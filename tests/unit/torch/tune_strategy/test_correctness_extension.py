@@ -1,0 +1,90 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from pathlib import Path
+
+import pytest
+import torch
+import torch.nn as nn
+
+from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.recording_module import Sample
+from aitune.torch.task.correctness import CorrectnessCheckError
+from aitune.torch.tune_strategy import TuneStrategy
+from tests.toy_models.torch_models import ToyTorchModel
+
+
+class TestTuneStrategyCorrectness(TuneStrategy):
+    def _tune(
+        self,
+        module: nn.Module,
+        name: str,
+        graph_spec: GraphSpec,
+        data: list[Sample],
+        device: torch.device,
+        cache_dir: Path,
+    ):
+        backend = TorchEagerBackend()
+        backend = backend.build(module, graph_spec, data, device, cache_dir)
+        self.check_correctness(backend, name, graph_spec, data)
+        return backend
+
+    def _describe_parts(self) -> list[str]:
+        return ["TestTuneStrategyCorrectness"]
+
+
+def test_correctness_extension_torch_eager_backend(torch_device, tmp_path):
+    """Test correctness extension with torch eager backend."""
+
+    module = ToyTorchModel()
+    graph_spec = module.graph_spec()
+    data = [((module.sample(device=torch_device),), {})]
+
+    strategy = TestTuneStrategyCorrectness()
+
+    backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
+    backend.deactivate()
+
+
+def test_correctness_extension_torch_eager_backend_with_nan(torch_device, tmp_path):
+    """Test correctness extension with torch eager backend."""
+
+    module = ToyTorchModel()
+    graph_spec = module.graph_spec()
+    sample = module.sample().to(torch_device)
+    sample[0] = float("nan")
+    data = [((sample,), {})]
+
+    strategy = TestTuneStrategyCorrectness()
+
+    with pytest.raises(CorrectnessCheckError, match="contains NaN values"):
+        backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
+        backend.deactivate()
+
+
+def test_correctness_extension_torch_eager_backend_with_inf(mocker, torch_device, tmp_path):
+    """Test correctness extension with torch eager backend."""
+    module = ToyTorchModel()
+    graph_spec = module.graph_spec()
+    sample = module.sample(torch_device)
+    data = [((sample,), {})]
+
+    mocker.patch.object(module, "forward", return_value=torch.tensor([float("inf")]))
+
+    strategy = TestTuneStrategyCorrectness()
+
+    with pytest.raises(CorrectnessCheckError, match="contains infinity values"):
+        backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
+        backend.deactivate()

@@ -1,0 +1,70 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Inspecting and patching modules."""
+
+import time
+from collections.abc import Callable
+from logging import getLogger
+
+import torch
+
+from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
+from aitune.torch.inspecting.module_info import InspectedModulesInfo
+from aitune.torch.inspecting.module_inspector import ModuleInspector
+from aitune.torch.utils.cuda import synchronize
+from aitune.utils.logging import setup_logging
+
+logger = getLogger(__name__)
+
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+
+
+def inspect(obj: Callable, dataset: DatasetLike | DataLoaderFactory | torch.Tensor) -> InspectedModulesInfo:
+    """Inspect provided callable object searching for nn.Module members executed as part of forward pass.
+
+    Args:
+        obj: Callable object to inspect.
+        dataset: List of tuples with batch size and input.
+        log_level: Log level to use.
+
+    Returns:
+        InspectedModulesInfo object.
+    """
+    setup_logging(format_string=LOG_FORMAT)
+
+    logger.info("Inspecting object searching for executed nn.Module members.")
+    model_inspector = ModuleInspector()
+    model_inspector.inspect(obj)
+
+    total_execution_time = 0.0
+    for _, args, kwargs in samples_generator(dataset, [1], None):
+        synchronize()
+        start_time = time.perf_counter()
+        with torch.inference_mode():
+            obj(*args, **kwargs)
+        synchronize()
+        end_time = time.perf_counter()
+        total_execution_time += end_time - start_time
+
+    modules = model_inspector.get_modules()
+
+    logger.info("Inspection done. Found %d candidate modules for tuning.", len(modules))
+
+    inspected_modules_info = InspectedModulesInfo(total_execution_time)
+    for module in modules:
+        inspected_modules_info.add_module(module)
+
+    model_inspector.reset()
+
+    return inspected_modules_info

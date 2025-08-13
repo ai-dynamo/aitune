@@ -1,0 +1,226 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""NVIDIA ModelOpt ONNX quantization module for TensorRT backend."""
+
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
+
+import modelopt.onnx.quantization as moq
+import onnx
+import torch
+from modelopt.onnx.quantization.qdq_utils import fp4qdq_to_2dq
+
+from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.recording_module import Sample
+from aitune.utils.system_monitor import SystemMonitor
+
+# Setup logger
+logger = logging.getLogger(__name__)
+
+QuantizationPrecision = Literal["int8", "int4", "fp8"]
+CalibrationMethod = Literal["max", "entropy", "awq_clip", "awq_lite", "awq_full", "rtn_dq"]
+
+
+@dataclass
+class ONNXQuantizationConfig:
+    """Configuration for ONNX quantization.
+
+    Args:
+        precision: Quantization precision ("int8", "fp8", "int4")
+        calibration_method: Calibration method to use ("max", "entropy", "awq_clip", "awq_lite", "awq_full", "rtn_dq")
+        use_model_opt_post_processing: Whether to apply ModelOpt post-processing to the quantized model
+    """
+
+    precision: QuantizationPrecision
+    calibration_method: CalibrationMethod | None = None
+    use_model_opt_post_processing: bool = False
+
+    @classmethod
+    def from_dict(cls, state_dict: dict):
+        """Convert dict to ONNXQuantizationConfig."""
+        return cls(**state_dict)
+
+
+class ONNXQuantizer:
+    """NVIDIA ModelOpt ONNX quantizer for TensorRT backend.
+
+    This class provides functionality to quantize ONNX models using NVIDIA ModelOpt
+    for deployment with TensorRT. It supports various quantization modes including
+    INT8, FP8, and INT4 quantization with different calibration methods.
+
+    The quantizer can be used in two ways:
+    1. Standalone for quantizing existing ONNX models
+    2. Integrated with TensorRTBackend for end-to-end quantization
+
+    Example:
+        # Standalone usage
+        quantizer = ONNXQuantizer()
+        quantized_path = quantizer.quantize(
+            onnx_path="model.onnx",
+            name="my_model",
+            precision="int8",
+            calibration_method="max"
+        )
+
+        # Integrated usage (automatic when using TensorRTBackend)
+        config = TensorRTBackendConfig(
+            quantization_type="onnx",
+            precision="int8",
+            onnx_quantization_calibration_method="awq_lite"
+        )
+        backend = TensorRTBackend(config=config)
+
+    Supported quantization modes:
+        - int8: 8-bit integer quantization
+        - fp8: 8-bit floating point quantization
+        - int4: 4-bit integer quantization (with AWQ support)
+
+    Supported calibration methods:
+        - max: Max calibration (default, INT8/FP8 only)
+        - entropy: Entropy-based calibration (INT8/FP8 only)
+        - awq_lite: Activation-aware Weight Quantization (INT4 only)
+        - awq_clip: Activation-aware Weight Quantization (INT4 only)
+        - awq_full: Activation-aware Weight Quantization (INT4 only)
+        - rtn_dq: RTN-DQ calibration (INT4 only)
+
+    Note:
+        Requires NVIDIA ModelOpt to be installed:
+        pip install nvidia-modelopt[onnx]
+    """
+
+    def __init__(self):
+        """Initialize the ONNX quantizer."""
+        self.system_monitor = SystemMonitor()
+
+    @staticmethod
+    def apply_model_opt_post_processing(onnx_path: Path):
+        """Apply ModelOpt post-processing optimizations to the exported ONNX model.
+
+        Args:
+            onnx_path: Path to the ONNX model file
+        """
+        logger.info("Applying ModelOpt post-processing optimizations to ONNX model")
+
+        # Load the exported ONNX model
+        onnx_model = onnx.load(onnx_path)
+
+        # Apply fp4qdq_to_2dq transformation for TensorRT optimization
+        # Note: https://nvidia.github.io/TensorRT-Model-Optimizer/reference/generated/modelopt.onnx.quantization.qdq_utils.html#modelopt.onnx.quantization.qdq_utils.fp4qdq_to_2dq
+        # Used for FP4 nodes
+        logger.info("Applying fp4qdq_to_2dq transformation")
+        post_processed_model = fp4qdq_to_2dq(onnx_model)
+
+        #  Workaround for missing ir_version and opset, this is not needed for TensorRT
+        if not hasattr(post_processed_model, "ir_version"):
+            post_processed_model.ir_version = onnx_model.ir_version
+        if not hasattr(post_processed_model, "opset_import"):
+            post_processed_model.opset_import = onnx_model.opset_import
+
+        # Save the post-processed model back to the same path
+        onnx.save(post_processed_model, onnx_path)
+
+        # self.verify_model(onnx_path)
+
+        logger.info("ModelOpt post-processing completed successfully")
+
+    def _prepare_calibration_data(self, data: list[Sample], graph_spec: GraphSpec) -> list[dict[str, torch.Tensor]]:
+        """Prepare calibration data with proper input names mapping.
+
+        Args:
+            data: List of Sample objects containing calibration data
+            graph_spec: Graph specification containing input names mapping
+
+        Returns:
+            List of dictionaries mapping input names to tensors for calibration
+        """
+        logger.debug("Preparing calibration data with proper input names for %s samples", len(data))
+        calibration_data_with_names = []
+
+        for sample in data:
+            # Use the graph spec to flatten the sample and get proper input names
+            input_dict = graph_spec.input_spec.flatten_sample(sample)
+            calibration_data_with_names.append(input_dict)
+            logger.debug("Mapped sample to input names: %s", list(input_dict.keys()))
+
+        logger.debug(
+            "Successfully prepared %s calibration samples with proper input names", len(calibration_data_with_names)
+        )
+        return calibration_data_with_names
+
+    def quantize(
+        self,
+        input_onnx_path: str | Path,
+        output_path: str | Path,
+        config: ONNXQuantizationConfig,
+        samples: list[Sample] | None = None,
+        graph_spec: GraphSpec | None = None,
+    ) -> Path:
+        """Quantize the ONNX model using NVIDIA ModelOpt.
+
+        Args:
+            input_onnx_path: Path to the input ONNX model
+            output_path: Path to the output ONNX model
+            config: ONNXQuantizationConfig
+            samples: Optional calibration dataset for quantization.
+                If None, random data will be used for calibration
+            graph_spec: Graph specification containing input names mapping
+
+        Returns:
+            Path to the quantized ONNX file
+
+        Raises:
+            ImportError: If ModelOpt is not installed
+            ValueError: If unsupported precision is specified
+            RuntimeError: If quantization fails
+        """
+        # TODO: Temporarily disable, re-enable when proper calibration data handling is implemented.
+        # if samples is not None:
+        #     calibration_data = self._prepare_calibration_data(samples, graph_spec)
+        # else:
+        #     calibration_data = None
+
+        input_onnx_path = Path(input_onnx_path)
+        output_path = Path(output_path)
+
+        logger.info("Starting ONNX quantization: %s -> %s", input_onnx_path, output_path)
+        logger.info("Quantization precision: %s, calibration method: %s", config.precision, config.calibration_method)
+
+        with self.system_monitor.system_stats_context(log_label=f"ONNX {config.precision} quantization"):
+            # Perform quantization
+            logger.debug("Performing %s quantization", config.precision.upper())
+
+            quantize_kwargs = {
+                "onnx_path": str(input_onnx_path),
+                "output_path": str(output_path),
+                "quantize_mode": config.precision,
+                "calibration_method": config.calibration_method,
+            }
+
+            # if calibration_data is not None:
+            #     quantize_kwargs["calibration_data"] = calibration_data
+
+            moq.quantize(**quantize_kwargs)
+
+            # Apply post-processing optimizations
+            if config.use_model_opt_post_processing:
+                self.apply_model_opt_post_processing(output_path)
+
+        # Verify the quantized model exists
+        if not output_path.exists():
+            raise RuntimeError(f"Quantization failed: output file not created at {output_path}")
+
+        logger.info("Successfully quantized ONNX model: %s", output_path)
+        return output_path

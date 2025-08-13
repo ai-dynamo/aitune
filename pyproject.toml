@@ -1,0 +1,215 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+[project]
+name = "aitune"
+readme = "docs/pypi.rst"
+description = "NVIDIA AITune"
+dynamic = ["version"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Operating System :: MacOS",
+]
+authors = []
+maintainers = []
+keywords = [
+    "dynamo",
+    "inference",
+    "tune",
+    "nvidia",
+    "tensorrt",
+    "torch-tensorrt",
+    "onnx",
+    "pytorch",
+    "torch",
+]
+license = { text = "Apache 2.0" }
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "dill>=0.3.8",
+    "numpy<2",
+    "onnx~=1.16",
+    "onnxruntime==1.19.*;platform_machine == 'aarch64' and python_version < '3.10'",
+    "onnxruntime-gpu==1.19.*;platform_machine == 'x86_64' and python_version < '3.10'",
+    "onnxruntime~=1.20;platform_machine == 'aarch64' and python_version >= '3.10'",
+    "onnxruntime-gpu~=1.20;platform_machine == 'x86_64' and python_version >= '3.10'",
+    "onnxscript~=0.3.0",
+    "onnx_graphsurgeon~=0.5",
+    "polygraphy>=0.49.0",
+    "psutil",
+    "pynvml",
+    "tensorrt>=10.5.0",
+    "torch>=2.5.1",
+    "torchao>=0.11.0",
+    "torch_tensorrt>2",
+    "wrapt>=1.17.2",
+    "nvidia-modelopt[all]>=0.29.0",
+]
+
+[project.urls]
+"Documentation" = "https://ai-dynamo.github.io/aitune"
+"Source" = "https://github.com/ai-dynamo/aitune"
+"Tracker" = "https://github.com/ai-dynamo/aitune/issues"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-mock",
+    "pytest-cov",
+    "pillow",
+    "datasets>=3.3.2",
+    "transformers",
+    "setuptools",
+    "importlib-metadata; python_version < '3.10'",
+]
+doc = [
+    "mike ~= 1.1.0",
+    "mkdocs-htmlproofer-plugin >= 0.8.0",
+    "mkdocs-material >= 8.5.6",
+    "mkdocstrings[python] < 0.28.3",
+    "mkdocstrings-python >= 1.7.0",
+]
+dev = [
+    "aitune[test]",
+    "aitune[doc]",
+    "build >= 0.8",
+    "ipython >= 7.16",
+    "pdbpp >= 0.10",
+    "pip >= 21.1",
+    "ruff >= 0.3.0",
+    "twine >= 4.0",
+    "ipykernel",
+    "pre-commit",
+    "pre-commit-uv",
+    "pytype",
+    "tox",
+    "tox-uv",
+    "nbconvert",
+]
+functional-test = [
+    "fire",
+    "timm",
+    "diffusers",
+    "datasets>=3.3.2",
+    "transformers>=4.48",
+    "sentencepiece>=0.2.0",
+]
+
+demo = [
+    "diffusers",
+    "ipykernel",
+    "sentencepiece>=0.2.0",
+    "timm>=1.0.14",
+    "transformers>=4.48.2",
+]
+
+
+[build-system]
+requires = ["setuptools>=65.3.0", "setuptools_scm>=2.0.0,<3", "wheel>=0.37.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+license-files = ["LICENSE"]
+
+[tool.setuptools.packages.find]
+namespaces = false
+include = ["aitune"]
+
+[tool.setuptools.package-data]
+aitune = ["**/*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "aitune.__version__.__version__" }
+
+[tool.pytest.ini_options]
+log_cli = true
+addopts = ["--import-mode=importlib", "--doctest-modules"]
+pythonpath = ["."]
+testpaths = ["aitune", "tests/unit"]
+markers = ["slow: mark test as slow"]
+
+[tool.ruff]
+preview = true
+line-length = 120
+indent-width = 4
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "B",
+    "C",
+    "C4",
+    "C90",
+    "D",
+    "E",
+    "F",
+    "I",
+    "N",
+    "W",
+    "T",
+    "T10",
+    "T20",
+    "UP",
+    "CPY",
+    "G004"
+]
+ignore = ["E266", "E501", "N818"]
+exclude = ["**/*.ipynb"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["D104"]
+"**/__version__.py" = ["D100"]
+"**/{tests,docs,tools,examples}/*" = ["C416", "D", "T201"]
+"**/examples/FLUX/flux/dynamo/batching.py" = ["CPY001"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.flake8-copyright]
+author = "NVIDIA CORPORATION"
+notice-rgx = 'Copyright \(c\) \d{4}(-\d{4})*,'
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+[tool.vulture]
+exclude = []
+ignore_decorators = []
+ignore_names = []
+make_whitelist = true
+min_confidence = 80
+paths = ["aitune"]
+sort_by_size = true
+verbose = false
+
+[tool.pytype]
+disable = ["import-error", "module-attr"]

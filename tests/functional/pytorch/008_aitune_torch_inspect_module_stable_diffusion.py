@@ -1,0 +1,65 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# /// script
+# dependencies = ["transformers", "diffusers"]
+#
+# # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
+# scope = "always"
+# ///
+
+
+import diffusers
+
+from aitune.torch import inspect
+
+
+def test_inspect_stable_diffusion():
+    # given
+    model_id = "stabilityai/stable-diffusion-2-1"
+    pipe = diffusers.StableDiffusionPipeline.from_pretrained(model_id)
+    pipe.to("cuda")
+
+    prompt = "A futuristic cityscape with neon lights and flying cars"
+    input_data = [{"prompt": prompt}]
+
+    # when
+    modules_info = inspect(pipe, input_data)
+
+    # then - verify inspection
+    modules_info.describe()
+
+    assert len(modules_info.get_modules()) == 4
+
+    expected_module_names = ["unet", "vae.decoder", "text_encoder", "vae.post_quant_conv"]
+    modules = modules_info.get_modules()
+
+    assert len(modules) == len(expected_module_names)
+    for module in modules:
+        assert module.name in expected_module_names
+
+    top_modules = modules_info.get_modules(min_execution_percentage=0.6)
+    assert len(top_modules) == 1
+    assert top_modules[0].name == "unet"
+    assert top_modules[0].execution_count == 50
+    assert top_modules[0].total_execution_time > 0
+    assert top_modules[0].average_execution_time > 0
+
+    top_modules = modules_info.get_modules(limit=1)
+    assert len(top_modules) == 1
+    assert top_modules[0].name == "unet"
+
+
+if __name__ == "__main__":
+    test_inspect_stable_diffusion()

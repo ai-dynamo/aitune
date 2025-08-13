@@ -1,0 +1,104 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# /// script
+# dependencies = ["timm"]
+#
+# # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
+# scope = "always"
+# ///
+
+import gc
+import pathlib
+import tempfile
+from logging import INFO, basicConfig, getLogger
+
+import torch
+from diffusers import StableDiffusionPipeline
+
+from aitune.torch.backend import TensorRTBackend, TorchInductorBackend, TorchTensorRTAotBackend
+from aitune.torch.module import Module
+from aitune.torch.tune_strategy import FirstWinsStrategy
+from aitune.torch.tuning import load, save, tune
+
+basicConfig(level=INFO, force=True)
+logger = getLogger(__name__)
+
+PROMPT = "a photo of a cat sitting on a windowsill, natural lighting, detailed fur, photorealistic"
+
+
+def _get_pipeline(model_name: str = "stabilityai/stable-diffusion-2-1", device: str = "cuda"):
+    """Get a pretrained Flux model from HuggingFace.
+
+    Args:
+        model_name: HuggingFace model name or path
+        device: Device to load the model on
+
+    Returns:
+        FluxPipeline: The loaded Flux pipeline
+    """
+    model = StableDiffusionPipeline.from_pretrained(model_name)
+    model.to(device)
+    return model
+
+
+def _tune_and_save(save_path: pathlib.Path, device: str = "cuda"):
+    pipeline = _get_pipeline(device=device)
+
+    pipeline.text_encoder = Module(
+        pipeline.text_encoder,
+        "text_encoder",
+        strategy=FirstWinsStrategy(backends=[TensorRTBackend(), TorchTensorRTAotBackend(), TorchInductorBackend()]),
+    )
+
+    tune(
+        pipeline,
+        [PROMPT],
+        batch_sizes=[1],
+        max_num_batches_per_batch_size=1,
+        device=device,
+        disable_external_logging=False,
+    )
+
+    save(pipeline, save_path)
+
+
+def _load_and_infer(load_path: pathlib.Path, device: str = "cuda"):
+    pipeline = _get_pipeline(device=device)
+
+    load(pipeline, load_path, disable_external_logging=False)
+
+    res = pipeline(PROMPT, generator=torch.Generator(device="cuda").manual_seed(42))
+    opt_image = res[0][0]
+
+    return opt_image
+
+
+def _clean_up():
+    gc.collect()
+    torch.cuda.empty_cache()
+
+
+def test_pipeline_serialization_with_first_module_only():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        save_path = pathlib.Path(temp_dir) / "sd-dev-tuned.pt"
+        _tune_and_save(save_path)
+        _clean_up()
+        opt_image = _load_and_infer(save_path)
+
+    assert opt_image is not None
+
+
+if __name__ == "__main__":
+    test_pipeline_serialization_with_first_module_only()

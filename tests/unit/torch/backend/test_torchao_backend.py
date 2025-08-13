@@ -1,0 +1,189 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+from unittest.mock import Mock
+
+import pytest
+import torch
+import torch.nn as nn
+from torchao.quantization import FPXWeightOnlyConfig, Int8WeightOnlyConfig
+from torchao.utils import is_sm_at_least_89
+
+from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendConfig
+from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
+from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_metadata import SampleMetadata
+from tests.toy_models.torch_models import ToyTorchModel
+from tests.utilities.helpers import requires_cuda
+
+
+@pytest.fixture
+def model(torch_device) -> nn.Module:
+    return ToyTorchModel().to(torch_device).eval()
+
+
+@pytest.fixture
+def sample_data(model, torch_device) -> list[Sample]:
+    sample = model.sample()
+    args = (sample.to(torch_device).unsqueeze(0).repeat(32, 1),)
+    kwargs = {}
+    return [(args, kwargs)]
+
+
+def move_to_dtype(sample_data, dtype):
+    args, kwargs = sample_data[0]
+    args = (args[0].to(dtype),)
+    return [(args, kwargs)]
+
+
+def build_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
+    metadata = Mock(SampleMetadata)
+    sample_data = move_to_dtype(sample_data, dtype)
+    model.to(dtype)
+    return backend.build(model, metadata, sample_data, device=torch_device, cache_dir=tmp_path)
+
+
+def test_torchao_config_key():
+    config = TorchAOBackendConfig(quantization="int4wo")
+    key1 = config.key()
+    key2 = config.key()
+
+    assert key1 == key2
+
+
+def test_torchao_config_describe():
+    config = TorchAOBackendConfig(quantization="int4wo")
+    describe = config.describe()
+    assert describe == "quantization_config=Int4WeightOnlyConfig(group_size=32)"
+
+
+def test_torchao_config_describe_with_kwargs():
+    config = TorchAOBackendConfig(quantization="fp6e3m2")
+    describe = config.describe()
+    assert describe == "quantization_config=FPXWeightOnlyConfig(ebits=3,mbits=2)"
+
+
+def test_torchao_config_initialization():
+    # Test valid initialization with quantization type
+    for quantization in TorchAOBackendConfig._QUANTIZATION_CONFIGS.keys():
+        TorchAOBackendConfig(quantization=quantization)  # type: ignore
+
+    # Test valid initialization with quantization config
+    config = Int8WeightOnlyConfig()
+    TorchAOBackendConfig(quantization_config=config)
+
+    # Test invalid initialization with both parameters
+    with pytest.raises(ValueError, match="Only one of quantization or quantization_config should be provided."):
+        TorchAOBackendConfig(quantization="int8wo", quantization_config=config)
+
+    # Test invalid initialization with neither parameter
+    with pytest.raises(ValueError, match="Either quantization or quantization_config should be provided."):
+        TorchAOBackendConfig()
+
+
+def do_test_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
+    """Helper function to test backend with given dtype data.
+
+    Args:
+        backend: The backend instance to test
+        dtype: The dtype to use for the test
+    """
+    backend = build_backend(backend, dtype, model, sample_data, torch_device, tmp_path)
+    sample_data = move_to_dtype(sample_data, dtype)
+    args, kwargs = sample_data[0]
+
+    # then
+    assert backend is not None
+    try:
+        backend.infer(*args, **kwargs)
+    finally:
+        backend.deactivate()
+
+
+@requires_cuda
+@pytest.mark.parametrize("quantization", TorchAOBackendConfig._QUANTIZATION_CONFIGS.keys())
+@pytest.mark.parametrize(
+    "dtype",
+    [torch.bfloat16, torch.float16, torch.float32],
+    ids=["bfloat16", "float16", "float32"],
+)
+def test_torchao_backend_build(quantization, dtype, model, sample_data, torch_device, tmp_path):
+    if quantization == "int4wo" and dtype != torch.bfloat16:
+        pytest.skip("int4wo is not supported on float16 or float32")
+    if quantization in ["fp8wo", "fp8dq"] and not is_sm_at_least_89():
+        pytest.skip("fp8wo and fp8dq are not supported on this device")
+
+    config = TorchAOBackendConfig(quantization=quantization)
+    backend = TorchAOBackend(config=config)
+    do_test_backend(backend, dtype, model, sample_data, torch_device, tmp_path)
+
+
+@requires_cuda
+@pytest.mark.parametrize(
+    "quantization_config",
+    [Int8WeightOnlyConfig(group_size=16), FPXWeightOnlyConfig(2, 3)],
+    ids=["int8wo with different group size", "fp6 with lower exponent but higher mantissa"],
+)
+def test_torchao_backend_build_with_user_config(quantization_config, model, sample_data, torch_device, tmp_path):
+    config = TorchAOBackendConfig(quantization_config=quantization_config)
+    backend = TorchAOBackend(config=config)
+    do_test_backend(backend, torch.bfloat16, model, sample_data, torch_device, tmp_path)
+
+
+def test_invalid_quantization_type():
+    with pytest.raises(ValueError):
+        TorchAOBackendConfig(quantization="invalid_type")  # type: ignore
+
+
+@requires_cuda
+@pytest.mark.parametrize("quantization", TorchAOBackendConfig._QUANTIZATION_CONFIGS.keys())
+def test_serialization(quantization, tmp_path, model, sample_data, torch_device):
+    if quantization == "int4wo":
+        dtype = torch.bfloat16
+    else:
+        dtype = torch.float16
+
+    if quantization in ["fp8wo", "fp8dq"] and not is_sm_at_least_89():
+        pytest.skip("fp8wo and fp8dq are not supported on this device")
+
+    if quantization == "fp8dq" and torch.cuda.get_device_capability() == (9, 0):
+        pytest.skip("fp8dq is unstable on H100")
+
+    config = TorchAOBackendConfig(quantization=quantization)
+    backend = build_backend(TorchAOBackend(config=config), dtype, model, sample_data, torch_device, tmp_path)
+    sample_data = move_to_dtype(sample_data, dtype)
+    args, kwargs = sample_data[0]
+    loaded_backend = None
+    try:
+        expected = backend.infer(*args, **kwargs)
+        model.to("cuda")
+
+        state_dict = backend.to_dict()  # type: ignore
+
+        torch.save(state_dict, tmp_path / "state_dict.pth")
+        backend.deactivate()
+        backend = None
+
+        loaded_backend = TorchAOBackend.from_dict(model, torch_load_with_custom_types(tmp_path / "state_dict.pth"))
+        loaded_backend.activate()
+        actual = loaded_backend.infer(*args, **kwargs)
+        torch.testing.assert_close(expected, actual)
+        loaded_backend.deactivate()
+        loaded_backend = None
+    except Exception as e:
+        # do cleanup in case of an exception, torchao backend is susceptible to memory issues when not deactivated
+        if backend:
+            backend.deactivate()
+        if loaded_backend:
+            loaded_backend.deactivate()
+        raise e

@@ -1,0 +1,7 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "NVIDIA AITune."
+url: https://github.com/ai-dynamo/aitune
+repository-code: https://github.com/ai-dynamo/aitune
+authors:
+  - name: "NVIDIA Corporation"
