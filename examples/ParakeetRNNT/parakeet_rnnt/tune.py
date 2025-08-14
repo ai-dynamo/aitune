@@ -20,7 +20,7 @@ from pathlib import Path
 import torch
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
-from aitune.torch import HighestThroughputStrategy, save, tune
+from aitune.torch import HighestThroughputStrategy, TuneStrategy, save, tune
 from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
 from aitune.torch.backend.torch_inductor_backend import TorchInductorBackendConfig
 from parakeet_rnnt.cmd_args import parse_args
@@ -33,7 +33,8 @@ def tune_model(
     model_name: str,
     audio_path: Path,
     tuned_model_path: Path,
-    batch_size: int,
+    batch_sizes: list[int],
+    strategy: TuneStrategy | None = None,
 ):
     """Tune the ASR model.
 
@@ -41,17 +42,22 @@ def tune_model(
         model_name: The name of the model to tune.
         audio_path: The path to the audio file to transcribe.
         tuned_model_path: The path to save the tuned model file.
+        batch_sizes: The batch sizes to tune.
+        strategy: The strategy to use for tuning.
     """
     model = get_model(model_name=model_name)
     torch.set_grad_enabled(False)
-    strategy = HighestThroughputStrategy(
+
+    batch_sizes = batch_sizes or [1, 2, 4]
+
+    strategy = strategy or HighestThroughputStrategy(
         backends=[
             TensorRTBackend(),
             TorchInductorBackend(TorchInductorBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)),
             TorchEagerBackend(),
         ]
-    )
-    strategy.enable_find_max_batch_size(False)
+    ).enable_find_max_batch_size(False)
+
     pipeline = wrap_pipeline(model_name, model, strategy=strategy)
 
     def call_wrapper(*args, **kwargs):
@@ -62,14 +68,17 @@ def tune_model(
         return pipeline.transcribe(
             *args,
             **kwargs,
-            override_config=TranscribeConfig(_internal=InternalTranscribeConfig(device="cuda"), batch_size=batch_size),
-            verbose=False,
+            override_config=TranscribeConfig(
+                batch_size=batch_size,
+                verbose=False,
+                _internal=InternalTranscribeConfig(device="cuda"),
+            ),
         )
 
     input_data = [{"audio": str(audio_path)}]
 
     logger.info("Tuning module: %s", model_name)
-    tune(call_wrapper, input_data, batch_sizes=[1, batch_size])
+    tune(call_wrapper, input_data, batch_sizes=batch_sizes)
     logger.info("Tuning completed.")
 
     save(pipeline, tuned_model_path)
@@ -91,7 +100,7 @@ def main():
         model_name=args.model_name,
         audio_path=args.audio_path,
         tuned_model_path=args.tuned_model_path,
-        batch_size=args.batch_size,
+        batch_sizes=[1, args.batch_size],
     )
 
 

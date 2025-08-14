@@ -70,7 +70,7 @@ The generated image will be saved in the specified output directory.
 
 To run FLUX as AI Dynamo service, we have prepared a few additional configs and scripts.
 
-Code starts in `resnet/flux/service.py`, Docker and Docker Compose is used to make setup simple.
+Code starts in `flux/dynamo/service.py`, Docker and Docker Compose is used to make setup simple.
 
 Firstly, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
 

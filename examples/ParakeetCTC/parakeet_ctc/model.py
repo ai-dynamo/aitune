@@ -21,9 +21,10 @@ import torch
 from nemo.core.classes.common import typecheck
 
 from aitune.torch import Module
+from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
 
-def get_model(model_name: str = "nvidia/parakeet-ctc-0.6b"):
+def get_model(model_name: str = "nvidia/parakeet-ctc-0.6b") -> nemo.collections.asr.models.EncDecCTCModel:
     """Get a pretrained ASR model from HuggingFace.
 
     Args:
@@ -62,7 +63,7 @@ def get_model(model_name: str = "nvidia/parakeet-ctc-0.6b"):
     return asr_model
 
 
-def wrap_pipeline(name: str, pipeline):
+def wrap_pipeline(name: str, pipeline, strategy: TuneStrategy | None = None):
     """Wrap modules in the pipeline.
 
     Args:
@@ -75,11 +76,13 @@ def wrap_pipeline(name: str, pipeline):
     pipeline.encoder = Module(
         pipeline.encoder,
         name=f"{name}-encoder",
+        strategy=deepcopy(strategy),
     )
 
     pipeline.decoder = Module(
         pipeline.decoder,
         name=f"{name}-decoder",
+        strategy=deepcopy(strategy),
     )
 
     return pipeline

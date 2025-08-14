@@ -24,7 +24,7 @@ from stable_diffusion.model import get_pipeline
 logger = getLogger(__name__)
 
 
-def tune_model(model_name, prompt, sizes, steps, tuned_model_path):
+def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=None):
     """Tune the Stable Diffusion model.
 
     Args:
@@ -33,7 +33,9 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path):
         sizes: List of (height, width) tuples
         steps: Number of inference steps
         tuned_model_path: Path to save the tuned model
+        batch_sizes: List of batch sizes to tune, if None, tune only with batch size 1
     """
+    batch_sizes = batch_sizes or [1]
     pipeline = get_pipeline(model_name=model_name)
 
     input_data = [{"prompt": prompt}]
@@ -61,7 +63,7 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path):
             )
 
     logger.info("Tuning module: %s", model_name)
-    tune(call_wrapper, input_data, batch_sizes=[1])
+    tune(call_wrapper, input_data, batch_sizes=batch_sizes)
     logger.info("Tuning completed.")
 
     save(pipeline, tuned_model_path)

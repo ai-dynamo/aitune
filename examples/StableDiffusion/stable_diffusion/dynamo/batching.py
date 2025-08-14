@@ -69,6 +69,7 @@ def batch(  # noqa: C901
     Example:
 
     .. code-block:: python
+            from stable_diffusion.dynamo.batching import batch
 
             class BatchedDeployment:
 
@@ -219,8 +220,10 @@ class _BatchQueue:
         max_ongoing_requests = get_max_ongoing_requests()
         if max_ongoing_requests < self.max_batch_size:
             logger.warning(
-                "`max_batch_size` (%d) is larger than `max_ongoing_requests` (%d). This means the replica will never"
-                " receive a full batch. Please update `max_ongoing_requests` to be >= `max_batch_size`.",
+                "`max_batch_size` (%d) is larger than "
+                "`max_ongoing_requests` (%d). This means "
+                "the replica will never receive a full batch. Please update "
+                "`max_ongoing_requests` to be >= `max_batch_size`.",
                 self.max_batch_size,
                 max_ongoing_requests,
             )

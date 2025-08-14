@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM nvcr.io/nvidia/cuda:12.8.1-runtime-ubuntu24.04
+FROM nvcr.io/nvidia/cuda:13.0.0-runtime-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -24,9 +24,6 @@ RUN uv venv /opt/dynamo/venv --python 3.12
 ENV VIRTUAL_ENV=/opt/dynamo/venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install "ai-dynamo>=0.3.0"
-
 COPY . /opt/dynamo/app
 WORKDIR /opt/dynamo/app
 
@@ -34,6 +31,6 @@ WORKDIR /opt/dynamo/app
 COPY --from=aitune / /opt/dynamo/aitune
 RUN sed -i 's/^aitune = .*$/aitune = { path = "\/opt\/dynamo\/aitune" }/g' pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install .
+    uv pip install .[dynamo]
 
-CMD ["dynamo", "serve", "flux.dynamo.service:FluxBatchedFrontend"]
+CMD ["dynamo", "serve", "flux.dynamo.service:FluxBatchedFrontend", "-f", "config.yaml"]

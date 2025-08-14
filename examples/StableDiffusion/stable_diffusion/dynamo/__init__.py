@@ -11,19 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-Backend:
-  model_name: "black-forest-labs/FLUX.1-dev"
-  max_batch_size: 2 # Tested on A100/H100 80GB (H100 can handle 4)
-  batch_timeout: 2.0
-  pretrained: true
-  prompt: "A beautiful sunset over a calm ocean"
-  sizes: [[512, 512]]
-  steps: 20
-  guidance_scale: 7.5
-  max_sequence_length: 77
-  tuned_model_path: "tuned_model.pt"
-  force_tune: false
-  ServiceArgs:
-    workers: 1
-    resources:
-      cpu: "8"

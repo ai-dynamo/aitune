@@ -66,6 +66,77 @@ inference --prompt "A beautiful landscape with mountains and a lake" --output-di
 
 The generated image will be saved in the specified output directory.
 
+
+### AI Dynamo Stable Diffusion Deployment
+
+To run Stable Diffusion as AI Dynamo service, we have prepared a few additional configs and scripts.
+
+Code starts in `stable_diffusion/dynamo/service.py`, Docker and Docker Compose is used to make setup simple.
+
+Firstly, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
+
+After successful tunning and services start run below command to test the service.
+
+```sh
+python -m stable_diffusion.dynamo.client --help # to see the prompts
+python -m stable_diffusion.dynamo.client --num-requests 1
+python -m stable_diffusion.dynamo.client --num-requests 2
+python -m stable_diffusion.dynamo.client --num-requests 4
+python -m stable_diffusion.dynamo.client --num-requests 8
+python -m stable_diffusion.dynamo.client --num-requests 100
+```
+
+Finally, to shut it down use `docker compose --profile all down`.
+
+
+#### Development version
+
+```
+cd examples/StableDiffusion
+
+# 1. Start auxiliary services NATS and ETCD
+docker compose --profile aux up -d
+
+# 2. build docker image
+docker build --build-context aitune=../.. -f Dockerfile.dynamo -t sdd .
+
+# 3. Running docker with caches
+mkdir -p tmp/hf tmp/ait
+
+docker run \
+    --rm -ti \
+    --name sdd_dynamo_demo \
+    --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864  \
+    --network stablediffusion_default \
+    -v `pwd`/tmp/hf:/root/.cache/huggingface \
+    -v `pwd`/tmp/ait:/ait_cache \
+    sdd:latest bash
+
+# 4. Running service (inside container)
+. /opt/dynamo/venv/bin/activate
+export ETCD_ENDPOINTS=http://etcd-server:2379
+export NATS_SERVER=nats://nats-server:4222
+export AITUNE_CACHE_DIR=/ait_cache
+
+dynamo serve stable_diffusion.dynamo.service:StableDiffusionBatchedFrontend -f config.yaml
+
+# ... first time it will tune for a while
+
+# 5. Run client (in separate shell, same container)
+docker exec -ti sdd_dynamo_demo bash
+. /opt/dynamo/venv/bin/activate
+
+# 5.a. optionally link generated images to temporary cache dir, for viewing
+mkdir generated_images
+ln -s ./generated_images /ait_cache/
+
+python -m stable_diffusion.dynamo.client --num-requests 8
+```
+
+#### Dynamic batching
+
+The service uses dynamic batching — requests are grouped and processed together for efficiency. Currently, there is one frontend and one worker. To support multiple workers, move batching to a separate service that handles request grouping.
+
 ## Model Details
 
 The Stable Diffusion model is a text-to-image diffusion model that generates high-quality images from text descriptions. The model is trained on a large dataset of images and text, and can generate realistic images across various domains.

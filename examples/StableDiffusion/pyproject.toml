@@ -18,7 +18,7 @@ version = "0.1.0"
 description = "NVIDIA AITune Stable Diffusion 3 Example"
 readme = "README.md"
 license = { text = "Apache 2.0" }
-requires-python = ">=3.10, < 3.13"
+requires-python = ">=3.10, <3.13"
 
 dependencies = [
     "aitune",
@@ -28,6 +28,13 @@ dependencies = [
     "pillow",
     "sentencepiece",
     "protobuf",
+]
+
+[project.optional-dependencies]
+dynamo = [
+    "ai-dynamo==0.3.0",
+    "uvicorn",
+    "aiohttp",
 ]
 
 [tool.uv.sources]

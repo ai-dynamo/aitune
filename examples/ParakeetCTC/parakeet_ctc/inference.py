@@ -38,18 +38,25 @@ def do_inference(
     pipeline = load(model, tuned_model_path)
 
     def infer(*args, **kwargs):
-        # Note: user is controlling batch size in inference and it needs to be passed down to the transcribe function because by default it is 4
-        kwargs["batch_size"] = kwargs.get("batch_size", 32)
         return pipeline.transcribe(
             *args,
             **kwargs,
-            override_config=TranscribeConfig(_internal=InternalTranscribeConfig(device="cuda")),
+            override_config=TranscribeConfig(
+                batch_size=kwargs["batch_size"],
+                verbose=False,
+                _internal=InternalTranscribeConfig(device="cuda"),
+            ),
             verbose=False,
         )
 
-    results = infer(audio=str(audio_path), batch_size=32)
+    batch_size = 16
+    results = infer(audio=[str(audio_path)] * batch_size, batch_size=batch_size)
     for result in results:
         logger.info(result.text)
+        assert (
+            result.text
+            == "well i don't wish to see it any more observed phoebe turning away her eyes it is certainly very like the old portrait"
+        )
 
 
 def main():

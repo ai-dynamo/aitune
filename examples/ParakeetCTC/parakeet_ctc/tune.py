@@ -17,7 +17,10 @@ import os
 from logging import basicConfig, getLogger
 from pathlib import Path
 
-from aitune.torch import save, tune
+from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
+
+from aitune.torch import FirstWinsStrategy, TuneStrategy, save, tune
+from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
 
 from .cmd_args import parse_args
 from .model import get_model, wrap_pipeline
@@ -29,6 +32,8 @@ def tune_model(
     model_name: str,
     audio_path: Path,
     tuned_model_path: Path,
+    strategy: TuneStrategy | None = None,
+    batch_sizes: list[int] | None = None,
 ):
     """Tune the ASR model.
 
@@ -36,17 +41,25 @@ def tune_model(
         model_name: The name of the model to tune.
         audio_path: The path to the audio file to transcribe.
         tuned_model_path: The path to save the tuned model file.
+        strategy: The strategy to use for tuning.
+        batch_sizes: The batch sizes to tune.
     """
     model = get_model(model_name=model_name)
 
-    pipeline = wrap_pipeline(model_name, model)
+    pipeline = wrap_pipeline(model_name, model, strategy=strategy)
 
-    batch_sizes = [1, 16, 32]
-    batch_size = max(batch_sizes)
+    batch_sizes = batch_sizes or [1, 2, 4, 8, 16, 32]
 
     def call_wrapper(*args, **kwargs):
-        # Note: tunning is controlling batch size and it needs to be passed down to the transcribe function because by default it is 4
-        return pipeline.transcribe(*args, **kwargs, verbose=False, batch_size=batch_size)
+        return pipeline.transcribe(
+            *args,
+            **kwargs,
+            override_config=TranscribeConfig(
+                batch_size=len(kwargs["audio"]),
+                verbose=False,
+                _internal=InternalTranscribeConfig(device="cuda"),
+            ),
+        )
 
     input_data = [{"audio": str(audio_path)}]
 
@@ -64,10 +77,14 @@ def main():
     basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     args = parse_args()
 
+    strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
+    strategy.enable_find_max_batch_size(enable=False)
+
     tune_model(
         model_name=args.model_name,
         audio_path=args.audio_path,
         tuned_model_path=args.tuned_model_path,
+        strategy=strategy,
     )
 
 

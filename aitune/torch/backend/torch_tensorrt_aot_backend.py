@@ -141,12 +141,11 @@ class TorchTensorRTAotBackend(Backend):
         self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
 
         # Create input signature for dynamic shapes
-        # TODO: what about other argument types - none tensor?
         input_signature = []
         for tensor_spec in graph_spec.input_spec.tensor_specs:
             input_i = torch_tensorrt.Input(
                 min_shape=tensor_spec.min_shape,
-                opt_shape=tensor_spec.max_shape,  # TODO(kn): there is no opt shape yet
+                opt_shape=tensor_spec.max_shape,
                 max_shape=tensor_spec.max_shape,
                 dtype=tensor_spec.dtype,
                 name=tensor_spec.name,

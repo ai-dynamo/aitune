@@ -17,11 +17,20 @@ name = "aitune-parakeet-ctc-example"
 version = "0.1.0"
 description = "NVIDIA AITune Parakeet CTC Example"
 readme = "README.md"
-requires-python = ">=3.10, < 3.13"
+requires-python = ">=3.10, <3.13"
 
 dependencies = [
     "aitune",
     "nemo-toolkit[asr]",
+]
+
+[project.optional-dependencies]
+dynamo = [
+    "ai-dynamo==0.3.0",
+    "uvicorn",
+    "aiofiles>=24.1.0",
+    "python-multipart",
+    "colored",
 ]
 
 [tool.uv.sources]

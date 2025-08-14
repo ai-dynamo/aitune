@@ -19,6 +19,9 @@ services:
       - 4222:4222
       - 6222:6222
       - 8222:8222
+    profiles:
+      - aux
+      - all
 
   etcd-server:
     image: bitnami/etcd
@@ -27,8 +30,11 @@ services:
     ports:
       - 2379:2379
       - 2380:2380
+    profiles:
+      - aux
+      - all
 
-  resnet-frontend:
+  stable-diffusion-frontend:
     environment:
       NATS_SERVER: "nats://nats-server:4222"
       ETCD_ENDPOINTS: "http://etcd-server:2379"
@@ -53,6 +59,8 @@ services:
               capabilities: [gpu]
     volumes:
       - cache:/opt/dynamo/app/cache
+    profiles:
+      - all
 
 volumes:
   cache:

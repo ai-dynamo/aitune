@@ -33,5 +33,4 @@ RUN sed -i 's/^aitune = .*$/aitune = { path = "\/opt\/dynamo\/aitune" }/g' pypro
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install .[dynamo]
 
-
-CMD ["dynamo", "serve", "resnet.dynamo.service:ResNetFrontend", "-f", "config.yaml"]
+CMD ["dynamo", "serve", "parakeet_ctc.dynamo.service:ParakeetCTCBatchedFrontend", "-f", "config.yaml"]

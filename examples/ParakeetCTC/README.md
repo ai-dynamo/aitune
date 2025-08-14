@@ -62,6 +62,33 @@ benchmark --audio_path 2086-149220-0033.wav
 
 Note: if `--audio_path` is omitted the default audio file, bundled with this example, will be used.
 
+
+### AI Dynamo ParakeetCTC Deployment
+
+To run ParakeetCTC as AI Dynamo service, we have prepared a few additional configs and scripts.
+
+Code starts in `parakeet_ctc/dynamo/service.py`, Docker and Docker Compose is used to make setup simple.
+
+Firstly, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
+
+After successful tunning and services start run below command to test the service.
+
+```sh
+python -m parakeet_ctc.dynamo.client --help # to see the prompts
+python -m parakeet_ctc.dynamo.client --num-requests 1
+python -m parakeet_ctc.dynamo.client --num-requests 2
+python -m parakeet_ctc.dynamo.client --num-requests 4
+python -m parakeet_ctc.dynamo.client --num-requests 8
+python -m parakeet_ctc.dynamo.client --num-requests 100
+```
+
+Finally, to shut it down use `docker compose --profile all down`.
+
+#### Dynamic batching
+
+The service uses dynamic batching — requests are grouped and processed together for efficiency. Currently, there is one frontend and one worker. To support multiple workers, move batching to a separate service that handles request grouping.
+
+
 ## Model Details
 
 Can be found in following pages:

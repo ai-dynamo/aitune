@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""AI Dynamo service with FLUX model and  batching.
+"""AI Dynamo service with Stable Diffusion model and batching.
 
 This service implements batched image generation using batch decorator
 to improve throughput by processing multiple prompts together.
@@ -69,26 +69,23 @@ class ImageGenerationResponse(BaseModel):
     workers=1,
     image=DYNAMO_IMAGE,
 )
-class FluxBatchedBackend:
-    """Backend service for FLUX model inference with  batching."""
+class StableDiffusionBatchedBackend:
+    """Backend service for Stable Diffusion model inference with batching."""
 
     def __init__(self) -> None:
-        """Initialize the FLUX backend with  batching."""
-        logger.info("Starting FLUX backend with  batching")
+        """Initialize the Stable Diffusion backend with batching."""
+        logger.info("Starting Stable Diffusion backend with batching")
         config = ServiceConfig.get_instance()
 
         self.pipeline = None
-        self.model_name = config.get("Backend", {}).get("model_name", "black-forest-labs/FLUX.1-dev")
+        self.model_name = config.get("Backend", {}).get("model_name", "stabilityai/stable-diffusion-2-1")
         self.max_batch_size = config.get("Backend", {}).get("max_batch_size", 4)
         self.batch_timeout = config.get("Backend", {}).get("batch_timeout", 2.0)  # seconds
-        self.pretrained = config.get("Backend", {}).get("pretrained", True)
         self.force_tune = config.get("Backend", {}).get("force_tune", False)
 
         self.prompt = config.get("Backend", {}).get("prompt", "A beautiful sunset over a calm ocean")
         self.sizes = config.get("Backend", {}).get("sizes", [(1024, 1024), (512, 512)])
         self.steps = config.get("Backend", {}).get("steps", 20)
-        self.guidance_scale = config.get("Backend", {}).get("guidance_scale", 7.5)
-        self.max_sequence_length = config.get("Backend", {}).get("max_sequence_length", 77)
         self.tuned_model_path = config.get("Backend", {}).get("tuned_model_path")
         if self.tuned_model_path is None:
             self.tuned_model_path = aitune_cache_dir() / f"{self.model_name.replace('/', '_')}.pt"
@@ -123,8 +120,6 @@ class FluxBatchedBackend:
                 self.prompt,
                 self.sizes,
                 self.steps,
-                self.guidance_scale,
-                self.max_sequence_length,
                 self.tuned_model_path,
                 batch_sizes=batch_sizes,
             )
@@ -157,8 +152,6 @@ class FluxBatchedBackend:
             height = requests[0].height
             width = requests[0].width
             num_steps = requests[0].num_inference_steps
-            guidance_scale = requests[0].guidance_scale
-            max_seq_length = requests[0].max_sequence_length
 
             # Generate images for all prompts in batch
             def generate_batch_images():
@@ -171,8 +164,6 @@ class FluxBatchedBackend:
                         width=width,
                         num_inference_steps=num_steps,
                         num_images_per_prompt=1,
-                        guidance_scale=guidance_scale,
-                        max_sequence_length=max_seq_length,
                         return_dict=True,
                     )
 
@@ -189,7 +180,7 @@ class FluxBatchedBackend:
                 try:
                     # Convert PIL image to base64
                     img_buffer = io.BytesIO()
-                    images[i].save(img_buffer, format="JPEG")  # type: ignore
+                    images[i].save(img_buffer, format="JPEG")
                     img_data = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
 
                     response = ImageGenerationResponse(
@@ -203,7 +194,7 @@ class FluxBatchedBackend:
                     logger.info("Processed request %d", i + 1)
 
                 except Exception as e:
-                    logger.error("Error processing request %d: %s", i + 1, e)
+                    logger.error("Error processing request %d: %s", i + 1, e, exc_info=True)
                     # Create error response
                     error_response = ImageGenerationResponse(
                         request_id=req.request_id or "",
@@ -260,15 +251,15 @@ class FluxBatchedBackend:
     dynamo={"namespace": "inference"},
     image=DYNAMO_IMAGE,
 )
-class FluxBatchedFrontend:
-    """Frontend HTTP API for FLUX inference service with batching."""
+class StableDiffusionBatchedFrontend:
+    """Frontend HTTP API for Stable Diffusion inference service with batching."""
 
-    backend: FluxBatchedBackend = depends(FluxBatchedBackend)
+    backend: StableDiffusionBatchedBackend = depends(StableDiffusionBatchedBackend)
 
     def __init__(self) -> None:
-        """Initialize the FLUX frontend."""
-        configure_dynamo_logging(service_name="FluxBatchedFrontend")
-        logger.info("Starting FLUX frontend with batching")
+        """Initialize the Stable Diffusion frontend."""
+        configure_dynamo_logging(service_name="StableDiffusionBatchedFrontend")
+        logger.info("Starting Stable Diffusion frontend with batching")
 
         config = ServiceConfig.get_instance()
         self.port = config.get("Frontend", {}).get("port", 8000)
@@ -291,4 +282,4 @@ class FluxBatchedFrontend:
     @api()
     async def health(self):
         """Health check endpoint."""
-        return {"status": "healthy", "service": "FLUX Image Generation with Batching"}
+        return {"status": "healthy", "service": "Stable Diffusion Image Generation with Batching"}
