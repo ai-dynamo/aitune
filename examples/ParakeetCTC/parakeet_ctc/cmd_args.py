@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
         "-a",
         "--audio_path",
         type=Path,
-        required=True,
+        default=Path(__file__).parent.parent / "2086-149220-0033.wav",
         help="Audio path",
     )
     parser.add_argument(

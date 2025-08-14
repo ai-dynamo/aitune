@@ -1,0 +1,70 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Test JIT tuning with patch decorator."""
+# /// script
+# dependencies = []
+# scope = "always"
+# allow_failure = false
+# ///
+
+from io import StringIO
+from logging import INFO, basicConfig
+
+import torch
+
+from aitune.torch.jit.config import config
+from aitune.torch.jit.patched_module import PatchedModule
+from aitune.torch.jit.patcher import patch_for_jit_tuning
+
+
+@patch_for_jit_tuning
+def create_resnet():
+    """Create a ResNet18 model.
+
+    The decorator will make this model tunable.
+    """
+    return torch.hub.load("pytorch/vision:v0.10.0", "resnet18", weights="IMAGENET1K_V1").to("cuda")
+
+
+def test_jit_resnet():
+    resnet = create_resnet()
+
+    config.min_samples = 4  # just to compare before and after tuning
+    config.dry_run = False
+    config.detect_graph_breaks = False
+
+    def batch():
+        # we are calling two times with different batch sizes to recognize dynamic axes
+        resnet(torch.randn(2, 3, 224, 224, device="cuda"))
+        resnet(torch.randn(16, 3, 224, 224, device="cuda"))
+
+    for _ in range(5):
+        batch()
+
+    # Capture the print_hierarchy output
+    with StringIO() as test_sink:
+        PatchedModule.print_hierarchy(sink=test_sink.write)
+        hierarchy_output = test_sink.getvalue()
+
+    # Assert the expected output
+    assert "PatchedModule Hierarchy:" in hierarchy_output
+    assert "├─ ResNet 📊11.7M level=0🪜 state=tuned🎯 (TensorRTBackend)" in hierarchy_output
+
+    assert resnet(torch.randn(8, 3, 224, 224, device="cuda")).shape == (8, 1000)
+    assert resnet(torch.randn(16, 3, 224, 224, device="cuda")).shape == (16, 1000)
+
+
+if __name__ == "__main__":
+    basicConfig(level=INFO, force=True)
+    test_jit_resnet()

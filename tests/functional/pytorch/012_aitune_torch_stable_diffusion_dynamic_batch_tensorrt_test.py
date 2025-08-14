@@ -154,7 +154,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
             images_bs1 = call_wrapper(prompt=single_prompt)
 
             # Verify output structure for batch_size=1
-            assert hasattr(images_bs1, "images") or isinstance(images_bs1, (list, tuple)), "Expected images output"
+            assert hasattr(images_bs1, "images") or isinstance(images_bs1, list | tuple), "Expected images output"
             if hasattr(images_bs1, "images"):
                 actual_images_bs1 = images_bs1.images
             else:
@@ -174,7 +174,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
             images_bs2 = call_wrapper(prompt=double_prompt)
 
             # Verify output structure for batch_size=2
-            assert hasattr(images_bs2, "images") or isinstance(images_bs2, (list, tuple)), "Expected images output"
+            assert hasattr(images_bs2, "images") or isinstance(images_bs2, list | tuple), "Expected images output"
             if hasattr(images_bs2, "images"):
                 actual_images_bs2 = images_bs2.images
             else:

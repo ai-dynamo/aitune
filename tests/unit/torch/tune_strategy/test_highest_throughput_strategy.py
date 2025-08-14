@@ -23,7 +23,7 @@ from aitune.torch.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
 from aitune.torch.module.wrapper_module import get_object_name
-from aitune.torch.task.correctness import CorrectnessCheckError
+from aitune.torch.task.correctness import CorrectnessValueError
 from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, StableWindowMeasuringStopStrategy
 from aitune.torch.task.profiling.profiling_stop_strategy import (
     AllSamplesProfilingStopStrategy,
@@ -206,7 +206,7 @@ def test_highest_throughput_strategy_fails_backend_if_all_of_backends_fails(torc
         backends=[
             BuildFailsBackend(RuntimeError),
             BuildFailsBackend(MemoryError),
-            BuildFailsBackend(CorrectnessCheckError),
+            BuildFailsBackend(CorrectnessValueError),
             ActivateFailsBackend(),
         ],
     )
@@ -227,7 +227,7 @@ def test_highest_throughput_strategy_select_backend_if_one_of_backends_succeeds(
         backends=[
             BuildFailsBackend(RuntimeError),
             BuildFailsBackend(MemoryError),
-            BuildFailsBackend(CorrectnessCheckError),
+            BuildFailsBackend(CorrectnessValueError),
             ActivateFailsBackend(),
             TorchEagerBackend(),
         ],

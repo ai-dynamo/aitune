@@ -1,0 +1,466 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Module for inspecting PyTorch models and tracking their execution."""
+
+import hashlib
+import random
+from collections import Counter, OrderedDict, deque
+from enum import Enum
+from pathlib import Path
+from time import perf_counter
+from typing import cast
+
+import torch
+import torch.nn as nn
+
+from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
+from aitune.torch.jit.config import config
+from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.passthrough_module import PassthroughModule
+from aitune.torch.module.recording_module import RecordingModule, Sample
+from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.tuned_module import TunedModule
+from aitune.torch.tune_strategy.jit_strategy import JitStrategy
+from aitune.torch.utils.graph_break_detector import GraphBreakDetector
+
+
+class ModuleState(Enum):
+    """Possible states of the Module class."""
+
+    INIT = "init"  # before first forward call, model hierarchy is not fully resolved
+    RECORDING = "recording"  # after first forward call, model hierarchy is fully resolved, but not tuned
+    TUNED = "tuned"  # model is tuned
+    EAGER = "eager"  # model cannot be tuned, moved to eager mode
+    SKIPPED = "skipped"  # module is skipped, not tuned
+    DETACHED = "detached"  # module is detached i.e. its parent was tuned hence children could be detached
+
+
+_emoji_state = {
+    ModuleState.INIT: "⏳",
+    ModuleState.RECORDING: "🔴",
+    ModuleState.TUNED: "🎯",
+    ModuleState.EAGER: "⚠️",
+    ModuleState.SKIPPED: "🚫",
+    ModuleState.DETACHED: "☑️",
+}
+
+
+class GraphBreakException(Exception):
+    """Exception raised when graph break is detected."""
+
+    pass
+
+
+class PatchedModule:
+    """Patched module.
+
+    Intercepts torch.nn.Module's forward function to record data, tune module and to do inference on a tuned one.
+
+    As opposed to the AITune declarative approach, where the user specifies which module should be tuned,
+    JIT approach intercepts all modules on the fly and creates call hierarchy. After a few calls it can perform
+    tuning. JIT is actually a bit harder case, since during navigation of the model hierarchy we are not aware
+    of the real parent object (there could be python objects in between). Hence we cannot override parent object
+    reference meaning we can't inject module as a proxy. This is why only forward function is overridden and
+    device attribute is patched with dynamic class creation so that only instance attribute is changed.
+
+    """
+
+    stack: deque["PatchedModule"] = deque()
+    heads: list["PatchedModule"] = []  # the top level modules
+    history: list[str] = []  # for tracking purposes
+    patched_classes: Counter[str] = Counter()  # for generating unique names
+
+    def __init__(self, module: torch.nn.Module):
+        """Initialize the patched module."""
+        self.__wrapped__ = module
+        # proxy forward
+        self._original_forward = module.forward
+        # basic attributes
+        self._name = module.__class__.__name__
+        # those attributes can't be resolved until first forward call
+        self._call_count = 0
+        self._level = -1
+        self._parent: PatchedModule | None = None
+        self._children: list[PatchedModule] = []
+        self._allowed_to_tune = False
+        # routing maps state to forward method implementation, to split large logic into smaller parts
+        self._forward_routing = {
+            ModuleState.INIT: lambda *args, **kwargs: self._forward_init(*args, **kwargs),
+            ModuleState.RECORDING: lambda *args, **kwargs: self._forward_recording(*args, **kwargs),
+            ModuleState.TUNED: lambda *args, **kwargs: self._forward_tuned(*args, **kwargs),
+            ModuleState.EAGER: lambda *args, **kwargs: self._original_forward(*args, **kwargs),
+            ModuleState.SKIPPED: lambda *args, **kwargs: self._raise_exception(f"Module {self._name} is skipped"),
+            ModuleState.DETACHED: lambda *args, **kwargs: self._raise_exception(f"Module {self._name} is detached"),
+        }
+        self._tune_result_description: str = ""  # for tracking purposes
+        self._update_state(ModuleState.INIT)
+
+    def tune(
+        self,
+    ):
+        """Tunes the module in blocking mode.
+
+        Args:
+            dry_run: if True, only dry run the tuning
+
+        Note:
+            if module has already defined strategy/strategies those will take precedence over the provided one.
+        """
+        self._set_original_forward_for_hierarchy()
+        device = torch.device("cuda")
+        todo = [self]
+        while todo:
+            current = todo.pop()
+            if current._should_be_skipped():
+                current._update_state(ModuleState.SKIPPED)
+                _to_hist(f"Module on skip list: {str(current)}")
+                current._unpatch_hierarchy(include_self=True)
+                continue
+            recording = cast(RecordingModule, current._wrapper)
+            backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
+            strategy = JitStrategy(TensorRTBackend())
+            try:
+                for graph_spec in recording.graph_specs:
+                    cache_dir = self._create_graph_cache_dir(graph_spec)
+                    data = recording.samples_for_graph_spec(graph_spec)
+                    if config.dry_run:
+                        self._simulate_dry_run(strategy, current, graph_spec, data, device, cache_dir)
+                    else:
+                        backend = self._tune(device, current, strategy, graph_spec, cache_dir, data)
+                        backends[graph_spec.input_spec] = backend
+                if backends:
+                    current._wrapper = TunedModule(backends)
+                    current._tune_result_description = ", ".join([b.name for b in backends.values()])
+                else:
+                    current._wrapper = PassthroughModule(current.__wrapped__)
+                    current._tune_result_description = "dry-run tuning success"
+
+                # tuning success, we can revert forward for current module, unpatch children
+                current._update_state(ModuleState.TUNED)
+                current._patch_device_attribute(device)
+                current._unpatch_hierarchy(include_self=False)
+                _to_hist(f"Model tuned: {str(current)}")
+            except Exception as e:
+                current.__wrapped__.to(device)  # failed backend leaves module on cpu, move it back
+                current._unpatch()
+                current._update_state(ModuleState.EAGER)
+                for child in current._children:
+                    child._allowed_to_tune = True  # since parent failed, now children are allowed to tune
+                    if child._should_be_tuned():
+                        todo.append(child)
+                if isinstance(e, GraphBreakException):
+                    current._tune_result_description = "graph break"
+                else:
+                    current._tune_result_description = "tuning error"
+                _to_hist(f"Failed to tune module, unpatched: {str(current)}")
+
+    def _simulate_dry_run(self, strategy, current, graph_spec, data, device, cache_dir):
+        """Simulate tuning in dry-run mode.
+
+        It runs tune_dry_run but it also raises exception with probability of `config.dry_run_failure_probability`.
+
+        This is done to simulate failures during JIT tuning to see how it would behave.
+        """
+        _to_hist(f"Tuning in dry-run module: {str(current)}")
+        strategy.tune_dry_run(current.__wrapped__, current._name, graph_spec, data, device, cache_dir)
+        if failure := random.random() < config.dry_run_failure_probability:
+            raise Exception(f"Tuning failed in dry-run mode with probability {failure:.2f}")
+
+    def _tune(self, device, current, strategy, graph_spec, cache_dir, data):
+        """Tune the module.
+
+        It throws exception if graph break is detected.
+        """
+        if config.detect_graph_breaks:
+            self._throw_if_has_graph_break(current, data)
+        backend = self._tune_module(strategy, current, graph_spec, data, device, cache_dir)
+        return backend
+
+    def _should_be_skipped(self):
+        """Check if the module should be skipped.
+
+        Name contains parameters, so only class names is relevant.
+        """
+        cls_name = self._name.split(" ")[0]
+        return cls_name in config.skip_modules
+
+    def _forward_init(self, *args, **kwargs):
+        """Forward call for the first time.
+
+        This method is called when the module is first called.
+        It initializes the module and sets the state to RECORDING.
+        """
+        params = self._count_parameters(self.__wrapped__)
+        if params == "0":
+            self._unpatch()
+            return self.__wrapped__(*args, **kwargs)
+
+        self._name += f" 📊{params}"
+        self._call_count = 1
+        if PatchedModule.stack:
+            parent = PatchedModule.stack[-1]
+            if parent._level + 1 < config.max_depth_level:
+                parent._children.append(self)
+                self._parent = parent
+                self._level = parent._level + 1
+                _to_hist(f"New child module: {str(self)}")
+            else:
+                # too deep, skip the module
+                self._unpatch()
+                return self.__wrapped__(*args, **kwargs)
+        else:
+            self._parent = None
+            self._level = 0
+            self._allowed_to_tune = True  # at the beginning only head modules are allowed
+            PatchedModule.heads.append(self)
+            _to_hist(f"New top module: {str(self)}")
+
+        self._update_state(ModuleState.RECORDING)
+        self._wrapper = RecordingModule(self.__wrapped__, self._name)
+        PatchedModule.stack.append(self)
+        try:
+            self.__wrapped__.forward = self._original_forward
+            result = self._wrapper(*args, **kwargs)
+        finally:
+            self.__wrapped__.forward = self._proxy_forward
+            PatchedModule.stack.pop()
+        return result
+
+    def _forward_recording(self, *args, **kwargs):
+        """Forward call for the recording state."""
+        try:
+            self.__wrapped__.forward = self._original_forward
+            result = self._wrapper(*args, **kwargs)
+            self._call_count += 1
+        finally:
+            self.__wrapped__.forward = self._proxy_forward
+        if self._should_be_tuned():
+            self.tune()
+        return result
+
+    def _forward_tuned(self, *args, **kwargs):
+        """Forward call for the tuned state."""
+        try:
+            self.__wrapped__.forward = self._original_forward
+            return self._wrapper(*args, **kwargs)
+        finally:
+            self.__wrapped__.forward = self._proxy_forward
+
+    def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:
+        """Create a cache directory for the graph."""
+        cache_dir = config.cache_dir / self._get_hierarchy_hash() / graph_spec.name
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir
+
+    def _get_hierarchy_hash(self) -> str:
+        """Get the hash of the module hierarchy."""
+        todo = [self]
+        hierarchy_names = ""
+        while todo:
+            current = todo.pop()
+            hierarchy_names += current._name
+            todo.extend(current._children)
+        return hashlib.sha256(hierarchy_names.encode()).hexdigest()
+
+    def _patch_device_attribute(self, device: torch.device):
+        """Patch the device attribute of the module and its parents.
+
+        HF pipelines have `device` attribute which checks `next(module.parameters()).device`.
+        Since JIT tuning moves the original module to a cpu device, this attribute returns cpu device.
+        This causes misplacement issues where some modules are on cuda and other modules or tensors are moved according
+        to the device attribute to cpu. To fix this, the method patches dynamically device attribute but only at instance
+        (object) level i.e. does not touch class object. This has to be applied not only to the current module but to
+        its parents in case parents objects do not have it's own parameters but include child module which has been
+        tuned and move to a cpu device.
+        """
+        todo = [self]
+        while todo:
+            current = todo.pop()
+            name = current._name
+            counter = PatchedModule.patched_classes[name]
+            # create dynamically a subclass with device attribute overridden
+            patched_class = type(
+                f"Patched_{name}_{counter}",
+                (current.__wrapped__.__class__,),
+                {"device": device},
+            )  # noqa: N806
+            PatchedModule.patched_classes[name] += 1
+            # replace class so that python dynamically invokes patched device attribute
+            current.__wrapped__.__class__ = patched_class
+            if current._parent:
+                todo.append(current._parent)
+
+    def _raise_exception(self, message: str):
+        """Raise an exception."""
+        raise Exception(message)
+
+    def __repr__(self):
+        """Representation of the module."""
+        return self.__str__()
+
+    def __str__(self):
+        """String representation of the module."""
+        result = f"{self._name} level={self._level}🪜 "
+        result += f"state={self._state.value}{_emoji_state[self._state]} "
+        if self._tune_result_description:
+            result += f"({self._tune_result_description}) "
+        result += f"call_count={self._call_count}"
+        return result
+
+    def _set_original_forward_for_hierarchy(self):
+        """Set the original forward method for the module and its children."""
+        todo = [self]
+        while todo:
+            current = todo.pop()
+            current.__wrapped__.forward = current._original_forward
+            todo.extend(current._children)
+
+    def _should_be_tuned(self):
+        """Check if the module should be tuned."""
+        min_samples_check = self._call_count >= config.min_samples
+
+        dynamic_axes_check = False
+        if config.batch_axis_required:
+            recording = cast(RecordingModule, self._wrapper)
+            for graph_spec in recording.graph_specs:
+                if graph_spec.input_spec.detected_dynamic_axis():
+                    dynamic_axes_check = True
+                    break
+        else:
+            dynamic_axes_check = True
+
+        return min_samples_check and self._allowed_to_tune and dynamic_axes_check
+
+    def _throw_if_has_graph_break(self, module: "PatchedModule", data: list[Sample]):
+        """Throw if graph break is detected.
+
+        Adds to history the duration of the checking.
+        """
+        detector = GraphBreakDetector()
+        args, kwargs = data[0]
+        start = perf_counter()
+        detector.detect(module.__wrapped__, args, kwargs)
+        duration = perf_counter() - start
+        if detector.has_graph_breaks():
+            message = f"Graph break detected in {module._name} in {duration:.2f}s"
+            _to_hist(message)
+            raise GraphBreakException(message)
+        else:
+            _to_hist(f"No graph breaks in {module._name}. Checking took {duration:.2f}s")
+
+    def _tune_module(
+        self,
+        strategy,
+        module: "PatchedModule",
+        graph_spec: GraphSpec,
+        data: list[Sample],
+        device: torch.device,
+        cache_dir: Path,
+    ):
+        """Tune the module.
+
+        Adds to history the duration of the tuning.
+        """
+        start = perf_counter()
+        backend = strategy.tune(module.__wrapped__, module._name, graph_spec, data, device, cache_dir)
+        duration = perf_counter() - start
+        _to_hist(f"Tuning {module._name} took {duration:.2f}s")
+        return backend
+
+    def _unpatch(self):
+        """Unpatch the module.
+
+        Removes it also from Patcher object registry.
+        """
+        self._allowed_to_tune = False
+        self.__wrapped__.forward = self._original_forward
+
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        Patcher.unpatch_module(self)
+
+    def _unpatch_hierarchy(self, include_self=False):
+        """Unpatch the module and all its children."""
+        if include_self:
+            _to_hist(f"Unpatching module: {str(self)}")
+            self._unpatch()
+        to_unpatch = self._children[:]
+        while to_unpatch:
+            child = to_unpatch.pop()
+            child._update_state(ModuleState.DETACHED)
+            _to_hist(f"Unpatching child module: {str(child)}")
+            child._unpatch()
+            to_unpatch.extend(child._children)
+
+    def _update_state(self, state: ModuleState):
+        """Update the state of the module and update the forward method routing."""
+        self._state = state
+        if state != ModuleState.SKIPPED:
+            self._proxy_forward = self._forward_routing[state]
+            self.__wrapped__.forward = self._proxy_forward
+
+    @staticmethod
+    def _count_parameters(module: nn.Module) -> str:
+        """Counts the total number of parameters and returns it in a human-readable format (e.g., 1.2M, 500K)."""
+        num_params = sum(p.numel() for p in module.parameters())
+
+        if num_params >= 1_000_000_000:
+            return f"{num_params / 1_000_000_000:.1f}B"
+        elif num_params >= 1_000_000:
+            return f"{num_params / 1_000_000:.1f}M"
+        elif num_params >= 1_000:
+            return f"{num_params / 1_000:.1f}K"
+        else:
+            return f"{num_params}"
+
+    @staticmethod
+    def print_hierarchy(sink=print):
+        """Prints the PatchedModule hierarchy starting from the head module.
+
+        This method traverses the module tree starting from the head module
+        and prints each module with indentation to show the hierarchy levels.
+        """
+        if len(PatchedModule.heads) == 0:
+            sink("No modules in hierarchy")
+            return
+
+        def _print_module(module: "PatchedModule", level: int = 0):
+            """Recursively print module and its children.
+
+            Args:
+                module: The module to print
+                level: The current indentation level
+            """
+            indent = "  " * level
+            sink(f"{indent}├─ {str(module)}")
+
+            for child in module._children:
+                _print_module(child, level + 1)
+
+        sink("PatchedModule Hierarchy:")
+        for head in PatchedModule.heads:
+            _print_module(head)
+
+    @staticmethod
+    def reset():
+        """Reset PatchedModule state."""
+        PatchedModule.history.clear()
+        PatchedModule.heads.clear()
+        PatchedModule.stack.clear()
+
+
+def _to_hist(entry: str):
+    """Updates history with new entry."""
+    PatchedModule.history.append(entry)

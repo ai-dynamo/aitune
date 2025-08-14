@@ -32,6 +32,7 @@ class SleepBackend(Backend):
 
     def _build(self, module: Any, graph_spec: Any, data: list[Any], cache_dir: Path) -> Backend:
         self._activate()
+        self._module = module
         return self
 
     def _activate(self):
@@ -39,7 +40,7 @@ class SleepBackend(Backend):
 
     def _infer(self, *args, **kwargs):
         time.sleep(self.sleep_time)
-        return args, kwargs
+        return self._module(*args, **kwargs)
 
     def _deactivate(self):
         pass

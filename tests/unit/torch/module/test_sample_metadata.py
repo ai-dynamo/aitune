@@ -277,3 +277,24 @@ def test_get_names_mapping():
     args_mapping, kwargs_mapping = metadata.get_names_mapping()
     assert args_mapping == []
     assert kwargs_mapping == {}
+
+
+def test_detected_dynamic_axis():
+    # Test case 1: No dynamic or batch axes
+    tensor1 = torch.randn(2, 3)
+    metadata1 = SampleMetadata.from_sample(tensor1, prefix="test")
+    assert not metadata1.detected_dynamic_axis()
+
+    # Test case 2: Has dynamic axis
+    tensor2 = torch.randn(2, 3)
+    metadata2 = SampleMetadata.from_sample(tensor2, prefix="test")
+    # Manually modify tensor spec to have dynamic axis
+    metadata2._tensor_specs[0].shape[1] = "dim1"
+    assert metadata2.detected_dynamic_axis()
+
+    # Test case 3: Has batch axis
+    tensor3 = torch.randn(2, 3)
+    metadata3 = SampleMetadata.from_sample(tensor3, prefix="test")
+    # Manually modify tensor spec to have batch axis
+    metadata3._tensor_specs[0].shape[0] = "batch0"
+    assert metadata3.detected_dynamic_axis()

@@ -65,6 +65,7 @@ dependencies = [
     "torch_tensorrt>2",
     "wrapt>=1.17.2",
     "nvidia-modelopt[all]>=0.29.0",
+    "autowrapt>=1.0",
 ]
 
 [project.urls]
@@ -118,10 +119,12 @@ functional-test = [
 
 demo = [
     "diffusers",
+    "transformers>=4.48.2",
     "ipykernel",
     "sentencepiece>=0.2.0",
     "timm>=1.0.14",
-    "transformers>=4.48.2",
+    "matplotlib",
+    "nemo-toolkit[asr]"
 ]
 
 
@@ -213,3 +216,7 @@ verbose = false
 
 [tool.pytype]
 disable = ["import-error", "module-attr"]
+
+# the following enables autowrapt to conditionally enable JIT tuning i.e. `AUTOWRAPT_BOOTSTRAP=jit_tuning python script.py`
+[project.entry-points.jit_tuning]
+torch = "aitune.torch.jit.enable:wrapt_auto_enable"

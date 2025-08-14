@@ -96,3 +96,60 @@ def test_tensor_spec_to_dict_from_dict():
     wrong_dict = {"a": 1}
     with pytest.raises(ValueError):
         TensorSpec.from_dict(wrong_dict)
+
+
+def test_has_batch_axis():
+    spec1 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    spec2 = TensorSpec.from_tensor("test", torch.randn(3, 2), batch_size=3)
+    spec1.update_shapes_seen(spec2)
+    assert spec1.has_batch_axis()
+
+
+def test_has_dynamic_axis():
+    spec1 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    spec2 = TensorSpec.from_tensor("test", torch.randn(2, 2), batch_size=3)
+    spec1.update_shapes_seen(spec2)
+    assert spec1.has_dynamic_axis()
+
+
+def test_matches():
+    """Test the matches function with various scenarios."""
+    # Test case 1: Same shapes with integer dimensions
+    spec1 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    spec2 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    assert spec1.matches(spec2)
+    assert spec2.matches(spec1)
+
+    # Test case 2: Same shapes with symbolic dimensions (dim1)
+    spec1 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    spec2 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    spec2.shape[1] = "dim1"  # Replace second dimension with symbolic
+    assert spec1.matches(spec2)
+    assert spec2.matches(spec1)
+
+    # Test case 3: Same shapes with symbolic dimensions (batch1)
+    spec1 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    spec2 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    spec2.shape[1] = "batch1"  # Replace second dimension with batch symbolic
+    assert spec1.matches(spec2)
+    assert spec2.matches(spec1)
+
+    # Test case 4: Different integer dimensions - should not match
+    spec1 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    spec2 = TensorSpec.from_tensor("test", torch.randn(1, 3), batch_size=1)
+    assert not spec1.matches(spec2)
+    assert not spec2.matches(spec1)
+
+    # Test case 5: Different ranks - should not match
+    spec1 = TensorSpec.from_tensor("test", torch.randn(1, 2), batch_size=1)
+    spec2 = TensorSpec.from_tensor("test", torch.randn(1, 2, 3), batch_size=1)
+    assert not spec1.matches(spec2)
+    assert not spec2.matches(spec1)
+
+    # Test case 6: Scalars i.e. empty shapes
+    spec1 = TensorSpec.from_tensor("test", torch.randn(1), batch_size=1)
+    spec2 = TensorSpec.from_tensor("test", torch.randn(1), batch_size=1)
+    spec1.shape = []
+    spec2.shape = []
+    assert spec1.matches(spec2)
+    assert spec2.matches(spec1)

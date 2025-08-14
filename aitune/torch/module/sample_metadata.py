@@ -124,6 +124,10 @@ class SampleMetadata:
 
         return args_mapping, kwargs_mapping
 
+    def detected_dynamic_axis(self) -> bool:
+        """Check if dynamic axes are detected in the metadata."""
+        return any(ts.has_dynamic_axis() or ts.has_batch_axis() for ts in self._tensor_specs)
+
     def get_names(self) -> Sequence[str]:
         """Get names of tensors in PyTreeMetadata."""
         return list(self.flatten_sample(self._metadata).keys())

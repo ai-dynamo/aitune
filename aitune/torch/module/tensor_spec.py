@@ -163,6 +163,33 @@ class TensorSpec:
             max_batch_size = max(max_batch_size, self.max_shape[axis])
         return max_batch_size
 
+    def has_batch_axis(self) -> bool:
+        """Check if tensor has batch axis."""
+        return any(isinstance(dim, str) and dim.startswith("batch") for dim in self.shape)
+
+    def has_dynamic_axis(self) -> bool:
+        """Check if tensor has dynamic axis."""
+        return any(isinstance(dim, str) and dim.startswith("dim") for dim in self.shape)
+
+    def matches(self, other: "TensorSpec") -> bool:
+        """Check if tensor spec matches other tensor spec.
+
+        Tensor spec matches other if ranks are same and each ordinal dimension is the same.
+
+        Example:
+            tensor[1, 2] matches tensor[1, 2]
+            tensor[1, 2] matches tensor[1, "dim1"]
+            tensor[1, 2] matches tensor[1, "batch1"]
+            tensor[1, 2] does not match tensor[1, 3]
+            tensor[1, 2] does not match tensor[1, 2, 3]
+        """
+        if len(self.shape) != len(other.shape):
+            return False
+        for i in range(len(self.shape)):
+            if isinstance(self.shape[i], int) and isinstance(other.shape[i], int) and self.shape[i] != other.shape[i]:
+                return False
+        return True
+
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "TensorSpec":
         """Create TensorSpec from dictionary."""
@@ -175,7 +202,3 @@ class TensorSpec:
     def is_int(value: float) -> bool:
         """Check if value is an integer by checking value not the type."""
         return not math.isnan(value) and int(value) == value
-
-    def has_batch_axis(self) -> bool:
-        """Check if tensor has batch axis."""
-        return any(isinstance(dim, str) and dim.startswith("batch") for dim in self.shape)

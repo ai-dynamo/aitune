@@ -11,11 +11,4 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Simple unit test to pass. Replace with more meaningful unit tests."""
-
-from aitune import __version__
-
-
-def test_current_version():
-    """Test current version."""
-    assert __version__.startswith("0.1.0")
+"""Just-in-time compilation module."""

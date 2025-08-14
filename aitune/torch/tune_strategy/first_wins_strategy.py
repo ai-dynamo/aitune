@@ -71,7 +71,7 @@ class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
                 if backend.is_active:
                     backend.deactivate()
                 log("❌ backend failed", depth=2, sink=logger.info)
-                log("Exception: %s", exception, sink=logger.debug)
+                log("Exception: %s", exception, sink=logger.info)
                 module.to(device)  # move module back to device as failed backend could move it to cpu
 
         if selected_backend:

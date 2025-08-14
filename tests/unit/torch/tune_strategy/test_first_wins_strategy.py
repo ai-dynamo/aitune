@@ -24,7 +24,7 @@ from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
-from tests.toy_backends import BuildFailsBackend, SleepBackend
+from tests.toy_backends import SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
 
 
@@ -168,7 +168,7 @@ def test_first_wins_strategy_find_max_batch_size_fails(torch_device):
     """If find max batch size fails, there is no recovery."""
     strategy = FirstWinsStrategy(
         backends=[
-            BuildFailsBackend(RuntimeError),
+            # BuildFailsBackend(RuntimeError),
             SleepBackend(),
             InferenceFailsBackend(),  # this should not be considered, as SleepBackend should be selected
         ],

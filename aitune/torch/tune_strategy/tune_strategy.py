@@ -24,8 +24,9 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, DummyBackend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
-from aitune.torch.task.correctness import check_output_correctness
+from aitune.torch.module.recording_module import OUTPUT_METADATA_PREFIX, Sample
+from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.task.correctness import check_output_correctness, check_output_tensor_shapes
 from aitune.utils.logging import log
 
 logger = getLogger(__name__)
@@ -103,6 +104,8 @@ class TuneStrategy(ABC):
             for args, kwargs in data:
                 outputs = backend.infer(*args, **kwargs)
                 check_output_correctness(outputs, name=f"{name}.{graph_spec.name}.{backend.describe()}.output")
+                outputs_metadata = SampleMetadata.from_sample(outputs, prefix=OUTPUT_METADATA_PREFIX)
+                check_output_tensor_shapes(graph_spec.output_spec.tensor_specs, outputs_metadata.tensor_specs)
 
     def enable_correctness_check(self, enable: bool = True) -> "TuneStrategy":
         """Enable/disable correctness checking."""

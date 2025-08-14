@@ -20,9 +20,15 @@ from typing import Any
 import numpy as np
 import torch
 
+from aitune.torch.module.tensor_spec import TensorSpec
 
-class CorrectnessCheckError(ValueError):
-    """Error raised when correctness check fails."""
+
+class CorrectnessValueError(ValueError):
+    """Error raised when value is not finite i.e. NaN or infinity."""
+
+
+class CorrectnessTensorShapeError(ValueError):
+    """Error raised when tensor shapes do not match."""
 
 
 def check_output_correctness(output: Any, name: str = "output", depth: int = 0):  # noqa: C901
@@ -46,7 +52,7 @@ def check_output_correctness(output: Any, name: str = "output", depth: int = 0):
 
     if isinstance(output, (int, float)):
         if not math.isfinite(output):
-            raise CorrectnessCheckError(f"Output(int, float) {name} is not finite")
+            raise CorrectnessValueError(f"Output(int, float) {name} is not finite")
         return
 
     if isinstance(output, str):
@@ -69,7 +75,22 @@ def check_output_correctness(output: Any, name: str = "output", depth: int = 0):
         raise ValueError(f"Output {name} is not a tensor but {type(output)}")
 
     if torch.isinf(output).any():
-        raise CorrectnessCheckError(f"Output tensor {name} contains infinity values")
+        raise CorrectnessValueError(f"Output tensor {name} contains infinity values")
 
     if torch.isnan(output).any():
-        raise CorrectnessCheckError(f"Output tensor {name} contains NaN values")
+        raise CorrectnessValueError(f"Output tensor {name} contains NaN values")
+
+
+def check_output_tensor_shapes(expected_tensor_specs: list[TensorSpec], actual_tensor_specs: list[TensorSpec]):
+    """Check if the output tensor shapes are the same as the original output tensor shapes."""
+    errors = []
+    for orig_tensor, tuned_tensor in zip(expected_tensor_specs, actual_tensor_specs, strict=True):
+        if not orig_tensor.matches(tuned_tensor):
+            errors.append(
+                f"Expected tensor {orig_tensor.name} to have shape {orig_tensor.shape} but got {tuned_tensor.shape}"
+            )
+
+    if errors:
+        raise CorrectnessTensorShapeError(
+            f"{len(errors)} error(s) related to output tensor shapes:\n- " + "\n- ".join(errors)
+        )

@@ -17,5 +17,10 @@ limitations under the License.
 # Changelog
 
 
-## 0.1.0 (unreleased)
-- new: Initial release
+## 0.2.0 (unreleased)
+
+- feat: add JIT tuning
+
+## 0.1.0
+
+- feat: add AITune features scoped for the first release

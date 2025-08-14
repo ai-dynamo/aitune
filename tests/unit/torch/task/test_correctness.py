@@ -17,7 +17,12 @@ import numpy as np
 import pytest
 import torch
 
-from aitune.torch.task.correctness import check_output_correctness
+from aitune.torch.module.tensor_spec import TensorSpec
+from aitune.torch.task.correctness import (
+    CorrectnessTensorShapeError,
+    check_output_correctness,
+    check_output_tensor_shapes,
+)
 
 
 def test_check_output_correctness_valid():
@@ -71,3 +76,85 @@ def test_check_output_correctness_sample_scalar_nan():
     )
     with pytest.raises(ValueError, match="is not finite"):
         check_output_correctness(outputs)
+
+
+def test_check_output_tensor_shapes_matching_shapes():
+    """Test check_output_tensor_shapes with matching tensor shapes."""
+    expected_specs = [
+        TensorSpec.from_tensor("output__0", torch.randn(2, 5), batch_size=2),
+        TensorSpec.from_tensor("output__1", torch.randn(2, 10), batch_size=2),
+    ]
+    actual_specs = [
+        TensorSpec.from_tensor("output__0", torch.randn(2, 5), batch_size=2),
+        TensorSpec.from_tensor("output__1", torch.randn(2, 10), batch_size=2),
+    ]
+
+    # Should not raise any exception
+    check_output_tensor_shapes(expected_specs, actual_specs)
+
+
+def test_check_output_tensor_shapes_matching_with_symbolic_dimensions():
+    """Test check_output_tensor_shapes with symbolic dimensions that should match."""
+    # Create specs with symbolic dimensions that should match
+    expected_specs = [
+        TensorSpec(
+            name="output__0",
+            shape=[2, "dim1"],
+            min_shape=[2, 5],
+            max_shape=[2, 10],
+            dtype=torch.float32,
+            _bs_multipliers=[1.0, 2.5],
+        ),
+        TensorSpec(
+            name="output__1",
+            shape=[2, "batch1"],
+            min_shape=[2, 10],
+            max_shape=[2, 10],
+            dtype=torch.float32,
+            _bs_multipliers=[1.0, 5.0],
+        ),
+    ]
+    actual_specs = [
+        TensorSpec(
+            name="output__0",
+            shape=[2, 7],  # Concrete dimension that falls within symbolic range
+            min_shape=[2, 7],
+            max_shape=[2, 7],
+            dtype=torch.float32,
+            _bs_multipliers=[1.0, 3.5],
+        ),
+        TensorSpec(
+            name="output__1",
+            shape=[2, 10],  # Concrete dimension that matches batch dimension
+            min_shape=[2, 10],
+            max_shape=[2, 10],
+            dtype=torch.float32,
+            _bs_multipliers=[1.0, 5.0],
+        ),
+    ]
+
+    # Should not raise any exception
+    check_output_tensor_shapes(expected_specs, actual_specs)
+
+
+def test_check_output_tensor_shapes_mismatched_shapes():
+    """Test check_output_tensor_shapes with mismatched tensor shapes."""
+    expected_specs = [
+        TensorSpec.from_tensor("output__0", torch.randn(2, 5), batch_size=2),
+        TensorSpec.from_tensor("output__1", torch.randn(2, 10), batch_size=2),
+        TensorSpec.from_tensor("output__2", torch.randn(2, 10, 20), batch_size=2),
+    ]
+    actual_specs = [
+        TensorSpec.from_tensor("output__0", torch.randn(1, 5), batch_size=1),  # Different batch size
+        TensorSpec.from_tensor("output__1", torch.randn(2, 8), batch_size=2),  # Different feature size
+        TensorSpec.from_tensor("output__2", torch.randn(2, 10), batch_size=2),
+    ]
+
+    with pytest.raises(CorrectnessTensorShapeError) as exc_info:
+        check_output_tensor_shapes(expected_specs, actual_specs)
+
+    error_message = str(exc_info.value)
+    assert "Expected tensor output__0 to have shape [2, 5] but got [1, 5]" in error_message
+    assert "Expected tensor output__1 to have shape [2, 10] but got [2, 8]" in error_message
+    assert "Expected tensor output__2 to have shape [2, 10, 20] but got [2, 10]" in error_message
+    assert "3 error(s) related to output tensor shapes" in error_message
