@@ -84,13 +84,6 @@ test = [
     "setuptools",
     "importlib-metadata; python_version < '3.10'",
 ]
-doc = [
-    "mike ~= 1.1.0",
-    "mkdocs-htmlproofer-plugin >= 0.8.0",
-    "mkdocs-material >= 8.5.6",
-    "mkdocstrings[python] < 0.28.3",
-    "mkdocstrings-python >= 1.7.0",
-]
 dev = [
     "aitune[test]",
     "aitune[doc]",
@@ -127,9 +120,19 @@ demo = [
     "nemo-toolkit[asr]"
 ]
 
+[dependency-groups]
+docs = [
+    "mike",
+    "mkdocs-htmlproofer-plugin",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocstrings-python",
+    "GitPython",
+]
+
 
 [build-system]
-requires = ["setuptools>=65.3.0", "setuptools_scm>=2.0.0,<3", "wheel>=0.37.1"]
+requires = ["setuptools>=65.3.0", "setuptools_scm[toml]>=8.3", "wheel>=0.37.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -143,8 +146,7 @@ include = ["aitune"]
 [tool.setuptools.package-data]
 aitune = ["**/*"]
 
-[tool.setuptools.dynamic]
-version = { attr = "aitune.__version__.__version__" }
+[tool.setuptools_scm]
 
 [tool.pytest.ini_options]
 log_cli = true
