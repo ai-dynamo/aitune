@@ -13,7 +13,7 @@
 # limitations under the License.
 """Test JIT tuning with auto tuning."""
 # /// script
-# dependencies = []
+# dependencies = ["timm"]
 # scope = "always"
 # allow_failure = false
 # ///
@@ -21,6 +21,7 @@
 from io import StringIO
 from logging import INFO, basicConfig
 
+import timm
 import torch
 
 from aitune.torch.jit.patched_module import PatchedModule
@@ -29,7 +30,7 @@ from aitune.torch.jit.patched_module import PatchedModule
 def test_jit_resnet():
     import aitune.torch.jit.enable  # noqa: F401
 
-    resnet = torch.hub.load("pytorch/vision:v0.10.0", "resnet18", weights="IMAGENET1K_V1").to("cuda")
+    resnet = timm.create_model("resnet18", pretrained=False).to("cuda")
 
     def batch():
         # we are calling two times with different batch sizes to recognize dynamic axes

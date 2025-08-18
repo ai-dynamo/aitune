@@ -355,3 +355,6 @@ notebooks/checkpoints/
 
 # skip nsights system reports
 *.nsys-rep
+
+# images
+*.png

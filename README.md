@@ -30,16 +30,17 @@ The toolkit enables seamless tuning of PyTorch models and pipelines using variou
 
 The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 
-| Feature                     | Description                                                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Ease-of-use                 | Single line of code to run all possible tuning paths directly from your source code                                                              |
-| Wide Backend Support        | Compatible with various tuning backends including TensorRT, Torch-TensorRT, TorchAO, and Torch Inductor                                          |
-| Model Tuning                | Enhance the performance of models such as ResNET and BERT for efficient inference deployment                                                     |
-| Pipeline Tuning             | Streamline Python code pipelines for models such as Stable Diffusion and Flux using seamless model wrapping and tuning                           |
-| Model Export and Conversion | Automate the process of exporting and converting models between various formats with focus on TensorRT and Torch-TensorRT                        |
-| Correctness Testing         | Ensures the tuned model produce correct outputs validating on provided data samples                                                              |
-| Performance Profiling       | Profiles models to select the optimal backend based on performance metrics such as latency and throughput                                        |
-| Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                                               |
+| Feature                     | Description                                                                                                               |
+|-----------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| Ease-of-use                 | Single line of code to run all possible tuning paths directly from your source code                                       |
+| Wide Backend Support        | Compatible with various tuning backends including TensorRT, Torch-TensorRT, TorchAO, and Torch Inductor                   |
+| Model Tuning                | Enhance the performance of models such as ResNET and BERT for efficient inference deployment                              |
+| Pipeline Tuning             | Streamline Python code pipelines for models such as Stable Diffusion and Flux using seamless model wrapping and tuning    |
+| Model Export and Conversion | Automate the process of exporting and converting models between various formats with focus on TensorRT and Torch-TensorRT |
+| Correctness Testing         | Ensures the tuned model produce correct outputs validating on provided data samples                                       |
+| Performance Profiling       | Profiles models to select the optimal backend based on performance metrics such as latency and throughput                 |
+| Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                        |
+| JIT tuning                  | Just-in-time tuning of a model or a pipeline without any code changes required                                            |
 
 ## Prerequisites
 
@@ -83,6 +84,12 @@ The quick start section provides examples of possible tuning and deployment path
 NVIDIA AITune allows seamless tuning of models for deployment, such as converting them to TensorRT, without requiring any changes to the original Python pipelines.
 
 The below code presents Stable Diffusion pipeline tuning. But first, before you run the example install the required packages:
+
+### Declarative approach
+
+AITune allows annotating torch.nn.Modules manually or using the `inspect` functionality, where modules are automatically picked, then user can verify them and schedule for tuning.
+
+At the beginning install required 3rd party dependencies:
 
 ```bash
 pip install transformers diffusers torch
@@ -144,6 +151,41 @@ And load the tuned pipeline directly
 pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1")
 pipe.to("cuda")
 ait.load(pipe, "tuned_pipe.pt")
+```
+
+### Just-in-time tuning
+
+In this mode there is no need to modify user's code. At the beginning AITune uses a few inferences to detect model architecture and hierarchy of a model. Then it tries to tune modules one by one
+starting from top. If there is one of the following conditions:
+
+* a graph break detected i.e. torch.nn.Module contains conditional logic on inputs, meaning there is no guarantee of a static, correct graph of computations or
+* there is an error during tuning
+
+such a module is left intact and AITune tries to tune this module's children. This process continues until the depth of module reaches a certain limit.
+
+To turn on this mode, just set the following environment variable:
+
+```bash
+export AUTOWRAPT_BOOTSTRAP=jit_tuning
+```
+
+Next, you can run user script without modifying it e.g.
+
+```bash
+python your_script.py
+```
+
+Note: currently JIT mode does not support caching results i.e. every time a new python interpreter starts, the tunning process starts from scratch
+
+#### Configuring just-in-time tuning
+
+If there is a need to adjust just-in-time options, you can do it but currently this requires modifying code to import the JIT config:
+
+```python
+from aitune.torch.jit.config import config
+
+config.max_depth_level = 1 # change the default value of a nested module to be allowed to be tuned
+config.detect_graph_breaks = False # turn of graph break detection
 ```
 
 ## Core Functionalities

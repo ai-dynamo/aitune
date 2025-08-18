@@ -13,7 +13,7 @@
 # limitations under the License.
 """Test JIT tuning with patch decorator."""
 # /// script
-# dependencies = []
+# dependencies = ["timm"]
 # scope = "always"
 # allow_failure = false
 # ///
@@ -21,6 +21,7 @@
 from io import StringIO
 from logging import INFO, basicConfig
 
+import timm
 import torch
 
 from aitune.torch.jit.config import config
@@ -34,7 +35,7 @@ def create_resnet():
 
     The decorator will make this model tunable.
     """
-    return torch.hub.load("pytorch/vision:v0.10.0", "resnet18", weights="IMAGENET1K_V1").to("cuda")
+    return timm.create_model("resnet18", pretrained=False).to("cuda")
 
 
 def test_jit_resnet():
