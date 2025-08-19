@@ -13,7 +13,6 @@
 # limitations under the License.
 """Unit tests for TensorRTBuilder."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -121,14 +120,14 @@ def test_tensorrt_builder_init(tmp_path):
         workspace_size=2 << 30,  # 2GB
         optimization_level=5,
         compatibility_level=0,
-        timing_cache=Path("/tmp/timing.cache"),
+        timing_cache=tmp_path / "timing.cache",
         min_shapes={"input": (1, 3, 224, 224)},
         opt_shapes={"input": (4, 3, 224, 224)},
         max_shapes={"input": (8, 3, 224, 224)},
     )
     assert builder.workspace_size == 2 << 30
     assert builder.optimization_level == 5
-    assert builder.timing_cache == Path("/tmp/timing.cache")
+    assert builder.timing_cache == tmp_path / "timing.cache"
     assert builder.min_shapes == {"input": (1, 3, 224, 224)}
     assert builder.opt_shapes == {"input": (4, 3, 224, 224)}
     assert builder.max_shapes == {"input": (8, 3, 224, 224)}

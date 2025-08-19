@@ -200,7 +200,7 @@ def test_verify_model(mock_onnx_lib, tmp_path):
     exporter = ONNXExporter(output_path=output_path)
 
     # Verify model
-    exporter.verify_model("/tmp/test_model.onnx")
+    exporter.verify_model(output_path)
 
     # Verify interactions
     mock_onnx_lib.checker.check_model.assert_called_once()
@@ -209,7 +209,7 @@ def test_verify_model(mock_onnx_lib, tmp_path):
     mock_onnx_lib.checker.check_model.side_effect = ValueError("Invalid model")
 
     with pytest.raises(ValueError, match="Invalid model"):
-        exporter.verify_model("/tmp/test_model.onnx")
+        exporter.verify_model(output_path)
 
 
 def test_onnx_exporter_integration(tmp_path):

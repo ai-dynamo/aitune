@@ -116,7 +116,7 @@ def test_output_allocator_integration():
 
 
 @requires_cuda
-def test_output_allocator_inference_flow():
+def test_output_allocator_inference_flow(tmp_path):
     """Test the inference flow with output allocator."""
     backend = TensorRTBackend()
 
@@ -139,7 +139,7 @@ def test_output_allocator_inference_flow():
 
         # Initialize required components
         backend._model_name = "test_model"
-        backend._engine_path = "/tmp/test.engine"
+        backend._engine_path = tmp_path / "test.engine"
         backend._context = mock_context
         backend._engine_info = mock_engine_info
         backend._input_names = ["input_0"]

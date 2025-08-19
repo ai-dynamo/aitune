@@ -47,12 +47,12 @@ def test_module_type(module_info, simple_model):
 def test_average_execution_time(module_info):
     """Test average_execution_time property."""
     # Test when execution_count is 0
-    assert module_info.average_execution_time == 0.0
+    assert module_info.average_execution_time == pytest.approx(0.0)
 
     # Test with some execution time
     module_info.execution_count = 2
     module_info.total_execution_time = 4.0
-    assert module_info.average_execution_time == 2.0
+    assert module_info.average_execution_time == pytest.approx(2.0)
 
 
 def test_num_layers(module_info):
@@ -118,7 +118,7 @@ def test_execution_tracking(module_info):
     # Initial state
     assert not module_info.forward_called
     assert module_info.execution_count == 0
-    assert module_info.total_execution_time == 0.0
+    assert module_info.total_execution_time == pytest.approx(0.0)
 
     # Update execution state
     module_info.forward_called = True
@@ -127,8 +127,8 @@ def test_execution_tracking(module_info):
 
     assert module_info.forward_called
     assert module_info.execution_count == 1
-    assert module_info.total_execution_time == 1.5
-    assert module_info.average_execution_time == 1.5
+    assert module_info.total_execution_time == pytest.approx(1.5)
+    assert module_info.average_execution_time == pytest.approx(1.5)
 
 
 def test_output_types(module_info):

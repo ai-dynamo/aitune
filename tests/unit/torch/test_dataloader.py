@@ -255,7 +255,7 @@ def test_custom_dataloader_shuffled_dataset():
 
         def create_dataloader(self, batch_size):
             self.custom_used = True
-            return torch.utils.data.DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
+            return torch.utils.data.DataLoader(self.dataset, batch_size=batch_size, shuffle=True, num_workers=0)
 
     dataloader = CustomDataloaderFactory(dataset)
     samples = simulate_tuning_loop(dataloader, batch_sizes=[4])

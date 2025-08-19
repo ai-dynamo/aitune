@@ -241,7 +241,7 @@ def test_highest_throughput_strategy_select_backend_if_one_of_backends_succeeds(
     model = Module(model, strategy=strategy)
     tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
 
-    assert model(sample.unsqueeze(0)) is not None  # FIXME: does not work without unsqueeze
+    assert model(sample.unsqueeze(0)) is not None  # Note: does not work without unsqueeze
 
 
 def test_highest_throughput_strategy_find_max_batch_size_fails(torch_device):

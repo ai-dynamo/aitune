@@ -183,4 +183,4 @@ def test_first_wins_strategy_find_max_batch_size_fails(torch_device):
     model = Module(model, strategy=strategy)
     tune(model, sample, device=torch_device, disable_external_logging=False)
 
-    assert model(sample.unsqueeze(0)) is not None  # FIXME: does not work without unsqueeze
+    assert model(sample.unsqueeze(0)) is not None  # Note: does not work without unsqueeze

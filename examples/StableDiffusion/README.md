@@ -91,7 +91,7 @@ Finally, to shut it down use `docker compose --profile all down`.
 
 #### Development version
 
-```
+```sh
 cd examples/StableDiffusion
 
 # 1. Start auxiliary services NATS and ETCD

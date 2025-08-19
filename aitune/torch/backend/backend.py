@@ -271,7 +271,7 @@ class Backend(ABC):
     @abstractmethod
     def describe(self) -> str:
         """Returns the description of the backend."""
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     @abstractmethod
     def to_dict(self):
@@ -280,13 +280,13 @@ class Backend(ABC):
         Note: if there any binary artifacts (files) which should be stored by a backend,
         they must be passed as Python Path object. Such objects will be bundled with a checkpoint.
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     @classmethod
     @abstractmethod
     def from_dict(cls, state_dict: dict):
         """Creates a backend from a state_dict."""
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     @property
     def name(self) -> str:
@@ -309,7 +309,7 @@ class Backend(ABC):
 
         This method ensures that the backend has this property defined.
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     @property
     def is_active(self) -> bool:
@@ -329,7 +329,7 @@ class Backend(ABC):
             data: The data to build the backend on.
             cache_dir: The cache directory to store the backend artifacts.
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     @abstractmethod
     def _activate(self):
@@ -337,7 +337,7 @@ class Backend(ABC):
 
         After activating, the backend should be ready to do inference.
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     @abstractmethod
     def _deactivate(self):
@@ -345,7 +345,7 @@ class Backend(ABC):
 
         After deactivating, the backend cannot be used to do inference.
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     @abstractmethod
     def _deploy(self):
@@ -353,7 +353,7 @@ class Backend(ABC):
 
         After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     @abstractmethod
     def _infer(self, *args, **kwargs):
@@ -366,7 +366,7 @@ class Backend(ABC):
         Returns:
             Any: The result of the inference.
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     def _set_device(self, device: torch.device):
         """Set the device of the backend.

@@ -128,7 +128,6 @@ def test_torch_tensorrt_aot_backend_config_describe():
 
 @requires_cuda
 def test_mock_build(
-    mocker,
     mock_torch_tensorrt,
     backend: TorchTensorRTAotBackend,
     model: SimpleModel,
@@ -137,12 +136,13 @@ def test_mock_build(
     torch_device: torch.device,
     tmp_path: Path,
 ):
-    backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+    active_backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
-    assert backend is backend
+    assert active_backend is backend
 
-    backend = cast(TorchTensorRTAotBackend, backend)
-    assert backend._device == torch_device
+    active_backend = cast(TorchTensorRTAotBackend, active_backend)
+    assert active_backend._device == torch_device
+    assert active_backend.is_active
 
     mock_torch_tensorrt.compile.assert_called_once()
 
@@ -150,7 +150,6 @@ def test_mock_build(
 @requires_cuda
 def test_mock_infer(
     mocker,
-    mock_torch_tensorrt,
     model: SimpleModel,
     graph_spec: GraphSpec,
     sample_data: list[Sample],

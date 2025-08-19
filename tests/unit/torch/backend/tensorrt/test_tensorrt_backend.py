@@ -13,7 +13,6 @@
 # limitations under the License.
 """Unit tests for TensorRTBackend."""
 
-from pathlib import Path
 from typing import cast
 
 import pytest
@@ -34,7 +33,7 @@ BATCH_SIZE = 2
 
 
 @pytest.fixture
-def mock_tensorrt_components(mocker):
+def mock_tensorrt_components(mocker, tmp_path):
     """Fixture that mocks TensorRT components for testing without actual TensorRT."""
     # Setup mocks
     mock_exporter = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.ONNXExporter")
@@ -42,11 +41,11 @@ def mock_tensorrt_components(mocker):
     mock_runtime = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTRuntime")
 
     mock_exporter_instance = mocker.MagicMock()
-    mock_exporter_instance.export.return_value = Path("/tmp/mock_model.onnx")
+    mock_exporter_instance.export.return_value = tmp_path / "mock_model.onnx"
     mock_exporter.return_value = mock_exporter_instance
 
     mock_builder_instance = mocker.MagicMock()
-    mock_builder_instance.build.return_value = Path("/tmp/mock_model.plan")
+    mock_builder_instance.build.return_value = tmp_path / "mock_model.onnx"
 
     mock_runtime_instance = mocker.MagicMock()
     mock_runtime_instance.load_engine.return_value = b"mock_engine_bytes"

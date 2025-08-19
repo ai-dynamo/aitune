@@ -91,16 +91,19 @@ class DataLoaderFactory:
 
     dataset: DatasetLike
     collate_fn: Callable | None = None
+    num_workers: int = 0
 
-    def __init__(self, dataset: DatasetLike, collate_fn: Callable | None = None):
+    def __init__(self, dataset: DatasetLike, collate_fn: Callable | None = None, num_workers: int = 0):
         """Initialize the DataLoaderFactory.
 
         Args:
             dataset: The dataset or DataloaderFactory with the dataset
             collate_fn: The collate function to make a tensor batch from the inputs default is default_data_collator
+            num_workers: The number of workers to use for the torch.utils.data.DataLoader
         """
         self.dataset = dataset
         self.collate_fn = collate_fn or default_data_collator
+        self.num_workers = num_workers
 
     def create_dataloader(self, batch_size: int) -> torch.utils.data.DataLoader:
         """Create a DataLoader from the configuration."""
@@ -110,6 +113,7 @@ class DataLoaderFactory:
                 batch_size=batch_size,
                 collate_fn=self.collate_fn,
                 drop_last=True,
+                num_workers=self.num_workers,
             )
 
         if len(self.dataset) < batch_size:
@@ -118,6 +122,7 @@ class DataLoaderFactory:
                 batch_size=batch_size,
                 collate_fn=self.collate_fn,
                 drop_last=True,
+                num_workers=self.num_workers,
             )
 
         return torch.utils.data.DataLoader(
@@ -125,6 +130,7 @@ class DataLoaderFactory:
             batch_size=batch_size,
             collate_fn=self.collate_fn,
             drop_last=True,
+            num_workers=self.num_workers,
         )
 
 
