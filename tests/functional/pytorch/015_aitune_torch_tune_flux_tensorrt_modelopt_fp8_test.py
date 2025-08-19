@@ -89,7 +89,7 @@ def test_flux_tensorrt_modelopt_fp8():
             # Step 2: Inspect pipeline to identify modules
             logger.info("Inspecting pipeline modules")
             input_data = [{"prompt": prompt}]
-            modules_info = inspect(pipeline, input_data)
+            modules_info = inspect(pipeline, input_data, number_of_iterations=1, warmup_iterations=1)
 
             # Get all modules for comprehensive tuning
             modules = modules_info.get_modules()

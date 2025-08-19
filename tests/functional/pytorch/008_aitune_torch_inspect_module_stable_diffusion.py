@@ -34,8 +34,15 @@ def test_inspect_stable_diffusion():
     prompt = "A futuristic cityscape with neon lights and flying cars"
     input_data = [{"prompt": prompt}]
 
+    num_inference_steps = 10
+
+    def inference_function(prompt):
+        return pipe(prompt, num_inference_steps=num_inference_steps)
+
     # when
-    modules_info = inspect(pipe, input_data)
+    number_of_iterations = 1
+    warmup_iterations = 1
+    modules_info = inspect(pipe, input_data, inference_function, number_of_iterations, warmup_iterations)
 
     # then - verify inspection
     modules_info.describe()
@@ -52,7 +59,7 @@ def test_inspect_stable_diffusion():
     top_modules = modules_info.get_modules(min_execution_percentage=0.6)
     assert len(top_modules) == 1
     assert top_modules[0].name == "unet"
-    assert top_modules[0].execution_count == 50
+    assert top_modules[0].execution_count == num_inference_steps * (number_of_iterations + warmup_iterations)
     assert top_modules[0].total_execution_time > 0
     assert top_modules[0].average_execution_time > 0
 

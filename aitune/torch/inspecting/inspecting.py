@@ -19,7 +19,7 @@ from logging import getLogger
 
 import torch
 
-from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
+from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, ensure_enough_samples, samples_generator
 from aitune.torch.inspecting.module_info import InspectedModulesInfo
 from aitune.torch.inspecting.module_inspector import ModuleInspector
 from aitune.torch.utils.cuda import synchronize
@@ -29,14 +29,25 @@ logger = getLogger(__name__)
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
+DEFAULT_INSPECT_ITERATIONS = 10
+DEFAULT_WARMUP_ITERATIONS = 5
 
-def inspect(obj: Callable, dataset: DatasetLike | DataLoaderFactory | torch.Tensor) -> InspectedModulesInfo:
+
+def inspect(
+    obj: Callable | torch.nn.Module,
+    dataset: DatasetLike | DataLoaderFactory | torch.Tensor,
+    inference_function: Callable | None = None,
+    number_of_iterations: int = DEFAULT_INSPECT_ITERATIONS,
+    warmup_iterations: int = DEFAULT_WARMUP_ITERATIONS,
+) -> InspectedModulesInfo:
     """Inspect provided callable object searching for nn.Module members executed as part of forward pass.
 
     Args:
         obj: Callable object to inspect.
         dataset: List of tuples with batch size and input.
-        log_level: Log level to use.
+        inference_function: Custom inference function to use for inspection, obj is used by default.
+        number_of_iterations: Number of iterations to run for inference.
+        warmup_iterations: Number of iterations to run for warmup.
 
     Returns:
         InspectedModulesInfo object.
@@ -47,12 +58,22 @@ def inspect(obj: Callable, dataset: DatasetLike | DataLoaderFactory | torch.Tens
     model_inspector = ModuleInspector()
     model_inspector.inspect(obj)
 
+    # If no inference function is provided, use the obj
+    if inference_function is None:
+        inference_function = obj
+
+    dataset = ensure_enough_samples(dataset, max(number_of_iterations, warmup_iterations))
+
+    # Warmup, run the model on a few samples, to make sure the model is compiled and the cache is warm
+    _warmup(inference_function, dataset, warmup_iterations)
+
+    # Run the model on the dataset for the number of iterations
     total_execution_time = 0.0
-    for _, args, kwargs in samples_generator(dataset, [1], None):
+    for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
         synchronize()
         start_time = time.perf_counter()
         with torch.inference_mode():
-            obj(*args, **kwargs)
+            inference_function(*args, **kwargs)
         synchronize()
         end_time = time.perf_counter()
         total_execution_time += end_time - start_time
@@ -61,10 +82,19 @@ def inspect(obj: Callable, dataset: DatasetLike | DataLoaderFactory | torch.Tens
 
     logger.info("Inspection done. Found %d candidate modules for tuning.", len(modules))
 
-    inspected_modules_info = InspectedModulesInfo(total_execution_time)
+    inspected_modules_info = InspectedModulesInfo(total_execution_time, number_of_iterations)
     for module in modules:
         inspected_modules_info.add_module(module)
 
     model_inspector.reset()
 
     return inspected_modules_info
+
+
+def _warmup(obj: Callable, dataset: DatasetLike | DataLoaderFactory | torch.Tensor, number_of_iterations: int):
+    """Warmup the model by running it on a few samples."""
+    for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
+        synchronize()
+        with torch.inference_mode():
+            obj(*args, **kwargs)
+        synchronize()

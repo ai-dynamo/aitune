@@ -77,10 +77,11 @@ class ModuleInfo:
 class InspectedModulesInfo:
     """Information about inspected modules."""
 
-    def __init__(self, total_execution_time: float):
+    def __init__(self, total_execution_time: float, number_of_batches: int):
         """Initialize the inspected modules specification."""
         self._modules = {}
         self._total_execution_time = total_execution_time
+        self._number_of_batches = number_of_batches
 
     def add_module(self, module: ModuleInfo):
         """Add a module to the specification.
@@ -150,4 +151,5 @@ class InspectedModulesInfo:
 
         print("-" * 138)  # noqa: T201
         print(f"Total execution time: {self._total_execution_time:.6f} seconds")  # noqa: T201
+        print(f"Number of batch iterations: {self._number_of_batches}")  # noqa: T201
         print("=" * 138)  # noqa: T201

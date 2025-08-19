@@ -63,7 +63,8 @@ Non-batchable inputs should be handled by the user on module level.
 
 """
 
-from collections.abc import Callable, Generator, Mapping, Sequence
+import itertools
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -509,3 +510,47 @@ def _map_data_collator(features: list) -> dict:
                 batch[k] = torch.tensor([f[k] for f in features])
 
     return batch
+
+
+def ensure_enough_samples(
+    dataset: DatasetLike | DataLoaderFactory | torch.Tensor,
+    number_of_samples: int,
+) -> DatasetLike | DataLoaderFactory:
+    """Ensures there is enough samples in the dataset to run the model for the given number of iterations.
+
+    NOTE: This function trims the dataset to the given number of samples.
+
+    Args:
+        dataset: The dataset to make iterable.
+        number_of_samples: The number of samples to ensure.
+
+    Returns:
+        The dataset with enough samples.
+    """
+    if number_of_samples <= 0:
+        raise ValueError("number_of_samples must be greater than 0")
+
+    if isinstance(dataset, torch.Tensor):
+        dataset = [dataset]
+
+    if isinstance(dataset, Iterable):
+        return list(itertools.islice(itertools.cycle(dataset), number_of_samples))
+
+    if isinstance(dataset, torch.utils.data.Dataset):
+        # torch Dataset has only __getitem__ and only potentially __len__
+        limited_dataset = []
+
+        # getting enough samples by iterating over the dataset, cycling over the dataset if needed
+        index = 0
+        while len(limited_dataset) < number_of_samples:
+            try:
+                limited_dataset.append(dataset[index])
+                index += 1
+            except IndexError:
+                index = 0
+
+        return limited_dataset
+
+    if isinstance(dataset, DataLoaderFactory):
+        dataset.dataset = ensure_enough_samples(dataset.dataset, number_of_samples)
+        return dataset

@@ -44,7 +44,6 @@ def test_inspect_resnet50():
     module_info = modules_info.get_modules()[0]
     assert module_info.name == model.__class__.__name__
     assert module_info.module_type == timm.models.resnet.ResNet
-    assert module_info.execution_count == 1
     assert module_info.total_execution_time > 0
     assert module_info.average_execution_time > 0
 

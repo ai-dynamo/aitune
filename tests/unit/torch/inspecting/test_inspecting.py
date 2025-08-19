@@ -17,7 +17,10 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.inspecting import inspect
+from aitune.torch.inspecting.inspecting import DEFAULT_WARMUP_ITERATIONS
 from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo
+
+TEST_NUMBER_OF_ITERATIONS = 10
 
 
 @pytest.fixture
@@ -48,13 +51,14 @@ def custom_object():
 
     class CustomObject:
         def __init__(self):
+            self.num_iterations = 4
             self.linear1 = nn.Linear(10, 10)
             self.relu = nn.ReLU()
             self.linear2 = nn.Linear(10, 10)
 
         def __call__(self, x):
             # Call linear1 multiple times
-            for _ in range(4):
+            for _ in range(self.num_iterations):
                 x = self.linear1(x)
             # Then continue with the rest of the forward pass
             x = self.relu(x)
@@ -92,7 +96,7 @@ def test_inspect_simple_model(simple_model, sample_dataset):
 def test_inspect_nested_model(nested_model, sample_dataset):
     """Test inspecting a nested model."""
     # When inspecting the nested model
-    modules_info = inspect(nested_model.linear, sample_dataset)
+    modules_info = inspect(nested_model.linear, sample_dataset, number_of_iterations=TEST_NUMBER_OF_ITERATIONS)
 
     # Then verify the results
     assert isinstance(modules_info, InspectedModulesInfo)
@@ -104,7 +108,34 @@ def test_inspect_nested_model(nested_model, sample_dataset):
     # Verify execution tracking
     assert modules[0].module == nested_model.linear
     assert modules[0].forward_called is True
-    assert modules[0].execution_count == 1
+    assert modules[0].execution_count == DEFAULT_WARMUP_ITERATIONS + TEST_NUMBER_OF_ITERATIONS
+
+
+def test_inspect_nested_model_with_inference_function(nested_model, sample_dataset):
+    """Test inspecting a nested model with an inference function."""
+
+    def inference_function(x):
+        return nested_model.forward(x)
+
+    # When inspecting the nested model
+    modules_info = inspect(
+        nested_model,
+        sample_dataset,
+        inference_function=inference_function,
+        number_of_iterations=TEST_NUMBER_OF_ITERATIONS,
+    )
+
+    # Then verify the results
+    assert isinstance(modules_info, InspectedModulesInfo)
+
+    modules = modules_info.get_modules()
+
+    assert len(modules) > 0
+
+    # Verify execution tracking
+    assert modules[0].module == nested_model
+    assert modules[0].forward_called is True
+    assert modules[0].execution_count == DEFAULT_WARMUP_ITERATIONS + TEST_NUMBER_OF_ITERATIONS
 
 
 def test_inspect_with_dataloader(simple_model):
@@ -309,41 +340,50 @@ def test_inspect_with_custom_object_with_attributes(sample_dataset):
 def test_get_modules_after_inspection(custom_object, sample_dataset):
     """Test getting executed modules after inspection."""
     # When inspecting custom object with various attributes
-    modules_info = inspect(custom_object, sample_dataset)
+    modules_info = inspect(custom_object, sample_dataset, number_of_iterations=TEST_NUMBER_OF_ITERATIONS)
 
     # Then verify the results
     executed_modules = modules_info.get_modules()
 
     assert len(executed_modules) == 3
     assert executed_modules[0].name == "linear1"
-    assert executed_modules[0].execution_count == 4
+    assert executed_modules[0].execution_count == (
+        TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
+        + DEFAULT_WARMUP_ITERATIONS * custom_object.num_iterations
+    )
     for idx in [1, 2]:
         assert executed_modules[idx].name in ["linear2", "relu"]
-        assert executed_modules[idx].execution_count == 1
+        assert executed_modules[idx].execution_count == TEST_NUMBER_OF_ITERATIONS + DEFAULT_WARMUP_ITERATIONS
 
 
 def test_get_modules_after_inspection_with_min_execution_percentage(custom_object, sample_dataset):
     """Test getting executed modules with a minimum execution percentage."""
     # When inspecting custom object with various attributes
-    modules_info = inspect(custom_object, sample_dataset)
+    modules_info = inspect(custom_object, sample_dataset, number_of_iterations=TEST_NUMBER_OF_ITERATIONS)
 
     # Then verify the results
     executed_modules = modules_info.get_modules(min_execution_percentage=0.25)
 
     assert len(executed_modules) == 1
     assert executed_modules[0].name == "linear1"
-    assert executed_modules[0].execution_count == 4
+    assert executed_modules[0].execution_count == (
+        TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
+        + DEFAULT_WARMUP_ITERATIONS * custom_object.num_iterations
+    )
 
 
 def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset):
     """Test getting executed modules with a limit."""
     # When inspecting custom object with various attributes
-    modules_info = inspect(custom_object, sample_dataset)
+    modules_info = inspect(custom_object, sample_dataset, number_of_iterations=TEST_NUMBER_OF_ITERATIONS)
 
     # Then verify the results
     executed_modules = modules_info.get_modules(limit=2)
     assert len(executed_modules) == 2
     assert executed_modules[0].name == "linear1"
-    assert executed_modules[0].execution_count == 4
+    assert executed_modules[0].execution_count == (
+        TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
+        + DEFAULT_WARMUP_ITERATIONS * custom_object.num_iterations
+    )
     assert executed_modules[1].name in ["linear2", "relu"]
-    assert executed_modules[1].execution_count == 1
+    assert executed_modules[1].execution_count == TEST_NUMBER_OF_ITERATIONS + DEFAULT_WARMUP_ITERATIONS

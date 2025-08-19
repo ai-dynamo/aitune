@@ -55,7 +55,7 @@ def tune_model(
     input_data = [{"prompt": prompt}]
 
     # Inspect pipeline to get modules
-    modules_info = inspect(pipe, input_data)
+    modules_info = inspect(pipe, input_data, number_of_iterations=1, warmup_iterations=1)
 
     # Define strategy
     strategy = FirstWinsStrategy(

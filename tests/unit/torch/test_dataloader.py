@@ -18,7 +18,14 @@ import torch
 from transformers import AutoTokenizer
 from transformers.data.data_collator import DataCollatorWithPadding
 
-from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, InputConfig, MinMaxRandomDataset, samples_generator
+from aitune.torch.dataloader import (
+    DataLoaderFactory,
+    DatasetLike,
+    InputConfig,
+    MinMaxRandomDataset,
+    ensure_enough_samples,
+    samples_generator,
+)
 
 
 def simulate_tuning_loop(dataset: DatasetLike, batch_sizes: list[int]):
@@ -398,3 +405,53 @@ def test_dataloader_sample_as_dict():
     assert len(kwargs["audio"]["path"]) == 4
     assert len(kwargs["audio"]["array"]) == 4
     assert len(kwargs["audio"]["sampling_rate"]) == 4
+
+
+def test_ensure_enough_samples_tensor():
+    dataset = torch.ones(3, 24, 24)
+
+    dataset = ensure_enough_samples(dataset, 10)
+
+    assert len(dataset) == 10
+    assert all(s.shape == (3, 24, 24) for s in dataset)
+
+
+def test_ensure_enough_samples_iterable():
+    dataset = [{"input": torch.ones(3, 24, 24), "labels": torch.randint(0, 10, (1,))}]
+
+    dataset = ensure_enough_samples(dataset, 10)
+
+    assert len(dataset) == 10
+
+    assert all("input" in s for s in dataset)
+    assert all("labels" in s for s in dataset)
+
+
+def test_ensure_enough_samples_torch_dataset():
+    dataset = torch.utils.data.TensorDataset(torch.randn(3, 24, 24))
+
+    dataset = ensure_enough_samples(dataset, 10)
+
+    assert len(dataset) == 10
+
+
+def test_ensure_enough_samples_dataloader_factory():
+    dataset = [{"input": torch.ones(3, 24, 24), "labels": torch.randint(0, 10, (1,))}]
+    dataloader = DataLoaderFactory(dataset)
+
+    dataset = ensure_enough_samples(dataloader, 10).dataset
+
+    assert len(dataset) == 10
+
+    assert all("input" in s for s in dataset)
+    assert all("labels" in s for s in dataset)
+
+
+def test_ensure_enough_samples_empty_dataset():
+    dataset = []
+
+    dataset = ensure_enough_samples(dataset, 10)
+
+    assert len(dataset) == 0
+
+    assert dataset == []

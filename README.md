@@ -114,6 +114,13 @@ input_data = [{"prompt": "A beautiful landscape with mountains and a lake"}]
 # Inspect pipeline to get modules
 modules_info = ait.inspect(pipeline, input_data)
 
+
+# Optional: inference function, if you need more control over execution
+def infer(prompt):
+    return pipeline(prompt, num_inference_steps=10)
+
+# modules_info = ait.inspect(pipeline, input_data, inference_function=infer)
+
 # Display modules info
 modules_info.describe()
 ```

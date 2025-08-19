@@ -36,7 +36,9 @@ def test_inspect_flux():
     input_data = [{"prompt": prompt}]
 
     # when
-    modules_info = inspect(pipe, input_data)
+    number_of_iterations = 1
+    warmup_iterations = 1
+    modules_info = inspect(pipe, input_data, None, number_of_iterations, warmup_iterations)
 
     # then - verify inspection
     modules_info.describe()
@@ -53,7 +55,7 @@ def test_inspect_flux():
     top_modules = modules_info.get_modules(min_execution_percentage=0.75)
     assert len(top_modules) == 1
     assert top_modules[0].name == "transformer"
-    assert top_modules[0].execution_count == 28
+    assert top_modules[0].execution_count == 28 * (number_of_iterations + warmup_iterations)
     assert top_modules[0].total_execution_time > 0
     assert top_modules[0].average_execution_time > 0
 
