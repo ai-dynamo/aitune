@@ -33,7 +33,7 @@ from tests.utilities.helpers import requires_cuda
 
 
 @dataclass
-class TestTorchTensorRTConfig:
+class TorchTensorRTTestConfig:
     enabled_precisions: set[torch.dtype] = field(default_factory=lambda: {torch.float16})
     workspace_size: int = 0
 
@@ -56,7 +56,7 @@ def sample_metadata(sample_data) -> SampleMetadata:
 @pytest.fixture
 def torch_tensorrt_jit_backend_config() -> TorchTensorRTJitBackendConfig:
     return TorchTensorRTJitBackendConfig(
-        compile_config=TestTorchTensorRTConfig(
+        compile_config=TorchTensorRTTestConfig(
             enabled_precisions={torch.float16},
             workspace_size=1,
         ),
@@ -94,17 +94,17 @@ def test_torch_tensorrt_jit_backend_config_key():
 
 def test_torch_tensorrt_jit_backend_config_describe():
     """Test backend config describe."""
-    config = TorchTensorRTJitBackendConfig(compile_config=TestTorchTensorRTConfig())
+    config = TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTTestConfig())
     describe = config.describe()
 
     assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16})"
 
-    config = TorchTensorRTJitBackendConfig(compile_config=TestTorchTensorRTConfig(workspace_size=1))
+    config = TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTTestConfig(workspace_size=1))
     describe = config.describe()
 
     assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16},workspace_size=1)"
 
-    config = TorchTensorRTJitBackendConfig(compile_config=TestTorchTensorRTConfig(), fullgraph=True)
+    config = TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTTestConfig(), fullgraph=True)
     describe = config.describe()
 
     assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}),fullgraph=True"

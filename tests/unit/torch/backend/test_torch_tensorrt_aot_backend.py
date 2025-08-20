@@ -34,7 +34,7 @@ from tests.utilities.helpers import requires_cuda
 
 
 @dataclass
-class TestTorchTensorRTConfig:
+class TorchTensorRTTestConfig:
     enabled_precisions: set[torch.dtype] = field(default_factory=lambda: {torch.float16})
     workspace_size: int = 0
 
@@ -85,7 +85,7 @@ def backend(mocker) -> TorchTensorRTAotBackend:
 
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")  # always available
 
-    return TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TestTorchTensorRTConfig()))
+    return TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
 
 
 @pytest.fixture
@@ -110,17 +110,17 @@ def test_torch_tensorrt_aot_backend_config_key():
 
 def test_torch_tensorrt_aot_backend_config_describe():
     """Test backend config with cache_dir."""
-    config = TorchTensorRTAotBackendConfig(compile_config=TestTorchTensorRTConfig())
+    config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig())
     describe = config.describe()
 
     assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16})"
 
-    config = TorchTensorRTAotBackendConfig(compile_config=TestTorchTensorRTConfig(workspace_size=1))
+    config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig(workspace_size=1))
     describe = config.describe()
 
     assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16},workspace_size=1)"
 
-    config = TorchTensorRTAotBackendConfig(compile_config=TestTorchTensorRTConfig(), pickle_protocol=1)
+    config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig(), pickle_protocol=1)
     describe = config.describe()
 
     assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}),pickle_protocol=1"
@@ -186,7 +186,7 @@ def test_build_with_custom_precisions(
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
 
     config = TorchTensorRTAotBackendConfig(
-        compile_config=TestTorchTensorRTConfig(
+        compile_config=TorchTensorRTTestConfig(
             enabled_precisions={torch.float16},
             workspace_size=1,
         )

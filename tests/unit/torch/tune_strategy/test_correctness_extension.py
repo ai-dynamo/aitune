@@ -26,7 +26,7 @@ from aitune.torch.tune_strategy import TuneStrategy
 from tests.toy_models.torch_models import ToyTorchModel
 
 
-class TestTuneStrategyCorrectness(TuneStrategy):
+class TuneStrategyTestCorrectness(TuneStrategy):
     def _tune(
         self,
         module: nn.Module,
@@ -42,7 +42,7 @@ class TestTuneStrategyCorrectness(TuneStrategy):
         return backend
 
     def _describe_parts(self) -> list[str]:
-        return ["TestTuneStrategyCorrectness"]
+        return ["TuneStrategyTestCorrectness"]
 
 
 def test_correctness_extension_torch_eager_backend(torch_device, tmp_path):
@@ -52,7 +52,7 @@ def test_correctness_extension_torch_eager_backend(torch_device, tmp_path):
     graph_spec = module.graph_spec()
     data = module.samples(device=torch_device)
 
-    strategy = TestTuneStrategyCorrectness()
+    strategy = TuneStrategyTestCorrectness()
 
     backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
     backend.deactivate()
@@ -66,7 +66,7 @@ def test_correctness_extension_torch_eager_backend_with_nan(torch_device, tmp_pa
     data = module.samples(device=torch_device)
     data[0][0][0][0] = float("nan")
 
-    strategy = TestTuneStrategyCorrectness()
+    strategy = TuneStrategyTestCorrectness()
 
     with pytest.raises(CorrectnessValueError, match="contains NaN values"):
         backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
@@ -82,7 +82,7 @@ def test_correctness_extension_torch_eager_backend_with_inf(mocker, torch_device
 
     mocker.patch.object(module, "forward", return_value=torch.tensor([float("inf")]))
 
-    strategy = TestTuneStrategyCorrectness()
+    strategy = TuneStrategyTestCorrectness()
 
     with pytest.raises(CorrectnessValueError, match="contains infinity values"):
         backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
@@ -95,7 +95,7 @@ def test_correctness_extension_torch_eager_backend_with_wrong_shapes(torch_devic
     graph_spec = module.graph_spec()
     data = module.samples(device=torch_device, batch_sizes=[1])
 
-    strategy = TestTuneStrategyCorrectness()
+    strategy = TuneStrategyTestCorrectness()
 
     with pytest.raises(
         CorrectnessTensorShapeError, match=r"Expected tensor output__0 to have shape \[2, 5\] but got \[1, 5\]"

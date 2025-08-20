@@ -188,7 +188,6 @@ exclude = ["**/*.ipynb"]
 "**/__init__.py" = ["D104"]
 "**/__version__.py" = ["D100"]
 "**/{tests,docs,tools,examples}/*" = ["C416", "D", "T201"]
-"**/examples/FLUX/flux/dynamo/batching.py" = ["CPY001"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

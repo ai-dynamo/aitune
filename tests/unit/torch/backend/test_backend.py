@@ -22,7 +22,7 @@ from aitune.utils.hashing import hash_string
 
 
 @dataclass
-class TestBackendConfig(BackendConfig):
+class BackendTestConfig(BackendConfig):
     """Test backend configuration for testing _get_changed_fields."""
 
     name: str = "test_backend"
@@ -35,16 +35,16 @@ class TestBackendConfig(BackendConfig):
 
 
 @dataclass
-class TestBackendWithSubClassConfig(BackendConfig):
+class BackendTestWithSubClassConfig(BackendConfig):
     """Test backend configuration for testing _get_changed_fields."""
 
     name: str = "test_backend_with_sub_class"
     enabled: bool = True
-    sub_class: TestBackendConfig = field(default_factory=TestBackendConfig)
+    sub_class: BackendTestConfig = field(default_factory=BackendTestConfig)
 
 
 @dataclass
-class TestBackendConfigWithDefaults(BackendConfig):
+class BackendTestConfigWithDefaults(BackendConfig):
     """Test backend configuration with custom default fields."""
 
     name: str = "test_backend"
@@ -70,7 +70,7 @@ def test_backend_config_key():
     }
     expected_key = hash_string(json.dumps(expected_dict))
 
-    config = TestBackendConfig()
+    config = BackendTestConfig()
     key = config.key()
     assert key == expected_key
 
@@ -109,7 +109,7 @@ def test_backend_config_with_sub_class_key():
     }
     expected_key = hash_string(json.dumps(expected_dict))
 
-    config = TestBackendWithSubClassConfig()
+    config = BackendTestWithSubClassConfig()
 
     key = config.key()
     assert key == expected_key
@@ -134,7 +134,7 @@ def test_backend_config_with_sub_class_key():
 
 def test_backend_config_with_defaults_key():
     """Test backend config key."""
-    config = TestBackendConfigWithDefaults()
+    config = BackendTestConfigWithDefaults()
 
     expected_dict = {
         "name": "test_backend",
@@ -167,8 +167,8 @@ def test_backend_config_with_defaults_key():
 
 def test_no_changes_returns_empty_list():
     """Test that when no fields are changed, empty list is returned."""
-    config = TestBackendConfig()
-    default = TestBackendConfig()
+    config = BackendTestConfig()
+    default = BackendTestConfig()
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -177,8 +177,8 @@ def test_no_changes_returns_empty_list():
 
 def test_single_field_change_returns_only_changed_field():
     """Test that only changed fields are returned."""
-    config = TestBackendConfig(timeout=60.0)  # Changed from default 30.0
-    default = TestBackendConfig()
+    config = BackendTestConfig(timeout=60.0)  # Changed from default 30.0
+    default = BackendTestConfig()
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -188,8 +188,8 @@ def test_single_field_change_returns_only_changed_field():
 
 def test_multiple_field_changes_returns_all_changed_fields():
     """Test that multiple changed fields are returned."""
-    config = TestBackendConfig(name="custom_backend", enabled=False, timeout=45.0, max_retries=5)
-    default = TestBackendConfig()
+    config = BackendTestConfig(name="custom_backend", enabled=False, timeout=45.0, max_retries=5)
+    default = BackendTestConfig()
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -202,8 +202,8 @@ def test_multiple_field_changes_returns_all_changed_fields():
 
 def test_excluded_fields_are_not_returned():
     """Test that excluded fields are not returned even if changed."""
-    config = TestBackendConfig(timeout=60.0, max_retries=5)
-    default = TestBackendConfig()
+    config = BackendTestConfig(timeout=60.0, max_retries=5)
+    default = BackendTestConfig()
 
     changed_fields = config._get_changed_fields(config, default, exclude=["timeout"])
 
@@ -214,8 +214,8 @@ def test_excluded_fields_are_not_returned():
 
 def test_included_fields_are_always_returned():
     """Test that included fields are always returned even if not changed."""
-    config = TestBackendConfig()  # No changes from default
-    default = TestBackendConfig()
+    config = BackendTestConfig()  # No changes from default
+    default = BackendTestConfig()
 
     changed_fields = config._get_changed_fields(config, default, include=["name", "enabled"])
 
@@ -226,8 +226,8 @@ def test_included_fields_are_always_returned():
 
 def test_default_describe_fields_are_included():
     """Test that fields from _default_describe_fields are always included."""
-    config = TestBackendConfigWithDefaults()  # No changes from default
-    default = TestBackendConfigWithDefaults()
+    config = BackendTestConfigWithDefaults()  # No changes from default
+    default = BackendTestConfigWithDefaults()
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -239,11 +239,11 @@ def test_default_describe_fields_are_included():
 
 def test_mixed_changes_and_defaults():
     """Test combination of changed fields and default describe fields."""
-    config = TestBackendConfigWithDefaults(
+    config = BackendTestConfigWithDefaults(
         timeout=60.0,  # Changed field
         max_retries=5,  # Changed field
     )
-    default = TestBackendConfigWithDefaults()
+    default = BackendTestConfigWithDefaults()
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -257,8 +257,8 @@ def test_mixed_changes_and_defaults():
 
 def test_include_overrides_exclude():
     """Test that exclude takes precedence over include."""
-    config = TestBackendConfigWithDefaults(timeout=60.0)
-    default = TestBackendConfigWithDefaults()
+    config = BackendTestConfigWithDefaults(timeout=60.0)
+    default = BackendTestConfigWithDefaults()
 
     changed_fields = config._get_changed_fields(
         config,
@@ -273,7 +273,7 @@ def test_include_overrides_exclude():
 
 def test_none_values_are_handled_correctly():
     """Test that None values are handled correctly."""
-    config = TestBackendConfig(cache_dir=None)  # Explicitly set to None
+    config = BackendTestConfig(cache_dir=None)  # Explicitly set to None
     key = config.key()
 
     # Should not include None values unless they're in default describe fields
@@ -283,8 +283,8 @@ def test_none_values_are_handled_correctly():
 def test_dict_values_are_handled_correctly():
     """Test that dict values are handled correctly."""
     custom_params = {"key1": "value1", "key2": "value2"}
-    config = TestBackendConfig(extra_params=custom_params)
-    default = TestBackendConfig()  # extra_params defaults to empty dict
+    config = BackendTestConfig(extra_params=custom_params)
+    default = BackendTestConfig()  # extra_params defaults to empty dict
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -295,8 +295,8 @@ def test_dict_values_are_handled_correctly():
 
 def test_boolean_values_are_formatted_correctly():
     """Test that boolean values are formatted correctly."""
-    config = TestBackendConfig(enabled=False)  # Changed from default True
-    default = TestBackendConfig()
+    config = BackendTestConfig(enabled=False)  # Changed from default True
+    default = BackendTestConfig()
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -306,8 +306,8 @@ def test_boolean_values_are_formatted_correctly():
 
 def test_float_values_are_formatted_correctly():
     """Test that float values are formatted correctly."""
-    config = TestBackendConfig(timeout=45.5)  # Changed from default 30.0
-    default = TestBackendConfig()
+    config = BackendTestConfig(timeout=45.5)  # Changed from default 30.0
+    default = BackendTestConfig()
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -317,8 +317,8 @@ def test_float_values_are_formatted_correctly():
 
 def test_int_values_are_formatted_correctly():
     """Test that int values are formatted correctly."""
-    config = TestBackendConfig(max_retries=10)  # Changed from default 3
-    default = TestBackendConfig()
+    config = BackendTestConfig(max_retries=10)  # Changed from default 3
+    default = BackendTestConfig()
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -328,8 +328,8 @@ def test_int_values_are_formatted_correctly():
 
 def test_string_values_are_formatted_correctly():
     """Test that string values are formatted correctly."""
-    config = TestBackendConfig(name="custom_name")  # Changed from default
-    default = TestBackendConfig()
+    config = BackendTestConfig(name="custom_name")  # Changed from default
+    default = BackendTestConfig()
 
     changed_fields = config._get_changed_fields(config, default)
 
@@ -339,8 +339,8 @@ def test_string_values_are_formatted_correctly():
 
 def test_empty_exclude_list_does_not_affect_result():
     """Test that empty exclude list doesn't affect the result."""
-    config = TestBackendConfig(timeout=60.0)
-    default = TestBackendConfig()
+    config = BackendTestConfig(timeout=60.0)
+    default = BackendTestConfig()
 
     changed_fields_with_exclude = config._get_changed_fields(config, default, exclude=[])
     changed_fields_without_exclude = config._get_changed_fields(config, default)
@@ -350,8 +350,8 @@ def test_empty_exclude_list_does_not_affect_result():
 
 def test_empty_include_list_does_not_affect_result():
     """Test that empty include list doesn't affect the result."""
-    config = TestBackendConfig(timeout=60.0)
-    default = TestBackendConfig()
+    config = BackendTestConfig(timeout=60.0)
+    default = BackendTestConfig()
 
     changed_fields_with_include = config._get_changed_fields(config, default, include=[])
     changed_fields_without_include = config._get_changed_fields(config, default)
