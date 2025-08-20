@@ -189,3 +189,6 @@ class ToyComplexPipeline:
     def to(self, device):
         self.net.to(device)
         return self
+
+    def inputs(self, batch_sizes: list[int] | None = None, device: str = "cpu"):
+        return self.net.inputs(batch_sizes, device)

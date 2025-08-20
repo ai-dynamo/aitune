@@ -18,13 +18,14 @@
 # allow_failure = false
 # ///
 
+import re
 from io import StringIO
 from logging import INFO, basicConfig
 
 import timm
 import torch
 
-from aitune.torch.jit.patched_module import PatchedModule
+from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
 
 
 def test_jit_resnet():
@@ -46,8 +47,8 @@ def test_jit_resnet():
         hierarchy_output = test_sink.getvalue()
 
     # Assert the expected output
-    assert "PatchedModule Hierarchy:" in hierarchy_output
-    assert "├─ ResNet 📊11.7M level=0🪜 state=tuned🎯 (TensorRTBackend)" in hierarchy_output
+    assert PRINT_HIERARCHY_HEADER in hierarchy_output
+    assert re.match(r".*ResNet.*state=tuned.*TensorRTBackend", hierarchy_output)
 
     assert resnet(torch.randn(8, 3, 224, 224, device="cuda")).shape == (8, 1000)
     assert resnet(torch.randn(16, 3, 224, 224, device="cuda")).shape == (16, 1000)

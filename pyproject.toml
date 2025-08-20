@@ -218,6 +218,6 @@ verbose = false
 [tool.pytype]
 disable = ["import-error", "module-attr"]
 
-# the following enables autowrapt to conditionally enable JIT tuning i.e. `AUTOWRAPT_BOOTSTRAP=jit_tuning python script.py`
-[project.entry-points.jit_tuning]
+# the following enables autowrapt to conditionally enable JIT tuning i.e. `AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning python script.py`
+[project.entry-points.aitune_enable_jit_tuning]
 torch = "aitune.torch.jit.enable:wrapt_auto_enable"

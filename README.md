@@ -173,7 +173,7 @@ such a module is left intact and AITune tries to tune this module's children. Th
 To turn on this mode, just set the following environment variable:
 
 ```bash
-export AUTOWRAPT_BOOTSTRAP=jit_tuning
+export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
 ```
 
 Next, you can run user script without modifying it e.g.

@@ -35,6 +35,9 @@ from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy.jit_strategy import JitStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
 
+PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
+PRINT_HIERARCHY_NO_MODULES_HEADER = "No modules in hierarchy"
+
 
 class ModuleState(Enum):
     """Possible states of the Module class."""
@@ -433,7 +436,7 @@ class PatchedModule:
         and prints each module with indentation to show the hierarchy levels.
         """
         if len(PatchedModule.heads) == 0:
-            sink("No modules in hierarchy")
+            sink(PRINT_HIERARCHY_NO_MODULES_HEADER)
             return
 
         def _print_module(module: "PatchedModule", level: int = 0):
@@ -449,7 +452,7 @@ class PatchedModule:
             for child in module._children:
                 _print_module(child, level + 1)
 
-        sink("PatchedModule Hierarchy:")
+        sink(PRINT_HIERARCHY_HEADER)
         for head in PatchedModule.heads:
             _print_module(head)
 

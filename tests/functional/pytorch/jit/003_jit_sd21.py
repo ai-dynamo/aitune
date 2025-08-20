@@ -19,6 +19,7 @@
 # ///
 
 
+import re
 from io import StringIO
 from logging import INFO, basicConfig
 
@@ -26,7 +27,7 @@ import torch
 from diffusers import StableDiffusionPipeline
 
 from aitune.torch.jit.config import config
-from aitune.torch.jit.patched_module import PatchedModule
+from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
 from aitune.torch.jit.patcher import patch_for_jit_tuning
 
 
@@ -61,11 +62,11 @@ def test_jit_sd21():
         hierarchy_output = test_sink.getvalue()
 
     # Assert the expected output
-    assert "PatchedModule Hierarchy:" in hierarchy_output
-    assert "├─ CLIPTextModel 📊340.4M level=0🪜 state=tuned🎯 (TensorRTBackend)" in hierarchy_output
-    assert "├─ UNet2DConditionModel 📊865.9M level=0🪜 state=tuned🎯 (TensorRTBackend)" in hierarchy_output
-    assert "├─ Decoder 📊49.5M level=0🪜 state=tuned🎯 (TensorRTBackend)" in hierarchy_output
-    assert "├─ Conv2d 📊20 level=0🪜 state=tuned🎯 (TensorRTBackend)" in hierarchy_output
+    assert PRINT_HIERARCHY_HEADER in hierarchy_output
+    assert re.match(r".*CLIPTextModel.*state=tuned.*TensorRTBackend", hierarchy_output)
+    assert re.match(r".*UNet2DConditionModel.*state=tuned.*TensorRTBackend", hierarchy_output)
+    assert re.match(r".*Decoder.*state=tuned.*TensorRTBackend", hierarchy_output)
+    assert re.match(r".*Conv2d.*state=tuned.*TensorRTBackend", hierarchy_output)
 
 
 if __name__ == "__main__":

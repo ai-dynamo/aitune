@@ -125,7 +125,7 @@ def run(
     output_dir.mkdir(parents=True, exist_ok=True)
     prompts = get_prompts(file_with_prompts)
     file_index = 0
-    dataloader = DataLoader(prompts, batch_size=max_batch_size, shuffle=False)
+    dataloader = DataLoader(prompts, batch_size=max_batch_size, shuffle=False, num_workers=0)
     durations = []
 
     warm_up_pipe(pipe, prompts, max_batch_size)

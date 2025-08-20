@@ -31,13 +31,13 @@ uv sync
 If you would like to run a model with JIT tuning enabled set the following environment variable:
 
 ```bash
-export AUTOWRAPT_BOOTSTRAP=jit_tuning
+export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
 ```
 
 or set it inplace
 
 ```bash
-AUTOWRAPT_BOOTSTRAP=jit_tuning uv run a_command
+AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning uv run a_command
 ```
 
 If the environment variable is not set, the model will run without any tuning.
