@@ -15,16 +15,13 @@
 
 import argparse
 import asyncio
-import base64
-import io
 import itertools
-import json
 import logging
 import time
 from pathlib import Path
 
+import aiofiles
 import aiohttp
-from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +51,7 @@ class StableDiffusionClient:
 
     async def __aenter__(self):
         """Async context manager entry."""
-        self.session = aiohttp.ClientSession()
+        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5 * 60))
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -62,7 +59,7 @@ class StableDiffusionClient:
         if self.session:
             await self.session.close()
 
-    async def generate_image(self, request: dict) -> dict:
+    async def generate_image(self, request: dict, save_path: Path) -> Path | None:
         """Generate a single image.
 
         Args:
@@ -77,24 +74,20 @@ class StableDiffusionClient:
         url = f"{self.base_url}/generate_image"
         async with self.session.post(url, json=request) as response:
             response.raise_for_status()
-            async for line in response.content:
-                if line:
-                    return json.loads(line.decode())
-        return {}
 
-    async def get_batch_status(self) -> dict:
-        """Get current batching status.
+            if response.headers.get("content-type") == "image/jpeg":
+                image_data = await response.read()
 
-        Returns:
-            Batch status information
-        """
-        if not self.session:
-            raise RuntimeError("Client not initialized. Use async context manager.")
+                request_id = response.headers.get("x-request-id")
+                assert request_id.startswith(request.get("request_id", "")), "Request ID mismatch"
 
-        url = f"{self.base_url}/batch_status"
-        async with self.session.get(url) as response:
-            response.raise_for_status()
-            return await response.json()
+                out_path = save_path / f"{request_id}.jpg"
+                async with aiofiles.open(out_path, "wb") as f:
+                    await f.write(image_data)
+
+                return out_path
+
+        return None
 
     async def health_check(self) -> dict:
         """Check service health.
@@ -111,14 +104,13 @@ class StableDiffusionClient:
             return await response.json()
 
 
-async def demo_batching(num_requests: int = 4):
+async def demo_batching(num_requests: int, save_path: Path):
     """Demonstrate the batching functionality."""
     # Sample prompts for testing
 
     async with StableDiffusionClient() as client:
         # Check health
-        # health = await client.health_check()
-        health = {"status": "healthy", "service": "Stable Diffusion Image Generation"}
+        health = await client.health_check()
         logger.info("Service health: %s", health)
 
         # Create requests
@@ -138,7 +130,7 @@ async def demo_batching(num_requests: int = 4):
         logger.info("Submitting %d requests concurrently...", len(requests))
         start_time = time.time()
 
-        tasks = [client.generate_image(req) for req in requests]
+        tasks = [client.generate_image(req, save_path) for req in requests]
         results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=5 * 60)
 
         total_time = time.time() - start_time
@@ -149,38 +141,20 @@ async def demo_batching(num_requests: int = 4):
         )
 
         # Process results
-        successful_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error("Request %d failed: %s", i, result)
             else:
-                successful_results.append(result)
-                logger.info("Request %d completed: %s", i, result.get("request_id", "unknown"))
+                logger.info("Request %d completed: %s", i, result)
 
-        logger.info("Successfully generated %d images", len(successful_results))
-
-        # Save images
-        output_dir = Path("generated_images")
-        output_dir.mkdir(exist_ok=True)
-
-        for i, result in enumerate(successful_results):
-            try:
-                image_data = base64.b64decode(result["image_data"])
-                image = Image.open(io.BytesIO(image_data))
-
-                filename = f"sd_batch_{i:02d}_{result['request_id'][:8]}.jpg"
-                image_path = output_dir / filename
-                image.save(image_path)
-                logger.info("Saved image: %s", image_path)
-
-            except Exception as e:
-                logger.error("Error saving image %d: %s", i, e)
+        logger.info("Successfully generated %d images", len(results))
 
 
-async def demo_single_request():
+async def demo_single_request(save_path: Path):
     """Demonstrate a single request."""
     async with StableDiffusionClient() as client:
         request = dict(  # noqa: C408
+            request_id="r-0-a-beautiful-sunset-over-a-mountain-lake-with-reflection",
             prompt="A beautiful sunset over a mountain lake with reflection",
             height=512,
             width=512,
@@ -191,32 +165,16 @@ async def demo_single_request():
         logger.info("Submitting single request...")
         start_time = time.time()
 
-        result = await client.generate_image(request)
+        result = await client.generate_image(request, save_path)
 
         generation_time = time.time() - start_time
         logger.info("Request completed in %.2fs", generation_time)
-        logger.info("Result: %s", result.get("request_id", "unknown"))
-
-        # Save the image
-        try:
-            image_data = base64.b64decode(result["image_data"])
-            image = Image.open(io.BytesIO(image_data))
-
-            output_dir = Path("generated_images")
-            output_dir.mkdir(exist_ok=True)
-
-            filename = f"sd_single_{result['request_id'][:8]}.jpg"
-            image_path = output_dir / filename
-            image.save(image_path)
-            logger.info("Saved image: %s", image_path)
-
-        except Exception as e:
-            logger.error("Error saving image: %s", e)
+        logger.info("Result: %s", result)
 
 
 def main():
     """Main entry point."""
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG, force=True)
 
     # Run demos
     parser = argparse.ArgumentParser(
@@ -230,16 +188,26 @@ def main():
         default=1,
         help="Number of requests for batching demo, default is 1",
     )
+    parser.add_argument(
+        "-s",
+        "--save-path",
+        type=Path,
+        default=Path("examples"),
+        help="Path to save the generated images, default is examples",
+    )
     args = parser.parse_args()
 
     if args.num_requests == 0:
         logger.error("Number of requests must be greater than 0")
         return
 
-    if args.num_requests == 1:
-        asyncio.run(demo_single_request())
+    save_path = Path(args.save_path)
+    save_path.mkdir(parents=True, exist_ok=True)
+
+    if args.num_requests <= 1:
+        asyncio.run(demo_single_request(save_path))
     else:
-        asyncio.run(demo_batching(args.num_requests))
+        asyncio.run(demo_batching(args.num_requests, save_path))
 
 
 if __name__ == "__main__":

@@ -34,19 +34,22 @@ services:
       - aux
       - all
 
-  flux-frontend:
+  backend:
     environment:
       NATS_SERVER: "nats://nats-server:4222"
       ETCD_ENDPOINTS: "http://etcd-server:2379"
-      AI_TUNE_CACHE_DIR: /opt/dynamo/app/cache
+      AITUNE_CACHE_DIR: /opt/aitune/dynamo/app/cache
+      EXAMPLE_NAME: flux
+      HF_TOKEN: ${HF_TOKEN}
     build:
       context: .
       additional_contexts:
         # we need aitune and we are using local version
+        # NOTE: docker compose should be from the given example directory, i.e. examples/FLUX
         aitune: ../..
-      dockerfile: Dockerfile.dynamo
-    ports:
-      - 8000:8000
+      dockerfile: ../common/Dockerfile
+    image: aitune-dynamo-flux-image:latest
+    pull_policy: never
     depends_on:
       - nats-server
       - etcd-server
@@ -58,10 +61,37 @@ services:
               count: 1
               capabilities: [gpu]
     volumes:
-      - cache:/opt/dynamo/app/cache
+      - aitune_cache:/opt/aitune/dynamo/app/cache
+      - huggingface:/root/.cache/huggingface
+      - images:/images
     profiles:
       - all
 
+  frontend:
+    # reusing the same image as backend
+    image: aitune-dynamo-flux-image:latest
+    pull_policy: build
+    ports:
+      - 8000:8000
+    depends_on:
+      - backend
+    profiles:
+      - all
+    environment:
+      NATS_SERVER: "nats://nats-server:4222"
+      ETCD_ENDPOINTS: "http://etcd-server:2379"
+      EXAMPLE_NAME: flux
+    command: /bin/sh -c 'python -m $$EXAMPLE_NAME.dynamo.frontend'
+    volumes:
+      - huggingface:/root/.cache/huggingface
+      - images:/images
+
 volumes:
-  cache:
+  aitune_cache:
+    driver: local
+
+  huggingface:
+    driver: local
+
+  images:
     driver: local

@@ -80,12 +80,18 @@ docs: clean-docs ## generate site
 docs-serve: docs
 	mkdocs serve
 
+
 lint: ## check style with pre-commit and pytype
-	tox -e pre-commit,pytype --develop
+	pre-commit run --all-files
+	pytype aitune tests -j auto
 
-test: ## run tests on every Python version with tox
+
+test: ## run tests on
+	pytest
+
+
+all-tests: ## run all tests for all python versions
 	tox --develop --skip-missing-interpreters
-
 
 
 coverage: ## check code coverage quickly with the default Python

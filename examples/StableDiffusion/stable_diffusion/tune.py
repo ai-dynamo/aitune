@@ -24,7 +24,7 @@ from stable_diffusion.model import get_pipeline
 logger = getLogger(__name__)
 
 
-def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=None):
+def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=None, strategy=None):
     """Tune the Stable Diffusion model.
 
     Args:
@@ -44,8 +44,9 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
     modules_info = inspect(pipeline, input_data)
 
     # Define strategy
-    strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
-    strategy.enable_find_max_batch_size(enable=False)
+    if strategy is None:
+        strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
+        strategy.enable_find_max_batch_size(enable=False)
 
     # Wrap all modules with AITune Module
     modules = modules_info.get_modules()

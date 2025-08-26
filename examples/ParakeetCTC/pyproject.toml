@@ -26,7 +26,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dynamo = [
-    "ai-dynamo==0.3.0",
+    "aitune-examples-common",
+    "ai-dynamo==0.4.0",
     "uvicorn",
     "aiofiles>=24.1.0",
     "python-multipart",
@@ -35,13 +36,14 @@ dynamo = [
 
 [tool.uv.sources]
 aitune = { path  = "../../" }
+aitune-examples-common = { path = "../../examples/common" }
 
 [project.scripts]
 tune = "parakeet_ctc.tune:main"
 inference = "parakeet_ctc.inference:main"
 
 [build-system]
-requires = ["setuptools>=65.3.0", "setuptools_scm>=2.0.0,<3", "wheel>=0.37.1"]
+requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

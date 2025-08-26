@@ -11,8 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-Backend:
-  model_name: "nvidia/parakeet-ctc-0.6b"
-  max_batch_size: 4
-  batch_timeout: 0.5
-  tuning_audio_path: "/opt/aitune/dynamo/app/2086-149220-0033.wav"

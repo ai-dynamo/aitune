@@ -34,19 +34,21 @@ services:
       - aux
       - all
 
-  parakeet-ctc-frontend:
+  backend:
     environment:
       NATS_SERVER: "nats://nats-server:4222"
       ETCD_ENDPOINTS: "http://etcd-server:2379"
-      AI_TUNE_CACHE_DIR: /opt/dynamo/app/cache
+      AITUNE_CACHE_DIR: /opt/aitune/dynamo/app/cache
+      EXAMPLE_NAME: parakeet_rnnt
     build:
       context: .
       additional_contexts:
         # we need aitune and we are using local version
+        # NOTE: docker compose should be from the given example directory, i.e. examples/ParakeetRNNT
         aitune: ../..
-      dockerfile: Dockerfile.dynamo
-    ports:
-      - 8000:8000
+      dockerfile: ../common/Dockerfile
+    image: aitune-dynamo-parakeet-rnnt-image:latest
+    pull_policy: never
     depends_on:
       - nats-server
       - etcd-server
@@ -58,10 +60,37 @@ services:
               count: 1
               capabilities: [gpu]
     volumes:
-      - cache:/opt/dynamo/app/cache
+      - aitune_cache:/opt/aitune/dynamo/app/cache
+      - huggingface:/root/.cache/huggingface
+      - audio_files:/tmp/audio
     profiles:
       - all
 
+  frontend:
+    # reusing the same image as backend
+    image: aitune-dynamo-parakeet-rnnt-image:latest
+    pull_policy: build
+    ports:
+      - 8000:8000
+    depends_on:
+      - backend
+    profiles:
+      - all
+    environment:
+      NATS_SERVER: "nats://nats-server:4222"
+      ETCD_ENDPOINTS: "http://etcd-server:2379"
+      EXAMPLE_NAME: parakeet_rnnt
+    command: /bin/sh -c 'python -m $$EXAMPLE_NAME.dynamo.frontend'
+    volumes:
+      - audio_files:/tmp/audio
+
 volumes:
-  cache:
+  aitune_cache:
     driver: local
+
+  huggingface:
+    driver: local
+
+  audio_files:
+    driver: local
+

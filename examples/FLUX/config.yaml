@@ -21,8 +21,8 @@ Backend:
   steps: 20
   guidance_scale: 7.5
   max_sequence_length: 77
-  tuned_model_path: "tuned_model.pt"
   force_tune: false
+  image_storage_path: "/images"
   ServiceArgs:
     workers: 1
     resources:

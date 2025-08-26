@@ -70,11 +70,11 @@ The generated image will be saved in the specified output directory.
 
 To run FLUX as AI Dynamo service, we have prepared a few additional configs and scripts.
 
-Code starts in `flux/dynamo/service.py`, Docker and Docker Compose is used to make setup simple.
+The service is split into backend (`flux/dynamo/backend.py`) and frontend (`flux/dynamo/frontend.py`) components. Docker and Docker Compose is used to make setup simple.
 
-Firstly, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
+Firstly, start all services by running `HF_TOKEN=hf.... docker compose --profile all up --detach`. This will build and start all required services. The token for the HuggingFace is required to download the model.
 
-After successful tunning and services start run below command to test the service.
+After successful download, tuning and services start run below command to test the service.
 
 ```sh
 python -m flux.dynamo.client --help # to see the prompts

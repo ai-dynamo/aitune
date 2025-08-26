@@ -67,11 +67,11 @@ Note: if `--audio_path` is omitted the default audio file, bundled with this exa
 
 To run ParakeetCTC as AI Dynamo service, we have prepared a few additional configs and scripts.
 
-Code starts in `parakeet_ctc/dynamo/service.py`, Docker and Docker Compose is used to make setup simple.
+Code starts in `parakeet_ctc/dynamo/backend.py`, Docker and Docker Compose is used to make setup simple.
 
 Firstly, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
 
-After successful tunning and services start run below command to test the service.
+After successful tuning and services start run below command to test the service.
 
 ```sh
 python -m parakeet_ctc.dynamo.client --help # to see the prompts

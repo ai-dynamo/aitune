@@ -11,8 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-Backend:
-  model_name: "nvidia/parakeet-ctc-0.6b"
-  max_batch_size: 4
-  batch_timeout: 0.5
-  tuning_audio_path: "/opt/aitune/dynamo/app/2086-149220-0033.wav"
+
+[project]
+name = "aitune-examples-common"
+version = "0.1.0"
+description = "NVIDIA AITune Examples Common"
+requires-python = ">=3.10, <3.13"
+
+[build-system]
+requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.aitune]
+skip = true

@@ -18,10 +18,14 @@ from logging import basicConfig, getLogger
 
 import torch
 
-from aitune.torch import FirstWinsStrategy, inspect, save, tune, wrap
-from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
-from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackendConfig
-from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig
+import aitune.torch as ait
+from aitune.torch.backend import (
+    TensorRTBackend,
+    TensorRTBackendConfig,
+    TorchEagerBackend,
+    TorchInductorBackend,
+)
+from aitune.torch.backend.tensorrt.tensorrt_backend import TorchQuantizationConfig
 from flux.cmd_args import parse_args
 from flux.model import get_pipeline
 
@@ -37,6 +41,7 @@ def tune_model(
     max_sequence_length,
     tuned_model_path,
     batch_sizes=None,
+    strategy=None,
 ):
     """Tune the Flux model.
 
@@ -49,36 +54,38 @@ def tune_model(
         max_sequence_length: Maximum sequence length
         tuned_model_path: Path to save the tuned model
         batch_sizes: List of batch sizes to tune
+        strategy: AITune strategy to use
     """
     pipe = get_pipeline(model_name=model_name)
 
     input_data = [{"prompt": prompt}]
 
     # Inspect pipeline to get modules
-    modules_info = inspect(pipe, input_data, number_of_iterations=1, warmup_iterations=1)
+    modules_info = ait.inspect(pipe, input_data, number_of_iterations=1, warmup_iterations=1)
 
-    # Define strategy
-    strategy = FirstWinsStrategy(
-        backends=[
-            TensorRTBackend(
-                TensorRTBackendConfig(
-                    quantization_config=TorchQuantizationConfig(
-                        quantization_config="FP8_DEFAULT_CFG",
-                        device="cuda",
-                        verbose=False,
-                    ),
-                )
-            ),
-            TensorRTBackend(),  # For FP16 fallback
-            TorchInductorBackend(),
-            TorchEagerBackend(),
-        ]
-    )
+    # Define strategy if not provided
+    if strategy is None:
+        strategy = ait.FirstWinsStrategy(
+            backends=[
+                TensorRTBackend(
+                    TensorRTBackendConfig(
+                        quantization_config=TorchQuantizationConfig(
+                            quantization_config="FP8_DEFAULT_CFG",
+                            device="cuda",
+                            verbose=False,
+                        ),
+                    )
+                ),
+                TensorRTBackend(),  # For FP16 fallback
+                TorchInductorBackend(),
+                TorchEagerBackend(),
+            ]
+        )
     strategy.enable_find_max_batch_size(enable=False)
 
     # Wrap all modules with AITune Module
     modules = modules_info.get_modules()
-    pipe = wrap(pipe, modules, strategy=strategy)
+    pipe = ait.wrap(pipe, modules, strategy=strategy)
 
     def call_wrapper(*args, **kwargs):
         for height, width in sizes:
@@ -96,10 +103,10 @@ def tune_model(
 
     # First do a dry run for testing
     logger.info("Tuning module: %s", model_name)
-    tune(call_wrapper, input_data, batch_sizes=[1] if batch_sizes is None else batch_sizes)
+    ait.tune(call_wrapper, input_data, batch_sizes=[1] if batch_sizes is None else batch_sizes)
     logger.info("Tuning completed.")
 
-    save(pipe, tuned_model_path)
+    ait.save(pipe, tuned_model_path)
     logger.info("Model saved to %s", tuned_model_path)
 
 

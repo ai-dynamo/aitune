@@ -12,7 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 Backend:
-  model_name: "nvidia/parakeet-ctc-0.6b"
+  model_name: "resnet50"
   max_batch_size: 4
   batch_timeout: 0.5
-  tuning_audio_path: "/opt/aitune/dynamo/app/2086-149220-0033.wav"
+  image_path: "/opt/aitune/dynamo/app/dog.webp"
+  classes_file: "/opt/aitune/dynamo/app/imagenet_classes.txt"
+  image_storage_path: "/tmp/images"
+  pretrained: true
+  force_tune: false
+  tuned_model_path: null
+
+Frontend:
+  port: 8000

@@ -36,7 +36,7 @@ Sample = tuple[tuple[Any], dict]
 
 
 class RecordingModule:
-    """Module that records samples for tunning."""
+    """Module that records samples for tuning."""
 
     def __init__(
         self,

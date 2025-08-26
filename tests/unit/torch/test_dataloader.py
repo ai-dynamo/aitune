@@ -29,7 +29,7 @@ from aitune.torch.dataloader import (
 
 
 def simulate_tuning_loop(dataset: DatasetLike, batch_sizes: list[int]):
-    """Prepare dataset for tunning.
+    """Prepare dataset for tuning.
 
     Steps:
     1. Create a dataloader from the dataset

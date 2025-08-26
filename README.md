@@ -182,7 +182,7 @@ Next, you can run user script without modifying it e.g.
 python your_script.py
 ```
 
-Note: currently JIT mode does not support caching results i.e. every time a new python interpreter starts, the tunning process starts from scratch
+Note: currently JIT mode does not support caching results i.e. every time a new python interpreter starts, the tuning process starts from scratch
 
 #### Configuring just-in-time tuning
 

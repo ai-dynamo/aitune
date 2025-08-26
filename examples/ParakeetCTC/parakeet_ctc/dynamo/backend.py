@@ -17,19 +17,17 @@ This service implements batched audio transcription using batch decorator
 to improve throughput by processing multiple audio files together.
 """
 
+import asyncio
 import logging
+import os
 import time
-import uuid
 from pathlib import Path
-from typing import Annotated
 
-import aiofiles
 import torch
-from dynamo.runtime.logging import configure_dynamo_logging
-from dynamo.sdk import DYNAMO_IMAGE, api, async_on_start, depends, endpoint, service
-from dynamo.sdk.lib.config import ServiceConfig
-from fastapi import Form, UploadFile
-from fastapi.responses import StreamingResponse
+import uvloop
+import yaml
+from aitune_examples_common.batching import batch, get_or_create_event_loop
+from dynamo.runtime import DistributedRuntime, dynamo_endpoint, dynamo_worker
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 from pydantic import BaseModel, Field
 
@@ -38,13 +36,12 @@ from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInduct
 from aitune.torch.config import aitune_cache_dir
 
 from ..tune import get_model, tune_model
-from .batching import batch, get_or_create_event_loop
 
 logger = logging.getLogger(__name__)
 
 
 class AudioTranscriptionRequest(BaseModel):
-    """Request model for audio transcription."""
+    """Request model for audio transcription after preprocessing."""
 
     request_id: str | None = Field(default=None, description="Request ID")
     audio_path: str = Field(description="Path to audio file")
@@ -58,27 +55,30 @@ class AudioTranscriptionResponse(BaseModel):
     transcription_time: float
     error: str | None = Field(default=None, description="Error message")
 
+    @staticmethod
+    def make_error_response(request_id: str, error: str) -> "AudioTranscriptionResponse":
+        """Make an error response."""
+        return AudioTranscriptionResponse(
+            request_id=request_id,
+            transcription="",
+            transcription_time=0,
+            error=error,
+        )
 
-@service(
-    dynamo={"namespace": "inference"},
-    resource={"cpu": 4, "memory": "8Gi", "gpu": 1},
-    workers=1,
-    image=DYNAMO_IMAGE,
-)
+
 class ParakeetCTCBatchedBackend:
     """Backend service for ParakeetCTC model inference with batching."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: dict) -> None:
         """Initialize the ParakeetCTC backend with batching."""
         logger.info("Starting ParakeetCTC backend with batching")
-        config = ServiceConfig.get_instance()
 
         self.pipeline = None
         self.model_name = config.get("Backend", {}).get("model_name", "nvidia/parakeet-ctc-0.6b")
-        self.max_batch_size = config.get("Backend", {}).get("max_batch_size", 15)
+        self.max_batch_size = config.get("Backend", {}).get("max_batch_size", 8)
         self.batch_timeout = config.get("Backend", {}).get("batch_timeout", 0.5)  # seconds
 
-        self.tunning_audio_path = config.get("Backend", {}).get("tunning_audio_path", "./2086-149220-0033.wav")
+        self.tuning_audio_path = config.get("Backend", {}).get("tuning_audio_path", "./2086-149220-0033.wav")
         self.audio_storage_path = Path(config.get("Backend", {}).get("audio_storage_path", "/tmp/audio"))
         self.force_tune = config.get("Backend", {}).get("force_tune", False)
         self.audio_storage_path.mkdir(parents=True, exist_ok=True)
@@ -99,8 +99,7 @@ class ParakeetCTCBatchedBackend:
             self.handle_batch
         )
 
-    @async_on_start
-    async def on_start(self):
+    async def initialize_model(self):
         """Tune the model on start."""
         logger.info("Tuning model on start")
 
@@ -117,7 +116,7 @@ class ParakeetCTCBatchedBackend:
             # Tune model
             tune_model(
                 self.model_name,
-                self.tunning_audio_path,
+                self.tuning_audio_path,
                 self.tuned_model_path,
                 strategy=strategy,
                 batch_sizes=list(range(1, self.max_batch_size + 1)),
@@ -214,85 +213,55 @@ class ParakeetCTCBatchedBackend:
                 error_responses.append(error_response)
             return error_responses
 
-    @endpoint()
+    @dynamo_endpoint(AudioTranscriptionRequest, AudioTranscriptionResponse)
     async def transcribe_audio(self, request: AudioTranscriptionRequest):
         """Transcribe audio with batching."""
         logger.info("Received transcription request: %s...", request.request_id)
 
         # Process through batch handler - will automatically batch this
         try:
-            response = await self.handle_batch(request)  # type: ignore
+            response = await self.handle_batch(request)
             if response:
                 logger.info("Request completed successfully")
-                yield response.model_dump_json()  # type: ignore
+                yield response.model_dump()
             else:
                 logger.error("Request failed: no response")
-                error_response = {"error": "No response generated"}
-                yield str(error_response)
+                yield AudioTranscriptionResponse.make_error_response(
+                    request.request_id, "No response generated"
+                ).model_dump()
         except Exception as e:
             logger.error("Request failed: %s", e)
-            error_response = {"error": str(e)}
-            yield str(error_response)
+            yield AudioTranscriptionResponse.make_error_response(request.request_id, str(e)).model_dump()
 
 
-@service(
-    dynamo={"namespace": "inference"},
-    image=DYNAMO_IMAGE,
-)
-class ParakeetCTCBatchedFrontend:
-    """Frontend HTTP API for ParakeetCTC inference service with batching."""
+@dynamo_worker()
+async def backend_worker(runtime: DistributedRuntime):
+    namespace_name = "parakeet_ctc"
+    component_name = "backend"
+    endpoint_name = "transcribe_audio"
+    lease_id = runtime.etcd_client().primary_lease_id()
 
-    backend: ParakeetCTCBatchedBackend = depends(ParakeetCTCBatchedBackend)
+    component = runtime.namespace(namespace_name).component(component_name)
+    await component.create_service()
 
-    def __init__(self) -> None:
-        """Initialize the ParakeetCTC frontend."""
-        configure_dynamo_logging(service_name="ParakeetCTCBatchedFrontend")
-        logger.info("Starting ParakeetCTC frontend with batching")
+    logger.info("Created service %s/%s", namespace_name, component_name)
 
-        config = ServiceConfig.get_instance()
+    endpoint = component.endpoint(endpoint_name)
 
-        self.port = config.get("Frontend", {}).get("port", 8000)
-        self.audio_storage_path = Path(config.get("Backend", {}).get("audio_storage_path", "/tmp/audio"))
-        logger.info("Frontend config port: %d", self.port)
+    logger.info("Serving endpoint %s on lease %s", endpoint_name, lease_id)
 
-    @api()
-    async def transcribe_audio(self, audio_file: UploadFile, request_id: Annotated[str, Form()]):
-        """HTTP endpoint for audio transcription with batching.
+    backend = ParakeetCTCBatchedBackend(_get_config())
+    await backend.initialize_model()
+    await endpoint.serve_endpoint(backend.transcribe_audio)
 
-        Args:
-            audio_file: Audio file to transcribe, expects wav format
-            request_id: User provided request ID
 
-        Returns:
-            StreamingResponse: Streaming response with transcription
-        """
-        logger.info("Frontend received transcription request: %s...", request_id)
+def _get_config() -> dict:
+    with Path(os.environ.get("AITUNE_EXAMPLE_CONFIG_PATH", "config.yaml")).open() as f:
+        return yaml.safe_load(f)
 
-        internal_request_id = "" if request_id is None else request_id
-        internal_request_id += "__" + str(uuid.uuid4())
 
-        # store audio file in temp file, expecting wav format for now
-        audio_file_path = self.audio_storage_path / f"{internal_request_id}.wav"
-        async with aiofiles.open(audio_file_path, "wb") as f:
-            await f.write(await audio_file.read())
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, force=True)
+    uvloop.install()
 
-        request = AudioTranscriptionRequest(
-            request_id=request_id,
-            audio_path=str(audio_file_path),
-        )
-
-        async def content_generator():
-            async for response in self.backend.transcribe_audio(request.model_dump_json()):
-                logger.info("Frontend received response")
-                yield response
-
-            logger.info("Frontend done")
-
-        # audio_file_path.unlink(missing_ok=True)
-
-        return StreamingResponse(content_generator())
-
-    @api()
-    async def health(self):
-        """Health check endpoint."""
-        return {"status": "healthy", "service": "ParakeetCTC Audio Transcription with Batching"}
+    asyncio.run(backend_worker())

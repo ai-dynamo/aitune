@@ -19,7 +19,7 @@ from pathlib import Path
 
 import torch
 
-from aitune.torch import load
+import aitune.torch as ait
 from flux.cmd_args import parse_args
 from flux.model import get_pipeline
 
@@ -71,7 +71,7 @@ def do_inference(
         logger.info("Generated image saved to: %s", image_path)
 
     logger.info("Loading tuned pipeline")
-    pipe = load(pipe, tuned_model_path)
+    pipe = ait.load(pipe, tuned_model_path)
 
     logger.info("Generating images on tuned pipeline")
     for height, width in sizes:

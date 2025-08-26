@@ -52,4 +52,4 @@ include = ["jit_tuning"]
 jit_tuning = ["**/*"]
 
 [tool.aitune]
-scope = "L3"
+skip = true

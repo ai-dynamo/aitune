@@ -34,19 +34,21 @@ services:
       - aux
       - all
 
-  stable-diffusion-frontend:
+  backend:
     environment:
       NATS_SERVER: "nats://nats-server:4222"
       ETCD_ENDPOINTS: "http://etcd-server:2379"
-      AI_TUNE_CACHE_DIR: /opt/dynamo/app/cache
+      AITUNE_CACHE_DIR: /opt/aitune/dynamo/app/cache
+      EXAMPLE_NAME: stable_diffusion
     build:
       context: .
       additional_contexts:
         # we need aitune and we are using local version
+        # NOTE: docker compose should be from the given example directory, i.e. examples/StableDiffusion
         aitune: ../..
-      dockerfile: Dockerfile.dynamo
-    ports:
-      - 8000:8000
+      dockerfile: ../common/Dockerfile
+    image: aitune-dynamo-stable-diffusion-image:latest
+    pull_policy: never
     depends_on:
       - nats-server
       - etcd-server
@@ -58,10 +60,37 @@ services:
               count: 1
               capabilities: [gpu]
     volumes:
-      - cache:/opt/dynamo/app/cache
+      - aitune_cache:/opt/aitune/dynamo/app/cache
+      - huggingface_cache:/root/.cache/huggingface
+      - image_files:/images
     profiles:
       - all
 
+  frontend:
+    # reusing the same image as backend
+    image: aitune-dynamo-stable-diffusion-image:latest
+    pull_policy: build
+    ports:
+      - 8000:8000
+    depends_on:
+      - backend
+    profiles:
+      - all
+    environment:
+      NATS_SERVER: "nats://nats-server:4222"
+      ETCD_ENDPOINTS: "http://etcd-server:2379"
+      EXAMPLE_NAME: stable_diffusion
+    command: /bin/sh -c 'python -m $$EXAMPLE_NAME.dynamo.frontend'
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+      - image_files:/images
+
 volumes:
-  cache:
+  aitune_cache:
+    driver: local
+
+  huggingface_cache:
+    driver: local
+
+  image_files:
     driver: local

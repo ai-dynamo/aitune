@@ -47,7 +47,7 @@ torch.Size([4, 3, 488, 488])
 
 Samples are collated into a batch with a transformers default collator with additional support for strings.
 
-We are using torch.utils.data.Dataloader internally, we feed tunning with
+We are using torch.utils.data.Dataloader internally, we feed tuning with
 different batch sizes of samples.
 
 Non-batchable inputs should be handled by the user on module level.

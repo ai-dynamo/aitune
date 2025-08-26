@@ -64,21 +64,45 @@ or for uv:
 uv run inference --model-name resnet50 --image-path your_image
 ```
 
-### AI Dynamo Resnet Deployment
+### AI Dynamo ResNet Deployment with Batching
 
-To run Resnet as AI Dynamo service, we have prepared a few additional configs and scripts.
+To run ResNet as AI Dynamo service with dynamic batching, we have prepared additional configs and scripts.
 
-Code starts in `resnet/dynamo/service.py`, Docker and Docker Compose is used to make setup simple.
+Code starts in `resnet/dynamo/backend.py`, Docker and Docker Compose is used to make setup simple.
 
-Firstly, start all services by running `docker compose up --detach`. This will build and start all required services.
+Firstly, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
 
-After successful tunning and services start run below command to test the service.
+After successful tuning and services start run below commands to test the service.
 
+#### Single Request
 ```sh
-python -m resnet.dynamo.client --image-path dog.webp
+python -m resnet.dynamo.client --num-requests 1
 # response should be:
-#    {"prediction":"golden retriever","confidence":0.9992710947990417,"class_id":207}
+#    {"request_id":"img-resnet-single","prediction":"golden retriever","confidence":0.9992710947990417,"class_id":207,"inference_time":0.123}
 ```
 
-Finally, to shut it down use `docker compose down`.
+#### Batching Demonstration
+```sh
+python -m resnet.dynamo.client --num-requests 2
+python -m resnet.dynamo.client --num-requests 4
+python -m resnet.dynamo.client --num-requests 8
+python -m resnet.dynamo.client --num-requests 100
+```
+
+#### Custom Image
+```sh
+python -m resnet.dynamo.client --image-path your_image.jpg --num-requests 4
+```
+
+Finally, to shut it down use `docker compose down --volumes`.
+
+#### Dynamic batching
+
+The service uses dynamic batching — requests are grouped and processed together for efficiency. Currently, there is one frontend and one worker. To support multiple workers, move batching to a separate service that handles request grouping.
+
+## Model Details
+
+Can be found in following pages:
+* https://pytorch.org/vision/stable/models.html#classification
+* https://huggingface.co/timm
 

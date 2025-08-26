@@ -88,7 +88,7 @@ class ParakeetCTCClient:
             raise RuntimeError("Client not initialized. Use async context manager.")
 
         url = f"{self.base_url}/health"
-        async with self.session.post(url) as response:
+        async with self.session.get(url) as response:
             response.raise_for_status()
             return await response.json()
 

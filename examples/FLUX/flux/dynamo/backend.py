@@ -11,24 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""AI Dynamo service with FLUX model and  batching.
+"""AI Dynamo service with FLUX model and batching.
 
 This service implements batched image generation using batch decorator
 to improve throughput by processing multiple prompts together.
 """
 
-import base64
-import io
+import asyncio
 import logging
+import os
 import time
-import uuid
 from pathlib import Path
 
 import torch
-from dynamo.runtime.logging import configure_dynamo_logging
-from dynamo.sdk import DYNAMO_IMAGE, api, async_on_start, depends, endpoint, service
-from dynamo.sdk.lib.config import ServiceConfig
-from fastapi.responses import StreamingResponse
+import uvloop
+import yaml
+from aitune_examples_common.batching import batch, get_or_create_event_loop
+from dynamo.runtime import DistributedRuntime, dynamo_endpoint, dynamo_worker
 from pydantic import BaseModel, Field
 
 import aitune.torch as ait
@@ -36,7 +35,6 @@ from aitune.torch.config import aitune_cache_dir
 
 from ..model import get_pipeline
 from ..tune import tune_model
-from .batching import batch, get_or_create_event_loop
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +43,7 @@ class ImageGenerationRequest(BaseModel):
     """Request model for image generation."""
 
     request_id: str | None = Field(default=None, description="Request ID")
+    internal_request_id: str | None = Field(default=None, description="Internal request ID")
     prompt: str = Field(description="Text prompt for image generation")
     height: int = Field(default=1024, description="Image height")
     width: int = Field(default=1024, description="Image width")
@@ -57,33 +56,38 @@ class ImageGenerationResponse(BaseModel):
     """Response model for image generation results."""
 
     request_id: str
-    image_data: str  # Base64 encoded image
+    internal_request_id: str
+    image_path: str
     prompt: str
     generation_time: float
     error: str | None = Field(default=None, description="Error message")
 
+    @staticmethod
+    def make_error_response(request_id: str, internal_request_id: str, error: str) -> "ImageGenerationResponse":
+        """Make an error response."""
+        return ImageGenerationResponse(
+            request_id=request_id,
+            internal_request_id=internal_request_id,
+            image_path="",
+            prompt="",
+            generation_time=0,
+            error=error,
+        )
 
-@service(
-    dynamo={"namespace": "inference"},
-    resource={"cpu": 4, "memory": "8Gi", "gpu": 1},
-    workers=1,
-    image=DYNAMO_IMAGE,
-)
+
 class FluxBatchedBackend:
-    """Backend service for FLUX model inference with  batching."""
+    """Backend service for FLUX model inference with batching."""
 
-    def __init__(self) -> None:
-        """Initialize the FLUX backend with  batching."""
-        logger.info("Starting FLUX backend with  batching")
-        config = ServiceConfig.get_instance()
+    def __init__(self, config: dict) -> None:
+        """Initialize the FLUX backend with batching."""
+        logger.info("Starting FLUX backend with batching")
 
         self.pipeline = None
         self.model_name = config.get("Backend", {}).get("model_name", "black-forest-labs/FLUX.1-dev")
         self.max_batch_size = config.get("Backend", {}).get("max_batch_size", 4)
         self.batch_timeout = config.get("Backend", {}).get("batch_timeout", 2.0)  # seconds
-        self.pretrained = config.get("Backend", {}).get("pretrained", True)
         self.force_tune = config.get("Backend", {}).get("force_tune", False)
-
+        self.image_storage_path = Path(config.get("Backend", {}).get("image_storage_path", "/images"))
         self.prompt = config.get("Backend", {}).get("prompt", "A beautiful sunset over a calm ocean")
         self.sizes = config.get("Backend", {}).get("sizes", [(1024, 1024), (512, 512)])
         self.steps = config.get("Backend", {}).get("steps", 20)
@@ -105,10 +109,10 @@ class FluxBatchedBackend:
             self.handle_batch
         )
 
-    @async_on_start
-    async def on_start(self):
+    async def initialize_model(self):
         """Tune the model on start."""
         logger.info("Tuning model on start")
+
         # Load model
         if not self.tuned_model_path.exists() or self.force_tune:
             # Generate batch sizes, taking just powers of 2 up to max_batch_size
@@ -131,7 +135,7 @@ class FluxBatchedBackend:
 
         logger.info("Loading tuned model from %s", self.tuned_model_path)
         self.pipeline = get_pipeline(self.model_name)
-        ait.load(self.pipeline, self.tuned_model_path)  # type: ignore
+        ait.load(self.pipeline, self.tuned_model_path)
 
         logger.info("Backend initialized with model: %s, max_batch_size: %d", self.model_name, self.max_batch_size)
 
@@ -187,14 +191,15 @@ class FluxBatchedBackend:
             responses = []
             for i, req in enumerate(requests):
                 try:
-                    # Convert PIL image to base64
-                    img_buffer = io.BytesIO()
-                    images[i].save(img_buffer, format="JPEG")  # type: ignore
-                    img_data = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
+                    # Save image to storage
+                    image_path = self.image_storage_path / f"{req.internal_request_id}.jpg"
+                    with image_path.open("wb") as f:
+                        images[i].save(f, format="JPEG")
 
                     response = ImageGenerationResponse(
                         request_id=req.request_id or "",
-                        image_data=img_data,
+                        internal_request_id=req.internal_request_id,
+                        image_path=str(image_path),
                         prompt=req.prompt,
                         generation_time=generation_time,
                     )
@@ -203,11 +208,12 @@ class FluxBatchedBackend:
                     logger.info("Processed request %d", i + 1)
 
                 except Exception as e:
-                    logger.error("Error processing request %d: %s", i + 1, e)
+                    logger.error("Error processing request %d: %s", i + 1, e, exc_info=True)
                     # Create error response
                     error_response = ImageGenerationResponse(
                         request_id=req.request_id or "",
-                        image_data="",  # Empty for error
+                        internal_request_id=req.internal_request_id,
+                        image_path="",  # Empty for error
                         prompt=req.prompt,
                         generation_time=generation_time,
                         error=str(e),
@@ -223,7 +229,8 @@ class FluxBatchedBackend:
             for req in requests:
                 error_response = ImageGenerationResponse(
                     request_id=req.request_id or "",
-                    image_data="",  # Empty for error
+                    internal_request_id=req.internal_request_id,
+                    image_path="",  # Empty for error
                     prompt=req.prompt,
                     generation_time=(time.monotonic_ns() - start_time) / 1e9,
                     error=str(e),
@@ -231,64 +238,57 @@ class FluxBatchedBackend:
                 error_responses.append(error_response)
             return error_responses
 
-    @endpoint()
-    async def generate_image(self, req: ImageGenerationRequest):
+    @dynamo_endpoint(ImageGenerationRequest, ImageGenerationResponse)
+    async def generate_image(self, request: ImageGenerationRequest):
         """Generate image with batching."""
-        logger.info("Received generation request: %s...", req.prompt[:50])
-
-        # set request_id to a new uuid, respecting the existing request_id if it exists
-        req.request_id = "" if req.request_id is None else req.request_id
-        req.request_id += "__" + str(uuid.uuid4())
+        logger.info("Received generation request: %s...", request.prompt[:50])
 
         # Process through batch handler - will automatically batch this
         try:
-            response = await self.handle_batch(req)  # type: ignore
+            response = await self.handle_batch(request)
             if response:
                 logger.info("Request completed successfully")
-                yield response.model_dump_json()  # type: ignore
+                yield response.model_dump()
             else:
                 logger.error("Request failed: no response")
-                error_response = {"error": "No response generated"}
-                yield str(error_response)
+                yield ImageGenerationResponse.make_error_response(
+                    request.request_id, request.internal_request_id, "No response generated"
+                ).model_dump()
         except Exception as e:
             logger.error("Request failed: %s", e)
-            error_response = {"error": str(e)}
-            yield str(error_response)
+            yield ImageGenerationResponse.make_error_response(
+                request.request_id, request.internal_request_id, str(e)
+            ).model_dump()
 
 
-@service(
-    dynamo={"namespace": "inference"},
-    image=DYNAMO_IMAGE,
-)
-class FluxBatchedFrontend:
-    """Frontend HTTP API for FLUX inference service with batching."""
+@dynamo_worker()
+async def backend_worker(runtime: DistributedRuntime):
+    namespace_name = "flux"
+    component_name = "backend"
+    endpoint_name = "generate_image"
+    lease_id = runtime.etcd_client().primary_lease_id()
 
-    backend: FluxBatchedBackend = depends(FluxBatchedBackend)
+    component = runtime.namespace(namespace_name).component(component_name)
+    await component.create_service()
 
-    def __init__(self) -> None:
-        """Initialize the FLUX frontend."""
-        configure_dynamo_logging(service_name="FluxBatchedFrontend")
-        logger.info("Starting FLUX frontend with batching")
+    logger.info("Created service %s/%s", namespace_name, component_name)
 
-        config = ServiceConfig.get_instance()
-        self.port = config.get("Frontend", {}).get("port", 8000)
-        logger.info("Frontend config port: %d", self.port)
+    endpoint = component.endpoint(endpoint_name)
 
-    @api()
-    async def generate_image(self, request: ImageGenerationRequest):
-        """HTTP endpoint for image generation with batching."""
-        logger.info("Frontend received generation request: %s...", request.prompt[:50])
+    logger.info("Serving endpoint %s on lease %s", endpoint_name, lease_id)
 
-        async def content_generator():
-            async for response in self.backend.generate_image(request.model_dump_json()):
-                logger.info("Frontend received response")
-                yield response
+    backend = FluxBatchedBackend(_get_config())
+    await backend.initialize_model()
+    await endpoint.serve_endpoint(backend.generate_image)
 
-            logger.info("Frontend done")
 
-        return StreamingResponse(content_generator())
+def _get_config() -> dict:
+    with Path(os.environ.get("AITUNE_EXAMPLE_CONFIG_PATH", "config.yaml")).open() as f:
+        return yaml.safe_load(f)
 
-    @api()
-    async def health(self):
-        """Health check endpoint."""
-        return {"status": "healthy", "service": "FLUX Image Generation with Batching"}
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, force=True)
+    uvloop.install()
+
+    asyncio.run(backend_worker())

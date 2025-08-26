@@ -32,20 +32,25 @@ dependencies = [
 
 [project.optional-dependencies]
 dynamo = [
-    "ai-dynamo==0.3.0",
+    "aitune-examples-common",
+    "ai-dynamo==0.4.0",
     "uvicorn",
     "aiohttp",
+    "aiofiles",
+    "uvloop",
+    "pyyaml",
 ]
 
 [tool.uv.sources]
 aitune = { path = "../../" }
+aitune-examples-common = { path = "../../examples/common" }
 
 [project.scripts]
 tune = "stable_diffusion.tune:main"
 inference = "stable_diffusion.inference:main"
 
 [build-system]
-requires = ["setuptools>=65.3.0", "setuptools_scm>=2.0.0,<3", "wheel>=0.37.1"]
+requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
