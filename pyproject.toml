@@ -49,7 +49,7 @@ requires-python = ">=3.10,<3.13"
 dependencies = [
     "dill>=0.3.8",
     "numpy<2",
-    "onnx~=1.16",
+    "onnx<1.19",
     "onnxruntime==1.19.*;platform_machine == 'aarch64' and python_version < '3.10'",
     "onnxruntime-gpu==1.19.*;platform_machine == 'x86_64' and python_version < '3.10'",
     "onnxruntime~=1.20;platform_machine == 'aarch64' and python_version >= '3.10'",
