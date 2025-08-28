@@ -23,6 +23,7 @@ from typing import cast
 
 import torch
 import torch.nn as nn
+import wrapt
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
@@ -30,7 +31,7 @@ from aitune.torch.jit.config import config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule, Sample
-from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_metadata import SampleMetadata, UnsupportedTypeException
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy.jit_strategy import JitStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
@@ -100,14 +101,11 @@ class PatchedModule:
         self._allowed_to_tune = False
         # routing maps state to forward method implementation, to split large logic into smaller parts
         self._forward_routing = {
-            ModuleState.INIT: lambda *args, **kwargs: self._forward_init(*args, **kwargs),
-            ModuleState.RECORDING: lambda *args, **kwargs: self._forward_recording(*args, **kwargs),
-            ModuleState.TUNED: lambda *args, **kwargs: self._forward_tuned(*args, **kwargs),
-            ModuleState.EAGER: lambda *args, **kwargs: self._original_forward(*args, **kwargs),
-            ModuleState.SKIPPED: lambda *args, **kwargs: self._raise_exception(f"Module {self._name} is skipped"),
-            ModuleState.DETACHED: lambda *args, **kwargs: self._raise_exception(f"Module {self._name} is detached"),
+            ModuleState.INIT: self._forward_init,
+            ModuleState.RECORDING: self._forward_recording,
+            ModuleState.TUNED: self._forward_tuned,
         }
-        self._tune_result_description: str = ""  # for tracking purposes
+        self._extra_state_info: str = ""  # for tracking purposes
         self._update_state(ModuleState.INIT)
 
     def tune(
@@ -126,11 +124,6 @@ class PatchedModule:
         todo = [self]
         while todo:
             current = todo.pop()
-            if current._should_be_skipped():
-                current._update_state(ModuleState.SKIPPED)
-                _to_hist(f"Module on skip list: {str(current)}")
-                current._unpatch_hierarchy(include_self=True)
-                continue
             recording = cast(RecordingModule, current._wrapper)
             backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
             strategy = JitStrategy(TensorRTBackend())
@@ -145,10 +138,10 @@ class PatchedModule:
                         backends[graph_spec.input_spec] = backend
                 if backends:
                     current._wrapper = TunedModule(backends)
-                    current._tune_result_description = ", ".join([b.name for b in backends.values()])
+                    current._extra_state_info = ", ".join([b.name for b in backends.values()])
                 else:
                     current._wrapper = PassthroughModule(current.__wrapped__)
-                    current._tune_result_description = "dry-run tuning success"
+                    current._extra_state_info = "dry-run tuning success"
 
                 # tuning success, we can revert forward for current module, unpatch children
                 current._update_state(ModuleState.TUNED)
@@ -164,9 +157,9 @@ class PatchedModule:
                     if child._should_be_tuned():
                         todo.append(child)
                 if isinstance(e, GraphBreakException):
-                    current._tune_result_description = "graph break"
+                    current._extra_state_info = "graph break"
                 else:
-                    current._tune_result_description = "tuning error"
+                    current._extra_state_info = "tuning error"
                 _to_hist(f"Failed to tune module, unpatched: {str(current)}")
 
     def _simulate_dry_run(self, strategy, current, graph_spec, data, device, cache_dir):
@@ -199,7 +192,7 @@ class PatchedModule:
         cls_name = self._name.split(" ")[0]
         return cls_name in config.skip_modules
 
-    def _forward_init(self, *args, **kwargs):
+    def _forward_init(self, wrapped, instance, args, kwargs):
         """Forward call for the first time.
 
         This method is called when the module is first called.
@@ -236,24 +229,47 @@ class PatchedModule:
         try:
             self.__wrapped__.forward = self._original_forward
             result = self._wrapper(*args, **kwargs)
-        finally:
             self.__wrapped__.forward = self._proxy_forward
+        except UnsupportedTypeException as e:
+            self._handle_unsupported_type(e)
+            result = self.__wrapped__(*args, **kwargs)  # return original result
+            # since cannot record parent, let children be allowed to tune
+            # the order is important - line above will call and register children
+            for child in self._children:
+                child._allowed_to_tune = True
+        finally:
             PatchedModule.stack.pop()
         return result
 
-    def _forward_recording(self, *args, **kwargs):
-        """Forward call for the recording state."""
+    def _forward_recording(self, wrapped, instance, args, kwargs):
+        """Forward call for the recording state.
+
+        In this state we already have the hierarchy resolved for the current module.
+        If necessary we can skip the module and its children from processing.
+        """
+        if self._should_be_skipped():
+            self._update_state(ModuleState.SKIPPED)
+            _to_hist(f"Module on skip list: {str(self)}")
+            self._unpatch_hierarchy(include_self=True)
+            return self.__wrapped__(*args, **kwargs)
+
         try:
             self.__wrapped__.forward = self._original_forward
             result = self._wrapper(*args, **kwargs)
-            self._call_count += 1
-        finally:
             self.__wrapped__.forward = self._proxy_forward
+            self._call_count += 1
+        except UnsupportedTypeException as e:
+            self._handle_unsupported_type(e)
+            result = self.__wrapped__(*args, **kwargs)  # return original result
+            # since cannot record parent, let children be allowed to tune
+            for child in self._children:
+                child._allowed_to_tune = True
+
         if self._should_be_tuned():
             self.tune()
         return result
 
-    def _forward_tuned(self, *args, **kwargs):
+    def _forward_tuned(self, wrapped, instance, args, kwargs):
         """Forward call for the tuned state."""
         try:
             self.__wrapped__.forward = self._original_forward
@@ -276,6 +292,13 @@ class PatchedModule:
             hierarchy_names += current._name
             todo.extend(current._children)
         return hashlib.sha256(hierarchy_names.encode()).hexdigest()
+
+    def _handle_unsupported_type(self, e: UnsupportedTypeException):
+        """Handle unsupported type exception."""
+        self._update_state(ModuleState.EAGER)
+        self._unpatch()
+        self._extra_state_info = f"Unsupported type: {e.wrong_type.__module__}.{e.wrong_type.__name__}"
+        _to_hist(f"Cannot record module: {self._name}, {self._extra_state_info}")
 
     def _patch_device_attribute(self, device: torch.device):
         """Patch the device attribute of the module and its parents.
@@ -305,10 +328,6 @@ class PatchedModule:
             if current._parent:
                 todo.append(current._parent)
 
-    def _raise_exception(self, message: str):
-        """Raise an exception."""
-        raise Exception(message)
-
     def __repr__(self):
         """Representation of the module."""
         return self.__str__()
@@ -317,8 +336,8 @@ class PatchedModule:
         """String representation of the module."""
         result = f"{self._name} level={self._level}🪜 "
         result += f"state={self._state.value}{_emoji_state[self._state]} "
-        if self._tune_result_description:
-            result += f"({self._tune_result_description}) "
+        if self._extra_state_info:
+            result += f"({self._extra_state_info}) "
         result += f"call_count={self._call_count}"
         return result
 
@@ -408,10 +427,16 @@ class PatchedModule:
             to_unpatch.extend(child._children)
 
     def _update_state(self, state: ModuleState):
-        """Update the state of the module and update the forward method routing."""
+        """Update the state of the module and update the forward.
+
+        Replaces torch.nn.Module.forward method with a proxy forward according to the object state. The substitution
+        is done with a wrapt.decorator so that the replaced function has same docstring, signature and other attributes.
+        This is crucial as some HF models perform self inspection for method arguments.
+        """
         self._state = state
-        if state != ModuleState.SKIPPED:
-            self._proxy_forward = self._forward_routing[state]
+        self.__wrapped__.forward = self._original_forward  # revert original forward to be ready for decoration
+        if replacement_func := self._forward_routing.get(state):
+            self._proxy_forward = wrapt.decorator(replacement_func)(self.__wrapped__.forward)
             self.__wrapped__.forward = self._proxy_forward
 
     @staticmethod
@@ -455,6 +480,11 @@ class PatchedModule:
         sink(PRINT_HIERARCHY_HEADER)
         for head in PatchedModule.heads:
             _print_module(head)
+
+    @staticmethod
+    def print_history(sink=print):
+        """Prints history to the sink."""
+        sink("\n".join(PatchedModule.history))
 
     @staticmethod
     def reset():

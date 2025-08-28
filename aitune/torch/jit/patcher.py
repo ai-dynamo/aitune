@@ -64,9 +64,7 @@ class Patcher:
         Args:
             module: The module to unpatch.
         """
-        if module not in cls._patched_modules:
-            logger.warning("Module %s not found in Patcher._patched_modules", module._name)
-        else:
+        if module in cls._patched_modules:
             cls._patched_modules.remove(module)
 
     @classmethod

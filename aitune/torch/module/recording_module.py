@@ -70,25 +70,30 @@ class RecordingModule:
         self._graphs_counter = itertools.count()
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Record a sample and run the module."""
+        """Record a sample and run the module.
+
+        Inputs metadata is created before calling `_forward_call` - the order is important as calling model does not
+        have to be idempotent i.e. can have side effects. If inputs contain unsupported type, exception will be thrown
+        and model won't be called i.e. there won't be side effects. This is not guaranteed for outputs - but there is
+        not other option for it.
+        """
         logger.debug("Calling recording %s module.", self._name)
-        output = self._forward_call(*args, **kwargs)
-
         inputs: Sample = (args, kwargs)
-        self.record_sample(inputs, output)
+        inputs_metadata = SampleMetadata.from_sample(inputs, prefix=INPUT_METADATA_PREFIX)
+        outputs = self._forward_call(*args, **kwargs)
+        outputs_metadata = SampleMetadata.from_sample(outputs, prefix=OUTPUT_METADATA_PREFIX)
 
-        return output
+        self.record_sample(inputs, inputs_metadata, outputs_metadata)
+
+        return outputs
 
     @property
     def device(self) -> torch.device:
         """Get the device of the module."""
         return next(self._module.parameters()).device
 
-    def record_sample(self, inputs, outputs) -> None:
+    def record_sample(self, inputs, inputs_metadata, outputs_metadata) -> None:
         """Record a sample from the module."""
-        inputs_metadata = SampleMetadata.from_sample(inputs, prefix=INPUT_METADATA_PREFIX)
-        outputs_metadata = SampleMetadata.from_sample(outputs, prefix=OUTPUT_METADATA_PREFIX)
-
         if inputs_metadata in self._graph_specs:
             # graphs share same hash but can have different min, max seen shapes
             self._graph_specs[inputs_metadata].update_shapes_seen(inputs_metadata, outputs_metadata)

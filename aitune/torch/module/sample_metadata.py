@@ -30,6 +30,15 @@ PYTHON_PRIMITIVE_TYPES = (int, float, bool, bytes, str, type(None))
 MetadataType = Union[int, float, bool, bytes, str, type(None), "TensorSpec", Mapping, Sequence]
 
 
+class UnsupportedTypeException(Exception):
+    """Exception raised when an unsupported type is encountered."""
+
+    def __init__(self, value: Any):
+        """Initialize UnsupportedType exception."""
+        self.wrong_type = type(value)
+        super().__init__(f"Unsupported type: {self.wrong_type}")
+
+
 class SampleMetadata:
     """Metadata description of a sample of data.
 
@@ -252,7 +261,7 @@ class SampleMetadata:
         elif isinstance(metadata, tuple):
             return tuple(SampleMetadata._from_metadata(item) for item in metadata)
         else:
-            raise TypeError(f"Unsupported type: {type(metadata)}")
+            raise UnsupportedTypeException(metadata)
 
     @staticmethod
     def _from_sample(sample, names, batch_size: int | None = None) -> tuple[MetadataType, Iterable[str]]:
@@ -292,7 +301,7 @@ class SampleMetadata:
             if isinstance(sample, list):
                 return metadata, names
             return tuple(metadata), names
-        raise TypeError(f"Unsupported type: {type(sample)}")
+        raise UnsupportedTypeException(sample)
 
     def _flatten_sample(self, sample, metadata: MetadataType, flatten_sample: dict[str, Any], include_constants=False):
         """Flatten sample according to metadata in a recursive manner.
@@ -317,7 +326,7 @@ class SampleMetadata:
                 self._flatten_sample(item, metadata[i], flatten_sample, include_constants=include_constants)
                 i += 1
         else:
-            raise TypeError(f"Unsupported type: {type(sample)}")
+            raise UnsupportedTypeException(sample)
 
     def _unflatten_sample(self, sample: Any, metadata: MetadataType) -> MetadataType:
         """Unflatten sample according to metadata in a recursive manner.
