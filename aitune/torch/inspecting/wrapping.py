@@ -46,20 +46,11 @@ def wrap(
     setup_logging(format_string=LOG_FORMAT)
     MODULE_REGISTRY.clear()
     for module_info in modules:
-        if module_info.name is None:
-            logger.info("Wrapping module: %s", obj.__class__.__name__)
+        logger.info("Wrapping module: %s", module_info.object_path or module_info.name or obj.__class__.__name__)
+        if module_info.parent is None:
             return Module(obj, name=obj.__class__.__name__, strategy=strategy, strategies=strategies)
 
-        parts = module_info.name.split(".")
-        module = obj
-        for part in parts[:-1]:
-            module = getattr(module, part)
-
-        logger.info("Wrapping module: %s [%s]", module_info.name, module_info.module_type)
-        setattr(
-            module,
-            parts[-1],
-            Module(module_info.module, name=module_info.name, strategy=strategy, strategies=strategies),
-        )
+        ait_module = Module(module_info.module, name=module_info.name, strategy=strategy, strategies=strategies)
+        module_info.parent.set_wrapped(module_info.name, ait_module)
 
     return obj

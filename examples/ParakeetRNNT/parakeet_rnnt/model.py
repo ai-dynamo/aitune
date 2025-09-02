@@ -21,7 +21,7 @@ import torch
 from nemo.core.classes.common import typecheck
 from omegaconf import open_dict
 
-from aitune.torch import Module, TuneStrategy
+import aitune.torch as ait
 
 
 def get_model(model_name: str = "nvidia/parakeet-rnnt-1.1b"):
@@ -38,6 +38,7 @@ def get_model(model_name: str = "nvidia/parakeet-rnnt-1.1b"):
 
     # Note: Allowing nemo object to be un/serialized (torch.load)
     torch.serialization.add_safe_globals([
+        # pytype: disable=module-attr
         nemo.core.neural_types.neural_type.NeuralType,
         nemo.core.neural_types.elements.MelSpectrogramType,
         nemo.core.neural_types.axes.AxisType,
@@ -46,6 +47,7 @@ def get_model(model_name: str = "nvidia/parakeet-rnnt-1.1b"):
         nemo.core.neural_types.elements.SpectrogramType,
         nemo.core.neural_types.elements.IntType,
         nemo.core.neural_types.elements.AcousticEncodedRepresentation,
+        # pytype: enable=module-attr
     ])
 
     asr_model = nemo.collections.asr.models.EncDecRNNTBPEModel.from_pretrained(model_name=model_name)
@@ -66,7 +68,7 @@ def get_model(model_name: str = "nvidia/parakeet-rnnt-1.1b"):
     return asr_model
 
 
-def wrap_pipeline(name: str, pipeline: nemo.collections.asr.models.EncDecRNNTBPEModel, strategy: TuneStrategy):
+def wrap_pipeline(name: str, pipeline: nemo.collections.asr.models.EncDecRNNTBPEModel, strategy: ait.TuneStrategy):
     """Wrap modules in the pipeline.
 
     Args:
@@ -77,13 +79,13 @@ def wrap_pipeline(name: str, pipeline: nemo.collections.asr.models.EncDecRNNTBPE
     Returns:
         ASR model
     """
-    pipeline.encoder = Module(
+    pipeline.encoder = ait.Module(
         pipeline.encoder,
         name=f"{name}-encoder",
         strategy=strategy,
     )
 
-    pipeline.decoder.prediction["dec_rnn"] = Module(
+    pipeline.decoder.prediction["dec_rnn"] = ait.Module(
         pipeline.decoder.prediction["dec_rnn"],
         name=f"{name}-decoder-rnn",
         strategy=strategy,

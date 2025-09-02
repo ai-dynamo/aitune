@@ -45,7 +45,7 @@ def test_inspect_flux():
 
     assert len(modules_info.get_modules()) == 4
 
-    expected_module_names = ["transformer", "vae.decoder", "text_encoder", "text_encoder_2"]
+    expected_module_names = ["transformer", "decoder", "text_encoder", "text_encoder_2"]
     modules = modules_info.get_modules()
 
     assert len(modules) == len(expected_module_names)
@@ -55,9 +55,10 @@ def test_inspect_flux():
     top_modules = modules_info.get_modules(min_execution_percentage=0.75)
     assert len(top_modules) == 1
     assert top_modules[0].name == "transformer"
-    assert top_modules[0].execution_count == 28 * (number_of_iterations + warmup_iterations)
+    assert top_modules[0].execution_count == 28 * number_of_iterations
     assert top_modules[0].total_execution_time > 0
     assert top_modules[0].average_execution_time > 0
+    assert top_modules[0].total_execution_time < modules_info._total_execution_time
 
     top_modules = modules_info.get_modules(limit=1)
     assert len(top_modules) == 1

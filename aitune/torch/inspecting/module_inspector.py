@@ -11,29 +11,122 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Module for inspecting PyTorch models and tracking their execution."""
+"""Module for inspecting PyTorch models and tracking their execution.
 
+This module is used to inspect PyTorch models and track their execution. It is
+used to find the modules that are executed and the modules that are not
+executed. It is also used to wrap the forward methods of the modules to track
+the execution time and input/output types.
+
+In ModuleInspector, we use `vars(obj)` to get the members of an object.
+
+Double references to the same module may cause issues. The inspector takes the
+first reference to the module that is inspected. So, even if the second
+reference is used for inference, the first will be returned for wrapping.
+
+Object paths used in ModuleInfo are relative to the root module and are in all
+dot notation, even for dictionaries and lists. (e.g., '.list.0.layers`,
+'.dict.key.layers`, `.encoder.layers.0.self_attn.q_proj.weight`).
+
+Environment variables that could be used:
+
+    AITUNE_INSPECT_MAX_RECURSION_DEPTH:
+        Maximum recursion depth to inspect, default is 5.
+
+    AITUNE_INSPECT_DEBUG:
+        Whether to enable more verbose debug mode for inspecting. Adds visited
+        nodes, and execution order. Default is False.
+
+    AITUNE_INSPECT_DEBUG_RAISE:
+        Whether to raise an error when an error occurs during inspecting -
+        ignored by default. Default is False.
+
+"""
+
+import os
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from functools import cache, wraps
 from logging import getLogger
 from typing import Any
 
 import torch
 
-from aitune.torch.inspecting.module_info import ModuleInfo
+from aitune.torch.config import get_bool_env_variable
+from aitune.torch.inspecting.module_info import DictOfModulesInfo, ListOfModulesInfo, ModuleInfo, ObjectOfModulesInfo
 from aitune.torch.utils.cuda import synchronize
 
 logger = getLogger(__name__)
+
+DEFAULT_MAX_RECURSION_DEPTH = 5
+
+DEFAULT_INSPECT_DEBUG = False
+
+DEFAULT_INSPECT_DEBUG_RAISE = False
+
+
+@dataclass
+class InspectContext:
+    """Context for inspecting modules."""
+
+    depth: int = 0
+    object_path: str = ""
+    module_parent: ModuleInfo | None = None
+
+    @property
+    def name(self) -> str:
+        """Get the name."""
+        return self.object_path.split(".")[-1]
+
+    def create_module_info(self, module: torch.nn.Module | list | dict | Any) -> ModuleInfo:
+        """Get the ModuleInfo based on current context and provided object type."""
+        cls = ObjectOfModulesInfo
+        if isinstance(module, torch.nn.Module):
+            cls = ModuleInfo
+        elif isinstance(module, list):
+            cls = ListOfModulesInfo
+        elif isinstance(module, dict):
+            cls = DictOfModulesInfo
+
+        return cls(
+            name=self.name or module.__class__.__name__,
+            module=module,
+            parent=self.module_parent,
+            object_path=self.object_path,
+            depth=self.depth,
+        )
+
+    def next(self, name: str = "", parent: ModuleInfo | None = None) -> "InspectContext":
+        """Get the next inspect context - increment depth and add name to object path."""
+        return InspectContext(
+            depth=self.depth + 1,
+            object_path=f"{self.object_path}.{name}" if name else self.object_path,
+            module_parent=parent,
+        )
+
+    def clone(self, **kwargs) -> "InspectContext":
+        """Get the inspect context, with optional changes."""
+        return InspectContext(
+            depth=kwargs.get("depth", self.depth),
+            object_path=kwargs.get("object_path", self.object_path),
+            module_parent=kwargs.get("module_parent", self.module_parent),
+        )
 
 
 class ModuleInspector:
     """Class for inspecting PyTorch modules and tracking their execution."""
 
-    def __init__(self):
+    def __init__(self, min_depth: int = 0, max_depth: int | None = None):
         """Initialize the module inspector."""
         self._module_info: dict[Any, ModuleInfo] = {}
         self._original_forward: dict[Any, Any] = {}
         self._inspected_objects: set = set()  # Track objects that have been inspected
-        self._max_recursion_depth = 5
+        self._min_recursion_depth = min_depth
+        self._max_recursion_depth = max_depth or _get_max_depth()
+        self._execution_parent_module: list[ModuleInfo] = []
+        if _get_inspect_debug():
+            self._debug_inspecting_functions()
 
     def inspect(self, obj: Any) -> None:
         """Inspect an object and its members for PyTorch modules.
@@ -42,7 +135,7 @@ class ModuleInspector:
             obj: The object to inspect
         """
         self.reset()
-        self._inspect_object(obj)
+        self._inspect_object(obj, context=InspectContext())
 
     def reset(self) -> None:
         """Reset the inspector state."""
@@ -64,6 +157,11 @@ class ModuleInspector:
         """
         executed_modules = []
 
+        # removing parents calls
+        for module_info in self._module_info.values():
+            if module_info.depth < self._min_recursion_depth:
+                module_info.forward_called = False
+
         def parent_called(module_info: ModuleInfo) -> bool:
             if module_info.parent is None:
                 return False
@@ -74,26 +172,30 @@ class ModuleInspector:
             return parent_called(module_info.parent)
 
         for module_info in self._module_info.values():
-            if module_info.forward_called and not parent_called(module_info):
+            if (
+                module_info.depth >= self._min_recursion_depth
+                and module_info.forward_called
+                and not parent_called(module_info)
+            ):
                 executed_modules.append(module_info)
 
         return executed_modules
 
-    def _inspect_object(self, obj: Any, depth: int = 1) -> None:
+    def _inspect_object(self, obj: Any, *, context: InspectContext) -> None:
         """Inspect an object and its members for PyTorch modules.
 
         Args:
             obj: The object to inspect
-            depth: The depth of the method recursion
+            context: The context of the inspection
         """
         # Check recursion depth
-        if depth > self._max_recursion_depth:
-            logger.debug("Maximum recursion depth (%d) reached, stopping inspection", self._max_recursion_depth)
+        if context.depth > self._max_recursion_depth:
             return
 
         # Skip Python built-in objects
         if obj.__class__.__module__ == "builtins":
-            return
+            if not isinstance(obj, (dict, list)):
+                return
 
         # Skip if object has already been inspected
         obj_id = id(obj)
@@ -105,80 +207,119 @@ class ModuleInspector:
         # Check if object is a PyTorch module
         try:
             if isinstance(obj, torch.nn.Module):
-                logger.debug("Inspecting module: %s", obj.__class__.__name__)
-                self._inspect_module(obj)
+                self._inspect_module(obj, context=context)
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            self._debug_error("Failed to inspect module %s", context.object_path, error=e)
 
-        logger.debug("Inspecting object: %s", obj.__class__.__name__)
-        self._inspect_members(obj, depth=depth)
+        # Handle dictionaries
+        if isinstance(obj, dict):
+            self._inspect_dict(obj, context=context)
+            return
 
-    def _inspect_members(self, obj: Any, depth: int) -> None:
+        # Handle lists
+        if isinstance(obj, list):
+            self._inspect_list(obj, context=context)
+            return
+
+        # Handle objects
+        if hasattr(obj, "__dict__"):
+            self._inspect_members(obj, members={}, context=context.clone(module_parent=context.create_module_info(obj)))
+            return
+
+    def _inspect_dict(self, obj: dict, *, context: InspectContext) -> None:
+        """Inspect the values of a dictionary.
+
+        Args:
+            obj: The dictionary to inspect
+            context: The context of the inspection
+        """
+        new_parent = context.create_module_info(obj)
+        for key, value in obj.items():
+            try:
+                self._inspect_object(value, context=context.next(key, parent=new_parent))
+            except Exception as e:
+                self._debug_error("Failed to inspect dict[%s] of %s", key, context.object_path, error=e)
+
+    def _inspect_list(self, obj: list, *, context: InspectContext) -> None:
+        """Inspect the elements of a list.
+
+        Args:
+            obj: The list to inspect
+            context: The context of the inspection
+        """
+        new_parent = context.create_module_info(obj)
+        for i, item in enumerate(obj):
+            try:
+                self._inspect_object(item, context=context.next(str(i), parent=new_parent))
+            except Exception as e:
+                self._debug_error("Failed to inspect list[%d] of %s", i, context.object_path, error=e)
+
+    def _inspect_members(self, obj: Any, members: dict[str, Any], *, context: InspectContext) -> None:
         """Inspect the members of an object.
 
         Args:
             obj: The object to inspect
-            depth: The depth of the inspect object method recursion
+            members: The members of the object to inspect
+            context: The context of the inspection
         """
-        members = {}
-        for name in dir(obj):
-            if name.startswith("__"):
+        for name in vars(obj).keys():
+            if self._should_skip_member(obj, name):
                 continue
 
             try:
                 member = getattr(obj, name)
                 if name not in members:
                     members[name] = member
-            except Exception:
-                continue
+            except Exception as e:
+                self._debug_error("Failed to inspect member %s of %s", name, context.object_path, error=e)
 
         for name, member in members.items():
-            if not isinstance(member, torch.nn.Module):
-                self._inspect_object(member, depth=depth + 1)
-                continue
+            self._inspect_object(member, context=context.next(name, parent=context.module_parent))
 
-            try:
-                if member in self._module_info:
-                    continue
+    def _should_skip_member(self, obj: Any, member_name: str) -> bool:
+        """Check if a member should be skipped."""
+        if member_name.startswith("__"):
+            return True
 
-                logger.debug("Inspecting module: %s (%s)", name, member.__class__.__name__)
-                self._inspect_module(member, name=name)
-            except Exception:
-                continue
+        # check if name is nn.Module default name, if so, skip
+        if isinstance(obj, torch.nn.Module):
+            if member_name in ModuleInspector.nn_module_base_members():
+                return True
 
-    def _inspect_module(self, module, name: str | None = None) -> None:
+        return False
+
+    def _inspect_module(self, module: torch.nn.Module, *, context: InspectContext) -> None:
         """Start inspecting a module and its submodules.
 
         Args:
             module: The PyTorch module to inspect
-            name: The name of the module
+            context: The context of the inspection
         """
-        self._register_module(module, name=name)
+        parent: ModuleInfo | None = None
+        if module not in self._module_info:
+            parent = self._register_module(module, context=context)
+        else:
+            parent = self._module_info[module]
 
-    def _register_module(self, module, parent: ModuleInfo | None = None, name: str | None = None) -> ModuleInfo | None:
+        self._inspect_members(
+            module,
+            members=dict(module.named_children()),
+            context=context.clone(module_parent=parent),
+        )
+
+    def _register_module(self, module: torch.nn.Module, *, context: InspectContext) -> ModuleInfo | None:
         """Register a module and its submodules in the inspector.
 
         Args:
             module: The module to register
             parent: The parent module info if any
-            name: The name of the module
+            context: The context of the inspection
         """
-        if module in self._module_info:
-            return None
-
-        self._wrap_forward_methods(module)
-
-        name = name or module.__class__.__name__
-
-        module_info = ModuleInfo(name=name, module=module, parent=parent)
+        module_info = context.create_module_info(module)
         self._module_info[module] = module_info
 
-        for child_name, child in module.named_children():
-            child_name = f"{name}.{child_name}" if name else child_name
-            child_info = self._register_module(child, module_info, child_name)
-            if child_info is not None:
-                module_info.children.append(child_info)
+        self._wrap_forward_methods(module)
 
         return module_info
 
@@ -194,8 +335,20 @@ class ModuleInspector:
         original_forward = module.forward
         self._original_forward[module] = original_forward
 
+        def _debug_run(module_info: ModuleInfo, exec_parent: ModuleInfo, depth: int = 0):
+            if _get_inspect_debug():
+                logger.debug("%-75s from %s", " " * depth * 2 + module_info.object_path + "()", exec_parent.object_path)
+
         def wrapped_forward(*args, **kwargs):
             module_info = self._module_info[module]
+
+            execution_parent_module = ModuleInfo(name="root", module=None, object_path="root")
+            if self._execution_parent_module:
+                execution_parent_module = self._execution_parent_module[-1]
+
+            self._execution_parent_module.append(module_info)
+
+            _debug_run(module_info, execution_parent_module, len(self._execution_parent_module))
             module_info.forward_called = True
             module_info.execution_count += 1
 
@@ -229,6 +382,64 @@ class ModuleInspector:
                 output_info = {"type": type(output).__name__}
             module_info.output_types.append(output_info)
 
+            self._execution_parent_module.pop()
+
             return output
 
         module.forward = wrapped_forward
+
+    @cache
+    @staticmethod
+    def nn_module_base_members() -> list[str]:
+        """Get the base class members of a PyTorch module.
+
+        Returns:
+            List of names
+        """
+        return list(dir(torch.nn.Module()))
+
+    def _wrap_debug_inspect(self, method: Callable, collection: bool = False) -> Callable:
+        """Wrap a method to add debug logging."""
+
+        @wraps(method)
+        def inspect_debug(*args, **kwargs):
+            context = kwargs["context"]
+            indent = "│" * context.depth
+            logger.debug("%s%s(%d)%s for %s", indent, "├", context.depth, method.__name__, context.object_path)
+            try:
+                return method(*args, **kwargs)
+            finally:
+                if collection:
+                    logger.debug("%s└", indent)
+
+        return inspect_debug
+
+    def _debug_error(self, message: str, *args: Any, error: Exception) -> None:
+        """Debug an error."""
+        if _get_inspect_debug():
+            logger.debug(message, *args)
+        if _get_inspect_debug_raise():
+            raise error
+
+    def _debug_inspecting_functions(self) -> None:
+        """Debug inspecting functions."""
+        logger.debug("Enabled debug mode for inspecting.")
+        logger.debug("Wrapping inspecting functions with debug logging.")
+        self._inspect_object = self._wrap_debug_inspect(self._inspect_object, collection=True)
+        self._inspect_dict = self._wrap_debug_inspect(self._inspect_dict, collection=True)
+        self._inspect_list = self._wrap_debug_inspect(self._inspect_list, collection=True)
+        self._inspect_members = self._wrap_debug_inspect(self._inspect_members)
+        self._inspect_module = self._wrap_debug_inspect(self._inspect_module)
+        self._register_module = self._wrap_debug_inspect(self._register_module)
+
+
+def _get_max_depth() -> int:
+    return int(os.getenv("AITUNE_INSPECT_MAX_RECURSION_DEPTH", DEFAULT_MAX_RECURSION_DEPTH))
+
+
+def _get_inspect_debug() -> bool:
+    return get_bool_env_variable("AITUNE_INSPECT_DEBUG", DEFAULT_INSPECT_DEBUG)
+
+
+def _get_inspect_debug_raise() -> bool:
+    return get_bool_env_variable("AITUNE_INSPECT_DEBUG_RAISE", DEFAULT_INSPECT_DEBUG_RAISE)

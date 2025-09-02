@@ -17,7 +17,6 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.inspecting import inspect
-from aitune.torch.inspecting.inspecting import DEFAULT_WARMUP_ITERATIONS
 from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo
 
 TEST_NUMBER_OF_ITERATIONS = 10
@@ -108,7 +107,7 @@ def test_inspect_nested_model(nested_model, sample_dataset):
     # Verify execution tracking
     assert modules[0].module == nested_model.linear
     assert modules[0].forward_called is True
-    assert modules[0].execution_count == DEFAULT_WARMUP_ITERATIONS + TEST_NUMBER_OF_ITERATIONS
+    assert modules[0].execution_count == TEST_NUMBER_OF_ITERATIONS
 
 
 def test_inspect_nested_model_with_inference_function(nested_model, sample_dataset):
@@ -135,7 +134,7 @@ def test_inspect_nested_model_with_inference_function(nested_model, sample_datas
     # Verify execution tracking
     assert modules[0].module == nested_model
     assert modules[0].forward_called is True
-    assert modules[0].execution_count == DEFAULT_WARMUP_ITERATIONS + TEST_NUMBER_OF_ITERATIONS
+    assert modules[0].execution_count == TEST_NUMBER_OF_ITERATIONS
 
 
 def test_inspect_with_dataloader(simple_model):
@@ -347,13 +346,10 @@ def test_get_modules_after_inspection(custom_object, sample_dataset):
 
     assert len(executed_modules) == 3
     assert executed_modules[0].name == "linear1"
-    assert executed_modules[0].execution_count == (
-        TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
-        + DEFAULT_WARMUP_ITERATIONS * custom_object.num_iterations
-    )
+    assert executed_modules[0].execution_count == TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
     for idx in [1, 2]:
         assert executed_modules[idx].name in ["linear2", "relu"]
-        assert executed_modules[idx].execution_count == TEST_NUMBER_OF_ITERATIONS + DEFAULT_WARMUP_ITERATIONS
+        assert executed_modules[idx].execution_count == TEST_NUMBER_OF_ITERATIONS
 
 
 def test_get_modules_after_inspection_with_min_execution_percentage(custom_object, sample_dataset):
@@ -366,10 +362,7 @@ def test_get_modules_after_inspection_with_min_execution_percentage(custom_objec
 
     assert len(executed_modules) == 1
     assert executed_modules[0].name == "linear1"
-    assert executed_modules[0].execution_count == (
-        TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
-        + DEFAULT_WARMUP_ITERATIONS * custom_object.num_iterations
-    )
+    assert executed_modules[0].execution_count == TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
 
 
 def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset):
@@ -381,9 +374,7 @@ def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset):
     executed_modules = modules_info.get_modules(limit=2)
     assert len(executed_modules) == 2
     assert executed_modules[0].name == "linear1"
-    assert executed_modules[0].execution_count == (
-        TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
-        + DEFAULT_WARMUP_ITERATIONS * custom_object.num_iterations
-    )
+    assert executed_modules[0].execution_count == TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
+
     assert executed_modules[1].name in ["linear2", "relu"]
-    assert executed_modules[1].execution_count == TEST_NUMBER_OF_ITERATIONS + DEFAULT_WARMUP_ITERATIONS
+    assert executed_modules[1].execution_count == TEST_NUMBER_OF_ITERATIONS

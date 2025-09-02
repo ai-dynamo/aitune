@@ -31,7 +31,6 @@ def module_info(simple_model):
         name="test_module",
         module=simple_model,
         parent=None,
-        children=[],
         forward_called=False,
         execution_count=0,
         total_execution_time=0.0,
@@ -76,41 +75,6 @@ def test_precisions(module_info):
     precisions = module_info.precisions
     assert len(precisions) == 1
     assert torch.float32 in precisions
-
-
-def test_parent_child_relationship():
-    """Test parent-child relationship in ModuleInfo."""
-    parent_model = nn.Sequential(nn.Linear(10, 20))
-    child_model = nn.Linear(20, 5)
-    parent_model.add_module("child", child_model)
-
-    parent_info = ModuleInfo(
-        name="parent",
-        module=parent_model,
-        parent=None,
-        children=[],
-        forward_called=False,
-        execution_count=0,
-        total_execution_time=0.0,
-        output_types=[],
-    )
-
-    child_info = ModuleInfo(
-        name="child",
-        module=child_model,
-        parent=parent_info,
-        children=[],
-        forward_called=False,
-        execution_count=0,
-        total_execution_time=0.0,
-        output_types=[],
-    )
-
-    parent_info.children.append(child_info)
-
-    assert child_info.parent == parent_info
-    assert child_info in parent_info.children
-    assert len(parent_info.children) == 1
 
 
 def test_execution_tracking(module_info):

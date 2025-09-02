@@ -49,19 +49,20 @@ def test_inspect_stable_diffusion():
 
     assert len(modules_info.get_modules()) == 4
 
-    expected_module_names = ["unet", "vae.decoder", "text_encoder", "vae.post_quant_conv"]
+    expected_module_names = {"unet", "decoder", "text_encoder", "post_quant_conv"}
     modules = modules_info.get_modules()
 
     assert len(modules) == len(expected_module_names)
-    for module in modules:
-        assert module.name in expected_module_names
+    names = {module.name for module in modules}
+    assert names == expected_module_names, f"Expected {expected_module_names} but got {names}"
 
     top_modules = modules_info.get_modules(min_execution_percentage=0.6)
     assert len(top_modules) == 1
     assert top_modules[0].name == "unet"
-    assert top_modules[0].execution_count == num_inference_steps * (number_of_iterations + warmup_iterations)
+    assert top_modules[0].execution_count == num_inference_steps * number_of_iterations
     assert top_modules[0].total_execution_time > 0
     assert top_modules[0].average_execution_time > 0
+    assert top_modules[0].total_execution_time < modules_info._total_execution_time
 
     top_modules = modules_info.get_modules(limit=1)
     assert len(top_modules) == 1

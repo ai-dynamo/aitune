@@ -49,7 +49,7 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
         strategy.enable_find_max_batch_size(enable=False)
 
     # Wrap all modules with AITune Module
-    modules = modules_info.get_modules()
+    modules = modules_info.get_modules(min_execution_percentage=0.05)
     pipeline = wrap(pipeline, modules, strategy=strategy)
 
     def call_wrapper(*args, **kwargs):

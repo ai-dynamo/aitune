@@ -107,3 +107,11 @@ class TuneConfig:
     def clone(self) -> "TuneConfig":
         """Clone the current TuneConfig using deepcopy."""
         return copy.deepcopy(self)
+
+
+def get_bool_env_variable(env_variable: str, default: bool) -> bool:
+    """Get a boolean environment variable."""
+    value = os.environ.get(env_variable)
+    if value is None:
+        return default
+    return value in ["1", "true", "True", "yes", "Yes", "YES"]

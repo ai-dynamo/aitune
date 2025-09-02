@@ -23,15 +23,16 @@ import torch
 class ModuleInfo:
     """Information about a PyTorch module."""
 
-    name: str | None
     module: torch.nn.Module
+    name: str = ""
     parent: Optional["ModuleInfo"] = None
-    children: list["ModuleInfo"] = field(default_factory=list)
     forward_called: bool = False
     execution_count: int = 0
     total_execution_time: float = 0.0
     input_types: list[dict[str, Any]] = field(default_factory=list)
     output_types: list[dict[str, Any]] = field(default_factory=list)
+    object_path: str | None = None
+    depth: int = 0
 
     @property
     def module_type(self) -> type:
@@ -73,13 +74,41 @@ class ModuleInfo:
 
         return layer_precisions
 
+    def set_wrapped(self, name: str, wrapped: Any):
+        """Set the wrapped module."""
+        setattr(self.module, name, wrapped)
+
+
+class ListOfModulesInfo(ModuleInfo):
+    """Information about a list of PyTorch modules."""
+
+    def set_wrapped(self, name: str, wrapped: Any):
+        """Set the wrapped module in a list under name as index."""
+        self.module[int(name)] = wrapped
+
+
+class DictOfModulesInfo(ModuleInfo):
+    """Information about a dictionary of PyTorch modules."""
+
+    def set_wrapped(self, name: str, wrapped: Any):
+        """Set the wrapped module in a dict under name as key."""
+        self.module[name] = wrapped
+
+
+class ObjectOfModulesInfo(ModuleInfo):
+    """Information about a custom object containing PyTorch modules."""
+
+    def set_wrapped(self, name: str, wrapped: Any):
+        """Set the wrapped module."""
+        setattr(self.module, name, wrapped)
+
 
 class InspectedModulesInfo:
     """Information about inspected modules."""
 
     def __init__(self, total_execution_time: float, number_of_batches: int):
         """Initialize the inspected modules specification."""
-        self._modules = {}
+        self._modules: dict[str, ModuleInfo] = {}
         self._total_execution_time = total_execution_time
         self._number_of_batches = number_of_batches
 
@@ -90,9 +119,9 @@ class InspectedModulesInfo:
             name: Name of the module.
             module: ModuleInfo object.
         """
-        if module.name in self._modules:
-            raise ValueError(f"Module with name {module.name} already exists")
-        self._modules[module.name] = module
+        if module.object_path in self._modules:
+            raise ValueError(f"Module `{module.name}` in `{module.object_path}` already exists")
+        self._modules[module.object_path] = module
 
     def get_modules(
         self, min_execution_percentage: float | None = None, limit: int | None = None

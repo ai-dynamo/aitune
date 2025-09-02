@@ -20,11 +20,11 @@ from pathlib import Path
 import torch
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
-from aitune.torch import HighestThroughputStrategy, TuneStrategy, save, tune
+from aitune.torch import HighestThroughputStrategy, TuneStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
 from aitune.torch.backend.torch_inductor_backend import TorchInductorBackendConfig
 from parakeet_rnnt.cmd_args import parse_args
-from parakeet_rnnt.model import get_model, wrap_pipeline
+from parakeet_rnnt.model import get_model
 
 logger = getLogger(__name__)
 
@@ -58,7 +58,8 @@ def tune_model(
         ]
     ).enable_find_max_batch_size(False)
 
-    pipeline = wrap_pipeline(model_name, model, strategy=strategy)
+    # pipeline = wrap_pipeline(model_name, model, strategy=strategy)
+    pipeline = model
 
     def call_wrapper(*args, **kwargs):
         # Note: transcribe function overrides batch size to a micro batch size of 4
@@ -76,6 +77,14 @@ def tune_model(
         )
 
     input_data = [{"audio": str(audio_path)}]
+    call_wrapper(audio=str(audio_path))
+
+    logger.info("Inspecting model...")
+    inspected_modules_info = inspect(pipeline, input_data, inference_function=call_wrapper, min_depth=1)
+    inspected_modules_info.describe()
+
+    modules = inspected_modules_info.get_modules(min_execution_percentage=0.01)
+    pipeline = wrap(pipeline, modules, strategy=strategy)
 
     logger.info("Tuning module: %s", model_name)
     tune(call_wrapper, input_data, batch_sizes=batch_sizes)

@@ -20,6 +20,7 @@ limitations under the License.
 ## 0.2.0 (unreleased)
 
 - feat: add JIT tuning
+- feat: module inspect considers lists and dicts for Torch module containers
 
 ## 0.1.0
 

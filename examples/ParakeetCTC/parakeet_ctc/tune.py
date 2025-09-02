@@ -19,11 +19,10 @@ from pathlib import Path
 
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
-from aitune.torch import FirstWinsStrategy, TuneStrategy, save, tune
+from aitune.torch import FirstWinsStrategy, TuneStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
-
-from .cmd_args import parse_args
-from .model import get_model, wrap_pipeline
+from parakeet_ctc.cmd_args import parse_args
+from parakeet_ctc.model import get_model
 
 logger = getLogger(__name__)
 
@@ -44,9 +43,7 @@ def tune_model(
         strategy: The strategy to use for tuning.
         batch_sizes: The batch sizes to tune.
     """
-    model = get_model(model_name=model_name)
-
-    pipeline = wrap_pipeline(model_name, model, strategy=strategy)
+    pipeline = get_model(model_name=model_name)
 
     batch_sizes = batch_sizes or [1, 2, 4, 8, 16, 32]
 
@@ -63,12 +60,23 @@ def tune_model(
 
     input_data = [{"audio": str(audio_path)}]
 
+    inspected_modules_info = inspect(pipeline, input_data, inference_function=call_wrapper, min_depth=1)
+    inspected_modules_info.describe()
+
+    modules = inspected_modules_info.get_modules(min_execution_percentage=0.01)
+    pipeline = wrap(pipeline, modules, strategy=strategy)
+
     logger.info("Tuning module: %s", model_name)
     tune(call_wrapper, input_data, batch_sizes=batch_sizes)
     logger.info("Tuning completed.")
 
-    save(model, tuned_model_path)
+    save(pipeline, tuned_model_path)
     logger.info("Model saved to %s", tuned_model_path)
+
+    logger.info("Running inference on the tuned model...")
+    results = call_wrapper(audio=str(audio_path))
+    texts = [r.text for r in results]
+    logger.info("Transcription: %s", texts)
 
 
 def main():

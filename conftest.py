@@ -13,6 +13,7 @@
 # limitations under the License.
 """Pytest fixtures both for unit and integration tests and docttest for production code."""
 
+import logging
 import os
 
 import pytest
@@ -21,6 +22,7 @@ import torch
 from aitune.torch.jit.patcher import jit_reset
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.utils.cuda import is_available as is_cuda_available
+from aitune.utils.logging import setup_logging
 
 
 @pytest.fixture(autouse=True)
@@ -62,3 +64,11 @@ def jit_cleanup():
         yield
     finally:
         jit_reset()
+
+
+@pytest.fixture(autouse=True)
+def aitune_logging_setup():
+    """Setup logging for aitune."""
+    setup_logging(level=logging.DEBUG if os.environ.get("AITUNE_TESTS_LOG_LEVEL") == "DEBUG" else logging.INFO)
+    yield
+    logging.shutdown()
