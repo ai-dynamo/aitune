@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
+from tests.toy_models.torch_models import ToyTorchModel
 
 
 class ModelWithIf(nn.Module):
@@ -74,3 +75,11 @@ def test_detect_graph_breaks(model_class):
     detector = GraphBreakDetector()
     detector.detect(model_class(), torch.randn(1, 10), {})
     assert detector.has_graph_breaks()
+
+
+def test_there_is_no_graph_breaks():
+    detector = GraphBreakDetector()
+    model = ToyTorchModel()
+    args, kwargs = ((model.sample(),), {})
+    detector.detect(model, args, kwargs)
+    assert not detector.has_graph_breaks()

@@ -37,10 +37,11 @@ class Patcher:
     """
 
     _patched_modules: list[PatchedModule] = []
+    _intercepted_classes: set[type[torch.nn.Module]] = set()  # for tracking purposes
     _original_module_init: Callable | None = None
 
     # Packages that should not be patched to avoid conflicts with JIT compilation
-    _blacklisted_packages = {"torch.jit", "torch._inductor"}
+    _blacklisted_packages = {"torch.jit", "torch._inductor", "torch._dynamo", "torch.fx"}
 
     @classmethod
     def patch_torch(cls):
@@ -52,6 +53,7 @@ class Patcher:
         def _patched_init(module, *args, **kwargs):
             cls._original_module_init(module, *args, **kwargs)
             if cls._is_allowed_to_tune(module):
+                cls._intercepted_classes.add(module.__class__)
                 pm = PatchedModule(module)
                 cls._patched_modules.append(pm)
 
@@ -78,6 +80,7 @@ class Patcher:
             for patched_module in cls._patched_modules:
                 patched_module._unpatch()
             cls._patched_modules.clear()
+            cls._intercepted_classes.clear()
         if cls._original_module_init is not None:
             torch.nn.Module.__init__ = cls._original_module_init
 
@@ -92,6 +95,11 @@ class Patcher:
         if module_info is not None and module_info.__package__ in cls._blacklisted_packages:
             return False
         return True
+
+    @classmethod
+    def intercepted_classes(cls):
+        """Get the intercepted classes."""
+        return [f"{c.__module__}.{c.__name__}" for c in cls._intercepted_classes]
 
 
 @contextmanager

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test JIT tuning with patch decorator."""
+"""Test JIT tuning with patch decorator on resnet."""
 # /// script
 # dependencies = ["timm"]
 # scope = "always"
@@ -19,7 +19,6 @@
 # ///
 
 import re
-from io import StringIO
 from logging import INFO, basicConfig
 
 import timm
@@ -28,6 +27,16 @@ import torch
 from aitune.torch.jit.config import config
 from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
 from aitune.torch.jit.patcher import patch_for_jit_tuning
+
+
+class TestSink:
+    """Sink for capturing output from PatchedModule.print_hierarchy."""
+
+    def __init__(self):
+        self.output = []
+
+    def write(self, text):
+        self.output.append(text)
 
 
 @patch_for_jit_tuning
@@ -55,13 +64,13 @@ def test_jit_resnet():
         batch()
 
     # Capture the print_hierarchy output
-    with StringIO() as test_sink:
-        PatchedModule.print_hierarchy(sink=test_sink.write)
-        hierarchy_output = test_sink.getvalue()
+    sink = TestSink()
+    PatchedModule.print_hierarchy(sink=sink.write)
+    print("\n".join(sink.output))
 
     # Assert the expected output
-    assert PRINT_HIERARCHY_HEADER in hierarchy_output
-    assert re.match(r".*ResNet.*state=tuned.*TensorRTBackend", hierarchy_output)
+    assert PRINT_HIERARCHY_HEADER in sink.output[0]
+    assert re.match(r".*ResNet.*state=tuned.*TensorRTBackend", sink.output[1])
 
     assert resnet(torch.randn(8, 3, 224, 224, device="cuda")).shape == (8, 1000)
     assert resnet(torch.randn(16, 3, 224, 224, device="cuda")).shape == (16, 1000)

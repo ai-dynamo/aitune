@@ -13,7 +13,11 @@
 # limitations under the License.
 """Torch eager backend which logs graph breaks."""
 
+import logging
+
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 class GraphBreakDetector:
@@ -36,6 +40,8 @@ class GraphBreakDetector:
     Those reasons can prevent creating correct computational graph. This class uses `torch.compile` to detect
     such graph breaks.
 
+    Note: detections can be flaky in debug mode raising false positives signals.
+
     """
 
     def __init__(self):
@@ -47,6 +53,7 @@ class GraphBreakDetector:
         try:
             torch.compile(module, fullgraph=True)(*args, **kwargs)
         except Exception as e:
+            logger.debug("Graph break detected: %s", e)
             self._exceptions.append(e)
 
     def has_graph_breaks(self) -> bool:
