@@ -72,4 +72,20 @@ if __name__ == "__main__":
         device="cuda",
     )
 
+    do_test(
+        TensorRTBackend(
+            config=TensorRTBackendConfig(),
+        ),
+        dtype=torch.float16,
+        device="cuda",
+    )
+
+    do_test(
+        TensorRTBackend(
+            config=TensorRTBackendConfig(),
+        ),
+        dtype=torch.bfloat16,
+        device="cuda",
+    )
+
     logger.info("Done")

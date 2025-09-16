@@ -135,7 +135,7 @@ class TensorRTRuntime:
                         "index": i,
                         "type": tensor_type,
                         "shape": dims,
-                        "dtype": trt.nptype(engine.get_tensor_dtype(name)),
+                        "dtype": str(engine.get_tensor_dtype(name)),
                     }
 
                 logger.debug(
