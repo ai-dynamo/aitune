@@ -118,7 +118,11 @@ class ONNXExporter:
             input_names = graph_spec.input_spec.get_names()
             output_names = graph_spec.output_spec.get_names()
 
-            args, kwargs = sample
+            args, kwargs = graph_spec.input_spec.make_batch(sample, batch_size=2)
+
+            dynamic_shapes += [None] * (
+                len(args) + len(kwargs) - len(dynamic_shapes)
+            )  # WAR: For missing shapes for None value args and kwargs
             exported_program = torch.onnx.export(
                 module,
                 args=args,
@@ -229,7 +233,7 @@ class ONNXExporter:
 
     def _modify_onnx_io_names(self, model_path, new_input_names, new_output_names, output_path):
         """Modify the input and output names of the ONNX model."""
-        graph = gs.import_onnx(onnx.load(model_path))
+        graph = gs.import_onnx(onnx.load(model_path, load_external_data=False))
 
         # Check if the number of new input names matches the number of inputs in the graph
         if len(new_input_names) != len(graph.inputs):

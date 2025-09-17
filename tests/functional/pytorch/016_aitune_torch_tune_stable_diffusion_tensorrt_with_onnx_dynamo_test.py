@@ -28,7 +28,7 @@ import diffusers
 import torch
 
 from aitune.torch import inspect, load, save, tune, wrap
-from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
+from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 
@@ -36,7 +36,7 @@ basicConfig(level=INFO, force=True)
 logger = getLogger(__name__)
 
 
-def test_stable_diffusion_dynamic_batch_tensorrt():
+def test_stable_diffusion_dynamic_batch_tensorrt_dynamo():
     """Test dynamic shape inference of TensorRT backend with StableDiffusion.
 
     This test:
@@ -51,8 +51,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
     # Test configuration
     model_id = "stabilityai/stable-diffusion-2-1"
     prompt = "A futuristic cityscape with neon lights and flying cars"
-    height = 256  # Reduced size for faster testing
-    width = 256
+    sizes = [(256, 256), (512, 512)]  # Multiple sizes for faster testing
     steps = 10  # Reduced steps for faster testing
 
     logger.info("Starting StableDiffusion dynamic batch TensorRT test")
@@ -74,35 +73,36 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
             input_data = [{"prompt": prompt}]
             modules_info = inspect(pipeline, input_data)
 
-            # Get the UNet module which is the main compute-intensive component
-            # and benefits most from TensorRT tuning
-            unet_modules = [m for m in modules_info.get_modules() if m.name == "unet"]
-            assert len(unet_modules) == 1, "Expected exactly one UNet module"
-            unet_module = unet_modules[0]
-            logger.info(
-                "Found UNet module: %s with execution time %.2fs",
-                unet_module.name,
-                unet_module.total_execution_time,
-            )
+            # Get the all modules for tuning
+            modules = modules_info.get_modules()
+            assert len(modules) > 0, "Expected at least one module"
+
+            # Print modules info
+            for module in modules:
+                logger.info("Module: %s with execution time %s", module.name, module.total_execution_time)
 
             # Step 3: Configure TensorRT backend with dynamic shapes support
             logger.info("Configuring TensorRT backend with dynamic shapes")
-            tensorrt_backend = TensorRTBackend()
+            tensorrt_config = TensorRTBackendConfig(use_dynamo=True)
+            tensorrt_backend = TensorRTBackend(config=tensorrt_config)
 
             # Step 4: Wrap the UNet module with TensorRT backend
-            logger.info("Wrapping UNet module with TensorRT backend")
-            pipeline = wrap(pipeline, [unet_module], strategy=OneBackendStrategy(tensorrt_backend))
+            logger.info("Wrapping all modules with TensorRT backend")
+            strategy = OneBackendStrategy(tensorrt_backend)
+            strategy.enable_find_max_batch_size(enable=False)  # WAR: Disabled to avoid OOM
+            pipeline = wrap(pipeline, modules, strategy=strategy)
 
             # Create wrapper function for both tuning and inference
             def call_wrapper(*args, **kwargs):
                 """Wrapper function for pipeline calls that supports different batch sizes."""
-                return pipeline(
-                    *args,
-                    height=height,
-                    width=width,
-                    num_inference_steps=steps,
-                    **kwargs,
-                )
+                for height, width in sizes:
+                    pipeline(
+                        *args,
+                        height=height,
+                        width=width,
+                        num_inference_steps=steps,
+                        **kwargs,
+                    )
 
             # Step 5: First do a dry run for testing
             tune(call_wrapper, input_data, dry_run=True)
@@ -136,25 +136,19 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
             # Load the tuned components
             loaded_pipeline = load(fresh_pipeline, tuned_model_path, disable_external_logging=False)
 
-            # Update call_wrapper to use loaded pipeline with fixed seed for reproducibility
-            def call_wrapper(*args, **kwargs):
-                """Wrapper function for pipeline calls that supports different batch sizes."""
-                return loaded_pipeline(
-                    *args,
-                    height=height,
-                    width=width,
-                    num_inference_steps=steps,
-                    generator=torch.Generator(device="cuda").manual_seed(42),  # Fixed seed for reproducibility
-                    **kwargs,
-                )
-
             # Step 8: Test inference with batch_size=1
             logger.info("Testing inference with batch_size=1")
             single_prompt = [prompt]
-            images_bs1 = call_wrapper(prompt=single_prompt)
+            images_bs1 = loaded_pipeline(
+                prompt=single_prompt,
+                height=256,
+                width=256,
+                num_inference_steps=steps,
+                generator=torch.Generator(device="cuda").manual_seed(42),
+            )
 
             # Verify output structure for batch_size=1
-            assert hasattr(images_bs1, "images") or isinstance(images_bs1, list | tuple), "Expected images output"
+            assert hasattr(images_bs1, "images") or isinstance(images_bs1, (list, tuple)), "Expected images output"
             if hasattr(images_bs1, "images"):
                 actual_images_bs1 = images_bs1.images
             else:
@@ -171,10 +165,16 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
             # Step 9: Test inference with batch_size=2 (dynamic shape inference)
             logger.info("Testing dynamic shape inference with batch_size=2")
             double_prompt = [prompt, prompt]  # Same prompt twice for batch_size=2
-            images_bs2 = call_wrapper(prompt=double_prompt)
+            images_bs2 = loaded_pipeline(
+                prompt=double_prompt,
+                height=512,
+                width=512,
+                num_inference_steps=steps,
+                generator=torch.Generator(device="cuda").manual_seed(42),
+            )
 
             # Verify output structure for batch_size=2
-            assert hasattr(images_bs2, "images") or isinstance(images_bs2, list | tuple), "Expected images output"
+            assert hasattr(images_bs2, "images") or isinstance(images_bs2, (list, tuple)), "Expected images output"
             if hasattr(images_bs2, "images"):
                 actual_images_bs2 = images_bs2.images
             else:
@@ -210,4 +210,4 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
 
 
 if __name__ == "__main__":
-    test_stable_diffusion_dynamic_batch_tensorrt()
+    test_stable_diffusion_dynamic_batch_tensorrt_dynamo()
