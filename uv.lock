@@ -143,6 +143,7 @@ dependencies = [
     { name = "autowrapt" },
     { name = "dill" },
     { name = "numpy" },
+    { name = "nvidia-ml-py" },
     { name = "nvidia-modelopt", extra = ["all"] },
     { name = "onnx" },
     { name = "onnx-graphsurgeon" },
@@ -152,7 +153,6 @@ dependencies = [
     { name = "onnxscript" },
     { name = "polygraphy" },
     { name = "psutil" },
-    { name = "pynvml" },
     { name = "tensorrt" },
     { name = "torch" },
     { name = "torch-tensorrt" },
@@ -241,6 +241,7 @@ requires-dist = [
     { name = "nbconvert", marker = "extra == 'dev'" },
     { name = "nemo-toolkit", extras = ["asr"], marker = "extra == 'demo'" },
     { name = "numpy", specifier = "<2" },
+    { name = "nvidia-ml-py" },
     { name = "nvidia-modelopt", extras = ["all"], specifier = ">=0.29.0" },
     { name = "onnx", specifier = "<1.19" },
     { name = "onnx-graphsurgeon", specifier = "~=0.5" },
@@ -256,7 +257,6 @@ requires-dist = [
     { name = "pre-commit", marker = "extra == 'dev'" },
     { name = "pre-commit-uv", marker = "extra == 'dev'" },
     { name = "psutil" },
-    { name = "pynvml" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-cov", marker = "extra == 'test'" },
     { name = "pytest-mock", marker = "extra == 'test'" },
@@ -4204,18 +4204,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/08/92/a7296491dbf5585b3a987f3f3fc87af0e632121ff3e490c14b5f2d2b4eb5/pymdown_extensions-10.15.tar.gz", hash = "sha256:0e5994e32155f4b03504f939e501b981d306daf7ec2aa1cd2eb6bd300784f8f7", size = 852320, upload-time = "2025-04-27T23:48:29.183Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/d1/c54e608505776ce4e7966d03358ae635cfd51dff1da6ee421c090dbc797b/pymdown_extensions-10.15-py3-none-any.whl", hash = "sha256:46e99bb272612b0de3b7e7caf6da8dd5f4ca5212c0b273feb9304e236c484e5f", size = 265845, upload-time = "2025-04-27T23:48:27.359Z" },
-]
-
-[[package]]
-name = "pynvml"
-version = "12.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "nvidia-ml-py" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/26/6f/6b5880ed0239e85b9a39aed103b65b2ef81425beef9f45e5c035bf008330/pynvml-12.0.0.tar.gz", hash = "sha256:299ce2451a6a17e6822d6faee750103e25b415f06f59abb8db65d30f794166f5", size = 33636, upload-time = "2024-12-02T15:04:36.631Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ed/df/f7cf07a65a96dd11d71f346f9c2863accdd4784da83af7181b067d556cbc/pynvml-12.0.0-py3-none-any.whl", hash = "sha256:fdff84b62a27dbe98e08e1a647eb77342bef1aebe0878bcd15e99a83fcbecb9e", size = 26560, upload-time = "2024-12-02T15:04:35.047Z" },
 ]
 
 [[package]]

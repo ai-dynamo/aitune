@@ -1,0 +1,93 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+services:
+  nats-server:
+    image: nats
+    command: [ "-js", "--trace" ]
+    ports:
+      - 4222:4222
+      - 6222:6222
+      - 8222:8222
+    profiles:
+      - aux
+      - all
+
+  etcd-server:
+    image: bitnami/etcd
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+    ports:
+      - 2379:2379
+      - 2380:2380
+    profiles:
+      - aux
+      - all
+
+  backend:
+    environment:
+      NATS_SERVER: "nats://nats-server:4222"
+      ETCD_ENDPOINTS: "http://etcd-server:2379"
+      AITUNE_CACHE_DIR: /opt/aitune/dynamo/app/cache
+      EXAMPLE_NAME: esm2
+      HF_TOKEN: ${HF_TOKEN}
+    build:
+      context: .
+      additional_contexts:
+        # we need aitune and we are using local version
+        # NOTE: docker compose should be from the given example directory, i.e. examples/ESM2
+        aitune: ../..
+      dockerfile: ../common/Dockerfile
+    image: aitune-dynamo-esm2-image:latest
+    pull_policy: never
+    depends_on:
+      - nats-server
+      - etcd-server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - aitune_cache:/opt/aitune/dynamo/app/cache
+      - huggingface:/root/.cache/huggingface
+    profiles:
+      - all
+
+  frontend:
+    # reusing the same image as backend
+    image: aitune-dynamo-esm2-image:latest
+    pull_policy: build
+    ports:
+      - 8000:8000
+    depends_on:
+      - backend
+    profiles:
+      - all
+    environment:
+      NATS_SERVER: "nats://nats-server:4222"
+      ETCD_ENDPOINTS: "http://etcd-server:2379"
+      EXAMPLE_NAME: esm2
+    command: /bin/sh -c 'python -m $$EXAMPLE_NAME.dynamo.frontend'
+    volumes:
+      - huggingface:/root/.cache/huggingface
+
+volumes:
+  aitune_cache:
+    driver: local
+
+  huggingface:
+    driver: local
+

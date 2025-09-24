@@ -1,0 +1,65 @@
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[project]
+name = "ai-tune-esm2-example"
+version = "0.1.0"
+description = "NVIDIA AITune ESM2 Example"
+readme = "README.md"
+license = { text = "Apache 2.0" }
+requires-python = ">=3.10, <3.13"
+
+dependencies = [
+    "aitune",
+    "transformers",
+    "sentencepiece",
+    "protobuf",
+    "colored",
+]
+
+[project.optional-dependencies]
+dynamo = [
+    "aitune-examples-common",
+    "ai-dynamo==0.5.0",
+    "uvicorn",
+    "aiohttp",
+    "aiofiles",
+    "uvloop",
+    "pyyaml",
+]
+
+[tool.uv.sources]
+aitune = { path = "../../" }
+aitune-examples-common = { path = "../../examples/common" }
+
+[project.scripts]
+tune = "esm2.tune:tune"
+inference = "esm2.infer:infer"
+
+[build-system]
+requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+namespaces = false
+include = ["esm2"]
+
+[tool.setuptools.package-data]
+esm2 = ["**/*"]
+
+[tool.aitune]
+additional_tags = ["gpu/a100"]

@@ -62,7 +62,7 @@ async def frontend_worker(runtime: DistributedRuntime):
             JSON response with classification results
         """
         # Read image file into storage
-        logger.info("Frontend received classification request: %s...", request_id)
+        logger.info("Frontend received classification request")
 
         internal_request_id = "" if request_id is None else request_id
         internal_request_id += "__" + str(uuid.uuid4())

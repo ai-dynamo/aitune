@@ -65,7 +65,7 @@ async def frontend_worker(runtime: DistributedRuntime):
         Returns:
             StreamingResponse: Streaming response with generated image
         """
-        logger.info("Frontend received generation request: %s...", request.prompt[:50])
+        logger.info("Frontend received generation request")
 
         request.internal_request_id = "" if request.request_id is None else request.request_id
         request.internal_request_id += "__" + str(uuid.uuid4())

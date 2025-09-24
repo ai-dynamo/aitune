@@ -244,7 +244,7 @@ class StableDiffusionBatchedBackend:
     @dynamo_endpoint(ImageGenerationRequest, ImageGenerationResponse)
     async def generate_image(self, request: ImageGenerationRequest):
         """Generate image with batching."""
-        logger.info("Received generation request: %s...", request.prompt[:50])
+        logger.info("Received generation request")
 
         # set request_id to a new uuid, respecting the existing request_id if it exists
         request.internal_request_id = "" if request.request_id is None else request.request_id

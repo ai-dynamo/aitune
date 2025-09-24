@@ -60,7 +60,7 @@ async def frontend_worker(runtime: DistributedRuntime):
             StreamingResponse: Streaming response with transcription
         """
         # Read audio file into storage
-        logger.info("Frontend received transcription request: %s...", request_id)
+        logger.info("Frontend received transcription request")
 
         internal_request_id = "" if request_id is None else request_id
         internal_request_id += "__" + str(uuid.uuid4())
