@@ -97,6 +97,8 @@ class Module(wrapt.CallableObjectProxy):
         super().__init__(module)
         self._self_name = sanitize_model_name(name) or get_object_name(module)
         self._self_orig_forward = module.forward
+        self._original_forward_pre_hooks = module._forward_pre_hooks
+        self._original_forward_hooks = module._forward_hooks
         self._self_proxy_forward = lambda *args, **kwargs: self._forward(*args, **kwargs)
         module.forward = self._self_proxy_forward
         self._setup_strategies(strategy, strategies)
@@ -294,12 +296,12 @@ class Module(wrapt.CallableObjectProxy):
                 strategy.tune_dry_run(self.__wrapped__, self._self_name, graph_spec, data, device, cache_dir)
             else:
                 try:
-                    self.__wrapped__.forward = self._self_orig_forward
+                    self._restore_original_forward()
                     backends[graph_spec.input_spec] = strategy.tune(
                         self.__wrapped__, self._self_name, graph_spec, data, device, cache_dir
                     )
                 finally:
-                    self.__wrapped__.forward = self._self_proxy_forward
+                    self._proxy_forward()
 
         if not dry_run:
             self._self_prev_recording = recording
@@ -315,11 +317,11 @@ class Module(wrapt.CallableObjectProxy):
     def _activate_wrapper(self):
         try:
             # revert original forward for activation which may result in jit compilation
-            self.__wrapped__.forward = self._self_orig_forward
+            self._restore_original_forward()
             wrapper = cast(TunedModule, self._self_wrapper)
             wrapper.activate()
         finally:
-            self.__wrapped__.forward = self._self_proxy_forward
+            self._proxy_forward()
 
     def _deactivate_wrapper(self):
         if self._self_wrapper is not None:
@@ -332,11 +334,11 @@ class Module(wrapt.CallableObjectProxy):
     def _deploy_wrapper(self, device: torch.device | None):
         try:
             # revert original forward for deployment which may result in jit compilation
-            self.__wrapped__.forward = self._self_orig_forward
+            self._restore_original_forward()
             wrapper = cast(TunedModule, self._self_wrapper)
             wrapper.deploy(device=device)
         finally:
-            self.__wrapped__.forward = self._self_proxy_forward
+            self._proxy_forward()
 
     def _forward(self, *args, **kwargs) -> Any:
         """Calls one of the wrappers depending on the module state.
@@ -348,12 +350,30 @@ class Module(wrapt.CallableObjectProxy):
         if self._self_state == ModuleState.INIT:
             self.enable_recording()
         try:
-            self.__wrapped__.forward = self._self_orig_forward
+            self._restore_original_forward()
             result = self._self_wrapper(*args, **kwargs)
         finally:
-            self.__wrapped__.forward = self._self_proxy_forward
+            self._proxy_forward()
 
         return result
+
+    def _proxy_forward(self):
+        """Proxy the forward calls.
+
+        We need to re-enable hooks, so that they will be called before and after proxied forward.
+        """
+        self.__wrapped__._forward_pre_hooks = self._original_forward_pre_hooks
+        self.__wrapped__.forward = self._self_proxy_forward
+        self.__wrapped__._forward_hooks = self._original_forward_hooks
+
+    def _restore_original_forward(self):
+        """Restore the original forward and hooks.
+
+        We need to disable hooks, otherwise they will be called twice.
+        """
+        self.__wrapped__._forward_pre_hooks = OrderedDict()
+        self.__wrapped__.forward = self._self_orig_forward
+        self.__wrapped__._forward_hooks = OrderedDict()
 
     def _reset(self):
         """Resets the module to initial state."""

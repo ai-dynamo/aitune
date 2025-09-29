@@ -29,17 +29,7 @@ from aitune.torch.jit.patched_module import (
 )
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
 from tests.toy_models.torch_models import OUTPUT_SIZE, ToyComplexPipeline
-from tests.utilities.helpers import requires_cuda
-
-
-class TestSink:
-    """Sink for capturing output from PatchedModule.print_hierarchy."""
-
-    def __init__(self):
-        self.output = []
-
-    def write(self, text):
-        self.output.append(text)
+from tests.utilities.helpers import TestSink, requires_cuda
 
 
 class TestType:
@@ -69,6 +59,7 @@ def mock_trt_backend(mock_trt_backend_class, mocker, infer_value):
 @patch("aitune.torch.jit.patched_module.TensorRTBackend")
 def test_jit_dry_run_success(mock_trt_backend, torch_device):
     config.dry_run = True
+    config.inspect_mode = False
     config.dry_run_failure_probability = 0.0
 
     with prepare_for_jit_tuning():
@@ -90,6 +81,7 @@ def test_jit_dry_run_success(mock_trt_backend, torch_device):
 @patch("aitune.torch.jit.patched_module.TensorRTBackend")
 def test_jit_dry_run_failure(mock_trt_backend, torch_device):
     config.dry_run = True
+    config.inspect_mode = False
     config.dry_run_failure_probability = 1.0
 
     with prepare_for_jit_tuning():
@@ -112,6 +104,7 @@ def test_jit_dry_run_failure(mock_trt_backend, torch_device):
 @patch("aitune.torch.jit.patched_module.TensorRTBackend")
 def test_jit_tuning_success(mock_trt_backend_class, torch_device, scenario, mocker):
     config.dry_run = False
+    config.inspect_mode = False
     config.detect_graph_breaks = False
 
     with prepare_for_jit_tuning():
@@ -145,6 +138,54 @@ def test_jit_tuning_success(mock_trt_backend_class, torch_device, scenario, mock
 
 
 @requires_cuda
+@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+def test_jit_tuning_with_module_hooks(mock_trt_backend_class, torch_device, mocker):
+    config.dry_run = False
+    config.inspect_mode = False
+    config.detect_graph_breaks = False
+
+    class TestNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(10, 10)  # only to make num params > 0
+
+        def forward(self, x):
+            return x
+
+    with prepare_for_jit_tuning():
+        pipeline = TestNet().to(torch_device)
+
+    hooks_history = []
+
+    def pre_hook(module, input):  # noqa: A002
+        hooks_history.append("pre_hook")
+        return input
+
+    def hook(module, input, output):  # noqa: A002
+        hooks_history.append("forward_hook")
+        return output
+
+    pipeline.register_forward_hook(hook)
+    pipeline.register_forward_pre_hook(pre_hook)
+
+    mock_backend = mock_trt_backend(mock_trt_backend_class, mocker, infer_value=torch.randn(1))
+    pipeline(torch.randn(1))
+    assert hooks_history == ["pre_hook", "forward_hook"]
+    hooks_history.clear()
+    pipeline(torch.randn(2))
+    assert hooks_history == ["pre_hook", "forward_hook"]
+
+    assert len(PatchedModule.heads) == 1
+
+    sink = TestSink()
+    PatchedModule.print_hierarchy(sink=sink.write)
+
+    mock_backend.build.assert_called()
+    assert PRINT_HIERARCHY_HEADER in sink.output[0]
+    assert re.match(r".*TestNet.*state=tuned.*(MockTensorRTBackend).*call_count=2", sink.output[1])
+
+
+@requires_cuda
 @pytest.mark.parametrize("unsupported_type_on_input", [True, False])
 @patch("aitune.torch.jit.patched_module.TensorRTBackend")
 def test_jit_tuning_unsupported_type(mock_trt_backend_class, unsupported_type_on_input, torch_device, mocker):
@@ -157,6 +198,7 @@ def test_jit_tuning_unsupported_type(mock_trt_backend_class, unsupported_type_on
 
     """
     config.dry_run = False
+    config.inspect_mode = False
     config.detect_graph_breaks = False
 
     mock_trt_backend(mock_trt_backend_class, mocker, torch.randn(1, 10))
@@ -201,6 +243,7 @@ def test_jit_tuning_unsupported_type(mock_trt_backend_class, unsupported_type_on
 @requires_cuda
 def test_jit_tuning_graph_break(torch_device, mocker):
     config.dry_run = False
+    config.inspect_mode = False
     config.detect_graph_breaks = True
 
     with prepare_for_jit_tuning():
@@ -225,6 +268,7 @@ def test_jit_tuning_graph_break(torch_device, mocker):
 @patch("aitune.torch.jit.patched_module.TensorRTBackend")
 def test_jit_tuning_skip_module(mock_trt_backend_class, torch_device, mocker):
     config.dry_run = False
+    config.inspect_mode = False
     config.detect_graph_breaks = False
     config.skip_modules = ["ToyTorchModel"]
 
@@ -251,6 +295,7 @@ def test_jit_tuning_skip_module(mock_trt_backend_class, torch_device, mocker):
 @patch("aitune.torch.jit.patched_module.TensorRTBackend")
 def test_jit_tuning_no_modules(mock_trt_backend_class, torch_device, mocker):
     config.dry_run = False
+    config.inspect_mode = False
     config.detect_graph_breaks = False
 
     # the following class has not parameters and should be skipped
@@ -280,6 +325,7 @@ def test_jit_tuning_no_modules(mock_trt_backend_class, torch_device, mocker):
 @patch("aitune.torch.jit.patched_module.TensorRTBackend")
 def test_forward_method_should_have_same_signature(mock_trt_backend, torch_device):
     config.dry_run = False
+    config.inspect_mode = False
 
     class TestNet(torch.nn.Module):
         def __init__(self):

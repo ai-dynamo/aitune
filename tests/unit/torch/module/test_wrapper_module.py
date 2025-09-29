@@ -98,6 +98,33 @@ def test_passthrough(module):
     assert module.state == ModuleState.RECORDING
 
 
+def test_forward_hooks(module):
+    hooks_history = []
+
+    def pre_hook(module, input):  # noqa: A002
+        hooks_history.append("pre_hook")
+        return input
+
+    def hook(module, input, output):  # noqa: A002
+        hooks_history.append("forward_hook")
+        return output
+
+    module.register_forward_hook(hook)
+    module.register_forward_pre_hook(pre_hook)
+
+    module(1)
+    assert hooks_history == ["pre_hook", "forward_hook"]
+    hooks_history.clear()
+    module(2)
+    assert hooks_history == ["pre_hook", "forward_hook"]
+    hooks_history.clear()
+    assert module.state == ModuleState.RECORDING
+    module.enable_passthrough()
+    module(3)
+    assert hooks_history == ["pre_hook", "forward_hook"]
+    assert module.state == ModuleState.PASSTHROUGH
+
+
 def test_tune_dry_run(module, torch_device):
     strategy = Mock()
 

@@ -21,6 +21,8 @@ limitations under the License.
 
 - feat: add JIT tuning
 - feat: module inspect considers lists and dicts for Torch module containers
+- feat: add JIT inspect
+- feat: add support for forward hooks for AOT and JIT tuning
 
 ## 0.1.0
 

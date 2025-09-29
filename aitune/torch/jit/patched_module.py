@@ -19,10 +19,9 @@ from collections import Counter, OrderedDict, deque
 from enum import Enum
 from pathlib import Path
 from time import perf_counter
-from typing import cast
+from typing import ClassVar, cast
 
 import torch
-import torch.nn as nn
 import wrapt
 
 from aitune.torch.backend.backend import Backend
@@ -35,6 +34,7 @@ from aitune.torch.module.sample_metadata import SampleMetadata, UnsupportedTypeE
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy.jit_strategy import JitStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
+from aitune.torch.utils.module_utils import count_parameters
 
 PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
 PRINT_HIERARCHY_NO_MODULES_HEADER = "No modules in hierarchy"
@@ -81,16 +81,18 @@ class PatchedModule:
 
     """
 
-    stack: deque["PatchedModule"] = deque()
-    heads: list["PatchedModule"] = []  # the top level modules
-    history: list[str] = []  # for tracking purposes
-    patched_classes: Counter[str] = Counter()  # for generating unique names
+    stack: ClassVar[deque["PatchedModule"]] = deque()
+    heads: ClassVar[list["PatchedModule"]] = []  # the top level modules
+    history: ClassVar[list[str]] = []  # for tracking purposes
+    patched_classes: ClassVar[Counter[str]] = Counter()  # for generating unique names
 
     def __init__(self, module: torch.nn.Module):
         """Initialize the patched module."""
         self.__wrapped__ = module
-        # proxy forward
+        # proxy forward, hooks
         self._original_forward = module.forward
+        self._original_forward_pre_hooks = module._forward_pre_hooks
+        self._original_forward_hooks = module._forward_hooks
         # basic attributes
         self._name = module.__class__.__name__
         # those attributes can't be resolved until first forward call
@@ -198,7 +200,7 @@ class PatchedModule:
         This method is called when the module is first called.
         It initializes the module and sets the state to RECORDING.
         """
-        params = self._count_parameters(self.__wrapped__)
+        params = count_parameters(self.__wrapped__)
         if params == "0":
             self._unpatch()
             return self.__wrapped__(*args, **kwargs)
@@ -227,9 +229,9 @@ class PatchedModule:
         self._wrapper = RecordingModule(self.__wrapped__, self._name)
         PatchedModule.stack.append(self)
         try:
-            self.__wrapped__.forward = self._original_forward
+            self._restore_original_forward()
             result = self._wrapper(*args, **kwargs)
-            self.__wrapped__.forward = self._proxy_forward
+            self._proxy_forward()
         except UnsupportedTypeException as e:
             self._handle_unsupported_type(e)
             result = self.__wrapped__(*args, **kwargs)  # return original result
@@ -254,9 +256,9 @@ class PatchedModule:
             return self.__wrapped__(*args, **kwargs)
 
         try:
-            self.__wrapped__.forward = self._original_forward
+            self._restore_original_forward()
             result = self._wrapper(*args, **kwargs)
-            self.__wrapped__.forward = self._proxy_forward
+            self._proxy_forward()
             self._call_count += 1
         except UnsupportedTypeException as e:
             self._handle_unsupported_type(e)
@@ -272,10 +274,10 @@ class PatchedModule:
     def _forward_tuned(self, wrapped, instance, args, kwargs):
         """Forward call for the tuned state."""
         try:
-            self.__wrapped__.forward = self._original_forward
+            self._restore_original_forward()
             return self._wrapper(*args, **kwargs)
         finally:
-            self.__wrapped__.forward = self._proxy_forward
+            self._proxy_forward()
 
     def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:
         """Create a cache directory for the graph."""
@@ -341,12 +343,30 @@ class PatchedModule:
         result += f"call_count={self._call_count}"
         return result
 
+    def _proxy_forward(self):
+        """Proxy the forward calls.
+
+        We need to re-enable hooks, so that they will be called before and after proxied forward.
+        """
+        self.__wrapped__._forward_pre_hooks = self._original_forward_pre_hooks
+        self.__wrapped__.forward = self._proxy_forward_func
+        self.__wrapped__._forward_hooks = self._original_forward_hooks
+
+    def _restore_original_forward(self):
+        """Restore the original forward and hooks.
+
+        We need to disable hooks, otherwise they will be called twice.
+        """
+        self.__wrapped__._forward_pre_hooks = OrderedDict()
+        self.__wrapped__.forward = self._original_forward
+        self.__wrapped__._forward_hooks = OrderedDict()
+
     def _set_original_forward_for_hierarchy(self):
         """Set the original forward method for the module and its children."""
         todo = [self]
         while todo:
             current = todo.pop()
-            current.__wrapped__.forward = current._original_forward
+            current._restore_original_forward()
             todo.extend(current._children)
 
     def _should_be_tuned(self):
@@ -407,7 +427,7 @@ class PatchedModule:
         Removes it also from Patcher object registry.
         """
         self._allowed_to_tune = False
-        self.__wrapped__.forward = self._original_forward
+        self._restore_original_forward()
 
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 
@@ -434,24 +454,10 @@ class PatchedModule:
         This is crucial as some HF models perform self inspection for method arguments.
         """
         self._state = state
-        self.__wrapped__.forward = self._original_forward  # revert original forward to be ready for decoration
+        self._restore_original_forward()
         if replacement_func := self._forward_routing.get(state):
-            self._proxy_forward = wrapt.decorator(replacement_func)(self.__wrapped__.forward)
-            self.__wrapped__.forward = self._proxy_forward
-
-    @staticmethod
-    def _count_parameters(module: nn.Module) -> str:
-        """Counts the total number of parameters and returns it in a human-readable format (e.g., 1.2M, 500K)."""
-        num_params = sum(p.numel() for p in module.parameters())
-
-        if num_params >= 1_000_000_000:
-            return f"{num_params / 1_000_000_000:.1f}B"
-        elif num_params >= 1_000_000:
-            return f"{num_params / 1_000_000:.1f}M"
-        elif num_params >= 1_000:
-            return f"{num_params / 1_000:.1f}K"
-        else:
-            return f"{num_params}"
+            self._proxy_forward_func = wrapt.decorator(replacement_func)(self.__wrapped__.forward)
+            self._proxy_forward()
 
     @staticmethod
     def print_hierarchy(sink=print):

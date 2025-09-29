@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for TuneStrategy base class."""
+"""Unit tests for PyTorch module utilities."""
 
 import pytest
 import torch.nn as nn
 
-from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
+from aitune.torch.utils.module_utils import count_parameters
 
 
 @pytest.mark.parametrize(
@@ -25,11 +25,10 @@ from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
     [(100, "100"), (1_000, "1.0K"), (100_000, "100.0K"), (1_000_000, "1.0M"), (1_000_000_000, "1.0B")],
 )
 def test_count_parameters(num_params, expected):
-    """Test _count_parameters with deeply nested modules."""
-
+    """Test count_parameters with deeply nested modules."""
     module = nn.Sequential(
         nn.Linear(num_params, 1, bias=False),
     )
-    result = TuneStrategy._count_parameters(module)
+    result = count_parameters(module)
 
     assert result == expected

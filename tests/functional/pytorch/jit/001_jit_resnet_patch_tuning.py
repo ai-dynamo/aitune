@@ -29,16 +29,6 @@ from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModul
 from aitune.torch.jit.patcher import patch_for_jit_tuning
 
 
-class TestSink:
-    """Sink for capturing output from PatchedModule.print_hierarchy."""
-
-    def __init__(self):
-        self.output = []
-
-    def write(self, text):
-        self.output.append(text)
-
-
 @patch_for_jit_tuning
 def create_resnet():
     """Create a ResNet18 model.
@@ -64,13 +54,13 @@ def test_jit_resnet():
         batch()
 
     # Capture the print_hierarchy output
-    sink = TestSink()
-    PatchedModule.print_hierarchy(sink=sink.write)
-    print("\n".join(sink.output))
+    history = []
+    PatchedModule.print_hierarchy(sink=lambda s: history.append(s))
+    print("\n".join(history))
 
     # Assert the expected output
-    assert PRINT_HIERARCHY_HEADER in sink.output[0]
-    assert re.match(r".*ResNet.*state=tuned.*TensorRTBackend", sink.output[1])
+    assert PRINT_HIERARCHY_HEADER in history[0]
+    assert re.match(r".*ResNet.*state=tuned.*TensorRTBackend", history[1])
 
     assert resnet(torch.randn(8, 3, 224, 224, device="cuda")).shape == (8, 1000)
     assert resnet(torch.randn(16, 3, 224, 224, device="cuda")).shape == (16, 1000)

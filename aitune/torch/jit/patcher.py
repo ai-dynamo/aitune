@@ -22,6 +22,8 @@ from typing import TypeVar
 
 import torch
 
+from aitune.torch.jit.config import config
+from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import PatchedModule
 
 T = TypeVar("T")
@@ -36,7 +38,7 @@ class Patcher:
     Allows intercepting creating torch modules to register them with PatchedModule.
     """
 
-    _patched_modules: list[PatchedModule] = []
+    _patched_modules: list[PatchedModule | InspectModule] = []
     _intercepted_classes: set[type[torch.nn.Module]] = set()  # for tracking purposes
     _original_module_init: Callable | None = None
 
@@ -54,13 +56,13 @@ class Patcher:
             cls._original_module_init(module, *args, **kwargs)
             if cls._is_allowed_to_tune(module):
                 cls._intercepted_classes.add(module.__class__)
-                pm = PatchedModule(module)
+                pm = InspectModule(module) if config.inspect_mode else PatchedModule(module)
                 cls._patched_modules.append(pm)
 
         torch.nn.Module.__init__ = _patched_init
 
     @classmethod
-    def unpatch_module(cls, module: PatchedModule):
+    def unpatch_module(cls, module: PatchedModule | InspectModule):
         """Unpatch a module.
 
         Args:
@@ -150,4 +152,4 @@ def patch_for_jit_tuning(func: Callable[..., T]) -> Callable[..., T]:
 def jit_reset():
     """Reset the JIT patcher."""
     Patcher.unpatch_torch(unpatch_modules=True)
-    PatchedModule.reset()
+    InspectModule.reset() if config.inspect_mode else PatchedModule.reset()

@@ -27,6 +27,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import OUTPUT_METADATA_PREFIX, Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.task.correctness import check_output_correctness, check_output_tensor_shapes
+from aitune.torch.utils.module_utils import count_parameters
 from aitune.utils.logging import log
 
 logger = getLogger(__name__)
@@ -145,20 +146,6 @@ class TuneStrategy(ABC):
         ...
 
     @staticmethod
-    def _count_parameters(module: nn.Module) -> str:
-        """Counts the total number of parameters and returns it in a human-readable format (e.g., 1.2M, 500K)."""
-        num_params = sum(p.numel() for p in module.parameters())
-
-        if num_params >= 1_000_000_000:
-            return f"{num_params / 1_000_000_000:.1f}B"
-        elif num_params >= 1_000_000:
-            return f"{num_params / 1_000_000:.1f}M"
-        elif num_params >= 1_000:
-            return f"{num_params / 1_000:.1f}K"
-        else:
-            return f"{num_params}"
-
-    @staticmethod
     def _count_layers(module: nn.Module) -> int:
         return len(list(module.named_children()))
 
@@ -197,7 +184,7 @@ class TuneStrategy(ABC):
             name,
             sink=self._sink,
         )
-        log("number of parameters: %s", self._count_parameters(module), depth=1, sink=self._sink)
+        log("number of parameters: %s", count_parameters(module), depth=1, sink=self._sink)
         log("number of layers: %s", self._count_layers(module), depth=1, sink=self._sink)
         log("precisions: %s", precisions, depth=1, sink=self._sink)
         log("graph_spec:", depth=1, sink=self._sink)

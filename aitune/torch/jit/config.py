@@ -26,6 +26,7 @@ class Config:
 
     dry_run: bool = False  # whether to perform dry-run tuning
     dry_run_failure_probability: float = 0.2  # probability of failure in dry-run mode to imitate tuning failure
+    inspect_mode: bool = False  # whether to perform inspect mode
 
     min_samples: int = 2  # minimum number of samples recorded before tuning
     batch_axis_required: bool = True  # if True, the batch axis must detected in the input data
