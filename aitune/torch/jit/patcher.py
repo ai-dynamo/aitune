@@ -13,6 +13,7 @@
 # limitations under the License.
 """Module for inspecting PyTorch models and tracking their execution."""
 
+import atexit
 import inspect
 import logging
 from collections.abc import Callable
@@ -48,9 +49,10 @@ class Patcher:
     @classmethod
     def patch_torch(cls):
         """Patch torch.nn.Module to track execution."""
-        # Only store the original function once
         if cls._original_module_init is None:
+            # this will be called only once
             cls._original_module_init = torch.nn.Module.__init__
+            atexit.register(InspectModule.on_python_exit if config.inspect_mode else PatchedModule.on_python_exit)
 
         def _patched_init(module, *args, **kwargs):
             cls._original_module_init(module, *args, **kwargs)

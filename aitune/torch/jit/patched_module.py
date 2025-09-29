@@ -14,6 +14,7 @@
 """Module for inspecting PyTorch models and tracking their execution."""
 
 import hashlib
+import logging
 import random
 from collections import Counter, OrderedDict, deque
 from enum import Enum
@@ -85,6 +86,7 @@ class PatchedModule:
     heads: ClassVar[list["PatchedModule"]] = []  # the top level modules
     history: ClassVar[list[str]] = []  # for tracking purposes
     patched_classes: ClassVar[Counter[str]] = Counter()  # for generating unique names
+    attempted_tuning: ClassVar[bool] = False
 
     def __init__(self, module: torch.nn.Module):
         """Initialize the patched module."""
@@ -121,6 +123,7 @@ class PatchedModule:
         Note:
             if module has already defined strategy/strategies those will take precedence over the provided one.
         """
+        PatchedModule.attempted_tuning = True
         self._set_original_forward_for_hierarchy()
         device = torch.device("cuda")
         todo = [self]
@@ -145,7 +148,7 @@ class PatchedModule:
                     current._wrapper = PassthroughModule(current.__wrapped__)
                     current._extra_state_info = "dry-run tuning success"
 
-                # tuning success, we can revert forward for current module, unpatch children
+                # tuning success, we can revert forward for current module, unpatch child modules
                 current._update_state(ModuleState.TUNED)
                 current._patch_device_attribute(device)
                 current._unpatch_hierarchy(include_self=False)
@@ -155,7 +158,7 @@ class PatchedModule:
                 current._unpatch()
                 current._update_state(ModuleState.EAGER)
                 for child in current._children:
-                    child._allowed_to_tune = True  # since parent failed, now children are allowed to tune
+                    child._allowed_to_tune = not child._should_be_skipped()  # child modules are allowed to tune
                     if child._should_be_tuned():
                         todo.append(child)
                 if isinstance(e, GraphBreakException):
@@ -235,8 +238,8 @@ class PatchedModule:
         except UnsupportedTypeException as e:
             self._handle_unsupported_type(e)
             result = self.__wrapped__(*args, **kwargs)  # return original result
-            # since cannot record parent, let children be allowed to tune
-            # the order is important - line above will call and register children
+            # since cannot record parent, let child modules be allowed to tune
+            # the order is important - line above will call and register child modules
             for child in self._children:
                 child._allowed_to_tune = True
         finally:
@@ -263,7 +266,7 @@ class PatchedModule:
         except UnsupportedTypeException as e:
             self._handle_unsupported_type(e)
             result = self.__wrapped__(*args, **kwargs)  # return original result
-            # since cannot record parent, let children be allowed to tune
+            # since cannot record parent, let child modules be allowed to tune
             for child in self._children:
                 child._allowed_to_tune = True
 
@@ -498,6 +501,31 @@ class PatchedModule:
         PatchedModule.history.clear()
         PatchedModule.heads.clear()
         PatchedModule.stack.clear()
+
+    @staticmethod
+    def on_python_exit():
+        """Give suggestions if tuning was not attempted."""
+        if len(PatchedModule.heads) == 0:
+            logging.error("JIT tuning has been enabled but no modules were found.")
+        elif not PatchedModule.attempted_tuning:
+            to_few_samples = [h._call_count < config.min_samples for h in PatchedModule.heads]
+            if all(to_few_samples):
+                logging.warning(
+                    "JIT tuning has been enabled and requires at least %d samples. None of top level modules had enough samples.",
+                    config.min_samples,
+                )
+            elif config.batch_axis_required:
+                logging.warning(
+                    """
+JIT tuning has been enabled and requires two different batch sizes to detect dynamic axes.
+This was not the case. You can either turn this requirement off with:
+
+from aitune.torch.jit.config import config
+config.batch_axis_required = False
+
+or provide two different batch sizes when calling the model.
+""",
+                )
 
 
 def _to_hist(entry: str):

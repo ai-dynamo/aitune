@@ -162,8 +162,7 @@ ait.load(pipe, "tuned_pipe.pt")
 
 ### Just-in-time tuning
 
-In this mode there is no need to modify user's code. At the beginning AITune uses a few inferences to detect model architecture and hierarchy of a model. Then it tries to tune modules one by one
-starting from top. If there is one of the following conditions:
+In this mode there is no need to modify user's code. At the beginning AITune uses a few inferences to detect model architecture and hierarchy of a model. Then it tries to tune modules one by one starting from top. If there is one of the following conditions:
 
 * a graph break detected i.e. torch.nn.Module contains conditional logic on inputs, meaning there is no guarantee of a static, correct graph of computations or
 * there is an error during tuning
@@ -182,7 +181,6 @@ Next, you can run user script without modifying it e.g.
 python your_script.py
 ```
 
-Note: currently JIT mode does not support caching results i.e. every time a new python interpreter starts, the tuning process starts from scratch
 
 #### Configuring just-in-time tuning
 
@@ -195,9 +193,31 @@ config.max_depth_level = 1 # change the default value of a nested module to be a
 config.detect_graph_breaks = False # turn of graph break detection
 ```
 
+#### Comparison between declarative approach and just-in-time tuning
+
+The big advantage of just-in-time tuning is that you don't need to modify user's script to tune a model. However it has some disadvantages - since it cannot access data directly (you don't provide dataloader):
+
+* it cannot deduce batch size, nor do benchmarking
+* input/output shapes depend on the data seen so for example TRT backend will build profile only for that data
+* it needs at least two inference calls - first to get model/pipeline hierarchy and second one for actual tuning
+* if you need dynamic axes (e.g. TRT backend) you need to provide two different batch sizes
+
+Both types of tuning: declarative approach and JIT approach support only models which have the following input arguments in the forward method:
+
+* int, float, bool, bytes, str, type(None)
+* torch.Tensor
+* mappings, sequences (lists, tuples) of the types above
+
+If the condition is not met:
+
+* declarative approach will raise exception and prevent tuning
+* JIT approach will skip a module and will try to tune its children
+
+Note: currently JIT mode does not support caching results i.e. every time a new python interpreter starts, the tuning process starts from scratch
+
 ## Core Functionalities
 
-### Inspect
+### Inspect for declarative approach
 
 The `inspect` function allows you to analyze PyTorch models and pipelines to understand their structure, parameters, and execution flow. It provides detailed insights into model architecture and helps identify tuning opportunities.
 
@@ -216,7 +236,24 @@ class SimpleModel(nn.Module):
 model = SimpleModel()
 
 # Inspect the model
-ait.inspect(model)
+ait.inspect(model, dataset)
+```
+
+### Inspect for JIT tuning
+
+JIT tuning also has corresponding `inspect` mode which gathers information about the model/pipeline and allows checking model input and output arguments, hierarchy of the model etc.
+
+Here is a short snippet how to use it:
+
+```python
+# required imports
+import aitune.torch.jit.enable_inspection as inspection
+
+# your code goes here
+# ...
+
+# you can export report to html file
+inspection.save_report("filename.html", "YOUR_MODEL_NAME")
 ```
 
 ### Tune

@@ -13,7 +13,9 @@
 # limitations under the License.
 """Module for inspecting PyTorch models and tracking their execution."""
 
+import logging
 from collections import OrderedDict, deque
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from time import perf_counter
@@ -53,6 +55,7 @@ class InspectModule:
     stack: ClassVar[deque["InspectModule"]] = deque()
     heads: ClassVar[list["InspectModule"]] = []  # the top level modules
     history: ClassVar[list[str]] = []  # for tracking purposes
+    report_saved: ClassVar[bool] = False
 
     def __init__(self, module: torch.nn.Module):
         """Initialize the patched module."""
@@ -265,8 +268,8 @@ class InspectModule:
         InspectModule.stack.clear()
 
     @staticmethod
-    def export_history_to_html(path: str | Path, model_name: str = "Model"):
-        """Export module hierarchy to interactive HTML with folding/unfolding capabilities.
+    def save_report(path: str | Path, model_name: str = "Model"):
+        """Save module hierarchy to interactive HTML with folding/unfolding capabilities.
 
         Creates a comprehensive HTML page that displays the module hierarchy with:
         - Collapsible sections for each module
@@ -282,6 +285,19 @@ class InspectModule:
         html_content = HTMLGenerator.generate_html_content(InspectModule, model_name)
         with open(path, "w", encoding="utf-8") as f:
             f.write(html_content)
+
+        InspectModule.report_saved = True
+
+    @staticmethod
+    def on_python_exit():
+        """Print hierarchy and save report if not saved yet when process is exiting."""
+        InspectModule.print_hierarchy()
+        if len(InspectModule.heads) > 0 and not InspectModule.report_saved:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"jit_inspect_{timestamp}.html"
+
+            InspectModule.save_report(filename, "Unknown")
+            logging.warning("Since you didn't save the report, it was saved to: %s.", filename)
 
 
 def _to_hist(entry: str):

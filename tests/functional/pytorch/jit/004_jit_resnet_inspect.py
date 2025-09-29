@@ -26,12 +26,9 @@ from pathlib import Path
 import timm
 import torch
 
-from aitune.torch.jit.config import config
-from aitune.torch.jit.inspect_module import InspectModule
-from aitune.torch.jit.patcher import patch_for_jit_tuning
+import aitune.torch.jit.enable_inspection as inspection  # noqa: F401
 
 
-@patch_for_jit_tuning
 def create_resnet():
     """Create a ResNet18 model.
 
@@ -41,12 +38,6 @@ def create_resnet():
 
 
 def test_jit_resnet():
-    config.min_samples = 4  # just to compare before and after tuning
-    config.dry_run = False
-    config.max_depth_level = 3
-    config.detect_graph_breaks = False
-    config.inspect_mode = True
-
     resnet = create_resnet()
 
     def batch():
@@ -60,7 +51,7 @@ def test_jit_resnet():
     output_dir = Path(os.environ.get("AITUNE_OUTPUT_DIR", "output"))
     output_dir.mkdir(parents=True, exist_ok=True)
     html_path = output_dir / "inspect_resnet.html"
-    InspectModule.export_history_to_html(html_path, "ResNet")
+    inspection.save_report(html_path, "ResNet")
 
     assert html_path.exists(), f"HTML file {html_path} was not created"
 

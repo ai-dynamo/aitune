@@ -27,12 +27,9 @@ from pathlib import Path
 import torch
 from diffusers import StableDiffusionPipeline
 
-from aitune.torch.jit.config import config
-from aitune.torch.jit.inspect_module import InspectModule
-from aitune.torch.jit.patcher import patch_for_jit_tuning
+import aitune.torch.jit.enable_inspection as inspection  # noqa: F401
 
 
-@patch_for_jit_tuning
 def create_model():
     pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16)
     pipe.to("cuda")
@@ -41,12 +38,6 @@ def create_model():
 
 def test_jit_sd21():
     prompt = "A fluffy, orange tabby cat with bright green eyes is captured mid-air, pouncing playfully on a vibrant red ball of yarn"
-    config.dry_run = False
-    config.inspect_mode = True
-    config.min_samples = 4
-    config.max_depth_level = 3
-    config.detect_graph_breaks = True
-
     pipe = create_model()
 
     def batch():
@@ -60,7 +51,7 @@ def test_jit_sd21():
     output_dir = Path(os.environ.get("AITUNE_OUTPUT_DIR", "output"))
     output_dir.mkdir(parents=True, exist_ok=True)
     html_path = output_dir / "inspect_sd21.html"
-    InspectModule.export_history_to_html(html_path, "SD21")
+    inspection.save_report(html_path, "SD21")
 
     assert html_path.exists(), f"HTML file {html_path} was not created"
 

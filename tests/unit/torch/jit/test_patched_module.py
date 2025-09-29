@@ -293,6 +293,35 @@ def test_jit_tuning_skip_module(mock_trt_backend_class, torch_device, mocker):
 
 @requires_cuda
 @patch("aitune.torch.jit.patched_module.TensorRTBackend")
+def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend_class, torch_device, mocker):
+    config.dry_run = False
+    config.inspect_mode = False
+    config.detect_graph_breaks = False
+    config.skip_modules = ["Linear"]
+
+    with prepare_for_jit_tuning():
+        pipeline = ToyComplexPipeline().to(torch_device)
+
+    mock_backend = mock_trt_backend(mock_trt_backend_class, mocker, infer_value=Exception("Backend build error"))
+
+    inputs = pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device)
+    for x in inputs:
+        pipeline(x)
+
+    assert len(PatchedModule.heads) == 1
+
+    sink = TestSink()
+    PatchedModule.print_hierarchy(sink=sink.write)
+
+    mock_backend.build.assert_called()
+    assert PRINT_HIERARCHY_HEADER in sink.output[0]
+    assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=2", sink.output[1])
+    assert re.match(r".*Linear.*state=skipped.*call_count=1", sink.output[2])
+    assert re.match(r".*Linear.*state=skipped.*call_count=1", sink.output[3])
+
+
+@requires_cuda
+@patch("aitune.torch.jit.patched_module.TensorRTBackend")
 def test_jit_tuning_no_modules(mock_trt_backend_class, torch_device, mocker):
     config.dry_run = False
     config.inspect_mode = False
