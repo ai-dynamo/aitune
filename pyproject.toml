@@ -106,13 +106,13 @@ functional-test = [
     "timm",
     "diffusers",
     "datasets>=3.3.2",
-    "transformers>=4.48",
+    "transformers>=4.54",
     "sentencepiece>=0.2.0",
 ]
 
 demo = [
     "diffusers",
-    "transformers>=4.48.2",
+    "transformers>=4.54",
     "ipykernel",
     "sentencepiece>=0.2.0",
     "timm>=1.0.14",

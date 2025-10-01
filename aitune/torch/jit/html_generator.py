@@ -16,6 +16,8 @@
 import html
 from typing import TYPE_CHECKING
 
+from aitune.torch.utils.module_utils import format_num_parameters
+
 if TYPE_CHECKING:
     from aitune.torch.jit.inspect_module import InspectModule
 
@@ -37,6 +39,7 @@ class HTMLGenerator:
         css_styles = HTMLGenerator._get_css_styles()
         javascript = HTMLGenerator._get_javascript()
         module_tree_html = HTMLGenerator._generate_module_tree_html(inspect_module_class)
+        total_modules, total_parameters = HTMLGenerator._calculate_module_stats(inspect_module_class)
 
         html_content = f"""
         <!DOCTYPE html>
@@ -52,6 +55,16 @@ class HTMLGenerator:
                 <div class="header">
                     <h1>🔍 AITune Model Inspector</h1>
                     <p>Model: {html.escape(model_name)}</p>
+                    <div class="stats-bar">
+                        <div class="stat-item">
+                            <span class="stat-number">{total_modules}</span>
+                            <span class="stat-label">Modules</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{total_parameters}</span>
+                            <span class="stat-label">Parameters</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="content">
                     {module_tree_html}
@@ -94,20 +107,21 @@ class HTMLGenerator:
             .header {
                 background: linear-gradient(135deg, #1a4d1a 0%, #2d5a2d 100%);
                 color: white;
-                padding: 30px;
+                padding: 20px;
                 text-align: center;
             }
             .header h1 {
-                font-size: 2.5em;
-                margin-bottom: 10px;
+                font-size: 2.2em;
+                margin-bottom: 8px;
                 font-weight: 300;
             }
             .header p {
-                font-size: 1.1em;
+                font-size: 1.3em;
                 opacity: 0.9;
+                margin-bottom: 15px;
             }
             .content {
-                padding: 30px;
+                padding: 20px;
             }
             .module-tree {
                 font-family: 'Courier New', monospace;
@@ -271,8 +285,8 @@ class HTMLGenerator:
             .stats-bar {
                 background: linear-gradient(135deg, #76b900 0%, #5a9a00 100%);
                 color: white;
-                padding: 15px 20px;
-                margin-bottom: 20px;
+                padding: 12px 20px;
+                margin-bottom: 15px;
                 border-radius: 8px;
                 display: flex;
                 justify-content: space-around;
@@ -728,3 +742,30 @@ class HTMLGenerator:
         """
         children_total_time = sum(child._total_execution_time for child in module._children)
         return max(0.0, module._total_execution_time - children_total_time)
+
+    @staticmethod
+    def _calculate_module_stats(inspect_module_class: type["InspectModule"]) -> tuple[int, str]:
+        """Calculate module statistics including total count and parameters.
+
+        Args:
+            inspect_module_class: The InspectModule class to calculate stats for.
+
+        Returns:
+            Tuple of (total_module_count, total_parameters_string).
+        """
+        total_modules = 0
+        total_parameters = 0
+
+        for module in HTMLGenerator._traverse_modules(inspect_module_class):
+            total_modules += 1
+            try:
+                # Count parameters for this module
+                module_params = sum(p.numel() for p in module.__wrapped__.parameters())
+                total_parameters += module_params
+            except (AttributeError, TypeError):
+                # Skip if module doesn't have parameters or is not a proper PyTorch module
+                pass
+
+        params = format_num_parameters(total_parameters)
+
+        return total_modules, params

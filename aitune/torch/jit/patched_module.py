@@ -87,6 +87,7 @@ class PatchedModule:
     history: ClassVar[list[str]] = []  # for tracking purposes
     patched_classes: ClassVar[Counter[str]] = Counter()  # for generating unique names
     attempted_tuning: ClassVar[bool] = False
+    module_counter: ClassVar[int] = 0
 
     def __init__(self, module: torch.nn.Module):
         """Initialize the patched module."""
@@ -97,6 +98,8 @@ class PatchedModule:
         self._original_forward_hooks = module._forward_hooks
         # basic attributes
         self._name = module.__class__.__name__
+        self._id = PatchedModule.module_counter
+        PatchedModule.module_counter += 1
         # those attributes can't be resolved until first forward call
         self._call_count = 0
         self._level = -1
@@ -134,7 +137,7 @@ class PatchedModule:
             strategy = JitStrategy(TensorRTBackend())
             try:
                 for graph_spec in recording.graph_specs:
-                    cache_dir = self._create_graph_cache_dir(graph_spec)
+                    cache_dir = self._create_graph_cache_dir(graph_spec.name)
                     data = recording.samples_for_graph_spec(graph_spec)
                     if config.dry_run:
                         self._simulate_dry_run(strategy, current, graph_spec, data, device, cache_dir)
@@ -282,21 +285,24 @@ class PatchedModule:
         finally:
             self._proxy_forward()
 
-    def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:
+    def _create_graph_cache_dir(self, graph_spec_name: str) -> Path:
         """Create a cache directory for the graph."""
-        cache_dir = config.cache_dir / self._get_hierarchy_hash() / graph_spec.name
+        cache_dir = config.cache_dir / self._get_hierarchy_hash() / graph_spec_name
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
 
     def _get_hierarchy_hash(self) -> str:
-        """Get the hash of the module hierarchy."""
+        """Get the hash of the module hierarchy.
+
+        Assumption: given name (actual class name + number of parameters) + id is unique enough to be used as a hash
+        """
         todo = [self]
         hierarchy_names = ""
         while todo:
             current = todo.pop()
-            hierarchy_names += current._name
+            hierarchy_names += current._name + str(current._id)
             todo.extend(current._children)
-        return hashlib.sha256(hierarchy_names.encode()).hexdigest()
+        return hashlib.sha256(hierarchy_names.encode()).hexdigest()[:10]
 
     def _handle_unsupported_type(self, e: UnsupportedTypeException):
         """Handle unsupported type exception."""

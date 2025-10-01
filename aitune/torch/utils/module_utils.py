@@ -16,6 +16,34 @@
 import torch.nn as nn
 
 
+def format_num_parameters(num: int) -> str:
+    """Formats a number into human-readable format with appropriate suffixes.
+
+    Args:
+        num: The number to format.
+
+    Returns:
+        A string representation of the number in human-readable format
+        (e.g., "1.2B", "500M", "100K", "50").
+
+    Examples:
+        >>> format_num_parameters(1_200_000_000)
+        '1.2B'
+        >>> format_num_parameters(500_000)
+        '500.0K'
+        >>> format_num_parameters(50)
+        '50'
+    """
+    if num >= 1_000_000_000:
+        return f"{num / 1_000_000_000:.1f}B"
+    elif num >= 1_000_000:
+        return f"{num / 1_000_000:.1f}M"
+    elif num >= 1_000:
+        return f"{num / 1_000:.1f}K"
+    else:
+        return f"{num}"
+
+
 def count_parameters(module: nn.Module) -> str:
     """Counts the total number of parameters and returns it in a human-readable format.
 
@@ -33,12 +61,4 @@ def count_parameters(module: nn.Module) -> str:
         '100.1K'
     """
     num_params = sum(p.numel() for p in module.parameters())
-
-    if num_params >= 1_000_000_000:
-        return f"{num_params / 1_000_000_000:.1f}B"
-    elif num_params >= 1_000_000:
-        return f"{num_params / 1_000_000:.1f}M"
-    elif num_params >= 1_000:
-        return f"{num_params / 1_000:.1f}K"
-    else:
-        return f"{num_params}"
+    return format_num_parameters(num_params)

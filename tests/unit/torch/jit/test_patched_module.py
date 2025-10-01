@@ -376,3 +376,21 @@ def test_forward_method_should_have_same_signature(mock_trt_backend, torch_devic
     # in tuned state
     model(1, 2, 3)  # we are in recording state
     assert set(inspect.signature(model.forward).parameters.keys()) == {"x", "y", "z", "pos"}
+
+
+def test_each_module_has_unique_cache_dir():
+    config.dry_run = False
+    config.inspect_mode = False
+
+    with prepare_for_jit_tuning():
+        # 10 identical modules - same parameters, same name
+        modules = [torch.nn.Linear(10, 10) for _ in range(10)]
+
+    for module in modules:
+        # call each module to capture it by patched module
+        module(torch.randn(1, 10))
+
+    assert len(PatchedModule.heads) == 10
+
+    cache_dirs = {m._create_graph_cache_dir("test") for m in PatchedModule.heads}
+    assert len(cache_dirs) == 10
