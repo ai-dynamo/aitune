@@ -219,6 +219,7 @@ pytestdebug.log
 cover/
 *.test-report.xml
 .gitlab-ci-local/
+*.csv
 
 # Translations
 *.mo

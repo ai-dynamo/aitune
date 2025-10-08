@@ -332,6 +332,20 @@ config = TensorRTBackendConfig(precision="fp16")
 backend = TensorRTBackend(config)
 ```
 
+#### CUDA Graphs Support
+
+The TensorRT backend supports CUDA Graphs for reduced CPU overhead and improved inference performance. CUDA Graphs automatically capture and replay GPU operations, eliminating kernel launch overhead for repeated inference calls. This feature is disabled by default.
+
+Keep in mind that graphs are automatically re-captured when input shapes changes.
+
+```python
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+
+# Enable CUDA Graphs for optimized inference
+config = TensorRTBackendConfig(use_cuda_graphs=True)
+backend = TensorRTBackend(config)
+```
+
 ### Torch-TensorRT Backend (JIT)
 
 Torch-TensorRT JIT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through

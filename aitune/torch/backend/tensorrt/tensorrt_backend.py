@@ -84,6 +84,7 @@ class TensorRTBackendConfig(BackendConfig):
     device: str = "cuda"
     quantization_config: ONNXQuantizationConfig | TorchQuantizationConfig | None = None
     enable_tf32: bool = True
+    use_cuda_graphs: bool = False
 
     def _default_describe_fields(self) -> list[str]:
         """Returns the default fields to describe."""
@@ -114,6 +115,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
     STATE_DEVICE = "device"
     STATE_QUANTIZATION_CONFIG = "quantization_config"
     STATE_CONFIG = "config"
+    STATE_USE_CUDA_GRAPHS = "use_cuda_graphs"
 
     def __init__(
         self,
@@ -151,6 +153,12 @@ class TensorRTBackend(Backend, TensorRTRunner):
         # runtime variables
         self._output_allocator = None
         self._trt_runtime = None
+
+        # CUDA graph variables
+        self._cuda_graph = None
+        self._last_input_shapes = None
+        self._static_inputs = {}
+        self._infer_cuda_graph = None
 
     def describe(self) -> str:
         """Returns the description of the backend."""
@@ -436,55 +444,65 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Returns:
             Model outputs
         """
-        try:
-            if self._context is None:
-                raise RuntimeError("Engine not loaded. Call build() first.")
-
-            # Prepare inputs
-            logger.debug("Preparing input tensors")
-            inputs = self._prepare_inputs(args, kwargs)
-
-            if not inputs:
-                raise ValueError("No input tensors provided for inference")
-
-            # Set input tensor shapes and addresses
-            logger.debug("Setting input tensor shapes and addresses")
-            self._set_input_tensors(inputs)
-
-            # Run inference with timing
-            logger.debug("Executing TensorRT inference")
+        with torch.inference_mode():
             try:
-                # Only synchronize before timing for accuracy
-                with torch.cuda.stream(self._cuda_stream):
-                    self._start_time.record(stream=self._cuda_stream)
-                    status = self._context.execute_async_v3(self._cuda_stream.cuda_stream)
-                    if not status:
-                        raise RuntimeError("TensorRT execution failed")
-                self._end_time.record(stream=self._cuda_stream)
+                if self._context is None:
+                    raise RuntimeError("Engine not loaded. Call build() first.")
+
+                # Prepare inputs
+                logger.debug("Preparing input tensors")
+                inputs = self._prepare_inputs(args, kwargs)
+
+                if not inputs:
+                    raise ValueError("No input tensors provided for inference")
+
+                # Check if input shapes have changed (for CUDA graph invalidation)
+                self._invalidate_cuda_graph(inputs)
+
+                # Set input tensor shapes and addresses
+                logger.debug("Setting input tensor shapes and addresses")
+                self._set_input_tensors(inputs)
+
+                # Run inference with timing
+                logger.debug("Executing TensorRT inference")
+                try:
+                    # Only synchronize before timing for accuracy
+                    with torch.cuda.stream(self._cuda_stream):
+                        self._start_time.record(stream=self._cuda_stream)
+
+                        # Using if instead overloading/replacing a function as simple if is faster
+                        if self._config.use_cuda_graphs:
+                            self._infer_cuda_graph()
+                        else:
+                            status = self._context.execute_async_v3(self._cuda_stream.cuda_stream)
+                            if not status:
+                                raise RuntimeError("TensorRT execution failed")
+
+                    self._end_time.record(stream=self._cuda_stream)
+                except Exception as e:
+                    # Attempt to recover from error
+                    torch.cuda.empty_cache()
+                    raise e
+
+                # Wait for inference to complete
+                try:
+                    logger.debug("Synchronizing CUDA stream")
+                    self._cuda_stream.synchronize()
+
+                    elapsed_time = self._start_time.elapsed_time(self._end_time)
+                    logger.debug("Inference completed in %s ms", elapsed_time)
+                except Exception as e:
+                    torch.cuda.empty_cache()
+                    elapsed_time = 0
+                    raise e
+
+                # Return a copy of the outputs with the correct format
+                return self._prepare_outputs_for_return()
+
             except Exception as e:
-                # Attempt to recover from error
+                torch.cuda.synchronize()
                 torch.cuda.empty_cache()
                 raise e
-
-            # Wait for inference to complete
-            try:
-                logger.debug("Synchronizing CUDA stream")
-                self._cuda_stream.synchronize()
-
-                elapsed_time = self._start_time.elapsed_time(self._end_time)
-                logger.debug("Inference completed in %s ms", elapsed_time)
-            except Exception as e:
-                torch.cuda.empty_cache()
-                elapsed_time = 0
-                raise e
-
-            # Return a copy of the outputs with the correct format
-            return self._prepare_outputs_for_return()
-
-        except Exception as e:
-            torch.cuda.synchronize()
-            torch.cuda.empty_cache()
-            raise e
 
     def _activate(self):
         """Activate the TensorRT engine."""
@@ -504,6 +522,15 @@ class TensorRTBackend(Backend, TensorRTRunner):
         # Initialize CUDA stream for inference
         logger.debug("Creating dedicated CUDA stream for inference")
         self._cuda_stream = torch.cuda.Stream()
+
+        # Initializing CUDA graph for inference
+        logger.debug("Creating CUDA graph for inference")
+        if self._config.use_cuda_graphs:
+            self._infer_cuda_graph = self._build_cuda_graph
+            self._static_inputs = {}
+            self._cuda_graph = None
+        else:
+            self._infer_cuda_graph = None
 
         # Initialize timing events
         logger.debug("Creating CUDA events for timing")
@@ -547,6 +574,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     "_outputs",
                     "_context",
                     "_output_allocator",
+                    "_cuda_graph",
+                    "_last_input_shapes",
+                    "_static_inputs",
+                    "_infer_cuda_graph",
                 ]:
                     if hasattr(self, attr_name):
                         delattr(self, attr_name)
@@ -695,6 +726,20 @@ class TensorRTBackend(Backend, TensorRTRunner):
             dtype = tensor.dtype
             logger.debug("Setting shape for input tensor %s: %s, dtype=%s", name, shape, dtype)
 
+            # CUDA graphs always use the same memory address for the same input tensors
+            if self._config.use_cuda_graphs:
+                if name not in self._static_inputs:
+                    # creating static memory for inputs
+                    self._static_inputs[name] = torch.zeros_like(tensor)
+
+                # copy the tensor to the static input
+                static_tensor = self._static_inputs[name]
+                static_tensor.copy_(tensor)
+
+                tensor = static_tensor
+
+                # TODO: can we have user provided static inputs?
+
             try:
                 # Set input tensor shape directly
                 self._context.set_input_shape(name, shape)
@@ -732,6 +777,55 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         return min_shapes, opt_shapes, max_shapes
 
+    def _build_cuda_graph(self):
+        """Create a CUDA graph for inference."""
+        logger.debug("Capturing CUDA graph for first time")
+        # First execution to ensure everything is set up
+        status = self._context.execute_async_v3(self._cuda_stream.cuda_stream)
+        if not status:
+            raise RuntimeError("TensorRT execution failed during CUDA graph setup")
+
+        # Begin CUDA graph capture
+        self._cuda_graph = torch.cuda.CUDAGraph()
+
+        # See https://docs.pytorch.org/docs/2.4/generated/torch.cuda.graph.html for more args
+        with torch.cuda.graph(self._cuda_graph, stream=self._cuda_stream):
+            # Execute inference within the capture
+            status = self._context.execute_async_v3(self._cuda_stream.cuda_stream)
+            if not status:
+                raise RuntimeError("TensorRT execution failed during CUDA graph capture")
+
+        logger.debug("CUDA graph captured and instantiated successfully")
+        self._infer_cuda_graph = self._execute_cuda_graph
+
+        # Execute the CUDA graph
+        self._infer_cuda_graph()
+
+    def _execute_cuda_graph(self):
+        """Execute inference using CUDA graphs for optimized performance.
+
+        This method implements the CUDA graph capture and launch pattern:
+        1. If no CUDA graph exists, capture one by running inference twice
+        2. If CUDA graph exists, launch the captured graph
+        """
+        logger.debug("Launching CUDA graph")
+        # Launch the captured CUDA graph
+        self._cuda_graph.replay()
+
+    def _invalidate_cuda_graph(self, inputs: dict[str, torch.Tensor]):
+        """Setup the inputs for the CUDA graph.
+
+        This should be called when input shapes change or when the graph needs to be rebuilt.
+        """
+        if self._cuda_graph is not None:
+            current_input_shapes = {name: tensor.shape for name, tensor in inputs.items()}
+            if self._last_input_shapes != current_input_shapes:
+                logger.debug("Input shapes changed, invalidating CUDA graph")
+                self._cuda_graph = None
+                self._infer_cuda_graph = self._build_cuda_graph
+                self._last_input_shapes = current_input_shapes
+                self._static_inputs = {}
+
     def to_dict(self):
         """Returns the state_dict of the backend.
 
@@ -758,6 +852,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self.STATE_DEVICE: self._device,
             self.STATE_QUANTIZATION_CONFIG: self._config.quantization_config,
             self.STATE_CONFIG: self._config.to_dict(),
+            self.STATE_USE_CUDA_GRAPHS: self._config.use_cuda_graphs,
         }
 
     @classmethod
@@ -781,6 +876,12 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         # Reconstruct config with quantization settings
         backend._config = TensorRTBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
+
+        # Ensure CUDA graphs are disabled when loading from checkpoint
+        # CUDA graphs cannot be serialized and must be re-captured
+        if backend._config.use_cuda_graphs:
+            logger.info("CUDA graphs were enabled in saved state, but will be re-captured on first inference")
+            # CUDA graph state will be None initially, triggering re-capture
 
         # Reconstruct output_class from string representation
         output_class_str = state_dict[cls.STATE_OUTPUT_CLASS]
