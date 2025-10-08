@@ -38,6 +38,7 @@ class TensorRTBuilder:
         compatibility_level: int | None = None,
         timing_cache: Path | None = None,
         profiles: list[Any] | None = None,
+        enable_tf32: bool = True,
         min_shapes: dict[str, list[int] | tuple[int, ...]] | None = None,
         opt_shapes: dict[str, list[int] | tuple[int, ...]] | None = None,
         max_shapes: dict[str, list[int] | tuple[int, ...]] | None = None,
@@ -53,6 +54,7 @@ class TensorRTBuilder:
             compatibility_level: TensorRT hardware compatibility level
             timing_cache: Path to TensorRT timing cache file
             profiles: List of TensorRTProfile objects for optimization profiles
+            enable_tf32: Enable TF32 hardware acceleration
             min_shapes: Dictionary of minimum input shapes
             opt_shapes: Dictionary of optimal input shapes
             max_shapes: Dictionary of maximum input shapes
@@ -64,6 +66,7 @@ class TensorRTBuilder:
         self.compatibility_level = compatibility_level
         self.timing_cache = timing_cache
         self.profiles = profiles or []
+        self.enable_tf32 = enable_tf32
         self.min_shapes = min_shapes
         self.opt_shapes = opt_shapes
         self.max_shapes = max_shapes
@@ -154,6 +157,7 @@ class TensorRTBuilder:
                 compatibility_level=self.compatibility_level,
                 profiles=profiles,
                 timing_cache=self.timing_cache,
+                enable_tf32=self.enable_tf32,
             )
 
             # Create TensorRT config
@@ -211,6 +215,7 @@ class TensorRTBuilder:
         compatibility_level,
         profiles,
         timing_cache,
+        enable_tf32,
     ):
         """Build the kwargs for the CreateConfig constructor.
 
@@ -220,6 +225,7 @@ class TensorRTBuilder:
             compatibility_level: Hardware compatibility level
             profiles: List of optimization profiles
             timing_cache: Path to timing cache
+            enable_tf32: Enable TF32 hardware acceleration
 
         Returns:
             Dictionary of kwargs for CreateConfig
@@ -243,6 +249,10 @@ class TensorRTBuilder:
                 create_config_kwargs["memory_pool_limits"] = {
                     trt.MemoryPoolType.WORKSPACE: max_workspace_size,
                 }
+
+            if enable_tf32:
+                logger.debug("Using TF32 hardware acceleration")
+                create_config_kwargs["tf32"] = True
 
             logger.debug("TensorRT configuration: %s", create_config_kwargs)
             return create_config_kwargs

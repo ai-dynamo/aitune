@@ -83,6 +83,7 @@ class TensorRTBackendConfig(BackendConfig):
     profiles: list[TensorRTProfile] | None = None
     device: str = "cuda"
     quantization_config: ONNXQuantizationConfig | TorchQuantizationConfig | None = None
+    enable_tf32: bool = True
 
     def _default_describe_fields(self) -> list[str]:
         """Returns the default fields to describe."""
@@ -260,7 +261,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     verbose=False,  # NOTE: After ModelOpt torch quantization we don't need verbose output because of excessive logging
                 )
 
-                self._offload_torch_model_to_cpu(module)
+                self._offload_torch_model_to_meta(module)
 
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
@@ -317,7 +318,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     graph_spec=graph_spec,
                 )
 
-                self._offload_torch_model_to_cpu(module)
+                self._offload_torch_model_to_meta(module)
 
             with self._system_monitor.system_stats_context(log_label="ONNX quantization"):
                 logger.debug("Initializing ONNX quantizer")
@@ -391,7 +392,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     graph_spec=graph_spec,
                 )
 
-                self._offload_torch_model_to_cpu(module)
+                self._offload_torch_model_to_meta(module)
 
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
@@ -408,6 +409,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     compatibility_level=self._config.compatibility_level,
                     timing_cache=self._config.timing_cache,
                     profiles=self._config.profiles,
+                    enable_tf32=self._config.enable_tf32,
                     min_shapes=min_shapes,
                     opt_shapes=opt_shapes,
                     max_shapes=max_shapes,
@@ -572,14 +574,15 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._config.to_json(config_path)
         logger.debug("Config saved to %s", config_path)
 
-    def _offload_torch_model_to_cpu(self, model: "torch.nn.Module"):
-        """Offload PyTorch model to CPU.
+    def _offload_torch_model_to_meta(self, model: "torch.nn.Module"):
+        """Offload PyTorch model to meta device.
 
         Args:
             model: PyTorch model to offload.
         """
-        logger.debug("Offloading model to CPU")
-        model.to("cpu")
+        logger.debug("Offloading model to meta device")
+        model = model.to("meta")
+        model = model.to_empty(device="cpu")
 
         gc.collect()
 

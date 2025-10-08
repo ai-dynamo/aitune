@@ -41,6 +41,18 @@ def test_runner_integration_with_different_batch_sizes(tmp_path):
     samples = model.samples(batch_sizes=batch_sizes, device="cuda")
     graph_spec = model.graph_spec(batch_sizes=batch_sizes, device="cuda")
 
+    input_tensors = {}
+    for batch_size in batch_sizes:
+        # Torch model is offloaded to CPU, use host memory for input tensor
+        input_tensors[batch_size] = torch.randn(batch_size, IN_FEATURES, device="cuda")
+
+    reference_outputs = {}
+    for batch_size in batch_sizes:
+        # Get reference output from PyTorch model
+        with torch.no_grad():
+            reference_output = model(input_tensors[batch_size]).to("cpu")
+            reference_outputs[batch_size] = reference_output
+
     # Build TensorRT engine with dynamic batch support
     backend = backend.build(model, graph_spec, samples, device=torch.device("cuda"), cache_dir=tmp_path)
     # Note: build() already calls activate() internally
@@ -48,19 +60,14 @@ def test_runner_integration_with_different_batch_sizes(tmp_path):
     try:
         # Test inference with different batch sizes
         for batch_size in batch_sizes:
-            # Torch model is offloaded to CPU, use host memory for input tensor
-            input_tensor = torch.randn(batch_size, IN_FEATURES, device="cpu")
-
-            # Get reference output from PyTorch model
-            with torch.no_grad():
-                reference_output = model(input_tensor)
-
             # Perform TensorRT inference
-            trt_output = backend.infer(input_tensor).to("cpu")
+            trt_output = backend.infer(input_tensors[batch_size]).to("cpu")
 
             # Verify output shape and accuracy
-            assert trt_output.shape == reference_output.shape, f"Shape mismatch for batch size {batch_size}"
-            assert torch.allclose(trt_output, reference_output, rtol=1e-2, atol=1e-2), (
+            assert trt_output.shape == reference_outputs[batch_size].shape, (
+                f"Shape mismatch for batch size {batch_size}"
+            )
+            assert torch.allclose(trt_output, reference_outputs[batch_size], rtol=1e-2, atol=1e-2), (
                 f"Output mismatch for batch size {batch_size}"
             )
 

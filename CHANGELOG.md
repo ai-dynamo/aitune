@@ -24,6 +24,7 @@ limitations under the License.
 - feat: add JIT inspect
 - feat: add support for forward hooks for AOT and JIT tuning
 - fix: prevent cache dir override when there are two similar modules in jit tuning
+- fix: use meta device for model offloading for TensorRT backend
 
 ## 0.1.0
 

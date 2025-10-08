@@ -242,22 +242,32 @@ def test_build_create_config_kwargs(tmp_path):
             compatibility_level=None,
             profiles=profiles,
             timing_cache=None,
+            enable_tf32=False,
         )
 
         # Verify kwargs
+        assert len(kwargs) == 3
         assert kwargs["memory_pool_limits"] == {"WORKSPACE": 1 << 30}
         assert kwargs["profiles"] == profiles
+        assert kwargs["load_timing_cache"] is None
 
-        # Test with optimization level
+        # Test with all flags set
         kwargs = builder._build_create_config_kwargs(
             max_workspace_size=1 << 30,
             optimization_level=5,
-            compatibility_level=None,
+            compatibility_level=1,
             profiles=profiles,
-            timing_cache=None,
+            timing_cache="/tmp/timing.cache",
+            enable_tf32=True,
         )
 
+        assert len(kwargs) == 6
+        assert kwargs["memory_pool_limits"] == {"WORKSPACE": 1 << 30}
+        assert kwargs["profiles"] == profiles
         assert kwargs["builder_optimization_level"] == 5
+        assert kwargs["hardware_compatibility_level"] == 1
+        assert kwargs["tf32"] is True
+        assert kwargs["load_timing_cache"] == "/tmp/timing.cache"
 
 
 @pytest.mark.skipif(
