@@ -191,6 +191,7 @@ from aitune.torch.jit.config import config
 
 config.max_depth_level = 1 # change the default value of a nested module to be allowed to be tuned
 config.detect_graph_breaks = False # turn of graph break detection
+config.backend = TensorRTBackend() # change the backend
 ```
 
 #### Comparison between declarative approach and just-in-time tuning

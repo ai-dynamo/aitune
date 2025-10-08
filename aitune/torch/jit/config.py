@@ -17,6 +17,9 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
+
 DEFAULT_JIT_CACHE_DIR = Path.home() / ".cache" / "aitune.jit"
 
 
@@ -35,6 +38,7 @@ class Config:
     skip_modules: list[str] = field(default_factory=list)  # list of modules (class names) to skip
 
     cache_dir: Path = Path(os.environ.get("AITUNE_JIT_CACHE_DIR", DEFAULT_JIT_CACHE_DIR))
+    backend: Backend = field(default_factory=TensorRTBackend)  # backend to use for JIT tuning
 
 
 config = Config()

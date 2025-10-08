@@ -56,7 +56,7 @@ def mock_trt_backend(mock_trt_backend_class, mocker, infer_value):
 
 
 @requires_cuda
-@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+@patch("aitune.torch.jit.config.TensorRTBackend")
 def test_jit_dry_run_success(mock_trt_backend, torch_device):
     config.dry_run = True
     config.inspect_mode = False
@@ -78,7 +78,7 @@ def test_jit_dry_run_success(mock_trt_backend, torch_device):
 
 
 @requires_cuda
-@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+@patch("aitune.torch.jit.config.TensorRTBackend")
 def test_jit_dry_run_failure(mock_trt_backend, torch_device):
     config.dry_run = True
     config.inspect_mode = False
@@ -101,7 +101,7 @@ def test_jit_dry_run_failure(mock_trt_backend, torch_device):
 
 @requires_cuda
 @pytest.mark.parametrize("scenario", ["success", "correctness_error", "backend_build_error"])
-@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+@patch("aitune.torch.jit.config.TensorRTBackend")
 def test_jit_tuning_success(mock_trt_backend_class, torch_device, scenario, mocker):
     config.dry_run = False
     config.inspect_mode = False
@@ -138,7 +138,7 @@ def test_jit_tuning_success(mock_trt_backend_class, torch_device, scenario, mock
 
 
 @requires_cuda
-@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+@patch("aitune.torch.jit.config.TensorRTBackend")
 def test_jit_tuning_with_module_hooks(mock_trt_backend_class, torch_device, mocker):
     config.dry_run = False
     config.inspect_mode = False
@@ -187,7 +187,7 @@ def test_jit_tuning_with_module_hooks(mock_trt_backend_class, torch_device, mock
 
 @requires_cuda
 @pytest.mark.parametrize("unsupported_type_on_input", [True, False])
-@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+@patch("aitune.torch.jit.config.TensorRTBackend")
 def test_jit_tuning_unsupported_type(mock_trt_backend_class, unsupported_type_on_input, torch_device, mocker):
     """Test that the patched module handles unsupported types.
 
@@ -265,7 +265,7 @@ def test_jit_tuning_graph_break(torch_device, mocker):
 
 
 @requires_cuda
-@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+@patch("aitune.torch.jit.config.TensorRTBackend")
 def test_jit_tuning_skip_module(mock_trt_backend_class, torch_device, mocker):
     config.dry_run = False
     config.inspect_mode = False
@@ -292,7 +292,7 @@ def test_jit_tuning_skip_module(mock_trt_backend_class, torch_device, mocker):
 
 
 @requires_cuda
-@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+@patch("aitune.torch.jit.config.TensorRTBackend")
 def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend_class, torch_device, mocker):
     config.dry_run = False
     config.inspect_mode = False
@@ -321,7 +321,7 @@ def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend_class, t
 
 
 @requires_cuda
-@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+@patch("aitune.torch.jit.config.TensorRTBackend")
 def test_jit_tuning_no_modules(mock_trt_backend_class, torch_device, mocker):
     config.dry_run = False
     config.inspect_mode = False
@@ -351,7 +351,7 @@ def test_jit_tuning_no_modules(mock_trt_backend_class, torch_device, mocker):
 
 
 @requires_cuda
-@patch("aitune.torch.jit.patched_module.TensorRTBackend")
+@patch("aitune.torch.jit.config.TensorRTBackend")
 def test_forward_method_should_have_same_signature(mock_trt_backend, torch_device):
     config.dry_run = False
     config.inspect_mode = False

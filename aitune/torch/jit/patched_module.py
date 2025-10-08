@@ -26,7 +26,6 @@ import torch
 import wrapt
 
 from aitune.torch.backend.backend import Backend
-from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
 from aitune.torch.jit.config import config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
@@ -134,7 +133,7 @@ class PatchedModule:
             current = todo.pop()
             recording = cast(RecordingModule, current._wrapper)
             backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
-            strategy = JitStrategy(TensorRTBackend())
+            strategy = JitStrategy(config.backend)
             try:
                 for graph_spec in recording.graph_specs:
                     cache_dir = self._create_graph_cache_dir(graph_spec.name)
