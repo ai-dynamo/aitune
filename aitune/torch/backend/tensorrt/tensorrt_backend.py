@@ -817,7 +817,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         This should be called when input shapes change or when the graph needs to be rebuilt.
         """
-        if self._cuda_graph is not None:
+        if self._config.use_cuda_graphs:
             current_input_shapes = {name: tensor.shape for name, tensor in inputs.items()}
             if self._last_input_shapes != current_input_shapes:
                 logger.debug("Input shapes changed, invalidating CUDA graph")
