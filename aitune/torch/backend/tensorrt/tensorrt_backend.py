@@ -269,7 +269,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     verbose=False,  # NOTE: After ModelOpt torch quantization we don't need verbose output because of excessive logging
                 )
 
-                self._offload_torch_model_to_meta(module)
+                self._offload_torch_model_to_cpu(module)
 
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
@@ -326,7 +326,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     graph_spec=graph_spec,
                 )
 
-                self._offload_torch_model_to_meta(module)
+                self._offload_torch_model_to_cpu(module)
 
             with self._system_monitor.system_stats_context(log_label="ONNX quantization"):
                 logger.debug("Initializing ONNX quantizer")
@@ -400,7 +400,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     graph_spec=graph_spec,
                 )
 
-                self._offload_torch_model_to_meta(module)
+                self._offload_torch_model_to_cpu(module)
 
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
@@ -605,15 +605,14 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._config.to_json(config_path)
         logger.debug("Config saved to %s", config_path)
 
-    def _offload_torch_model_to_meta(self, model: "torch.nn.Module"):
+    def _offload_torch_model_to_cpu(self, model: "torch.nn.Module"):
         """Offload PyTorch model to meta device.
 
         Args:
             model: PyTorch model to offload.
         """
-        logger.debug("Offloading model to meta device")
-        model = model.to("meta")
-        model = model.to_empty(device="cpu")
+        logger.debug("Offloading model to cpu device")
+        model = model.to("cpu")
 
         gc.collect()
 
