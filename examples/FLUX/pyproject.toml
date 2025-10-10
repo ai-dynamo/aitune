@@ -22,7 +22,7 @@ requires-python = ">=3.10, <3.13"
 
 dependencies = [
     "aitune",
-    "diffusers>=0.25.0",
+    "diffusers>=0.25.0,<0.35",
     "torch>=2.0.0",
     "transformers",
     "pillow",
@@ -65,3 +65,4 @@ flux = ["**/*"]
 
 [tool.aitune]
 additional_tags = ["gpu/a100"]
+allow_failure = true

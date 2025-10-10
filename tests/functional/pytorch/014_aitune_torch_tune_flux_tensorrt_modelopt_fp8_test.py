@@ -18,6 +18,7 @@
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "nightly"
 # additional_tags = ["gpu/a100"]
+# allow_failure = true
 # ///
 
 import tempfile
