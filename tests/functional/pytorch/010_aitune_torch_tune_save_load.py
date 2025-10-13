@@ -28,7 +28,7 @@ import torch
 
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
 from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
-from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTAotBackend
+from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig
 from aitune.torch.backend.torch_tensorrt_jit_backend import (
     TorchTensorRTConfig,
     TorchTensorRTJitBackend,
@@ -87,7 +87,9 @@ def tune_save_load_whole_model(model_factory, samples, output_dir, backend_facto
     """Test tuning, saving and loading a whole model wrapped in a single Module."""
 
     def wrap_whole_model(model):
-        return Module(model, "demo-simple", strategy=OneBackendStrategy(backend_factory()))
+        strategy = OneBackendStrategy(backend_factory())
+        strategy.enable_find_max_batch_size(enable=False)
+        return Module(model, "demo-simple", strategy=strategy)
 
     _tune_save_load_helper(model_factory, samples, output_dir, wrap_whole_model)
 
@@ -96,8 +98,10 @@ def tune_save_load_part_of_model(model_factory, samples, output_dir, backend_fac
     """Test tuning, saving and loading a model with individual layers wrapped in Modules."""
 
     def wrap_partial_model(model):
-        model.layer1 = Module(model.layer1, "demo-simple1", strategy=OneBackendStrategy(backend_factory()))
-        model.layer2 = Module(model.layer2, "demo-simple2", strategy=OneBackendStrategy(backend_factory()))
+        strategy = OneBackendStrategy(backend_factory())
+        strategy.enable_find_max_batch_size(enable=False)
+        model.layer1 = Module(model.layer1, "demo-simple1", strategy=strategy)
+        model.layer2 = Module(model.layer2, "demo-simple2", strategy=strategy)
         return model
 
     _tune_save_load_helper(model_factory, samples, output_dir, wrap_partial_model)
@@ -115,13 +119,26 @@ def tensorrt_jit_backend():
     )
 
 
+def tensorrt_aot_backend():
+    return TorchTensorRTAotBackend(
+        config=TorchTensorRTAotBackendConfig(
+            compile_config=TorchTensorRTConfig(
+                enabled_precisions={torch.float32, torch.float16, torch.bfloat16},
+                use_python_runtime=False,
+                assume_dynamic_shape_support=True,
+            ),
+            dynamic_shapes=True,
+        ),
+    )
+
+
 def test_backends_serialization():
     model_factory = lambda: timm.create_model("resnet18", pretrained=False).cuda()  # noqa: E731
     samples = torch.randn(3, 224, 224).cuda()
 
     for backend_factory in [
         TensorRTBackend,
-        TorchTensorRTAotBackend,
+        tensorrt_aot_backend,
         tensorrt_jit_backend,
         TorchInductorBackend,
     ]:
@@ -131,10 +148,12 @@ def test_backends_serialization():
             output_path = Path(temp_dir) / "top_model_test.pt"
             tune_save_load_whole_model(model_factory, samples, output_path, backend_factory)
             MODULE_REGISTRY.clear()
+            torch.cuda.empty_cache()
             logger.info("Testing partial model")
             output_path = Path(temp_dir) / "partial_model_test.pt"
             tune_save_load_part_of_model(model_factory, samples, output_path, backend_factory)
             MODULE_REGISTRY.clear()
+            torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
