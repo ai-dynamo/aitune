@@ -61,7 +61,7 @@ dependencies = [
     "nvidia-ml-py",
     "tensorrt>=10.5.0",
     "torch>=2.5.1",
-    "torchao>=0.11.0",
+    "torchao==0.13",
     "torch_tensorrt>2",
     "wrapt>=1.17.2",
     "nvidia-modelopt[all]>=0.29.0",

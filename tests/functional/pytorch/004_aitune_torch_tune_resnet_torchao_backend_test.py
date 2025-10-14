@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # /// script
-# dependencies = ["timm"]
+# dependencies = ["timm", "fbgemm-gpu-genai==1.2.0"]
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
