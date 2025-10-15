@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import nvtx
 import torch
 import torch.nn as nn
 from polygraphy.logger import G_LOGGER
@@ -434,6 +435,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._engine_path,
         )
 
+    @nvtx.annotate(name="TensorRTBackend.infer", domain="AITune", color="green")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Infer using the TensorRT engine.
 

@@ -17,7 +17,7 @@
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "nightly"
-# additional_tags = ["gpu/a100"]
+# additional_tags = ["mem/80g"]
 # allow_failure = true
 # ///
 

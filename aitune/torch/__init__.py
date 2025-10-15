@@ -13,6 +13,9 @@
 # limitations under the License.
 """Torch tuning module."""
 
+# configuring some variables before importing other modules
+from aitune.torch.config import aitune_cache_dir  # noqa: I001
+
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.inspecting import inspect, wrap
 from aitune.torch.module import Module
@@ -20,6 +23,7 @@ from aitune.torch.tune_strategy import FirstWinsStrategy, HighestThroughputStrat
 from aitune.torch.tuning import load, save, tune
 
 __all__ = [
+    "aitune_cache_dir",
     "inspect",
     "wrap",
     "tune",

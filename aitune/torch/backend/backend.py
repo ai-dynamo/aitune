@@ -20,6 +20,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+import nvtx
 import torch
 import torch.nn as nn
 
@@ -208,6 +209,7 @@ class Backend(ABC):
         else:
             raise Exception(f"Backend {self.name} build should be called only once")
 
+    @nvtx.annotate(domain="AITune", color="black")
     def activate(self):
         """Activates backend.
 

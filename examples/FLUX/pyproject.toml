@@ -64,5 +64,5 @@ include = ["flux"]
 flux = ["**/*"]
 
 [tool.aitune]
-additional_tags = ["gpu/a100"]
+additional_tags = ["mem/80g"]
 allow_failure = true

@@ -17,6 +17,7 @@
 from pathlib import Path
 from typing import Any
 
+import nvtx
 import torch
 import torch.nn as nn
 
@@ -64,6 +65,7 @@ class TorchEagerBackend(Backend):
         """Activates runner."""
         pass
 
+    @nvtx.annotate(name="TorchEagerBackend.infer", domain="AITune", color="blue")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Runs inference with the given arguments.
 

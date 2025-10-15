@@ -66,6 +66,7 @@ dependencies = [
     "wrapt>=1.17.2",
     "nvidia-modelopt[all]>=0.29.0",
     "autowrapt>=1.0",
+    "nvtx",
 ]
 
 [project.urls]

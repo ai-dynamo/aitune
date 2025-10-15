@@ -17,6 +17,7 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 
+import nvtx
 import torch
 import torch.nn as nn
 
@@ -33,6 +34,7 @@ from aitune.torch.task.profiling.profiling import ProfilingResults, ProfilingSta
 logger = logging.getLogger(__name__)
 
 
+@nvtx.annotate(domain="AITune", color="green")
 def find_max_batch_size(
     module: nn.Module,
     name: str,

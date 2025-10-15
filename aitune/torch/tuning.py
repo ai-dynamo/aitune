@@ -18,6 +18,7 @@ from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
 
+import nvtx
 import torch
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
@@ -37,6 +38,7 @@ logger = getLogger(__name__)
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 
+@nvtx.annotate(domain="AITune", color="green")
 def tune(
     func: Callable,
     dataset: DatasetLike | DataLoaderFactory | torch.Tensor,

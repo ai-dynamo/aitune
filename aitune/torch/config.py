@@ -33,6 +33,14 @@ DEFAULT_WINDOW_SIZE = 10
 
 DEFAULT_DEVICE = "cuda:0"
 
+# Getting NVTX_DISABLE from environment variable and respect user's choice
+NVTX_DISABLE = os.getenv("NVTX_DISABLE")
+
+# Disable NVTX by default, enable with NVTX_ENABLE=1
+NVTX_ENABLE = os.getenv("NVTX_ENABLE") in ("1", "true", "True", "yes", "Yes", "YES")
+if NVTX_DISABLE is None:
+    os.environ["NVTX_DISABLE"] = "" if NVTX_ENABLE else "disable"
+
 
 def aitune_cache_dir() -> Path:
     """Configure cache dir location based on environment variable.

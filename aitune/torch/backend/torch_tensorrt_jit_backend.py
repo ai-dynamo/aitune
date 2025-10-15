@@ -19,6 +19,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any
 
+import nvtx
 import torch
 import torch.nn as nn
 
@@ -164,6 +165,7 @@ class TorchTensorRTJitBackend(Backend):
             self._compiled_module(*args, **kwargs)
         logger.debug("Module has been compiled.")
 
+    @nvtx.annotate(name="TorchTensorRTJitBackend.infer", domain="AITune", color="magenta")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with TensorRT engine thought Torch compile.
 

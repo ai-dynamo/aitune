@@ -19,6 +19,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any
 
+import nvtx
 import torch
 import torch.nn as nn
 from packaging.version import Version
@@ -190,6 +191,7 @@ class TorchTensorRTAotBackend(Backend):
         """Load compiled module."""
         self._opt_module = torch.export.load(self._exported_model_path.as_posix()).module().to(self._device)
 
+    @nvtx.annotate(name="TorchTensorRTAotBackend.infer", domain="AITune", color="purple")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with TensorRT engine.
 
