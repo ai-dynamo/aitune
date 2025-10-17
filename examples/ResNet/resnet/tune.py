@@ -16,11 +16,21 @@
 import os
 from logging import basicConfig, getLogger
 
+import torch
 from PIL import Image
 
+from aitune.torch.backend.tensorrt import (
+    ONNXAutoCastConfig,
+    ONNXQuantizationConfig,
+    TensorRTBackend,
+    TensorRTBackendConfig,
+)
+from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend, TorchInductorBackendConfig
+from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendConfig
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.module.wrapper_module import Module
-from aitune.torch.tune_strategy.highest_throughput_strategy import HighestThroughputStrategy
+from aitune.torch.tune_strategy import HighestThroughputStrategy
 from aitune.torch.tuning import save, tune
 from resnet.cmd_args import get_parser
 from resnet.model import get_model, get_transform
@@ -47,7 +57,30 @@ def tune_model(
     dataset = transform(img).to("cuda")
 
     module_name = f"example-{model_name}"
-    module = Module(model, module_name, strategy=HighestThroughputStrategy())
+
+    # TODO: add default backends for INT8 quantization stream
+    module = Module(
+        model,
+        module_name,
+        strategy=HighestThroughputStrategy(
+            backends=[
+                TensorRTBackend(
+                    config=TensorRTBackendConfig(
+                        quantization_config=ONNXQuantizationConfig(
+                            precision="int8",
+                            calibration_method="max",
+                        ),
+                    ),
+                ),
+                TensorRTBackend(config=TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="fp16"))),
+                TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo")),
+                TorchInductorBackend(
+                    config=TorchInductorBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)
+                ),
+                TorchEagerBackend(),
+            ]
+        ),
+    )
 
     logger.info("Tuning module: %s", model_name)
     tune(module, dataset)

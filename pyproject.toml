@@ -54,7 +54,7 @@ dependencies = [
     "onnxruntime-gpu==1.19.*;platform_machine == 'x86_64' and python_version < '3.10'",
     "onnxruntime~=1.20;platform_machine == 'aarch64' and python_version >= '3.10'",
     "onnxruntime-gpu~=1.20;platform_machine == 'x86_64' and python_version >= '3.10'",
-    "onnxscript~=0.3.0",
+    "onnxscript~=0.5.0",
     "onnx_graphsurgeon~=0.5",
     "polygraphy>=0.49.0",
     "psutil",
@@ -64,7 +64,7 @@ dependencies = [
     "torchao==0.13",
     "torch_tensorrt>2",
     "wrapt>=1.17.2",
-    "nvidia-modelopt[all]>=0.29.0",
+    "nvidia-modelopt[all]>=0.35.0",
     "autowrapt>=1.0",
     "nvtx",
 ]

@@ -13,6 +13,7 @@
 # limitations under the License.
 """Model utilities for Stable Diffusion pipeline."""
 
+import torch
 from diffusers import StableDiffusionPipeline
 
 
@@ -26,6 +27,6 @@ def get_pipeline(model_name: str = "stabilityai/stable-diffusion-2-1", device: s
     Returns:
         StableDiffusionPipeline: The loaded Stable Diffusion pipeline
     """
-    pipe = StableDiffusionPipeline.from_pretrained(model_name)
+    pipe = StableDiffusionPipeline.from_pretrained(model_name, torch_dtype=torch.float16)
     pipe.to(device)
     return pipe

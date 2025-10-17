@@ -95,10 +95,6 @@ class ONNXQuantizer:
         - awq_clip: Activation-aware Weight Quantization (INT4 only)
         - awq_full: Activation-aware Weight Quantization (INT4 only)
         - rtn_dq: RTN-DQ calibration (INT4 only)
-
-    Note:
-        Requires NVIDIA ModelOpt to be installed:
-        pip install nvidia-modelopt[onnx]
     """
 
     def __init__(self):
@@ -203,8 +199,8 @@ class ONNXQuantizer:
             logger.debug("Performing %s quantization", config.precision.upper())
 
             quantize_kwargs = {
-                "onnx_path": str(input_onnx_path),
-                "output_path": str(output_path),
+                "onnx_path": input_onnx_path.as_posix(),
+                "output_path": output_path.as_posix(),
                 "quantize_mode": config.precision,
                 "calibration_method": config.calibration_method,
             }

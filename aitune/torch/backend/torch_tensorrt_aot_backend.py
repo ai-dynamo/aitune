@@ -34,7 +34,7 @@ from aitune.torch.utils.cuda import get_device as get_cuda_device
 try:
     import torch_tensorrt
     from torch_tensorrt.dynamo import CompilationSettings as TorchTensorRTConfig
-except (ImportError, RuntimeError, FileNotFoundError):
+except (ImportError, RuntimeError, FileNotFoundError, OSError):
     torch_tensorrt = None
 
     @dataclass

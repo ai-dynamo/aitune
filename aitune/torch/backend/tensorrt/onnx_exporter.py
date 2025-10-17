@@ -129,6 +129,7 @@ class ONNXExporter:
                 module,
                 args=args,
                 kwargs=kwargs,
+                f=onnx_path.as_posix(),
                 dynamo=True,
                 input_names=input_names,
                 dynamic_shapes=dynamic_shapes,

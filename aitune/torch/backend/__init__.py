@@ -14,9 +14,16 @@
 """Torch backend module."""
 
 from aitune.torch.backend.backend import Backend
-from aitune.torch.backend.tensorrt import TensorRTBackend, TensorRTBackendConfig, TensorRTProfile
+from aitune.torch.backend.tensorrt import (
+    ONNXAutoCastConfig,
+    ONNXQuantizationConfig,
+    TensorRTBackend,
+    TensorRTBackendConfig,
+    TensorRTProfile,
+    TorchQuantizationConfig,
+)
 from aitune.torch.backend.torch_eager import TorchEagerBackend
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
+from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend, TorchInductorBackendConfig
 from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
@@ -25,18 +32,23 @@ from aitune.torch.backend.torch_tensorrt_jit_backend import (
     TorchTensorRTJitBackend,
     TorchTensorRTJitBackendConfig,
 )
-from aitune.torch.backend.torchao_backend import TorchAOBackend
+from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendConfig
 
 __all__ = [
     "Backend",
+    "ONNXAutoCastConfig",
+    "ONNXQuantizationConfig",
     "TensorRTBackend",
     "TensorRTBackendConfig",
     "TensorRTProfile",
     "TorchInductorBackend",
+    "TorchInductorBackendConfig",
     "TorchAOBackend",
+    "TorchAOBackendConfig",
     "TorchEagerBackend",
     "TorchTensorRTAotBackend",
     "TorchTensorRTAotBackendConfig",
     "TorchTensorRTJitBackend",
     "TorchTensorRTJitBackendConfig",
+    "TorchQuantizationConfig",
 ]

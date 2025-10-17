@@ -270,7 +270,7 @@ class TensorRTBuilder:
         try:
             logger.debug("Saving TensorRT engine to %s", path)
             with self.system_monitor.system_stats_context(log_label="Saving engine"):
-                save_engine(engine=engine, path=str(path))
+                save_engine(engine=engine, path=path.as_posix())
                 logger.debug("TensorRT engine built and saved successfully: %s", path)
         except Exception as e:
             logger.debug("Failed to save TensorRT engine: %s", e)

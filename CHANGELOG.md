@@ -19,16 +19,21 @@ limitations under the License.
 
 ## 0.2.0 (unreleased)
 
-- feat: add JIT tuning
+- feat: introduced Just-in-Time (JIT) tuning: no-code model tuning controlled through import or environment flag
+- feat: introduced Just-in-Time (JIT) inspect: no-code model analysis controlled through import or environment flag
 - feat: module inspect considers lists and dicts for Torch module containers
-- feat: add JIT inspect
 - feat: add support for forward hooks for AOT and JIT tuning
 - feat: add support for CUDA graphs for TensorRT backend
 - feat: changing default ONNX export path to dynamo (torch.onnx.export(dynamo=True))
+- feat: add ONNX AutoCast in TensorRT Backend for mixed precision through TensorRT ModelOpt
+- feat: extended collecting profiling metrics through nvtx annotations
 - fix: prevent cache dir override when there are two similar modules in jit tuning
-- fix: use meta device for model offloading for TensorRT backend
+- fix: dynamic shapes configuration for ONNX Dynamo export path in TensorRT Backend
+- fix: bfloat16 support in TensorRT Backend
 - fix: profiling of models without batching supported
+- misc: extended examples and improved dependencies
 
 ## 0.1.0
 
 - feat: add AITune features scoped for the first release
+- feat: introduced Ahead-of-Time tuning for low-code model inspection and tuning

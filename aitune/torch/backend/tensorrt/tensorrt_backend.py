@@ -26,6 +26,7 @@ import torch.nn as nn
 from polygraphy.logger import G_LOGGER
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCast, ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.onnx_exporter import ONNXExporter
 from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig, ONNXQuantizer
 from aitune.torch.backend.tensorrt.tensorrt_builder import TensorRTBuilder
@@ -37,7 +38,6 @@ from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationCo
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda import set_device as cuda_set_device
-from aitune.utils.logging import log_exception_details
 from aitune.utils.system_monitor import SystemMonitor
 
 G_LOGGER.use_python_logging_system = True
@@ -84,7 +84,7 @@ class TensorRTBackendConfig(BackendConfig):
     timing_cache: Path | None = None
     profiles: list[TensorRTProfile] | None = None
     device: str = "cuda"
-    quantization_config: ONNXQuantizationConfig | TorchQuantizationConfig | None = None
+    quantization_config: ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None = None
     enable_tf32: bool = True
     use_cuda_graphs: bool = False
 
@@ -166,20 +166,20 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _prepare_onnx_model_path(self, cache_dir: Path, quantized: bool = False) -> Path:
+    def _prepare_onnx_model_path(self, cache_dir: Path, suffix: str = "") -> Path:
         """Prepare the ONNX model path.
 
         Args:
             cache_dir (Path): The cache directory to store the ONNX model.
-            quantized (bool): Whether the ONNX model is quantized.
+            suffix (str): The suffix of the ONNX model.
 
         Returns:
             Path: The ONNX model path
         """
-        if not quantized:
-            onnx_dir = cache_dir / "onnx"
-        else:
-            onnx_dir = cache_dir / "onnx_quantized"
+        if suffix:
+            suffix = f"_{suffix}"
+
+        onnx_dir = cache_dir / f"onnx{suffix}"
 
         onnx_dir.mkdir(parents=True, exist_ok=True)
         return onnx_dir / f"model{ONNX_FILE_EXTENSION}"
@@ -209,27 +209,27 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Returns:
             Backend: The backend with built TensorRT model.
         """
-        try:
-            self._graph_spec = graph_spec
+        self._graph_spec = graph_spec
 
-            cuda_set_device(self._device)
-            cache_dir = self._create_cache_dir(cache_dir)
-            self._save_config(cache_dir)
+        cuda_set_device(self._device)
+        cache_dir = self._create_cache_dir(cache_dir)
+        self._save_config(cache_dir)
 
-            with self._system_monitor.system_stats_context(log_label="TorchModelInfo analysis"):
-                self._torch_model_info = TorchModelInfo(model=module.to(self._device), sample=data[0])
-                self._output_class = self._torch_model_info.output_class
-                self._output_format = self._torch_model_info.output_format
+        with self._system_monitor.system_stats_context(log_label="TorchModelInfo analysis"):
+            self._torch_model_info = TorchModelInfo(model=module.to(self._device), sample=data[0])
+            self._output_class = self._torch_model_info.output_class
+            self._output_format = self._torch_model_info.output_format
 
-            if isinstance(self._config.quantization_config, TorchQuantizationConfig):
-                self._build_modelopt_torch(module, graph_spec, data, cache_dir)
-            elif isinstance(self._config.quantization_config, ONNXQuantizationConfig):
-                self._build_modelopt_onnx(module, graph_spec, data, cache_dir)
-            else:
-                self._build_standard(module, graph_spec, data, cache_dir)
-            self._activate()
-        except Exception as e:
-            log_exception_details(logger, e, "Error building TensorRT backend", reraise=True)
+        if isinstance(self._config.quantization_config, TorchQuantizationConfig):
+            self._build_modelopt_torch(module, graph_spec, data, cache_dir)
+        elif isinstance(self._config.quantization_config, ONNXQuantizationConfig):
+            self._build_modelopt_onnx(module, graph_spec, data, cache_dir)
+        elif isinstance(self._config.quantization_config, ONNXAutoCastConfig):
+            self._build_modelopt_onnx_autocast(module, graph_spec, data, cache_dir)
+        else:
+            self._build_standard(module, graph_spec, data, cache_dir)
+        self._activate()
+
         return self
 
     def _build_modelopt_torch(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path):
@@ -245,8 +245,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
 
         """
-        logger.info("Using torch quantization with config: %s", self._config.quantization_config)
-        logger.info("Using %s samples for quantization calibration", len(data))
+        logger.debug("Using torch quantization with config: %s", self._config.quantization_config)
+        logger.debug("Using %s samples for quantization calibration", len(data))
         try:
             with self._system_monitor.system_stats_context(log_label="ModelOpt Torch quantization"):
                 torch_quantizer = TorchQuantizer()
@@ -257,7 +257,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 )
 
             with self._system_monitor.system_stats_context(log_label="ONNX export"):
-                self._onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, quantized=True)
+                self._onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
 
                 self._onnx_exporter = ONNXExporter(
                     use_dynamo=self._config.use_dynamo,
@@ -288,6 +288,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     compatibility_level=self._config.compatibility_level,
                     timing_cache=self._config.timing_cache,
                     profiles=self._config.profiles,
+                    enable_tf32=self._config.enable_tf32,
                     min_shapes=min_shapes,
                     opt_shapes=opt_shapes,
                     max_shapes=max_shapes,
@@ -334,7 +335,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 logger.debug("Initializing ONNX quantizer")
                 onnx_quantizer = ONNXQuantizer()
 
-                self._onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, quantized=True)
+                self._onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
 
                 # Quantize the ONNX model
                 self._onnx_path_quantized = onnx_quantizer.quantize(
@@ -360,6 +361,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     compatibility_level=self._config.compatibility_level,
                     timing_cache=self._config.timing_cache,
                     profiles=self._config.profiles,
+                    enable_tf32=self._config.enable_tf32,
                     min_shapes=min_shapes,
                     opt_shapes=opt_shapes,
                     max_shapes=max_shapes,
@@ -371,6 +373,86 @@ class TensorRTBackend(Backend, TensorRTRunner):
             # Use this except block to clean up any partial resources
             self._deactivate()
             raise e
+
+    def _build_modelopt_onnx_autocast(
+        self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path
+    ):
+        """Build the TensorRT model.
+
+        This method will export the module to ONNX and build a TensorRT engine from it using Polygraphy.
+
+        Args:
+            module (nn.Module): The module to build the TensorRT model for.
+            name (str): The name of the model.
+            graph_spec (GraphSpec): The graph spec of the model.
+            data (list[Sample]): The data of the model.
+            cache_dir (Path): The cache directory to store the TensorRT model.
+        """
+        logger.debug("Starting TensorRT backend building")
+        try:
+            with self._system_monitor.system_stats_context(log_label="ONNX export"):
+                logger.info("Initializing ONNX exporter")
+
+                self._onnx_path = self._prepare_onnx_model_path(cache_dir)
+                self._onnx_exporter = ONNXExporter(
+                    use_dynamo=self._config.use_dynamo,
+                    opset_version=self._config.opset_version,
+                    output_path=self._onnx_path,
+                )
+
+                self._onnx_exporter.export(
+                    module=module,
+                    sample=data[0],
+                    graph_spec=graph_spec,
+                )
+
+                self._offload_torch_model_to_cpu(module)
+
+            with self._system_monitor.system_stats_context(log_label="ONNX autocast"):
+                logger.info("Initializing ONNX autocast")
+                onnx_autocast = ONNXAutoCast()
+
+                self._onnx_path_autocasted = self._prepare_onnx_model_path(cache_dir, suffix="autocast")
+
+                self._onnx_path_autocasted = onnx_autocast.autocast(
+                    input_onnx_path=self._onnx_path,
+                    output_path=self._onnx_path_autocasted,
+                    config=self._config.quantization_config,
+                    samples=data,
+                    graph_spec=graph_spec,
+                )
+
+            with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
+                # Initialize TensorRT builder
+                logger.info("Initializing TensorRT builder")
+                min_shapes, opt_shapes, max_shapes = self._get_shapes(graph_spec=graph_spec)
+
+                self._engine_path = self._prepare_trt_engine_path(cache_dir)
+
+                self._trt_builder = TensorRTBuilder(
+                    input_onnx_path=self._onnx_path_autocasted,
+                    output_path=self._engine_path,
+                    workspace_size=self._config.workspace_size,
+                    optimization_level=self._config.optimization_level,
+                    compatibility_level=self._config.compatibility_level,
+                    timing_cache=self._config.timing_cache,
+                    profiles=self._config.profiles,
+                    enable_tf32=self._config.enable_tf32,
+                    min_shapes=min_shapes,
+                    opt_shapes=opt_shapes,
+                    max_shapes=max_shapes,
+                )
+
+                self._trt_builder.build()
+        except Exception as e:
+            # Use this except block to clean up any partial resources
+            self._deactivate()
+            raise e
+
+        logger.debug(
+            "TensorRT backend building finished successfully with engine path %s",
+            self._engine_path,
+        )
 
     def _build_standard(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path):
         """Build the TensorRT model.
