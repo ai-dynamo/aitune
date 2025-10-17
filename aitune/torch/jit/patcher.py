@@ -44,7 +44,15 @@ class Patcher:
     _original_module_init: Callable | None = None
 
     # Packages that should not be patched to avoid conflicts with JIT compilation
-    _blacklisted_packages = {"torch.jit", "torch._inductor", "torch._dynamo", "torch.fx"}
+    _blacklisted_packages = {
+        "torch.jit",
+        "torch._inductor",
+        "torch._dynamo",
+        "torch.fx",
+        "torch.export",
+        "torch.export._trace",
+        "torch.export._export",
+    }
 
     @classmethod
     def patch_torch(cls):
