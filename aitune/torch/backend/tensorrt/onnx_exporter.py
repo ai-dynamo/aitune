@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 class ONNXExporter:
     """Class for exporting PyTorch modules to ONNX format."""
 
-    def __init__(self, output_path: Path, use_dynamo: bool = False, opset_version: int = 20):
+    def __init__(self, output_path: Path, use_dynamo: bool = False, opset_version: int | None = 20):
         """Initialize the ONNX exporter.
 
         Args:
@@ -115,6 +115,7 @@ class ONNXExporter:
         """Export the module to ONNX using torch.dynamo."""
         with self.system_monitor.system_stats_context(log_label="Torch.dynamo ONNX export and save"):
             dynamic_shapes = self._create_dynamic_shapes(graph_spec)
+            dynamic_axes = self._create_dynamic_axes(graph_spec)  # dynamic axes required for fallback=True
             input_names = graph_spec.input_spec.get_names()
             output_names = graph_spec.output_spec.get_names()
 
@@ -123,6 +124,7 @@ class ONNXExporter:
             dynamic_shapes += [None] * (
                 len(args) + len(kwargs) - len(dynamic_shapes)
             )  # WAR: For missing shapes for None value args and kwargs
+
             exported_program = torch.onnx.export(
                 module,
                 args=args,
@@ -130,7 +132,8 @@ class ONNXExporter:
                 dynamo=True,
                 input_names=input_names,
                 dynamic_shapes=dynamic_shapes,
-                fallback=False,
+                dynamic_axes=dynamic_axes,
+                fallback=True,
                 verbose=verbose,
             )
             exported_program.save(onnx_path.as_posix())

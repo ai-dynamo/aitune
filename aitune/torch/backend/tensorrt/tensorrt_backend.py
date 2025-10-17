@@ -46,6 +46,7 @@ G_LOGGER.use_python_logging_system = True
 TRT_ENGINE_FILE_EXTENSION = ".plan"
 ONNX_FILE_EXTENSION = ".onnx"
 
+
 # Setup logger
 logger = logging.getLogger(__name__)
 
@@ -75,9 +76,9 @@ class TensorRTRunner:
 class TensorRTBackendConfig(BackendConfig):
     """Configuration for TensorRT backend."""
 
-    use_dynamo: bool = False
+    use_dynamo: bool = True
     workspace_size: int | None = None
-    opset_version: int = 20
+    opset_version: int | None = None
     optimization_level: int | None = None
     compatibility_level: int | None = None
     timing_cache: Path | None = None

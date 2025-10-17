@@ -25,6 +25,7 @@ from logging import INFO, basicConfig
 import torch
 from diffusers import StableDiffusionPipeline
 
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.jit.config import config
 from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
 from aitune.torch.jit.patcher import patch_for_jit_tuning
@@ -33,7 +34,7 @@ from aitune.torch.jit.patcher import patch_for_jit_tuning
 @patch_for_jit_tuning
 def create_model():
     pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16)
-    pipe.to("cuda")
+    pipe.to("cuda", dtype=torch.float16)
     return pipe
 
 
@@ -46,6 +47,7 @@ def test_jit_sd21():
     config.min_samples = 4
     config.max_depth_level = 1
     config.detect_graph_breaks = True
+    config.backend = TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False))
 
     def batch():
         with torch.no_grad():

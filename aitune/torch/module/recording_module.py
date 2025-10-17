@@ -94,6 +94,9 @@ class RecordingModule:
 
     def record_sample(self, inputs, inputs_metadata, outputs_metadata) -> None:
         """Record a sample from the module."""
+        if torch.compiler.is_compiling():
+            return
+
         if inputs_metadata in self._graph_specs:
             # graphs share same hash but can have different min, max seen shapes
             self._graph_specs[inputs_metadata].update_shapes_seen(inputs_metadata, outputs_metadata)

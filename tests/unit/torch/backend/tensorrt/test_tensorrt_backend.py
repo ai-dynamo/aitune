@@ -97,10 +97,10 @@ def test_tensorrt_backend_config_describe():
 
     assert describe == "quantization_config=None"
 
-    config = TensorRTBackendConfig(use_dynamo=True)
+    config = TensorRTBackendConfig(use_dynamo=False)
     describe = config.describe()
 
-    assert describe == "use_dynamo=True,quantization_config=None"
+    assert describe == "use_dynamo=False,quantization_config=None"
 
 
 def test_tensorrt_backend_init():

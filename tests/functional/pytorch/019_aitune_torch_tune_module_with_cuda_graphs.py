@@ -46,7 +46,7 @@ def test_custom_module_with_cuda_graphs():
     data = torch.tensor([[1, 1]], device=device)
 
     # Create TensorRT backend with CUDA graphs enabled
-    config = TensorRTBackendConfig(use_cuda_graphs=True)
+    config = TensorRTBackendConfig(use_dynamo=False, use_cuda_graphs=True, opset_version=20)
     backend = TensorRTBackend(config=config)
 
     # when - create module and tune with CUDA graphs enabled

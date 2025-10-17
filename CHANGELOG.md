@@ -23,6 +23,8 @@ limitations under the License.
 - feat: module inspect considers lists and dicts for Torch module containers
 - feat: add JIT inspect
 - feat: add support for forward hooks for AOT and JIT tuning
+- feat: add support for CUDA graphs for TensorRT backend
+- feat: changing default ONNX export path to dynamo (torch.onnx.export(dynamo=True))
 - fix: prevent cache dir override when there are two similar modules in jit tuning
 - fix: use meta device for model offloading for TensorRT backend
 

@@ -45,7 +45,13 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
 
     # Define strategy
     if strategy is None:
-        strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
+        strategy = FirstWinsStrategy(
+            backends=[
+                TensorRTBackend(),
+                TorchInductorBackend(),
+                TorchEagerBackend(),
+            ]
+        )
         strategy.enable_find_max_batch_size(enable=False)
 
     # Wrap all modules with AITune Module
