@@ -64,4 +64,4 @@ include = ["stable_diffusion"]
 stable_diffusion = ["**/*"]
 
 [tool.aitune]
-additional_tags = ["gpu/h100"]
+additional_tags = ["mem/80g"]

@@ -207,3 +207,14 @@ def test_profile_toy_model():
     result = profile(model, dataset, profile_config)
     assert result.status == ProfilingStatus.Status.SUCCESS
     assert len(result.results.entries) > 0
+
+
+def test_profile_toy_model_no_batching():
+    profile_config = ProfilingConfig(batch_sizes=[2**n for n in range(1, 5)], batching=False)
+
+    model = Module(ToyTorchModel())
+    dataset = model.samples()
+
+    result = profile(model, dataset, profile_config)
+    assert result.status == ProfilingStatus.Status.SUCCESS
+    assert len(result.results.entries) > 0

@@ -40,6 +40,7 @@ class ProfilingConfig:
 
     batch_sizes: list[int] | Generator[int, None, None]
 
+    batching: bool = True
     measuring_strategy: MeasuringStrategy | None = None
     measurement_stop_strategy: MeasuringStopStrategy | None = None
     profiling_stop_strategy: ProfilingStopStrategy | None = None

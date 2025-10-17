@@ -109,9 +109,14 @@ def profile_backend(
     """
 
     def generator():
-        for batch_size in profiling_config.batch_sizes:
-            sample = graph_spec.input_spec.make_batch(data[0], batch_size)
-            yield batch_size, sample[0], sample[1]
+        if profiling_config.batching:
+            for batch_size in profiling_config.batch_sizes:
+                sample = graph_spec.input_spec.make_batch(data[0], batch_size)
+                args, kwargs = sample
+                yield batch_size, args, kwargs
+        else:
+            args, kwargs = data[0]
+            yield 1, args, kwargs
 
     return _profile(
         backend.infer,

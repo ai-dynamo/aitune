@@ -133,6 +133,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
 
     @staticmethod
     def default_profiling_config(
+        batching: bool = True,
         max_batch_size: int = DEFAULT_MAX_BATCH_SIZE,
         window_size: int = DEFAULT_WINDOW_SIZE,
         stability_percentage: float = DEFAULT_STABILITY_PERCENTAGE,
@@ -142,6 +143,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
         """Get profiling config for finding max batch size.
 
         Args:
+            batching: Whether to profile with batching.
             max_batch_size: Max batch size to find used to construct batch sizes, the batch sizes will be 2^n for n in range(max_batch_size.bit_length()).
             window_size: Window size for measuring stop strategy.
             stability_percentage: Stability percentage for measuring stop strategy.
@@ -155,6 +157,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
             The profiling config will use defaults from highest throughput strategy.
         """
         return ProfilingConfig(
+            batching=batching,
             batch_sizes=[2**n for n in range(max_batch_size.bit_length())],
             measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
             measurement_stop_strategy=StableWindowMeasuringStopStrategy(

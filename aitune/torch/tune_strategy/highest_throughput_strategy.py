@@ -127,8 +127,8 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
         measurements = []
         highest_throughput_results = []
 
-        if not graph_spec.input_spec.has_batch_axis():
-            raise ValueError("Graph spec input spec does not have batch axis.")
+        # Verify if model has batching
+        batching = graph_spec.input_spec.has_batch_axis() and graph_spec.get_max_batch_size() > 1
 
         # Note: As this strategy is extended with FindMaxBatchSizeTuneStrategyExtension,
         # we can assume that max batch size is included in the graph spec.
@@ -149,7 +149,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                 self.check_correctness(backend, name, graph_spec, data)
                 log("✅ backend validated", depth=2, sink=logger.info)
                 batch_size, throughput, results = calculate_highest_throughput_for_backend(
-                    backend, name, graph_spec, data, self._get_profiling_config(max_batch_size)
+                    backend, name, graph_spec, data, self._get_profiling_config(batching, max_batch_size)
                 )
                 highest_throughput_results.append(
                     HighestThroughputResult(
@@ -202,9 +202,10 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
 
         return best_backend
 
-    def _get_profiling_config(self, max_batch_size: int) -> ProfilingConfig:
+    def _get_profiling_config(self, batching: bool, max_batch_size: int) -> ProfilingConfig:
         """Gets profiling configuration."""
         return ProfilingConfig(
+            batching=batching,
             batch_sizes=[2**n for n in range(max_batch_size.bit_length())],
             measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
             measurement_stop_strategy=self._measurement_stop_strategy,

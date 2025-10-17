@@ -27,6 +27,7 @@ limitations under the License.
 - feat: changing default ONNX export path to dynamo (torch.onnx.export(dynamo=True))
 - fix: prevent cache dir override when there are two similar modules in jit tuning
 - fix: use meta device for model offloading for TensorRT backend
+- fix: profiling of models without batching supported
 
 ## 0.1.0
 
