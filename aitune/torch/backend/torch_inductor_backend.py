@@ -247,6 +247,9 @@ class TorchInductorBackend(Backend):
 
     def to_dict(self):
         """Returns the state_dict of the backend."""
+        if not self._orig_module:
+            raise RuntimeError("Backend has not been properly initialized. Please call build() first.")
+
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),

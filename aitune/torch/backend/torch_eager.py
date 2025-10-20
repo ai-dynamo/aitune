@@ -14,6 +14,7 @@
 
 """Torch eager backend."""
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,9 +22,27 @@ import nvtx
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendState
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
+
+
+@dataclass
+class TorchEagerBackendConfig(BackendConfig):
+    """Configuration for torch eager backend.
+
+    Args:
+        autocast_enabled (bool): If True, enable autocast.
+        autocast_dtype (torch.dtype): The dtype to use for autocast.
+    """
+
+    autocast_enabled: bool = False
+    autocast_dtype: torch.dtype | None = None
+
+    @classmethod
+    def from_dict(cls, state_dict: dict):
+        """Convert dict to TorchEagerBackendConfig."""
+        return cls(**state_dict)
 
 
 class TorchEagerBackend(Backend):
@@ -31,23 +50,48 @@ class TorchEagerBackend(Backend):
 
     # State dictionary keys
     STATE_TYPE = "type"
+    STATE_CONFIG = "config"
     STATE_ORIG_MODULE = "orig_module"
-    STATE_GRAPH_SPEC = "graph_spec"
     STATE_DEVICE = "device"
+    STATE_OUTPUT_DTYPE = "output_dtype"
 
-    def __init__(self):
+    def __init__(self, config: TorchEagerBackendConfig | None = None):
         """Initializes backend."""
         super().__init__()
+        self._config = config or TorchEagerBackendConfig()
         self._orig_module = None
         self._graph_spec = None
+        self._output_dtype = None
 
     def is_jit(self) -> bool:
         """Returns True if the backend is a JIT backend."""
         return True
 
+    def key(self) -> str:
+        """Returns the key of the backend."""
+        return f"{self.__class__.__name__}_{self._config.key()}"
+
     def describe(self) -> str:
         """Returns the description of the backend."""
-        return f"{self.__class__.__name__}()"
+        return f"{self.__class__.__name__}({self._config.describe()})"
+
+    @staticmethod
+    def _get_dtype(module: nn.Module, data: list[Sample]) -> torch.dtype:
+        """Get the output dtype of the module by running a sample inference.
+
+        Args:
+            module (nn.Module): The module to get the dtype from.
+            data (list[Sample]): List of sample inputs to run through the module.
+
+        Returns:
+            torch.dtype: The dtype of the module's output tensor. Returns None if output is not a tensor.
+        """
+        args, kwargs = data[0]
+        res = module(*args, **kwargs)
+        if isinstance(res, torch.Tensor):
+            return res.dtype
+        else:
+            return None
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Builds the model."""
@@ -55,6 +99,7 @@ class TorchEagerBackend(Backend):
 
         self._orig_module = module
         self._graph_spec = graph_spec
+        self._output_dtype = self._get_dtype(module, data)
 
         # must be activated before returning the backend
         self._activate()
@@ -77,7 +122,17 @@ class TorchEagerBackend(Backend):
             Any: The result of the inference.
         """
         with torch.inference_mode():
-            return self._orig_module(*args, **kwargs)
+            with torch.autocast(
+                device_type=str(self._device),
+                dtype=self._config.autocast_dtype,
+                enabled=self._config.autocast_enabled,
+            ):
+                res = self._orig_module(*args, **kwargs)
+                if isinstance(res, torch.Tensor) and res.dtype != self._output_dtype and self._output_dtype is not None:
+                    # autocast changed the dtype of the output, converting back to the original dtype
+                    return res.to(self._output_dtype)
+                else:
+                    return res
 
     def _deactivate(self):
         """Deactivates runner."""
@@ -93,8 +148,9 @@ class TorchEagerBackend(Backend):
             raise RuntimeError("Backend has not been properly initialized. Please call build() first.")
         return {
             self.STATE_TYPE: self.__class__.__name__,
+            self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
-            self.STATE_GRAPH_SPEC: self._graph_spec,
+            self.STATE_OUTPUT_DTYPE: self._output_dtype,
             self.STATE_DEVICE: self.device,
         }
 
@@ -107,10 +163,12 @@ class TorchEagerBackend(Backend):
         if module is None:
             raise ValueError("Module is required to create a backend from a state_dict.")
 
-        backend = cls()
-        backend._orig_module = module
-        backend._graph_spec = state_dict[cls.STATE_GRAPH_SPEC]
+        config = TorchEagerBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
+
+        backend = cls(config=config)
+        backend._output_dtype = state_dict[cls.STATE_OUTPUT_DTYPE]
         backend._set_device(state_dict[cls.STATE_DEVICE])
+        backend._orig_module = module
         module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend
