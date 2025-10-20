@@ -65,4 +65,3 @@ flux = ["**/*"]
 
 [tool.aitune]
 additional_tags = ["mem/80g"]
-allow_failure = true
