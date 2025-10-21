@@ -27,11 +27,13 @@ limitations under the License.
 - feat: changing default ONNX export path to dynamo (torch.onnx.export(dynamo=True))
 - feat: add ONNX AutoCast in TensorRT Backend for mixed precision through TensorRT ModelOpt
 - feat: extended collecting profiling metrics through nvtx annotations
+- feat: suppress console output during tuning and save logs to file - controlled through verbose flag
 - fix: prevent cache dir override when there are two similar modules in jit tuning
 - fix: dynamic shapes configuration for ONNX Dynamo export path in TensorRT Backend
 - fix: bfloat16 support in TensorRT Backend
 - fix: profiling of models without batching supported
 - misc: extended examples and improved dependencies
+
 
 ## 0.1.0
 

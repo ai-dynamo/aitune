@@ -18,21 +18,13 @@ import math
 import sys
 import traceback
 
-import tensorrt as trt
 import torch
+from wrapt import lazy_import
+
+trt = lazy_import("tensorrt")
 
 # Setup logger
 logger = logging.getLogger(__name__)
-
-# TensorRT to PyTorch dtype mapping
-TRT_TO_TORCH_DTYPE = {
-    trt.float32: torch.float32,
-    trt.float16: torch.float16,
-    trt.int32: torch.int32,
-    trt.int8: torch.int8,
-    trt.bool: torch.bool,
-    trt.uint8: torch.uint8,
-}
 
 # Element size mapping for each data type (in bytes)
 DTYPE_ELEMENT_SIZE = {
@@ -45,6 +37,17 @@ DTYPE_ELEMENT_SIZE = {
     torch.bfloat16: 2,
     torch.int64: 8,
 }
+
+
+def _get_trt_to_torch_dtype_mapping():
+    return {
+        trt.float32: torch.float32,
+        trt.float16: torch.float16,
+        trt.int32: torch.int32,
+        trt.int8: torch.int8,
+        trt.bool: torch.bool,
+        trt.uint8: torch.uint8,
+    }
 
 
 class TorchOutputAllocator(trt.IOutputAllocator):
@@ -85,7 +88,7 @@ class TorchOutputAllocator(trt.IOutputAllocator):
             Memory pointer to the allocated tensor data
         """
         logger.debug("Reallocating output tensor '%s': size=%s, alignment=%s", tensor_name, size, alignment)
-
+        trt_to_torch_dtype_mapping = _get_trt_to_torch_dtype_mapping()
         try:
             # Determine the data type for this tensor
             dtype = torch.float32  # Default fallback
@@ -98,8 +101,8 @@ class TorchOutputAllocator(trt.IOutputAllocator):
                         dtype = engine_dtype
                         logger.debug("Using torch dtype %s for tensor '%s' from engine info", dtype, tensor_name)
                     # Otherwise try to map from TensorRT dtype to torch dtype
-                    elif engine_dtype in TRT_TO_TORCH_DTYPE:
-                        dtype = TRT_TO_TORCH_DTYPE[engine_dtype]
+                    elif engine_dtype in trt_to_torch_dtype_mapping:
+                        dtype = trt_to_torch_dtype_mapping[engine_dtype]
                         logger.debug(
                             "Mapped TensorRT dtype %s to torch dtype %s for tensor '%s'",
                             engine_dtype,

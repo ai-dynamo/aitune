@@ -20,8 +20,8 @@
 """
 
 import copy
+import logging
 from dataclasses import dataclass, field
-from logging import getLogger
 from pathlib import Path
 
 import torch
@@ -54,9 +54,9 @@ from aitune.torch.task.profiling import (
     ThroughputSaturatedProfilingStopStrategy,
 )
 from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
-from aitune.utils.logging import log
+from aitune.utils.logging import control_output, log
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -140,11 +140,15 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
 
         # Run all backends with given max batch size.
         for backend in self._backends:
+            backend_cache_dir = cache_dir / backend.key()
+            log_file = self._log_file(backend_cache_dir, "build.log")
+
             try:
                 log("🤖 backend: %s", backend.describe(), sink=logger.info)
                 log("🔄 in progress...please wait", depth=2, sink=logger.info)
-                backend = copy.deepcopy(backend)
-                backend.build(module, graph_spec, data, device, cache_dir)
+                with control_output(log_file=log_file):
+                    backend = copy.deepcopy(backend)
+                    backend.build(module, graph_spec, data, device, backend_cache_dir)
                 log("✅ backend built", depth=2, sink=logger.info)
                 self.check_correctness(backend, name, graph_spec, data)
                 log("✅ backend validated", depth=2, sink=logger.info)
@@ -178,11 +182,10 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                     best_throughput = throughput
                     best_batch_size = batch_size
 
-            except Exception as e:
+            except Exception:
                 if backend.is_active:
                     backend.deactivate()
-                log("❌ backend failed", depth=2, sink=logger.info)
-                log("Exception: %s", e, sink=logger.debug)
+                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=logger.info)
                 continue
 
         if best_backend is None:

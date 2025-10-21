@@ -48,7 +48,6 @@ class TorchQuantizationConfig:
 
     quantization_config: QuantizationConfig = "FP8_DEFAULT_CFG"
     device: str = "cuda"
-    verbose: bool = False
 
     @classmethod
     def from_dict(cls, state_dict: dict):
@@ -119,7 +118,7 @@ class TorchQuantizer:
         logger.info("Model quantization completed successfully")
 
         # Configure quantizers for ONNX export
-        self._configure_quantizers_for_onnx_export(quantized_model, config.verbose)
+        self._configure_quantizers_for_onnx_export(quantized_model)
 
         # Clean up GPU memory and references
         del model_copy
@@ -229,12 +228,10 @@ class TorchQuantizer:
         for name, module in model.named_modules():
             if isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)):
                 if hasattr(module, "input_quantizer") and module.input_quantizer is not None:
-                    if verbose:
-                        logger.info("Setting quantizer attributes for %s.input_quantizer", name)
+                    logger.info("Setting quantizer attributes for %s.input_quantizer", name)
                     module.input_quantizer._onnx_quantizer_type = "dynamic"
                     module.input_quantizer._trt_high_precision_dtype = "Half"
 
                 if hasattr(module, "weight_quantizer") and module.weight_quantizer is not None:
-                    if verbose:
-                        logger.info("Setting quantizer attributes for %s.weight_quantizer", name)
+                    logger.info("Setting quantizer attributes for %s.weight_quantizer", name)
                     module.weight_quantizer._onnx_quantizer_type = "static"

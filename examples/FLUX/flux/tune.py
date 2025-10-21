@@ -72,7 +72,6 @@ def tune_model(
                         quantization_config=TorchQuantizationConfig(
                             quantization_config="FP8_DEFAULT_CFG",
                             device="cuda",
-                            verbose=False,
                         ),
                     )
                 ),

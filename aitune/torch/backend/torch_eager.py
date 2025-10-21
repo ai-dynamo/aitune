@@ -73,7 +73,7 @@ class TorchEagerBackend(Backend):
 
     def describe(self) -> str:
         """Returns the description of the backend."""
-        return f"{self.__class__.__name__}({self._config.describe()})"
+        return f"{self.__class__.__name__}({self._config.describe()}{self._config.describe()})"
 
     @staticmethod
     def _get_dtype(module: nn.Module, data: list[Sample]) -> torch.dtype:
@@ -95,6 +95,7 @@ class TorchEagerBackend(Backend):
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Builds the model."""
+        self._save_config(cache_dir)
         module.to(self._device)
 
         self._orig_module = module
@@ -141,6 +142,11 @@ class TorchEagerBackend(Backend):
     def _deploy(self):
         """Deploys the backend."""
         pass
+
+    def _save_config(self, cache_dir: Path):
+        """Store the backend configuration to a file."""
+        config_path = cache_dir / "config.json"
+        self._config.to_json(config_path)
 
     def to_dict(self):
         """Returns the state_dict of the backend."""

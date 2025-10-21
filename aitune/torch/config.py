@@ -41,6 +41,9 @@ NVTX_ENABLE = os.getenv("NVTX_ENABLE") in ("1", "true", "True", "yes", "Yes", "Y
 if NVTX_DISABLE is None:
     os.environ["NVTX_DISABLE"] = "" if NVTX_ENABLE else "disable"
 
+# Console output configuration
+CONSOLE_OUTPUT_ENABLE = os.getenv("AITUNE_CONSOLE_OUTPUT") in ("1", "true", "True", "yes", "Yes", "YES")
+
 
 def aitune_cache_dir() -> Path:
     """Configure cache dir location based on environment variable.

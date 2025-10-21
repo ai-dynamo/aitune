@@ -17,10 +17,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import tensorrt as trt
 from polygraphy.backend.trt import CreateConfig, Profile, engine_from_network, network_from_onnx_path, save_engine
+from wrapt import lazy_import
 
 from aitune.utils.system_monitor import SystemMonitor
+
+trt = lazy_import("tensorrt")
 
 # Setup logger
 logger = logging.getLogger(__name__)

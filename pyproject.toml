@@ -59,7 +59,7 @@ dependencies = [
     "torch>=2.5.1",
     "torchao==0.13",
     "torch_tensorrt>2",
-    "wrapt>=1.17.2",
+    "wrapt~=2.0",
     "nvidia-modelopt[onnx]>=0.33.0",
     "autowrapt>=1.0",
     "nvtx",

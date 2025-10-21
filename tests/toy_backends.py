@@ -27,6 +27,9 @@ class SleepBackend(Backend):
         super().__init__()
         self.sleep_time = sleep_time
 
+    def key(self) -> str:
+        return f"{self.__class__.__name__}"
+
     def describe(self) -> str:
         return "SleepBackend - test only"
 

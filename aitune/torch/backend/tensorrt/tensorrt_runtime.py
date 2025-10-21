@@ -17,24 +17,60 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import tensorrt as trt
+from wrapt import lazy_import
 
 from aitune.global_context import LIBRARY_LOGGING_KEY, global_context
 from aitune.torch.backend.tensorrt.tensorrt_engine_info import TensorRTEngineInfo
 from aitune.utils.system_monitor import SystemMonitor
+
+trt = lazy_import("tensorrt")
 
 TRT_ENGINE_FILE_EXTENSION = ".plan"
 
 # Setup logger
 logger = logging.getLogger(__name__)
 
-LOG_LEVEL_MAPPING = {
-    logging.DEBUG: trt.Logger.VERBOSE,
-    logging.INFO: trt.Logger.INFO,
-    logging.WARNING: trt.Logger.WARNING,
-    logging.ERROR: trt.Logger.ERROR,
-    logging.CRITICAL: trt.Logger.INTERNAL_ERROR,
-}
+
+def _get_log_level_mapping():
+    return {
+        logging.DEBUG: trt.Logger.VERBOSE,
+        logging.INFO: trt.Logger.INFO,
+        logging.WARNING: trt.Logger.WARNING,
+        logging.ERROR: trt.Logger.ERROR,
+        logging.CRITICAL: trt.Logger.INTERNAL_ERROR,
+    }
+
+
+class PythonTRTLogger(trt.ILogger):
+    """TensorRT logger that routes messages through Python's logging system.
+
+    This allows TensorRT C++ output to be captured by Python logging handlers
+    and redirected (e.g., to a file) via control_output context manager.
+    """
+
+    def __init__(self, severity=trt.Logger.INFO):
+        """Initialize with TensorRT severity level."""
+        super().__init__()
+        self.severity = severity
+        self.python_logger = logging.getLogger("tensorrt")
+
+    def log(self, severity, msg):
+        """Route TensorRT log messages to Python logging system."""
+        # Only log if severity meets threshold
+        if severity > self.severity:
+            return
+
+        # Map TensorRT severity to Python logging levels
+        if severity == trt.Logger.INTERNAL_ERROR:
+            self.python_logger.critical("[TRT] %s", msg)
+        elif severity == trt.Logger.ERROR:
+            self.python_logger.error("[TRT] %s", msg)
+        elif severity == trt.Logger.WARNING:
+            self.python_logger.warning("[TRT] %s", msg)
+        elif severity == trt.Logger.INFO:
+            self.python_logger.info("[TRT] %s", msg)
+        elif severity == trt.Logger.VERBOSE:
+            self.python_logger.debug("[TRT] %s", msg)
 
 
 class TensorRTRuntime:
@@ -102,12 +138,15 @@ class TensorRTRuntime:
             try:
                 # Create runtime and deserialize engine
                 log_level = global_context.get(LIBRARY_LOGGING_KEY, logger.level)
-                if log_level > logging.CRITICAL:
-                    trt_log_severity = trt.Logger.INTERNAL_ERROR
-                else:
-                    trt_log_severity = LOG_LEVEL_MAPPING.get(log_level, trt.Logger.INFO)
 
-                runtime = trt.Runtime(trt.Logger(trt_log_severity))
+                # Use Python-based logger that routes through logging system
+                # This allows control_output() to capture TensorRT messages to files
+                trt_log_severity = _get_log_level_mapping().get(
+                    log_level if log_level <= logging.CRITICAL else logging.CRITICAL, trt.Logger.INFO
+                )
+                trt_logger = PythonTRTLogger(severity=trt_log_severity)
+
+                runtime = trt.Runtime(trt_logger)
                 engine = runtime.deserialize_cuda_engine(engine_bytes)
                 if not engine:
                     raise RuntimeError("Failed to deserialize engine")

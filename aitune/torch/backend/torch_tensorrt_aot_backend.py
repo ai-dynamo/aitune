@@ -118,6 +118,10 @@ class TorchTensorRTAotBackend(Backend):
         self._opt_module = None
         self._exported_model_path = None
 
+    def key(self) -> str:
+        """Returns the key of the backend."""
+        return f"{self.__class__.__name__}_{self._config.key()}"
+
     def describe(self) -> str:
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
@@ -135,7 +139,6 @@ class TorchTensorRTAotBackend(Backend):
         model = module.eval()
         model = model.to(self._device)
 
-        cache_dir = self._create_cache_dir(cache_dir)
         self._save_config(cache_dir)
 
         # Set the device for the TensorRT backend compilation
@@ -218,13 +221,6 @@ class TorchTensorRTAotBackend(Backend):
     def _deploy(self):
         """Deploys the backend."""
         self._activate()
-
-    def _create_cache_dir(self, cache_dir: Path) -> Path:
-        """Create cache directory for the backend."""
-        cache_dir = cache_dir / self.__class__.__name__ / self._config.key()
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        logger.debug("Cache directory created: %s", cache_dir)
-        return cache_dir
 
     def _save_config(self, cache_dir: Path):
         """Store the backend configuration to a file."""

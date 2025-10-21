@@ -13,7 +13,7 @@
 # limitations under the License.
 """Utility modules for AITune."""
 
-from aitune.utils.logging import enable_gpu_memory_logging, set_module_level, setup_logging
+from aitune.utils.logging import control_output, enable_gpu_memory_logging, set_module_level, setup_logging
 from aitune.utils.system_monitor import SystemMonitor, system_resource_monitor
 
 __all__ = [
@@ -22,4 +22,5 @@ __all__ = [
     "setup_logging",
     "set_module_level",
     "enable_gpu_memory_logging",
+    "control_output",
 ]

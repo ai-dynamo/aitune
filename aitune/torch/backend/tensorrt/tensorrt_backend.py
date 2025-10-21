@@ -162,6 +162,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._static_inputs = {}
         self._infer_cuda_graph = None
 
+    def key(self) -> str:
+        """Returns the key of the backend."""
+        return f"{self.__class__.__name__}_{self._config.key()}"
+
     def describe(self) -> str:
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
@@ -212,7 +216,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._graph_spec = graph_spec
 
         cuda_set_device(self._device)
-        cache_dir = self._create_cache_dir(cache_dir)
         self._save_config(cache_dir)
 
         with self._system_monitor.system_stats_context(log_label="TorchModelInfo analysis"):
@@ -275,7 +278,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
-                logger.debug("Initializing TensorRT builder")
+                logger.info("Initializing TensorRT builder")
                 min_shapes, opt_shapes, max_shapes = self._get_shapes(graph_spec=graph_spec)
 
                 self._engine_path = self._prepare_trt_engine_path(cache_dir)
@@ -314,7 +317,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """
         try:
             with self._system_monitor.system_stats_context(log_label="ONNX export"):
-                logger.debug("Initializing ONNX exporter")
+                logger.info("Initializing ONNX exporter")
 
                 self._onnx_path = self._prepare_onnx_model_path(cache_dir)
                 self._onnx_exporter = ONNXExporter(
@@ -332,7 +335,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 self._offload_torch_model_to_cpu(module)
 
             with self._system_monitor.system_stats_context(log_label="ONNX quantization"):
-                logger.debug("Initializing ONNX quantizer")
+                logger.info("Initializing ONNX quantizer")
                 onnx_quantizer = ONNXQuantizer()
 
                 self._onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
@@ -348,7 +351,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
-                logger.debug("Initializing TensorRT builder")
+                logger.info("Initializing TensorRT builder")
                 min_shapes, opt_shapes, max_shapes = self._get_shapes(graph_spec=graph_spec)
 
                 self._engine_path = self._prepare_trt_engine_path(cache_dir)
@@ -466,10 +469,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
             data (list[Sample]): The data of the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
-        logger.debug("Starting TensorRT backend building")
+        logger.info("Starting TensorRT backend building")
         try:
             with self._system_monitor.system_stats_context(log_label="ONNX export"):
-                logger.debug("Initializing ONNX exporter")
+                logger.info("Initializing ONNX exporter")
 
                 self._onnx_path = self._prepare_onnx_model_path(cache_dir)
                 self._onnx_exporter = ONNXExporter(
@@ -488,7 +491,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
-                logger.debug("Initializing TensorRT builder")
+                logger.info("Initializing TensorRT builder")
                 min_shapes, opt_shapes, max_shapes = self._get_shapes(graph_spec=graph_spec)
 
                 self._engine_path = self._prepare_trt_engine_path(cache_dir)
@@ -513,7 +516,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._deactivate()
             raise e
 
-        logger.debug(
+        logger.info(
             "TensorRT backend building finished successfully with engine path %s",
             self._engine_path,
         )
@@ -535,9 +538,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     raise RuntimeError("Engine not loaded. Call build() first.")
 
                 # Prepare inputs
-                logger.debug("Preparing input tensors")
                 inputs = self._prepare_inputs(args, kwargs)
-
                 if not inputs:
                     raise ValueError("No input tensors provided for inference")
 
@@ -677,18 +678,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """
         self._activate()
 
-    def _create_cache_dir(self, cache_dir: Path) -> Path:
-        """Create cache directory for the backend."""
-        cache_dir = cache_dir / self.__class__.__name__ / self._config.key()
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        logger.debug("Cache directory created: %s", cache_dir)
-        return cache_dir
-
     def _save_config(self, cache_dir: Path):
         """Store the backend configuration to a file."""
         config_path = cache_dir / "config.json"
         self._config.to_json(config_path)
-        logger.debug("Config saved to %s", config_path)
+        logger.info("Config saved to %s", config_path)
 
     def _offload_torch_model_to_cpu(self, model: "torch.nn.Module"):
         """Offload PyTorch model to meta device.
@@ -696,7 +690,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Args:
             model: PyTorch model to offload.
         """
-        logger.debug("Offloading model to cpu device")
+        logger.info("Offloading model to cpu device")
         model = model.to("cpu")
 
         gc.collect()

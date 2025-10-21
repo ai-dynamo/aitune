@@ -65,7 +65,7 @@ def test_describe(mock_backend):
 def test_tune_success(mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path):
     """Test tune method when backend succeeds."""
     # Setup
-    strategy = OneBackendStrategy(MagicMock(spec=Backend))
+    strategy = OneBackendStrategy(mock_backend)
     strategy._describe = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
@@ -77,13 +77,15 @@ def test_tune_success(mock_backend, mock_module, mock_graph_spec, torch_device, 
 
     # Verify
     assert result == mock_backend
-    mock_backend.build.assert_called_once_with(mock_module, mock_graph_spec, [mock_sample], torch_device, tmp_path)
+    mock_backend.build.assert_called_once_with(
+        mock_module, mock_graph_spec, [mock_sample], torch_device, tmp_path / mock_backend.key()
+    )
 
 
 def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path):
     """Test tune method when backend fails."""
     # Setup
-    strategy = OneBackendStrategy(MagicMock(spec=Backend))
+    strategy = OneBackendStrategy(mock_backend)
     strategy._describe = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
@@ -94,4 +96,6 @@ def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_de
         strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
 
     assert str(exc_info.value) == "Backend failed"
-    mock_backend.build.assert_called_once_with(mock_module, mock_graph_spec, [mock_sample], torch_device, tmp_path)
+    mock_backend.build.assert_called_once_with(
+        mock_module, mock_graph_spec, [mock_sample], torch_device, tmp_path / mock_backend.key()
+    )

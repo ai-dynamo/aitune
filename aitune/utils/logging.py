@@ -13,6 +13,7 @@
 # limitations under the License.
 """Logging configuration for the AITune package."""
 
+import contextlib
 import logging
 import os
 import sys
@@ -20,14 +21,16 @@ import traceback
 import warnings
 from collections.abc import Callable
 from contextlib import contextmanager
+from pathlib import Path
 
 from aitune.global_context import LIBRARY_LOGGING_KEY, global_context
+from aitune.torch.config import CONSOLE_OUTPUT_ENABLE
 
 
 def setup_logging(
     level: int | str | None = None,
     format_string: str = "%(asctime)s - %(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s",
-    log_file: str | None = None,
+    log_file: str | Path | None = None,
     capture_warnings: bool = True,
 ):
     """Configure logging for the AITune package.
@@ -59,6 +62,7 @@ def setup_logging(
     """
     # Configure root logger
     root_logger = logging.getLogger()
+    log_file = Path(log_file) if log_file else None
 
     # Set level if provided
     if level is not None:
@@ -90,11 +94,11 @@ def setup_logging(
     # Add file handler if specified
     if log_file:
         # Create directory if it doesn't exist
-        log_dir = os.path.dirname(log_file)
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir)
+        log_dir = log_file.parent
+        if log_dir and not log_dir.exists():
+            log_dir.mkdir(parents=True, exist_ok=True)
 
-        file_handler = logging.FileHandler(log_file)
+        file_handler = logging.FileHandler(str(log_file))
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
 
@@ -156,6 +160,7 @@ def libraries_logging(disabled: bool, exceptions: list[str] | None = None):
 
     level = logging.CRITICAL + 1
     root_level = logging.root.level
+
     try:
         global_context.set(LIBRARY_LOGGING_KEY, level)
         for logger_name in all_loggers:
@@ -197,7 +202,7 @@ def log_exception_details(
     exception: Exception,
     message: str,
     level: int = logging.ERROR,
-    reraise: bool = True,
+    reraise: bool = False,
     reraise_as: Exception | None = None,
 ):
     """Log detailed exception information in a standardized format.
@@ -245,3 +250,233 @@ def log_exception_details(
             raise reraise_as from exception
         else:
             raise exception
+
+
+class _TeeFile:
+    """File-like object that writes to multiple destinations (tee functionality)."""
+
+    def __init__(self, *files):
+        """Initialize with multiple file objects to write to."""
+        self.files = files
+
+    def write(self, data: str) -> int:
+        """Write data to all file objects."""
+        for f in self.files:
+            f.write(data)
+            f.flush()
+        return len(data)
+
+    def flush(self) -> None:
+        """Flush all file objects."""
+        for f in self.files:
+            f.flush()
+
+    def isatty(self) -> bool:
+        """Return whether this is an interactive stream."""
+        # Check if any of the underlying files is a tty
+        return any(hasattr(f, "isatty") and f.isatty() for f in self.files)
+
+    def fileno(self) -> int:
+        """Return file descriptor of first file."""
+        # Return the first file's fileno if available
+        for f in self.files:
+            if hasattr(f, "fileno"):
+                try:
+                    return f.fileno()
+                except (AttributeError, OSError):
+                    continue
+        raise OSError("No file descriptor available")
+
+    def readable(self) -> bool:
+        """Return whether object supports reading."""
+        return False
+
+    def writable(self) -> bool:
+        """Return whether object supports writing."""
+        return True
+
+
+def _redirect_low_level_output(target_fd):
+    """Redirect low-level file descriptors to target and return cleanup info."""
+    save_fds = [os.dup(1), os.dup(2)]
+    os.dup2(target_fd, 1)
+    os.dup2(target_fd, 2)
+    return save_fds
+
+
+def _restore_low_level_output(save_fds):
+    """Restore low-level file descriptors."""
+    if save_fds:
+        os.dup2(save_fds[0], 1)
+        os.dup2(save_fds[1], 2)
+        for fd in save_fds:
+            os.close(fd)
+
+
+def _try_redirect_handler(handler, target_file, original_stdout, original_stderr):
+    """Try to redirect a single handler to target file.
+
+    Args:
+        handler: The logging handler to redirect
+        target_file: File object to redirect to
+        original_stdout: Original sys.stdout reference
+        original_stderr: Original sys.stderr reference
+
+    Returns:
+        Tuple of (handler, original_stream) if successful, None otherwise
+    """
+    if not isinstance(handler, logging.StreamHandler):
+        return None
+    if handler.stream not in (original_stdout, original_stderr):
+        return None
+    if not hasattr(handler, "setStream"):
+        return None
+
+    try:
+        original_stream = handler.stream
+        handler.setStream(target_file)
+        return (handler, original_stream)
+    except (AttributeError, TypeError):
+        return None
+
+
+def _redirect_logging_handlers(target_file, original_stdout, original_stderr):
+    """Redirect all logging StreamHandlers to target file.
+
+    Args:
+        target_file: File object to redirect to
+        original_stdout: Original sys.stdout reference
+        original_stderr: Original sys.stderr reference
+
+    Returns:
+        List of (handler, original_stream) tuples for restoration
+    """
+    saved_handler_streams = []
+    root_logger = logging.getLogger()
+
+    # Check all logger handlers
+    for logger_obj in logging.root.manager.loggerDict.values():
+        if isinstance(logger_obj, logging.Logger):
+            for handler in logger_obj.handlers:
+                result = _try_redirect_handler(handler, target_file, original_stdout, original_stderr)
+                if result:
+                    saved_handler_streams.append(result)
+
+    # Check root logger handlers
+    for handler in root_logger.handlers:
+        result = _try_redirect_handler(handler, target_file, original_stdout, original_stderr)
+        if result:
+            saved_handler_streams.append(result)
+
+    return saved_handler_streams
+
+
+def _restore_logging_handlers(saved_handler_streams):
+    """Restore logging StreamHandlers to their original streams.
+
+    Args:
+        saved_handler_streams: List of (handler, original_stream) tuples
+    """
+    for handler, original_stream in saved_handler_streams:
+        handler.setStream(original_stream)
+
+
+@contextmanager
+def control_output(log_file: str | Path | None = None):
+    """Silences or redirects stdout, stderr, and logs within the invoked context.
+
+    Args:
+        log_file: Optional file path to log output to (independent of suppress_stdout)
+
+    Behavior matrix:
+        suppress_stdout=True, log_file=None       → Complete suppression (to /dev/null)
+        suppress_stdout=True, log_file="file.log" → Redirect to file only, no console
+        suppress_stdout=False, log_file=None      → Normal console output
+        suppress_stdout=False, log_file="file.log"→ Tee mode: console AND file
+
+    Example usage:
+        # Suppress all output
+        with control_output():
+            print("Not shown anywhere")
+
+        # Redirect output to file only
+        with control_output(log_file="output.log"):
+            print("Goes to file, not console")
+
+        # Allow normal console output
+        with control_output(suppress_stdout=False):
+            print("Shown on console")
+
+        # Tee mode: both console and file
+        with control_output(suppress_stdout=False, log_file="output.log"):
+            print("Goes to BOTH console and file")
+    """
+    # If no suppression and no log file, do nothing
+    if CONSOLE_OUTPUT_ENABLE and not log_file:
+        yield
+        return
+
+    # Determine target file
+    if log_file:
+        log_file = Path(log_file)
+        log_dir = log_file.parent
+        if log_dir and not log_dir.exists():
+            log_dir.mkdir(parents=True, exist_ok=True)
+        target_file = str(log_file)
+        mode = "a"
+    else:
+        target_file = os.devnull
+        mode = "w"
+
+    # Save state
+    save_fds = None
+    tqdm_ctx = None
+    saved_handler_streams = []
+
+    # Open target file
+    with open(target_file, mode) as f:
+        try:
+            # Store original stdout/stderr before any redirection
+            original_stdout = sys.stdout
+            original_stderr = sys.stderr
+
+            if not CONSOLE_OUTPUT_ENABLE:
+                # Redirect low-level fds (1,2) - catches C++/Fortran output
+                save_fds = _redirect_low_level_output(f.fileno())
+
+                # Redirect logging handlers - critical for Python logging output
+                saved_handler_streams = _redirect_logging_handlers(f, original_stdout, original_stderr)
+
+                # Redirect Python-level stdout/stderr to file only
+                with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+                    yield
+
+            else:
+                # suppress_stdout=False with log_file: tee mode (console AND file)
+                # Add a FileHandler for logging (keeps console handlers active)
+                file_handler = logging.FileHandler(str(log_file), mode="a")
+                # Copy formatter from existing handler if available
+                for handler in logging.getLogger().handlers:
+                    if isinstance(handler, logging.StreamHandler) and handler.formatter:
+                        file_handler.setFormatter(handler.formatter)
+                        break
+                logging.getLogger().addHandler(file_handler)
+
+                try:
+                    # For print() statements, use Tee to write to both console and file
+                    tee_stdout = _TeeFile(original_stdout, f)
+                    tee_stderr = _TeeFile(original_stderr, f)
+                    with contextlib.redirect_stdout(tee_stdout), contextlib.redirect_stderr(tee_stderr):  # type: ignore[arg-type]
+                        yield
+                finally:
+                    # Remove the temporary file handler
+                    logging.getLogger().removeHandler(file_handler)
+                    file_handler.close()
+
+        finally:
+            if tqdm_ctx:
+                tqdm_ctx.__exit__(None, None, None)
+
+            # Restore all redirections
+            _restore_logging_handlers(saved_handler_streams)
+            _restore_low_level_output(save_fds)

@@ -197,6 +197,11 @@ class TuneStrategy(ABC):
         for part in self._describe_parts():
             log(part, depth=2, sink=self._sink)
 
+    def _log_file(self, cache_dir: Path, filename: str) -> Path:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        log_file = cache_dir / filename
+        return log_file
+
 
 class DummyTuneStrategy(TuneStrategy):
     """Dummy tune strategy that does nothing."""

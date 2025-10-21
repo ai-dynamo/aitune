@@ -97,7 +97,9 @@ def test_tune_success_first_backend(mock_backend, mock_module, mock_graph_spec, 
 
     # Verify
     assert result == mock_backend
-    mock_backend.build.assert_called_once_with(mock_module, mock_graph_spec, [mock_sample], torch_device, tmp_path)
+    mock_backend.build.assert_called_once_with(
+        mock_module, mock_graph_spec, [mock_sample], torch_device, tmp_path / first_backend.key()
+    )
     backends[1].build.assert_not_called()
 
 

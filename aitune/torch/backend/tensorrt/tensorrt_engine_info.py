@@ -16,23 +16,27 @@
 import logging
 from typing import Any
 
-import tensorrt as trt
 import torch
+from wrapt import lazy_import
+
+trt = lazy_import("tensorrt")
 
 # Setup logger
 logger = logging.getLogger(__name__)
 
-DTYPE_MAPPING = {
-    trt.DataType.UINT8: torch.uint8,
-    trt.DataType.INT8: torch.int8,
-    trt.DataType.INT32: torch.int,
-    trt.DataType.INT64: torch.long,
-    trt.DataType.FP8: torch.float8_e4m3fn,
-    trt.DataType.HALF: torch.half,
-    trt.DataType.FLOAT: torch.float,
-    trt.DataType.BOOL: torch.bool,
-    trt.DataType.BF16: torch.bfloat16,
-}
+
+def _get_dtype_mapping():
+    return {
+        trt.DataType.UINT8: torch.uint8,
+        trt.DataType.INT8: torch.int8,
+        trt.DataType.INT32: torch.int,
+        trt.DataType.INT64: torch.long,
+        trt.DataType.FP8: torch.float8_e4m3fn,
+        trt.DataType.HALF: torch.half,
+        trt.DataType.FLOAT: torch.float,
+        trt.DataType.BOOL: torch.bool,
+        trt.DataType.BF16: torch.bfloat16,
+    }
 
 
 class TensorRTEngineInfo:
@@ -67,8 +71,9 @@ class TensorRTEngineInfo:
                 if engine.get_tensor_mode(engine.get_tensor_name(i)) == trt.TensorIOMode.OUTPUT
             ]
             # Create output tensors info
+            dtype_mapping = _get_dtype_mapping()
             self._output_dtypes = {
-                output_name: DTYPE_MAPPING[engine.get_tensor_dtype(output_name)] for output_name in self._output_names
+                output_name: dtype_mapping[engine.get_tensor_dtype(output_name)] for output_name in self._output_names
             }
             self._output_shapes = {
                 output_name: engine.get_tensor_shape(output_name) for output_name in self._output_names

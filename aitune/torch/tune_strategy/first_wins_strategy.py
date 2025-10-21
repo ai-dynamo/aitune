@@ -14,7 +14,7 @@
 """First Wins tune strategy."""
 
 import copy
-from logging import getLogger
+import logging
 from pathlib import Path
 
 import torch
@@ -25,9 +25,9 @@ from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
-from aitune.utils.logging import log
+from aitune.utils.logging import control_output, log
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
@@ -57,21 +57,24 @@ class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
             sink=logger.info,
         )
         for backend in self._backends:
+            backend_cache_dir = cache_dir / backend.key()
+            log_file = self._log_file(backend_cache_dir, "build.log")
+
             try:
                 log("⚙️ backend:  %s", backend.describe(), sink=logger.info)
                 log("🔄 in progress...please wait", depth=2, sink=logger.info)
-                backend = copy.deepcopy(backend)
-                backend = backend.build(module, graph_spec, data, device, cache_dir)
+                with control_output(log_file=log_file):
+                    backend = copy.deepcopy(backend)
+                    backend = backend.build(module, graph_spec, data, device, backend_cache_dir)
                 log("✅ backend built", depth=2, sink=logger.info)
                 self.check_correctness(backend, name, graph_spec, data)
                 log("✅ backend validated", depth=2, sink=logger.info)
                 selected_backend = backend
                 break
-            except Exception as exception:
+            except Exception:
                 if backend.is_active:
                     backend.deactivate()
-                log("❌ backend failed", depth=2, sink=logger.info)
-                log("Exception: %s", exception, sink=logger.info)
+                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=logger.info)
                 module.to(device)  # move module back to device as failed backend could move it to cpu
 
         if selected_backend:

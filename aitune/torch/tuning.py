@@ -46,7 +46,7 @@ def tune(
     max_num_batches_per_batch_size: int | None = None,
     device: str | torch.device = DEFAULT_DEVICE,
     dry_run: bool = False,
-    disable_external_logging: bool = True,
+    disable_external_logging: bool = False,
     clear_cache: bool = False,
 ) -> None:
     """Tune a callable which runs inference on a pipeline or a model.

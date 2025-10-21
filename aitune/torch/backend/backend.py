@@ -271,6 +271,11 @@ class Backend(ABC):
         return self._infer(*args, **kwargs)
 
     @abstractmethod
+    def key(self) -> str:
+        """Returns the key of the backend."""
+        pass
+
+    @abstractmethod
     def describe(self) -> str:
         """Returns the description of the backend."""
         pass
@@ -387,6 +392,10 @@ class DummyBackend(Backend):
     """Dummy backend for testing purposes."""
 
     is_jit = False
+
+    def key(self) -> str:
+        """Returns the key of the backend."""
+        return f"{self.__class__.__name__}"
 
     def describe(self) -> str:
         """Returns the description of the backend."""

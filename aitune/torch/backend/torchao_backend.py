@@ -161,13 +161,16 @@ class TorchAOBackend(Backend):
         self._orig_module = None
         self._data = None
 
+    def key(self) -> str:
+        """Returns the key of the backend."""
+        return f"{self.__class__.__name__}_{self._config.key()}"
+
     def describe(self) -> str:
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Builds the model with torchao quantization and torch.compile."""
-        cache_dir = self._create_cache_dir(cache_dir)
         self._save_config(cache_dir)
 
         self._orig_module = module
@@ -205,12 +208,6 @@ class TorchAOBackend(Backend):
         self._activate()
         self._data = None
         gc.collect()
-
-    def _create_cache_dir(self, cache_dir: Path) -> Path:
-        """Create cache directory for the backend."""
-        cache_dir = cache_dir / self.__class__.__name__ / self._config.key()
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        return cache_dir
 
     def _save_config(self, cache_dir: Path):
         """Store the backend configuration to a file."""
