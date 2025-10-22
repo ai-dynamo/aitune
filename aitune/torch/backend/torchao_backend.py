@@ -199,9 +199,6 @@ class TorchAOBackend(Backend):
     def _deactivate(self):
         """Deactivates backend."""
         self._quant_module = None
-        torch.compiler.reset()
-        torch.cuda.empty_cache()
-        gc.collect()
 
     def _deploy(self):
         """Deploys the backend."""

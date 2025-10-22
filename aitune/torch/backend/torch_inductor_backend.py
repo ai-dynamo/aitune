@@ -225,9 +225,6 @@ class TorchInductorBackend(Backend):
     def _deactivate(self):
         """Deactivates backend."""
         self._compiled_module = None
-        torch.compiler.reset()
-        torch.cuda.empty_cache()
-        gc.collect()
 
     def _deploy(self):
         """Deploys the backend."""

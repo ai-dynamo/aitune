@@ -13,7 +13,6 @@
 # limitations under the License.
 """TorchTensorRT backend with AOT compilation and intermediate model save."""
 
-import gc
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
@@ -214,9 +213,6 @@ class TorchTensorRTAotBackend(Backend):
     def _deactivate(self):
         """Deactivate backend and cleanup."""
         self._opt_module = None
-        torch._dynamo.reset()
-        torch.cuda.empty_cache()
-        gc.collect()
 
     def _deploy(self):
         """Deploys the backend."""

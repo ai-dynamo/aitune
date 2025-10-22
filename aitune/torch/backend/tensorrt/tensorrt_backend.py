@@ -639,6 +639,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """Deactivate the TensorRT engine."""
         logger.debug("Deactivating TensorRT backend")
         self._trt_runtime = None
+
         with self._system_monitor.system_stats_context(log_label="Deactivation"):
             try:
                 with contextlib.ExitStack() as stack:

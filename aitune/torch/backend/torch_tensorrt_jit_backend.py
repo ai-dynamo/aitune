@@ -196,9 +196,6 @@ class TorchTensorRTJitBackend(Backend):
     def _deactivate(self):
         """Deactivate backend and cleanup."""
         self._compiled_module = None
-        torch._dynamo.reset()
-        torch.cuda.empty_cache()
-        gc.collect()
 
     def _deploy(self):
         """Deploys the backend."""

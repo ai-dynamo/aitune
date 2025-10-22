@@ -13,6 +13,7 @@
 # limitations under the License.
 """Backend interface."""
 
+import gc
 import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, fields, is_dataclass
@@ -238,6 +239,7 @@ class Backend(ABC):
 
         if self.state == BackendState.ACTIVE:
             self._deactivate()
+            self._clean_memory()
             self.state = BackendState.INACTIVE
 
     def deploy(self, device: torch.device | None):
@@ -386,6 +388,13 @@ class Backend(ABC):
 
         if self._device is None:
             raise ValueError("Device is not set. Please set the device before deploying.")
+
+    def _clean_memory(self):
+        """Clean up memory."""
+        torch._dynamo.reset()
+        torch.compiler.reset()
+        torch.cuda.empty_cache()
+        gc.collect()
 
 
 class DummyBackend(Backend):

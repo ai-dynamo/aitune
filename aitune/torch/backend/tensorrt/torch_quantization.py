@@ -98,8 +98,12 @@ class TorchQuantizer:
         with self.system_monitor.system_stats_context(log_label="Model deep copy"):
             model_copy = deepcopy(module)
 
-        # Move model to target device
-        model_copy = model_copy.to(config.device)
+            # Offload model to CPU
+            module.to("cpu")
+            self._clean_memory()
+
+            # Move model to target device
+            model_copy = model_copy.to(config.device)
 
         # Prepare calibration data
         calibration_sample = self._prepare_calibration_sample(sample=sample, device=config.device)
@@ -122,8 +126,7 @@ class TorchQuantizer:
 
         # Clean up GPU memory and references
         del model_copy
-        gc.collect()
-        torch.cuda.empty_cache()
+        self._clean_memory()
 
         return quantized_model
 
@@ -235,3 +238,8 @@ class TorchQuantizer:
                 if hasattr(module, "weight_quantizer") and module.weight_quantizer is not None:
                     logger.info("Setting quantizer attributes for %s.weight_quantizer", name)
                     module.weight_quantizer._onnx_quantizer_type = "static"
+
+    def _clean_memory(self):
+        """Clean up memory."""
+        torch.cuda.empty_cache()
+        gc.collect()

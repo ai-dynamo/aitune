@@ -155,9 +155,11 @@ def test_torch_compile_backend_infer_not_activated(
 ):
     torch_mod = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch")
     torch_mod.compile = mocker.MagicMock(return_value=model)
-    torch_mod._dynamo.reset = mocker.MagicMock()
-    torch_mod.cuda.empty_cache = mocker.MagicMock()
-    torch_mod.collect = mocker.MagicMock()
+
+    torch_mod_backend = mocker.patch("aitune.torch.backend.backend.torch")
+    torch_mod_backend._dynamo.reset = mocker.MagicMock()
+    torch_mod_backend.compiler.reset = mocker.MagicMock()
+    torch_mod_backend.cuda.empty_cache = mocker.MagicMock()
 
     backend = torch_tensorrt_jit_backend.build(
         model, graph_spec=Mock(spec=GraphSpec), data=sample_data, device=torch_device, cache_dir=tmp_path
@@ -175,9 +177,11 @@ def test_torch_compile_backend_deactivate(
 ):
     torch_mod = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch")
     torch_mod.compile = mocker.MagicMock(return_value=model)
-    torch_mod._dynamo.reset = mocker.MagicMock()
-    torch_mod.cuda.empty_cache = mocker.MagicMock()
-    torch_mod.collect = mocker.MagicMock()
+
+    torch_mod_backend = mocker.patch("aitune.torch.backend.backend.torch")
+    torch_mod_backend._dynamo.reset = mocker.MagicMock()
+    torch_mod_backend.compiler.reset = mocker.MagicMock()
+    torch_mod_backend.cuda.empty_cache = mocker.MagicMock()
 
     mock_gc = mocker.patch("gc.collect")
 
@@ -189,8 +193,9 @@ def test_torch_compile_backend_deactivate(
     backend.deactivate()
 
     # Verify cleanup was performed
-    torch_mod._dynamo.reset.assert_called()
-    torch_mod.cuda.empty_cache.assert_called()
+    torch_mod_backend._dynamo.reset.assert_called()
+    torch_mod_backend.compiler.reset.assert_called()
+    torch_mod_backend.cuda.empty_cache.assert_called()
     mock_gc.assert_called()
 
 
