@@ -24,7 +24,7 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, DummyBackend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import OUTPUT_METADATA_PREFIX, Sample
+from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.task.correctness import check_output_correctness, check_output_tensor_shapes
 from aitune.torch.utils.module_utils import count_parameters
@@ -100,12 +100,12 @@ class TuneStrategy(ABC):
             )
             return
 
-        logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
+        logger.debug("Checking correctness for %s and %s", backend.describe(), graph_spec)
         with torch.inference_mode():
             for args, kwargs in data:
                 outputs = backend.infer(*args, **kwargs)
                 check_output_correctness(outputs, name=f"{name}.{graph_spec.name}.{backend.describe()}.output")
-                outputs_metadata = SampleMetadata.from_sample(outputs, prefix=OUTPUT_METADATA_PREFIX)
+                outputs_metadata = SampleMetadata.from_outputs(outputs)
                 check_output_tensor_shapes(graph_spec.output_spec.tensor_specs, outputs_metadata.tensor_specs)
 
     def enable_correctness_check(self, enable: bool = True) -> "TuneStrategy":
@@ -188,8 +188,8 @@ class TuneStrategy(ABC):
         log("number of layers: %s", self._count_layers(module), depth=1, sink=self._sink)
         log("precisions: %s", precisions, depth=1, sink=self._sink)
         log("graph_spec:", depth=1, sink=self._sink)
-        log("input_spec: %s", graph_spec.input_spec.describe(), depth=2, sink=self._sink)
-        log("output_spec: %s", graph_spec.output_spec.describe(), depth=2, sink=self._sink)
+        log("input_spec:\n %s", graph_spec.input_spec.describe(), depth=2, sink=self._sink)
+        log("output_spec:\n %s", graph_spec.output_spec.describe(), depth=2, sink=self._sink)
         log("num samples: %s", len(data), depth=1, sink=self._sink)
         log("device: %s", device, depth=1, sink=self._sink)
         log("cache_dir: %s", cache_dir, depth=1, sink=self._sink)

@@ -126,7 +126,6 @@ def test_output_allocator_inference_flow(tmp_path):
         _trt_runtime=MagicMock(),
         _system_monitor=MagicMock(),
         _graph_spec=MagicMock(),
-        _output_format=MagicMock(),
         _output_names=["output_0"],
     ):
         # Setup mock components
@@ -169,7 +168,6 @@ def test_output_allocator_inference_flow(tmp_path):
         backend._output_allocator.notify_shape("output_0", MockDims(mock_output.shape))
 
         # Mock the output format handling
-        backend._output_format.value = "TENSOR"
         backend._prepare_outputs_for_return = MagicMock(return_value=mock_output)
 
         # Set the backend state to ACTIVE to allow inference

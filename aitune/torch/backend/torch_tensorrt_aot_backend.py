@@ -167,7 +167,8 @@ class TorchTensorRTAotBackend(Backend):
         )
 
         # Note: torch export requires batch size to be grater then 1
-        args, kwargs = graph_spec.input_spec.make_batch(data[0], batch_size=2)
+        args, kwargs = data[0]
+        args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=2)
 
         exported_model = torch.export.export(
             trt_model_compiled,

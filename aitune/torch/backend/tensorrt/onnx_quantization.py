@@ -142,12 +142,17 @@ class ONNXQuantizer:
         Returns:
             List of dictionaries mapping input names to tensors for calibration
         """
-        logger.debug("Preparing calibration data with proper input names for %s samples", len(data))
+        logger.debug("Preparing calibration data with proper input names for %d samples", len(data))
         calibration_data_with_names = []
 
         for sample in data:
-            # Use the graph spec to flatten the sample and get proper input names
-            input_dict = graph_spec.input_spec.flatten_sample(sample)
+            args, kwargs = sample
+            input_dict = {}
+            for locator, tensor_spec in graph_spec.input_spec.tensor_data:
+                if tensor_spec.name.startswith("args"):
+                    input_dict[tensor_spec.name] = locator.get_value(args)
+                else:
+                    input_dict[tensor_spec.name] = locator.get_value(kwargs)
             calibration_data_with_names.append(input_dict)
             logger.debug("Mapped sample to input names: %s", list(input_dict.keys()))
 

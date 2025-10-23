@@ -13,11 +13,8 @@
 # limitations under the License.
 """Inplace configuration."""
 
-import copy
-import dataclasses
 import os
 from pathlib import Path
-from typing import Any
 
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "aitune"
 DEFAULT_MIN_NUM_SAMPLES = 100
@@ -63,6 +60,7 @@ class AITuneConfig:
         self._cache_dir: Path = aitune_cache_dir()
         self._min_num_samples: int = DEFAULT_MIN_NUM_SAMPLES
         self._max_num_samples_stored: int = DEFAULT_MAX_NUM_SAMPLES_STORED
+        self.strict_mode: bool = True
 
     @property
     def min_num_samples(self) -> int:
@@ -97,32 +95,12 @@ class AITuneConfig:
         self._cache_dir = Path(cache_dir)
 
 
-@dataclasses.dataclass
-class TuneConfig:
-    """Configuration for inplace Tune.
-
-    Args:
-        workspace: Workspace where packages will be extracted
-    """
-
-    workspace: Path | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert TuneConfig to dictionary."""
-        config_dict = {}
-        for field in dataclasses.fields(self):
-            value = getattr(self, field.name)
-            config_dict[field.name] = value
-        return config_dict
-
-    def clone(self) -> "TuneConfig":
-        """Clone the current TuneConfig using deepcopy."""
-        return copy.deepcopy(self)
-
-
 def get_bool_env_variable(env_variable: str, default: bool) -> bool:
     """Get a boolean environment variable."""
     value = os.environ.get(env_variable)
     if value is None:
         return default
     return value in ["1", "true", "True", "yes", "Yes", "YES"]
+
+
+config = AITuneConfig()

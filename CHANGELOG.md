@@ -28,6 +28,7 @@ limitations under the License.
 - feat: add ONNX AutoCast in TensorRT Backend for mixed precision through TensorRT ModelOpt
 - feat: extended collecting profiling metrics through nvtx annotations
 - feat: suppress console output during tuning and save logs to file - controlled through verbose flag
+- feat: add support for dataclasses and user custom object in module.forward arguments
 - fix: prevent cache dir override when there are two similar modules in jit tuning
 - fix: dynamic shapes configuration for ONNX Dynamo export path in TensorRT Backend
 - fix: bfloat16 support in TensorRT Backend

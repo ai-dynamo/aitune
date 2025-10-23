@@ -98,7 +98,7 @@ def test_correctness_extension_torch_eager_backend_with_wrong_shapes(torch_devic
     strategy = TuneStrategyTestCorrectness()
 
     with pytest.raises(
-        CorrectnessTensorShapeError, match=r"Expected tensor output__0 to have shape \[2, 5\] but got \[1, 5\]"
+        CorrectnessTensorShapeError, match=r"Expected tensor outputs to have shape \[2, 5\] but got \[1, 5\]"
     ):
         backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
         backend.deactivate()

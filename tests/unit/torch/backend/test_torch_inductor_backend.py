@@ -23,7 +23,6 @@ from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend, To
 from aitune.torch.checkpoint.storage_tasks import TorchLoadTask, TorchSaveTask
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.module.sample_metadata import SampleMetadata
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -43,11 +42,6 @@ def sample_data(model, torch_device) -> list[Sample]:
     args = (sample.to(torch_device).unsqueeze(0),)
     kwargs = {}
     return [(args, kwargs)]
-
-
-@pytest.fixture
-def sample_metadata(sample_data) -> SampleMetadata:
-    return SampleMetadata(sample_data[0])
 
 
 def move_to_dtype(sample_data, dtype):

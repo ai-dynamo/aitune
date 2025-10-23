@@ -154,8 +154,8 @@ def test_wrap_with_strategies_map(simple_model):
     """Test wrapping with a strategy."""
     model = ToyTorchModel().to("cpu").eval()
     samples = model.inputs(device="cpu")
-    sample_metadata1 = SampleMetadata.from_sample(samples[0], prefix="test1")
-    sample_metadata2 = SampleMetadata.from_sample(samples[0], prefix="test2")
+    sample_metadata1 = SampleMetadata.from_inputs(args=samples[0], kwargs={})
+    sample_metadata2 = SampleMetadata.from_inputs(args=samples[0], kwargs={})
 
     strategies = {
         sample_metadata1: FirstWinsStrategy(backends=[TorchInductorBackend(), TensorRTBackend()]),

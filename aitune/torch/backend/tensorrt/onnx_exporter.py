@@ -119,7 +119,8 @@ class ONNXExporter:
             input_names = graph_spec.input_spec.get_names()
             output_names = graph_spec.output_spec.get_names()
 
-            args, kwargs = graph_spec.input_spec.make_batch(sample, batch_size=2)
+            args, kwargs = sample
+            args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=2)
 
             dynamic_shapes += [None] * (
                 len(args) + len(kwargs) - len(dynamic_shapes)

@@ -24,6 +24,7 @@ import torch
 
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch.config import AITuneConfig
+from aitune.torch.config import config as global_config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 
@@ -32,7 +33,7 @@ OUTPUT_METADATA_PREFIX = "output"
 
 logger = logging.getLogger(__name__)
 
-Sample = tuple[tuple[Any], dict]
+Sample = tuple[tuple, dict]
 
 
 class RecordingModule:
@@ -49,8 +50,7 @@ class RecordingModule:
         Args:
             module: module to be tuned.
             name: name of the module.
-            config: config for the module. If None, default config is used.
-            device: Device on which tuned module has to be executed.
+            config: Configuration for the module, if not provided, global config is used.
         """
         super().__init__()
         if not isinstance(module, torch.nn.Module):
@@ -58,7 +58,7 @@ class RecordingModule:
 
         self._module = module
         self._name = name
-        self._config = config if config is not None else AITuneConfig()
+        self._config = config if config is not None else global_config
         self._forward_call = module.__call__
 
         self._samples = defaultdict(list)
@@ -78,12 +78,11 @@ class RecordingModule:
         not other option for it.
         """
         logger.debug("Calling recording %s module.", self._name)
-        inputs: Sample = (args, kwargs)
-        inputs_metadata = SampleMetadata.from_sample(inputs, prefix=INPUT_METADATA_PREFIX)
+        inputs_metadata = SampleMetadata.from_inputs(args, kwargs, strict=self._config.strict_mode)
         outputs = self._forward_call(*args, **kwargs)
-        outputs_metadata = SampleMetadata.from_sample(outputs, prefix=OUTPUT_METADATA_PREFIX)
+        outputs_metadata = SampleMetadata.from_outputs(outputs, strict=self._config.strict_mode)
 
-        self.record_sample(inputs, inputs_metadata, outputs_metadata)
+        self.record_sample((args, kwargs), inputs_metadata, outputs_metadata)
 
         return outputs
 
@@ -127,5 +126,5 @@ class RecordingModule:
         """Get the samples."""
         result = []
         for path in self._samples[graph_spec.input_spec]:
-            result.append(torch.load(path, weights_only=True))
+            result.append(torch.load(path, weights_only=False))
         return result

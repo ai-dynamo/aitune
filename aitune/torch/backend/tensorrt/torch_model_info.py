@@ -13,6 +13,7 @@
 # limitations under the License.
 """PyTorch Model Info module for extracting information from PyTorch models."""
 
+import copy
 import enum
 import inspect
 import logging
@@ -80,15 +81,13 @@ class TorchModelInfo:
                 # Run inference and analyze outputs
                 outputs = self._run_inference(model, args, kwargs)
 
-                self._output_class = outputs.__class__
+                self._output_object = copy.deepcopy(outputs)
                 self._analyze_outputs(outputs)
 
             # Log results
             logger.debug("Extracted information for model:")
             logger.debug("  Inputs: %s", self._input_names)
             logger.debug("  Outputs: %s", self._output_names)
-            if self._output_class:
-                logger.debug("  Output class: %s", self._output_class)
 
         except Exception as e:
             logger.debug("Failed to extract information from PyTorch model: %s", e)
@@ -130,21 +129,20 @@ class TorchModelInfo:
             logger.warning("Found unexpected kwargs that don't match any parameter: %s", unknown_kwargs)
 
         # Create sample metadata to help with input analysis
-        sample_metadata = SampleMetadata.from_sample(sample, prefix="input")
-        flattened_sample = sample_metadata.flatten_sample(sample)
+        sample_metadata = SampleMetadata.from_inputs(args, kwargs)
 
         # Extract input names from sample metadata
         self._input_names = []
         self._input_shapes = {}
         self._input_dtypes = {}
 
-        # Map tensor specs to parameter names when possible
-        tensor_specs = sample_metadata.tensor_specs
-
         # For args, use the corresponding parameter name if available
         args_count = 0
-        for tensor_spec in tensor_specs:
-            tensor = flattened_sample[tensor_spec.name]
+        for locator, tensor_spec in sample_metadata.tensor_data:
+            if tensor_spec.name.startswith("args"):
+                tensor = locator.get_value(args)
+            else:
+                tensor = locator.get_value(kwargs)
 
             # Try to match with parameter name
             if args_count < len(args) and args_count < len(param_names):
@@ -195,14 +193,11 @@ class TorchModelInfo:
         else:
             self._analyze_object_output(outputs)
 
-        logger.debug("Detected output format: %s", self._output_format.value)
-
     def _initialize_output_data(self) -> None:
         """Initialize output data structures."""
         self._output_names = []
         self._output_shapes = {}
         self._output_dtypes = {}
-        self._output_format = OutputFormat.UNKNOWN
 
     def _analyze_tensor_output(self, tensor: torch.Tensor) -> None:
         """Analyze single tensor output.
@@ -210,7 +205,6 @@ class TorchModelInfo:
         Args:
             tensor: Output tensor from the model
         """
-        self._output_format = OutputFormat.TENSOR
         name = "output_0"
         self._output_names = [name]
         self._output_shapes[name] = list(tensor.shape)
@@ -223,7 +217,6 @@ class TorchModelInfo:
         Args:
             tensors: Tuple of output tensors from the model
         """
-        self._output_format = OutputFormat.TUPLE
         self._analyze_iterable_output(tensors)
         logger.debug("Analyzed tuple output with %s tensors", len(self._output_names))
 
@@ -233,7 +226,6 @@ class TorchModelInfo:
         Args:
             tensors: List of output tensors from the model
         """
-        self._output_format = OutputFormat.LIST
         self._analyze_iterable_output(tensors)
         logger.debug("Analyzed list output with %s tensors", len(self._output_names))
 
@@ -256,7 +248,6 @@ class TorchModelInfo:
         Args:
             outputs: Dictionary of output tensors from the model
         """
-        self._output_format = OutputFormat.DICT
         self._output_names = list(outputs.keys())
         for name, out in outputs.items():
             if isinstance(out, torch.Tensor):
@@ -279,7 +270,6 @@ class TorchModelInfo:
 
         # If we found tensor attributes, assume it's a custom object format
         if self._output_names:
-            self._output_format = OutputFormat.OBJECT
             logger.debug("Analyzed object output with tensor attributes: %s", self._output_names)
         else:
             logger.debug("No tensor attributes found in object output")
@@ -339,19 +329,10 @@ class TorchModelInfo:
         return self._output_dtypes
 
     @property
-    def output_class(self):
-        """Output class type.
+    def output_object(self) -> Any:
+        """Output object.
 
         Returns:
-            The class type of the model output
+            The object output from the model
         """
-        return self._output_class
-
-    @property
-    def output_format(self) -> OutputFormat:
-        """Output format type.
-
-        Returns:
-            Enum indicating the output format: TENSOR, TUPLE, LIST, DICT, OBJECT, or UNKNOWN
-        """
-        return self._output_format
+        return self._output_object

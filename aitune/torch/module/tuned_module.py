@@ -19,7 +19,9 @@ from typing import Any
 import torch
 
 from aitune.torch.backend.backend import Backend
-from aitune.torch.module.recording_module import INPUT_METADATA_PREFIX, Sample
+from aitune.torch.config import AITuneConfig
+from aitune.torch.config import config as global_config
+from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 
 
@@ -44,6 +46,7 @@ class TunedModule:
         self,
         backends: OrderedDict[SampleMetadata, Backend],
         check_graph: bool = True,
+        config: AITuneConfig | None = None,
     ) -> None:
         """Initializes module.
 
@@ -53,7 +56,7 @@ class TunedModule:
             check_graph: whether to check the graph of the sample before calling the backend.
                 If True, the graph of the sample is checked against the graph of the backend.
                 If False, the graph of the sample is not checked against the graph of the backend.
-            device: Device on which tuned module has to be executed.
+            config: Configuration for the module, if not provided, global config is used.
         """
         self._backends = backends
         self._check_graph = check_graph
@@ -65,6 +68,8 @@ class TunedModule:
         else:
             self._unique_backend = list(self._backends.values())[0]
             self._backend_func = self.call_unique_backend
+
+        self._config = config if config is not None else global_config
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run the call through the tuned module."""
@@ -93,12 +98,12 @@ class TunedModule:
 
     def safe_call_backend(self, sample: Sample):
         """Calls the backend according to the metadata of the sample."""
-        sample_metadata = SampleMetadata.from_sample(sample, prefix=INPUT_METADATA_PREFIX)
+        args, kwargs = sample
+        sample_metadata = SampleMetadata.from_inputs(args, kwargs, strict=self._config.strict_mode)
         if sample_metadata not in self._backends:
             raise RuntimeError(self.ERROR_NO_BACKEND_FOUND.format(sample_metadata))
 
         backend = self._backends[sample_metadata]
-        args, kwargs = sample
         return backend.infer(*args, **kwargs)
 
     def activate(self):

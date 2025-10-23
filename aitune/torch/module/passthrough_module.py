@@ -15,9 +15,6 @@
 
 from typing import Any
 
-import torch
-
-from aitune.torch.module.recording_module import INPUT_METADATA_PREFIX
 from aitune.torch.module.sample_metadata import SampleMetadata
 
 
@@ -51,19 +48,12 @@ class PassthroughModule:
 
     def _prepare_inputs(self, *args, **kwargs):
         """Prepare inputs for inplace inference and place them on the same device if are not."""
-        sample = (*args, kwargs)
-        sample_metadata = SampleMetadata.from_sample(sample, prefix=INPUT_METADATA_PREFIX)
+        sample_metadata = SampleMetadata.from_inputs(args, kwargs)
 
-        input_sample = {}
-        for n, t in sample_metadata.flatten_sample(sample).items():
-            if isinstance(t, torch.Tensor) and t.device != self._device:
-                t = t.to(self._device)
-            input_sample[n] = t
+        for locator, tensor_spec in sample_metadata.tensor_data:
+            if tensor_spec.name.startswith("args"):
+                args = locator.set_value(args, locator.get_value(args).to(self._device))
+            else:
+                kwargs = locator.set_value(kwargs, locator.get_value(kwargs).to(self._device))
 
-        unflatten_inputs = sample_metadata.unflatten_sample(input_sample, wrap_input=True)
-        if isinstance(unflatten_inputs[-1], dict):
-            device_args, device_kwargs = unflatten_inputs[:-1], unflatten_inputs[-1]
-        else:
-            device_args, device_kwargs = unflatten_inputs, {}
-
-        return device_args, device_kwargs
+        return args, kwargs

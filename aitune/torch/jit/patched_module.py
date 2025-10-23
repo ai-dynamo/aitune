@@ -30,7 +30,7 @@ from aitune.torch.jit.config import config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule, Sample
-from aitune.torch.module.sample_metadata import SampleMetadata, UnsupportedTypeException
+from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy.jit_strategy import JitStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
@@ -237,13 +237,6 @@ class PatchedModule:
             self._restore_original_forward()
             result = self._wrapper(*args, **kwargs)
             self._proxy_forward()
-        except UnsupportedTypeException as e:
-            self._handle_unsupported_type(e)
-            result = self.__wrapped__(*args, **kwargs)  # return original result
-            # since cannot record parent, let child modules be allowed to tune
-            # the order is important - line above will call and register child modules
-            for child in self._children:
-                child._allowed_to_tune = True
         finally:
             PatchedModule.stack.pop()
         return result
@@ -260,17 +253,10 @@ class PatchedModule:
             self._unpatch_hierarchy(include_self=True)
             return self.__wrapped__(*args, **kwargs)
 
-        try:
-            self._restore_original_forward()
-            result = self._wrapper(*args, **kwargs)
-            self._proxy_forward()
-            self._call_count += 1
-        except UnsupportedTypeException as e:
-            self._handle_unsupported_type(e)
-            result = self.__wrapped__(*args, **kwargs)  # return original result
-            # since cannot record parent, let child modules be allowed to tune
-            for child in self._children:
-                child._allowed_to_tune = True
+        self._restore_original_forward()
+        result = self._wrapper(*args, **kwargs)
+        self._proxy_forward()
+        self._call_count += 1
 
         if self._should_be_tuned():
             self.tune()
@@ -302,13 +288,6 @@ class PatchedModule:
             hierarchy_names += current._name + str(current._id)
             todo.extend(current._children)
         return hashlib.sha256(hierarchy_names.encode()).hexdigest()[:10]
-
-    def _handle_unsupported_type(self, e: UnsupportedTypeException):
-        """Handle unsupported type exception."""
-        self._update_state(ModuleState.EAGER)
-        self._unpatch()
-        self._extra_state_info = f"Unsupported type: {e.wrong_type.__module__}.{e.wrong_type.__name__}"
-        _to_hist(f"Cannot record module: {self._name}, {self._extra_state_info}")
 
     def _patch_device_attribute(self, device: torch.device):
         """Patch the device attribute of the module and its parents.

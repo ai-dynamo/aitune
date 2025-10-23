@@ -20,20 +20,22 @@ import torch
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
-from aitune.torch.module.recording_module import INPUT_METADATA_PREFIX
+from aitune.torch.config import AITuneConfig
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 
 
-def get_tuned_module(check_graph=True):
+def get_tuned_module(check_graph=True, strict_mode=False):
+    config = AITuneConfig()
+    config.strict_mode = strict_mode
     kwargs = {}
-    graph1 = SampleMetadata.from_sample(((1,), kwargs), prefix=INPUT_METADATA_PREFIX)
-    graph2 = SampleMetadata.from_sample(((torch.randn(2),), kwargs), prefix=INPUT_METADATA_PREFIX)
+    graph1 = SampleMetadata.from_inputs((1,), kwargs, strict=strict_mode)
+    graph2 = SampleMetadata.from_inputs((torch.randn(2),), kwargs, strict=strict_mode)
     backend1 = Mock()
     backend2 = Mock()
     backends = OrderedDict({graph1: backend1, graph2: backend2})
 
-    module = TunedModule(backends=backends, check_graph=check_graph)
+    module = TunedModule(backends=backends, check_graph=check_graph, config=config)
     return backend1, backend2, module
 
 
@@ -49,7 +51,7 @@ def test_unique_backend():
 
 @pytest.mark.parametrize("check_graph", [True, False])
 def test_multiple_dict_backends(check_graph):
-    backend1, backend2, module = get_tuned_module(check_graph)
+    backend1, backend2, module = get_tuned_module(check_graph, strict_mode=True)
 
     module(1)
     backend1.infer.assert_called_with(1)
@@ -73,8 +75,8 @@ def test_deactivate():
 def test_serialization():
     """Test serialization and deserialization of TunedModule."""
     kwargs = {}
-    graph1 = SampleMetadata.from_sample(((1,), kwargs), prefix=INPUT_METADATA_PREFIX)
-    graph2 = SampleMetadata.from_sample(((torch.randn(2),), kwargs), prefix=INPUT_METADATA_PREFIX)
+    graph1 = SampleMetadata.from_inputs((1,), kwargs, strict=True)
+    graph2 = SampleMetadata.from_inputs((torch.randn(2),), kwargs, strict=True)
     backend1 = TorchInductorBackend()
     backend2 = TorchInductorBackend()
     backend1._orig_module = Mock(spec=torch.nn.Module)

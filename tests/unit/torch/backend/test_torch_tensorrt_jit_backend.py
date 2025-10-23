@@ -27,7 +27,6 @@ from aitune.torch.backend.torch_tensorrt_jit_backend import (
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.module.sample_metadata import SampleMetadata
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -46,11 +45,6 @@ def model(torch_device) -> nn.Module:
 @pytest.fixture
 def sample_data(model, torch_device) -> list[Sample]:
     return model.samples(device=torch_device)
-
-
-@pytest.fixture
-def sample_metadata(sample_data) -> SampleMetadata:
-    return SampleMetadata(sample_data[0])
 
 
 @pytest.fixture

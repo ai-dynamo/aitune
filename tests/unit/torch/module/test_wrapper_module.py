@@ -21,6 +21,7 @@ import torch
 
 from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
 from aitune.torch.config import aitune_cache_dir
+from aitune.torch.config import config as global_config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
@@ -79,6 +80,7 @@ def test_module_registration():
 
 
 def test_recording(module):
+    global_config.strict_mode = True
     module(1)
     assert len(module.graph_specs) == 1
     module(2)
@@ -87,6 +89,7 @@ def test_recording(module):
 
 
 def test_passthrough(module):
+    global_config.strict_mode = True
     module(1)
     module.enable_passthrough()
     module(2)
@@ -127,6 +130,7 @@ def test_forward_hooks(module):
 
 def test_tune_dry_run(module, torch_device):
     strategy = Mock()
+    global_config.strict_mode = True
 
     with pytest.raises(ValueError, match="Module: 'demo-identity' has not recorded any samples. Cannot tune it."):
         module.tune(strategy=strategy, dry_run=True, device=torch_device)
@@ -142,8 +146,8 @@ def test_tune_dry_run(module, torch_device):
             TEST_MODULE_NAME,
             GraphSpec(
                 name="0",
-                input_spec=SampleMetadata.from_sample(((1,), {"a": 1}), prefix="input"),
-                output_spec=SampleMetadata.from_sample(1, prefix="output"),
+                input_spec=SampleMetadata.from_inputs(args=(1,), kwargs={"a": 1}, strict=True),
+                output_spec=SampleMetadata.from_outputs(1, strict=True),
             ),
             [
                 ((1,), {"a": 1}),
@@ -156,8 +160,8 @@ def test_tune_dry_run(module, torch_device):
             TEST_MODULE_NAME,
             GraphSpec(
                 name="1",
-                input_spec=SampleMetadata.from_sample(((2,), {"b": 2}), prefix="input"),
-                output_spec=SampleMetadata.from_sample(2, prefix="output"),
+                input_spec=SampleMetadata.from_inputs(args=(2,), kwargs={"b": 2}, strict=True),
+                output_spec=SampleMetadata.from_outputs(2, strict=True),
             ),
             [((2,), {"b": 2})],
             torch_device,
@@ -170,6 +174,7 @@ def test_tune_dry_run(module, torch_device):
 
 def test_tune(module, torch_device):
     strategy = Mock()
+    global_config.strict_mode = True
 
     with pytest.raises(ValueError, match="Module: 'demo-identity' has not recorded any samples. Cannot tune it."):
         module.tune(strategy=strategy, dry_run=True, device=torch_device)
@@ -185,8 +190,8 @@ def test_tune(module, torch_device):
             TEST_MODULE_NAME,
             GraphSpec(
                 name="0",
-                input_spec=SampleMetadata.from_sample(((1,), {"a": 1}), prefix="input"),
-                output_spec=SampleMetadata.from_sample(1, prefix="output"),
+                input_spec=SampleMetadata.from_inputs(args=(1,), kwargs={"a": 1}, strict=True),
+                output_spec=SampleMetadata.from_outputs(1, strict=True),
             ),
             [((1,), {"a": 1})],
             torch_device,
@@ -197,8 +202,8 @@ def test_tune(module, torch_device):
             TEST_MODULE_NAME,
             GraphSpec(
                 name="1",
-                input_spec=SampleMetadata.from_sample(((2,), {"b": 2}), prefix="input"),
-                output_spec=SampleMetadata.from_sample(2, prefix="output"),
+                input_spec=SampleMetadata.from_inputs(args=(2,), kwargs={"b": 2}, strict=True),
+                output_spec=SampleMetadata.from_outputs(2, strict=True),
             ),
             [((2,), {"b": 2})],
             torch_device,
@@ -250,10 +255,11 @@ def test_tune_with_list_of_strategies(torch_device):
 
 def test_tune_with_dict_of_strategies(torch_device):
     model = Identity()
+    global_config.strict_mode = True
     strategy1 = Mock()
     strategy2 = Mock()
-    graph1 = SampleMetadata.from_sample(((1,), {}), prefix="irrelevant")
-    graph2 = SampleMetadata.from_sample(((2,), {}), prefix="irrelevant")
+    graph1 = SampleMetadata.from_inputs(args=(1,), kwargs={}, strict=True)
+    graph2 = SampleMetadata.from_inputs(args=(2,), kwargs={}, strict=True)
     module = Module(model, TEST_MODULE_NAME, strategies={graph1: strategy1, graph2: strategy2})
 
     module(1)
@@ -272,7 +278,7 @@ def test_tune_with_dict_of_strategies(torch_device):
     module(2)
     module(3)
 
-    with pytest.raises(RuntimeError, match=r"The are following errors:\nmissing strategy for graph:\(\(3,\), \{\}\)"):
+    with pytest.raises(RuntimeError, match=r"The are following errors:\nmissing strategy for graph"):
         module.tune(dry_run=False, device=torch_device)
 
 

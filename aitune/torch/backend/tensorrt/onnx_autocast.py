@@ -73,13 +73,18 @@ class ONNXAutoCast:
         calibration_data_with_names = []
 
         for sample in data:
-            # Use the graph spec to flatten the sample and get proper input names
-            input_dict = graph_spec.input_spec.flatten_sample(sample)
+            args, kwargs = sample
+            input_dict = {}
+            for locator, tensor_spec in graph_spec.input_spec.tensor_data:
+                if tensor_spec.name.startswith("args"):
+                    input_dict[tensor_spec.name] = locator.get_value(args)
+                else:
+                    input_dict[tensor_spec.name] = locator.get_value(kwargs)
             calibration_data_with_names.append(input_dict)
             logger.debug("Mapped sample to input names: %s", list(input_dict.keys()))
 
         logger.debug(
-            "Successfully prepared %d calibration samples with proper input names", len(calibration_data_with_names)
+            "Successfully prepared %s calibration samples with proper input names", len(calibration_data_with_names)
         )
         return calibration_data_with_names
 

@@ -62,3 +62,11 @@ class GraphSpec:
             raise ValueError(f"Invalid dictionary format for {GraphSpec.__name__}")
         del data["type"]
         return GraphSpec(**data)
+
+    def __str__(self) -> str:
+        """Return string representation of GraphSpec."""
+        return f"Name={self.name}\nInput_spec:\n{self.input_spec.describe()}Output_spec:\n{self.output_spec.describe()}"
+
+    def __repr__(self) -> str:
+        """Return representation of GraphSpec."""
+        return self.__str__()

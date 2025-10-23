@@ -48,6 +48,6 @@ def test_prepare_calibration_data():
         graph_spec=graph_spec,
     )
 
-    assert calibration_samples[0]["input__0"][0].shape == cpu_samples[0][0][0][0].shape
-    assert calibration_samples[0]["input__0"][1].shape == cpu_samples[0][0][0][1].shape
-    assert len(calibration_samples[0]["input__0"]) == len(cpu_samples[0][0][0]) == 2  # two batched samples.
+    assert calibration_samples[0]["args_0"][0].shape == cpu_samples[0][0][0][0].shape
+    assert calibration_samples[0]["args_0"][1].shape == cpu_samples[0][0][0][1].shape
+    assert len(calibration_samples[0]["args_0"]) == len(cpu_samples[0][0][0]) == 2  # two batched samples.

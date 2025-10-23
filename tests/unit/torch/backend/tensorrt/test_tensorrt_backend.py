@@ -22,7 +22,6 @@ from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, Tens
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.utils.cuda import is_available as is_cuda_available
 from tests.toy_models.torch_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -53,19 +52,19 @@ def mock_tensorrt_components(mocker, tmp_path):
     # Mock execution context and bindings
     mock_context = mocker.MagicMock()
     mock_bindings = {}
-    mock_input_names = ["input__0"]
-    mock_output_names = ["output__0"]
+    mock_input_names = ["args_0"]
+    mock_output_names = ["outputs_0"]
 
     # Mock engine info
     mock_engine_info = mocker.MagicMock()
-    mock_engine_info.input_names = ["input__0"]
-    mock_engine_info.output_names = ["output__0"]
-    mock_engine_info.input_shapes = {"input__0": (BATCH_SIZE, IN_FEATURES)}
+    mock_engine_info.input_names = ["args_0"]
+    mock_engine_info.output_names = ["outputs_0"]
+    mock_engine_info.input_shapes = {"args_0": (BATCH_SIZE, IN_FEATURES)}
     mock_engine_info.output_shapes = {
-        "output__0": (BATCH_SIZE, OUT_FEATURES),
+        "outputs_0": (BATCH_SIZE, OUT_FEATURES),
     }
-    mock_engine_info.input_dtypes = {"input__0": torch.float32}
-    mock_engine_info.output_dtypes = {"output__0": torch.float32}
+    mock_engine_info.input_dtypes = {"args_0": torch.float32}
+    mock_engine_info.output_dtypes = {"outputs_0": torch.float32}
 
     mock_runtime_instance.create_execution_context.return_value = (
         mock_context,
@@ -212,42 +211,81 @@ def test_tensorrt_backend_prepare_inputs(mocker):
 
     backend = TensorRTBackend()
     backend._engine_info = mocker.MagicMock()
-    backend._engine_info.input_names = ["input__0", "input__1"]
     backend._context = mocker.MagicMock()
     backend._context.get_tensor_shape.return_value = (1, IN_FEATURES)
 
     test_tensor = torch.randn(1, IN_FEATURES)
 
     # case 1: single arg only
-    sample = ((test_tensor,), {})
-    input_metadata = SampleMetadata.from_sample(sample, prefix="input")
-    output_metadata = SampleMetadata.from_sample(sample, prefix="output")
+    args, kwargs = (test_tensor,), {}
+    sample = (args, kwargs)
+    backend._engine_info.input_names = ["args_0"]
+    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    output_metadata = SampleMetadata.from_outputs(sample)
     backend._graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
 
     prepared_inputs = backend._prepare_inputs((test_tensor,), {})
-    assert torch.equal(prepared_inputs["input__0"], test_tensor)
+    assert torch.equal(prepared_inputs["args_0"], test_tensor)
 
     # case 2: single kwarg only
-    sample = ((), {"x": test_tensor})
-    input_metadata = SampleMetadata.from_sample(sample, prefix="input")
-    output_metadata = SampleMetadata.from_sample(sample, prefix="output")
+    args, kwargs = (), {"x": test_tensor}
+    sample = (args, kwargs)
+    backend._engine_info.input_names = ["kwargs_x"]
+    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    output_metadata = SampleMetadata.from_outputs(sample)
     backend._graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
 
     prepared_inputs = backend._prepare_inputs((), {"x": test_tensor})
-    assert torch.equal(prepared_inputs["input__0"], test_tensor)
+    assert torch.equal(prepared_inputs["kwargs_x"], test_tensor)
 
     # case 3: single arg and single kwarg
-    sample = ((test_tensor,), {"x": test_tensor})
-    input_metadata = SampleMetadata.from_sample(sample, prefix="input")
-    output_metadata = SampleMetadata.from_sample(sample, prefix="output")
+    args, kwargs = (test_tensor,), {"x": test_tensor}
+    sample = (args, kwargs)
+    backend._engine_info.input_names = ["args_0", "kwargs_x"]
+    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    output_metadata = SampleMetadata.from_outputs(sample)
     backend._graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
 
     prepared_inputs = backend._prepare_inputs((test_tensor,), {"x": test_tensor})
-    assert torch.equal(prepared_inputs["input__0"], test_tensor)
-    assert torch.equal(prepared_inputs["input__1"], test_tensor)
+    assert torch.equal(prepared_inputs["args_0"], test_tensor)
+    assert torch.equal(prepared_inputs["kwargs_x"], test_tensor)
 
 
-@pytest.mark.skipif(not is_cuda_available(), reason="CUDA is not available")
+@requires_cuda
+def test_backend_inference_returns_copy_of_tensors(tmp_path):
+    """The test validates whether backend returns a copy of tensor and not the view of the allocated output.
+
+    This is important if user invokes several infer functions and the latter don't overwrite the previous results.
+    """
+
+    class AddOneModule(torch.nn.Module):
+        def forward(self, x):
+            return x + 1
+
+    model = AddOneModule()
+    device = torch.device("cuda")
+    model.to(device)
+    model.eval()
+    x = torch.tensor([[1, 1]], device=device)
+    args, kwargs = (x,), {}
+    graph_spec = GraphSpec(
+        name="test_graph",
+        input_spec=SampleMetadata.from_inputs(args, kwargs),
+        output_spec=SampleMetadata.from_outputs(x),
+    )
+
+    backend = TensorRTBackend()
+    backend = backend.build(model, graph_spec, [(args, kwargs)], device=device, cache_dir=tmp_path)
+
+    output1 = backend.infer(x)
+    output2 = backend.infer(x + 1)  # this call should not alter the previous result
+    backend.deactivate()
+
+    assert output1.equal(torch.tensor([[2, 2]], device=device))
+    assert output2.equal(torch.tensor([[3, 3]], device=device))
+
+
+@requires_cuda
 def test_tensorrt_backend_deactivate(tmp_path):
     """Test the deactivate method."""
     # Create backend
@@ -326,21 +364,21 @@ def test_build_with_dynamic_shapes(tmp_path, mocker):
     # Mock the create_execution_context method to return the expected 4 values
     mock_context = mocker.MagicMock()
     mock_bindings = {}
-    mock_input_names = ["input__0"]
-    mock_output_names = ["output__0"]
+    mock_input_names = ["args_0"]
+    mock_output_names = ["outputs_0"]
 
     # Mock engine info
     mock_engine_info = mocker.MagicMock()
-    mock_engine_info.input_names = ["input__0"]
+    mock_engine_info.input_names = ["args_0"]
     mock_engine_info.output_names = [
-        "output__0",
+        "outputs_0",
     ]
-    mock_engine_info.input_shapes = {"input__0": (BATCH_SIZE, IN_FEATURES)}
+    mock_engine_info.input_shapes = {"args_0": (BATCH_SIZE, IN_FEATURES)}
     mock_engine_info.output_shapes = {
-        "output__0": (BATCH_SIZE, OUT_FEATURES),
+        "outputs_0": (BATCH_SIZE, OUT_FEATURES),
     }
-    mock_engine_info.input_dtypes = {"input__0": torch.float32}
-    mock_engine_info.output_dtypes = {"output__0": torch.float32}
+    mock_engine_info.input_dtypes = {"args_0": torch.float32}
+    mock_engine_info.output_dtypes = {"outputs_0": torch.float32}
 
     mock_runtime.create_execution_context.return_value = (
         mock_context,
@@ -354,8 +392,8 @@ def test_build_with_dynamic_shapes(tmp_path, mocker):
     mock_runtime_class.return_value = mock_runtime
 
     # Set dynamic shapes - different values for min, opt, and max
-    min_shapes = {"input__0": (1, IN_FEATURES)}
-    max_shapes = {"input__0": (4, IN_FEATURES)}
+    min_shapes = {"args_0": (1, IN_FEATURES)}
+    max_shapes = {"args_0": (4, IN_FEATURES)}
 
     # Create backend with dynamic shapes
     backend = TensorRTBackend()
@@ -401,21 +439,21 @@ def test_build_without_dynamic_shapes(tmp_path, mocker):
     # Mock the create_execution_context method to return the expected 4 values
     mock_context = mocker.MagicMock()
     mock_bindings = {}
-    mock_input_names = ["input__0"]
-    mock_output_names = ["output__0"]
+    mock_input_names = ["args_0"]
+    mock_output_names = ["outputs_0"]
 
     # Mock engine info
     mock_engine_info = mocker.MagicMock()
-    mock_engine_info.input_names = ["input__0"]
+    mock_engine_info.input_names = ["args_0"]
     mock_engine_info.output_names = [
-        "output__0",
+        "outputs_0",
     ]
-    mock_engine_info.input_shapes = {"input__0": (BATCH_SIZE, IN_FEATURES)}
+    mock_engine_info.input_shapes = {"args_0": (BATCH_SIZE, IN_FEATURES)}
     mock_engine_info.output_shapes = {
-        "output__0": (BATCH_SIZE, OUT_FEATURES),
+        "outputs_0": (BATCH_SIZE, OUT_FEATURES),
     }
-    mock_engine_info.input_dtypes = {"input__0": torch.float32}
-    mock_engine_info.output_dtypes = {"output__0": torch.float32}
+    mock_engine_info.input_dtypes = {"args_0": torch.float32}
+    mock_engine_info.output_dtypes = {"outputs_0": torch.float32}
 
     mock_runtime.create_execution_context.return_value = (
         mock_context,
@@ -444,9 +482,9 @@ def test_build_without_dynamic_shapes(tmp_path, mocker):
     # Verify builder was initialized with default shape settings (None)
     mock_builder_class.assert_called_once()
     call_kwargs = mock_builder_class.call_args.kwargs
-    assert call_kwargs["min_shapes"] == {"input__0": (2, IN_FEATURES)}
-    assert call_kwargs["opt_shapes"] == {"input__0": (2, IN_FEATURES)}
-    assert call_kwargs["max_shapes"] == {"input__0": (2, IN_FEATURES)}
+    assert call_kwargs["min_shapes"] == {"args_0": (2, IN_FEATURES)}
+    assert call_kwargs["opt_shapes"] == {"args_0": (2, IN_FEATURES)}
+    assert call_kwargs["max_shapes"] == {"args_0": (2, IN_FEATURES)}
 
     # Verify the TensorRTBuilder.build method was called
     mock_builder.build.assert_called_once()

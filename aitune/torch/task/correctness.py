@@ -71,14 +71,12 @@ def check_output_correctness(output: Any, name: str = "output", depth: int = 0):
     if isinstance(output, np.ndarray):
         output = torch.from_numpy(output)
 
-    if not isinstance(output, torch.Tensor):
-        raise ValueError(f"Output {name} is not a tensor but {type(output)}")
+    if isinstance(output, torch.Tensor):
+        if torch.isinf(output).any():
+            raise CorrectnessValueError(f"Output tensor {name} contains infinity values")
 
-    if torch.isinf(output).any():
-        raise CorrectnessValueError(f"Output tensor {name} contains infinity values")
-
-    if torch.isnan(output).any():
-        raise CorrectnessValueError(f"Output tensor {name} contains NaN values")
+        if torch.isnan(output).any():
+            raise CorrectnessValueError(f"Output tensor {name} contains NaN values")
 
 
 def check_output_tensor_shapes(expected_tensor_specs: list[TensorSpec], actual_tensor_specs: list[TensorSpec]):

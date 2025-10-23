@@ -11,79 +11,137 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Contains SampleMetadata which represents metadata of a sample."""
+"""Contains SampleMetadata which represents metadata of a function inputs (args and kwargs) or outputs."""
 
-import itertools
-import uuid
-from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Union
+import copy
+import pickle
+from collections import defaultdict
+from collections.abc import Sequence
+from typing import Any
 
-import numpy as np
 import torch
+from tabulate import tabulate
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
+from aitune.torch.module.locator import Locator
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
-
-PYTHON_PRIMITIVE_TYPES = (int, float, bool, bytes, str, type(None))
-# The following is type of metadata which consists of python primitives, mappings and sequences
-# Note: any supported type have to have __hash__ and __eq__ implemented for hashing purposes
-MetadataType = Union[int, float, bool, bytes, str, type(None), "TensorSpec", Mapping, Sequence]
-
-
-class UnsupportedTypeException(Exception):
-    """Exception raised when an unsupported type is encountered."""
-
-    def __init__(self, value: Any):
-        """Initialize UnsupportedType exception."""
-        self.wrong_type = type(value)
-        super().__init__(f"Unsupported type: {self.wrong_type}")
 
 
 class SampleMetadata:
-    """Metadata description of a sample of data.
+    """Metadata description of inputs (args and kwargs) or outputs of a function.
 
-    The sample can consist of sequences, mappings, python primitives and tensors.
-    If a given part of sample is different the metadata will be considered different e.g.
-    sample(1) == sample(1)
-    sample(1) != sample(2)
-    sample(1, 1) != sample(1)
+    SampleMetadata captures and tracks metadata about function inputs (args and kwargs) and outputs. It serves
+    several important purposes:
 
-    The rule is a bit different for tensors:
-    - tensors of the same rank are considered equal
-    - tensors of the different rank are considered different
+    - Tensor Tracking: Automatically discovers and tracks all tensors in nested structures
+      (tuples, lists, dicts, dataclasses, custom objects).
+    - Shape Inference: Learns about dynamic dimensions and batch axes by observing multiple samples
+      with different shapes via `update_shapes_seen()`.
+    - Dynamic Batching: Supports scaling tensors to different batch sizes based on learned patterns
+      using `make_batch()`.
 
-    Same tensors:
-        sample(tensor(1)) == sample(tensor(1))
-        sample(tensor(1)) == sample(tensor(2))
-        sample(tensor(1, 1)) == sample(tensor(1, 7)) # 2nd axis is dynamic
-        sample(tensor(1, 4, 2)) == sample(tensor(2, 2, 4)) # all axes are dynamic
+    Operating Modes:
+        The metadata can be created in two modes based on the `strict` flag:
 
-    Different tensors:
-        sample(tensor(1)) != sample(tensor(1, 1))
-        sample(tensor(1, 1)) != sample(tensor(1, 1, 1))
+        - Non-strict mode (`strict=False`, default): Only tensors are tracked. Primitives and
+          other non-tensor data are ignored.
+        - Strict mode (`strict=True`): All data types are tracked, including primitives.
 
-    This two rules allow to differentiate between samples of data in order to create different multi-graphs.
+    Equality Rules:
+        For non-tensor data, metadata equality is strict - two samples are equal only if all parts
+        are equal:
+            sample(1) == sample(1)
+            sample(1) != sample(2)
+            sample(1, 1) != sample(1)
 
-    Example usage:
+        For PyTorch tensors, equality is determined by rank (number of dimensions):
+            # Same rank (equal metadata)
+            sample(tensor(1)) == sample(tensor(1))
+            sample(tensor(1)) == sample(tensor(2))
+            sample(tensor(1, 1)) == sample(tensor(1, 7))
+            sample(tensor(1, 4, 2)) == sample(tensor(2, 2, 4))
+
+            # Different rank (different metadata)
+            sample(tensor(1)) != sample(tensor(1, 1))
+            sample(tensor(1, 1)) != sample(tensor(1, 1, 1))
+
+        These rules ensure that samples differing in structure or tensor rank are treated as having
+        different metadata, supporting the creation of distinct multi-graph representations.
+
+    Key Concepts:
+        - Dynamic Dimensions: Dimensions that vary across samples (e.g., sequence length in NLP).
+          Marked as 'dim0', 'dim1', etc.
+        - Batch Axes: Dimensions that scale proportionally with batch size. Marked as 'batch0',
+          'batch1', etc. with associated multipliers.
+
+    Example - Basic Usage:
         >>> args = 1, 2, 3, torch.randn(2, 2)
-        >>> kwargs = {"t": torch.randn(2, 3)}
-        >>> SampleMetadata.from_sample((args, kwargs), prefix="test")
-        ((1, 2, 3, test__0[2, 2]), {t: test__1[2, 3]})
+        >>> kwargs = {"t": torch.randn(2, 3), "other": "abc"}
+        >>> # Non-strict mode: only tensors tracked
+        >>> SampleMetadata.from_inputs(args, kwargs, strict=False)
+        Tensors:
+        ╒═══════════╤══════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+        │ Locator   │ Name     │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+        ╞═══════════╪══════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+        │ [3]       │ args_3   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+        ├───────────┼──────────┼─────────┼─────────────┼─────────────┼───────────────┤
+        │ ['t']     │ kwargs_t │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+        ╘═══════════╧══════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+        <BLANKLINE>
+        >>> # Strict mode: all data tracked
+        >>> SampleMetadata.from_inputs(args, kwargs, strict=True)
+        Tensors:
+        ╒═══════════╤══════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+        │ Locator   │ Name     │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+        ╞═══════════╪══════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+        │ [3]       │ args_3   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+        ├───────────┼──────────┼─────────┼─────────────┼─────────────┼───────────────┤
+        │ ['t']     │ kwargs_t │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+        ╘═══════════╧══════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+        Other:
+        ╒═══════════╤══════════════╤═════════╕
+        │ Locator   │ Name         │ Value   │
+        ╞═══════════╪══════════════╪═════════╡
+        │ [0]       │ args_0       │ 1       │
+        ├───────────┼──────────────┼─────────┤
+        │ [1]       │ args_1       │ 2       │
+        ├───────────┼──────────────┼─────────┤
+        │ [2]       │ args_2       │ 3       │
+        ├───────────┼──────────────┼─────────┤
+        │ ['other'] │ kwargs_other │ abc     │
+        ╘═══════════╧══════════════╧═════════╛
+        <BLANKLINE>
 
-        >>> SampleMetadata.from_sample((args, kwargs), names=["t1", "t2"])
-        ((1, 2, 3, t1[2, 2]), {t: t2[2, 3]})
-
-        >>> s1 = SampleMetadata.from_sample(torch.randn(1, 2, 3), prefix="t")
-        >>> s2 = SampleMetadata.from_sample(torch.randn(2, 2, 3), prefix="t")
-        >>> s1 == s2
+    Example - Tensor Rank Equality:
+        >>> s1 = SampleMetadata.from_inputs((torch.randn(1, 2, 3),), kwargs={})
+        >>> s2 = SampleMetadata.from_inputs((torch.randn(2, 2, 3),), kwargs={})
+        >>> s1 == s2  # Same rank, different shape
         True
+
+    Note: the __init__ method should not be used directly. instead:
+
+        - for inputs - use SampleMetadata.from_inputs(args, kwargs)
+        - for outputs - use SampleMetadata.from_outputs(output)
+
+    See Also:
+        - TensorSpec: Underlying representation of individual tensors
+        - Locator: Navigation mechanism for nested structures
+        - sample_metadata_walkthrough.ipynb: Comprehensive tutorial on using SampleMetadata
     """
 
-    def __init__(self, metadata: MetadataType) -> None:
-        """Create SampleMetadata from provided metadata."""
-        self._metadata = metadata
-        self._tensor_specs = []
-        self._find_tensor_specs(metadata, self._tensor_specs)
+    def __init__(
+        self,
+        tensor_data: tuple[tuple[Locator, TensorSpec]],
+        other_data: tuple[tuple[Locator, str, str]],
+        strict: bool = False,
+    ) -> None:
+        """Create SampleMetadata from provided tensor data and other data.
+
+        If strict is False, other data is empty i.e. everything except tensors is ignored.
+        """
+        self._tensor_data = tensor_data
+        self._other_data = other_data
+        self._strict = strict
 
     def __str__(self) -> str:
         """Convert sample metadata to string."""
@@ -91,84 +149,95 @@ class SampleMetadata:
 
     def __repr__(self):
         """Return representation of metadata."""
-        return self.describe(InfoLevel.MEDIUM)
+        return self.describe(InfoLevel.FULL)
 
     def __eq__(self, __value: object) -> bool:
-        """Compare sample metadata."""
+        """Equality operator."""
         if not isinstance(__value, type(self)):
             return False
-        return self._metadata == __value._metadata
+        return self._tensor_data == __value._tensor_data and self._other_data == __value._other_data
 
     def __hash__(self) -> int:
         """Compute hash of sample metadata."""
-        return self._hash(self._metadata, 0)
-
-    def get_names_mapping(self) -> tuple[Sequence[Any], dict[str, Any]]:
-        """Get mapping of metadata to names. Flatten the structure to collect exact mapping used for samples.
-
-        Returns:
-            Tuple of lists of names for arguments and keyword arguments
-        """
-        metadata = self._metadata
-        if isinstance(metadata, (PYTHON_PRIMITIVE_TYPES, Mapping)):
-            metadata = (metadata,)
-
-        if isinstance(metadata, TensorSpec):
-            args, kwargs = [metadata], {}
-        elif isinstance(metadata[-1], Mapping):
-            args, kwargs = metadata[:-1], metadata[-1]
-        else:
-            args, kwargs = metadata, {}
-
-        args_mapping, kwargs_mapping = [], {}
-        for arg in args:
-            flattened = {}
-            self._flatten_sample(arg, arg, flattened, include_constants=False)
-            args_mapping.extend(list(flattened.keys()))
-
-        for key, arg in kwargs.items():  # pytype: disable=attribute-error
-            flattened = {}
-            self._flatten_sample(arg, arg, flattened, include_constants=False)
-            kwargs_mapping[key] = list(flattened.keys())
-
-        return args_mapping, kwargs_mapping
+        return hash(self._tensor_data) ^ hash(self._other_data)
 
     def detected_dynamic_axis(self) -> bool:
         """Check if dynamic axes are detected in the metadata."""
-        return any(ts.has_dynamic_axis() or ts.has_batch_axis() for ts in self._tensor_specs)
+        return any(ts.has_dynamic_axis() or ts.has_batch_axis() for ts in self.tensor_specs)
 
     def get_names(self) -> Sequence[str]:
-        """Get names of tensors in PyTreeMetadata."""
-        return list(self.flatten_sample(self._metadata).keys())
+        """Get names of tensors."""
+        return [ts.name for ts in self.tensor_specs]
+
+    def get_names_mapping(self) -> tuple[list[str], dict[str, list[Any]]]:
+        """Get tensor names.
+
+        Returns:
+            Tuple of list of tensor names for args and dictionary with key kwarg name, value - list of tensor names under this kwarg
+            - for args it returns list of tensor names
+            - for kwargs it returns dictionary with key kwarg name, value - list of tensor names under this kwarg
+        """
+        args_names: list[str] = []
+        kwargs_names: dict[str, list[Any]] = defaultdict(list)  # make pytype happy
+        for locator, tensor_spec in self._tensor_data:
+            if tensor_spec.name.startswith("args"):
+                args_names.append(tensor_spec.name)
+            else:
+                kwarg_name = locator._path[0][0]  # TODO:: better api for this?
+                kwargs_names[kwarg_name].append(tensor_spec.name)
+
+        return args_names, kwargs_names
+
+    @property
+    def other_data(self) -> tuple[tuple[Locator, str, str]]:
+        """Get list of other data."""
+        return self._other_data
+
+    @property
+    def tensor_data(self) -> tuple[tuple[Locator, TensorSpec]]:
+        """Get list of tensor data."""
+        return self._tensor_data
 
     @property
     def tensor_specs(self) -> list[TensorSpec]:
         """Get list of tensor specs."""
-        return self._tensor_specs
+        return [ts for _, ts in self._tensor_data]
 
     @staticmethod
-    def from_sample(
-        sample: Any, names: Iterable[str] | None = None, prefix: str = "", batch_size: int | None = None
+    def from_inputs(
+        args: Any, kwargs: dict[str, Any], strict: bool = False, batch_size: int | None = None
     ) -> "SampleMetadata":
-        """Create SampleMetadata from sample.
+        """Create SampleMetadata from inputs: args and kwargs.
 
-        Args:
-            sample: A sample from which SampleMetadata will be created
-            names: Names of tensors in the sample
-            prefix: A prefix for names of tensors in the sample. Used only if names are not provided.
-            batch_size: Batch size to use for tensors. If not provided, it will be taken from global context or nan if not set.
-
-        Returns:
-            SampleMetadata created from sample
+        If strict is True, then other data is also included.
         """
-        if names is None:
-            if prefix == "":
-                raise ValueError("Prefix must be provided if names are not provided")
-            names = (f"{prefix}__{i}" for i in itertools.count(start=0, step=1))
-        else:
-            names = iter(names)
-        metadata, _ = SampleMetadata._from_sample(sample, names, batch_size)
-        return SampleMetadata(metadata)
+        batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
+        tensor_data, other_data = [], []
+        for prefix, data_source in zip(("args", "kwargs"), (args, kwargs), strict=False):
+            for locator, value in Locator.find_leaves(data_source):
+                name = prefix + sanitize_tensor_name(str(locator))
+                if torch.is_tensor(value):
+                    tensor_data.append((locator, TensorSpec.from_tensor(name, value, batch_size)))
+                elif strict:
+                    other_data.append((locator, name, str(value)))
+
+        return SampleMetadata(tuple(tensor_data), tuple(other_data), strict)
+
+    @staticmethod
+    def from_outputs(output: Any, strict: bool = False, batch_size: int | None = None) -> "SampleMetadata":
+        """Create SampleMetadata from outputs.
+
+        If strict is True, then other data is also included.
+        """
+        batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
+        tensor_data, other_data = [], []
+        for locator, value in Locator.find_leaves(output):
+            name = "outputs" + sanitize_tensor_name(str(locator))
+            if torch.is_tensor(value):
+                tensor_data.append((locator, TensorSpec.from_tensor(name, value, batch_size)))
+            elif strict:
+                other_data.append((locator, name, str(value)))
+        return SampleMetadata(tuple(tensor_data), tuple(other_data), strict)
 
     @staticmethod
     def from_dict(data: dict) -> "SampleMetadata":
@@ -180,7 +249,11 @@ class SampleMetadata:
         Returns:
             A SampleMetadata instance
         """
-        return SampleMetadata(SampleMetadata._from_metadata(data["metadata"]))
+        return SampleMetadata(
+            pickle.loads(data["tensor_data"]),
+            pickle.loads(data["other_data"]),
+            data["strict"],
+        )
 
     def to_dict(self) -> dict:
         """Convert sample metadata to a serializable dictionary.
@@ -188,264 +261,85 @@ class SampleMetadata:
         Returns:
             A dictionary representation of the metadata that can be serialized.
         """
-        return {"metadata": self._serialize_metadata(self._metadata)}
+        return {
+            "tensor_data": pickle.dumps(self._tensor_data),
+            "other_data": pickle.dumps(self._other_data),
+            "strict": self._strict,
+        }
 
     def describe(self, info_level: InfoLevel = InfoLevel.FULL) -> str:
-        """Get information describing metadata."""
-        return self._describe(self._metadata, info_level)
+        """Get information describing sample metadata."""
+        tensors, tensor_header = [], []
+        for locator, ts in self._tensor_data:
+            if info_level == InfoLevel.SHORT:
+                tensors.append(ts.name)
+            elif info_level == InfoLevel.MEDIUM:
+                tensor_header = ["Locator", "Name", "Shape"]
+                tensors.append((str(locator), ts.name, ts.shape))
+            elif info_level == InfoLevel.FULL:
+                tensor_header = ["Locator", "Name", "Shape", "Min Shape", "Max Shape", "Dtype"]
+                tensors.append((str(locator), ts.name, ts.shape, ts.min_shape, ts.max_shape, ts.dtype))
 
-    def flatten_sample(self, sample: Any) -> dict[str, Any]:
-        """Flatten sample according to sample metadata.
+        others, other_header = [], []
+        for locator, name, value in self._other_data:
+            if info_level == InfoLevel.SHORT:
+                others.append(f"{name}={value}")
+            else:
+                other_header = ["Locator", "Name", "Value"]
+                others.append((str(locator), name, value))
 
-        Nested structure of sample is flattened to one level dict with keys corresponding to sample metadata.
-        """
-        flattened_sample = {}
-        self._flatten_sample(sample, self._metadata, flattened_sample)
-        return flattened_sample
+        if info_level == InfoLevel.SHORT:
+            result = "Tensors: " + ", ".join(tensors)
+            if others:
+                result += " Others: " + ", ".join(others)
+        else:
+            tbl_fmt = "simple" if info_level == InfoLevel.MEDIUM else "fancy_grid"
+            result = "Tensors:\n" + tabulate(tensors, headers=tensor_header, tablefmt=tbl_fmt) + "\n"
+            if others:
+                result += "Other:\n" + tabulate(others, headers=other_header, tablefmt=tbl_fmt) + "\n"
 
-    def unflatten_sample(self, sample: dict[str, Any], wrap_input: bool = False) -> Any:
-        """Unflatten sample according to sample metadata.
+        return result
 
-        Reverse process of flatten, flat structure is reversed to original nested structure according to metadata.
-        If wrap_input is True, then single tensor will be wrapped in tuple.
-        """
-        unflatten_sample = self._unflatten_sample(sample, self._metadata)
-        if wrap_input and isinstance(self._metadata, (str, Mapping)):
-            unflatten_sample = (unflatten_sample,)
-        return unflatten_sample
-
-    def make_batch(self, sample: Any, batch_size: int) -> Any:
-        """Returns sample with all tensors having specified batch size.
+    def make_batch(self, args: Any, kwargs: dict[str, Any], batch_size: int) -> tuple[Any, dict[str, Any]]:
+        """Takes args and kwargs and extrapolates all tensors according to tensor specs to have specified batch size.
 
         Args:
-            sample: Sample to make batch from
-            metadata: Metadata to make batch from
+            args: Args to make batch from
+            kwargs: Kwargs to make batch from
             batch_size: Batch size
 
         Returns:
-            Sample with all tensors having specified batch size
+            args, kwargs with all tensors having specified batch size
         """
-        return self._make_batch(sample, self._metadata, batch_size)
+        args = copy.deepcopy(args)
+        kwargs = copy.deepcopy(kwargs)
+        for locator, tensor_spec in self._tensor_data:
+            if tensor_spec.name.startswith("args"):
+                args = locator.set_value(args, batch_tensor(locator.get_value(args), tensor_spec, batch_size))
+            else:
+                kwargs = locator.set_value(kwargs, batch_tensor(locator.get_value(kwargs), tensor_spec, batch_size))
+
+        return args, kwargs
 
     def update_shapes_seen(self, other: "SampleMetadata"):
         """Update shapes seen from other SampleMetadata."""
-        if hash(self) != hash(other):
-            raise ValueError(f"SampleMetadata to update shapes seen must be the same, {self} != {other}")
-        for i, tensor_spec in enumerate(self._tensor_specs):
+        if hash(self._tensor_data) != hash(other._tensor_data):
+            raise ValueError(
+                f"Cannot update shapes seen, because tensor data is different, {self.describe(InfoLevel.FULL)} != {other.describe(InfoLevel.FULL)}"
+            )
+        for i, tensor_spec in enumerate(self.tensor_specs):
             tensor_spec.update_shapes_seen(other.tensor_specs[i])
 
     def update_max_batch_size(self, sample: Any, max_batch_size: int):
         """Update input spec with max batch size information."""
-        max_batch_sample = self.make_batch(sample, max_batch_size)
-        max_batch_metadata = SampleMetadata.from_sample(max_batch_sample, prefix="input", batch_size=max_batch_size)
+        args, kwargs = sample
+        args, kwargs = self.make_batch(args, kwargs, max_batch_size)
+        max_batch_metadata = SampleMetadata.from_inputs(args, kwargs, batch_size=max_batch_size, strict=True)
         self.update_shapes_seen(max_batch_metadata)
-
-    @staticmethod
-    def _from_metadata(metadata: Any) -> MetadataType:
-        """Helper method to recursively deserialize metadata contents.
-
-        Args:
-            metadata: serialized metadata
-
-        Returns:
-            Deserialized metadata
-        """
-        if isinstance(metadata, dict) and metadata.get("type") == "TensorSpec":
-            return TensorSpec.from_dict(metadata)
-        elif isinstance(metadata, PYTHON_PRIMITIVE_TYPES):
-            return metadata
-        elif isinstance(metadata, dict):
-            return {key: SampleMetadata._from_metadata(value) for key, value in metadata.items()}
-        elif isinstance(metadata, list):
-            return [SampleMetadata._from_metadata(item) for item in metadata]
-        elif isinstance(metadata, tuple):
-            return tuple(SampleMetadata._from_metadata(item) for item in metadata)
-        else:
-            raise UnsupportedTypeException(metadata)
-
-    @staticmethod
-    def _from_sample(sample, names, batch_size: int | None = None) -> tuple[MetadataType, Iterable[str]]:
-        """Create SampleMetadata from sample in a recursive manner.
-
-        Args:
-            sample: Sample to create SampleMetadata from
-            names: iterator of names for tensors in the sample
-            batch_size: Batch size to use for tensors. If not provided, it will be taken from global context or nan if not set.
-
-        Returns:
-            Tuple of metadata and names
-        """
-        if torch.is_tensor(sample) or isinstance(sample, np.ndarray):
-            tensor_spec = TensorSpec.from_tensor(
-                next(names),
-                sample,
-                batch_size
-                or global_context.get(
-                    BATCH_SIZE_KEY, float("nan")
-                ),  # TBD global context should be set always, bs_multipliers won't work
-            )
-            return tensor_spec, names
-        if isinstance(sample, PYTHON_PRIMITIVE_TYPES):
-            return sample, names
-        if isinstance(sample, Mapping):
-            metadata = {}
-            for key, item in sorted(sample.items()):
-                submetadata, names = SampleMetadata._from_sample(item, names, batch_size)
-                metadata[key] = submetadata
-            return metadata, names
-        if isinstance(sample, Sequence):
-            metadata = []
-            for item in sample:
-                submetadata, names = SampleMetadata._from_sample(item, names, batch_size)
-                metadata.append(submetadata)
-            if isinstance(sample, list):
-                return metadata, names
-            return tuple(metadata), names
-        raise UnsupportedTypeException(sample)
-
-    def _flatten_sample(self, sample, metadata: MetadataType, flatten_sample: dict[str, Any], include_constants=False):
-        """Flatten sample according to metadata in a recursive manner.
-
-        Args:
-            sample: Sample to flatten
-            metadata: Metadata to flatten sample according to
-            flatten_sample: Dictionary to store flattened sample
-            include_constants: Whether to include constants in the flattened sample
-        """
-        if isinstance(metadata, TensorSpec):
-            flatten_sample[metadata.name] = sample
-        elif isinstance(sample, PYTHON_PRIMITIVE_TYPES):
-            if include_constants:
-                flatten_sample[f"const_{uuid.uuid4()}"] = sample
-        elif isinstance(sample, Mapping):
-            for key, item in sample.items():
-                self._flatten_sample(item, metadata[key], flatten_sample, include_constants=include_constants)
-        elif isinstance(sample, Sequence):
-            i = 0
-            for item in sample:
-                self._flatten_sample(item, metadata[i], flatten_sample, include_constants=include_constants)
-                i += 1
-        else:
-            raise UnsupportedTypeException(sample)
-
-    def _unflatten_sample(self, sample: Any, metadata: MetadataType) -> MetadataType:
-        """Unflatten sample according to metadata in a recursive manner.
-
-        Args:
-            sample: Sample to unflatten
-            metadata: Metadata to unflatten sample according to
-
-        Returns:
-            Unflattened sample
-        """
-        if isinstance(metadata, TensorSpec):
-            return sample[metadata.name]
-        elif isinstance(metadata, PYTHON_PRIMITIVE_TYPES):
-            return metadata
-        elif isinstance(metadata, Mapping):
-            return {key: self._unflatten_sample(sample, item) for key, item in metadata.items()}
-        elif isinstance(metadata, Sequence):
-            inner = (self._unflatten_sample(sample, item) for item in metadata)
-            if isinstance(metadata, list):
-                return list(inner)
-            elif isinstance(metadata, tuple):
-                return tuple(inner)
-
-    def _hash(self, metadata: MetadataType, hash_):
-        """Helper method to recursively hash metadata contents."""
-        if isinstance(metadata, TensorSpec) or isinstance(metadata, PYTHON_PRIMITIVE_TYPES):
-            return hash_ ^ hash(metadata)
-        elif isinstance(metadata, Mapping):
-            for key, value in metadata.items():
-                hash_ ^= hash(key)
-                hash_ ^= self._hash(value, hash_)
-            return hash_
-        elif isinstance(metadata, Sequence):
-            for value in metadata:
-                hash_ ^= self._hash(value, hash_)
-            return hash_
-
-    def _describe(self, metadata: MetadataType, info_level: InfoLevel) -> str:
-        """Get information describing metadata in a recursive manner."""
-        if isinstance(metadata, TensorSpec):
-            return metadata.describe(info_level)
-        elif isinstance(metadata, PYTHON_PRIMITIVE_TYPES):
-            return str(metadata)
-        elif isinstance(metadata, Mapping):
-            parts = []
-            for k, v in metadata.items():
-                parts.append(f"{k}: {self._describe(v, info_level)}")
-            return "{" + ", ".join(parts) + "}"
-        elif isinstance(metadata, list):
-            parts = []
-            for item in metadata:
-                parts.append(self._describe(item, info_level))
-            return "[" + ", ".join(parts) + "]"  # type: ignore[bad-return-type]
-        elif isinstance(metadata, tuple):
-            if len(metadata) == 1:  # make similar to python e.g. (1,)
-                return f"({self._describe(metadata[0], info_level)},)"
-
-            parts = []
-            for item in metadata:
-                parts.append(self._describe(item, info_level))
-            return "(" + ", ".join(parts) + ")"  # type: ignore[bad-return-type]
-
-    def _serialize_metadata(self, metadata: MetadataType) -> Any:
-        """Helper method to recursively serialize metadata contents.
-
-        Args:
-            metadata: The metadata to serialize
-
-        Returns:
-            A serializable representation of the metadata
-        """
-        if isinstance(metadata, TensorSpec):
-            return metadata.to_dict()
-        elif isinstance(metadata, PYTHON_PRIMITIVE_TYPES):
-            return metadata
-        elif isinstance(metadata, Mapping):
-            return {key: self._serialize_metadata(value) for key, value in metadata.items()}
-        elif isinstance(metadata, list):
-            return [self._serialize_metadata(item) for item in metadata]
-        elif isinstance(metadata, tuple):
-            return tuple(self._serialize_metadata(item) for item in metadata)
-
-    def _find_tensor_specs(self, metadata: MetadataType, tensor_specs: list[TensorSpec]):
-        """Find all tensor specs in metadata."""
-        if isinstance(metadata, PYTHON_PRIMITIVE_TYPES):
-            return
-        if isinstance(metadata, TensorSpec):
-            tensor_specs.append(metadata)
-        elif isinstance(metadata, Mapping):
-            for value in metadata.values():
-                self._find_tensor_specs(value, tensor_specs)
-        elif isinstance(metadata, Sequence):
-            for item in metadata:
-                self._find_tensor_specs(item, tensor_specs)
-
-    def _make_batch(self, sample: Any, metadata: MetadataType, batch_size: int) -> Any:
-        """Traverses through metadata and makes tensors to be of specified batch size.
-
-        Args:
-            sample: Sample to make batch from
-            metadata: Metadata to make batch from
-            batch_size: Batch size
-
-        Returns:
-            Sample with all tensors having
-        """
-        if isinstance(metadata, TensorSpec):
-            return batch_tensor(sample, metadata, batch_size)
-        elif isinstance(metadata, PYTHON_PRIMITIVE_TYPES):
-            return sample
-        elif isinstance(metadata, Mapping):
-            return {key: self._make_batch(item, metadata[key], batch_size) for key, item in sample.items()}
-        elif isinstance(metadata, Sequence):
-            return tuple(self._make_batch(item, metadata[i], batch_size) for i, item in enumerate(sample))
 
     def has_batch_axis(self) -> bool:
         """Check if metadata has batch axis."""
-        return all(tensor_spec.has_batch_axis() for tensor_spec in self._tensor_specs)
+        return all(tensor_spec.has_batch_axis() for tensor_spec in self.tensor_specs)
 
 
 def batch_tensor(tensor: torch.Tensor, tensor_spec: TensorSpec, batch_size: int) -> torch.Tensor:
@@ -479,3 +373,8 @@ def batch_tensor(tensor: torch.Tensor, tensor_spec: TensorSpec, batch_size: int)
             repeat_indices[axis] = effective_batch_size
             tensor = tensor.repeat(repeat_indices)
     return tensor
+
+
+def sanitize_tensor_name(name: str) -> str:
+    """Sanitize tensor name to be used as a tensor name."""
+    return name.translate(str.maketrans("[", "_", "]'"))

@@ -71,8 +71,8 @@ def graph_spec(model, sample_data) -> GraphSpec:
     output = model(*args, **kwargs)
     return GraphSpec(
         "0",
-        input_spec=SampleMetadata.from_sample(sample_data[0], names=["x"]),
-        output_spec=SampleMetadata.from_sample(output, names=["y"]),
+        input_spec=SampleMetadata.from_inputs(args, kwargs, strict=True),
+        output_spec=SampleMetadata.from_outputs(output),
     )
 
 
@@ -270,11 +270,13 @@ def dynamic_samples_data(torch_device):
 
 @pytest.fixture
 def graph_spec_with_dynamic_shape(dynamic_samples_data, model) -> GraphSpec:
-    input_metadata = SampleMetadata.from_sample(dynamic_samples_data[0], names=["x"])
-    output_metadata = SampleMetadata.from_sample(dynamic_samples_data[0], names=["y"])
+    args, kwargs = dynamic_samples_data[0]
+    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    output_metadata = SampleMetadata.from_outputs(dynamic_samples_data[0])
     for sample in dynamic_samples_data[1:]:
-        input_metadata.update_shapes_seen(SampleMetadata.from_sample(sample, names=["x"]))
-        output_metadata.update_shapes_seen(SampleMetadata.from_sample(sample, names=["y"]))
+        args, kwargs = sample
+        input_metadata.update_shapes_seen(SampleMetadata.from_inputs(args, kwargs, strict=True))
+        output_metadata.update_shapes_seen(SampleMetadata.from_outputs(sample))
 
     graph_spec = GraphSpec("0", input_metadata, output_metadata)
     return graph_spec
@@ -285,11 +287,11 @@ def test_create_dynamic_shape(graph_spec_with_dynamic_shape):
     results = create_dynamic_shapes(graph_spec_with_dynamic_shape, True)
     assert len(results) == 1
 
-    assert results[0][0].__name__ == "x_dim_0"
+    assert results[0][0].__name__ == "args_0_dim_0"
     assert results[0][0].min == 1
     assert results[0][0].max == 4
 
-    assert results[0][1].__name__ == "x_dim_1"
+    assert results[0][1].__name__ == "args_0_dim_1"
     assert results[0][1].min == 4
     assert results[0][1].max == 256
 

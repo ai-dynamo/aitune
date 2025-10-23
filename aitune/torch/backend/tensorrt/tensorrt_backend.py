@@ -14,6 +14,7 @@
 """TensorRT backend."""
 
 import contextlib
+import copy
 import gc
 import logging
 from dataclasses import dataclass
@@ -32,7 +33,7 @@ from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConf
 from aitune.torch.backend.tensorrt.tensorrt_builder import TensorRTBuilder
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.backend.tensorrt.tensorrt_runtime import TensorRTRuntime
-from aitune.torch.backend.tensorrt.torch_model_info import OutputFormat, TorchModelInfo
+from aitune.torch.backend.tensorrt.torch_model_info import TorchModelInfo
 from aitune.torch.backend.tensorrt.torch_output_allocator import TorchOutputAllocator
 from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig, TorchQuantizer
 from aitune.torch.module.graph_spec import GraphSpec
@@ -111,8 +112,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
     # State dictionary keys
     STATE_TYPE = "type"
     STATE_ENGINE_PATH = "engine_path"
-    STATE_OUTPUT_FORMAT = "output_format"
-    STATE_OUTPUT_CLASS = "output_class"
+    STATE_OUTPUT_OBJECT = "output_object"
     STATE_GRAPH_SPEC = "graph_spec"
     STATE_DEVICE = "device"
     STATE_QUANTIZATION_CONFIG = "quantization_config"
@@ -148,8 +148,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         # build variables
         self._engine_path = None
-        self._output_class = None
-        self._output_format = None
+        self._output_object = None
         self._graph_spec = None
 
         # runtime variables
@@ -220,8 +219,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         with self._system_monitor.system_stats_context(log_label="TorchModelInfo analysis"):
             self._torch_model_info = TorchModelInfo(model=module.to(self._device), sample=data[0])
-            self._output_class = self._torch_model_info.output_class
-            self._output_format = self._torch_model_info.output_format
+            self._output_object = self._torch_model_info.output_object
 
         if isinstance(self._config.quantization_config, TorchQuantizationConfig):
             self._build_modelopt_torch(module, graph_spec, data, cache_dir)
@@ -711,39 +709,18 @@ class TensorRTBackend(Backend, TensorRTRunner):
         # Get outputs from the allocator (already properly shaped by TensorRT)
         outputs = self._output_allocator.outputs
 
-        # Format the output according to the original model's output structure
-        if self._output_format is not None:
-            logger.debug("Using output format: %s", self._output_format.value)
-        else:
-            logger.debug("Output format is not set")
-        logger.debug("Retrieved %s outputs from allocator", len(outputs))
+        result = copy.deepcopy(self._output_object)  # make each results a unique copy of the original output object
+        for locator, tensor_spec in self._graph_spec.output_spec.tensor_data:
+            if tensor_spec.name in outputs:
+                result = locator.set_value(result, outputs[tensor_spec.name].clone())
+                del outputs[tensor_spec.name]
+            else:
+                logger.debug("Output: %s not found in outputs", tensor_spec.name)
 
-        # Clone tensors to avoid potential issues with memory reuse
-        outputs_copy = {}
-        for name, tensor in outputs.items():
-            outputs_copy[name] = tensor.clone()
-            logger.debug("Output %s shape: %s", name, tensor.shape)
+        if len(outputs) > 0:
+            logger.warning("Outputs not found in graph spec: %s", outputs)
 
-        if self._output_format == OutputFormat.TENSOR and len(outputs_copy) == 1:
-            # Return single tensor for single output models
-            logger.debug("Returning single tensor output")
-            return next(iter(outputs_copy.values()))
-        elif self._output_format == OutputFormat.DICT:
-            # Return dictionary output directly
-            logger.debug("Returning dictionary output")
-            output_dict = self._graph_spec.output_spec.unflatten_sample(outputs_copy)
-            return output_dict
-        elif self._output_format == OutputFormat.LIST:
-            # Convert dict to list in order of output_names
-            logger.debug("Returning list output")
-            return [outputs_copy[name] for name in self._output_names]
-        elif self._output_format == OutputFormat.TUPLE:
-            # Convert dict to tuple in order of output_names
-            logger.debug("Returning tuple output")
-            return self._graph_spec.output_spec.unflatten_sample(outputs_copy)
-        else:
-            output_dict = self._graph_spec.output_spec.unflatten_sample(outputs_copy)
-            return self._output_class(**output_dict)
+        return result
 
     def _prepare_inputs(self, args, kwargs):
         """Prepare input tensors from args and kwargs.
@@ -759,22 +736,16 @@ class TensorRTBackend(Backend, TensorRTRunner):
             ValueError: If inputs are missing or incorrect
         """
         # Use input_names property directly from engine_info
-        engine_input_names = self._engine_info.input_names
-
-        sample: Sample = (args, kwargs)
-        input_dict = self._graph_spec.input_spec.flatten_sample(sample)
-
+        engine_input_names = set(self._engine_info.input_names)
         inputs = {}
-
-        # Debug logging for input tensors
-        for name in engine_input_names:
-            shape = self._context.get_tensor_shape(name)
-            logger.debug("Input tensor: %s, shape=%s", name, shape)
-            if name not in input_dict:
-                logger.debug("Input: %s not found in inputs", name)
-                continue
-
-            inputs[name] = input_dict[name]
+        for locator, tensor_spec in self._graph_spec.input_spec.tensor_data:
+            if tensor_spec.name in engine_input_names:
+                if tensor_spec.name.startswith("args"):
+                    inputs[tensor_spec.name] = locator.get_value(args)
+                else:
+                    inputs[tensor_spec.name] = locator.get_value(kwargs)
+            else:
+                logger.debug("Input: %s not found in inputs", tensor_spec.name)
 
         logger.debug("Prepared %s inputs for inference", len(inputs))
         logger.debug("Inputs names: %s", engine_input_names)
@@ -911,22 +882,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Returns:
             dict: Dictionary containing the backend state
         """
-        # Convert output_class to string representation
-        output_class_str = None
-        if self._output_class:
-            try:
-                output_class_str = f"{self._output_class.__module__}.{self._output_class.__name__}"
-            except (AttributeError, TypeError) as e:
-                logger.error("Failed to serialize output_class: %s", e)
-                raise e
-
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_ENGINE_PATH: self._engine_path,
-            self.STATE_OUTPUT_FORMAT: self._output_format.value
-            if self._output_format is not None
-            else None,  # store as string
-            self.STATE_OUTPUT_CLASS: output_class_str,
+            self.STATE_OUTPUT_OBJECT: self._output_object,
             self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_QUANTIZATION_CONFIG: self._config.quantization_config,
@@ -947,8 +906,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """
         backend = cls()
         backend._engine_path = state_dict[cls.STATE_ENGINE_PATH]
-        output_format_value = state_dict[cls.STATE_OUTPUT_FORMAT]
-        backend._output_format = OutputFormat(output_format_value) if output_format_value is not None else None
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend._device = state_dict[cls.STATE_DEVICE]
         backend.state = BackendState.CHECKPOINT_LOADED
@@ -956,20 +913,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
         # Reconstruct config with quantization settings
         backend._config = TensorRTBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
+        backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]
         # Ensure CUDA graphs are disabled when loading from checkpoint
         # CUDA graphs cannot be serialized and must be re-captured
         if backend._config.use_cuda_graphs:
             logger.info("CUDA graphs were enabled in saved state, but will be re-captured on first inference")
             # CUDA graph state will be None initially, triggering re-capture
 
-        # Reconstruct output_class from string representation
-        output_class_str = state_dict[cls.STATE_OUTPUT_CLASS]
-        if output_class_str:
-            try:
-                module_path, class_name = output_class_str.rsplit(".", 1)
-                python_module = __import__(module_path, fromlist=[class_name])
-                backend._output_class = getattr(python_module, class_name)
-            except (ImportError, AttributeError) as e:
-                logger.warning("Failed to reconstruct output_class %s: %s", output_class_str, e)
-                raise e
         return backend

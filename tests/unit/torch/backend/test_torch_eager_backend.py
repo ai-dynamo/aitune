@@ -47,7 +47,8 @@ def sample_data(model, torch_device) -> list[Sample]:
 
 @pytest.fixture
 def sample_metadata(sample_data) -> SampleMetadata:
-    return SampleMetadata(sample_data[0])
+    args, kwargs = sample_data[0]
+    return SampleMetadata.from_inputs(args, kwargs)
 
 
 def move_to_dtype(sample_data, dtype):

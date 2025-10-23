@@ -186,61 +186,6 @@ def test_jit_tuning_with_module_hooks(mock_trt_backend_class, torch_device, mock
 
 
 @requires_cuda
-@pytest.mark.parametrize("unsupported_type_on_input", [True, False])
-@patch("aitune.torch.jit.config.TensorRTBackend")
-def test_jit_tuning_unsupported_type(mock_trt_backend_class, unsupported_type_on_input, torch_device, mocker):
-    """Test that the patched module handles unsupported types.
-
-    To mimic unsupported type, we use TestType object.
-
-    The test model contains linear layer so that even if the parent layer cannot be tuned due to unsupported type,
-    the child layer should be tuned.
-
-    """
-    config.dry_run = False
-    config.inspect_mode = False
-    config.detect_graph_breaks = False
-
-    mock_trt_backend(mock_trt_backend_class, mocker, torch.randn(1, 10))
-
-    class TestNet(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.linear = torch.nn.Linear(10, 10)
-
-        def forward(self, x, unsupported_type=None, return_unsupported_type=False):
-            y = self.linear(x)
-            return y, TestType() if return_unsupported_type else y
-
-    with prepare_for_jit_tuning():
-        pipeline = TestNet().to(torch_device)
-
-    # make two different inputs to detect batch axis
-    x1 = torch.randn(1, 10).to(torch_device)
-    x2 = torch.randn(2, 10).to(torch_device)
-
-    if unsupported_type_on_input:
-        pipeline(x1, TestType(), return_unsupported_type=False)
-        pipeline(x2, TestType(), return_unsupported_type=False)
-    else:
-        pipeline(x1, return_unsupported_type=True)
-        pipeline(x2, return_unsupported_type=True)
-
-    assert len(PatchedModule.heads) == 1
-
-    sink = TestSink()
-    PatchedModule.print_hierarchy(sink=sink.write)
-    assert PRINT_HIERARCHY_HEADER in sink.output[0]
-    assert re.match(r".*TestNet.*state=eager.*(Unsupported type:.*TestType).*call_count=1", sink.output[1])
-    # expected call count differs due to scenarios:
-    if unsupported_type_on_input:
-        call_cnt = 2  # unsupported exception detected before calling TestNet, 2 calls
-    else:
-        call_cnt = 3  # unsupported exception detected after calling TestNet, first call repeated 2 times + second call
-    assert re.match(r".*Linear.*state=tuned.*(MockTensorRTBackend).*call_count=" + str(call_cnt), sink.output[2])
-
-
-@requires_cuda
 def test_jit_tuning_graph_break(torch_device, mocker):
     config.dry_run = False
     config.inspect_mode = False

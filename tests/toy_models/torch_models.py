@@ -68,8 +68,8 @@ class ToyTorchModel(torch.nn.Module):
             args, kwargs = sample
 
             _output = self(*args, **kwargs)
-            input_metadata = SampleMetadata.from_sample(sample, prefix="input", batch_size=args[0].shape[0])
-            output_metadata = SampleMetadata.from_sample(_output, prefix="output", batch_size=args[0].shape[0])
+            input_metadata = SampleMetadata.from_inputs(args, kwargs, batch_size=args[0].shape[0])
+            output_metadata = SampleMetadata.from_outputs(_output, batch_size=args[0].shape[0])
             if graph_spec is None:
                 graph_spec = GraphSpec(name="toy_model", input_spec=input_metadata, output_spec=output_metadata)
             else:
@@ -124,8 +124,8 @@ class ToyTorchConditionalModel(torch.nn.Module):
             args, kwargs = sample
 
             _output = self(*args, **kwargs)
-            input_metadata = SampleMetadata.from_sample(sample, prefix="input", batch_size=args[0].shape[0])
-            output_metadata = SampleMetadata.from_sample(_output, prefix="output", batch_size=args[0].shape[0])
+            input_metadata = SampleMetadata.from_inputs(args, kwargs, batch_size=args[0].shape[0])
+            output_metadata = SampleMetadata.from_outputs(_output, batch_size=args[0].shape[0])
             if graph_spec is None:
                 graph_spec = GraphSpec(name="toy_model", input_spec=input_metadata, output_spec=output_metadata)
             else:

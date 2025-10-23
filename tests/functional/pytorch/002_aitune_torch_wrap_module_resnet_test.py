@@ -20,12 +20,13 @@
 # ///
 
 
+from logging import DEBUG, basicConfig
+
 import timm
 import torch
 
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
-from aitune.torch.module.wrapper_module import Module
-from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
+from aitune.torch import Module, OneBackendStrategy
+from aitune.torch.backend import TorchInductorBackend
 
 
 def test_resnet50():
@@ -57,4 +58,5 @@ def test_resnet50():
 
 
 if __name__ == "__main__":
+    basicConfig(level=DEBUG, force=True)
     test_resnet50()

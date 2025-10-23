@@ -82,8 +82,8 @@ def test_export_trace(mock_torch_onnx, mock_onnx_lib, tmp_path):
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    input_metadata = SampleMetadata.from_sample(sample, prefix="input")
-    output_metadata = SampleMetadata.from_sample(output, prefix="output")
+    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    output_metadata = SampleMetadata.from_outputs(output, strict=True)
 
     graph_spec = GraphSpec(
         name="test_graph",
@@ -130,8 +130,8 @@ def test_export_dynamo(mocker, mock_torch_onnx, mock_onnx_lib, mock_gs_lib, tmp_
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    input_metadata = SampleMetadata.from_sample(sample, prefix="input")
-    output_metadata = SampleMetadata.from_sample(output, prefix="output")
+    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    output_metadata = SampleMetadata.from_outputs(output, strict=True)
 
     graph_spec = GraphSpec(
         name="test_graph",
@@ -174,8 +174,8 @@ def test_export_error_handling(mock_torch_onnx, tmp_path):
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    input_metadata = SampleMetadata.from_sample(sample, prefix="input")
-    output_metadata = SampleMetadata.from_sample(output, prefix="output")
+    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    output_metadata = SampleMetadata.from_outputs(output, strict=True)
 
     graph_spec = GraphSpec(
         name="test_graph",
@@ -231,8 +231,8 @@ def test_onnx_exporter_integration(tmp_path):
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    input_metadata = SampleMetadata.from_sample(sample, prefix="input")
-    output_metadata = SampleMetadata.from_sample(output, prefix="output")
+    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    output_metadata = SampleMetadata.from_outputs(output, strict=True)
 
     graph_spec = GraphSpec(
         name="test_graph",
