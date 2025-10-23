@@ -519,7 +519,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._engine_path,
         )
 
-    @nvtx.annotate(name="TensorRTBackend.infer", domain="AITune", color="green")
+    @nvtx.annotate(message="TensorRTBackend.infer", domain="AITune", color="green")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Infer using the TensorRT engine.
 

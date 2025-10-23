@@ -111,7 +111,7 @@ class TorchEagerBackend(Backend):
         """Activates runner."""
         pass
 
-    @nvtx.annotate(name="TorchEagerBackend.infer", domain="AITune", color="blue")
+    @nvtx.annotate(message="TorchEagerBackend.infer", domain="AITune", color="blue")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Runs inference with the given arguments.
 

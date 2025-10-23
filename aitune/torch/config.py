@@ -16,6 +16,8 @@
 import os
 from pathlib import Path
 
+import nvtx.nvtx as nvtx
+
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "aitune"
 DEFAULT_MIN_NUM_SAMPLES = 100
 DEFAULT_MAX_NUM_SAMPLES_STORED = 1
@@ -30,13 +32,10 @@ DEFAULT_WINDOW_SIZE = 10
 
 DEFAULT_DEVICE = "cuda:0"
 
-# Getting NVTX_DISABLE from environment variable and respect user's choice
-NVTX_DISABLE = os.getenv("NVTX_DISABLE")
-
 # Disable NVTX by default, enable with NVTX_ENABLE=1
 NVTX_ENABLE = os.getenv("NVTX_ENABLE") in ("1", "true", "True", "yes", "Yes", "YES")
-if NVTX_DISABLE is None:
-    os.environ["NVTX_DISABLE"] = "" if NVTX_ENABLE else "disable"
+if not nvtx._ENABLED:
+    nvtx._ENABLED = NVTX_ENABLE
 
 # Console output configuration
 CONSOLE_OUTPUT_ENABLE = os.getenv("AITUNE_CONSOLE_OUTPUT") in ("1", "true", "True", "yes", "Yes", "YES")
