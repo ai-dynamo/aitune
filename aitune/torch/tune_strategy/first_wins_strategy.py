@@ -26,6 +26,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
 from aitune.utils.logging import control_output, log
+from aitune.utils.timer import Timer
 
 logger = logging.getLogger(__name__)
 
@@ -60,22 +61,23 @@ class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
             backend_cache_dir = cache_dir / backend.key()
             log_file = self._log_file(backend_cache_dir, "build.log")
 
-            try:
-                log("⚙️ backend:  %s", backend.describe(), sink=logger.info)
-                log("🔄 in progress...please wait", depth=2, sink=logger.info)
-                with control_output(log_file=log_file):
-                    backend = copy.deepcopy(backend)
-                    backend = backend.build(module, graph_spec, data, device, backend_cache_dir)
-                log("✅ backend built", depth=2, sink=logger.info)
-                self.check_correctness(backend, name, graph_spec, data)
-                log("✅ backend validated", depth=2, sink=logger.info)
-                selected_backend = backend
-                break
-            except Exception:
-                if backend.is_active:
-                    backend.deactivate()
-                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=logger.info)
-                module.to(device)  # move module back to device as failed backend could move it to cpu
+            with Timer(logger=logger, depth=2):
+                try:
+                    log("⚙️ backend:  %s", backend.describe(), sink=logger.info)
+                    log("🔄 in progress...please wait", depth=2, sink=logger.info)
+                    with control_output(log_file=log_file):
+                        backend = copy.deepcopy(backend)
+                        backend = backend.build(module, graph_spec, data, device, backend_cache_dir)
+                    log("✅ backend built", depth=2, sink=logger.info)
+                    self.check_correctness(backend, name, graph_spec, data)
+                    log("✅ backend validated", depth=2, sink=logger.info)
+                    selected_backend = backend
+                    break
+                except Exception:
+                    if backend.is_active:
+                        backend.deactivate()
+                    log("❌ backend failed (log file: %s)", log_file, depth=2, sink=logger.info)
+                    module.to(device)  # move module back to device as failed backend could move it to cpu
 
         if selected_backend:
             logger.info("🎯 Strategy %s execution finished:", self.__class__.__name__)

@@ -15,6 +15,7 @@
 
 from aitune.utils.logging import control_output, enable_gpu_memory_logging, set_module_level, setup_logging
 from aitune.utils.system_monitor import SystemMonitor, system_resource_monitor
+from aitune.utils.timer import Timer
 
 __all__ = [
     "SystemMonitor",
@@ -23,4 +24,5 @@ __all__ = [
     "set_module_level",
     "enable_gpu_memory_logging",
     "control_output",
+    "Timer",
 ]

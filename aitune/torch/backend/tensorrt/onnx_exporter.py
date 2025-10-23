@@ -115,7 +115,6 @@ class ONNXExporter:
         """Export the module to ONNX using torch.dynamo."""
         with self.system_monitor.system_stats_context(log_label="Torch.dynamo ONNX export and save"):
             dynamic_shapes = self._create_dynamic_shapes(graph_spec)
-            dynamic_axes = self._create_dynamic_axes(graph_spec)  # dynamic axes required for fallback=True
             input_names = graph_spec.input_spec.get_names()
             output_names = graph_spec.output_spec.get_names()
 
@@ -134,8 +133,7 @@ class ONNXExporter:
                 dynamo=True,
                 input_names=input_names,
                 dynamic_shapes=dynamic_shapes,
-                dynamic_axes=dynamic_axes,
-                fallback=True,
+                fallback=False,
                 verbose=verbose,
             )
             exported_program.save(onnx_path.as_posix())

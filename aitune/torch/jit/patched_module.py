@@ -32,7 +32,7 @@ from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule, Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
-from aitune.torch.tune_strategy.jit_strategy import JitStrategy
+from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
 from aitune.torch.utils.module_utils import count_parameters
 
@@ -133,7 +133,8 @@ class PatchedModule:
             current = todo.pop()
             recording = cast(RecordingModule, current._wrapper)
             backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
-            strategy = JitStrategy(config.backend)
+            strategy = FirstWinsStrategy(backends=config.backends)
+            strategy.enable_find_max_batch_size(False)
             try:
                 for graph_spec in recording.graph_specs:
                     cache_dir = self._create_graph_cache_dir(graph_spec.name)

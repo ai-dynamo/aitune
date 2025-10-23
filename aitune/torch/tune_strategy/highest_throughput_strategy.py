@@ -55,6 +55,7 @@ from aitune.torch.task.profiling import (
 )
 from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
 from aitune.utils.logging import control_output, log
+from aitune.utils.timer import Timer
 
 logger = logging.getLogger(__name__)
 
@@ -143,50 +144,50 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
             backend_cache_dir = cache_dir / backend.key()
             log_file = self._log_file(backend_cache_dir, "build.log")
 
-            try:
-                log("🤖 backend: %s", backend.describe(), sink=logger.info)
-                log("🔄 in progress...please wait", depth=2, sink=logger.info)
-                with control_output(log_file=log_file):
-                    backend = copy.deepcopy(backend)
-                    backend.build(module, graph_spec, data, device, backend_cache_dir)
-                log("✅ backend built", depth=2, sink=logger.info)
-                self.check_correctness(backend, name, graph_spec, data)
-                log("✅ backend validated", depth=2, sink=logger.info)
-                batch_size, throughput, results = calculate_highest_throughput_for_backend(
-                    backend, name, graph_spec, data, self._get_profiling_config(batching, max_batch_size)
-                )
-                highest_throughput_results.append(
-                    HighestThroughputResult(
-                        max_batch_size=batch_size, throughput=throughput, backend_details=backend.describe()
+            with Timer(logger=logger, depth=2):
+                try:
+                    log("🤖 backend: %s", backend.describe(), sink=logger.info)
+                    log("🔄 in progress...please wait", depth=2, sink=logger.info)
+                    with control_output(log_file=log_file):
+                        backend = copy.deepcopy(backend)
+                        backend.build(module, graph_spec, data, device, backend_cache_dir)
+                    log("✅ backend built", depth=2, sink=logger.info)
+                    self.check_correctness(backend, name, graph_spec, data)
+                    log("✅ backend validated", depth=2, sink=logger.info)
+                    batch_size, throughput, results = calculate_highest_throughput_for_backend(
+                        backend, name, graph_spec, data, self._get_profiling_config(batching, max_batch_size)
                     )
-                )
-                measurements += results.entries
-                log(
-                    "✅ backend profiled - throughput: %.2f samples/s, batch size: %s",
-                    throughput,
-                    batch_size,
-                    depth=2,
-                    sink=logger.info,
-                )
-
-                if throughput > best_throughput:
+                    highest_throughput_results.append(
+                        HighestThroughputResult(
+                            max_batch_size=batch_size, throughput=throughput, backend_details=backend.describe()
+                        )
+                    )
+                    measurements += results.entries
                     log(
-                        "🎯 new best throughput for %s is %.2f samples/s, batch size: %s",
-                        backend.describe(),
+                        "✅ backend profiled - throughput: %.2f samples/s, batch size: %s",
                         throughput,
                         batch_size,
                         depth=2,
                         sink=logger.info,
                     )
-                    best_backend = backend
-                    best_throughput = throughput
-                    best_batch_size = batch_size
 
-            except Exception:
-                if backend.is_active:
-                    backend.deactivate()
-                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=logger.info)
-                continue
+                    if throughput > best_throughput:
+                        log(
+                            "🎯 new best throughput for %s is %.2f samples/s, batch size: %s",
+                            backend.describe(),
+                            throughput,
+                            batch_size,
+                            depth=2,
+                            sink=logger.info,
+                        )
+                        best_backend = backend
+                        best_throughput = throughput
+                        best_batch_size = batch_size
+
+                except Exception:
+                    if backend.is_active:
+                        backend.deactivate()
+                    log("❌ backend failed (log file: %s)", log_file, depth=2, sink=logger.info)
 
         if best_backend is None:
             raise RuntimeError("No correct backend found with throughput > 0")

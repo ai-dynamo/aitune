@@ -14,9 +14,9 @@
 """Base class for tune strategy."""
 
 import copy
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from logging import getLogger
 from pathlib import Path
 
 import torch
@@ -29,21 +29,20 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.task.correctness import check_output_correctness, check_output_tensor_shapes
 from aitune.torch.utils.module_utils import count_parameters
 from aitune.utils.logging import log
-
-logger = getLogger(__name__)
+from aitune.utils.timer import Timer
 
 
 class TuneStrategy(ABC):
     """Base class for tune strategy."""
 
-    def __init__(self, sink: Callable = logger.info):
+    def __init__(self, sink: Callable | None = None):
         """Initializes strategy.
 
         Args:
             sink: a function where to print status.
             enable_correctness_check: whether to check correctness of the backend.
         """
-        self._sink = sink
+        self._sink = sink or self._logger.info
         self._enable_correctness_check = True
 
     def tune_dry_run(
@@ -73,7 +72,8 @@ class TuneStrategy(ABC):
     ) -> Backend:
         """Tunes given torch module with provided graph_spec and data."""
         self._describe(module, name, graph_spec, data, device, cache_dir)
-        return self._tune(module, name, graph_spec, data, device, cache_dir)
+        with Timer(name=f"Tune `{self.__class__.__name__}`", logger=self._logger):
+            return self._tune(module, name, graph_spec, data, device, cache_dir)
 
     def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, data: list[Sample]):
         """Check outputs for NaN/inf.
@@ -93,14 +93,14 @@ class TuneStrategy(ABC):
             CorrectnessCheckError: if the backend fails any check.
         """
         if not self._enable_correctness_check:
-            logger.debug(
+            self._logger.debug(
                 "Correctness check is disabled for %s and graph spec %s",
                 backend.describe(),
                 graph_spec,
             )
             return
 
-        logger.debug("Checking correctness for %s and %s", backend.describe(), graph_spec)
+        self._logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
         with torch.inference_mode():
             for args, kwargs in data:
                 outputs = backend.infer(*args, **kwargs)
@@ -201,6 +201,11 @@ class TuneStrategy(ABC):
         cache_dir.mkdir(parents=True, exist_ok=True)
         log_file = cache_dir / filename
         return log_file
+
+    @property
+    def _logger(self) -> logging.Logger:
+        """Get a logger specific to this backend implementation."""
+        return logging.getLogger(f"{self.__class__.__module__}")
 
 
 class DummyTuneStrategy(TuneStrategy):

@@ -15,6 +15,7 @@
 
 import gc
 import json
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, fields, is_dataclass
 from enum import Enum
@@ -388,6 +389,11 @@ class Backend(ABC):
 
         if self._device is None:
             raise ValueError("Device is not set. Please set the device before deploying.")
+
+    @property
+    def _logger(self) -> logging.Logger:
+        """Get a logger specific to this backend implementation."""
+        return logging.getLogger(f"{self.__class__.__module__}")
 
     def _clean_memory(self):
         """Clean up memory."""
