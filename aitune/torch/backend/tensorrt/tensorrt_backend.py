@@ -33,7 +33,6 @@ from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConf
 from aitune.torch.backend.tensorrt.tensorrt_builder import TensorRTBuilder
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.backend.tensorrt.tensorrt_runtime import TensorRTRuntime
-from aitune.torch.backend.tensorrt.torch_model_info import TorchModelInfo
 from aitune.torch.backend.tensorrt.torch_output_allocator import TorchOutputAllocator
 from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig, TorchQuantizer
 from aitune.torch.module.graph_spec import GraphSpec
@@ -217,9 +216,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         cuda_set_device(self._device)
         self._save_config(cache_dir)
 
-        with self._system_monitor.system_stats_context(log_label="TorchModelInfo analysis"):
-            self._torch_model_info = TorchModelInfo(model=module.to(self._device), sample=data[0])
-            self._output_object = self._torch_model_info.output_object
+        self._output_object = self._get_output_object(module=module, sample=data[0])
 
         if isinstance(self._config.quantization_config, TorchQuantizationConfig):
             self._build_modelopt_torch(module, graph_spec, data, cache_dir)
@@ -676,6 +673,25 @@ class TensorRTBackend(Backend, TensorRTRunner):
         After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
         """
         self._activate()
+
+    def _get_output_object(self, module: nn.Module, sample: Sample) -> Any:
+        """Get the output object from the module and sample.
+
+        Args:
+            module: PyTorch module
+            sample: Sample input to use for model inference.
+
+        Returns:
+            The output object from the module.
+
+        Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
+        the output object.
+        """
+        module.to(self._device)
+        args, kwargs = sample
+        with torch.no_grad():
+            output_object = module(*args, **kwargs)
+        return copy.deepcopy(output_object)
 
     def _save_config(self, cache_dir: Path):
         """Store the backend configuration to a file."""
