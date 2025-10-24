@@ -72,8 +72,11 @@ class TuneStrategy(ABC):
     ) -> Backend:
         """Tunes given torch module with provided graph_spec and data."""
         self._describe(module, name, graph_spec, data, device, cache_dir)
-        with Timer(name=f"Tune `{self.__class__.__name__}`", logger=self._logger):
-            return self._tune(module, name, graph_spec, data, device, cache_dir)
+        with Timer(name=f"Tune `{self.__class__.__name__}`", sink=self._sink):
+            self._pre_tune(module, name, graph_spec, data, device, cache_dir)
+            backend = self._tune(module, name, graph_spec, data, device, cache_dir)
+            self._post_tune(backend, name, graph_spec, data)
+            return backend
 
     def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, data: list[Sample]):
         """Check outputs for NaN/inf.
@@ -116,6 +119,22 @@ class TuneStrategy(ABC):
     def clone(self) -> "TuneStrategy":
         """Clones the tune strategy."""
         return copy.deepcopy(self)
+
+    def _pre_tune(
+        self,
+        module: nn.Module,
+        name: str,
+        graph_spec: GraphSpec,
+        data: list[Sample],
+        device: torch.device,
+        cache_dir: Path,
+    ):
+        """Pre-tune hook. Override to add custom logic before tuning."""
+        return
+
+    def _post_tune(self, backend: Backend, name: str, graph_spec: GraphSpec, data: list[Sample]):
+        """Post-tune hook. Override to add custom logic after tuning."""
+        return
 
     @abstractmethod
     def _tune(

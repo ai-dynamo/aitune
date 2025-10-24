@@ -20,7 +20,6 @@
 """
 
 import copy
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -56,8 +55,6 @@ from aitune.torch.task.profiling import (
 from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
 from aitune.utils.logging import control_output, log
 from aitune.utils.timer import Timer
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -123,7 +120,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
             self.__class__.__name__,
             name,
             graph_spec.name,
-            sink=logger.info,
+            sink=self._sink,
         )
         measurements = []
         highest_throughput_results = []
@@ -144,16 +141,16 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
             backend_cache_dir = cache_dir / backend.key()
             log_file = self._log_file(backend_cache_dir, "build.log")
 
-            with Timer(logger=logger, depth=2):
+            with Timer(sink=self._sink, depth=2):
                 try:
-                    log("🤖 backend: %s", backend.describe(), sink=logger.info)
-                    log("🔄 in progress...please wait", depth=2, sink=logger.info)
+                    log("🤖 backend: %s", backend.describe(), sink=self._sink)
+                    log("🔄 in progress...please wait", depth=2, sink=self._sink)
                     with control_output(log_file=log_file):
                         backend = copy.deepcopy(backend)
                         backend.build(module, graph_spec, data, device, backend_cache_dir)
-                    log("✅ backend built", depth=2, sink=logger.info)
+                    log("✅ backend built", depth=2, sink=self._sink)
                     self.check_correctness(backend, name, graph_spec, data)
-                    log("✅ backend validated", depth=2, sink=logger.info)
+                    log("✅ backend validated", depth=2, sink=self._sink)
                     batch_size, throughput, results = calculate_highest_throughput_for_backend(
                         backend, name, graph_spec, data, self._get_profiling_config(batching, max_batch_size)
                     )
@@ -168,7 +165,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                         throughput,
                         batch_size,
                         depth=2,
-                        sink=logger.info,
+                        sink=self._sink,
                     )
 
                     if throughput > best_throughput:
@@ -178,7 +175,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                             throughput,
                             batch_size,
                             depth=2,
-                            sink=logger.info,
+                            sink=self._sink,
                         )
                         best_backend = backend
                         best_throughput = throughput
@@ -187,7 +184,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                 except Exception:
                     if backend.is_active:
                         backend.deactivate()
-                    log("❌ backend failed (log file: %s)", log_file, depth=2, sink=logger.info)
+                    log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
 
         if best_backend is None:
             raise RuntimeError("No correct backend found with throughput > 0")
@@ -200,9 +197,15 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
             )
         )
         best_backend.activate()
-        logger.info("🎯 Strategy %s execution finished:", self.__class__.__name__)
-        logger.info("✅ Selected %s for module %s and graph spec %s.", best_backend.describe(), name, graph_spec)
-        logger.info("   Batch size: %s, throughput: %.2f samples/s", best_batch_size, best_throughput)
+        log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)
+        log(
+            "✅ Selected %s for module %s and graph spec %s.",
+            best_backend.describe(),
+            name,
+            graph_spec,
+            sink=self._sink,
+        )
+        log("   Batch size: %s, throughput: %.2f samples/s", best_batch_size, best_throughput, sink=self._sink)
 
         return best_backend
 

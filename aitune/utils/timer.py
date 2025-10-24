@@ -16,6 +16,9 @@
 import contextvars
 import logging
 import time
+from collections.abc import Callable
+
+logger = logging.getLogger(__name__)
 
 # Thread-safe context variable to track nested timer depth
 _timer_depth: contextvars.ContextVar[int] = contextvars.ContextVar("timer_depth", default=0)
@@ -110,25 +113,22 @@ class Timer:
     def __init__(
         self,
         name: str | None = None,
-        level: int = logging.INFO,
-        logger: logging.Logger | None = None,
+        sink: Callable | None = None,
         silent: bool = False,
         depth: int = 0,
         track_depth: bool = False,
     ):
-        """Initialize the Timer.
+        """Initializes the Timer.
 
         Args:
             name: Name of the operation being timed (default: None, no name in logs)
-            level: Logging level to use (default: INFO)
-            logger: Optional logger instance (default: creates logger for this module)
+            sink: A function where to print status.
             silent: If True, disables all logging and only tracks time (default: False)
             depth: Initial depth offset for indentation (default: 0)
             track_depth: If True, participates in nested depth tracking via context vars (default: False)
         """
         self.name = name
-        self.level = level
-        self.logger = logger or logging.getLogger(__name__)
+        self.sink = sink or logger.info
         self.silent = silent
         self.initial_depth = depth
         self.track_depth = track_depth
@@ -171,9 +171,9 @@ class Timer:
         indent_str = indent if indent is not None else self._get_indent()
 
         if self.name:
-            self.logger.log(self.level, "%s%s %s: %s", indent_str, emoji, self.name, message)
+            self.sink("%s%s %s: %s", indent_str, emoji, self.name, message)
         else:
-            self.logger.log(self.level, "%s%s %s", indent_str, emoji, message)
+            self.sink("%s%s %s", indent_str, emoji, message)
 
     def start(self, log: bool = False) -> "Timer":
         """Explicitly start the timer.
@@ -226,7 +226,7 @@ class Timer:
         """
         if self._start_time is None:
             if not self.silent:
-                self.logger.warning("stop() called before timer started")
+                self._log(message="stop() called before timer started")
             return 0.0
 
         # Stop timing
@@ -282,7 +282,7 @@ class Timer:
         """
         if self._start_time is None:
             if not self.silent:
-                self.logger.warning("checkpoint() called before timer started")
+                self._log(message="checkpoint() called before timer started")
             return 0.0
 
         current_time = time.perf_counter()

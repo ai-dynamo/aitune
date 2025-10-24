@@ -18,7 +18,6 @@ Looks for best batch size for the module using Torch Eager backend.
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from logging import getLogger
 from pathlib import Path
 
 import torch
@@ -43,8 +42,6 @@ from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
 DEFAULT_MAX_BATCH_SIZE = 2**20
 
-logger = getLogger(__name__)
-
 
 @dataclass
 class FindMaxBatchSizeExtensionConfig:
@@ -61,7 +58,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
     def __init__(
         self,
         *args,
-        sink: Callable = logger.info,
+        sink: Callable | None = None,
         **kwargs,
     ):
         """Initializes wrapper."""
@@ -100,7 +97,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
     ):
         """Finds max batch size for the module."""
         if self.find_config.enable_find_max_batch_size:
-            logger.info("🚀 Finding max batch size for %s", name)
+            self._logger.info("🚀 Finding max batch size for %s", name)
             backend = self.find_config.default_backend_class()
             backend.build(module, graph_spec, data, device, cache_dir)
             max_batch_size, best_throughput, _ = calculate_highest_throughput_for_backend(
@@ -110,7 +107,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
                 data,
                 self.find_config.profiling_config,
             )
-            logger.info(
+            self._logger.info(
                 "✅ Max batch size for %s is %d with throughput %.2f samples/s",
                 name,
                 max_batch_size,
@@ -118,7 +115,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
             )
             graph_spec.input_spec.update_max_batch_size(data[0], max_batch_size)
 
-    def tune(
+    def _pre_tune(
         self,
         module: nn.Module,
         name: str,
@@ -129,7 +126,6 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
     ):
         """Extends tune method to find max batch size."""
         self.find_max_batch_size(module, name, graph_spec, data, device, cache_dir)
-        return super().tune(module, name, graph_spec, data, device, cache_dir)
 
     @staticmethod
     def default_profiling_config(

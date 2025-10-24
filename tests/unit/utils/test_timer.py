@@ -64,18 +64,11 @@ def test_format_edge_cases():
     assert _format_duration(60.0) == "1.00min"
 
 
-# Tests for Timer class
-def test_timer_with_custom_level():
-    """Test Timer with custom log level."""
-    timer = Timer("test", level=logging.DEBUG)
-    assert timer.level == logging.DEBUG
-
-
-def test_timer_with_custom_logger():
+def test_timer_with_custom_sink():
     """Test Timer with custom logger."""
     custom_logger = logging.getLogger("custom")
-    timer = Timer("test", logger=custom_logger)
-    assert timer.logger == custom_logger
+    timer = Timer("test", sink=custom_logger.info)
+    assert timer.sink == custom_logger.info
 
 
 def test_basic_timer_context(caplog):
@@ -169,7 +162,7 @@ def test_checkpoint_before_start(caplog):
     """Test checkpoint called before timer starts."""
     timer = Timer("test")
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.INFO):
         lap_time = timer.checkpoint("premature")
 
     assert lap_time == 0.0
@@ -252,7 +245,7 @@ def test_timer_logging_levels(caplog):
     """Test that timer respects custom logging levels."""
     # Test with DEBUG level
     with caplog.at_level(logging.DEBUG):
-        with Timer("debug test", level=logging.DEBUG):
+        with Timer("debug test", sink=logging.debug):
             time.sleep(0.01)
 
     debug_messages = [r for r in caplog.records if r.levelno == logging.DEBUG]
@@ -262,7 +255,7 @@ def test_timer_logging_levels(caplog):
 
     # Test with WARNING level
     with caplog.at_level(logging.WARNING):
-        with Timer("warning test", level=logging.WARNING):
+        with Timer("warning test", sink=logging.warning):
             time.sleep(0.01)
 
     warning_messages = [r for r in caplog.records if r.levelno == logging.WARNING]
@@ -418,7 +411,7 @@ def test_timer_manual_stop_before_start(caplog):
     """Test calling stop() before start()."""
     timer = Timer("test")
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.INFO):
         elapsed = timer.stop()
 
     assert elapsed == 0.0
