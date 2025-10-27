@@ -286,6 +286,39 @@ def test_backend_inference_returns_copy_of_tensors(tmp_path):
 
 
 @requires_cuda
+@pytest.mark.parametrize("use_dynamo", [True, False], ids=["use_dynamo_true", "use_dynamo_false"])
+def test_backend_handle_args_kwargs(tmp_path, use_dynamo):
+    """The test validates backend against args and kwargs handling."""
+
+    class TestModule(torch.nn.Module):
+        def forward(self, x, y):
+            return x + 1, y + 2
+
+    model = TestModule()
+    device = torch.device("cuda")
+    model.to(device)
+    model.eval()
+    x = torch.tensor([[1, 1]], device=device)
+    y = torch.tensor([[1, 1]], device=device)
+    args, kwargs = (x,), {"y": y}
+    graph_spec = GraphSpec(
+        name="test_graph",
+        input_spec=SampleMetadata.from_inputs(args, kwargs),
+        output_spec=SampleMetadata.from_outputs((x, y)),
+    )
+
+    config = TensorRTBackendConfig(use_dynamo=use_dynamo)
+    backend = TensorRTBackend(config=config)
+    backend = backend.build(model, graph_spec, [(args, kwargs)], device=device, cache_dir=tmp_path)
+
+    res_x, res_y = backend.infer(x, y=y)
+    backend.deactivate()
+
+    assert res_x.equal(torch.tensor([[2, 2]], device=device))
+    assert res_y.equal(torch.tensor([[3, 3]], device=device))
+
+
+@requires_cuda
 def test_tensorrt_backend_deactivate(tmp_path):
     """Test the deactivate method."""
     # Create backend
