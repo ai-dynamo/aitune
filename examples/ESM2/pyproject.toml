@@ -63,3 +63,4 @@ esm2 = ["**/*"]
 
 [tool.aitune]
 additional_tags = ["gpu/a100"]
+use_gated_hf_token = true

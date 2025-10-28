@@ -12,10 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
+
 import datasets
+from PIL import Image
 from transformers import AutoImageProcessor  # pytype: disable=import-error
 
 from aitune.torch.dataloader import samples_generator
+
+
+def random_image_generator():
+    """Generates random RGB image."""
+    arr = (random.randint(0, 255) for _ in range(224 * 224 * 3))
+    img = Image.frombytes("RGB", (224, 224), bytes(arr))
+    return img
 
 
 def test_resnet_dataset():
@@ -34,9 +44,9 @@ def test_resnet_dataset():
             "pixel_values": processed.pixel_values.squeeze(0),
         }
 
-    dataset = datasets.load_dataset("huggingchat/models-logo", split="train").map(
-        process_images, remove_columns=["image"]
-    )
+    random_dataset = [{"image": random_image_generator()} for _ in range(12)]
+
+    dataset = datasets.Dataset.from_list(random_dataset).map(process_images, remove_columns=["image"])
 
     samples = [*samples_generator(dataset, [4])]
 

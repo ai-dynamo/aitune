@@ -13,12 +13,13 @@
 # limitations under the License.
 
 # /// script
-# dependencies = ["diffusers"]
+# dependencies = ["diffusers<0.35"]
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "nightly"
 # additional_tags = ["mem/80g"]
 # allow_failure = true
+# use_gated_hf_token = true
 # ///
 
 import tempfile

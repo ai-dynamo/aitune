@@ -26,6 +26,7 @@ from aitune.torch.dataloader import (
     ensure_enough_samples,
     samples_generator,
 )
+from tests.utilities.prompts import PROMPTS_PATH
 
 
 def simulate_tuning_loop(dataset: DatasetLike, batch_sizes: list[int]):
@@ -231,8 +232,8 @@ def test_llm_padding_collator():
         )
 
     # Load raw dataset first
-    dataset = datasets.load_dataset("fka/awesome-chatgpt-prompts", split="train[:100]").map(
-        tokenize, remove_columns=["act", "prompt"]
+    dataset = datasets.load_dataset("json", data_files=str(PROMPTS_PATH), split="train[:100]").map(
+        tokenize, remove_columns=["prompt", "act"]
     )
 
     dl_config = DataLoaderFactory(dataset, collate_fn=DataCollatorWithPadding(tokenizer=tokenizer, padding=True))

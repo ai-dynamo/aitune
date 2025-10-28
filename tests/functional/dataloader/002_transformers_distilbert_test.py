@@ -12,22 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datasets import load_dataset
+from pathlib import Path
+
+import datasets
 from transformers import AutoTokenizer
 from transformers.data.data_collator import DataCollatorWithPadding
 
 from aitune.torch.dataloader import DataLoaderFactory
+
+PROMPTS_PATH = Path(__file__).parent.parent.parent / "fixtures/chatgpt_prompts_100.json"
 
 
 def get_dataloader():
     tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
     max_sequence_length = 128
 
-    def preprocess_function(examples):
+    def tokenize_function(examples):
         return tokenizer(examples["prompt"], truncation=True, max_length=max_sequence_length)
 
-    dataset = load_dataset("fka/awesome-chatgpt-prompts", split="train[:99]").map(
-        preprocess_function, remove_columns=["act", "prompt"]
+    dataset = datasets.load_dataset("json", data_files=str(PROMPTS_PATH), split="train[:99]").map(
+        tokenize_function, remove_columns=["prompt", "act"]
     )
 
     return DataLoaderFactory(

@@ -15,10 +15,14 @@
 # scope = "nightly"
 # ///
 
+from pathlib import Path
+
 import datasets
 from transformers import AutoTokenizer
 
 from aitune.torch.dataloader import DataLoaderFactory
+
+PROMPTS_PATH = Path(__file__).parent.parent.parent / "fixtures/chatgpt_prompts_100.json"
 
 
 def test_huggingface_dataset():
@@ -36,7 +40,8 @@ def test_huggingface_dataset():
             )["input_ids"].squeeze(0)  # Note: NOT COOL!
         }
 
-    dataset = datasets.load_dataset("fka/awesome-chatgpt-prompts", split="train[:100]").map(
+    # Load from local fixture instead of HuggingFace API
+    dataset = datasets.load_dataset("json", data_files=str(PROMPTS_PATH), split="train").map(
         tokenize_function, remove_columns=["prompt", "act"]
     )
 
