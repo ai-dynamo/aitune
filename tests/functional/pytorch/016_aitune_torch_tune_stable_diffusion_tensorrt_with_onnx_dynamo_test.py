@@ -18,6 +18,9 @@
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
 # additional_tags = ["gpu/a100"]
+# [environment]
+# AITUNE_CONSOLE_ENABLE = 1
+# AITUNE_CONSOLE_OUTPUT = 1
 # ///
 
 import tempfile

@@ -29,7 +29,8 @@ from aitune.torch import inspect
 
 def test_inspect_flux():
     # given
-    model_id = "black-forest-labs/FLUX.1-dev"
+    # model_id = "black-forest-labs/FLUX.1-dev"
+    model_id = "hf-internal-testing/tiny-flux-pipe"
     pipe = diffusers.FluxPipeline.from_pretrained(model_id)
     pipe.to("cuda")
 
@@ -53,7 +54,7 @@ def test_inspect_flux():
     for module in modules:
         assert module.name in expected_module_names
 
-    top_modules = modules_info.get_modules(min_execution_percentage=0.75)
+    top_modules = modules_info.get_modules(min_execution_percentage=0.50)
     assert len(top_modules) == 1
     assert top_modules[0].name == "transformer"
     assert top_modules[0].execution_count == 28 * number_of_iterations

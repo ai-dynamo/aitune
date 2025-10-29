@@ -18,6 +18,8 @@
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
 # additional_tags = ["gpu/a100"]
+# [environment]
+# AITUNE_CONSOLE_ENABLE = 1
 # ///
 
 import tempfile
@@ -81,7 +83,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
 
             # Step 3: Configure TensorRT backend with dynamic shapes support
             logger.info("Configuring TensorRT backend with dynamic shapes")
-            tensorrt_config = TensorRTBackendConfig()
+            tensorrt_config = TensorRTBackendConfig(use_dynamo=False)
             tensorrt_backend = TensorRTBackend(config=tensorrt_config)
 
             # Step 4: Wrap the UNet module with TensorRT backend

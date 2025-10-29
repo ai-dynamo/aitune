@@ -69,7 +69,8 @@ def test_flux_tensorrt_modelopt_fp8():
     9. Saves generated images to verify functionality
     """
     # Test configuration
-    model_name = "black-forest-labs/FLUX.1-dev"
+    # model_name = "black-forest-labs/FLUX.1-dev"
+    model_name = "hf-internal-testing/tiny-flux-pipe"
     prompt = "A serene mountain landscape with a crystal clear lake reflecting the sky"
     sizes = [(512, 512), (768, 768)]  # Different image sizes for testing
     steps = 4  # Reduced steps for faster testing

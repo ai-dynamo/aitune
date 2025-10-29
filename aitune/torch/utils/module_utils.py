@@ -13,6 +13,9 @@
 # limitations under the License.
 """Utility functions for PyTorch modules."""
 
+import inspect
+from collections.abc import Callable
+
 import torch.nn as nn
 
 
@@ -62,3 +65,24 @@ def count_parameters(module: nn.Module) -> str:
     """
     num_params = sum(p.numel() for p in module.parameters())
     return format_num_parameters(num_params)
+
+
+def get_forward_arguments_names(forward_func: Callable) -> tuple[list[str], list[str]]:
+    """Get the forward_func signature arguments names.
+
+    Args:
+        forward_func: PyTorch module forward function
+    Returns:
+        Tuples of forward positional only arguments and forward keyword arguments (and positional that could be passed as kwargs)
+    """
+    forward_signature = inspect.signature(forward_func)
+    params_list = list(forward_signature.parameters.values())
+
+    if len(params_list) == 0:
+        raise ValueError(f"Forward function '{forward_func.__name__}' has no parameters!")
+
+    allowed_kinds = {inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD}
+    forward_args = [p.name for p in params_list if p.kind == inspect.Parameter.POSITIONAL_ONLY]
+    forward_kwargs = [p.name for p in params_list if p.kind in allowed_kinds]
+
+    return forward_args, forward_kwargs

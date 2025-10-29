@@ -63,6 +63,29 @@ class Locator:
         """
         self._path = tuple(paths)  # make it immutable
 
+    @property
+    def depth(self) -> int:
+        """Get the depth of the locator."""
+        return len(self._path)
+
+    @property
+    def root_name(self) -> int | str:
+        """Get the root of the locator."""
+        return self._path[0][0]
+
+    @property
+    def leaf_name(self) -> int | str:
+        """Get the leaf of the locator."""
+        return self._path[-1][0]
+
+    def accessor_at(self, index: int) -> int | str:
+        """Get the accessor at the given index."""
+        return self._path[index][0]
+
+    def path_iter(self):
+        """Yield (accessor, ObjectType) tuples for each step in the path."""
+        return iter(self._path)
+
     def __eq__(self, value: object, /) -> bool:
         """Equality operator."""
         if not isinstance(value, Locator):

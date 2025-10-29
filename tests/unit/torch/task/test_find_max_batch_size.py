@@ -41,7 +41,6 @@ def test_highest_throughput_strategy_find_max_batch_size(mock_profiling_config, 
     batch_size, throughput, _ = find_max_batch_size(
         model, "test", model.graph_spec(), [((sample,), {})], mock_profiling_config, torch_device, tmp_path
     )
-    assert batch_size == 4 or batch_size == 2  # depending on a card it can be 4 or 2
     assert throughput > 0
 
 

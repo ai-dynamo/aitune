@@ -286,3 +286,68 @@ def test_hash():
     locator1 = Locator([(0, ObjectType.SEQUENCE)])
     locator2 = Locator([(0, ObjectType.DICT)])
     assert hash(locator1) != hash(locator2)
+
+
+def test_locator_depth():
+    locator = Locator([(0, ObjectType.SEQUENCE)])
+    assert locator.depth == 1
+
+    locator = Locator([(0, ObjectType.SEQUENCE), (0, ObjectType.SEQUENCE)])
+    assert locator.depth == 2
+
+    locator = Locator([(0, ObjectType.SEQUENCE), (0, ObjectType.SEQUENCE), (0, ObjectType.SEQUENCE)])
+    assert locator.depth == 3
+
+
+def test_locator_accessor_at():
+    locator = Locator([(0, ObjectType.SEQUENCE)])
+    assert locator.accessor_at(0) == 0
+
+    locator = Locator([("key", ObjectType.DICT), (0, ObjectType.SEQUENCE)])
+    assert locator.accessor_at(0) == "key"
+    assert locator.accessor_at(1) == 0
+
+    locator = Locator([("field", ObjectType.DATACLASS), (0, ObjectType.SEQUENCE), ("key", ObjectType.DICT)])
+    assert locator.accessor_at(0) == "field"
+    assert locator.accessor_at(1) == 0
+    assert locator.accessor_at(2) == "key"
+
+
+def test_locator_path_iter():
+    locator = Locator([])
+    assert list(locator.path_iter()) == []
+
+    locator = Locator([(0, ObjectType.SEQUENCE)])
+    assert list(locator.path_iter()) == [(0, ObjectType.SEQUENCE)]
+
+    locator = Locator([("key", ObjectType.DICT), (0, ObjectType.SEQUENCE)])
+    assert list(locator.path_iter()) == [("key", ObjectType.DICT), (0, ObjectType.SEQUENCE)]
+
+    locator = Locator([("field", ObjectType.DATACLASS), (0, ObjectType.SEQUENCE), ("key", ObjectType.DICT)])
+    assert list(locator.path_iter()) == [
+        ("field", ObjectType.DATACLASS),
+        (0, ObjectType.SEQUENCE),
+        ("key", ObjectType.DICT),
+    ]
+
+
+def test_locator_root_name():
+    locator = Locator([(0, ObjectType.SEQUENCE)])
+    assert locator.root_name == 0
+
+    locator = Locator([("key", ObjectType.DICT), (0, ObjectType.SEQUENCE)])
+    assert locator.root_name == "key"
+
+    locator = Locator([("field", ObjectType.DATACLASS), (0, ObjectType.SEQUENCE), ("key", ObjectType.DICT)])
+    assert locator.root_name == "field"
+
+
+def test_locator_leaf_name():
+    locator = Locator([(0, ObjectType.SEQUENCE)])
+    assert locator.leaf_name == 0
+
+    locator = Locator([("key", ObjectType.DICT), (0, ObjectType.SEQUENCE)])
+    assert locator.leaf_name == 0
+
+    locator = Locator([("field", ObjectType.DATACLASS), (0, ObjectType.SEQUENCE), ("key", ObjectType.DICT)])
+    assert locator.leaf_name == "key"

@@ -183,7 +183,7 @@ class SampleMetadata:
             if tensor_spec.name.startswith("args"):
                 args_names.append(tensor_spec.name)
             else:
-                kwarg_name = locator._path[0][0]  # TODO:: better api for this?
+                kwarg_name = locator.root_name
                 kwargs_names[kwarg_name].append(tensor_spec.name)
 
         return args_names, kwargs_names
