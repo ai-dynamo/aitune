@@ -25,7 +25,7 @@ from aitune.torch.backend import (
     TorchEagerBackend,
     TorchInductorBackend,
 )
-from aitune.torch.backend.tensorrt.tensorrt_backend import TorchQuantizationConfig
+from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig
 from flux.cmd_args import parse_args
 from flux.model import get_pipeline
 
@@ -73,9 +73,11 @@ def tune_model(
                             quantization_config="FP8_DEFAULT_CFG",
                             device="cuda",
                         ),
+                        use_dynamo=False,
                     )
                 ),
-                TensorRTBackend(),  # For FP16 fallback
+                # TensorRTBackend(TensorRTBackendConfig(use_dynamo=True)),
+                TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
                 TorchInductorBackend(),
                 TorchEagerBackend(),
             ]

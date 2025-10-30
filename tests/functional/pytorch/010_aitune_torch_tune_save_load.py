@@ -13,10 +13,8 @@
 # limitations under the License.
 
 # /// script
+# docker_image = "nvcr.io/nvidia/pytorch:25.09-py3"
 # dependencies = ["timm"]
-#
-# # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
-# scope = "always"
 # ///
 
 import tempfile

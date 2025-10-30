@@ -13,12 +13,8 @@
 # limitations under the License.
 
 # /// script
-# dependencies = ["timm", "fbgemm-gpu-genai==1.2.0"]
-#
-# # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
-# scope = "always"
+# dependencies = ["timm"]
 # additional_tags = ["gpu/rtx-a6000"]
-# allow_failure = false
 # ///
 
 from itertools import product
@@ -44,17 +40,22 @@ def do_test(backend: TorchAOBackend, dtype: torch.dtype):
     model = timm.create_model("resnet18", pretrained=False)
     model.to("cuda", dtype=dtype)
     model.eval()
+
     data = torch.randn((3, 224, 224), device="cuda").to(dtype)
+    sample = torch.randn((4, 3, 224, 224), device="cuda").to(dtype)
 
     with torch.inference_mode():
-        out = model(data.unsqueeze(0))
+        out = model(sample)
+
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 
-    module = Module(model, "functional-resnet18", strategy=OneBackendStrategy(backend))
+    module = Module(
+        model, "functional-resnet18", strategy=OneBackendStrategy(backend).enable_find_max_batch_size(False)
+    )
     # when
     tune(module, data, batch_sizes=[1, 2, 4], dry_run=False, disable_external_logging=False)
     # then - verify tuning
-    out = module(data.unsqueeze(0))
+    out = module(sample)
     actual_probs = torch.nn.functional.softmax(out[0], dim=0)
     torch.testing.assert_close(actual_probs, expected_probs, rtol=1e-2, atol=1e-2)
 

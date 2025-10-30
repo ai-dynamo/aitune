@@ -13,10 +13,9 @@
 # limitations under the License.
 
 # /// script
+# # dynamic shapes works on torch 2.9
+# docker_image = "nvcr.io/nvidia/pytorch:25.09-py3"
 # dependencies = ["timm"]
-#
-# # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
-# scope = "always"
 # ///
 
 from logging import DEBUG, basicConfig, getLogger
@@ -49,18 +48,26 @@ def do_test(backend: TorchTensorRTAotBackend, dtype: torch.dtype, device: str):
 
     with torch.inference_mode():
         out = model(sample)
+
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 
-    module = Module(model, "functional-resnet18", strategy=OneBackendStrategy(backend))
+    module = Module(
+        model, "functional-resnet18", strategy=OneBackendStrategy(backend).enable_find_max_batch_size(False)
+    )
 
     # when
-    tune(module, data, batch_sizes=[2, 4, 1], dry_run=False, device=device, disable_external_logging=False)
+    tune(module, [data], batch_sizes=[1, 2, 4, 8], dry_run=False, device=device, disable_external_logging=False)
 
     # then - verify tuning
     out = module(sample)
     actual_probs = torch.nn.functional.softmax(out[0], dim=0)
 
     torch.testing.assert_close(actual_probs, expected_probs, rtol=1e-2, atol=1e-2)
+
+    # try dynamic shapes
+    module(data.repeat(8, 1, 1, 1))
+    module(data.repeat(4, 1, 1, 1))
+    module(data.repeat(2, 1, 1, 1))
 
     MODULE_REGISTRY.clear()
 

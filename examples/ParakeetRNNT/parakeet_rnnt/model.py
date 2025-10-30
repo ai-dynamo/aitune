@@ -60,7 +60,7 @@ def get_model(model_name: str = "nvidia/parakeet-rnnt-1.1b"):
     asr_model.change_decoding_strategy(cfg)
 
     asr_model.eval()
-    asr_model = asr_model.to("cuda", dtype=torch.float16)
+    asr_model = asr_model.to("cuda")
 
     # Note: Move STFT window to GPU
     asr_model.preprocessor.featurizer.window = asr_model.preprocessor.featurizer.window.to("cuda")
