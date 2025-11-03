@@ -39,9 +39,6 @@ class TunedModule:
     ERROR_UNKNOWN_BACKEND = "Unknown backend type: {}"
     ERROR_NO_BACKEND_FOUND = "No backend found for a graph with pytree metadata: {}"
 
-    # Device names
-    META_DEVICE = "meta"
-
     def __init__(
         self,
         backends: OrderedDict[SampleMetadata, Backend],
@@ -128,7 +125,9 @@ class TunedModule:
         backends = OrderedDict()
 
         if not state_dict[TunedModule.IS_ANY_JIT_KEY]:
-            module = module.to(TunedModule.META_DEVICE)  # no module needed, we can move to meta device
+            module = module.to(
+                global_config.device_after_tuning
+            )  # no module needed, we can move to meta(default) device
 
         for sample_metadata_data, backend_data in state_dict[TunedModule.BACKENDS_KEY]:
             if backend_data[TunedModule.TYPE_KEY] not in backend_classes:

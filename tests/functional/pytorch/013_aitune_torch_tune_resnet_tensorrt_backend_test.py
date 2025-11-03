@@ -14,9 +14,6 @@
 
 # /// script
 # dependencies = ["timm"]
-#
-# # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
-# scope = "always"
 # ///
 
 from logging import DEBUG, basicConfig, getLogger
@@ -47,7 +44,9 @@ def do_test(backend: TensorRTBackend, dtype: torch.dtype, device: str):
         out = model(sample)
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 
-    module = Module(model, "functional-resnet18", strategy=OneBackendStrategy(backend))
+    module = Module(
+        model, "functional-resnet18", strategy=OneBackendStrategy(backend).enable_find_max_batch_size(False)
+    )
 
     # when
     tune(module, data, batch_sizes=[2, 4, 1], dry_run=False, device=device, disable_external_logging=False)
@@ -82,7 +81,7 @@ if __name__ == "__main__":
 
     do_test(
         TensorRTBackend(
-            config=TensorRTBackendConfig(),
+            config=TensorRTBackendConfig(use_dynamo=False),
         ),
         dtype=torch.bfloat16,
         device="cuda",

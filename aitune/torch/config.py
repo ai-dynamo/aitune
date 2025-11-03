@@ -31,6 +31,7 @@ DEFAULT_STABILITY_PERCENTAGE = 95
 DEFAULT_WINDOW_SIZE = 10
 
 DEFAULT_DEVICE = "cuda:0"
+DEFAULT_DEVICE_AFTER_TUNING = "meta"
 
 # Disable NVTX by default, enable with NVTX_ENABLE=1
 NVTX_ENABLE = os.getenv("NVTX_ENABLE") in ("1", "true", "True", "yes", "Yes", "YES")
@@ -60,6 +61,7 @@ class AITuneConfig:
         self._min_num_samples: int = DEFAULT_MIN_NUM_SAMPLES
         self._max_num_samples_stored: int = DEFAULT_MAX_NUM_SAMPLES_STORED
         self.strict_mode: bool = True
+        self._device_after_tuning: str = DEFAULT_DEVICE_AFTER_TUNING
 
     @property
     def min_num_samples(self) -> int:
@@ -92,6 +94,16 @@ class AITuneConfig:
     def cache_dir(self, cache_dir: str | Path) -> None:
         """Set the cache directory."""
         self._cache_dir = Path(cache_dir)
+
+    @property
+    def device_after_tuning(self) -> str:
+        """Get the device to use after tuning."""
+        return self._device_after_tuning
+
+    @device_after_tuning.setter
+    def device_after_tuning(self, device_after_tuning: str) -> None:
+        """Set the device to use after tuning."""
+        self._device_after_tuning = device_after_tuning
 
 
 def get_bool_env_variable(env_variable: str, default: bool) -> bool:
