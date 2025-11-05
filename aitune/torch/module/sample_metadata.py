@@ -132,7 +132,7 @@ class SampleMetadata:
     def __init__(
         self,
         tensor_data: tuple[tuple[Locator, TensorSpec]],
-        other_data: tuple[tuple[Locator, str, str]],
+        other_data: tuple[tuple[Locator, str, Any]],
         strict: bool = False,
     ) -> None:
         """Create SampleMetadata from provided tensor data and other data.
@@ -219,7 +219,7 @@ class SampleMetadata:
                 if torch.is_tensor(value):
                     tensor_data.append((locator, TensorSpec.from_tensor(name, value, batch_size)))
                 elif strict:
-                    other_data.append((locator, name, str(value)))
+                    other_data.append((locator, name, value))
 
         return SampleMetadata(tuple(tensor_data), tuple(other_data), strict)
 
@@ -236,7 +236,7 @@ class SampleMetadata:
             if torch.is_tensor(value):
                 tensor_data.append((locator, TensorSpec.from_tensor(name, value, batch_size)))
             elif strict:
-                other_data.append((locator, name, str(value)))
+                other_data.append((locator, name, value))
         return SampleMetadata(tuple(tensor_data), tuple(other_data), strict)
 
     @staticmethod
@@ -286,7 +286,7 @@ class SampleMetadata:
                 others.append(f"{name}={value}")
             else:
                 other_header = ["Locator", "Name", "Value"]
-                others.append((str(locator), name, value))
+                others.append((str(locator), name, str(value)))
 
         if info_level == InfoLevel.SHORT:
             result = "Tensors: " + ", ".join(tensors)

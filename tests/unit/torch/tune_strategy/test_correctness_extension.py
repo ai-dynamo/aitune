@@ -21,6 +21,7 @@ import torch.nn as nn
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.task.correctness import CorrectnessTensorShapeError, CorrectnessValueError
 from aitune.torch.tune_strategy import TuneStrategy
 from tests.toy_models.torch_models import ToyTorchModel
@@ -56,6 +57,29 @@ def test_correctness_extension_torch_eager_backend(torch_device, tmp_path):
 
     backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
     backend.deactivate()
+
+
+def test_correctness_is_idempotent():
+    """Test correctness is idempotent, has no side effects."""
+
+    class MockBackend:
+        def infer(self, *args, **kwargs):
+            """This mock backend alters cache in args and kwargs."""
+            args[0].append("not important, should be discarded")
+            kwargs["cache"].append("not important, should be discarded")
+            return args, kwargs
+
+        def describe(self):
+            return "mock_backend"
+
+    strategy = TuneStrategyTestCorrectness()
+
+    cache = []
+    data = [((cache,), {"cache": cache})]
+    input_spec = output_spec = SampleMetadata.from_inputs((), {})
+    graph_spec = GraphSpec(name="test_model", input_spec=input_spec, output_spec=output_spec)
+    strategy.check_correctness(MockBackend(), "test_model", graph_spec, data)  # type: ignore
+    assert len(cache) == 0, "cache should be empty"
 
 
 def test_correctness_extension_torch_eager_backend_with_nan(torch_device, tmp_path):

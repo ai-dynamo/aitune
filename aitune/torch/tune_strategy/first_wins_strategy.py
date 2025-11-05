@@ -13,7 +13,7 @@
 # limitations under the License.
 """First Wins tune strategy."""
 
-import copy
+from copy import deepcopy
 from pathlib import Path
 
 import torch
@@ -63,8 +63,8 @@ class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
                     log("⚙️ backend:  %s", backend.describe(), sink=self._sink)
                     log("🔄 in progress...please wait", depth=2, sink=self._sink)
                     with control_output(log_file=log_file):
-                        backend = copy.deepcopy(backend)
-                        backend = backend.build(module, graph_spec, data, device, backend_cache_dir)
+                        backend = deepcopy(backend)
+                        backend = backend.build(module, graph_spec, deepcopy(data), device, backend_cache_dir)
                     log("✅ backend built", depth=2, sink=self._sink)
                     self.check_correctness(backend, name, graph_spec, data)
                     log("✅ backend validated", depth=2, sink=self._sink)

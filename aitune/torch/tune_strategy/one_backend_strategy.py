@@ -13,7 +13,7 @@
 # limitations under the License.
 """Simple tune strategy."""
 
-import copy
+from copy import deepcopy
 from pathlib import Path
 
 import torch
@@ -61,7 +61,7 @@ class OneBackendStrategy(TuneStrategyFindMaxBatchSizeExtension):
                 log("🤖 backend: %s", self._backend.describe(), sink=self._sink)
                 log("🔄 in progress...please wait", depth=2, sink=self._sink)
                 with control_output(log_file=log_file):
-                    backend = copy.deepcopy(self._backend)
+                    backend = deepcopy(self._backend)
                     backend = backend.build(module, graph_spec, data, device, backend_cache_dir)
                 log("✅ backend built", depth=2, sink=self._logger.info)
                 self.check_correctness(backend, name, graph_spec, data)

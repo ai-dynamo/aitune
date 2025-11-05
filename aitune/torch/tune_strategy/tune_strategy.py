@@ -13,10 +13,10 @@
 # limitations under the License.
 """Base class for tune strategy."""
 
-import copy
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from copy import deepcopy
 from pathlib import Path
 
 import torch
@@ -106,7 +106,7 @@ class TuneStrategy(ABC):
         self._logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
         with torch.inference_mode():
             for args, kwargs in data:
-                outputs = backend.infer(*args, **kwargs)
+                outputs = backend.infer(*deepcopy(args), **deepcopy(kwargs))
                 check_output_correctness(outputs, name=f"{name}.{graph_spec.name}.{backend.describe()}.output")
                 outputs_metadata = SampleMetadata.from_outputs(outputs)
                 check_output_tensor_shapes(graph_spec.output_spec.tensor_specs, outputs_metadata.tensor_specs)
@@ -118,7 +118,7 @@ class TuneStrategy(ABC):
 
     def clone(self) -> "TuneStrategy":
         """Clones the tune strategy."""
-        return copy.deepcopy(self)
+        return deepcopy(self)
 
     def _pre_tune(
         self,

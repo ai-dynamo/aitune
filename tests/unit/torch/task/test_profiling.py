@@ -24,7 +24,7 @@ from aitune.torch.task.profiling.measuring_stop_strategy import (
     StableWindowMeasuringStopStrategy,
 )
 from aitune.torch.task.profiling.metrics import get_throughput, is_throughput_saturated
-from aitune.torch.task.profiling.profiling import ProfilingStatus, profile
+from aitune.torch.task.profiling.profiling import ProfilingStatus, profile, profile_backend
 from aitune.torch.task.profiling.profiling_stop_strategy import ThroughputSaturatedProfilingStopStrategy
 from tests.toy_models.torch_models import ToyTorchModel
 
@@ -217,4 +217,37 @@ def test_profile_toy_model_no_batching():
 
     result = profile(model, dataset, profile_config)
     assert result.status == ProfilingStatus.Status.SUCCESS
+    assert len(result.results.entries) > 0
+
+
+@pytest.mark.parametrize("batching", [True, False])
+def test_profile_backend(batching: bool):
+    model = ToyTorchModel()
+    graph_spec = model.graph_spec(batch_sizes=[1])
+
+    class MockBackend:
+        def __init__(self, model):
+            self.model = model
+
+        def infer(self, *args, **kwargs):
+            """The following function imitates adding something to cache each time it is called.
+
+            If the profile is idempotent, the cache argument should always be empty i.e. any changes should be discarded.
+            """
+            assert len(kwargs["cache"]) == 0, "Cache should be empty"
+            kwargs["cache"].append("not important, should be discarded")
+            return self.model(*args)
+
+        def describe(self):
+            return "mock_backend"
+
+    backend = MockBackend(model)
+    profile_config = ProfilingConfig(batch_sizes=[1, 2], batching=batching)
+
+    samples = [(model.inputs(batch_sizes=[1]), {"cache": []})]
+    result = profile_backend(backend, "test_model", graph_spec, samples, profile_config)  # type: ignore
+
+    assert result.status == ProfilingStatus.Status.SUCCESS
+
+    # Verify both calls produced results
     assert len(result.results.entries) > 0

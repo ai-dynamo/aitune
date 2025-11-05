@@ -37,8 +37,9 @@ def test_jit_resnet():
         resnet(torch.randn(2, 3, 224, 224, device="cuda"))
         resnet(torch.randn(16, 3, 224, 224, device="cuda"))
 
-    for _ in range(5):
-        batch()
+    with torch.inference_mode():
+        for _ in range(5):
+            batch()
 
     # Capture the print_hierarchy output
     history = []

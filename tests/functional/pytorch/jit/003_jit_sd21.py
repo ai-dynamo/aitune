@@ -52,8 +52,9 @@ def test_jit_sd21():
             pipe([prompt] * 1, num_inference_steps=1)
             pipe([prompt] * 2, num_inference_steps=1)
 
-    for _ in range(5):
-        batch()
+    with torch.inference_mode():
+        for _ in range(5):
+            batch()
 
     # Capture the print_hierarchy output
     history = []

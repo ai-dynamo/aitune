@@ -121,3 +121,36 @@ def test_device():
     model = ToyTorchModel()
     recording = RecordingModule(model, "test-module")
     assert recording.device == torch.device("cpu")
+
+
+def test_recording_stores_original_args_and_kwargs():
+    """Test that recording stores original args and kwargs before calling the model to avoid side effects."""
+
+    class Model(torch.nn.Module):
+        def forward(self, *args, **kwargs):
+            args[0].append("not important, should be discarded")
+            kwargs["cache"] = "not important, should be discarded"
+            return args, kwargs
+
+    model = Model()
+    recording = RecordingModule(model, "test-module")
+    recording([], cache=[])
+
+    assert len(recording.graph_specs) == 1
+    samples = recording.samples_for_graph_spec(recording.graph_specs[0])
+    assert len(samples) == 1
+    args, kwargs = samples[0]
+    assert args[0] == []
+    assert kwargs["cache"] == []
+
+
+def test_recording_raises_error_if_model_is_not_in_inference_mode():
+    """Test that recording raises an error if the model is not in inference mode."""
+    rec_module = recording_module(strict_mode=True)
+
+    normal_input = torch.tensor(1.0)
+    rec_module(normal_input)  # no exception
+
+    requires_grad_input = torch.tensor(1.0, requires_grad=True) + 1  # +1 fills grad buffer
+    with pytest.raises(RuntimeError, match=r"Cannot copy model inputs\. Model is not in inference mode\."):
+        rec_module(requires_grad_input)

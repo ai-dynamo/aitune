@@ -145,7 +145,7 @@ class BackendConfig:
             return {k: self._to_json(v) for k, v in obj.items()}
 
         # Handle sequences (list, tuple, set)
-        if isinstance(obj, (list, tuple, set)):
+        if isinstance(obj, list | tuple | set):
             return [self._to_json(item) for item in obj]
 
         # Handle Enums
@@ -153,7 +153,7 @@ class BackendConfig:
             return obj.value
 
         # Handle JSON primitives (these are already JSON-serializable)
-        if isinstance(obj, (int, float, str, bool)):
+        if isinstance(obj, int | float | str | bool):
             return obj
 
         # Handle other types by converting to string
@@ -200,6 +200,10 @@ class Backend(ABC):
         cache_dir: Path,
     ) -> "Backend":
         """Build the model with the given arguments.
+
+        Building a backend should be idempotent i.e. do not cause side effects. A model is not necessarily pure
+        functional and can have an internal state (like kv cache for LLMs). That is why build can call a sample of
+        inputs at most once so that subsequent calls have exact same state as the first call for the given sample.
 
         After building, the backend should be activated.
         """

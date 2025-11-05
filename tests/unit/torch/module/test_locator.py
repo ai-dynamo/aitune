@@ -14,6 +14,8 @@
 
 import dataclasses
 
+import torch
+
 from aitune.torch.module.locator import Locator, ObjectType
 
 
@@ -145,8 +147,8 @@ def test_find_leaves_nested_dataclass():
         assert str(locator) == expected_str
 
 
-def test_find_leaves_user_type():
-    # test unregistered user type
+def test_find_leaves_unregistered_user_type():
+    # test unregistered user type - find leaves should return the object itself
     obj = UserType(1)
     results = list(Locator.find_leaves(obj))
     assert len(results) == 1
@@ -154,16 +156,59 @@ def test_find_leaves_user_type():
     assert value == obj, "object should not be traversed"
     assert str(locator) == ""
 
-    # test registered user type
-    Locator.register_user_type(UserType)
+
+def test_find_leaves_registered_user_type():
+    # test registered user type - find leaves should traverse the object
     try:
+        obj = UserType(1)
+        Locator.register_user_type(UserType, only_tensors=False)
         results = list(Locator.find_leaves(obj))
         assert len(results) == 1
         locator, value = results[0]
         assert value == 1, "object should be traversed"
         assert str(locator) == ".value"
+
+        Locator.register_user_type(UserType, only_tensors=True)
+        results = list(Locator.find_leaves(obj))
+        assert len(results) == 0, "object should not return any non tensor leaves"
+
+        obj = UserType(torch.tensor(1))
+        Locator.register_user_type(UserType, only_tensors=True)
+        results = list(Locator.find_leaves(obj))
+        assert len(results) == 1, "object should return a tensor leaf"
+        locator, value = results[0]
+        assert value == torch.tensor(1), "object should return a tensor leaf"
+        assert str(locator) == ".value"
+
+        # more complicated example to test scenario where we globally look for any objects but narrow search
+        # for user type objects to only return tensor leaves e.g. for LLM cache we look only for tensors
+        results = list(Locator.find_leaves(("abc", torch.tensor(2), obj), only_tensors=False))
+        assert len(results) == 3
+        locator, value = results[0]
+        assert value == "abc", "non tensor leaf should be returned"
+        assert str(locator) == "[0]"
+        locator, value = results[1]
+        assert value == torch.tensor(2), "tensor leaf should be returned"
+        assert str(locator) == "[1]"
+        locator, value = results[2]
+        assert value == torch.tensor(1), "user type object should be traversed for tensor only"
+        assert str(locator) == "[2].value"
     finally:
         Locator.unregister_user_type(UserType)
+
+
+def test_find_leaves_ignored_type():
+    obj = UserType(1)
+    # check type is found if not ignored
+    results = list(Locator.find_leaves(obj))
+    assert len(results) == 1
+    # now ignore the type
+    Locator.ignore_type(UserType)
+    results = list(Locator.find_leaves(obj))
+    try:
+        assert len(results) == 0
+    finally:
+        Locator.unignore_type(UserType)
 
 
 def test_find_leaves_empty_containers():

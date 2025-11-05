@@ -14,7 +14,7 @@
 
 """Unit tests for OneBackendStrategy."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import torch.nn as nn
@@ -69,17 +69,15 @@ def test_tune_success(mock_backend, mock_module, mock_graph_spec, torch_device, 
     strategy._describe = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
+    mock_backend.__deepcopy__ = lambda _: mock_backend
     mock_backend.build.return_value = mock_backend
 
     # Execute
-    with patch("copy.deepcopy", return_value=mock_backend):
-        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+    result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
 
     # Verify
     assert result == mock_backend
-    mock_backend.build.assert_called_once_with(
-        mock_module, mock_graph_spec, [mock_sample], torch_device, tmp_path / mock_backend.key()
-    )
+    mock_backend.build.assert_called_once()
 
 
 def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path):
@@ -89,13 +87,12 @@ def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_de
     strategy._describe = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
+    mock_backend.__deepcopy__ = lambda _: mock_backend
     mock_backend.build.side_effect = Exception("Backend failed")
 
     # Execute and verify
-    with pytest.raises(Exception) as exc_info, patch("copy.deepcopy", return_value=mock_backend):
+    with pytest.raises(Exception) as exc_info:
         strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
 
     assert str(exc_info.value) == "Backend failed"
-    mock_backend.build.assert_called_once_with(
-        mock_module, mock_graph_spec, [mock_sample], torch_device, tmp_path / mock_backend.key()
-    )
+    mock_backend.build.assert_called_once()

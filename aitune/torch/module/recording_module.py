@@ -17,6 +17,7 @@ import itertools
 import logging
 import tempfile
 from collections import OrderedDict, defaultdict
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -72,17 +73,16 @@ class RecordingModule:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Record a sample and run the module.
 
-        Inputs metadata is created before calling `_forward_call` - the order is important as calling model does not
-        have to be idempotent i.e. can have side effects. If inputs contain unsupported type, exception will be thrown
-        and model won't be called i.e. there won't be side effects. This is not guaranteed for outputs - but there is
-        not other option for it.
+        Before calling forward, we need to make input sample metadata and a copy of args and kwargs, since the
+        forward call may have side effects on the inputs (like KV cache in LLM models).
         """
         logger.debug("Calling recording %s module.", self._name)
         inputs_metadata = SampleMetadata.from_inputs(args, kwargs, strict=self._config.strict_mode)
+        original_args, original_kwargs = self._copy_inputs(args, kwargs)
         outputs = self._forward_call(*args, **kwargs)
         outputs_metadata = SampleMetadata.from_outputs(outputs, strict=self._config.strict_mode)
 
-        self.record_sample((args, kwargs), inputs_metadata, outputs_metadata)
+        self.record_sample((original_args, original_kwargs), inputs_metadata, outputs_metadata)
 
         return outputs
 
@@ -128,3 +128,26 @@ class RecordingModule:
         for path in self._samples[graph_spec.input_spec]:
             result.append(torch.load(path, weights_only=False))
         return result
+
+    @staticmethod
+    def _copy_inputs(args: tuple, kwargs: dict) -> tuple[tuple, dict]:
+        """Create deep copies of args and kwargs.
+
+        Args:
+            args: Positional arguments tuple.
+            kwargs: Keyword arguments dict.
+
+        Returns:
+            Tuple containing deep copies of args and kwargs.
+
+        Raises:
+            RuntimeError: If cannot copy model inputs with tip to fix it
+        """
+        try:
+            return deepcopy(args), deepcopy(kwargs)
+        except RuntimeError as e:
+            # raise helpful error message
+            raise RuntimeError(
+                "Cannot copy model inputs. Model is not in inference mode. "
+                "Tip: you can use \n---\nwith torch.inference_mode():\n    model()\n---\ncontext manager to fix this."
+            ) from e

@@ -14,6 +14,7 @@
 """Torch Inductor backend."""
 
 import gc
+from copy import deepcopy
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
@@ -151,7 +152,7 @@ class TorchInductorBackend(Backend):
             torch.dtype: The dtype of the module's output tensor. Returns None if output is not a tensor.
         """
         args, kwargs = data[0]
-        res = module(*args, **kwargs)
+        res = module(*deepcopy(args), **deepcopy(kwargs))
         if isinstance(res, torch.Tensor):
             return res.dtype
         else:
@@ -188,7 +189,7 @@ class TorchInductorBackend(Backend):
             )
 
             for args, kwargs in self._data:
-                self._compiled_module(*args, **kwargs)
+                self._compiled_module(*deepcopy(args), **deepcopy(kwargs))
         logger.debug("Module has been compiled.")
 
     def _activate(self):

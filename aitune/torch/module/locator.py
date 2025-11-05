@@ -19,6 +19,8 @@ from collections.abc import Generator, Sequence
 from enum import IntEnum
 from typing import ClassVar
 
+import torch
+
 
 class ObjectType(IntEnum):
     """Object type."""
@@ -46,12 +48,14 @@ class Locator:
     found within a nested structure.
 
     Attributes:
-        _user_types: Class-level set of registered user-defined types that should
-            be traversed like dataclasses.
+        _user_types: Class-level dict of registered user-defined types that should be traversed like dataclasses.
+        If the value is True, only tensors are returned, otherwise all objects are returned.
+        _ignored_types: Class-level set of types that should not be traversed nor returned by find_leaves.
 
     """
 
-    _user_types: ClassVar[set[type]] = set()
+    _user_types: ClassVar[dict[type, bool]] = dict[type, bool]()
+    _ignored_types: ClassVar[set[type]] = set()
 
     def __init__(self, paths: Sequence[tuple[int | str, ObjectType]]):
         """Initialize the locator.
@@ -151,43 +155,124 @@ class Locator:
         return root
 
     @staticmethod
-    def find_leaves(obj: object) -> Generator[tuple["Locator", object], None, None]:
+    def _process_sequence(current: list | tuple, stack: list, only_tensors: bool, todo: deque):
+        """Process a sequence and add its elements to the todo queue.
+
+        Args:
+            current: The sequence to process.
+            stack: The current path stack.
+            only_tensors: Whether to only process tensors.
+            todo: The todo queue to append items to.
+        """
+        for idx, value in enumerate(current):
+            todo.append((value, [*stack, (idx, ObjectType.SEQUENCE)], only_tensors))
+
+    @staticmethod
+    def _process_dict(current: dict, stack: list, only_tensors: bool, todo: deque):
+        """Process a dictionary and add its items to the todo queue.
+
+        Args:
+            current: The dictionary to process.
+            stack: The current path stack.
+            only_tensors: Whether to only process tensors.
+            todo: The todo queue to append items to.
+        """
+        for key, value in current.items():
+            todo.append((value, [*stack, (key, ObjectType.DICT)], only_tensors))
+
+    @staticmethod
+    def _process_dataclass(current: object, stack: list, only_tensors: bool, todo: deque):
+        """Process a dataclass and add its fields to the todo queue.
+
+        Args:
+            current: The dataclass to process.
+            stack: The current path stack.
+            only_tensors: Whether to only process tensors.
+            todo: The todo queue to append items to.
+        """
+        for field in dataclasses.fields(current):  # type: ignore
+            value = getattr(current, field.name)
+            todo.append((value, [*stack, (field.name, ObjectType.DATACLASS)], only_tensors))
+
+    @staticmethod
+    def _process_user_type(current: object, stack: list, only_tensors: bool, todo: deque):
+        """Process a user type and add its fields to the todo queue.
+
+        Args:
+            current: The user type object to process.
+            stack: The current path stack.
+            only_tensors: Whether to only process tensors.
+            todo: The todo queue to append items to.
+        """
+        only_tensors = Locator._user_types[type(current)]
+        for field in get_object_fields(current):
+            value = getattr(current, field)
+            todo.append((value, [*stack, (field, ObjectType.USER_TYPE)], only_tensors))
+
+    @staticmethod
+    def _should_ignore_object(current: object, only_tensors: bool) -> bool:
+        """Check if the object should be ignored."""
+        if type(current) in Locator._ignored_types:
+            return True
+        if only_tensors:
+            return not torch.is_tensor(current)
+        return False
+
+    @staticmethod
+    def find_leaves(obj: object, only_tensors: bool = False) -> Generator[tuple["Locator", object], None, None]:
         """Walks the object and yields locators and their leaf values.
 
-        Leaf value is anything that is stored in a sequence, dictionary, or dataclass.
+        Leaf value is anything that is stored in a sequence, dictionary, or dataclass. If `only_tensors` is True,
+        only tensors are returned, otherwise all objects are returned.
+
+        Args:
+            obj: The object to walk.
+            only_tensors: Whether to only return tensors.
+
+        Yields:
+            A tuple of (locator, value) where locator is the path to the leaf and value is the leaf value.
+
+        Note:
+        - if a user type is marked as ignore, it will not be traversed nor returned.
+        - if a user type is registered, it will be traversed like a dataclass. If it was registered with
+              `only_tensors=True`, only tensors are returned irrespective of method argument `only_tensors`.
+              Such a case may happen when we want to handle LLM cache and look only for tensors inside cache object.
         """
-        todo = deque([(obj, [])])
+        todo = deque([(obj, [], only_tensors)])
         while todo:
-            current, stack = todo.popleft()
-            if isinstance(current, (list, tuple)):
-                for idx, value in enumerate(current):
-                    todo.append((value, stack + [(idx, ObjectType.SEQUENCE)]))
+            current, stack, only_tensors = todo.popleft()
+            if isinstance(current, list | tuple):
+                Locator._process_sequence(current, stack, only_tensors, todo)
             elif isinstance(current, dict):
-                for key, value in current.items():
-                    todo.append((value, stack + [(key, ObjectType.DICT)]))
+                Locator._process_dict(current, stack, only_tensors, todo)
             elif dataclasses.is_dataclass(current):
-                for field in dataclasses.fields(current):
-                    todo.append((getattr(current, field.name), stack + [(field.name, ObjectType.DATACLASS)]))
+                Locator._process_dataclass(current, stack, only_tensors, todo)
             elif type(current) in Locator._user_types:
-                for field in get_object_fields(current):
-                    todo.append((getattr(current, field), stack + [(field, ObjectType.USER_TYPE)]))
+                Locator._process_user_type(current, stack, only_tensors, todo)
+            elif Locator._should_ignore_object(current, only_tensors):
+                continue
             else:
                 yield Locator(stack), current
 
     @staticmethod
-    def register_user_type(cls: type):
+    def register_user_type(cls: type, only_tensors: bool = False):
         """Register a user type."""
-        Locator._user_types.add(cls)
+        Locator._user_types[cls] = only_tensors
 
     @staticmethod
     def unregister_user_type(cls: type):
         """Unregister a user type."""
-        Locator._user_types.remove(cls)
+        Locator._user_types.pop(cls, None)
 
     @staticmethod
-    def is_user_type(cls: type) -> bool:
-        """Check if a class is a user type."""
-        return cls in Locator._user_types
+    def ignore_type(cls: type):
+        """Ignore a type."""
+        Locator._ignored_types.add(cls)
+
+    @staticmethod
+    def unignore_type(cls: type):
+        """Unignore a type."""
+        Locator._ignored_types.discard(cls)
 
 
 def get_object_fields(obj):

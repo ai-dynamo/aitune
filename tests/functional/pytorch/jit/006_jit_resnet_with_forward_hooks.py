@@ -57,8 +57,9 @@ def test_jit_resnet():
     resnet.register_forward_pre_hook(pre_hook)
     resnet.register_forward_hook(post_hook)
 
-    for _ in range(2):
-        resnet()  # notice: not argument - it will be added by pre hook
+    with torch.inference_mode():
+        for _ in range(2):
+            resnet()  # notice: not argument - it will be added by pre hook
 
     # Capture the print_hierarchy output
     history = []

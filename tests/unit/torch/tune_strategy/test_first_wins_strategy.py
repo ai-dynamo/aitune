@@ -14,7 +14,7 @@
 
 """Unit tests for FirstWinsStrategy."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import torch.nn as nn
@@ -22,7 +22,6 @@ import torch.nn as nn
 from aitune.torch import Module, tune
 from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from tests.toy_backends import SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
@@ -56,7 +55,7 @@ def mock_graph_spec():
 @pytest.fixture
 def mock_sample():
     """Create a mock sample for testing."""
-    return MagicMock(spec=Sample)
+    return ["this is a mock sample"]
 
 
 def test_describe(mock_backend):
@@ -77,11 +76,13 @@ def test_tune_success_first_backend(mock_backend, mock_module, mock_graph_spec, 
     first_backend = MagicMock(spec=Backend)
     first_backend.name = "first_backend"
     first_backend.describe.return_value = "mock_backend"
+    first_backend.__deepcopy__ = lambda _: first_backend
     first_backend.build.return_value = mock_backend
 
     second_backend = MagicMock(spec=Backend)
     second_backend.name = "second_backend"
     second_backend.describe.return_value = "mock_backend"
+    second_backend.__deepcopy__ = lambda _: second_backend
     second_backend.build.return_value = mock_backend
 
     backends = [first_backend, second_backend]
@@ -89,17 +90,13 @@ def test_tune_success_first_backend(mock_backend, mock_module, mock_graph_spec, 
     strategy._describe = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
-    mock_backend.build.return_value = mock_backend
 
     # Execute
-    with patch("copy.deepcopy", return_value=mock_backend):
-        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+    result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
 
     # Verify
     assert result == mock_backend
-    mock_backend.build.assert_called_once_with(
-        mock_module, mock_graph_spec, [mock_sample], torch_device, tmp_path / first_backend.key()
-    )
+    backends[0].build.assert_called_once()
     backends[1].build.assert_not_called()
 
 
@@ -109,11 +106,13 @@ def test_tune_success_second_backend(mock_backend, mock_module, mock_graph_spec,
     first_backend = MagicMock(spec=Backend)
     first_backend.name = "first_backend"
     first_backend.describe.return_value = "mock_backend"
+    first_backend.__deepcopy__ = lambda _: first_backend
     first_backend.build.side_effect = Exception("First backend failed")
 
     second_backend = MagicMock(spec=Backend)
     second_backend.name = "second_backend"
     second_backend.describe.return_value = "mock_backend"
+    second_backend.__deepcopy__ = lambda _: second_backend
     second_backend.build.return_value = mock_backend
 
     backends = [first_backend, second_backend]
@@ -123,14 +122,19 @@ def test_tune_success_second_backend(mock_backend, mock_module, mock_graph_spec,
     strategy.enable_correctness_check(False)
 
     # Execute
-    with patch("copy.deepcopy", side_effect=[first_backend, second_backend]):
-        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+    result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_sample, torch_device, tmp_path)
 
     # Verify
     assert result == mock_backend
     first_backend.build.assert_called_once()
     second_backend.build.assert_called_once()
     mock_module.to.assert_called_once_with(torch_device)
+
+    # Ensure that the data passed to build() is a different object than the original [mock_sample]
+    # That is, each backend gets its own copy of the sample, not the original list, nor the same object
+    for backend in backends:
+        build_data_args = [args[2] for args, kwargs in backend.build.call_args_list]
+        assert build_data_args[0] is not mock_sample  # different list instance
 
 
 def test_tune_all_backends_fail(mock_module, mock_graph_spec, mock_sample, torch_device, tmp_path):

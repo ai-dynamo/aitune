@@ -174,8 +174,9 @@ def _run_profiling_batch_size(
     measurement_stop_strategy = deepcopy(profiling_config.measurement_stop_strategy)
     try:
         while True:
+            # make call idempotent (no side effects) since model can be stateful like LLM KV cache
             new_entries = profiling_config.measuring_strategy.do_measurement(
-                batch_size, model, sample, backend_details=backend_details, model_name=model_name
+                batch_size, model, deepcopy(sample), backend_details=backend_details, model_name=model_name
             )
             entries += new_entries
 

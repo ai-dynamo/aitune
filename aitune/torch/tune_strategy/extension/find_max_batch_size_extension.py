@@ -17,6 +17,7 @@ Looks for best batch size for the module using Torch Eager backend.
 """
 
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -99,7 +100,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
         if self.find_config.enable_find_max_batch_size:
             self._logger.info("🚀 Finding max batch size for %s", name)
             backend = self.find_config.default_backend_class()
-            backend.build(module, graph_spec, data, device, cache_dir)
+            backend.build(module, graph_spec, deepcopy(data), device, cache_dir)
             max_batch_size, best_throughput, _ = calculate_highest_throughput_for_backend(
                 backend,
                 name,

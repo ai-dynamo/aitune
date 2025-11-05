@@ -19,7 +19,7 @@
 4. Returns the backend with the highest throughput.
 """
 
-import copy
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -146,8 +146,8 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                     log("🤖 backend: %s", backend.describe(), sink=self._sink)
                     log("🔄 in progress...please wait", depth=2, sink=self._sink)
                     with control_output(log_file=log_file):
-                        backend = copy.deepcopy(backend)
-                        backend.build(module, graph_spec, data, device, backend_cache_dir)
+                        backend = deepcopy(backend)
+                        backend.build(module, graph_spec, deepcopy(data), device, backend_cache_dir)
                     log("✅ backend built", depth=2, sink=self._sink)
                     self.check_correctness(backend, name, graph_spec, data)
                     log("✅ backend validated", depth=2, sink=self._sink)
