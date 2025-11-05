@@ -10,22 +10,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-.idea/
-.git/
-.gitbu/
-.eggs/
-.pytest_cache/
-.venv/
-.gitignore
-.ruff/
-.tox/
-.pytype/
-.mypy_cache/
-*.egg-info/
-build/
-workspace/
+.venv
+../../.venv
+../../.tox
+../../tmp/
+../../checkpoints
+.cache/
 checkpoints/
-tmp/
-
-**/*.pyc
-**/*.pyi

@@ -31,6 +31,7 @@ def add_args(parser):
         "--expected-class-id",
         type=int,
         help="Expected class ID to verify the prediction against",
+        default=207,  # golden retriever
     )
     return parser
 

@@ -13,16 +13,17 @@
 # limitations under the License.
 
 [project]
-name = "aitune-parakeet-ctc-example"
+name = "nvidia-ai-tune-e5-large-v2-embedding-example"
 version = "0.1.0"
-description = "NVIDIA AITune Parakeet CTC Example"
+description = "NVIDIA AI Tune E5 Large V2 Embedding Example"
 readme = "README.md"
-requires-python = ">=3.10, <3.13"
+license-files = ["LICENSE"]
+requires-python = ">=3.9, <4"
 
 dependencies = [
     "aitune",
-    "megatron-core",
-    "nemo-toolkit[asr]",
+    "sentence_transformers",
+    "huggingface_hub",
 ]
 
 [project.optional-dependencies]
@@ -30,9 +31,10 @@ dynamo = [
     "aitune-examples-common",
     "ai-dynamo==0.6.0",
     "uvicorn",
+    "aiohttp",
     "aiofiles>=24.1.0",
     "python-multipart",
-    "colored",
+    "pyyaml",
 ]
 
 [tool.uv.sources]
@@ -40,11 +42,11 @@ aitune = { path  = "../../" }
 aitune-examples-common = { path = "../../examples/common" }
 
 [project.scripts]
-tune = "parakeet_ctc.tune:main"
-inference = "parakeet_ctc.inference:main"
+tune = "e5large.tune:main"
+inference = "e5large.inference:main"
 
 [build-system]
-requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
+requires = ["setuptools>=65.3.0", "setuptools_scm>=2.0.0,<3", "wheel>=0.37.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -52,11 +54,29 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 namespaces = false
-include = ["parakeet_ctc"]
+include = ["e5large"]
 
 [tool.setuptools.package-data]
-parakeet_ctc = ["**/*"]
+e5large = ["e5large/*"]
 
-[tool.aitune]
-[[tool.aitune.arguments]]
-audio_path = "2086-149220-0033.wav"
+[tool.ruff]
+preview = true
+line-length = 120
+indent-width = 4
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["B", "C", "C4", "C90", "D", "E", "F", "I", "N", "W", "T", "T10", "T20", "UP", "CPY"]
+ignore = ["E266", "E501", "N818"]
+exclude = []
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["D104"]
+"**/__version__.py" = ["D100"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-copyright]
+author = "NVIDIA CORPORATION"
+notice-rgx = 'Copyright \(c\) \d{4}(-\d{4})*,'

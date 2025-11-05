@@ -86,13 +86,63 @@ Demonstrates tuning of ASR (Automatic Speech Recognition) models using NVIDIA's 
   - https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/asr/models.html
 
 
+
+## ParakeetRNNT
+
+**Speech AI - Automatic Speech Recognition**
+
+Demonstrates tuning of ASR (Automatic Speech Recognition) models using NVIDIA's Parakeet RNNT model for speech-to-text conversion.
+
+- **Location**: [`ParakeetRNNT/`](./ParakeetRNNT/)
+- **Model**: NVIDIA Parakeet RNNT 1.1B
+- **Use Case**: Optimizing speech recognition models
+- **Key Features**:
+  - ASR model tuning
+  - Audio-to-text transcription
+  - NVIDIA NeMo framework integration
+- **More Info**:
+  - https://huggingface.co/nvidia/parakeet-rnnt-1.1b
+  - https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/asr/models.html
+
+
+## ESM2
+**Text AI - Advanced Text Embedding**
+
+Demonstrates tuning of ESM2 model for text embedding tasks.
+
+- **Location**: [`ESM2/`](./ESM2/)
+- **Model**: ESM2 from HuggingFace
+- **Use Case**: Optimizing text embedding models
+- **Key Features**:
+  - Text embedding tuning
+  - Text embedding inference
+  - HuggingFace integration
+- **More Info**:
+  - https://huggingface.co/esm/esm2-t12-100M-UR50S
+
+## E5Large
+
+**Text AI - Advanced Text Embedding**
+
+Demonstrates tuning of E5Large model for text embedding tasks.
+
+- **Location**: [`E5Large/`](./E5Large/)
+- **Model**: E5Large from HuggingFace
+- **Use Case**: Optimizing text embedding models
+- **Key Features**:
+  - Text embedding tuning
+  - Text embedding inference
+  - HuggingFace integration
+- **More Info**:
+  - https://huggingface.co/intfloat/e5-large-v2
+
 ---
 
 Each example includes:
 - Complete setup instructions
 - Usage examples with CLI commands
 - Model-specific tuning parameters
-- Performance benchmarking guidance
+- AI Dynamo deployment instructions
 
 To get started, navigate to any example directory and follow the README instructions for that specific model type.
 

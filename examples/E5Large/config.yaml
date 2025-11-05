@@ -1,4 +1,5 @@
-# Copyright (c) 2025 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -10,22 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-.idea/
-.git/
-.gitbu/
-.eggs/
-.pytest_cache/
-.venv/
-.gitignore
-.ruff/
-.tox/
-.pytype/
-.mypy_cache/
-*.egg-info/
-build/
-workspace/
-checkpoints/
-tmp/
 
-**/*.pyc
-**/*.pyi
+Backend:
+  model_name: "intfloat/e5-large-v2"
+  max_batch_size: 8
+  batch_timeout: 0.5
+  force_tune: false
+  tuned_model_path: null  # If null, will use default cache directory
+

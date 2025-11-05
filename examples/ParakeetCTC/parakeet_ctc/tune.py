@@ -20,7 +20,7 @@ from pathlib import Path
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
 from aitune.torch import FirstWinsStrategy, TuneStrategy, inspect, save, tune, wrap
-from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorBackend
 from parakeet_ctc.cmd_args import parse_args
 from parakeet_ctc.model import get_model
 
@@ -85,7 +85,14 @@ def main():
     basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     args = parse_args()
 
-    strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
+    strategy = FirstWinsStrategy(
+        backends=[
+            TensorRTBackend(),
+            TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
+            TorchInductorBackend(),
+            TorchEagerBackend(),
+        ]
+    )
     strategy.enable_find_max_batch_size(enable=False)
 
     tune_model(

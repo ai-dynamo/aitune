@@ -11,18 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-Backend:
-  model_name: "stabilityai/stable-diffusion-2-1"
-  max_batch_size: 4
-  batch_timeout: 2.0
-  pretrained: true
-  prompt: "A beautiful sunset over a calm ocean"
-  sizes: [[512, 512]]
-  steps: 10
-  # tuned_model_path: "tuned_model.pt"
-  force_tune: false
-  image_storage_path: "/images"
-  ServiceArgs:
-    workers: 1
-    resources:
-      cpu: "8"
+"""Model utilities for SentenceTransformer embedding."""
+
+from sentence_transformers import SentenceTransformer
+
+
+def get_model(model_name: str = "intfloat/e5-large-v2", device: str = "cuda"):
+    """Get a pretrained SentenceTransformer.
+
+    Args:
+        model_name: SentenceTransformer model name or path
+        device: Device to use for the model
+
+    Returns:
+        Embedding model
+    """
+    model = SentenceTransformer(model_name, device=device)
+    model.to(device)
+    model.eval()
+
+    return model

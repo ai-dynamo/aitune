@@ -42,6 +42,7 @@ def tune_model(
     model_name,
     image_path,
     tuned_model_path,
+    max_batch_size,
 ):
     """Tunes ResNet model.
 
@@ -49,7 +50,11 @@ def tune_model(
         model_name: Name of the model to tune.
         image_path: Path to the input image file.
         tuned_model_path: Path to save the tuned model.
+        max_batch_size: Maximum batch size.
     """
+    batch_sizes = [2**n for n in range(max_batch_size.bit_length())]
+    logger.info("Tuning with batch sizes: %s", batch_sizes)
+
     model = get_model(model_name=model_name, pretrained=True)
     transform = get_transform(model)
 
@@ -72,18 +77,33 @@ def tune_model(
                         ),
                     ),
                 ),
+                TensorRTBackend(
+                    config=TensorRTBackendConfig(
+                        quantization_config=ONNXQuantizationConfig(
+                            precision="int8",
+                            calibration_method="max",
+                        ),
+                        use_dynamo=False,
+                    ),
+                ),
                 TensorRTBackend(config=TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="fp16"))),
+                TensorRTBackend(
+                    config=TensorRTBackendConfig(
+                        quantization_config=ONNXAutoCastConfig(precision="fp16"), use_dynamo=False
+                    )
+                ),
+                # Gives 3x TRT throughput but after load if fails
                 TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo")),
                 TorchInductorBackend(
                     config=TorchInductorBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)
                 ),
                 TorchEagerBackend(),
             ]
-        ),
+        ).enable_find_max_batch_size(False),
     )
 
     logger.info("Tuning module: %s", model_name)
-    tune(module, dataset)
+    tune(module, dataset, batch_sizes=batch_sizes)
     logger.info("Tuning completed.")
 
     save(module, tuned_model_path, storage=LocalTorchStorage(remove_checkpoint_after_tune=True))
@@ -100,6 +120,7 @@ def main():
         model_name=args.model_name,
         image_path=args.image_path,
         tuned_model_path=args.tuned_model_path,
+        max_batch_size=args.max_batch_size,
     )
 
 

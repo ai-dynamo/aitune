@@ -133,8 +133,8 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
         max_batch_size = graph_spec.get_max_batch_size()
 
         best_backend = None
-        best_throughput = -1
-        best_batch_size = -1
+        best_throughput = float("-inf")
+        best_batch_size = 1
 
         # Run all backends with given max batch size.
         for backend in self._backends:
@@ -168,7 +168,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                         sink=self._sink,
                     )
 
-                    if throughput > best_throughput:
+                    if best_backend is None or throughput > best_throughput:
                         log(
                             "🎯 new best throughput for %s is %.2f samples/s, batch size: %s",
                             backend.describe(),
@@ -187,6 +187,12 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                     log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
 
         if best_backend is None:
+            log(
+                "ℹ️ No correct backend found with throughput %f > 0. Backends considered: %s",
+                best_throughput,
+                ", ".join([backend.describe() for backend in self._backends]),
+                sink=self._sink,
+            )
             raise RuntimeError("No correct backend found with throughput > 0")
 
         self.results.append(

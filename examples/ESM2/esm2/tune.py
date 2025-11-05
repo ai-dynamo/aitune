@@ -19,7 +19,7 @@ import torch
 from transformers import AutoTokenizer, EsmForMaskedLM
 
 import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorBackend
 from aitune.utils.logging import setup_logging
 
 DEVICE = torch.device("cuda")
@@ -70,6 +70,7 @@ def tune(
         strategy = ait.FirstWinsStrategy(
             backends=[
                 TensorRTBackend(),
+                TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
                 TorchInductorBackend(),
                 TorchEagerBackend(),
             ]

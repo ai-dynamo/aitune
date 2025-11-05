@@ -168,7 +168,7 @@ class FluxBatchedBackend:
             def generate_batch_images():
                 if self.pipeline is None:
                     raise ValueError("Pipeline is not initialized")
-                with torch.no_grad():
+                with torch.inference_mode():
                     return self.pipeline(
                         prompt=prompts,
                         height=height,
@@ -266,7 +266,6 @@ async def backend_worker(runtime: DistributedRuntime):
     namespace_name = "flux"
     component_name = "backend"
     endpoint_name = "generate_image"
-    lease_id = runtime.etcd_client().primary_lease_id()
 
     component = runtime.namespace(namespace_name).component(component_name)
     await component.create_service()
@@ -274,7 +273,7 @@ async def backend_worker(runtime: DistributedRuntime):
     logger.info("Created service %s/%s", namespace_name, component_name)
 
     endpoint = component.endpoint(endpoint_name)
-
+    lease_id = endpoint.lease_id()
     logger.info("Serving endpoint %s on lease %s", endpoint_name, lease_id)
 
     backend = FluxBatchedBackend(_get_config())

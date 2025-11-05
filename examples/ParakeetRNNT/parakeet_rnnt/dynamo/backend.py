@@ -155,7 +155,7 @@ class ParakeetRNNTBatchedBackend:
             def generate_batch_transcriptions():
                 if self.pipeline is None:
                     raise ValueError("Pipeline is not initialized")
-                with torch.no_grad():
+                with torch.inference_mode():
                     return self.pipeline.transcribe(
                         audio_paths,
                         override_config=TranscribeConfig(
@@ -239,7 +239,6 @@ async def backend_worker(runtime: DistributedRuntime):
     namespace_name = "parakeet_rnnt"
     component_name = "backend"
     endpoint_name = "transcribe_audio"
-    lease_id = runtime.etcd_client().primary_lease_id()
 
     component = runtime.namespace(namespace_name).component(component_name)
     await component.create_service()
@@ -247,7 +246,7 @@ async def backend_worker(runtime: DistributedRuntime):
     logger.info("Created service %s/%s", namespace_name, component_name)
 
     endpoint = component.endpoint(endpoint_name)
-
+    lease_id = endpoint.lease_id()
     logger.info("Serving endpoint %s on lease %s", endpoint_name, lease_id)
 
     backend = ParakeetRNNTBatchedBackend(_get_config())

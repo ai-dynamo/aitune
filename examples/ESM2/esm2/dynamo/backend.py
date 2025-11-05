@@ -225,7 +225,6 @@ async def backend_worker(runtime: DistributedRuntime):
     namespace_name = "esm2"
     component_name = "backend"
     endpoint_name = "generate_sequence"
-    lease_id = runtime.etcd_client().primary_lease_id()
 
     component = runtime.namespace(namespace_name).component(component_name)
     await component.create_service()
@@ -233,7 +232,7 @@ async def backend_worker(runtime: DistributedRuntime):
     logger.info("Created service %s/%s", namespace_name, component_name)
 
     endpoint = component.endpoint(endpoint_name)
-
+    lease_id = endpoint.lease_id()
     logger.info("Serving endpoint %s on lease %s", endpoint_name, lease_id)
 
     backend = ESM2BatchedBackend(_get_config())
@@ -249,5 +248,4 @@ def _get_config() -> dict:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, force=True)
     uvloop.install()
-
     asyncio.run(backend_worker())

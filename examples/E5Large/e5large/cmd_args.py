@@ -11,39 +11,36 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Common command line arguments for ResNet."""
+"""Common command line arguments for E5Large."""
 
 import argparse
-from pathlib import Path
-
-default_image_path = str(Path(__file__).parent.parent / "dog.webp")
 
 
 def get_parser():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Tune ResNet model")
+    parser = argparse.ArgumentParser(description="E5Large embedding model")
     parser.add_argument(
         "--model-name",
         type=str,
-        default="resnet50",
-        help="Name of the model to tune",
+        default="intfloat/e5-large-v2",
+        help="Model name, use only models compatible with SentenceTransformer",
     )
     parser.add_argument(
         "--tuned-model-path",
         type=str,
-        default="resnet50.ait",
-        help="Path to save the tuned model",
+        default="e5large_tuned.pt",
+        help="Path to save/load the tuned model",
     )
     parser.add_argument(
-        "--image-path",
+        "--prompt",
         type=str,
-        default=default_image_path,
-        help="Path to the input image file",
+        default="query: how much protein should a female eat",
+        help="Text prompt for embedding",
     )
     parser.add_argument(
         "--max-batch-size",
         type=int,
         default=4,
-        help="Maximum batch size (default: 4)",
+        help="Maximum batch size",
     )
     return parser

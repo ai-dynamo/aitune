@@ -17,7 +17,7 @@ Backend:
   batch_timeout: 0.5
   image_path: "/opt/aitune/dynamo/app/dog.webp"
   classes_file: "/opt/aitune/dynamo/app/imagenet_classes.txt"
-  image_storage_path: "/tmp/images"
+  image_storage_path: "/images"
   pretrained: true
   force_tune: false
   tuned_model_path: null
