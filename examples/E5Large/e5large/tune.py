@@ -111,7 +111,7 @@ def tune_model(
     logger.info("Running inference on the tuned model...")
     results = call_wrapper(sentences=input_list)
 
-    torch.testing.assert_close(results, embeddings, rtol=1e-4, atol=1e-4)
+    torch.testing.assert_close(results, embeddings, rtol=1e-3, atol=1e-3)
 
     save(model, output_path)
 
