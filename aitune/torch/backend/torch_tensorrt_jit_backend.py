@@ -151,7 +151,7 @@ class TorchTensorRTJitBackend(Backend):
 
     def _compile(self):
         """Compile module with Torch compile."""
-        logger.debug("Start compiling torch module.")
+        logger.info("Start compiling torch module.")
         torch._dynamo.reset()
 
         self._orig_module.to(self._device)
@@ -166,7 +166,7 @@ class TorchTensorRTJitBackend(Backend):
 
         for args, kwargs in self._data:
             self._compiled_module(*args, **kwargs)
-        logger.debug("Module has been compiled.")
+        logger.info("Module has been compiled.")
 
     @nvtx.annotate(message="TorchTensorRTJitBackend.infer", domain="AITune", color="magenta")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
@@ -207,7 +207,7 @@ class TorchTensorRTJitBackend(Backend):
         """Store the backend configuration to a file."""
         config_path = cache_dir / "config.json"
         self._config.to_json(config_path)
-        logger.debug("Config saved to %s", config_path)
+        logger.info("Config saved to %s", config_path)
 
     def to_dict(self):
         """Returns the state_dict of the backend."""

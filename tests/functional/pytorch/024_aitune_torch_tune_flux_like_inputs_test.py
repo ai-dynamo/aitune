@@ -18,8 +18,6 @@
 # allow_failure = true
 # [environment]
 # TQDM_DISABLE=1
-# AITUNE_CONSOLE_ENABLE = 1
-# AITUNE_CONSOLE_OUTPUT = 1
 # ///
 """Testing exporting issues with FLUX using tiny model.
 

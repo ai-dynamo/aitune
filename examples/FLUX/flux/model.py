@@ -27,6 +27,6 @@ def get_pipeline(model_name: str = "black-forest-labs/FLUX.1-dev", device: str =
     Returns:
         FluxPipeline: The loaded Flux pipeline
     """
-    pipe = FluxPipeline.from_pretrained(model_name, torch_dtype=torch.float32).to(torch.float16).to(device)
+    pipe = FluxPipeline.from_pretrained(model_name, torch_dtype=torch.float16).to(device, dtype=torch.float16)
     torch.cuda.empty_cache()
     return pipe

@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 class ONNXExporter:
     """Class for exporting PyTorch modules to ONNX format."""
 
-    def __init__(self, output_path: Path, use_dynamo: bool = False, opset_version: int | None = 20):
+    def __init__(self, output_path: Path, use_dynamo: bool = False, opset_version: int | None = None):
         """Initialize the ONNX exporter.
 
         Args:
@@ -71,25 +71,25 @@ class ONNXExporter:
         Returns:
             Path to the ONNX file
         """
-        logger.debug("Exporting PyTorch module to ONNX: %s", self.output_path)
+        logger.info("Exporting PyTorch module to ONNX: %s", self.output_path)
 
         try:
             if self.use_dynamo:
-                logger.debug("Using ONNX dynamo for exporting to ONNX")
+                logger.info("Using ONNX dynamo for exporting to ONNX")
                 self._export_dynamo(module, sample, graph_spec, self.output_path, verbose)
             else:
-                logger.debug("Using ONNX trace for exporting to ONNX")
+                logger.info("Using ONNX trace for exporting to ONNX")
                 self._export_trace(module, sample, graph_spec, self.output_path, verbose)
 
             # Verify the model
             with self.system_monitor.system_stats_context(log_label="ONNX model verification"):
                 self.verify_model(onnx_path=self.output_path)
 
-            logger.debug("Successfully exported and verified ONNX model: %s", self.output_path)
+            logger.info("Successfully exported and verified ONNX model: %s", self.output_path)
 
             return self.output_path
         except Exception as e:
-            logger.exception("Failed to export model to ONNX")
+            logger.error("Failed to export model to ONNX: %s", e)
             if self.output_path.exists():
                 logger.info("Removing incomplete ONNX file: %s", self.output_path)
                 try:
@@ -104,12 +104,12 @@ class ONNXExporter:
         Args:
             onnx_path: Path to the ONNX model
         """
-        logger.debug("Verifying ONNX model: %s", onnx_path)
+        logger.info("Verifying ONNX model: %s", onnx_path)
         try:
             onnx.checker.check_model(onnx_path)
-            logger.debug("ONNX model verification successful: %s", onnx_path)
+            logger.info("ONNX model verification successful: %s", onnx_path)
         except Exception as e:
-            logger.debug("ONNX model verification failed: %s", e)
+            logger.error("ONNX model verification failed: %s", e)
             raise e
 
     def _export_dynamo(
@@ -146,15 +146,16 @@ class ONNXExporter:
                 kwargs=ordered_kwargs,
                 f=onnx_path.as_posix(),
                 dynamo=True,
+                opset_version=self.opset_version,
                 input_names=input_names,
                 output_names=output_names,
                 dynamic_shapes=dynamic_shapes,
-                opset_version=self.opset_version,
                 fallback=False,
                 verbose=verbose,
             )
             exported_program.save(onnx_path.as_posix())
             self._modify_onnx_io_names(onnx_path, input_names, output_names, onnx_path)
+            logger.info("ONNX model exported successfully: %s", onnx_path)
 
     def _export_trace(
         self, module: nn.Module, sample: Sample, graph_spec: GraphSpec, onnx_path: Path, verbose: bool | None = None
@@ -164,6 +165,7 @@ class ONNXExporter:
             # Use standard torch ONNX export
             dynamic_axes = self._create_dynamic_axes(graph_spec)
 
+            # Use standard torch ONNX export
             args_mapping, kwargs_mapping = graph_spec.input_spec.get_names_mapping()
             _, forward_kwargs = get_forward_arguments_names(module.forward)
 
@@ -183,6 +185,10 @@ class ONNXExporter:
 
             output_names = graph_spec.output_spec.get_names()
 
+            logger.info("Input names: %s", input_names)
+            logger.info("Output names: %s", output_names)
+            logger.info("Dynamic axes: %s", dynamic_axes)
+
             args, kwargs = sample
             torch.onnx.export(
                 module,
@@ -195,6 +201,7 @@ class ONNXExporter:
                 dynamic_axes=dynamic_axes,
                 verbose=verbose,
             )
+            logger.info("ONNX model exported successfully: %s", onnx_path)
 
     @staticmethod
     def _create_dynamic_shapes(graph_spec: GraphSpec, forward_arguments: tuple[list[str], list[str]]) -> dict[str, Any]:
@@ -229,19 +236,21 @@ class ONNXExporter:
         Returns:
             Dict of dynamic axes
         """
-        input_dynamic_axes = defaultdict(list)
+        dynamic_axes = defaultdict(list)
+
+        # Process input dynamic axes
         for tensor_spec in graph_spec.input_spec.tensor_specs:
             for ax, (d1, d2) in enumerate(zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)):
                 if d1 != d2:
-                    input_dynamic_axes[tensor_spec.name].append(ax)
+                    dynamic_axes[tensor_spec.name].append(ax)
 
-        output_dynamic_axes = defaultdict(list)
+        # Process output dynamic axes
         for tensor_spec in graph_spec.output_spec.tensor_specs:
             for ax, (d1, d2) in enumerate(zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)):
                 if d1 != d2:
-                    output_dynamic_axes[tensor_spec.name].append(ax)
+                    dynamic_axes[tensor_spec.name].append(ax)
 
-        return dict(**input_dynamic_axes, **output_dynamic_axes)
+        return dynamic_axes
 
     def _modify_onnx_io_names(self, model_path, new_input_names, new_output_names, output_path):
         """Modify the input and output names of the ONNX model."""

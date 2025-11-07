@@ -16,8 +16,7 @@
 # dependencies = ["diffusers<0.35"]
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
-# scope = "nightly"
-# additional_tags = ["mem/80g"]
+# scope = "always"
 # allow_failure = true
 # use_gated_hf_token = true
 # ///
@@ -39,7 +38,7 @@ basicConfig(level=INFO, force=True)
 logger = getLogger(__name__)
 
 
-def get_flux_pipeline(model_name: str = "black-forest-labs/FLUX.1-dev", device: str = "cuda"):
+def get_flux_pipeline(model_name: str = "hf-internal-testing/tiny-flux-pipe", device: str = "cuda"):
     """Get a pretrained Flux model from HuggingFace.
 
     Args:
@@ -49,7 +48,7 @@ def get_flux_pipeline(model_name: str = "black-forest-labs/FLUX.1-dev", device: 
     Returns:
         FluxPipeline: The loaded Flux pipeline
     """
-    pipe = FluxPipeline.from_pretrained(model_name, torch_dtype=torch.float32).to(torch.float16).to(device)
+    pipe = FluxPipeline.from_pretrained(model_name, torch_dtype=torch.float16).to(device="cuda", dtype=torch.float16)
     torch.cuda.empty_cache()
     return pipe
 
@@ -110,6 +109,7 @@ def test_flux_tensorrt_modelopt_fp8():
                     # Primary: TensorRT with FP8 quantization
                     TensorRTBackend(
                         TensorRTBackendConfig(
+                            use_dynamo=False,
                             quantization_config=TorchQuantizationConfig(
                                 quantization_config="FP8_DEFAULT_CFG",
                                 device="cuda",
@@ -117,7 +117,11 @@ def test_flux_tensorrt_modelopt_fp8():
                         )
                     ),
                     # Fallback 1: TensorRT without quantization (FP16)
-                    TensorRTBackend(),
+                    TensorRTBackend(
+                        TensorRTBackendConfig(
+                            use_dynamo=False,
+                        )
+                    ),
                     # Fallback 2: Torch Inductor backend
                     TorchInductorBackend(),
                     # Fallback 3: Torch Eager backend

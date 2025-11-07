@@ -15,8 +15,7 @@
 # /// script
 # dependencies = ["timm"]
 #
-# # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
-# scope = "nightly"
+# scope = "always"
 # ///
 
 from logging import DEBUG, basicConfig, getLogger

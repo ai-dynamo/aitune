@@ -47,7 +47,7 @@ The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 Before proceeding with the installation of NVIDIA AITune, ensure your system meets the following criteria:
 
 * **Operating System**: Linux (Ubuntu 22.04+ recommended)
-* **Python**: Version `3.9` or newer
+* **Python**: Version `3.10` or newer
 * **PyTorch**: Version `2.5.1` or newer
 * **TensorRT**: Version `10.5.0` or higher (for TensorRT backend)
 * **NVIDIA GPU**: Required for GPU-accelerated tuning
@@ -58,6 +58,7 @@ You can use NGC Containers for PyTorch which contain all necessary dependencies:
 
 ## Install
 
+<!--
 The NVIDIA AITune can be installed from `pypi.org`.
 
 ### Installing from PyPI (Recommended)
@@ -72,8 +73,15 @@ pip install aitune
 # Clone the repository
 git clone https://github.com/ai-dynamo/aitune
 cd aitune
+-->
 
-# Install in development mode
+Clone the repository and install from the sources:
+```bash
+pip install .
+```
+
+or with editable mode for development
+```bash
 pip install -e .
 ```
 

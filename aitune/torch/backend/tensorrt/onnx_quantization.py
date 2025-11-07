@@ -142,7 +142,7 @@ class ONNXQuantizer:
         Returns:
             List of dictionaries mapping input names to tensors for calibration
         """
-        logger.debug("Preparing calibration data with proper input names for %d samples", len(data))
+        logger.info("Preparing calibration data with proper input names for %d samples", len(data))
         calibration_data_with_names = []
 
         for sample in data:
@@ -154,9 +154,9 @@ class ONNXQuantizer:
                 else:
                     input_dict[tensor_spec.name] = locator.get_value(kwargs)
             calibration_data_with_names.append(input_dict)
-            logger.debug("Mapped sample to input names: %s", list(input_dict.keys()))
+            logger.info("Mapped sample to input names: %s", list(input_dict.keys()))
 
-        logger.debug(
+        logger.info(
             "Successfully prepared %s calibration samples with proper input names", len(calibration_data_with_names)
         )
         return calibration_data_with_names
@@ -201,7 +201,7 @@ class ONNXQuantizer:
 
         with self.system_monitor.system_stats_context(log_label=f"ONNX {config.precision} quantization"):
             # Perform quantization
-            logger.debug("Performing %s quantization", config.precision.upper())
+            logger.info("Performing %s quantization", config.precision.upper())
 
             quantize_kwargs = {
                 "onnx_path": input_onnx_path.as_posix(),

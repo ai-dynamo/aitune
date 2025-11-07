@@ -61,7 +61,7 @@ def tune_model(
     input_data = [{"prompt": prompt}]
 
     # Inspect pipeline to get modules
-    modules_info = ait.inspect(pipe, input_data, number_of_iterations=1, warmup_iterations=1)
+    modules_info = ait.inspect(pipe, input_data, number_of_iterations=1, warmup_iterations=2)
 
     # Define strategy if not provided
     if strategy is None:

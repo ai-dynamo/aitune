@@ -20,7 +20,7 @@
 # ///
 
 
-from logging import DEBUG, basicConfig
+from logging import INFO, basicConfig
 
 import timm
 import torch
@@ -58,5 +58,5 @@ def test_resnet50():
 
 
 if __name__ == "__main__":
-    basicConfig(level=DEBUG, force=True)
+    basicConfig(level=INFO, force=True)
     test_resnet50()

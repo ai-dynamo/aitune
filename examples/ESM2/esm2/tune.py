@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def get_model(model_name: str = MODEL_NAME, device: torch.device = DEVICE):
     logger.info("Loading model '%s' on %s...", model_name, device)
-    model = EsmForMaskedLM.from_pretrained(model_name).to(torch.float16)
+    model = EsmForMaskedLM.from_pretrained(model_name)
     model.to(device)
     model.eval()
     return model

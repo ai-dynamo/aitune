@@ -18,7 +18,7 @@
 # ///
 
 from itertools import product
-from logging import DEBUG, basicConfig, getLogger
+from logging import INFO, basicConfig, getLogger
 
 import timm
 import torch
@@ -85,5 +85,5 @@ def test_tune_resnet_torchao():
 
 
 if __name__ == "__main__":
-    basicConfig(level=DEBUG, force=True)
+    basicConfig(level=INFO, force=True)
     test_tune_resnet_torchao()

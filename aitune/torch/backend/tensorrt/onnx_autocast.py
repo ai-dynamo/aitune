@@ -69,7 +69,7 @@ class ONNXAutoCast:
         Returns:
             List of dictionaries mapping input names to tensors for calibration
         """
-        logger.debug("Preparing calibration data with proper input names for %d samples", len(data))
+        logger.info("Preparing calibration data with proper input names for %d samples", len(data))
         calibration_data_with_names = []
 
         for sample in data:
@@ -81,9 +81,9 @@ class ONNXAutoCast:
                 else:
                     input_dict[tensor_spec.name] = locator.get_value(kwargs)
             calibration_data_with_names.append(input_dict)
-            logger.debug("Mapped sample to input names: %s", list(input_dict.keys()))
+            logger.info("Mapped sample to input names: %s", list(input_dict.keys()))
 
-        logger.debug(
+        logger.info(
             "Successfully prepared %s calibration samples with proper input names", len(calibration_data_with_names)
         )
         return calibration_data_with_names
@@ -123,12 +123,12 @@ class ONNXAutoCast:
         input_onnx_path = Path(input_onnx_path)
         output_path = Path(output_path)
 
-        logger.debug("Starting ONNX autocast: %s -> %s", input_onnx_path, output_path)
-        logger.debug("Autocast precision: %s", config.precision)
+        logger.info("Starting ONNX autocast: %s -> %s", input_onnx_path, output_path)
+        logger.info("Autocast precision: %s", config.precision)
 
         with self.system_monitor.system_stats_context(log_label=f"ONNX {config.precision} autocast"):
             # Perform autocast
-            logger.debug("Performing %s autocast", config.precision.upper())
+            logger.info("Performing %s autocast", config.precision.upper())
 
             autocast_kwargs = {
                 "onnx_path": input_onnx_path.as_posix(),
@@ -149,5 +149,5 @@ class ONNXAutoCast:
         if not output_path.exists():
             raise RuntimeError(f"Autocast failed: output file not created at {output_path}")
 
-        logger.debug("Successfully autocasted ONNX model: %s", output_path)
+        logger.info("Successfully autocasted ONNX model: %s", output_path)
         return output_path

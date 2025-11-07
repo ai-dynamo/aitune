@@ -59,7 +59,7 @@ def test_onnx_exporter_init(tmp_path):
     # Test with default parameters
     exporter = ONNXExporter(output_path=output_path)
     assert exporter.use_dynamo is False
-    assert exporter.opset_version == 20
+    assert exporter.opset_version is None
 
     # Test with custom parameters
     output_path2 = tmp_path / "test_model2.onnx"
@@ -97,7 +97,7 @@ def test_export_trace(mock_torch_onnx, mock_onnx_lib, tmp_path):
     # Verify interactions
     mock_torch_onnx.export.assert_called_once()
     assert "opset_version" in mock_torch_onnx.export.call_args.kwargs
-    assert mock_torch_onnx.export.call_args.kwargs["opset_version"] == 20
+    assert mock_torch_onnx.export.call_args.kwargs["opset_version"] is None
 
     # Verify verification was called
     mock_onnx_lib.checker.check_model.assert_called_once()

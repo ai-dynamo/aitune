@@ -40,7 +40,7 @@ class ONNXModelInfo:
         self._model_path = model_path
 
         try:
-            logger.debug("Loading ONNX model: %s", model_path)
+            logger.info("Loading ONNX model: %s", model_path)
             # Load the ONNX model
             model = onnx.load(model_path)
 
@@ -64,20 +64,20 @@ class ONNXModelInfo:
             # Extract doc string if available
             self._doc_string = model.doc_string if hasattr(model, "doc_string") else None
 
-            logger.debug("Extracted information for model:")
-            logger.debug("  Inputs: %s", self._input_names)
-            logger.debug("  Outputs: %s", self._output_names)
-            logger.debug("  OpSet version: %s", self._opset_version)
-            logger.debug("  Producer: %s %s", self._producer_name, self._producer_version)
+            logger.info("Extracted information for model:")
+            logger.info("  Inputs: %s", self._input_names)
+            logger.info("  Outputs: %s", self._output_names)
+            logger.info("  OpSet version: %s", self._opset_version)
+            logger.info("  Producer: %s %s", self._producer_name, self._producer_version)
 
             # Delete the model to free resources
             del model
 
         except ImportError as e:
-            logger.debug("ONNX package not installed. Install with 'pip install onnx'")
+            logger.error("ONNX package not installed. Install with 'pip install onnx'")
             raise e
         except Exception as e:
-            logger.debug("Failed to extract information from ONNX model: %s", e)
+            logger.error("Failed to extract information from ONNX model: %s", e)
             raise e
 
     @property

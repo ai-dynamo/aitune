@@ -14,10 +14,10 @@
 
 # /// script
 # dependencies = ["timm"]
-# scope = "nightly"
+# scope = "always"
 # ///
 
-from logging import DEBUG, basicConfig, getLogger
+from logging import INFO, basicConfig, getLogger
 from pathlib import Path
 
 import timm
@@ -59,7 +59,7 @@ def do_test(backend: TensorRTBackend, dtype: torch.dtype):
 
 
 if __name__ == "__main__":
-    basicConfig(level=DEBUG, force=True)
+    basicConfig(level=INFO, force=True)
 
     do_test(
         TensorRTBackend(

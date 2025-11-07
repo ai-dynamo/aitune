@@ -243,8 +243,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
 
         """
-        logger.debug("Using torch quantization with config: %s", self._config.quantization_config)
-        logger.debug("Using %s samples for quantization calibration", len(data))
+        logger.info("Using torch quantization with config: %s", self._config.quantization_config)
+        logger.info("Using %s samples for quantization calibration", len(data))
         try:
             with self._system_monitor.system_stats_context(log_label="ModelOpt Torch quantization"):
                 torch_quantizer = TorchQuantizer()
@@ -266,7 +266,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     module=module,
                     sample=data[0],
                     graph_spec=graph_spec,
-                    verbose=False,  # NOTE: After ModelOpt torch quantization we don't need verbose output because of excessive logging
+                    verbose=False,  # Disable verbose ONNX export to avoid excessive internal C++ logging
                 )
 
                 self._offload_torch_model_to_cpu(module)
@@ -325,6 +325,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     module=module,
                     sample=data[0],
                     graph_spec=graph_spec,
+                    verbose=False,  # Disable verbose ONNX export to avoid excessive internal C++ logging
                 )
 
                 self._offload_torch_model_to_cpu(module)
@@ -386,7 +387,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             data (list[Sample]): The data of the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
-        logger.debug("Starting TensorRT backend building")
+        logger.info("Starting TensorRT backend building")
         try:
             with self._system_monitor.system_stats_context(log_label="ONNX export"):
                 logger.info("Initializing ONNX exporter")
@@ -402,6 +403,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     module=module,
                     sample=data[0],
                     graph_spec=graph_spec,
+                    verbose=False,  # Disable verbose ONNX export to avoid excessive internal C++ logging
                 )
 
                 self._offload_torch_model_to_cpu(module)
@@ -447,7 +449,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._deactivate()
             raise e
 
-        logger.debug(
+        logger.info(
             "TensorRT backend building finished successfully with engine path %s",
             self._engine_path,
         )
@@ -480,6 +482,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     module=module,
                     sample=data[0],
                     graph_spec=graph_spec,
+                    verbose=False,  # Disable verbose ONNX export to avoid excessive internal C++ logging
                 )
 
                 self._offload_torch_model_to_cpu(module)

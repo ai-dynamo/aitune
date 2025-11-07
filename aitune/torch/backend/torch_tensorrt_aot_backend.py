@@ -133,7 +133,7 @@ class TorchTensorRTAotBackend(Backend):
         cache_dir: Path,
     ) -> Backend:
         """Build the model with TensorRT."""
-        logger.debug("Start compiling torch module with TensorRT.")
+        logger.info("Start compiling torch module with TensorRT.")
 
         model = module.eval()
         model = model.to(self._device)
@@ -158,7 +158,7 @@ class TorchTensorRTAotBackend(Backend):
 
         dynamic_shapes = create_dynamic_shapes(graph_spec, self._config.dynamic_shapes)
 
-        logger.debug("Compile model with TensorRT.")
+        logger.info("Compile model with TensorRT.")
         trt_model_compiled = torch_tensorrt.compile(
             model,
             ir="dynamo",
@@ -180,13 +180,13 @@ class TorchTensorRTAotBackend(Backend):
 
         save_kwargs = {}
         if Version(torch.__version__) >= Version("2.7"):
-            logger.debug("Using pickle protocol %d.", self._config.pickle_protocol)
+            logger.info("Using pickle protocol %d.", self._config.pickle_protocol)
             save_kwargs["pickle_protocol"] = self._config.pickle_protocol
 
         self._exported_model_path = self._create_exported_model_path(cache_dir)
         torch.export.save(exported_model, self._exported_model_path.as_posix(), **save_kwargs)
 
-        logger.debug("Module has been compiled and saved with TensorRT.")
+        logger.info("Module has been compiled and saved with TensorRT.")
         self._opt_module = trt_model_compiled
         return self
 
@@ -223,7 +223,7 @@ class TorchTensorRTAotBackend(Backend):
         """Store the backend configuration to a file."""
         config_path = cache_dir / "config.json"
         self._config.to_json(config_path)
-        logger.debug("Config saved to %s", config_path)
+        logger.info("Config saved to %s", config_path)
 
     def _create_exported_model_path(self, cache_dir: Path) -> Path:
         """Create path to exported model.
@@ -269,7 +269,7 @@ def create_dynamic_shapes(
             if True, extract dynamic shapes from graph spec, if False, return None, if tuple or list, return as is
     """
     if isinstance(user_dynamic_shapes, bool) and user_dynamic_shapes:
-        logger.debug("Extract dynamic shapes")
+        logger.info("Extract dynamic shapes")
         dynamic_shapes = []
         for tensor_spec in graph_spec.input_spec.tensor_specs:
             dynamic_shape = []
@@ -280,11 +280,11 @@ def create_dynamic_shapes(
                     dynamic_shape += [None]
 
             dynamic_shapes.append(tuple(dynamic_shape))
-        logger.debug("Extracted dynamic shapes: %s", dynamic_shape)
+        logger.info("Extracted dynamic shapes: %s", dynamic_shape)
         return dynamic_shapes
 
     if not user_dynamic_shapes:
         return None
 
-    logger.debug("Using user specified dynamic shapes: %s", user_dynamic_shapes)
+    logger.info("Using user specified dynamic shapes: %s", user_dynamic_shapes)
     return user_dynamic_shapes

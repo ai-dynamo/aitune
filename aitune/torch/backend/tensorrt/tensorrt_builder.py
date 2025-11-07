@@ -80,7 +80,7 @@ class TensorRTBuilder:
         Returns:
             Path to the TensorRT engine
         """
-        logger.debug("Building TensorRT engine from %s to %s", self.input_onnx_path, self.output_path)
+        logger.info("Building TensorRT engine from %s to %s", self.input_onnx_path, self.output_path)
 
         try:
             # Prepare and validate inputs
@@ -124,17 +124,17 @@ class TensorRTBuilder:
 
             # First, add profiles from the TensorRTProfile objects if provided
             for profile_obj in self.profiles:
-                logger.debug("Adding optimization profile from TensorRTProfile: %s", profile_obj)
+                logger.info("Adding optimization profile from TensorRTProfile: %s", profile_obj)
                 profiles.append(profile_obj.profile)
 
             # Then, create a profile from the shape dictionaries if provided and no profiles were added
             if not profiles and any([self.min_shapes, self.opt_shapes, self.max_shapes]):
-                logger.debug("Creating optimization profiles from shape dictionaries")
+                logger.info("Creating optimization profiles from shape dictionaries")
                 profile = Profile()
                 for name, min_shape in (self.min_shapes or {}).items():
                     opt_shape = self.opt_shapes.get(name) if self.opt_shapes else min_shape
                     max_shape = self.max_shapes.get(name) if self.max_shapes else opt_shape
-                    logger.debug(
+                    logger.info(
                         "Adding profile for '%s': min=%s, opt=%s, max=%s", name, min_shape, opt_shape, max_shape
                     )
                     profile.add(name=name, min=min_shape, opt=opt_shape, max=max_shape)
@@ -164,7 +164,7 @@ class TensorRTBuilder:
 
             # Create TensorRT config
             config = CreateConfig(**config_kwargs)
-            logger.debug("TensorRT config created successfully")
+            logger.info("TensorRT config created successfully")
             return config
 
     def _create_trt_network(self) -> Any:
@@ -173,10 +173,10 @@ class TensorRTBuilder:
         Returns:
             TensorRT network
         """
-        logger.debug("Creating TensorRT network from ONNX: %s", self.input_onnx_path)
+        logger.info("Creating TensorRT network from ONNX: %s", self.input_onnx_path)
         with self.system_monitor.system_stats_context(log_label="Creating TensorRT network"):
             network = network_from_onnx_path(self.input_onnx_path.as_posix(), strongly_typed=True)
-            logger.debug("Network created successfully")
+            logger.info("Network created successfully")
             return network
 
     def _build_engine_from_network(self, network: Any, config: Any) -> Any:
@@ -189,10 +189,10 @@ class TensorRTBuilder:
         Returns:
             TensorRT engine
         """
-        logger.debug("Building TensorRT engine")
+        logger.info("Building TensorRT engine")
         with self.system_monitor.system_stats_context(log_label="Engine building from network"):
             engine = engine_from_network(network=network, config=config)
-            logger.debug("Engine built successfully")
+            logger.info("Engine built successfully")
             return engine
 
     def _handle_failed_build(self, error: Exception, engine_path: Path) -> None:
@@ -202,9 +202,9 @@ class TensorRTBuilder:
             error: The exception that occurred
             engine_path: Path to the engine file
         """
-        logger.debug("Failed to build TensorRT engine: %s", error)
+        logger.info("Failed to build TensorRT engine: %s", error)
         if engine_path.exists():
-            logger.debug("Removing incomplete engine file: %s", engine_path)
+            logger.info("Removing incomplete engine file: %s", engine_path)
             try:
                 engine_path.unlink()
             except Exception as delete_error:
@@ -233,33 +233,33 @@ class TensorRTBuilder:
             Dictionary of kwargs for CreateConfig
         """
         try:
-            logger.debug("Building TensorRT configuration keyword arguments")
+            logger.info("Building TensorRT configuration keyword arguments")
             create_config_kwargs = {
                 "profiles": profiles,
                 "load_timing_cache": timing_cache,
             }
 
             if optimization_level:
-                logger.debug("Using optimization level: %s", optimization_level)
+                logger.info("Using optimization level: %s", optimization_level)
                 create_config_kwargs["builder_optimization_level"] = optimization_level
             if compatibility_level:
-                logger.debug("Using compatibility level: %s", compatibility_level)
+                logger.info("Using compatibility level: %s", compatibility_level)
                 create_config_kwargs["hardware_compatibility_level"] = compatibility_level
 
             if max_workspace_size:
-                logger.debug("Using workspace size: %s bytes", max_workspace_size)
+                logger.info("Using workspace size: %s bytes", max_workspace_size)
                 create_config_kwargs["memory_pool_limits"] = {
                     trt.MemoryPoolType.WORKSPACE: max_workspace_size,
                 }
 
             if enable_tf32:
-                logger.debug("Using TF32 hardware acceleration")
+                logger.info("Using TF32 hardware acceleration")
                 create_config_kwargs["tf32"] = True
 
-            logger.debug("TensorRT configuration: %s", create_config_kwargs)
+            logger.info("TensorRT configuration: %s", create_config_kwargs)
             return create_config_kwargs
         except Exception as e:
-            logger.debug("Failed to build TensorRT configuration: %s", e)
+            logger.info("Failed to build TensorRT configuration: %s", e)
             raise e
 
     def _save_engine(self, engine, path: Path):
@@ -270,10 +270,10 @@ class TensorRTBuilder:
             path: Path to save the engine
         """
         try:
-            logger.debug("Saving TensorRT engine to %s", path)
+            logger.info("Saving TensorRT engine to %s", path)
             with self.system_monitor.system_stats_context(log_label="Saving engine"):
                 save_engine(engine=engine, path=path.as_posix())
-                logger.debug("TensorRT engine built and saved successfully: %s", path)
+                logger.info("TensorRT engine built and saved successfully: %s", path)
         except Exception as e:
-            logger.debug("Failed to save TensorRT engine: %s", e)
+            logger.error("Failed to save TensorRT engine: %s", e)
             raise e

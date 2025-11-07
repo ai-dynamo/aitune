@@ -18,7 +18,7 @@
 # dependencies = ["timm"]
 # ///
 
-from logging import DEBUG, basicConfig, getLogger
+from logging import INFO, basicConfig, getLogger
 from pathlib import Path
 
 import timm
@@ -73,7 +73,7 @@ def do_test(backend: TorchTensorRTAotBackend, dtype: torch.dtype, device: str):
 
 
 if __name__ == "__main__":
-    basicConfig(level=DEBUG, force=True)
+    basicConfig(level=INFO, force=True)
 
     do_test(
         TorchTensorRTAotBackend(

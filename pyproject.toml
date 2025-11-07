@@ -105,7 +105,7 @@ dev = [
 functional-test = [
     "fire",
     "timm",
-    "diffusers",
+    "diffusers<=0.34.0",
     "datasets>=3.3.2",
     "transformers>=4.54",
     "sentencepiece>=0.2.0",

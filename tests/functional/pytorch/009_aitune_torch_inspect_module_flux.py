@@ -17,7 +17,6 @@
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
-# additional_tags = ["mem/80g"]
 # use_gated_hf_token = true
 # ///
 
