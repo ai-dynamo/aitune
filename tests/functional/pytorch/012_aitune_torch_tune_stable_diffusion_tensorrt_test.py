@@ -23,6 +23,7 @@
 import tempfile
 from logging import INFO, basicConfig, getLogger
 from pathlib import Path
+from time import perf_counter
 
 import diffusers
 import torch
@@ -134,16 +135,20 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
             # Load the tuned components
             loaded_pipeline = load(fresh_pipeline, tuned_model_path, disable_external_logging=False)
 
+            check_size = 256
+            check_inference_steps = 50
             # Step 8: Test inference with batch_size=1
             logger.info("Testing inference with batch_size=1")
             single_prompt = [prompt]
+            start = perf_counter()
             images_bs1 = loaded_pipeline(
                 prompt=single_prompt,
-                height=256,
-                width=256,
-                num_inference_steps=steps,
+                height=check_size,
+                width=check_size,
+                num_inference_steps=check_inference_steps,
                 generator=torch.Generator(device="cuda").manual_seed(42),
             )
+            end = perf_counter()
 
             # Verify output structure for batch_size=1
             assert hasattr(images_bs1, "images") or isinstance(images_bs1, (list, tuple)), "Expected images output"
@@ -153,7 +158,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
                 actual_images_bs1 = images_bs1
 
             assert len(actual_images_bs1) == 1, f"Expected 1 image for batch_size=1, got {len(actual_images_bs1)}"
-            logger.info("Batch_size=1 inference successful")
+            logger.info("Batch_size=1, res=256, steps=50, inference duration: %.2f seconds", end - start)
 
             # Save image for batch_size=1
             output_path_bs1 = output_dir / "stable_diffusion_bs1.jpg"
@@ -163,14 +168,15 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
             # Step 9: Test inference with batch_size=2 (dynamic shape inference)
             logger.info("Testing dynamic shape inference with batch_size=2")
             double_prompt = [prompt, prompt]  # Same prompt twice for batch_size=2
+            start = perf_counter()
             images_bs2 = loaded_pipeline(
                 prompt=double_prompt,
-                height=256,
-                width=256,
-                num_inference_steps=steps,
+                height=check_size,
+                width=check_size,
+                num_inference_steps=check_inference_steps,
                 generator=torch.Generator(device="cuda").manual_seed(42),
             )
-
+            end = perf_counter()
             # Verify output structure for batch_size=2
             assert hasattr(images_bs2, "images") or isinstance(images_bs2, (list, tuple)), "Expected images output"
             if hasattr(images_bs2, "images"):
@@ -179,7 +185,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
                 actual_images_bs2 = images_bs2
 
             assert len(actual_images_bs2) == 2, f"Expected 2 images for batch_size=2, got {len(actual_images_bs2)}"
-            logger.info("Batch_size=2 dynamic shape inference successful")
+            logger.info("Batch_size=2, res=256, steps=50, inference duration: %.2f seconds", end - start)
 
             # Save images for batch_size=2
             for i, image in enumerate(actual_images_bs2):
