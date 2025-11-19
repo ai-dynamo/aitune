@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # /// script
-# docker_image = "nvcr.io/nvidia/pytorch:25.09-py3"
 # dependencies = ["timm"]
 # ///
 

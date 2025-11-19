@@ -195,6 +195,7 @@ class ONNXExporter:
                 args=args,
                 kwargs=kwargs,
                 f=onnx_path.as_posix(),
+                dynamo=False,
                 input_names=input_names,
                 output_names=output_names,
                 opset_version=self.opset_version,

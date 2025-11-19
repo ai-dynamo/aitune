@@ -17,7 +17,7 @@
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
-# additional_tags = ["gpu/a100"]
+# docker_image = "nvcr.io/nvidia/pytorch:25.08-py3"
 # ///
 
 import tempfile
@@ -64,7 +64,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt_dynamo():
         try:
             # Step 1: Load StableDiffusion pipeline
             logger.info("Loading StableDiffusion pipeline")
-            pipeline = diffusers.StableDiffusionPipeline.from_pretrained(model_id)
+            pipeline = diffusers.StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
             pipeline.to("cuda")
             pipeline.set_progress_bar_config(disable=True)  # Disable progress bar for cleaner logs
 
@@ -109,7 +109,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt_dynamo():
             logger.info("Dry run completed successfully")
 
             # Now do the actual tuning with batch_size=2 to enable dynamic shape inference
-            logger.info("Tuning StableDiffusion with TensorRT backend (batch_size=2)")
+            logger.info("Tuning StableDiffusion with TensorRT backend (batch_size=[1, 2])")
             tune(
                 call_wrapper,
                 input_data,
@@ -129,7 +129,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt_dynamo():
 
             # Step 7: Load the tuned model
             logger.info("Loading tuned StableDiffusion model")
-            fresh_pipeline = diffusers.StableDiffusionPipeline.from_pretrained(model_id)
+            fresh_pipeline = diffusers.StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
             fresh_pipeline.to("cuda")
             fresh_pipeline.set_progress_bar_config(disable=True)
 

@@ -14,7 +14,6 @@
 
 # /// script
 # # dynamic shapes works on torch 2.9
-# docker_image = "nvcr.io/nvidia/pytorch:25.09-py3"
 # dependencies = ["timm"]
 # ///
 

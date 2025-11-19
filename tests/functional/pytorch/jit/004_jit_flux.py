@@ -20,7 +20,8 @@
 # use_gated_hf_token = true
 # ///
 import re
-from logging import INFO, basicConfig
+from logging import INFO, basicConfig, getLogger
+from time import perf_counter
 
 import torch
 from diffusers import FluxPipeline
@@ -28,6 +29,8 @@ from diffusers import FluxPipeline
 from aitune.torch.jit.config import config
 from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
 from aitune.torch.jit.patcher import patch_for_jit_tuning
+
+logger = getLogger(__name__)
 
 
 @patch_for_jit_tuning
@@ -58,8 +61,9 @@ def test_jit_flux():
 
     def batch():
         with torch.no_grad():
-            pipe([prompt] * 1, num_inference_steps=1)
-            pipe([prompt] * 2, num_inference_steps=1)
+            for size in [256, 512]:
+                pipe([prompt] * 1, num_inference_steps=1, height=size, width=size)
+                pipe([prompt] * 2, num_inference_steps=1, height=size, width=size)
 
     for _ in range(5):
         batch()
@@ -74,6 +78,17 @@ def test_jit_flux():
     assert re.match(r".*T5EncoderModel.*state=tuned.*TensorRTBackend", history[2])
     assert re.match(r".*FluxTransformer2DModel.*state=tuned.*TensorRTBackend", history[3])
     # assert re.match(r".*Decoder.*state=tuned.*TensorRTBackend", history[4])
+
+    logger.info("Testing inference with batch_size=1")
+    start = perf_counter()
+    pipe(
+        [prompt],
+        height=256,
+        width=256,
+        num_inference_steps=50,
+    )
+    end = perf_counter()
+    logger.info("Batch_size=1, res=256, steps=50, inference duration: %.2f seconds", end - start)
 
 
 if __name__ == "__main__":
