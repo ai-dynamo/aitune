@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any
 
 import onnx
-import onnx_graphsurgeon as gs
 import torch
 import torch.nn as nn
 
@@ -144,7 +143,6 @@ class ONNXExporter:
                 module,
                 args=args,
                 kwargs=ordered_kwargs,
-                f=onnx_path.as_posix(),
                 dynamo=True,
                 opset_version=self.opset_version,
                 input_names=input_names,
@@ -154,7 +152,6 @@ class ONNXExporter:
                 verbose=verbose,
             )
             exported_program.save(onnx_path.as_posix())
-            self._modify_onnx_io_names(onnx_path, input_names, output_names, onnx_path)
             logger.info("ONNX model exported successfully: %s", onnx_path)
 
     def _export_trace(
@@ -252,34 +249,6 @@ class ONNXExporter:
                     dynamic_axes[tensor_spec.name].append(ax)
 
         return dynamic_axes
-
-    def _modify_onnx_io_names(self, model_path, new_input_names, new_output_names, output_path):
-        """Modify the input and output names of the ONNX model."""
-        graph = gs.import_onnx(onnx.load(model_path, load_external_data=False))
-
-        # Check if the number of new input names matches the number of inputs in the graph
-        if len(new_input_names) != len(graph.inputs):
-            raise ValueError(
-                f"Number of new input names must match the number of inputs in the ONNX graph. Got: {new_input_names} and {graph.inputs}"
-            )
-
-        # Modify the input names
-        for i, _input in enumerate(graph.inputs):
-            _input.name = new_input_names[i]
-
-        # Check if the number of new output names matches the number of outputs in the graph
-        if len(new_output_names) != len(graph.outputs):
-            raise ValueError(
-                f"Number of new output names must match the number of outputs in the ONNX graph. Got: {new_output_names} and {graph.outputs}"
-            )
-
-        # Modify the output names
-        for i, _output in enumerate(graph.outputs):
-            _output.name = new_output_names[i]
-
-        # Save the modified model
-        graph.cleanup()
-        onnx.save(gs.export_onnx(graph), output_path)
 
 
 def _raise_on_locator_user_type(locator: Locator) -> None:

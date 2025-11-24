@@ -44,14 +44,6 @@ def mock_onnx_lib(mocker):
     return mock
 
 
-@pytest.fixture
-def mock_gs_lib(mocker):
-    """Fixture that mocks graphsurgeon library functionality."""
-    mock = mocker.patch("aitune.torch.backend.tensorrt.onnx_exporter.gs")
-    mock.import_onnx.return_value = mocker.MagicMock()
-    return mock
-
-
 def test_onnx_exporter_init(tmp_path):
     """Test ONNXExporter initialization."""
     output_path = tmp_path / "test_model.onnx"
@@ -106,7 +98,7 @@ def test_export_trace(mock_torch_onnx, mock_onnx_lib, tmp_path):
     assert onnx_path == output_path
 
 
-def test_export_dynamo(mocker, mock_torch_onnx, mock_onnx_lib, mock_gs_lib, tmp_path):
+def test_export_dynamo(mocker, mock_torch_onnx, mock_onnx_lib, tmp_path):
     """Test export method with dynamo export."""
     # Mock dynamo export output
     mock_export_program = MagicMock()
@@ -116,7 +108,6 @@ def test_export_dynamo(mocker, mock_torch_onnx, mock_onnx_lib, mock_gs_lib, tmp_
     mock_graph = mocker.MagicMock()
     mock_graph.inputs = [mocker.MagicMock(name="input__0")]
     mock_graph.outputs = [mocker.MagicMock(name="output__0")]
-    mock_gs_lib.import_onnx.return_value = mock_graph
 
     output_path = tmp_path / "onnx" / "test_model.onnx"
 
