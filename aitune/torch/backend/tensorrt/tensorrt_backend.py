@@ -737,7 +737,13 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 logger.debug("Output: %s not found in outputs", tensor_spec.name)
 
         if len(outputs) > 0:
-            logger.warning("Outputs not found in graph spec: %s", outputs)
+            logger.warning("Outputs not found in graph spec.")
+            if isinstance(outputs, dict):
+                for name, tensor in outputs.items():
+                    logger.debug(" - %s not found in graph spec: %s", name, tensor.shape)
+            elif isinstance(outputs, list):
+                for tensor in outputs:
+                    logger.debug(" - not found in graph spec: %s", tensor.shape)
 
         return result
 
