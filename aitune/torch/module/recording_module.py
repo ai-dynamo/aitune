@@ -28,6 +28,7 @@ from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.utils.path_utils import sanitize_filename
 
 INPUT_METADATA_PREFIX = "input"
 OUTPUT_METADATA_PREFIX = "output"
@@ -64,8 +65,10 @@ class RecordingModule:
 
         self._samples = defaultdict(list)
         self._total_num_samples = 0
+
         # make temp directory to store samples, it has to be a field so that is not prematurely removed
-        self._temp_dir = tempfile.TemporaryDirectory(prefix=f"{self._name}_")
+        tempdir_prefix = sanitize_filename(self._name)
+        self._temp_dir = tempfile.TemporaryDirectory(prefix=f"{tempdir_prefix}_")
         self._samples_dir = Path(self._temp_dir.name)
         self._graph_specs: OrderedDict[SampleMetadata, GraphSpec] = OrderedDict()
         self._graphs_counter = itertools.count()
