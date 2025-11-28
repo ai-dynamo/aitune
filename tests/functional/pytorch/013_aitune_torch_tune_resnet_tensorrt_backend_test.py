@@ -81,7 +81,7 @@ if __name__ == "__main__":
 
     do_test(
         TensorRTBackend(
-            config=TensorRTBackendConfig(use_dynamo=False),
+            config=TensorRTBackendConfig(),
         ),
         dtype=torch.bfloat16,
         device="cuda",
