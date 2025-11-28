@@ -133,6 +133,7 @@ def test_jit_tuning_with_module_hooks(mock_trt_backend, torch_device, mocker):
     config.dry_run = False
     config.inspect_mode = False
     config.detect_graph_breaks = False
+
     mock_trt_backend.infer.return_value = torch.randn(OUTPUT_SIZE)
 
     class TestNet(torch.nn.Module):
@@ -326,3 +327,27 @@ def test_each_module_has_unique_cache_dir():
 
     cache_dirs = {m._create_graph_cache_dir("test") for m in PatchedModule.heads}
     assert len(cache_dirs) == 10
+
+
+@requires_cuda
+def test_jit_tuning_skip_module_when_not_match_min_parameters(mock_trt_backend, torch_device):
+    config.dry_run = False
+    config.inspect_mode = False
+    config.detect_graph_breaks = False
+    config.min_parameters = 1e10
+    config.skip_modules = ["ToyTorchModel"]
+
+    with prepare_for_jit_tuning():
+        pipeline = ToyComplexPipeline().to(torch_device)
+
+    inputs = pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device)
+    with torch.inference_mode():
+        for x in inputs:
+            pipeline(x)
+
+    assert len(PatchedModule.heads) == 0
+
+    sink = TestSink()
+    PatchedModule.print_hierarchy(sink=sink.write)
+
+    mock_trt_backend.build.assert_not_called()

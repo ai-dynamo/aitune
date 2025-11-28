@@ -157,7 +157,6 @@ def test_tensorrt_backend_build(mock_tensorrt_components, tmp_path):
     mock_builder_instance.build.assert_called_once()
     mock_runtime_instance.load_engine.assert_called_once()
 
-    assert backend._onnx_path is not None
     assert backend._engine_path is not None
 
     # Verify backend is properly initialized

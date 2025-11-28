@@ -13,6 +13,7 @@
 # limitations under the License.
 """ONNX Exporter module for TensorRT backend."""
 
+import copy
 import logging
 from collections import defaultdict
 from itertools import zip_longest
@@ -26,8 +27,7 @@ import torch.nn as nn
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.utils.module_utils import get_forward_arguments_names
-from aitune.utils.system_monitor import SystemMonitor
+from aitune.torch.utils.module import get_forward_arguments_names
 
 # File extension constants
 ONNX_FILE_EXTENSION = ".onnx"
@@ -49,7 +49,6 @@ class ONNXExporter:
         """
         self.use_dynamo = use_dynamo
         self.opset_version = opset_version
-        self.system_monitor = SystemMonitor()
         self.output_path = output_path
 
     def export(
@@ -81,9 +80,7 @@ class ONNXExporter:
                 self._export_trace(module, sample, graph_spec, self.output_path, verbose)
 
             # Verify the model
-            with self.system_monitor.system_stats_context(log_label="ONNX model verification"):
-                self.verify_model(onnx_path=self.output_path)
-
+            self.verify_model(onnx_path=self.output_path)
             logger.info("Successfully exported and verified ONNX model: %s", self.output_path)
 
             return self.output_path
@@ -115,91 +112,89 @@ class ONNXExporter:
         self, module: nn.Module, sample: Sample, graph_spec: GraphSpec, onnx_path: Path, verbose: bool | None = None
     ):
         """Export the module to ONNX using torch.dynamo."""
-        with self.system_monitor.system_stats_context(log_label="Torch.dynamo ONNX export and save"):
-            forward_args = get_forward_arguments_names(module.forward)
-            dynamic_shapes = self._create_dynamic_shapes(graph_spec, forward_args)
-            input_names = graph_spec.input_spec.get_names()
-            output_names = graph_spec.output_spec.get_names()
+        forward_args = get_forward_arguments_names(module.forward)
+        dynamic_shapes = self._create_dynamic_shapes(graph_spec, forward_args)
+        input_names = graph_spec.input_spec.get_names()
+        output_names = graph_spec.output_spec.get_names()
 
-            args, kwargs = sample
-            args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=2)
+        args, kwargs = copy.deepcopy(sample)
+        args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=2)
 
-            ordered_kwargs = {}
-            for kwarg in forward_args[1]:
-                if kwarg in kwargs:
-                    ordered_kwargs[kwarg] = kwargs[kwarg]
+        ordered_kwargs = {}
+        for kwarg in forward_args[1]:
+            if kwarg in kwargs:
+                ordered_kwargs[kwarg] = kwargs[kwarg]
 
-                    # WAR: Non-tensor kwargs have to be mentioned in dynamic shapes - adding missing ones
-                    if kwarg not in dynamic_shapes:
-                        dynamic_shapes[kwarg] = {} if isinstance(kwargs[kwarg], (dict, list)) else None
+                # WAR: Non-tensor kwargs have to be mentioned in dynamic shapes - adding missing ones
+                if kwarg not in dynamic_shapes:
+                    dynamic_shapes[kwarg] = {} if isinstance(kwargs[kwarg], (dict, list)) else None
 
-            _print_dynamic_shapes(dynamic_shapes)
+        _print_dynamic_shapes(dynamic_shapes)
 
-            # drop root level names in dynamic shapes as we relay on input_names to set the names
-            # NOTE: dynamic shapes could be created as list but we need names for WAR above
-            dynamic_shapes = list(dynamic_shapes.values())
+        # drop root level names in dynamic shapes as we relay on input_names to set the names
+        # NOTE: dynamic shapes could be created as list but we need names for WAR above
+        dynamic_shapes = list(dynamic_shapes.values())
 
-            exported_program = torch.onnx.export(
-                module,
-                args=args,
-                kwargs=ordered_kwargs,
-                dynamo=True,
-                opset_version=self.opset_version,
-                input_names=input_names,
-                output_names=output_names,
-                dynamic_shapes=dynamic_shapes,
-                fallback=False,
-                verbose=verbose,
-            )
-            exported_program.save(onnx_path.as_posix())
-            logger.info("ONNX model exported successfully: %s", onnx_path)
+        torch.onnx.export(
+            module,
+            f=onnx_path.as_posix(),
+            args=args,
+            kwargs=ordered_kwargs,
+            dynamo=True,
+            opset_version=self.opset_version,
+            input_names=input_names,
+            output_names=output_names,
+            dynamic_shapes=dynamic_shapes,
+            fallback=False,
+            verbose=verbose,
+        )
+        logger.info("ONNX model exported successfully: %s", onnx_path)
 
     def _export_trace(
         self, module: nn.Module, sample: Sample, graph_spec: GraphSpec, onnx_path: Path, verbose: bool | None = None
     ):
         """Export the module to ONNX using torch.onnx.trace."""
-        with self.system_monitor.system_stats_context(log_label="Standard ONNX export"):
-            # Use standard torch ONNX export
-            dynamic_axes = self._create_dynamic_axes(graph_spec)
+        # Use standard torch ONNX export
+        dynamic_axes = self._create_dynamic_axes(graph_spec)
 
-            # Use standard torch ONNX export
-            args_mapping, kwargs_mapping = graph_spec.input_spec.get_names_mapping()
-            _, forward_kwargs = get_forward_arguments_names(module.forward)
+        # Use standard torch ONNX export
+        args_mapping, kwargs_mapping = graph_spec.input_spec.get_names_mapping()
+        _, forward_kwargs = get_forward_arguments_names(module.forward)
 
-            for argname in kwargs_mapping:
-                assert argname in forward_kwargs, f"""Argument {argname} is not in forward argspec {forward_kwargs}.
-                Collected args mapping: {args_mapping}
-                Collected kwargs mapping: {kwargs_mapping}
-                """
+        for argname in kwargs_mapping:
+            assert argname in forward_kwargs, f"""Argument {argname} is not in forward argspec {forward_kwargs}.
+            Collected args mapping: {args_mapping}
+            Collected kwargs mapping: {kwargs_mapping}
+            """
 
-            input_names = []
-            for args_names in args_mapping:
-                input_names.append(args_names)
+        input_names = []
+        for args_names in args_mapping:
+            input_names.append(args_names)
 
-            for argname in forward_kwargs:
-                if argname in kwargs_mapping:
-                    input_names.extend(kwargs_mapping[argname])
+        for argname in forward_kwargs:
+            if argname in kwargs_mapping:
+                input_names.extend(kwargs_mapping[argname])
 
-            output_names = graph_spec.output_spec.get_names()
+        output_names = graph_spec.output_spec.get_names()
 
-            logger.info("Input names: %s", input_names)
-            logger.info("Output names: %s", output_names)
-            logger.info("Dynamic axes: %s", dynamic_axes)
+        logger.info("Input names: %s", input_names)
+        logger.info("Output names: %s", output_names)
+        logger.info("Dynamic axes: %s", dynamic_axes)
 
-            args, kwargs = sample
-            torch.onnx.export(
-                module,
-                args=args,
-                kwargs=kwargs,
-                f=onnx_path.as_posix(),
-                dynamo=False,
-                input_names=input_names,
-                output_names=output_names,
-                opset_version=self.opset_version,
-                dynamic_axes=dynamic_axes,
-                verbose=verbose,
-            )
-            logger.info("ONNX model exported successfully: %s", onnx_path)
+        args, kwargs = sample
+        torch.onnx.export(
+            module,
+            args=args,
+            kwargs=kwargs,
+            f=onnx_path.as_posix(),
+            dynamo=False,
+            input_names=input_names,
+            output_names=output_names,
+            opset_version=self.opset_version,
+            dynamic_axes=dynamic_axes,
+            verbose=verbose,
+        )
+        logger.info("ONNX model exported successfully: %s", onnx_path)
 
     @staticmethod
     def _create_dynamic_shapes(graph_spec: GraphSpec, forward_arguments: tuple[list[str], list[str]]) -> dict[str, Any]:

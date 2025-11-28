@@ -28,12 +28,12 @@ def get_device(device: str | torch.device) -> torch.device:
     if isinstance(device, torch.device):
         if device.type == "cuda":
             device_str = f"{device.type}:{device.index or 0}"
-        elif device.type == "cpu":
+        elif device.type in ["cpu", "meta"]:
             device_str = device.type
         else:
-            raise ValueError(f"Invalid device: {device}. Expected 'cuda' or 'cpu'")
+            raise ValueError(f"Invalid device: {device}. Expected 'cuda', 'cpu' or 'meta'")
     elif isinstance(device, str):
-        if device == "cpu":
+        if device in ["cpu", "meta"]:
             device_str = device
         else:
             pattern = r"^cuda:(\d+)$"

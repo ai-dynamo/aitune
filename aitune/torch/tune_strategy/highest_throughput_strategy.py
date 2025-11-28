@@ -185,6 +185,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                     if backend.is_active:
                         backend.deactivate()
                     log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
+                    module.to(device)  # move module back to device as failed backend could move it to cpu
 
         if best_backend is None:
             log(

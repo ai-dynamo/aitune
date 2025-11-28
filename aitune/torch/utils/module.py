@@ -11,12 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Utility functions for PyTorch modules."""
+"""PyTorch module utilities for parameter counting, device management, and memory offloading."""
 
 import inspect
 from collections.abc import Callable
+from typing import Optional
 
+import torch
 import torch.nn as nn
+
+from aitune.torch.utils.memory import cleanup_memory
 
 
 def format_num_parameters(num: int) -> str:
@@ -47,24 +51,23 @@ def format_num_parameters(num: int) -> str:
         return f"{num}"
 
 
-def count_parameters(module: nn.Module) -> str:
-    """Counts the total number of parameters and returns it in a human-readable format.
+def count_parameters(module: nn.Module) -> int:
+    """Counts the total number of parameters and returns the count as an integer.
 
     Args:
         module: The PyTorch module to count parameters for.
 
     Returns:
-        A string representation of the parameter count in human-readable format
-        (e.g., "1.2M", "500K", "100").
+       The total number of parameters as an integer (e.g., 1200000, 500000, 100).
 
     Examples:
         >>> import torch.nn as nn
         >>> module = nn.Linear(1000, 100)
         >>> count_parameters(module)
-        '100.1K'
+        100100
     """
     num_params = sum(p.numel() for p in module.parameters())
-    return format_num_parameters(num_params)
+    return num_params
 
 
 def get_forward_arguments_names(forward_func: Callable) -> tuple[list[str], list[str]]:
@@ -86,3 +89,66 @@ def get_forward_arguments_names(forward_func: Callable) -> tuple[list[str], list
     forward_kwargs = [p.name for p in params_list if p.kind in allowed_kinds]
 
     return forward_args, forward_kwargs
+
+
+def get_module_device(module: nn.Module) -> Optional["torch.device"]:
+    """Get the device of the given module.
+
+    Args:
+        module: Module to get the device of.
+
+    Returns:
+        The device of module based on parameters. If not parameters, returns None.
+    """
+    try:
+        return next(module.parameters()).device
+    except StopIteration:
+        return None
+
+
+def offload(model: nn.Module, aggressive_cleanup: bool = False, device: str | torch.device = "meta") -> None:
+    """Offload model to meta device and remove all tensors, freeing all memory.
+
+    This method first moves the model to the meta device, then completely removes
+    all parameters, buffers, and child modules, leaving only an empty module shell.
+    This frees all GPU/CPU memory associated with the model.
+
+    Warning: This destroys the model structure. The model cannot be restored
+    without completely rebuilding it from scratch.
+
+    Args:
+        model: Model to offload and destroy
+        aggressive_cleanup: Whether to do multiple cleanup passes
+        device: Device to offload to
+    """
+    # Step 1: Move model to meta device
+    model.to(device)
+
+    # Step 2: Remove all tensors from the model
+    _remove_all_tensors(model, aggressive_cleanup)
+
+    # Step 3: Memory cleanup
+    cleanup_memory()
+
+
+def _remove_all_tensors(module: nn.Module, aggressive_cleanup: bool = True) -> None:
+    """Conditionally remove all tensors and child modules from the module (destructive operation).
+
+    Warning: This destroys the model structure. The model cannot be restored
+
+    Args:
+        module: Module to remove all tensors from.
+        aggressive_cleanup: Whether to do multiple cleanup passes. If True, all tensors and child modules will be removed.
+    """
+    if not aggressive_cleanup:
+        return
+
+    for name, _ in list(module.named_parameters(recurse=False)):
+        delattr(module, name)
+
+    for name, _ in list(module.named_buffers(recurse=False)):
+        delattr(module, name)
+
+    for name, child_module in list(module.named_children()):
+        delattr(module, name)
+        _remove_all_tensors(child_module, aggressive_cleanup)

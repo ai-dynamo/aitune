@@ -16,7 +16,7 @@
 import html
 from typing import TYPE_CHECKING
 
-from aitune.torch.utils.module_utils import format_num_parameters
+from aitune.torch.utils.module import format_num_parameters
 
 if TYPE_CHECKING:
     from aitune.torch.jit.inspect_module import InspectModule

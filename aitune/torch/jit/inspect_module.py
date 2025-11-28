@@ -26,7 +26,7 @@ import wrapt
 
 from aitune.torch.jit.config import config
 from aitune.torch.jit.html_generator import HTMLGenerator
-from aitune.torch.utils.module_utils import count_parameters
+from aitune.torch.utils.module import count_parameters
 
 PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
 PRINT_HIERARCHY_NO_MODULES_HEADER = "No modules in hierarchy"

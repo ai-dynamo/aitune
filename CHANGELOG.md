@@ -19,25 +19,26 @@ limitations under the License.
 
 ## 0.2.0 (unreleased)
 
-- feat: introduced Just-in-Time (JIT) tuning: no-code model tuning controlled through import or environment flag
-- feat: introduced Just-in-Time (JIT) inspect: no-code model analysis controlled through import or environment flag
+- feat: introduce Just-in-Time (JIT) tuning: no-code model tuning controlled through import or environment flag
+- feat: introduce Just-in-Time (JIT) inspect: no-code model analysis controlled through import or environment flag
 - feat: module inspect considers lists and dicts for Torch module containers
 - feat: add support for forward hooks for AOT and JIT tuning
 - feat: add support for CUDA graphs for TensorRT backend
 - feat: changing default ONNX export path to dynamo (torch.onnx.export(dynamo=True))
 - feat: add ONNX AutoCast in TensorRT Backend for mixed precision through TensorRT ModelOpt
-- feat: extended collecting profiling metrics through nvtx annotations
+- feat: extend collecting profiling metrics through nvtx annotations
 - feat: suppress console output during tuning and save logs to file - controlled through verbose flag
 - feat: add support for dataclasses and user custom object in module.forward arguments
 - feat: add support for kv cache for LLMs
-- fix: prevent cache dir override when there are two similar modules in jit tuning
+- feat: reduce CPU/GPU memory usage during tuning offloading modules to meta
+- fix: prevent cache dir override when there are two similar modules in JIT tuning
 - fix: dynamic shapes configuration for ONNX Dynamo export path in TensorRT Backend
 - fix: bfloat16 support in TensorRT Backend
 - fix: profiling of models without batching supported
-- misc: extended examples and improved dependencies
+- misc: extends examples and improved dependencies
 
 
 ## 0.1.0
 
 - feat: add AITune features scoped for the first release
-- feat: introduced Ahead-of-Time tuning for low-code model inspection and tuning
+- feat: introduce Ahead-of-Time tuning for low-code model inspection and tuning

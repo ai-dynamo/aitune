@@ -11,12 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test JIT tuning with patch decorator on Stable Diffusion 2.1."""
+"""Test JIT tuning with patch decorator on Wan2.2-T2V-A14B-Diffusers."""
 
 # /// script
-# dependencies = ["diffusers", "transformers"]
-# scope = "always"
+# dependencies = ["diffusers>0.35","transformers","accelerate","ftfy"]
+# scope = "nightly"
 # allow_failure = false
+# additional_tags = ["mem/80g"]
 # ///
 
 import os
@@ -25,33 +26,45 @@ from logging import INFO, basicConfig
 from pathlib import Path
 
 import torch
-from diffusers import StableDiffusionPipeline
+from diffusers import WanPipeline
 
 import aitune.torch.jit.enable_inspection as inspection  # noqa: F401
 
 
-def create_model():
-    pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16)
-    pipe.to("cuda")
+def get_wan_pipeline(model_name: str = "Wan-AI/Wan2.2-T2V-A14B-Diffusers", device: str = "cuda"):
+    """Get a pretrained Wan model from HuggingFace.
+
+    Args:
+        model_name: HuggingFace model name or path
+        device: Device to load the model on
+
+    Returns:
+        WanPipeline: The loaded Wan pipeline
+    """
+    pipe = WanPipeline.from_pretrained(model_name, torch_dtype=torch.bfloat16)
+    pipe.to(device)
     return pipe
 
 
-def test_jit_sd21():
-    prompt = "A fluffy, orange tabby cat with bright green eyes is captured mid-air, pouncing playfully on a vibrant red ball of yarn"
-    pipe = create_model()
+def test_jit_wan_inspect():
+    prompt = """The camera rushes from far to near in a low-angle shot, revealing a white ferret on a log. It plays, leaps into the water,
+    and emerges, as the camera zooms in for a close-up. Water splashes berry bushes nearby, while moss, snow, and leaves blanket the ground.
+    Birch trees and a light blue sky frame the scene, with ferns in the foreground. Side lighting casts dynamic shadows and warm highlights.
+    Medium composition, front view, low angle, with depth of field."""
 
-    def batch():
-        with torch.no_grad():
-            pipe([prompt] * 1)
-            pipe([prompt] * 2)
+    negative_prompt = """Bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray,
+    worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed,
+    disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards"""
 
-    for _ in range(5):
-        batch()
+    pipe = get_wan_pipeline()
+
+    with torch.no_grad():
+        pipe(prompt, negative_prompt=negative_prompt)
 
     output_dir = Path(os.environ.get("AITUNE_OUTPUT_DIR", "output"))
     output_dir.mkdir(parents=True, exist_ok=True)
-    html_path = output_dir / "inspect_sd21.html"
-    inspection.save_report(html_path, "SD21")
+    html_path = output_dir / "inspect_wan.html"
+    inspection.save_report(html_path, "WAN")
 
     assert html_path.exists(), f"HTML file {html_path} was not created"
 
@@ -65,7 +78,7 @@ def test_jit_sd21():
     assert "<body>" in html_content, "HTML file missing body section"
 
     # Assert model name appears in HTML
-    assert "Model: SD21" in html_content, "Model name 'SD21' not found in HTML"
+    assert "Model: WAN" in html_content, "Model name 'WAN' not found in HTML"
 
     # Assert title contains expected text
     assert "AITune Model Inspector" in html_content, "Expected title not found in HTML"
@@ -95,4 +108,4 @@ def test_jit_sd21():
 
 if __name__ == "__main__":
     basicConfig(level=INFO, force=True)
-    test_jit_sd21()
+    test_jit_wan_inspect()

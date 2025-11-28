@@ -34,7 +34,7 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
-from aitune.torch.utils.module_utils import count_parameters
+from aitune.torch.utils.module import count_parameters, format_num_parameters
 
 PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
 PRINT_HIERARCHY_NO_MODULES_HEADER = "No modules in hierarchy"
@@ -207,11 +207,12 @@ class PatchedModule:
         It initializes the module and sets the state to RECORDING.
         """
         params = count_parameters(self.__wrapped__)
-        if params == "0":
+        if int(params) <= config.min_parameters:
             self._unpatch()
             return self.__wrapped__(*args, **kwargs)
 
-        self._name += f" 📊{params}"
+        formatted_params = format_num_parameters(params)
+        self._name += f" 📊{formatted_params}"
         self._call_count = 1
         if PatchedModule.stack:
             parent = PatchedModule.stack[-1]

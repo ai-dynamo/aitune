@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test JIT tuning with patch decorator on Stable Diffusion 2.1."""
+"""Test JIT tuning with patch decorator on FLUX."""
 
 # /// script
 # dependencies = ["diffusers", "transformers"]
@@ -52,8 +52,8 @@ def test_jit_flux_inspect():
 
     def batch():
         with torch.no_grad():
-            pipe([prompt] * 1, num_inference_steps=1)
-            pipe([prompt] * 2, num_inference_steps=1)
+            pipe([prompt] * 1)
+            pipe([prompt] * 2)
 
     for _ in range(5):
         batch()

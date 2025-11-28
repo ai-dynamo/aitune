@@ -21,6 +21,7 @@ import torch
 from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch import HighestThroughputStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.config import config as global_config
 
 from .cmd_args import get_parser
 from .model import get_model
@@ -89,6 +90,13 @@ def tune_model(
     #     during make_batch and deepcopy of arguments with all kwags arguments passed as dict in args[0]
     inspected_modules_info = inspect(model, input_texts, inference_function=call_wrapper, min_depth=2)
     inspected_modules_info.describe()
+
+    # NOTE: workaround for SentenceTransformer to work with tuned model see below first dirty hack
+    #       By default, we move modules to meta device after tuning to save memory. Our wrapper returns correct device for the module.
+    #       However, SentenceTransformer overrides .device property, has one more reference to the same module we tuned, returns meta device by this additional reference.
+    #       In encode() method, it calls .to(self.device) and tries to move modules that are already on right devices, breaking the inference.
+    #       We need to move modules to cpu device after tuning to work with SentenceTransformer.
+    global_config.device_after_tuning = "cpu"
 
     modules = inspected_modules_info.get_modules(min_execution_percentage=0.1)
     model = wrap(

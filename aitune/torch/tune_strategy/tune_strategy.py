@@ -23,11 +23,13 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, DummyBackend
+from aitune.torch.backend.tensorrt.onnx_autocast import SystemMonitor
+from aitune.torch.config import config as global_config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.task.correctness import check_output_correctness, check_output_tensor_shapes
-from aitune.torch.utils.module_utils import count_parameters
+from aitune.torch.utils.module import count_parameters, offload
 from aitune.utils.logging import log
 from aitune.utils.timer import Timer
 
@@ -44,6 +46,7 @@ class TuneStrategy(ABC):
         """
         self._sink = sink or self._logger.info
         self._enable_correctness_check = True
+        self._system_monitor = SystemMonitor()
 
     def tune_dry_run(
         self,
@@ -76,6 +79,7 @@ class TuneStrategy(ABC):
             self._pre_tune(module, name, graph_spec, data, device, cache_dir)
             backend = self._tune(module, name, graph_spec, data, device, cache_dir)
             self._post_tune(backend, name, graph_spec, data)
+            self._offload_module(backend, module)
             return backend
 
     def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, data: list[Sample]):
@@ -225,6 +229,15 @@ class TuneStrategy(ABC):
     def _logger(self) -> logging.Logger:
         """Get a logger specific to this backend implementation."""
         return logging.getLogger(f"{self.__class__.__module__}")
+
+    def _offload_module(self, backend: Backend, module: nn.Module):
+        """Save the model to the cache directory."""
+        if backend.is_jit:
+            return
+
+        with self._system_monitor.system_stats_context(log_label="Offloading module to meta device"):
+            aggressive_cleanup = global_config.device_after_tuning == "meta"
+            offload(module, device=global_config.device_after_tuning, aggressive_cleanup=aggressive_cleanup)
 
 
 class DummyTuneStrategy(TuneStrategy):

@@ -54,6 +54,8 @@ class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
             graph_spec.name,
             sink=self._sink,
         )
+
+        # Run backend by backend until first working backend is found
         for backend in self._backends:
             backend_cache_dir = cache_dir / backend.key()
             log_file = self._log_file(backend_cache_dir, "build.log")

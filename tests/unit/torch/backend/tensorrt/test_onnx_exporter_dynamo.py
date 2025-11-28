@@ -25,7 +25,7 @@ from aitune.torch.backend.tensorrt.onnx_exporter import ONNXExporter, _create_ne
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.utils.module_utils import get_forward_arguments_names
+from aitune.torch.utils.module import get_forward_arguments_names
 from tests.utilities.helpers import requires_cuda
 
 

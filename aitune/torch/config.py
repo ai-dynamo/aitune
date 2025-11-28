@@ -40,6 +40,7 @@ if not nvtx._ENABLED:
 
 # Console output configuration
 CONSOLE_OUTPUT_ENABLE = os.getenv("AITUNE_CONSOLE_OUTPUT") in ("1", "true", "True", "yes", "Yes", "YES")
+SYSTEM_MONITOR_ENABLE = os.getenv("AITUNE_SYSTEM_MONITOR") in ("1", "true", "True", "yes", "Yes", "YES")
 
 
 def aitune_cache_dir() -> Path:

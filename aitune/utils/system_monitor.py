@@ -30,7 +30,11 @@ from pynvml import (
     nvmlSystemGetDriverVersion,
 )
 
+from aitune.torch.config import SYSTEM_MONITOR_ENABLE
+
 logger = logging.getLogger(__name__)
+
+DEFAULT_LOGGER_FUNC = logger.info if SYSTEM_MONITOR_ENABLE else logger.debug
 
 
 @dataclass
@@ -134,10 +138,10 @@ class SystemMonitor:
             self._driver_version = nvmlSystemGetDriverVersion()
             self._gpu_count = nvmlDeviceGetCount()
             self._nvml_initialized = True
-            logger.debug("NVML initialized. Driver version: %s", self._driver_version)
-            logger.debug("Found %d GPU devices", self._gpu_count)
+            DEFAULT_LOGGER_FUNC("NVML initialized. Driver version: %s", self._driver_version)
+            DEFAULT_LOGGER_FUNC("Found %d GPU devices", self._gpu_count)
         except Exception as e:
-            logger.debug("Failed to initialize NVML: %s", e)
+            logger.error("Failed to initialize NVML: %s", e)
             self._nvml_initialized = False
             self._gpu_count = 0
             self._driver_version = None
@@ -149,7 +153,7 @@ class SystemMonitor:
                 nvmlShutdown()
                 logger.debug("NVML shutdown complete")
             except Exception as e:
-                logger.debug("Failed to shutdown NVML: %s", e)
+                logger.error("Failed to shutdown NVML: %s", e)
 
     @property
     def driver_version(self) -> str | None:
@@ -190,7 +194,7 @@ class SystemMonitor:
                 power_usage_milliwatts=power_usage,
             )
         except Exception as e:
-            logger.debug("Failed to get GPU stats for device %s: %s", device_index, e)
+            logger.error("Failed to get GPU stats for device %s: %s", device_index, e)
             return None
 
     def get_all_gpu_stats(self) -> list[GPUStats]:
@@ -226,7 +230,7 @@ class SystemMonitor:
             logger_func: Optional custom logging function, defaults to logger.debug
         """
         if logger_func is None:
-            logger_func = logger.debug
+            logger_func = DEFAULT_LOGGER_FUNC
 
         if not self._nvml_initialized:
             logger_func("GPU statistics unavailable - NVML not initialized")
@@ -267,7 +271,7 @@ class SystemMonitor:
             logger_func: Optional custom logging function, defaults to logger.debug
         """
         if logger_func is None:
-            logger_func = logger.debug
+            logger_func = DEFAULT_LOGGER_FUNC
 
         stats = self.cpu_stats
         logger_func("CPU:")
@@ -290,7 +294,7 @@ class SystemMonitor:
             log_label: Optional label to identify what stage/operation these stats are for
         """
         if logger_func is None:
-            logger_func = logger.debug
+            logger_func = DEFAULT_LOGGER_FUNC
 
         header = "=== System Resource Usage ==="
         if log_label:

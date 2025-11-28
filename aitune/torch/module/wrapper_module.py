@@ -18,7 +18,7 @@ from collections import OrderedDict
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import torch
 import wrapt
@@ -36,6 +36,7 @@ from aitune.torch.tune_strategy.tune_strategy import (
     DummyTuneStrategy,
     TuneStrategy,
 )
+from aitune.torch.utils.module import get_module_device
 
 logger = getLogger(__name__)
 
@@ -453,18 +454,3 @@ def get_object_name(obj: Any) -> str:
 def sanitize_model_name(model_name: str | None) -> str | None:
     """Sanitize model name to be used as a module name."""
     return model_name.replace("/", "_") if model_name else None
-
-
-def get_module_device(module: "torch.nn.Module") -> Optional["torch.device"]:
-    """Get the device of the given module.
-
-    Args:
-        module: Module to get the device of.
-
-    Returns:
-        The device of module based on parameters. If not parameters, returns None.
-    """
-    try:
-        return next(module.parameters()).device
-    except StopIteration:
-        return None

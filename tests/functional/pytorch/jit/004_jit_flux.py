@@ -11,13 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test JIT tuning with patch decorator on Stable Diffusion 2.1."""
+"""Test JIT tuning with patch decorator on FLUX."""
 
 # /// script
 # dependencies = ["diffusers>=0.25.0,<0.35","transformers"]
 # scope = "always"
 # allow_failure = false
 # use_gated_hf_token = true
+# additional_tags = ["mem/80g"]
 # ///
 import re
 from logging import INFO, basicConfig, getLogger
@@ -34,7 +35,7 @@ logger = getLogger(__name__)
 
 
 @patch_for_jit_tuning
-def get_flux_pipeline(model_name: str = "hf-internal-testing/tiny-flux-pipe", device: str = "cuda"):
+def get_flux_pipeline(model_name: str = "black-forest-labs/FLUX.1-dev", device: str = "cuda"):
     """Get a pretrained Flux model from HuggingFace.
 
     Args:

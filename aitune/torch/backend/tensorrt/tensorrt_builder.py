@@ -13,6 +13,7 @@
 # limitations under the License.
 """TensorRT Builder module for building TensorRT engines from ONNX models."""
 
+import gc
 import logging
 from pathlib import Path
 from typing import Any
@@ -101,6 +102,8 @@ class TensorRTBuilder:
         except Exception as e:
             self._handle_failed_build(e, self.output_path)
             raise e
+        finally:
+            gc.collect()
 
     def _validate_onnx_file(self) -> None:
         """Validate that the ONNX file exists.

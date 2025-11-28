@@ -138,9 +138,6 @@ def test_export_dynamo(mocker, mock_torch_onnx, mock_onnx_lib, tmp_path):
     assert "dynamo" in mock_torch_onnx.export.call_args.kwargs
     assert mock_torch_onnx.export.call_args.kwargs["dynamo"] is True
 
-    # Verify save was called
-    mock_export_program.save.assert_called_once()
-
     # Verify verification was called
     mock_onnx_lib.checker.check_model.assert_called_once()
 
