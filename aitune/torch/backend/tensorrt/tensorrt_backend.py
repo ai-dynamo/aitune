@@ -363,8 +363,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 engine_path = self._prepare_trt_engine_path(cache_dir)
 
                 trt_builder = TensorRTBuilder(
-                    output_path=engine_path,
                     input_onnx_path=onnx_path_quantized,
+                    output_path=engine_path,
                     workspace_size=self._config.workspace_size,
                     optimization_level=self._config.optimization_level,
                     compatibility_level=self._config.compatibility_level,

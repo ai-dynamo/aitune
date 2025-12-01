@@ -14,6 +14,7 @@
 """Utility functions for path and filename manipulation."""
 
 import re
+from pathlib import Path
 
 MAX_FILENAME_BYTES = 80
 
@@ -45,3 +46,43 @@ def sanitize_filename(name: str, max_bytes: int = MAX_FILENAME_BYTES) -> str:
         safe = encoded.decode("utf-8", errors="ignore")
 
     return safe
+
+
+def get_file_size(path: str | Path) -> int:
+    """Get the size of a file.
+
+    Args:
+        path: The path to the file.
+
+    Returns:
+        The size of the file in bytes.
+    """
+    return Path(path).stat().st_size
+
+
+def format_file_size(size_bytes: int) -> str:
+    """Formats a file size in bytes into human-readable format.
+
+    Args:
+        size_bytes: The file size in bytes.
+
+    Returns:
+        A string representation of the file size in human-readable format
+        (e.g., "1.5 GB", "500.0 MB", "100.0 KB", "50 B").
+
+    Examples:
+        >>> format_file_size(1_500_000_000)
+        '1.4 GB'
+        >>> format_file_size(500_000)
+        '488.3 KB'
+        >>> format_file_size(50)
+        '50 B'
+    """
+    if size_bytes >= 1_073_741_824:  # 1024^3
+        return f"{size_bytes / 1_073_741_824:.1f} GB"
+    elif size_bytes >= 1_048_576:  # 1024^2
+        return f"{size_bytes / 1_048_576:.1f} MB"
+    elif size_bytes >= 1_024:  # 1024
+        return f"{size_bytes / 1_024:.1f} KB"
+    else:
+        return f"{size_bytes} B"

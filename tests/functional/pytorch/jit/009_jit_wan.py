@@ -79,7 +79,10 @@ def test_jit_wan():
     assert re.match(r".*UMT5EncoderModel.*state=recording", history[1])
     assert re.match(r".*WanTransformer3DModel.*state=recording", history[2])
     assert re.match(r".*WanTransformer3DModel.*state=tuned.*TensorRTBackend", history[3])
-    assert re.match(r".*WanDecoder3d.*state=recording", history[4])
+    assert re.match(r".*WanCausalConv3d.*state=recording", history[4])
+    assert re.match(r".*WanDecoder3d.*state=recording", history[5])
+    assert re.match(r".*WanCausalConv3d.*state=recording", history[6])
+    assert re.match(r".*WanCausalConv3d.*state=recording", history[7])
 
     logger.info("Testing inference with batch_size=1")
     start = perf_counter()

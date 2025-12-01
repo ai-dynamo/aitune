@@ -60,11 +60,11 @@ def tune(
         if batch_sizes is None:
             batch_sizes = [1, 2, 4, 8, 16, 32]
 
-        pipe = get_model(model_name=model_name, device=device)
+        model = get_model(model_name=model_name, device=device)
         input_data = prepare_sample(device=device)
 
         logger.info("Inspecting model...")
-        modules_info = ait.inspect(pipe, [input_data], number_of_iterations=1, warmup_iterations=1)
+        modules_info = ait.inspect(model, [input_data], number_of_iterations=1, warmup_iterations=1)
         modules_info.describe()
 
         strategy = ait.FirstWinsStrategy(
@@ -78,13 +78,13 @@ def tune(
         strategy.enable_find_max_batch_size(enable=False)
 
         logger.info("Wrapping modules...")
-        ait.wrap(pipe, modules_info.get_modules(), strategy=strategy)
+        model = ait.wrap(model, modules_info.get_modules(), strategy=strategy)
 
         logger.info("Tuning model...")
-        ait.tune(pipe, [input_data], batch_sizes=batch_sizes)
+        ait.tune(model, [input_data], batch_sizes=batch_sizes)
 
         logger.info("Saving model...")
-        ait.save(pipe, model_path)
+        ait.save(model, model_path)
 
 
 if __name__ == "__main__":

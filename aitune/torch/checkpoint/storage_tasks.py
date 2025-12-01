@@ -26,8 +26,10 @@ from typing import Literal
 import torch
 
 from aitune.torch.module.tuned_module import TunedModule
+from aitune.torch.utils.path_utils import format_file_size, get_file_size
 
 AIT_EXTENSION = ".ait"
+STATE_DICT_FILE = "state_dict.pt"
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,11 @@ class TorchSaveTask(SaveTask):
             path: The path where the state dictionary should be saved.
             state_dict: The state dictionary to save.
         """
-        torch.save(state_dict, path / "state_dict.pt")
+        file_path = path / STATE_DICT_FILE
+        torch.save(state_dict, file_path)
+
+        file_size = get_file_size(file_path)
+        logger.info("✅ State dict saved to %s [%s]", file_path, format_file_size(file_size))
 
 
 class TorchLoadTask(LoadTask):
@@ -80,7 +86,16 @@ class TorchLoadTask(LoadTask):
 
     def load(self, path: Path) -> dict:
         """Load a state dictionary from the specified path."""
-        return torch_load_with_custom_types(path / "state_dict.pt")
+        file_path = path / STATE_DICT_FILE
+        if not file_path.exists():
+            raise FileNotFoundError(f"State dictionary file not found: {file_path}")
+
+        state_dict = torch_load_with_custom_types(file_path)
+
+        file_size = get_file_size(file_path)
+        logger.info("✅ State dict loaded from %s [%s]", file_path, format_file_size(file_size))
+
+        return state_dict
 
 
 class MakeFolderTask(SaveTask):
@@ -139,7 +154,7 @@ class CopyBackendArtifactsTask(SaveTask):
                     dicts_to_check.append(value)
                 elif property_name == TunedModule.BACKENDS_KEY:
                     # value is a backends_data (see TunedModule.to_dict())
-                    for sample_metadata_data, backend_data in value:  # noqa: B007
+                    for _, backend_data in value:
                         for backend_property_name, backend_value in backend_data.items():
                             # look for Path objects
                             if isinstance(backend_value, Path):
@@ -207,7 +222,8 @@ class ZipSaveTask(SaveTask):
                     file_path_in_zip = file_path.relative_to(path)
                     zip_fp.write(file_path, file_path_in_zip)
 
-        logger.info("✅ Checkpoint compressed and saved to %s", zip_path)
+        zip_file_size = get_file_size(zip_path)
+        logger.info("✅ Checkpoint compressed and saved to %s [%s]", zip_path, format_file_size(zip_file_size))
         # copy sha hashes aside zip if they exist
         # Try both SHA-256 and SHA-512 files
         for sha_type in ["256", "512"]:
@@ -291,9 +307,14 @@ class UnzipLoadTask(LoadTask):
         if not zip_path.exists():
             raise FileNotFoundError(f"Checkpoint file not found: {zip_path}")
 
+        file_size = get_file_size(zip_path)
+        logger.info("🔄 Extracting checkpoint from: %s [%s]", path, format_file_size(file_size))
+
         if not check_checkpoint_valid(path):
             with zipfile.ZipFile(zip_path, "r") as zip_fp:
                 zip_fp.extractall(path)
+
+        logger.info("✅ Checkpoint extracted")
 
         return {}
 

@@ -86,22 +86,6 @@ def test_offload_moves_to_cpu_device(simple_model, device):
 
 
 @requires_cuda
-def test_offload_with_aggressive_cleanup_remove_all_tensors(simple_model, device):
-    """Test that offload_to_meta removes all parameters, buffers and child modules."""
-    # Move model to GPU
-    simple_model.to(device)
-
-    # Verify model is on GPU
-    for param in simple_model.parameters():
-        assert param.device.type == "cuda"
-
-    # Offload weights with aggressive cleanup (replaces parameter tensors, frees memory)
-    offload(simple_model, device="cpu", aggressive_cleanup=True)
-
-    assert len(list(simple_model.parameters())) == 0
-
-
-@requires_cuda
 def test_offload_to_meta_frees_gpu_memory(device):
     """Test that offload_to_meta frees GPU memory by replacing tensors with meta.
 
@@ -147,44 +131,6 @@ def test_offload_to_meta_frees_gpu_memory(device):
         f"Before: {memory_allocated_before / 1e6:.2f} MB, "
         f"After: {memory_allocated_after / 1e6:.2f} MB"
     )
-
-
-@requires_cuda
-def test_offload_with_aggressive_cleanup(simple_model, device):
-    """Test offload with aggressive cleanup enabled.
-
-    Aggressive cleanup performs multiple garbage collection passes
-    to ensure all memory is freed.
-    """
-    simple_model.to(device)
-    memory_before = torch.cuda.memory_allocated(device)
-
-    # Offload with aggressive cleanup (default)
-    offload(simple_model, device="meta", aggressive_cleanup=True)
-
-    memory_after = torch.cuda.memory_allocated(device)
-
-    # Memory should be significantly reduced
-    assert memory_after < memory_before
-
-
-@requires_cuda
-def test_offload_without_aggressive_cleanup(simple_model, device):
-    """Test offload with aggressive cleanup disabled.
-
-    Even without aggressive cleanup, memory should still be freed,
-    just with fewer garbage collection passes.
-    """
-    simple_model.to(device)
-    memory_before = torch.cuda.memory_allocated(device)
-
-    # Offload without aggressive cleanup
-    offload(simple_model, device="meta", aggressive_cleanup=False)
-
-    memory_after = torch.cuda.memory_allocated(device)
-
-    # Memory should still be reduced (just maybe not as much)
-    assert memory_after < memory_before
 
 
 @requires_cuda

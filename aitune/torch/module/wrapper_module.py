@@ -25,6 +25,7 @@ import wrapt
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.config import aitune_cache_dir
+from aitune.torch.config import config as global_config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule
@@ -36,7 +37,8 @@ from aitune.torch.tune_strategy.tune_strategy import (
     DummyTuneStrategy,
     TuneStrategy,
 )
-from aitune.torch.utils.module import get_module_device
+from aitune.torch.utils.module import get_module_device, offload
+from aitune.utils.system_monitor import SystemMonitor
 
 logger = getLogger(__name__)
 
@@ -108,6 +110,8 @@ class Module(wrapt.CallableObjectProxy):
         self._self_state = ModuleState.INIT
         self._self_wrapper = None
         self._self_prev_recording = None
+
+        self._system_monitor = SystemMonitor()
 
         MODULE_REGISTRY.register(self._self_name, self)
 
@@ -308,6 +312,7 @@ class Module(wrapt.CallableObjectProxy):
             self._self_prev_recording = recording
             self._self_state = ModuleState.TUNED
             self._self_wrapper = TunedModule(backends)
+            self._offload(backends)
 
     def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:
         """Create a cache directory for the graph."""
@@ -444,6 +449,17 @@ class Module(wrapt.CallableObjectProxy):
             return [DummyTuneStrategy()] * len(graph_specs)
 
         raise RuntimeError("No strategy provided. Cannot tune module.")
+
+    def _offload(self, backends: OrderedDict[SampleMetadata, Backend]):
+        """Offload the module to the meta device only if no JIT backends are used."""
+        if not backends:
+            return
+
+        if any(backend.is_jit for backend in backends.values()):
+            return None
+
+        with self._system_monitor.system_stats_context(log_label="Offloading module to meta device"):
+            offload(self.__wrapped__, device=global_config.device_after_tuning)
 
 
 def get_object_name(obj: Any) -> str:

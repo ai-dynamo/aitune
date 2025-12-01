@@ -30,8 +30,10 @@ from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_gene
 from aitune.torch.module.tensor_spec import InfoLevel
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
+from aitune.torch.utils.cuda import synchronize as cuda_synchronize
 from aitune.torch.utils.device import get_device
 from aitune.utils.logging import libraries_logging, setup_logging
+from aitune.utils.timer import Timer
 
 logger = getLogger(__name__)
 
@@ -168,9 +170,18 @@ def load(
     """
     # Setup logging
     setup_logging(format_string=LOG_FORMAT)
+
     with libraries_logging(disable_external_logging):
         checkpoint = TorchCheckpoint(storage or LocalTorchStorage())
-        return checkpoint.load(module, path=path, device_map=device_map)
+
+        # Measure loading time
+        with Timer("Load checkpoint", silent=True) as timer:
+            module = checkpoint.load(module, path=path, device_map=device_map)
+            cuda_synchronize()
+
+        logger.info("✅ Checkpoint loaded from: %s in %.2f seconds", path, timer.elapsed)
+
+        return module
 
 
 def _describe_module(module: Module):

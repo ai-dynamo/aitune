@@ -26,6 +26,7 @@ import torch
 import wrapt
 
 from aitune.torch.backend.backend import Backend
+from aitune.torch.config import config as global_config
 from aitune.torch.jit.config import config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
@@ -34,7 +35,8 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
-from aitune.torch.utils.module import count_parameters, format_num_parameters
+from aitune.torch.utils.module import count_parameters, format_num_parameters, offload
+from aitune.utils.system_monitor import SystemMonitor
 
 PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
 PRINT_HIERARCHY_NO_MODULES_HEADER = "No modules in hierarchy"
@@ -113,6 +115,7 @@ class PatchedModule:
         }
         self._extra_state_info: str = ""  # for tracking purposes
         self._update_state(ModuleState.INIT)
+        self._system_monitor = SystemMonitor()
 
     def tune(
         self,
@@ -156,6 +159,7 @@ class PatchedModule:
                 current._patch_device_attribute(device)
                 current._unpatch_hierarchy(include_self=False)
                 _to_hist(f"Model tuned: {str(current)}")
+                self._offload(backends)
             except Exception as e:
                 current.__wrapped__.to(device)  # failed backend leaves module on cpu, move it back
                 current._unpatch()
@@ -390,6 +394,17 @@ class PatchedModule:
             raise GraphBreakException(message)
         else:
             _to_hist(f"No graph breaks in {module._name}. Checking took {duration:.2f}s")
+
+    def _offload(self, backends: OrderedDict[SampleMetadata, Backend]):
+        """Offload the module to the meta device only if no JIT backends are used."""
+        if not backends:
+            return
+
+        if any(backend.is_jit for backend in backends.values()):
+            return
+
+        with self._system_monitor.system_stats_context(log_label="Offloading module to meta device"):
+            offload(self.__wrapped__, device=global_config.device_after_tuning)
 
     def _tune_module(
         self,

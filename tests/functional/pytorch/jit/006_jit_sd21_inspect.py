@@ -42,8 +42,8 @@ def test_jit_sd21():
 
     def batch():
         with torch.no_grad():
-            pipe([prompt] * 1)
-            pipe([prompt] * 2)
+            pipe([prompt] * 1, num_inference_steps=1)
+            pipe([prompt] * 2, num_inference_steps=1)
 
     for _ in range(5):
         batch()

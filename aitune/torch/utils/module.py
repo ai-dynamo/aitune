@@ -106,49 +106,15 @@ def get_module_device(module: nn.Module) -> Optional["torch.device"]:
         return None
 
 
-def offload(model: nn.Module, aggressive_cleanup: bool = False, device: str | torch.device = "meta") -> None:
-    """Offload model to meta device and remove all tensors, freeing all memory.
-
-    This method first moves the model to the meta device, then completely removes
-    all parameters, buffers, and child modules, leaving only an empty module shell.
-    This frees all GPU/CPU memory associated with the model.
-
-    Warning: This destroys the model structure. The model cannot be restored
-    without completely rebuilding it from scratch.
+def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
+    """Offload model to meta device and freeing all memory.
 
     Args:
         model: Model to offload and destroy
-        aggressive_cleanup: Whether to do multiple cleanup passes
         device: Device to offload to
     """
     # Step 1: Move model to meta device
     model.to(device)
 
-    # Step 2: Remove all tensors from the model
-    _remove_all_tensors(model, aggressive_cleanup)
-
-    # Step 3: Memory cleanup
+    # Step 2: Memory cleanup
     cleanup_memory()
-
-
-def _remove_all_tensors(module: nn.Module, aggressive_cleanup: bool = True) -> None:
-    """Conditionally remove all tensors and child modules from the module (destructive operation).
-
-    Warning: This destroys the model structure. The model cannot be restored
-
-    Args:
-        module: Module to remove all tensors from.
-        aggressive_cleanup: Whether to do multiple cleanup passes. If True, all tensors and child modules will be removed.
-    """
-    if not aggressive_cleanup:
-        return
-
-    for name, _ in list(module.named_parameters(recurse=False)):
-        delattr(module, name)
-
-    for name, _ in list(module.named_buffers(recurse=False)):
-        delattr(module, name)
-
-    for name, child_module in list(module.named_children()):
-        delattr(module, name)
-        _remove_all_tensors(child_module, aggressive_cleanup)
