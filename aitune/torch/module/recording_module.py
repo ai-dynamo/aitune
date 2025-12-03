@@ -102,6 +102,8 @@ class RecordingModule:
         else:
             # create a new graph spec for the sample metadata
             graph_name = f"{next(self._graphs_counter)}"
+            if inputs_metadata.llm_phase:
+                graph_name += f" (LLM phase {inputs_metadata.llm_phase})"
             self._graph_specs[inputs_metadata] = GraphSpec(
                 name=graph_name, input_spec=inputs_metadata, output_spec=outputs_metadata
             )

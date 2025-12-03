@@ -17,12 +17,13 @@ import copy
 import pickle
 from collections import defaultdict
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal
 
 import torch
 from tabulate import tabulate
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
+from aitune.torch.config import config
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
 
@@ -118,10 +119,17 @@ class SampleMetadata:
         >>> s1 == s2  # Same rank, different shape
         True
 
-    Note: the __init__ method should not be used directly. instead:
-
+    Note:
+    1. The __init__ method should not be used directly. instead:
         - for inputs - use SampleMetadata.from_inputs(args, kwargs)
         - for outputs - use SampleMetadata.from_outputs(output)
+
+    2. In order to support Hugging Face integrations with kv cache the following behavior is changed:
+        - the equality and hash operator ignore all tensors and return value corresponding to the llm_graph_type,
+        which is either "prefill" or "decode". This is deduced based on the cache_position tensor. It cannot be
+        done otherwise because even though kv cache is lazily initialized, it can be cached on subsequent generate
+        calls i.e. it can always have tensors irrespective of the phase.
+
 
     See Also:
         - TensorSpec: Underlying representation of individual tensors
@@ -134,6 +142,7 @@ class SampleMetadata:
         tensor_data: tuple[tuple[Locator, TensorSpec]],
         other_data: tuple[tuple[Locator, str, Any]],
         strict: bool = False,
+        llm_phase: Literal["prefill", "decode"] | None = None,
     ) -> None:
         """Create SampleMetadata from provided tensor data and other data.
 
@@ -142,6 +151,7 @@ class SampleMetadata:
         self._tensor_data = tensor_data
         self._other_data = other_data
         self._strict = strict
+        self._llm_phase = llm_phase
 
     def __str__(self) -> str:
         """Convert sample metadata to string."""
@@ -155,11 +165,20 @@ class SampleMetadata:
         """Equality operator."""
         if not isinstance(__value, type(self)):
             return False
-        return self._tensor_data == __value._tensor_data and self._other_data == __value._other_data
+
+        if self._llm_phase is None:
+            return self._tensor_data == __value._tensor_data and self._other_data == __value._other_data
+        else:
+            # LLM integration: check only LLM phase
+            return self._llm_phase == __value._llm_phase
 
     def __hash__(self) -> int:
         """Compute hash of sample metadata."""
-        return hash(self._tensor_data) ^ hash(self._other_data)
+        if self._llm_phase is None:
+            return hash(self._tensor_data) ^ hash(self._other_data)
+        else:
+            # LLM integration: hash only LLM phase
+            return hash(self._llm_phase)
 
     def detected_dynamic_axis(self) -> bool:
         """Check if dynamic axes are detected in the metadata."""
@@ -189,6 +208,13 @@ class SampleMetadata:
         return args_names, kwargs_names
 
     @property
+    def llm_phase(self) -> Literal["prefill", "decode", ""]:
+        """Get LLM graph type."""
+        if self._llm_phase is None:
+            return ""
+        return self._llm_phase
+
+    @property
     def other_data(self) -> tuple[tuple[Locator, str, str]]:
         """Get list of other data."""
         return self._other_data
@@ -212,16 +238,24 @@ class SampleMetadata:
         If strict is True, then other data is also included.
         """
         batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
-        tensor_data, other_data = [], []
+        tensor_data, other_data, cache_position = [], [], None
         for prefix, data_source in zip(("args", "kwargs"), (args, kwargs), strict=False):
             for locator, value in Locator.find_leaves(data_source):
-                name = prefix + sanitize_tensor_name(str(locator))
+                name = prefix + locator.sanitized_name
                 if torch.is_tensor(value):
                     tensor_data.append((locator, TensorSpec.from_tensor(name, value, batch_size)))
                 elif strict:
                     other_data.append((locator, name, value))
+                if config.enable_hf_integrations:
+                    if locator.root_name == "cache_position":
+                        cache_position = value
 
-        return SampleMetadata(tuple(tensor_data), tuple(other_data), strict)
+        if cache_position is None:
+            llm_phase = None
+        else:
+            llm_phase = "prefill" if cache_position[0].item() == 0 else "decode"
+
+        return SampleMetadata(tuple(tensor_data), tuple(other_data), strict, llm_phase)
 
     @staticmethod
     def from_outputs(output: Any, strict: bool = False, batch_size: int | None = None) -> "SampleMetadata":
@@ -232,12 +266,12 @@ class SampleMetadata:
         batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
         tensor_data, other_data = [], []
         for locator, value in Locator.find_leaves(output):
-            name = "outputs" + sanitize_tensor_name(str(locator))
+            name = "outputs" + locator.sanitized_name
             if torch.is_tensor(value):
                 tensor_data.append((locator, TensorSpec.from_tensor(name, value, batch_size)))
             elif strict:
                 other_data.append((locator, name, value))
-        return SampleMetadata(tuple(tensor_data), tuple(other_data), strict)
+        return SampleMetadata(tuple(tensor_data), tuple(other_data), strict, llm_phase=None)
 
     @staticmethod
     def from_dict(data: dict) -> "SampleMetadata":
@@ -253,6 +287,7 @@ class SampleMetadata:
             pickle.loads(data["tensor_data"]),
             pickle.loads(data["other_data"]),
             data["strict"],
+            data["llm_phase"],
         )
 
     def to_dict(self) -> dict:
@@ -265,12 +300,13 @@ class SampleMetadata:
             "tensor_data": pickle.dumps(self._tensor_data),
             "other_data": pickle.dumps(self._other_data),
             "strict": self._strict,
+            "llm_phase": self._llm_phase,
         }
 
     def describe(self, info_level: InfoLevel = InfoLevel.FULL) -> str:
         """Get information describing sample metadata."""
         tensors, tensor_header = [], []
-        for locator, ts in self._tensor_data:
+        for locator, ts in sorted(self._tensor_data, key=lambda x: x[1].name):
             if info_level == InfoLevel.SHORT:
                 tensors.append(ts.name)
             elif info_level == InfoLevel.MEDIUM:
@@ -281,7 +317,7 @@ class SampleMetadata:
                 tensors.append((str(locator), ts.name, ts.shape, ts.min_shape, ts.max_shape, ts.dtype))
 
         others, other_header = [], []
-        for locator, name, value in self._other_data:
+        for locator, name, value in sorted(self._other_data, key=lambda x: x[1]):
             if info_level == InfoLevel.SHORT:
                 others.append(f"{name}={value}")
             else:
@@ -373,8 +409,3 @@ def batch_tensor(tensor: torch.Tensor, tensor_spec: TensorSpec, batch_size: int)
             repeat_indices[axis] = effective_batch_size
             tensor = tensor.repeat(repeat_indices)
     return tensor
-
-
-def sanitize_tensor_name(name: str) -> str:
-    """Sanitize tensor name to be used as a tensor name."""
-    return name.translate(str.maketrans("[", "_", "]'"))

@@ -19,7 +19,7 @@ import pytest
 import torch
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
-from aitune.torch.module.sample_metadata import SampleMetadata, batch_tensor, sanitize_tensor_name
+from aitune.torch.module.sample_metadata import SampleMetadata, batch_tensor
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
 
 
@@ -174,22 +174,22 @@ def test_make_batch():
 
 def test_hash_non_strict():
     # same tensor ranks
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1)), kwargs={"t": torch.randn(2, 2)})
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1)), kwargs={"t": torch.randn(2, 2)})
+    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2, 2)})
+    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2, 2)})
     assert hash(m1) == hash(m2)
 
     # tensor rank same, different shapes
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1)), kwargs={"t": torch.randn(2, 2)})
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(2, 2)), kwargs={"t": torch.randn(2, 2)})
+    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2, 2)})
+    m2 = SampleMetadata.from_inputs(args=(torch.randn(2, 2),), kwargs={"t": torch.randn(2, 2)})
     assert hash(m1) == hash(m2)
 
     # different rank
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1)), kwargs={"t": torch.randn(2, 2)})
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1)), kwargs={"t": torch.randn(2)})
+    m1 = SampleMetadata.from_inputs(args=(torch.randn(1),), kwargs={"t": torch.randn(2, 2)})
+    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2)})
     assert hash(m1) != hash(m2)
 
     # different kwarg name
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1)), kwargs={"t": torch.randn(2, 2)})
+    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2, 2)})
     m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1)), kwargs={"other": torch.randn(2, 2)})
     assert hash(m1) != hash(m2)
 
@@ -209,6 +209,34 @@ def test_hash_strict():
     m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1), "a"), kwargs={"t": torch.randn(2, 2), "x": 1}, strict=True)
     m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1), "a"), kwargs={"t": torch.randn(2, 2), "x": 2}, strict=True)
     assert hash(m1) != hash(m2)
+
+
+def test_hash_llm_dynamic():
+    m1 = SampleMetadata.from_inputs(args=("a",), kwargs={"cache_position": torch.randn(5)}, strict=True)
+    m2 = SampleMetadata.from_inputs(args=("b",), kwargs={"cache_position": torch.randn(5)}, strict=True)
+    m3 = SampleMetadata.from_inputs(args=("b",), kwargs={"cache_position": torch.randn(6)}, strict=True)
+    assert hash(m1) == hash(m2), "args should be ignored"
+    assert hash(m2) == hash(m3), "cache position should not affect hash"
+
+    m1 = SampleMetadata.from_inputs(args=(torch.randn(1),), kwargs={"cache_position": torch.randn(5)}, strict=False)
+    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 2),), kwargs={"cache_position": torch.randn(5)}, strict=False)
+    assert hash(m1) == hash(m2), "tensor args should be ignored"
+
+
+def test_hash_llm_static():
+    m1 = SampleMetadata.from_inputs(args=("a",), kwargs={"cache_position": torch.tensor([0])}, strict=True)
+    m2 = SampleMetadata.from_inputs(args=("b",), kwargs={"cache_position": torch.tensor([0])}, strict=True)
+    assert hash(m1) == hash(m2), "args should be ignored"
+
+    m1 = SampleMetadata.from_inputs(args=(torch.randn(1),), kwargs={"cache_position": torch.tensor([0])}, strict=False)
+    m2 = SampleMetadata.from_inputs(
+        args=(torch.randn(1, 2),), kwargs={"cache_position": torch.tensor([0])}, strict=False
+    )
+    assert hash(m1) == hash(m2), "tensor args should be ignored"
+
+    m1 = SampleMetadata.from_inputs(args=("a",), kwargs={"cache_position": torch.tensor([0])})
+    m2 = SampleMetadata.from_inputs(args=("a",), kwargs={"cache_position": torch.tensor([1])})
+    assert hash(m1) != hash(m2), "cache position should affect hash"
 
 
 def test_batch_tensor():
@@ -356,23 +384,3 @@ def test_detected_dynamic_axis():
     # Manually modify tensor spec to have batch axis
     metadata3.tensor_specs[0].shape[0] = "batch0"
     assert metadata3.detected_dynamic_axis()
-
-
-def test_sanitize_tensor_name():
-    # Test case 1: Basic case with single bracket pair
-    assert sanitize_tensor_name("args[0]") == "args_0"
-
-    # Test case 2: Multiple brackets
-    assert sanitize_tensor_name("model[layer][0]") == "model_layer_0"
-
-    # Test case 3: No brackets - should remain unchanged
-    assert sanitize_tensor_name("simple_name") == "simple_name"
-
-    # Test case 4: Empty string - should remain unchanged
-    assert sanitize_tensor_name("") == ""
-
-    # Test case 5: Only brackets
-    assert sanitize_tensor_name("[]") == "_"
-
-    # Test case 6: Mixed content with existing underscores
-    assert sanitize_tensor_name("kwargs['0']['key']") == "kwargs_0_key"

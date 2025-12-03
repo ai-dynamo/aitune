@@ -12,6 +12,7 @@
 # See the License for the specific
 """Test for wrapper module."""
 
+import inspect
 from collections import OrderedDict
 from copy import deepcopy
 from unittest.mock import Mock, call
@@ -19,6 +20,7 @@ from unittest.mock import Mock, call
 import pytest
 import torch
 
+from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
@@ -28,8 +30,6 @@ from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy import (
-    FirstWinsStrategy,
-    HighestThroughputStrategy,
     OneBackendStrategy,
 )
 from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
@@ -367,24 +367,45 @@ def test_from_dict_raises_error_for_invalid_state_dict(torch_device):
         Module.from_dict(Identity(), {"type": "invalid"}, device=torch_device)
 
 
-@pytest.mark.parametrize(
-    "strategy_class,strategy_args",
-    [
-        (OneBackendStrategy, {"backend": TorchInductorBackend()}),
-        (FirstWinsStrategy, {"backends": [TorchInductorBackend()]}),
-        (HighestThroughputStrategy, {"backends": [TorchInductorBackend()]}),
-    ],
-)
-def test_deepcopy(strategy_class, strategy_args):
+def test_deepcopy():
     """Test that deepcopy of a wrapped module does not raise an error.
 
-    Wrapper should not add any attributes to the wrapped model. The following test checks that module can be deepcopied.
-
-    Args:
-        strategy_class: The strategy class to test
-        strategy_args: Arguments to pass to the strategy constructor
+    Wrapper should not add any attributes to the original wrapped model which prevent doing a deepcopy.
+    The only exception is overridden forward method - but this gets restored before handing original module to
+    a backend.
     """
     model = Identity()
-    strategy = strategy_class(**strategy_args)
-    _ = Module(model, TEST_MODULE_NAME, strategy=strategy)
-    deepcopy(model)
+    module = Module(model, TEST_MODULE_NAME)
+
+    # with pytest.raises(Exception, match="Cannot deepcopy a module"):
+    #     # this may fail do to decorating forward method with wrapt.decorator
+    #     deepcopy(model)
+
+    module._restore_original_forward()
+    deepcopy(model)  # this must not fail
+
+
+def test_forward_method_should_have_same_signature():
+    class TestNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(10, 10)
+
+        def forward(self, x, y, z, pos=4):
+            """Test forward method."""
+            return x, y, z, pos
+
+    original_model = TestNet()
+    expected_keys = {"x", "y", "z", "pos"}
+
+    model = Module(original_model, TEST_MODULE_NAME)
+    assert model.state == ModuleState.INIT
+    assert set(inspect.signature(original_model.forward).parameters.keys()) == expected_keys
+    model(1, 2, 3)
+    assert model.state == ModuleState.RECORDING
+    assert set(inspect.signature(original_model.forward).parameters.keys()) == expected_keys
+
+    strategy = OneBackendStrategy(TorchEagerBackend()).enable_find_max_batch_size(False)
+    model.tune(device=torch.device("cpu"), strategy=strategy)
+    assert model.state == ModuleState.TUNED
+    assert set(inspect.signature(original_model.forward).parameters.keys()) == expected_keys

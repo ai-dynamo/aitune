@@ -30,6 +30,8 @@ limitations under the License.
 - feat: suppress console output during tuning and save logs to file - controlled through verbose flag
 - feat: add support for dataclasses and user custom object in module.forward arguments
 - feat: add support for kv cache for LLMs
+- feat: add support for Static/Dynamic HuggingFace for TorchInductor backend
+- feat: optimize handling input/output metadata
 - feat: reduce CPU/GPU memory usage during tuning offloading modules to meta
 - fix: prevent cache dir override when there are two similar modules in JIT tuning
 - fix: dynamic shapes configuration for ONNX Dynamo export path in TensorRT Backend

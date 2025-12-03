@@ -102,7 +102,7 @@ class Module(wrapt.CallableObjectProxy):
         self._self_orig_forward = module.forward
         self._original_forward_pre_hooks = module._forward_pre_hooks
         self._original_forward_hooks = module._forward_hooks
-        self._self_proxy_forward = lambda *args, **kwargs: self._forward(*args, **kwargs)
+        self._self_proxy_forward = wrapt.decorator(self._forward)(module.forward)
         module.forward = self._self_proxy_forward
         self._setup_strategies(strategy, strategies)
 
@@ -346,12 +346,24 @@ class Module(wrapt.CallableObjectProxy):
         finally:
             self._proxy_forward()
 
-    def _forward(self, *args, **kwargs) -> Any:
+    def _forward(self, wrapped, instance, args, kwargs) -> Any:
         """Calls one of the wrappers depending on the module state.
 
         Before calling a particular wrapper, the forward method is restored so that we
         avoid infinite recursion. After the implementation handles the call forward is
         restored back to point to this _forward to intercept subsequent calls.
+
+        Args:
+            wrapped: The wrapped module.
+            instance: The instance of the module.
+            args: The arguments to pass to the module.
+            kwargs: The keyword arguments to pass to the module.
+
+        Returns:
+            The result of the call.
+
+        Note:
+            Method signature contains wrapped, instance - this is required by wrapt.decorator.
         """
         if self._self_state == ModuleState.INIT:
             self.enable_recording()

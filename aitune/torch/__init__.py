@@ -14,7 +14,7 @@
 """Torch tuning module."""
 
 # configuring some variables before importing other modules
-from aitune.torch.config import aitune_cache_dir  # noqa: I001
+from aitune.torch.config import aitune_cache_dir, config  # noqa: I001
 
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.inspecting import inspect, wrap
@@ -36,3 +36,6 @@ __all__ = [
     "HighestThroughputStrategy",
     "LocalTorchStorage",
 ]
+
+if config.enable_hf_integrations:
+    import aitune.torch.integrations.hugging_face  # noqa: F401

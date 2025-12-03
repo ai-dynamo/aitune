@@ -391,20 +391,20 @@ def test_onnx_exporter_should_produce_valid_simple_model(simple_module_and_args,
 
 
 def test_create_nested_structure():
-    locator = Locator([("zw", ObjectType.DICT), (0, ObjectType.SEQUENCE)])
+    locator = Locator((("zw", ObjectType.DICT), (0, ObjectType.SEQUENCE)))
     root = _create_nested_structure(locator, last={})
     assert root == {"zw": [{}]}
 
-    locator = Locator([("zw", ObjectType.DICT), (0, ObjectType.SEQUENCE), ("t", ObjectType.DICT)])
+    locator = Locator((("zw", ObjectType.DICT), (0, ObjectType.SEQUENCE), ("t", ObjectType.DICT)))
     root = _create_nested_structure(locator, last={})
     assert root == {"zw": [{"t": {}}]}
 
-    locator = Locator([("zw", ObjectType.DICT), (0, ObjectType.SEQUENCE)])
+    locator = Locator((("zw", ObjectType.DICT), (0, ObjectType.SEQUENCE)))
     root = _create_nested_structure(locator, last={})
-    locator = Locator([("zw", ObjectType.DICT), (1, ObjectType.SEQUENCE)])
+    locator = Locator((("zw", ObjectType.DICT), (1, ObjectType.SEQUENCE)))
     root = _create_nested_structure(locator, root=root, last={})
     assert root == {"zw": [{}, {}]}
 
-    locator = Locator([("zw", ObjectType.DICT)])
+    locator = Locator((("zw", ObjectType.DICT),))
     root = _create_nested_structure(locator, last=1)
     assert root == {"zw": 1}

@@ -29,7 +29,7 @@ class InfoLevel(Enum):
     FULL = auto()
 
 
-@dataclass
+@dataclass(slots=True)
 class TensorSpec:
     """TensorSpec is used to describe tensor metadata.
 
@@ -59,15 +59,19 @@ class TensorSpec:
             batch_size: Batch size
         """
         shape = list(tensor.shape)
-        self = TensorSpec(
+        if math.isnan(batch_size):
+            _bs_multipliers = [float("nan")] * len(shape)
+        else:
+            _bs_multipliers = [size / batch_size for size in shape]
+
+        return TensorSpec(
             name=name,
             shape=shape,
             min_shape=shape[:],
             max_shape=shape[:],
             dtype=tensor.dtype,
-            _bs_multipliers=[size / batch_size for size in shape],
+            _bs_multipliers=_bs_multipliers,
         )
-        return self
 
     def __repr__(self) -> str:
         """Get representation of TensorSpec."""

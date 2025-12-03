@@ -37,8 +37,14 @@ def module_registry_cleanup():
 @pytest.fixture(autouse=True)
 def aitune_cache_dir(mocker, tmp_path):
     """Sets cache dir to temporary directory."""
+    import sys
+
+    # aitune.torch.config resolves to the config object due to import in aitune.torch.__init__
+    # so we fetch the module directly from sys.modules
+    config_module = sys.modules["aitune.torch.config"]
+
     cache_dir = tmp_path / "aitune_cache"
-    mocker.patch("aitune.torch.config.DEFAULT_CACHE_DIR", cache_dir)
+    mocker.patch.object(config_module, "DEFAULT_CACHE_DIR", cache_dir)
     return cache_dir
 
 
