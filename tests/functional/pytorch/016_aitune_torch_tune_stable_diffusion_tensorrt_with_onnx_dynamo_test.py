@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # /// script
-# dependencies = ["transformers", "diffusers"]
+# dependencies = ["transformers<5", "diffusers"]
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
