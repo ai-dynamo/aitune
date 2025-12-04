@@ -31,6 +31,7 @@ aitune = { path = "../../" }
 
 [project.scripts]
 tune = "llm.tune:main"
+inference = "llm.tune:main"
 benchmark = "llm.benchmark:main"
 benchmark-all = "llm.benchmark_all:main"
 
