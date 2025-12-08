@@ -17,7 +17,7 @@ limitations under the License.
 # Changelog
 
 
-## 0.2.0 (unreleased)
+## 0.2.0
 
 - feat: introduce Just-in-Time (JIT) tuning: no-code model tuning controlled through import or environment flag
 - feat: introduce Just-in-Time (JIT) inspect: no-code model analysis controlled through import or environment flag
