@@ -69,9 +69,7 @@ if __name__ == "__main__":
             config=TorchTensorRTJitBackendConfig(
                 compile_config=TorchTensorRTConfig(
                     enabled_precisions={torch.float32, torch.float16, torch.bfloat16},
-                    use_python_runtime=False,
                 ),
-                dynamic_shapes=False,
             ),
         ),
         torch.float32,

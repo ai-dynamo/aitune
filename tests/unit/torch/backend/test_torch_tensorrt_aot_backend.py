@@ -22,7 +22,6 @@ import torch.nn as nn
 from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
-    create_dynamic_shapes,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
@@ -280,28 +279,6 @@ def graph_spec_with_dynamic_shape(dynamic_samples_data, model) -> GraphSpec:
 
     graph_spec = GraphSpec("0", input_metadata, output_metadata)
     return graph_spec
-
-
-@requires_cuda
-def test_create_dynamic_shape(graph_spec_with_dynamic_shape):
-    results = create_dynamic_shapes(graph_spec_with_dynamic_shape, True)
-    assert len(results) == 1
-
-    assert results[0][0].__name__ == "args_0_dim_0"
-    assert results[0][0].min == 1
-    assert results[0][0].max == 4
-
-    assert results[0][1].__name__ == "args_0_dim_1"
-    assert results[0][1].min == 4
-    assert results[0][1].max == 256
-
-    assert results[0][2] is None
-
-
-def test_create_dynamic_shape_with_user_defined_shapes(graph_spec_with_dynamic_shape):
-    results = create_dynamic_shapes(graph_spec_with_dynamic_shape, [("test",)])
-
-    assert results == [("test",)]
 
 
 @requires_cuda

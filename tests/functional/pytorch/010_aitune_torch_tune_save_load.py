@@ -121,10 +121,7 @@ def tensorrt_aot_backend():
         config=TorchTensorRTAotBackendConfig(
             compile_config=TorchTensorRTConfig(
                 enabled_precisions={torch.float32, torch.float16, torch.bfloat16},
-                use_python_runtime=False,
-                assume_dynamic_shape_support=True,
             ),
-            dynamic_shapes=True,
         ),
     )
 

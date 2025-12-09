@@ -82,7 +82,6 @@ if __name__ == "__main__":
                     use_python_runtime=False,
                     assume_dynamic_shape_support=True,
                 ),
-                dynamic_shapes=True,
             ),
         ),
         dtype=torch.float32,

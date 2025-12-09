@@ -16,7 +16,7 @@
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import nvtx
 import torch
@@ -46,6 +46,8 @@ except (ImportError, RuntimeError, FileNotFoundError, OSError):
 
 logger = getLogger(__name__)
 
+IRType = Literal["dynamo", "ts", "fx"]
+
 
 def assert_torch_tensorrt():
     """Check if torch_tensorrt is installed."""
@@ -60,10 +62,10 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
     See torch_tensorrt/dynamo/_settings.py CompilationSettings for compile_config(TorchTensorRTConfig)
     """
 
+    ir: IRType = "dynamo"
     compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
         default_factory=lambda: TorchTensorRTConfig(enabled_precisions={torch.float16})
     )
-    dynamic_shapes: dict[str, Any] | tuple[Any] | list[Any] | bool | None = True
     pickle_protocol: int = DEFAULT_PICKLE_PROTOCOL
 
     def describe(self) -> str:
@@ -156,12 +158,10 @@ class TorchTensorRTAotBackend(Backend):
 
             input_signature.append(input_i)
 
-        dynamic_shapes = create_dynamic_shapes(graph_spec, self._config.dynamic_shapes)
-
         logger.info("Compile model with TensorRT.")
         trt_model_compiled = torch_tensorrt.compile(
             model,
-            ir="dynamo",
+            ir=self._config.ir,
             inputs=input_signature,
             **asdict(self._config.compile_config),
         )
@@ -170,21 +170,19 @@ class TorchTensorRTAotBackend(Backend):
         args, kwargs = data[0]
         args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=2)
 
-        exported_model = torch.export.export(
-            trt_model_compiled,
-            args=args,
-            kwargs=kwargs,
-            dynamic_shapes=dynamic_shapes,
-            strict=False,
-        )
-
         save_kwargs = {}
         if Version(torch.__version__) >= Version("2.7"):
             logger.info("Using pickle protocol %d.", self._config.pickle_protocol)
             save_kwargs["pickle_protocol"] = self._config.pickle_protocol
 
         self._exported_model_path = self._create_exported_model_path(cache_dir)
-        torch.export.save(exported_model, self._exported_model_path.as_posix(), **save_kwargs)
+        torch_tensorrt.save(
+            trt_model_compiled,
+            self._exported_model_path.as_posix(),
+            arg_inputs=args,
+            kwargs_inputs=kwargs,
+            **save_kwargs,
+        )
 
         logger.info("Module has been compiled and saved with TensorRT.")
         self._opt_module = trt_model_compiled
@@ -255,36 +253,3 @@ class TorchTensorRTAotBackend(Backend):
         backend._device = state_dict[cls.STATE_DEVICE]
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend
-
-
-def create_dynamic_shapes(
-    graph_spec: GraphSpec,
-    user_dynamic_shapes: dict[str, Any] | tuple[Any] | list[Any] | bool | None,
-):
-    """Using graph spec to infer how does input look like.
-
-    Args:
-        graph_spec (GraphSpec): Input graph spec
-        user_dynamic_shapes (Union[dict[str, Any], tuple[Any], list[Any], bool, None]): User specified dynamic shapes,
-            if True, extract dynamic shapes from graph spec, if False, return None, if tuple or list, return as is
-    """
-    if isinstance(user_dynamic_shapes, bool) and user_dynamic_shapes:
-        logger.info("Extract dynamic shapes")
-        dynamic_shapes = []
-        for tensor_spec in graph_spec.input_spec.tensor_specs:
-            dynamic_shape = []
-            for i, (d1, d2) in enumerate(zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=True)):
-                if d1 != d2:
-                    dynamic_shape += [torch.export.Dim(f"{tensor_spec.name}_dim_{i}", min=d1, max=d2)]
-                else:
-                    dynamic_shape += [None]
-
-            dynamic_shapes.append(tuple(dynamic_shape))
-        logger.info("Extracted dynamic shapes: %s", dynamic_shape)
-        return dynamic_shapes
-
-    if not user_dynamic_shapes:
-        return None
-
-    logger.info("Using user specified dynamic shapes: %s", user_dynamic_shapes)
-    return user_dynamic_shapes

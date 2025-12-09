@@ -16,6 +16,9 @@ limitations under the License.
 
 # Changelog
 
+## 0.3.0 (unreleased)
+
+- fix: handling dynamic shapes in TorchTensorRT AoT backend
 
 ## 0.2.0
 
