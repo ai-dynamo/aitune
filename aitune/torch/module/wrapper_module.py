@@ -146,7 +146,7 @@ class Module(wrapt.CallableObjectProxy):
             return self._self_wrapper.device
 
         # When module is not tuned, return the device of the original module (__wrapped__)
-        return next(self.__wrapped__.parameters()).device
+        return get_module_device(self.__wrapped__)
 
     @property
     def graph_specs(self) -> list[GraphSpec]:
@@ -270,7 +270,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def tune(
         self,
-        device: torch.device,
+        device: torch.device | None = None,
         strategy: TuneStrategy | None = None,
         dry_run: bool = False,
     ):
@@ -288,6 +288,8 @@ class Module(wrapt.CallableObjectProxy):
             raise ValueError(f"Module: '{self._self_name}' has already been tuned. Reset it to do it again.")
         elif self._self_state == ModuleState.INIT or self._self_state == ModuleState.PASSTHROUGH:
             raise ValueError(f"Module: '{self._self_name}' has not recorded any samples. Cannot tune it.")
+
+        device = device or self._self_device
 
         recording = cast(RecordingModule, self._self_wrapper)
         backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()

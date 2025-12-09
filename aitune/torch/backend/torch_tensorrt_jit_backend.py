@@ -17,7 +17,7 @@ import gc
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import nvtx
 import torch
@@ -104,6 +104,9 @@ class TorchTensorRTJitBackend(Backend):
     STATE_ORIG_MODULE = "orig_module"
     STATE_DATA = "data"
     STATE_DEVICE = "device"
+
+    # Supported devices
+    _devices: ClassVar[list[str]] = ["cuda"]
 
     def __init__(
         self,

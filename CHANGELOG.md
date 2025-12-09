@@ -17,8 +17,9 @@ limitations under the License.
 # Changelog
 
 ## 0.3.0 (unreleased)
-
+- feat: allow to override tuning device in JIT tuning, when set to none, use the module device
 - fix: handling dynamic shapes in TorchTensorRT AoT backend
+
 
 ## 0.2.0
 

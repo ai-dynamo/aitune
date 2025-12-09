@@ -18,7 +18,7 @@ import copy
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import nvtx
 import torch
@@ -117,6 +117,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
     STATE_QUANTIZATION_CONFIG = "quantization_config"
     STATE_CONFIG = "config"
     STATE_USE_CUDA_GRAPHS = "use_cuda_graphs"
+
+    # Supported devices
+    _devices: ClassVar[list[str]] = ["cuda"]
 
     def __init__(
         self,

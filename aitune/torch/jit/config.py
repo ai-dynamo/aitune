@@ -17,8 +17,12 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import torch
+
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.config import DEFAULT_DEVICE
+from aitune.torch.utils.device import get_device
 
 DEFAULT_JIT_CACHE_DIR = Path.home() / ".cache" / "aitune.jit"
 
@@ -30,6 +34,9 @@ class Config:
     dry_run: bool = False  # whether to perform dry-run tuning
     dry_run_failure_probability: float = 0.2  # probability of failure in dry-run mode to imitate tuning failure
     inspect_mode: bool = False  # whether to perform inspect mode
+    device: str | torch.device | None = (
+        DEFAULT_DEVICE  # device to perform tuning on, if None, the device will use module device
+    )
 
     min_samples: int = 2  # minimum number of samples recorded before tuning
     batch_axis_required: bool = True  # if True, the batch axis must detected in the input data
@@ -45,6 +52,10 @@ class Config:
             TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
         ]
     )  # backends to use for JIT tuning
+
+    def __post_init__(self):
+        """Post init."""
+        self.device = get_device(self.device)
 
 
 config = Config()

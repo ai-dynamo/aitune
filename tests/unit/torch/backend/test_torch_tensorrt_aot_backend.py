@@ -107,6 +107,7 @@ def test_torch_tensorrt_aot_backend_config_key():
     assert key1 == key2
 
 
+@requires_cuda
 def test_torch_tensorrt_aot_backend_config_describe():
     """Test backend config with cache_dir."""
     config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig())

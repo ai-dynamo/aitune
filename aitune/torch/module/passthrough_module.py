@@ -28,7 +28,7 @@ class PassthroughModule:
     def __init__(
         self,
         module,
-        device: str | None = None,
+        device: str,
     ) -> None:
         """Initializes module.
 
@@ -39,7 +39,7 @@ class PassthroughModule:
         super().__init__()
         self._forward_call = module.__call__
         self._device = device
-        module.to(device)
+        module.to(self._device)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Native inference on wrapped module."""

@@ -46,7 +46,7 @@ def tune(
     dataset: DatasetLike | DataLoaderFactory | torch.Tensor,
     batch_sizes: list[int] | None = None,
     max_num_batches_per_batch_size: int | None = None,
-    device: str | torch.device = DEFAULT_DEVICE,
+    device: str | torch.device | None = DEFAULT_DEVICE,
     dry_run: bool = False,
     disable_external_logging: bool = False,
     clear_cache: bool = False,
@@ -75,15 +75,11 @@ def tune(
 
     with libraries_logging(disable_external_logging):
         # Convert device to torch.device
-        device = get_device(device)
+        if device is not None:
+            device = get_device(device)
 
-        # Check batch sizes
-        if not batch_sizes:
-            logger.info("No batch sizes provided, using default batch sizes [1, 2].")
-            batch_sizes = [1, 2]
-
-        if len(set(batch_sizes)) == 1:
-            logger.warning("Only 1 batch size provided, static shapes will be assumed.")
+        # Validate batch sizes
+        batch_sizes = _validate_and_normalize_batch_sizes(batch_sizes)
 
         for batch_size, args, kwargs in samples_generator(dataset, batch_sizes, max_num_batches_per_batch_size):
             with global_context:
@@ -104,13 +100,7 @@ def tune(
 
         # Activate the backends after tuning for inference
         if not dry_run:
-            logger.info("════════════════════════════════════════════════════════════════")
-            logger.info("✅ Completed tuning all modules.")
-            logger.info("🎯 Activating tuned modules for inference:")
-            for module in MODULE_REGISTRY.modules.values():
-                module.activate()
-                _describe_module(module)
-            logger.info("════════════════════════════════════════════════════════════════")
+            _activate_tuned_modules()
 
 
 def save(
@@ -182,6 +172,29 @@ def load(
         logger.info("✅ Checkpoint loaded from: %s in %.2f seconds", path, timer.elapsed)
 
         return module
+
+
+def _validate_and_normalize_batch_sizes(batch_sizes: list[int] | None) -> list[int]:
+    """Validate and normalize batch sizes for tuning."""
+    if not batch_sizes:
+        logger.info("No batch sizes provided, using default batch sizes [1, 2].")
+        return [1, 2]
+
+    if len(set(batch_sizes)) == 1:
+        logger.warning("Only 1 batch size provided, static shapes will be assumed.")
+
+    return batch_sizes
+
+
+def _activate_tuned_modules() -> None:
+    """Activate all tuned modules after tuning is complete."""
+    logger.info("════════════════════════════════════════════════════════════════")
+    logger.info("✅ Completed tuning all modules.")
+    logger.info("🎯 Activating tuned modules for inference:")
+    for module in MODULE_REGISTRY.modules.values():
+        module.activate()
+        _describe_module(module)
+    logger.info("════════════════════════════════════════════════════════════════")
 
 
 def _describe_module(module: Module):

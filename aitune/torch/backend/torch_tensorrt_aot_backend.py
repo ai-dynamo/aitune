@@ -16,7 +16,7 @@
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import nvtx
 import torch
@@ -98,6 +98,9 @@ class TorchTensorRTAotBackend(Backend):
     EXPORTED_MODEL_PATH_KEY = "exported_model_path"
     STATE_DEVICE = "device"
 
+    # Supported devices
+    _devices: ClassVar[list[str]] = ["cuda"]
+
     def __init__(
         self,
         config: TorchTensorRTAotBackendConfig | None = None,
@@ -168,7 +171,11 @@ class TorchTensorRTAotBackend(Backend):
 
         # Note: torch export requires batch size to be grater then 1
         args, kwargs = data[0]
-        args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=2)
+
+        if graph_spec.input_spec.has_batch_axis():
+            max_batch_size = graph_spec.get_max_batch_size()
+            batch_size = min(max_batch_size, 2)
+            args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=batch_size)
 
         save_kwargs = {}
         if Version(torch.__version__) >= Version("2.7"):

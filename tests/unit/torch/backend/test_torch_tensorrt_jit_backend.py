@@ -66,6 +66,7 @@ def torch_tensorrt_jit_backend(torch_tensorrt_jit_backend_config, torch_device, 
     return TorchTensorRTJitBackend(torch_tensorrt_jit_backend_config)
 
 
+@requires_cuda
 def backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path, mocker):
     torch_mod = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch")
     torch_mod.compile = mocker.MagicMock(return_value=model)
@@ -77,6 +78,7 @@ def backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, 
     return torch_mod, backend
 
 
+@requires_cuda
 def test_torch_tensorrt_jit_backend_config_key():
     """Test backend config with cache_dir."""
     config = TorchTensorRTJitBackendConfig()
@@ -86,6 +88,7 @@ def test_torch_tensorrt_jit_backend_config_key():
     assert key1 == key2
 
 
+@requires_cuda
 def test_torch_tensorrt_jit_backend_config_describe():
     """Test backend config describe."""
     config = TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTTestConfig())
@@ -104,6 +107,7 @@ def test_torch_tensorrt_jit_backend_config_describe():
     assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}),fullgraph=True"
 
 
+@requires_cuda
 def test_mock_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path, mocker):
     torch_mod = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch")
     torch_mod.compile = mocker.MagicMock(return_value=model)
@@ -116,6 +120,7 @@ def test_mock_build(torch_tensorrt_jit_backend, model, sample_data, torch_device
     assert backend._compiled_module is not None
 
 
+@requires_cuda
 def test_mock_infer(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path, mocker):
     torch_mod, backend = backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path, mocker)
 
@@ -144,6 +149,7 @@ def test_mock_infer(torch_tensorrt_jit_backend, model, sample_data, torch_device
     assert backend._compiled_module is None
 
 
+@requires_cuda
 def test_torch_compile_backend_infer_not_activated(
     torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path, mocker
 ):
@@ -166,6 +172,7 @@ def test_torch_compile_backend_infer_not_activated(
         backend.infer(torch.randn(2, 256))
 
 
+@requires_cuda
 def test_torch_compile_backend_deactivate(
     torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path, mocker
 ):

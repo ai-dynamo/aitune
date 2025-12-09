@@ -35,7 +35,7 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
-from aitune.torch.utils.module import count_parameters, format_num_parameters, offload
+from aitune.torch.utils.module import count_parameters, format_num_parameters, get_module_device, offload
 from aitune.utils.system_monitor import SystemMonitor
 
 PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
@@ -130,7 +130,7 @@ class PatchedModule:
         """
         PatchedModule.attempted_tuning = True
         self._set_original_forward_for_hierarchy()
-        device = torch.device("cuda")
+        device = config.device or get_module_device(self.__wrapped__)
         todo = [self]
         while todo:
             current = todo.pop()
@@ -151,7 +151,7 @@ class PatchedModule:
                     current._wrapper = TunedModule(backends)
                     current._extra_state_info = ", ".join([b.name for b in backends.values()])
                 else:
-                    current._wrapper = PassthroughModule(current.__wrapped__)
+                    current._wrapper = PassthroughModule(current.__wrapped__, device=device)
                     current._extra_state_info = "dry-run tuning success"
 
                 # tuning success, we can revert forward for current module, unpatch child modules

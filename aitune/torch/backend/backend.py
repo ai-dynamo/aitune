@@ -20,7 +20,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, fields, is_dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import nvtx
 import torch
@@ -186,6 +186,9 @@ class BackendConfig:
 class Backend(ABC):
     """Backend interface for tuning a module."""
 
+    # Supported devices types
+    _devices: ClassVar[list[str]] = ["cpu", "cuda"]
+
     def __init__(self):
         """Initialize the backend."""
         self.state = BackendState.INIT
@@ -208,6 +211,7 @@ class Backend(ABC):
         After building, the backend should be activated.
         """
         if self.state == BackendState.INIT:
+            self._assert_device(device)
             self._set_device(device)
             ready_backend = self._build(module, graph_spec, data, cache_dir)
             self.state = BackendState.ACTIVE
@@ -382,6 +386,15 @@ class Backend(ABC):
         """
         pass
 
+    def _assert_device(self, device: torch.device):
+        """Assert the device of the backend.
+
+        Args:
+            device: The device to assert.
+        """
+        if device.type not in self._devices:
+            raise ValueError(f"Device {device.type} is not supported by the backend {self.name}")
+
     def _set_device(self, device: torch.device):
         """Set the device of the backend.
 
@@ -411,6 +424,7 @@ class DummyBackend(Backend):
     """Dummy backend for testing purposes."""
 
     is_jit = False
+    _devices = ["cpu", "cuda"]
 
     def key(self) -> str:
         """Returns the key of the backend."""

@@ -13,7 +13,6 @@
 # limitations under the License.
 """ONNX Exporter module for TensorRT backend."""
 
-import copy
 import logging
 from collections import defaultdict
 from itertools import zip_longest
@@ -117,8 +116,13 @@ class ONNXExporter:
         input_names = graph_spec.input_spec.get_names()
         output_names = graph_spec.output_spec.get_names()
 
-        args, kwargs = copy.deepcopy(sample)
-        args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=2)
+        args, kwargs = sample
+
+        if graph_spec.input_spec.has_batch_axis():
+            max_batch_size = graph_spec.get_max_batch_size()
+            batch_size = min(max_batch_size, 2)
+
+            args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=batch_size)
 
         ordered_kwargs = {}
         for kwarg in forward_args[1]:
