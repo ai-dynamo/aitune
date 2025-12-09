@@ -69,7 +69,7 @@ def test_tune_resnet_torch_eager():
         MODULE_REGISTRY.clear()
 
     if errors:
-        raise Exception("There were some errors:\n" + "\n".join(errors))
+        raise RuntimeError("There were some errors:\n" + "\n".join(errors))
 
 
 def test_tune_resnet_torch_eager_autocast():
@@ -88,7 +88,7 @@ def test_tune_resnet_torch_eager_autocast():
             MODULE_REGISTRY.clear()
 
     if errors:
-        raise Exception("There were some errors:\n" + "\n".join(errors))
+        raise RuntimeError("There were some errors:\n" + "\n".join(errors))
 
 
 if __name__ == "__main__":

@@ -102,7 +102,7 @@ def test_timer_elapsed_property():
 def test_timer_elapsed_before_start():
     """Test elapsed property before timer is started."""
     timer = Timer("test")
-    assert timer.elapsed == 0.0
+    assert timer.elapsed == pytest.approx(0.0)
 
 
 def test_timer_elapsed_after_completion():
@@ -165,7 +165,7 @@ def test_checkpoint_before_start(caplog):
     with caplog.at_level(logging.INFO):
         lap_time = timer.checkpoint("premature")
 
-    assert lap_time == 0.0
+    assert lap_time == pytest.approx(0.0)
     assert any("checkpoint() called before timer started" in record.message for record in caplog.records)
 
 
@@ -414,7 +414,7 @@ def test_timer_manual_stop_before_start(caplog):
     with caplog.at_level(logging.INFO):
         elapsed = timer.stop()
 
-    assert elapsed == 0.0
+    assert elapsed == pytest.approx(0.0)
     assert any("stop() called before timer started" in record.message for record in caplog.records)
 
 
@@ -569,7 +569,7 @@ def test_timer_without_context_manager():
     timer = Timer("test")
 
     # Elapsed should be 0 before start
-    assert timer.elapsed == 0.0
+    assert timer.elapsed == pytest.approx(0.0)
 
     # Checkpoint before start should warn
-    assert timer.checkpoint("test") == 0.0
+    assert timer.checkpoint("test") == pytest.approx(0.0)

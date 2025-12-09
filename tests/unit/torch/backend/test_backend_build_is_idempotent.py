@@ -35,7 +35,7 @@ class Latch:
 
     def signal(self):
         if self.latched:
-            raise Exception("Latch already latched - should be called only once.")
+            raise RuntimeError("Latch already latched - should be called only once.")
         self.latched = True
 
 

@@ -17,6 +17,7 @@ import time
 import pytest
 
 from aitune.torch import Module
+from aitune.torch.backend import TorchEagerBackend
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent
 from aitune.torch.task.profiling.measuring_stop_strategy import (
@@ -225,7 +226,7 @@ def test_profile_backend(batching: bool):
     model = ToyTorchModel()
     graph_spec = model.graph_spec(batch_sizes=[1])
 
-    class MockBackend:
+    class MockBackend(TorchEagerBackend):
         def __init__(self, model):
             self.model = model
 

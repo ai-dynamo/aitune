@@ -81,7 +81,7 @@ def test_tune_resnet_torchao():
         finally:
             MODULE_REGISTRY.clear()
     if errors:
-        raise Exception("There were some errors:\n" + "\n".join(errors))
+        raise RuntimeError("There were some errors:\n" + "\n".join(errors))
 
 
 if __name__ == "__main__":

@@ -217,7 +217,7 @@ class Backend(ABC):
             self.state = BackendState.ACTIVE
             return ready_backend
         else:
-            raise Exception(f"Backend {self.name} build should be called only once")
+            raise RuntimeError(f"Backend {self.name} build should be called only once")
 
     @nvtx.annotate(domain="AITune", color="black")
     def activate(self):
@@ -226,9 +226,9 @@ class Backend(ABC):
         After activating, the backend should be ready to do inference.
         """
         if self.state == BackendState.INIT:
-            raise Exception(f"Cannot activate backend {self.name}, backend should be built first")
+            raise RuntimeError(f"Cannot activate backend {self.name}, backend should be built first")
         if self.state == BackendState.DEPLOYED:
-            raise Exception(f"Cannot activate backend {self.name}, backend is already deployed")
+            raise RuntimeError(f"Cannot activate backend {self.name}, backend is already deployed")
 
         if self.state == BackendState.INACTIVE or self.state == BackendState.CHECKPOINT_LOADED:
             self._activate()
@@ -240,11 +240,11 @@ class Backend(ABC):
         After deactivating, the backend cannot be used to do inference.
         """
         if self.state == BackendState.INIT:
-            raise Exception(f"Cannot deactivate backend {self.name}, backend should be built first")
+            raise RuntimeError(f"Cannot deactivate backend {self.name}, backend should be built first")
         if self.state == BackendState.DEPLOYED:
-            raise Exception(f"Cannot deactivate backend {self.name}, backend is already deployed")
+            raise RuntimeError(f"Cannot deactivate backend {self.name}, backend is already deployed")
         if self.state == BackendState.CHECKPOINT_LOADED:
-            raise Exception(f"Cannot deactivate backend {self.name}, backend has already been deployed")
+            raise RuntimeError(f"Cannot deactivate backend {self.name}, backend has already been deployed")
 
         if self.state == BackendState.ACTIVE:
             self._deactivate()
@@ -260,7 +260,7 @@ class Backend(ABC):
             device: The device to deploy the backend on.
         """
         if self.state != BackendState.CHECKPOINT_LOADED:
-            raise Exception(f"Cannot deploy backend {self.name}, backend should be loaded from a checkpoint")
+            raise RuntimeError(f"Cannot deploy backend {self.name}, backend should be loaded from a checkpoint")
 
         self._set_device(device)
         self._deploy()
@@ -277,7 +277,7 @@ class Backend(ABC):
             Any: The result of the inference.
         """
         if self.state != BackendState.ACTIVE and self.state != BackendState.DEPLOYED:
-            raise Exception(f"Cannot run inference, backend {self.name} should be activated first")
+            raise RuntimeError(f"Cannot run inference, backend {self.name} should be activated first")
 
         return self._infer(*args, **kwargs)
 

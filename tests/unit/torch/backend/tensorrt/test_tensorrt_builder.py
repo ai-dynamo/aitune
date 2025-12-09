@@ -226,6 +226,7 @@ def test_build_create_config_kwargs(tmp_path):
     """Test _build_create_config_kwargs method."""
     input_onnx_path = tmp_path / "input_model.onnx"
     output_path = tmp_path / "output_model.plan"
+    timing_cache = tmp_path / "timing.cache"
     builder = TensorRTBuilder(input_onnx_path=input_onnx_path, output_path=output_path)
 
     # Mock trt.MemoryPoolType.WORKSPACE
@@ -257,7 +258,7 @@ def test_build_create_config_kwargs(tmp_path):
             optimization_level=5,
             compatibility_level=1,
             profiles=profiles,
-            timing_cache="/tmp/timing.cache",
+            timing_cache=str(timing_cache),
             enable_tf32=True,
         )
 
@@ -267,7 +268,7 @@ def test_build_create_config_kwargs(tmp_path):
         assert kwargs["builder_optimization_level"] == 5
         assert kwargs["hardware_compatibility_level"] == 1
         assert kwargs["tf32"] is True
-        assert kwargs["load_timing_cache"] == "/tmp/timing.cache"
+        assert kwargs["load_timing_cache"] == str(timing_cache)
 
 
 @pytest.mark.skipif(

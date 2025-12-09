@@ -184,7 +184,7 @@ class PatchedModule:
         _to_hist(f"Tuning in dry-run module: {str(current)}")
         strategy.tune_dry_run(current.__wrapped__, current._name, graph_spec, data, device, cache_dir)
         if failure := random.random() < config.dry_run_failure_probability:
-            raise Exception(f"Tuning failed in dry-run mode with probability {failure:.2f}")
+            raise RuntimeError(f"Tuning failed in dry-run mode with probability {failure:.2f}")
 
     def _tune(self, device, current, strategy, graph_spec, cache_dir, data):
         """Tune the module.
