@@ -204,6 +204,19 @@ class PatchedModule:
         cls_name = self._name.split(" ")[0]
         return cls_name in config.skip_modules
 
+    def _forward_router(self, wrapped, instance, args, kwargs):
+        """Route forward calls to the appropriate state-specific handler.
+
+        This method serves as a stable wrapper throughout the module's lifecycle.
+        This design is necessary for compatibility with models that internally cache references
+        to module.forward wrappers. Since the wrapper object itself never changes, cached
+        references remain valid across state transitions.
+        """
+        forward_func = self._forward_routing.get(self._state)
+        if forward_func is None:
+            raise ValueError(f"Module should not be called in the state: {self._state}")
+        return forward_func(wrapped, instance, args, kwargs)
+
     def _forward_init(self, wrapped, instance, args, kwargs):
         """Forward call for the first time.
 
@@ -337,12 +350,16 @@ class PatchedModule:
         return result
 
     def _proxy_forward(self):
-        """Proxy the forward calls.
+        """Proxy the forward calls with a stable wrapper.
 
-        We need to re-enable hooks, so that they will be called before and after proxied forward.
+        Replaces torch.nn.Module.forward method with a proxy forward that routes to the appropriate handler.
+        The substitution is done with a wrapt.decorator so that the replaced function has the same docstring,
+        signature and other attributes. This is crucial as some HF models perform self inspection for method arguments.
+
+        We re-enable hooks so that they are called before and after the proxied forward.
         """
         self.__wrapped__._forward_pre_hooks = self._original_forward_pre_hooks
-        self.__wrapped__.forward = self._proxy_forward_func
+        self.__wrapped__.forward = wrapt.decorator(self._forward_router)(self._original_forward)
         self.__wrapped__._forward_hooks = self._original_forward_hooks
 
     def _restore_original_forward(self):
@@ -451,17 +468,20 @@ class PatchedModule:
             to_unpatch.extend(child._children)
 
     def _update_state(self, state: ModuleState):
-        """Update the state of the module and update the forward.
+        """Update the state of the module and its forward method.
 
-        Replaces torch.nn.Module.forward method with a proxy forward according to the object state. The substitution
-        is done with a wrapt.decorator so that the replaced function has same docstring, signature and other attributes.
-        This is crucial as some HF models perform self inspection for method arguments.
+        For states with custom forward handlers (INIT, RECORDING, TUNED), this method
+        installs a proxy forward that routes to the appropriate handler. For other states,
+        the original forward is restored.
+
+        Args:
+            state: The new state of the module
         """
         self._state = state
-        self._restore_original_forward()
-        if replacement_func := self._forward_routing.get(state):
-            self._proxy_forward_func = wrapt.decorator(replacement_func)(self.__wrapped__.forward)
+        if state in self._forward_routing:
             self._proxy_forward()
+        else:
+            self._restore_original_forward()
 
     @staticmethod
     def print_hierarchy(sink=print):

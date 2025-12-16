@@ -44,7 +44,7 @@ class Patcher:
     _original_module_init: Callable | None = None
 
     # Packages that should not be patched to avoid conflicts with JIT compilation
-    _blacklisted_packages = {
+    _exclude_packages = {
         "torch.jit",
         "torch._inductor",
         "torch._dynamo",
@@ -53,6 +53,16 @@ class Patcher:
         "torch.export._trace",
         "torch.export._export",
     }
+
+    # Container modules that should not be patched - they're organizational only, no computation
+    # and can be created dynamically during forward passes via slicing
+    _exclude_modules = (
+        torch.nn.ModuleList,
+        torch.nn.ModuleDict,
+        torch.nn.Sequential,
+        torch.nn.ParameterList,
+        torch.nn.ParameterDict,
+    )
 
     @classmethod
     def patch_torch(cls):
@@ -103,8 +113,12 @@ class Patcher:
         If automatic patching is used, all modules, even those for internal torch use, will be intercepted.
         Those have to be rejected, otherwise JIT compilation will fail.
         """
+        # Skip container modules
+        if isinstance(module, cls._exclude_modules):
+            return False
+
         module_info = inspect.getmodule(module.__class__)
-        if module_info is not None and module_info.__package__ in cls._blacklisted_packages:
+        if module_info is not None and module_info.__package__ in cls._exclude_packages:
             return False
         return True
 
