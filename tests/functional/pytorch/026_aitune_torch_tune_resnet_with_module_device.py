@@ -18,7 +18,8 @@
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
 # ///
-
+import logging
+from logging import basicConfig
 
 import timm
 import torch
@@ -66,4 +67,5 @@ def test_resnet50():
 
 
 if __name__ == "__main__":
+    basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     test_resnet50()
