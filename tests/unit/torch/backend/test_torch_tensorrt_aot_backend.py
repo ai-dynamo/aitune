@@ -241,7 +241,7 @@ def test_full_run_toy_model_linear(torch_device: torch.device, tmp_path: Path):
     assert output.shape == (2, 5)
 
 
-@pytest.mark.skip(reason="This test is to document a bug in the backend")
+@pytest.mark.skip(reason="Currently not supported by Torch-TRT https://github.com/pytorch/TensorRT/issues/767")
 @requires_cuda
 def test_conditional_model(torch_device, tmp_path: Path):
     model = ToyTorchConditionalModel().to(torch_device)

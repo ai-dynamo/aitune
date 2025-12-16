@@ -85,7 +85,7 @@ class StableDiffusionBatchedBackend:
         logger.info("Starting Stable Diffusion backend with batching")
 
         self.pipeline = None
-        self.model_name = config.get("Backend", {}).get("model_name", "stabilityai/stable-diffusion-2-1")
+        self.model_name = config.get("Backend", {}).get("model_name", "stabilityai/stable-diffusion-3-medium-diffusers")
         self.max_batch_size = config.get("Backend", {}).get("max_batch_size", 4)
         self.batch_timeout = config.get("Backend", {}).get("batch_timeout", 2.0)  # seconds
         self.force_tune = config.get("Backend", {}).get("force_tune", False)

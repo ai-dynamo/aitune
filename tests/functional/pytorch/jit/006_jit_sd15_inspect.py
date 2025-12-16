@@ -11,12 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test JIT tuning with patch decorator on Stable Diffusion 2.1."""
+"""Test JIT tuning with patch decorator on Stable Diffusion 1.5."""
 
 # /// script
 # dependencies = ["diffusers", "transformers"]
 # scope = "always"
 # allow_failure = false
+# use_gated_hf_token = true
+# additional_tags = ["mem/80g"]
 # ///
 
 import os
@@ -31,12 +33,14 @@ import aitune.torch.jit.enable_inspection as inspection  # noqa: F401
 
 
 def create_model():
-    pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16)
+    pipe = StableDiffusionPipeline.from_pretrained(
+        "stable-diffusion-v1-5/stable-diffusion-v1-5", torch_dtype=torch.float16
+    )
     pipe.to("cuda")
     return pipe
 
 
-def test_jit_sd21():
+def test_jit_sd15():
     prompt = "A fluffy, orange tabby cat with bright green eyes is captured mid-air, pouncing playfully on a vibrant red ball of yarn"
     pipe = create_model()
 
@@ -50,8 +54,8 @@ def test_jit_sd21():
 
     output_dir = Path(os.environ.get("AITUNE_OUTPUT_DIR", "output"))
     output_dir.mkdir(parents=True, exist_ok=True)
-    html_path = output_dir / "inspect_sd21.html"
-    inspection.save_report(html_path, "SD21")
+    html_path = output_dir / "inspect_sd15.html"
+    inspection.save_report(html_path, "SD15")
 
     assert html_path.exists(), f"HTML file {html_path} was not created"
 
@@ -65,7 +69,7 @@ def test_jit_sd21():
     assert "<body>" in html_content, "HTML file missing body section"
 
     # Assert model name appears in HTML
-    assert "Model: SD21" in html_content, "Model name 'SD21' not found in HTML"
+    assert "Model: SD15" in html_content, "Model name 'SD15' not found in HTML"
 
     # Assert title contains expected text
     assert "AITune Model Inspector" in html_content, "Expected title not found in HTML"
@@ -95,4 +99,4 @@ def test_jit_sd21():
 
 if __name__ == "__main__":
     basicConfig(level=INFO, force=True)
-    test_jit_sd21()
+    test_jit_sd15()

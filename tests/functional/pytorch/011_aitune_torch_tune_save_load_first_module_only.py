@@ -17,6 +17,8 @@
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
+# use_gated_hf_token = true
+# additional_tags = ["mem/80g"]
 # ///
 
 import gc
@@ -38,7 +40,7 @@ logger = getLogger(__name__)
 PROMPT = "a photo of a cat sitting on a windowsill, natural lighting, detailed fur, photorealistic"
 
 
-def _get_pipeline(model_name: str = "stabilityai/stable-diffusion-2-1", device: str = "cuda"):
+def _get_pipeline(model_name: str = "stable-diffusion-v1-5/stable-diffusion-v1-5", device: str = "cuda"):
     """Get a pretrained Flux model from HuggingFace.
 
     Args:

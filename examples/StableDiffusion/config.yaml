@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 Backend:
-  model_name: "stabilityai/stable-diffusion-2-1"
+  model_name: "stabilityai/stable-diffusion-3-medium-diffusers"
   max_batch_size: 4
   batch_timeout: 2.0
   pretrained: true

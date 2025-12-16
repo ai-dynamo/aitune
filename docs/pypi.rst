@@ -115,10 +115,10 @@ Then initialize the pipeline:
 .. code-block:: python
 
     import aitune.torch as ait
-    from diffusers import StableDiffusionPipeline
+    from diffusers import DiffusionPipeline
 
     # Initialize pipeline
-    pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1")
+    pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers")
     pipe.to("cuda")
 
 Next, `inspect` the pipeline components and display the summary:
@@ -166,7 +166,7 @@ And load the tuned pipeline directly
 
 .. code-block:: python
 
-    pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1")
+    pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers")
     pipe.to("cuda")
     ait.load(pipe, "tuned_pipe.pt")
 

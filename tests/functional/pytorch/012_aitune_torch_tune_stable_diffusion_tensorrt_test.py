@@ -17,7 +17,7 @@
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
-# additional_tags = ["gpu/a100"]
+# use_gated_hf_token = true
 # ///
 
 import tempfile
@@ -50,7 +50,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
     7. Saves generated images to verify functionality
     """
     # Test configuration
-    model_id = "stabilityai/stable-diffusion-2-1"
+    model_id = "stable-diffusion-v1-5/stable-diffusion-v1-5"
     prompt = "A futuristic cityscape with neon lights and flying cars"
     sizes = [(256, 256), (512, 512)]  # Multiple sizes for faster testing
     steps = 10  # Reduced steps for faster testing
@@ -75,7 +75,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt():
             modules_info = inspect(pipeline, input_data)
 
             # Get the all modules for tuning
-            modules = modules_info.get_modules()
+            modules = modules_info.get_modules(limit=1)
             assert len(modules) > 0, "Expected at least one module"
             for module in modules:
                 logger.info("Module: %s with execution time %s", module.name, module.total_execution_time)

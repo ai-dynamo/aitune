@@ -17,6 +17,8 @@
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
+# use_gated_hf_token = true
+# additional_tags = ["mem/80g"]
 # ///
 
 
@@ -27,7 +29,7 @@ from aitune.torch import inspect
 
 def test_inspect_stable_diffusion():
     # given
-    model_id = "stabilityai/stable-diffusion-2-1"
+    model_id = "stable-diffusion-v1-5/stable-diffusion-v1-5"
     pipe = diffusers.StableDiffusionPipeline.from_pretrained(model_id)
     pipe.to("cuda")
 
@@ -47,9 +49,9 @@ def test_inspect_stable_diffusion():
     # then - verify inspection
     modules_info.describe()
 
-    assert len(modules_info.get_modules()) == 4
+    assert len(modules_info.get_modules()) == 5
 
-    expected_module_names = {"unet", "decoder", "text_encoder", "post_quant_conv"}
+    expected_module_names = {"decoder", "unet", "text_encoder", "post_quant_conv", "safety_checker"}
     modules = modules_info.get_modules()
 
     assert len(modules) == len(expected_module_names)
@@ -59,7 +61,7 @@ def test_inspect_stable_diffusion():
     top_modules = modules_info.get_modules(min_execution_percentage=0.6)
     assert len(top_modules) == 1
     assert top_modules[0].name == "unet"
-    assert top_modules[0].execution_count == num_inference_steps * number_of_iterations
+    assert top_modules[0].execution_count == num_inference_steps * number_of_iterations + 1
     assert top_modules[0].total_execution_time > 0
     assert top_modules[0].average_execution_time > 0
     assert top_modules[0].total_execution_time < modules_info._total_execution_time

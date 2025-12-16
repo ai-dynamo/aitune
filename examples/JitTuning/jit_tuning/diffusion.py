@@ -28,7 +28,7 @@ DEFAULT_PROMPTS_FILE = Path(__file__).parent / "prompts.txt"
 logger = getLogger(__name__)
 
 models = [
-    "stabilityai/stable-diffusion-2-1",
+    "stabilityai/stable-diffusion-3-medium-diffusers",
     "stabilityai/stable-diffusion-xl-base-1.0",
     "black-forest-labs/FLUX.1-dev",
 ]

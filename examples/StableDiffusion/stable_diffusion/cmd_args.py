@@ -59,7 +59,7 @@ def parse_args():
     parser.add_argument(
         "--model-name",
         type=str,
-        default="stabilityai/stable-diffusion-2-1",
+        default="stabilityai/stable-diffusion-3-medium-diffusers",
         help="HuggingFace model name or path",
     )
     parser.add_argument(

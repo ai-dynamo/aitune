@@ -41,14 +41,14 @@ Shows how to tune ResNet models for image classification tasks. This example dem
 Demonstrates tuning of Stable Diffusion models for text-to-image generation. This example shows how to tune diffusion models for faster and more efficient image generation.
 
 - **Location**: [`StableDiffusion/`](./StableDiffusion/)
-- **Model**: Stable Diffusion 2.1 from HuggingFace
+- **Model**: Stable Diffusion 3 from HuggingFace
 - **Use Case**: Optimizing text-to-image diffusion models
 - **Key Features**:
   - Diffusion pipeline tuning
   - Customizable image generation parameters
   - Text prompt-based image synthesis
 - **More Info**:
-  - https://huggingface.co/stabilityai/stable-diffusion-2-1
+  - https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers
 
 
 ## FLUX

@@ -11,12 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test JIT tuning with patch decorator on Stable Diffusion 2.1."""
+"""Test JIT tuning with patch decorator on Stable Diffusion 1.5."""
 
 # /// script
 # dependencies = ["diffusers", "transformers"]
 # scope = "always"
 # allow_failure = false
+# use_gated_hf_token = true
+# additional_tags = ["mem/80g"]
 # ///
 
 import re
@@ -35,12 +37,14 @@ logger = getLogger(__name__)
 
 @patch_for_jit_tuning
 def create_model():
-    pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16)
+    pipe = StableDiffusionPipeline.from_pretrained(
+        "stable-diffusion-v1-5/stable-diffusion-v1-5", torch_dtype=torch.float16
+    )
     pipe.to("cuda")
     return pipe
 
 
-def test_jit_sd21():
+def test_jit_sd15():
     pipe = create_model()
 
     prompt = "A futuristic cityscape with neon lights and flying cars"
@@ -70,6 +74,7 @@ def test_jit_sd21():
     assert re.match(r".*UNet2DConditionModel.*state=tuned.*TensorRTBackend", history[2])
     assert re.match(r".*Conv2d.*state=tuned.*TensorRTBackend", history[3])
     assert re.match(r".*Decoder.*state=tuned.*TensorRTBackend", history[4])
+    assert re.match(r".*StableDiffusionSafetyChecker.*state=eager.*", history[5])
 
     logger.info("Testing inference with batch_size=1")
     start = perf_counter()
@@ -85,4 +90,4 @@ def test_jit_sd21():
 
 if __name__ == "__main__":
     basicConfig(level=INFO, force=True)
-    test_jit_sd21()
+    test_jit_sd15()

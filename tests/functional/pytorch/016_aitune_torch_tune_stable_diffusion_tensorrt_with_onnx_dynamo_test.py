@@ -17,7 +17,8 @@
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"
-# docker_image = "nvcr.io/nvidia/pytorch:25.08-py3"
+# use_gated_hf_token = true
+# additional_tags = ["mem/80g"]
 # ///
 
 import tempfile
@@ -49,7 +50,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt_dynamo():
     7. Saves generated images to verify functionality
     """
     # Test configuration
-    model_id = "stabilityai/stable-diffusion-2-1"
+    model_id = "stable-diffusion-v1-5/stable-diffusion-v1-5"
     prompt = "A futuristic cityscape with neon lights and flying cars"
     sizes = [(256, 256), (512, 512)]  # Multiple sizes for faster testing
     steps = 10  # Reduced steps for faster testing
@@ -74,7 +75,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt_dynamo():
             modules_info = inspect(pipeline, input_data)
 
             # Get the all modules for tuning
-            modules = modules_info.get_modules()
+            modules = modules_info.get_modules(limit=1)
             assert len(modules) > 0, "Expected at least one module"
 
             # Print modules info

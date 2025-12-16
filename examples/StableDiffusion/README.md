@@ -45,11 +45,11 @@ uv sync
 To tune the Stable Diffusion model, run:
 
 ```bash
-tune --model-name stabilityai/stable-diffusion-2-1 --prompt "A futuristic cityscape with neon lights"
+tune --model-name stabilityai/stable-diffusion-3-medium-diffusers --prompt "A futuristic cityscape with neon lights"
 ```
 
 You can customize the following parameters:
-- `--model-name`: HuggingFace model name or path (default: "stabilityai/stable-diffusion-2-1")
+- `--model-name`: HuggingFace model name or path (default: "stabilityai/stable-diffusion-3-medium-diffusers")
 - `--prompt`: Text prompt for image generation
 - `--negative-prompt`: Negative text prompt (default: "low quality, blurry")
 - `--height`: Height of the generated image (default: 512)
@@ -96,4 +96,4 @@ The service uses dynamic batching — requests are grouped and processed togethe
 
 The Stable Diffusion model is a text-to-image diffusion model that generates high-quality images from text descriptions. The model is trained on a large dataset of images and text, and can generate realistic images across various domains.
 
-For more information, visit the [Stable Diffusion model page on HuggingFace](https://huggingface.co/stabilityai/stable-diffusion-2-1).
+For more information, visit the [Stable Diffusion model page on HuggingFace](https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers).

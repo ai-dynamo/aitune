@@ -65,3 +65,4 @@ stable_diffusion = ["**/*"]
 
 [tool.aitune]
 additional_tags = ["mem/80g"]
+use_gated_hf_token = true

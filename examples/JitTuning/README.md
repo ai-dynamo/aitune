@@ -51,11 +51,11 @@ uv run resnet
 
 ### Diffusion models
 
-#### Stable Diffusion 2.1
+#### Stable Diffusion 3
 
 
 ```bash
-uv run diffusion --model stabilityai/stable-diffusion-2-1
+uv run diffusion --model stabilityai/stable-diffusion-3-medium-diffusers
 ```
 
 #### Stable Diffusion XL

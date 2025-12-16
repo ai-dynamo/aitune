@@ -55,6 +55,18 @@ def assert_torch_tensorrt():
         raise ImportError("torch-tensorrt is not installed. Please install `torch-tensorrt`.")
 
 
+def _is_primitive(value: Any) -> bool:
+    """Check if a value is a primitive type (int, float, str, bool, None).
+
+    Args:
+        value: The value to check
+
+    Returns:
+        True if the value is a primitive type, False otherwise
+    """
+    return isinstance(value, int | float | str | bool)
+
+
 @dataclass
 class TorchTensorRTAotBackendConfig(BackendConfig):
     """Configuration for TorchTensorRTAotBackend.
@@ -148,28 +160,7 @@ class TorchTensorRTAotBackend(Backend):
         # Set the device for the TensorRT backend compilation
         self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
 
-        # Create input signature for dynamic shapes
-        input_signature = []
-        for tensor_spec in graph_spec.input_spec.tensor_specs:
-            input_i = torch_tensorrt.Input(
-                min_shape=tensor_spec.min_shape,
-                opt_shape=tensor_spec.max_shape,
-                max_shape=tensor_spec.max_shape,
-                dtype=tensor_spec.dtype,
-                name=tensor_spec.name,
-            )
-
-            input_signature.append(input_i)
-
-        logger.info("Compile model with TensorRT.")
-        trt_model_compiled = torch_tensorrt.compile(
-            model,
-            ir=self._config.ir,
-            inputs=input_signature,
-            **asdict(self._config.compile_config),
-        )
-
-        # Note: torch export requires batch size to be grater then 1
+        # Note: torch export requires batch size to be greater then 1
         args, kwargs = data[0]
 
         if graph_spec.input_spec.has_batch_axis():
@@ -182,12 +173,46 @@ class TorchTensorRTAotBackend(Backend):
             logger.info("Using pickle protocol %d.", self._config.pickle_protocol)
             save_kwargs["pickle_protocol"] = self._config.pickle_protocol
 
+        # Create input signature for dynamic shapes
+        logger.info("Preparing input signature for dynamic shapes.")
+        input_signature = []
+        for tensor_spec in graph_spec.input_spec.tensor_specs:
+            input_i = torch_tensorrt.Input(
+                min_shape=tensor_spec.min_shape,
+                opt_shape=tensor_spec.max_shape,
+                max_shape=tensor_spec.max_shape,
+                dtype=tensor_spec.dtype,
+                name=tensor_spec.name,
+            )
+            input_signature.append(input_i)
+
+        # Extract non-tensor kwargs to pass as kwarg_inputs
+        kwarg_inputs = {}
+        for key, value in kwargs.items():
+            if value is None:
+                continue
+            # Skip tensors - they should be in input_signature
+            if isinstance(value, torch.Tensor):
+                continue
+            # Pass primitives and other types (lists, dicts, etc.) as kwarg_inputs
+            if _is_primitive(value):
+                kwarg_inputs[key] = [value]
+            else:
+                kwarg_inputs[key] = value
+
+        logger.info("Compile model with Torch-TensorRT.")
+        trt_model_compiled = torch_tensorrt.compile(
+            model,
+            ir=self._config.ir,
+            inputs=input_signature,
+            kwarg_inputs=kwarg_inputs,
+            **asdict(self._config.compile_config),
+        )
+
         self._exported_model_path = self._create_exported_model_path(cache_dir)
         torch_tensorrt.save(
             trt_model_compiled,
             self._exported_model_path.as_posix(),
-            arg_inputs=args,
-            kwargs_inputs=kwargs,
             **save_kwargs,
         )
 

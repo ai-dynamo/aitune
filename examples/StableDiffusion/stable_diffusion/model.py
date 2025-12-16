@@ -14,10 +14,10 @@
 """Model utilities for Stable Diffusion pipeline."""
 
 import torch
-from diffusers import StableDiffusionPipeline
+from diffusers import DiffusionPipeline
 
 
-def get_pipeline(model_name: str = "stabilityai/stable-diffusion-2-1", device: str = "cuda"):
+def get_pipeline(model_name: str = "stabilityai/stable-diffusion-3-medium-diffusers", device: str = "cuda"):
     """Get a pretrained Stable Diffusion model from HuggingFace.
 
     Args:
@@ -25,8 +25,8 @@ def get_pipeline(model_name: str = "stabilityai/stable-diffusion-2-1", device: s
         device: Device to load the model on
 
     Returns:
-        StableDiffusionPipeline: The loaded Stable Diffusion pipeline
+        DiffusionPipeline: The loaded Stable Diffusion pipeline
     """
-    pipe = StableDiffusionPipeline.from_pretrained(model_name, torch_dtype=torch.float16)
-    pipe.to(device)
+    pipe = DiffusionPipeline.from_pretrained(model_name, torch_dtype=torch.float16)
+    pipe.to(device, dtype=torch.float16)
     return pipe
