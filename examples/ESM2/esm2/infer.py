@@ -31,7 +31,7 @@ def infer(model_path: str = "esm2_tuned"):
 
     setup_logging(level=LOG_LEVEL)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         logger.info("Loading model...")
         model = get_model()
         pipe = ait.load(model, model_path)

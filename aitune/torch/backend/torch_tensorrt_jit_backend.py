@@ -192,7 +192,7 @@ class TorchTensorRTJitBackend(Backend):
             torch.autocast(
                 device_type=str(self._device), dtype=self._config.autocast_dtype, enabled=self._config.autocast_enabled
             ),
-            torch.inference_mode(),
+            torch.no_grad(),
         ):
             return self._compiled_module(*args, **kwargs)
 

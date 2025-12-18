@@ -77,7 +77,7 @@ def run(
     durations = []
     for _ in range(num_batches):
         start_time = perf_counter()
-        with torch.inference_mode():
+        with torch.no_grad():
             resnet(torch.randn(max_batch_size, 3, 224, 224, device="cuda"))
         durations.append(perf_counter() - start_time)
 

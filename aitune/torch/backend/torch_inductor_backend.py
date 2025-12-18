@@ -177,7 +177,7 @@ class TorchInductorBackend(Backend):
                 dtype=self._config.autocast_dtype,
                 enabled=self._config.autocast_enabled,
             ),
-            torch.inference_mode(),
+            torch.no_grad(),
         ):
             self._orig_module.to(self._device)
             self._compiled_module = torch.compile(
@@ -214,7 +214,7 @@ class TorchInductorBackend(Backend):
                 dtype=self._config.autocast_dtype,
                 enabled=self._config.autocast_enabled,
             ),
-            torch.inference_mode(),
+            torch.no_grad(),
         ):
             res = self._compiled_module(*args, **kwargs)
             if isinstance(res, torch.Tensor) and res.dtype != self._output_dtype and self._output_dtype is not None:

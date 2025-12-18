@@ -133,7 +133,7 @@ def run(
     logger.info("Generating %s images and saving them to folder: %s", len(prompts), output_dir)
     for batch in dataloader:
         start_time = perf_counter()
-        with torch.inference_mode():
+        with torch.no_grad():
             images = pipe(batch).images
         durations.append(perf_counter() - start_time)
 

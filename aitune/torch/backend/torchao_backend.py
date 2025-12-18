@@ -193,7 +193,7 @@ class TorchAOBackend(Backend):
         Returns:
             Any: The result of the inference.
         """
-        with torch.inference_mode():
+        with torch.no_grad():
             return self._quant_module(*args, **kwargs)
 
     def _deactivate(self):
@@ -248,6 +248,6 @@ class TorchAOBackend(Backend):
 
         quantize_(model, config=self._config.quantization_config, device=self._device)
         self._quant_module = torch.compile(model=model, mode="max-autotune")
-        with torch.inference_mode():
+        with torch.no_grad():
             for args, kwargs in self._data:
                 self._quant_module(*args, **kwargs)

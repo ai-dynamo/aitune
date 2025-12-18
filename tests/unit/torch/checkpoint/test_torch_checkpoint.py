@@ -77,7 +77,7 @@ def _tune_save_load_helper(model_factory, samples, output_dir, wrap_model_fn, ch
     """
     model = model_factory()
     test_data = samples.repeat(10, 1)  # make a bs=10
-    with torch.inference_mode():
+    with torch.no_grad():
         expected = model(test_data)
 
     wrapped_model = wrap_model_fn(model)
@@ -88,7 +88,7 @@ def _tune_save_load_helper(model_factory, samples, output_dir, wrap_model_fn, ch
     model = model_factory()
     model_loaded = checkpoint.load(model, output_dir, device_map=device_map)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         preds = model_loaded(test_data)
     torch.testing.assert_close(preds, expected, rtol=1e-3, atol=1e-3)
 
@@ -290,7 +290,7 @@ def test_tune_save_load_complex_pipeline(complex_pipeline_factory, sample, torch
     """Test tuning, saving and loading a pipeline."""
     pipeline = complex_pipeline_factory()
     test_data = sample.repeat(10, 1)  # make a bs=10
-    with torch.inference_mode():
+    with torch.no_grad():
         expected = pipeline(test_data)
 
     pipeline.net.linear1 = Module(
@@ -310,7 +310,7 @@ def test_tune_save_load_complex_pipeline(complex_pipeline_factory, sample, torch
     pipeline.net.linear1 = checkpoint.load(pipeline.net.linear1, "linear1_test.ait", device_map={"": torch_device})
     pipeline.net.linear2 = checkpoint.load(pipeline.net.linear2, "linear2_test.ait", device_map={"": torch_device})
 
-    with torch.inference_mode():
+    with torch.no_grad():
         preds = pipeline(test_data)
     torch.testing.assert_close(preds, expected, rtol=1e-4, atol=1e-4)
 
@@ -320,7 +320,7 @@ def test_tune_save_load_complex_pipeline_with_device_map(complex_pipeline_factor
     """Test tuning, saving and loading a pipeline."""
     pipeline = complex_pipeline_factory()
     test_data = sample.repeat(10, 1)  # make a bs=10
-    with torch.inference_mode():
+    with torch.no_grad():
         expected = pipeline(test_data)
 
     pipeline.net.linear1 = Module(
@@ -340,7 +340,7 @@ def test_tune_save_load_complex_pipeline_with_device_map(complex_pipeline_factor
     pipeline.net.linear1 = checkpoint.load(pipeline.net.linear1, "linear1_test.ait", device_map={})
     pipeline.net.linear2 = checkpoint.load(pipeline.net.linear2, "linear2_test.ait", device_map={})
 
-    with torch.inference_mode():
+    with torch.no_grad():
         preds = pipeline(test_data)
     torch.testing.assert_close(preds, expected, rtol=1e-4, atol=1e-4)
 

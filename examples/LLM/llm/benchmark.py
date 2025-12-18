@@ -129,7 +129,7 @@ def benchmark(
         inputs = get_random_inputs(isl, tokenizer, model.device, batch_size=1)
         gen_args["max_new_tokens"] = osl
         times = []
-        with torch.inference_mode():
+        with torch.no_grad():
             for _ in range(iterations):
                 start = perf_counter()
                 torch.cuda.synchronize()

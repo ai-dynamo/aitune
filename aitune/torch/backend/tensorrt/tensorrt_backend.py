@@ -535,7 +535,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Returns:
             Model outputs
         """
-        with torch.inference_mode():
+        with torch.no_grad():
             try:
                 if self._context is None:
                     raise RuntimeError("Engine not loaded. Call build() first.")

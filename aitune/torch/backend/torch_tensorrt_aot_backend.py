@@ -238,7 +238,7 @@ class TorchTensorRTAotBackend(Backend):
         if self._opt_module is None:
             raise RuntimeError("Module is not activated. Please call activate() first.")
 
-        with torch.inference_mode():
+        with torch.no_grad():
             return self._opt_module(*args, **kwargs)
 
     def _deactivate(self):

@@ -134,7 +134,7 @@ class E5LargeBatchedBackend:
             def generate_batch_embeddings():
                 if self.model is None:
                     raise ValueError("Model is not initialized")
-                with torch.inference_mode():
+                with torch.no_grad():
                     return self.model.encode(
                         sentences=all_sentences,
                         batch_size=len(all_sentences),

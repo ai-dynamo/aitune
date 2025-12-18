@@ -47,7 +47,7 @@ def test_resnet50_with_cuda_graphs_invalidation():
     model.eval()
 
     sample = torch.randn((3, 224, 224), device=device)
-    with torch.inference_mode():
+    with torch.no_grad():
         vanilla_benchmark = simple_benchmark(model, sample, batch_sizes=[1, 2, 4, 8, 16, 32, 64])
 
     # Create TensorRT backend with CUDA graphs enabled

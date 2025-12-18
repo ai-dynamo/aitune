@@ -56,7 +56,7 @@ def tune(
 ):
     setup_logging(level=LOG_LEVEL)
     logger.info("Tuning ESM2 model...")
-    with torch.inference_mode():
+    with torch.no_grad():
         if batch_sizes is None:
             batch_sizes = [1, 2, 4, 8, 16, 32]
 

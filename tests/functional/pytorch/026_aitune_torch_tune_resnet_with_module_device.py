@@ -49,7 +49,7 @@ def test_resnet50():
     model.register_forward_pre_hook(pre_hook)
     model.register_forward_hook(post_hook)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         expected_arg_max = model()  # notice: not argument - it will be added by pre hook
 
     # when

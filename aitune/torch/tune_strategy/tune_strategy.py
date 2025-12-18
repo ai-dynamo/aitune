@@ -106,7 +106,7 @@ class TuneStrategy(ABC):
             return
 
         self._logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
-        with torch.inference_mode():
+        with torch.no_grad():
             for args, kwargs in data:
                 outputs = backend.infer(*deepcopy(args), **deepcopy(kwargs))
                 check_output_correctness(outputs, name=f"{name}.{graph_spec.name}.{backend.describe()}.output")

@@ -59,7 +59,7 @@ def _tune_save_load_helper(model_factory, samples, output_dir, wrap_model_fn):
     model = model_factory()
     model.eval()
     test_data = samples.repeat(10, 1, 1, 1)
-    with torch.inference_mode():
+    with torch.no_grad():
         expected = model(test_data)
 
     wrapped_model = wrap_model_fn(model)
@@ -75,7 +75,7 @@ def _tune_save_load_helper(model_factory, samples, output_dir, wrap_model_fn):
     model_loaded = load(model, output_dir, disable_external_logging=False)
 
     logger.info("Verifying model")
-    with torch.inference_mode():
+    with torch.no_grad():
         preds = model_loaded(test_data)
     torch.testing.assert_close(preds, expected, rtol=1e-3, atol=1e-3)
 

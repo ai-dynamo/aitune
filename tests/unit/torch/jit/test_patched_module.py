@@ -58,7 +58,7 @@ def test_jit_dry_run_success(mock_trt_backend, torch_device):
     with prepare_for_jit_tuning():
         pipeline = ToyComplexPipeline().to(torch_device)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         for x in pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device):
             pipeline(x)
 
@@ -80,7 +80,7 @@ def test_jit_dry_run_failure(mock_trt_backend, torch_device):
     with prepare_for_jit_tuning():
         pipeline = ToyComplexPipeline().to(torch_device)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         for x in pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device):
             pipeline(x)
 
@@ -110,7 +110,7 @@ def test_jit_tuning_success(mock_trt_backend, torch_device, scenario):
     elif scenario == "backend_build_error":
         mock_trt_backend.infer.side_effect = Exception("Backend build error")
 
-    with torch.inference_mode():
+    with torch.no_grad():
         for x in pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device):
             pipeline(x)
 
@@ -160,7 +160,7 @@ def test_jit_tuning_with_module_hooks(mock_trt_backend, torch_device, mocker):
     pipeline.register_forward_hook(hook)
     pipeline.register_forward_pre_hook(pre_hook)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         pipeline(torch.randn(1))
         assert hooks_history == ["pre_hook", "forward_hook"]
         hooks_history.clear()
@@ -189,7 +189,7 @@ def test_jit_tuning_graph_break(mock_trt_backend, torch_device, mocker):
     inputs = pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device)
 
     mocker.patch("aitune.torch.jit.patched_module.GraphBreakDetector.detect", side_effect=GraphBreakException)
-    with torch.inference_mode():
+    with torch.no_grad():
         for x in inputs:
             pipeline(x)
 
@@ -213,7 +213,7 @@ def test_jit_tuning_skip_module(mock_trt_backend, torch_device, mocker):
         pipeline = ToyComplexPipeline().to(torch_device)
 
     inputs = pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device)
-    with torch.inference_mode():
+    with torch.no_grad():
         for x in inputs:
             pipeline(x)
 
@@ -241,7 +241,7 @@ def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend, torch_d
 
     inputs = pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         for x in inputs:
             pipeline(x)
 
@@ -341,7 +341,7 @@ def test_jit_tuning_skip_module_when_not_match_min_parameters(mock_trt_backend, 
         pipeline = ToyComplexPipeline().to(torch_device)
 
     inputs = pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device)
-    with torch.inference_mode():
+    with torch.no_grad():
         for x in inputs:
             pipeline(x)
 

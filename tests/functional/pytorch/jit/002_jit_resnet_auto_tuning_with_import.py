@@ -37,7 +37,7 @@ def test_jit_resnet():
         resnet(torch.randn(2, 3, 224, 224, device="cuda"))
         resnet(torch.randn(16, 3, 224, 224, device="cuda"))
 
-    with torch.inference_mode():
+    with torch.no_grad():
         for _ in range(5):
             batch()
 

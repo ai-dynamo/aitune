@@ -58,7 +58,7 @@ def test_jit_resnet():
     resnet.register_forward_pre_hook(pre_hook)
     resnet.register_forward_hook(post_hook)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         for _ in range(2):
             resnet()  # notice: not argument - it will be added by pre hook
 

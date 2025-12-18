@@ -84,7 +84,7 @@ def tune(
         for batch_size, args, kwargs in samples_generator(dataset, batch_sizes, max_num_batches_per_batch_size):
             with global_context:
                 global_context.set(BATCH_SIZE_KEY, batch_size)
-                with torch.inference_mode():
+                with torch.no_grad():
                     func(*args, **kwargs)
 
         for module in MODULE_REGISTRY.modules.values():

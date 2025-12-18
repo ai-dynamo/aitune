@@ -55,14 +55,12 @@ def test_jit_sd15():
     config.detect_graph_breaks = True
 
     def batch():
-        with torch.no_grad():
-            for size in [256, 512]:
-                pipe([prompt] * 1, num_inference_steps=1, height=size, width=size)
-                pipe([prompt] * 2, num_inference_steps=1, height=size, width=size)
+        for size in [256, 512]:
+            pipe([prompt] * 1, num_inference_steps=1, height=size, width=size)
+            pipe([prompt] * 2, num_inference_steps=1, height=size, width=size)
 
-    with torch.inference_mode():
-        for _ in range(3):
-            batch()
+    for _ in range(3):
+        batch()
 
     # Capture the print_hierarchy output
     history = []

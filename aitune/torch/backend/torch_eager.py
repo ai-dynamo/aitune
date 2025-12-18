@@ -122,7 +122,7 @@ class TorchEagerBackend(Backend):
         Returns:
             Any: The result of the inference.
         """
-        with torch.inference_mode():
+        with torch.no_grad():
             with torch.autocast(
                 device_type=str(self._device),
                 dtype=self._config.autocast_dtype,

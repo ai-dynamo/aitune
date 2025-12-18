@@ -74,7 +74,7 @@ def inspect(
     for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
         synchronize()
         start_time = time.perf_counter()
-        with torch.inference_mode():
+        with torch.no_grad():
             inference_function(*args, **kwargs)
         synchronize()
         end_time = time.perf_counter()
@@ -97,7 +97,7 @@ def _warmup(obj: Callable, dataset: DatasetLike | DataLoaderFactory | torch.Tens
     """Warmup the model by running it on a few samples."""
     for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
         synchronize()
-        with torch.inference_mode():
+        with torch.no_grad():
             obj(*args, **kwargs)
         synchronize()
 

@@ -154,5 +154,5 @@ class RecordingModule:
             # raise helpful error message
             raise RuntimeError(
                 "Cannot copy model inputs. Model is not in inference mode. "
-                "Tip: you can use \n---\nwith torch.inference_mode():\n    model()\n---\ncontext manager to fix this."
+                "Tip: you can use \n---\nwith torch.no_grad():\n    model()\n---\ncontext manager to fix this."
             ) from e

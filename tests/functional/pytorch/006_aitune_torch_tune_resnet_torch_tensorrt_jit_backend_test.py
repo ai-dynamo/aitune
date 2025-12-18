@@ -46,7 +46,7 @@ def do_test(backend: TorchTensorRTJitBackend, dtype: torch.dtype):
     data = torch.randn((3, 224, 224), device="cuda").to(dtype)
     sample = torch.randn((2, 3, 224, 224), device="cuda").to(dtype)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         out = model(sample)
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 

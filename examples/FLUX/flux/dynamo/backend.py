@@ -168,7 +168,7 @@ class FluxBatchedBackend:
             def generate_batch_images():
                 if self.pipeline is None:
                     raise ValueError("Pipeline is not initialized")
-                with torch.inference_mode():
+                with torch.no_grad():
                     return self.pipeline(
                         prompt=prompts,
                         height=height,

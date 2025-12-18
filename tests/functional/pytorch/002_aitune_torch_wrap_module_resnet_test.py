@@ -38,7 +38,7 @@ def test_resnet50():
     model.eval()
     data = torch.randn((2, 3, 224, 224), device=device)
 
-    with torch.inference_mode():
+    with torch.no_grad():
         out = model(data)
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 

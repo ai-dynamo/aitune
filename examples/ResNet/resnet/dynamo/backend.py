@@ -150,7 +150,7 @@ class ResNetBatchedBackend:
 
             # Run inference on the batch
             def generate_batch_predictions():
-                with torch.inference_mode():
+                with torch.no_grad():
                     output = self.model(batch_tensor)
                     probabilities = torch.nn.functional.softmax(output, dim=1)
                     confidences, predicted = torch.max(probabilities, 1)

@@ -69,5 +69,5 @@ def main():
 
 
 if __name__ == "__main__":
-    with torch.inference_mode():
+    with torch.no_grad():
         main()

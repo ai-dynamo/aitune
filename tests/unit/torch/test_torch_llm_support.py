@@ -264,7 +264,7 @@ def test_llm_dynamic_cache(cache_type, registered_type, torch_device):
     kv_cache = cache_type()
 
     model = Module(model, "test_llm")  # wrap the model with AITune
-    with torch.inference_mode():
+    with torch.no_grad():
         result, kv_cache = model.generate(prompt_token_ids, kv_cache, max_seq_len=MAX_SEQ_LEN)
 
     if registered_type:

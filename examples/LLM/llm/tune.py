@@ -97,7 +97,7 @@ def tune_model(model, tokenizer, cache="static"):
     def pipe(messages):
         inputs = tokenizer(messages, return_tensors="pt", padding=True)
         inputs = {k: v.to("cuda") for k, v in inputs.items()}
-        with torch.inference_mode():
+        with torch.no_grad():
             return model.generate(**inputs, **generate_args)
 
     aitune(pipe, ["2+2?", "How big is the universe?"], batch_sizes=[1, 2], device="cuda", dry_run=False)

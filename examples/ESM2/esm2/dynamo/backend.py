@@ -142,7 +142,7 @@ class ESM2BatchedBackend:
             def generate_batch_sequences():
                 if self.pipeline is None:
                     raise ValueError("Pipeline is not initialized")
-                with torch.inference_mode():
+                with torch.no_grad():
                     return self.pipeline(**input_data)
 
             loop = get_or_create_event_loop()
