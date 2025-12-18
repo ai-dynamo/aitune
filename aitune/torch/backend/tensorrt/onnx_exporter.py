@@ -119,8 +119,8 @@ class ONNXExporter:
         args, kwargs = sample
 
         if graph_spec.input_spec.has_batch_axis():
-            max_batch_size = graph_spec.get_max_batch_size()
-            batch_size = min(max_batch_size, 2)
+            min_batch_size = graph_spec.get_min_batch_size() or 2
+            batch_size = max(min_batch_size, 2)
 
             args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=batch_size)
 

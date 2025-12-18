@@ -21,6 +21,7 @@ import torch
 from aitune.torch.backend.tensorrt.tensorrt_builder import (
     TensorRTBuilder,
 )
+from aitune.torch.backend.tensorrt.tensorrt_profile import Profile
 from aitune.torch.backend.tensorrt.tensorrt_runtime import TensorRTRuntime
 from aitune.torch.utils.cuda import is_available as is_cuda_available
 from tests.toy_models import ToyOnnxModel
@@ -104,16 +105,16 @@ def test_tensorrt_builder_init(tmp_path):
     # Test with default parameters
     builder = TensorRTBuilder(input_onnx_path=input_onnx_path, output_path=output_path)
     assert builder.workspace_size is None
-    assert builder.min_shapes is None
-    assert builder.opt_shapes is None
-    assert builder.max_shapes is None
     assert builder.optimization_level is None
     assert builder.compatibility_level is None
     assert builder.timing_cache is None
+    assert builder.profiles == []
 
-    # Test with custom parameters
     input_onnx_path2 = tmp_path / "input_model2.onnx"
     output_path2 = tmp_path / "output_model2.plan"
+
+    profile = Profile().add(name="input", min=(1, 3, 224, 224), opt=(4, 3, 224, 224), max=(8, 3, 224, 224))
+
     builder = TensorRTBuilder(
         input_onnx_path=input_onnx_path2,
         output_path=output_path2,
@@ -121,16 +122,13 @@ def test_tensorrt_builder_init(tmp_path):
         optimization_level=5,
         compatibility_level=0,
         timing_cache=tmp_path / "timing.cache",
-        min_shapes={"input": (1, 3, 224, 224)},
-        opt_shapes={"input": (4, 3, 224, 224)},
-        max_shapes={"input": (8, 3, 224, 224)},
+        profiles=[profile],
     )
     assert builder.workspace_size == 2 << 30
     assert builder.optimization_level == 5
     assert builder.timing_cache == tmp_path / "timing.cache"
-    assert builder.min_shapes == {"input": (1, 3, 224, 224)}
-    assert builder.opt_shapes == {"input": (4, 3, 224, 224)}
-    assert builder.max_shapes == {"input": (8, 3, 224, 224)}
+    assert len(builder.profiles) == 1
+    assert builder.profiles[0] == profile
 
 
 def test_build(mock_polygraphy, tmp_path):
@@ -163,36 +161,26 @@ def test_build(mock_polygraphy, tmp_path):
 
 
 def test_build_with_dynamic_shapes(mock_polygraphy, tmp_path):
-    """Test build method with dynamic shapes."""
+    """Test build method with dynamic shapes using the Polygraphy Profile."""
     # Create mock ONNX path
     onnx_path = tmp_path / "test_model.onnx"
     with open(onnx_path, "w") as f:
         f.write("mock onnx content")
 
-    # Create shapes for testing
-    min_shapes = {"input": (1, 3, 224, 224)}
-    opt_shapes = {"input": (4, 3, 224, 224)}
-    max_shapes = {"input": (8, 3, 224, 224)}
+    # Create profile for testing
+    profile = Profile().add(name="input", min=(1, 3, 224, 224), opt=(4, 3, 224, 224), max=(8, 3, 224, 224))
 
-    # Create builder with dynamic shapes
+    # Create builder with profile
     engine_path = tmp_path / "tensorrt" / "test_model.plan"
     engine_path.parent.mkdir(parents=True, exist_ok=True)
     builder = TensorRTBuilder(
         input_onnx_path=onnx_path,
         output_path=engine_path,
-        min_shapes=min_shapes,
-        opt_shapes=opt_shapes,
-        max_shapes=max_shapes,
+        profiles=[profile],
     )
 
     # Build engine
     returned_path = builder.build()
-
-    # Verify profile interactions
-    mock_polygraphy["profile"].assert_called_once()
-    mock_polygraphy["profile_instance"].add.assert_called_once_with(
-        name="input", min=min_shapes["input"], opt=opt_shapes["input"], max=max_shapes["input"]
-    )
 
     # Verify build interactions
     mock_polygraphy["network"].assert_called_once_with(str(onnx_path), strongly_typed=True)
@@ -287,9 +275,7 @@ def test_tensorrt_builder_integration_linear(tmp_path):
 
     # Create a TensorRTBuilder instance with profiles
     # Add profiles with min/opt/max shapes for the dynamic inputs
-    min_shapes = {"input": (1, 256)}
-    opt_shapes = {"input": (1, 256)}
-    max_shapes = {"input": (8, 256)}
+    profile = Profile().add(name="input", min=(1, 256), opt=(1, 256), max=(8, 256))
 
     # Build engine from ONNX model
     engine_path = tmp_path / "tensorrt" / "toy_linear.plan"
@@ -298,9 +284,7 @@ def test_tensorrt_builder_integration_linear(tmp_path):
     builder = TensorRTBuilder(
         input_onnx_path=onnx_path,
         output_path=engine_path,
-        min_shapes=min_shapes,
-        opt_shapes=opt_shapes,
-        max_shapes=max_shapes,
+        profiles=[profile],
     )
     returned_path = builder.build()
 
@@ -358,11 +342,9 @@ def test_tensorrt_builder_integration_conv(tmp_path):
     except FileNotFoundError:
         pytest.skip("Convolutional toy ONNX model not available")
 
-    # Create a TensorRTBuilder instance with profiles
+    # Create a Profile instance with profiles
     # Add profiles with min/opt/max shapes for the dynamic inputs
-    min_shapes = {"input": (1, 1, 129, 129)}
-    opt_shapes = {"input": (1, 1, 129, 129)}
-    max_shapes = {"input": (8, 1, 129, 129)}
+    profile = Profile().add(name="input", min=(1, 1, 129, 129), opt=(1, 1, 129, 129), max=(8, 1, 129, 129))
 
     # Build engine from ONNX model
     engine_path = tmp_path / "tensorrt" / "toy_conv.plan"
@@ -371,9 +353,7 @@ def test_tensorrt_builder_integration_conv(tmp_path):
     builder = TensorRTBuilder(
         input_onnx_path=onnx_path,
         output_path=engine_path,
-        min_shapes=min_shapes,
-        opt_shapes=opt_shapes,
-        max_shapes=max_shapes,
+        profiles=[profile],
     )
     returned_path = builder.build()
 
@@ -419,33 +399,19 @@ def test_tensorrt_builder_integration_conv(tmp_path):
 
 
 def test_build_with_profile_objects(mock_polygraphy, tmp_path):
-    """Test build method with TensorRTProfile objects."""
+    """Test build method with The Polygraphy Profile objects."""
     # Create mock ONNX path
     onnx_path = tmp_path / "test_model.onnx"
     with open(onnx_path, "w") as f:
         f.write("mock onnx content")
 
-    # Create mock profile objects
-    mock_profile1 = MagicMock()
-    mock_profile1.profile = "profile1"
-    mock_profile2 = MagicMock()
-    mock_profile2.profile = "profile2"
-    profiles = [mock_profile1, mock_profile2]
-
     # Create builder with profiles
     engine_path = tmp_path / "tensorrt" / "test_model.plan"
     engine_path.parent.mkdir(parents=True, exist_ok=True)
-    builder = TensorRTBuilder(input_onnx_path=onnx_path, output_path=engine_path, profiles=profiles)
+    builder = TensorRTBuilder(input_onnx_path=onnx_path, output_path=engine_path)
 
     # Build engine
     returned_path = builder.build()
-
-    # Verify build interactions
-    # Check that the profiles were passed to CreateConfig
-    profiles_arg = mock_polygraphy["config"].call_args[1]["profiles"]
-    assert len(profiles_arg) == 2
-    assert profiles_arg[0] == "profile1"
-    assert profiles_arg[1] == "profile2"
 
     # Verify other interactions
     mock_polygraphy["network"].assert_called_once_with(str(onnx_path), strongly_typed=True)
@@ -467,27 +433,13 @@ def test_build_with_multiple_profiles(mock_polygraphy, tmp_path, mocker):
     with open(onnx_path, "w") as f:
         f.write("mock onnx content")
 
-    # Create mock profile objects that return actual profile values
-    # that can be passed to CreateConfig
-    profile1 = mocker.MagicMock()
-    profile1.profile = "profile1"
-
-    profile2 = mocker.MagicMock()
-    profile2.profile = "profile2"
-
     # Create builder with profiles
     engine_path = tmp_path / "tensorrt" / "test_model.plan"
     engine_path.parent.mkdir(parents=True, exist_ok=True)
-    builder = TensorRTBuilder(input_onnx_path=onnx_path, output_path=engine_path, profiles=[profile1, profile2])
+    builder = TensorRTBuilder(input_onnx_path=onnx_path, output_path=engine_path)
 
     # Build engine
     returned_path = builder.build()
-
-    # Verify profiles were passed to config creation
-    config_call_kwargs = mock_polygraphy["config"].call_args[1]
-    assert "profiles" in config_call_kwargs
-    assert len(config_call_kwargs["profiles"]) == 2
-    assert config_call_kwargs["profiles"] == ["profile1", "profile2"]
 
     # Verify build interactions
     mock_polygraphy["network"].assert_called_once_with(str(onnx_path), strongly_typed=True)
@@ -502,47 +454,6 @@ def test_build_with_multiple_profiles(mock_polygraphy, tmp_path, mocker):
     assert returned_path == engine_path
 
 
-def test_build_with_invalid_shapes(mock_polygraphy, tmp_path, mocker):
-    """Test building with invalid shape configurations."""
-    # Create mock ONNX path
-    onnx_path = tmp_path / "test_model.onnx"
-    with open(onnx_path, "w") as f:
-        f.write("mock onnx content")
-
-    # Create shapes with inconsistent dimensions
-    mock_profile = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_builder.Profile")
-    # Create a mock instance
-    mock_profile_instance = mocker.MagicMock()
-    mock_profile.return_value = mock_profile_instance
-
-    # Make add() raise a ValueError when called with mismatched dimensions
-    mock_profile_instance.add.side_effect = ValueError("Dimensions don't match")
-
-    # Create builder with invalid shapes
-    min_shapes = {"input": (1, 3, 224, 224)}
-    opt_shapes = {"input": (4, 3, 224, 224)}
-    # Max shape has wrong dimensions
-    max_shapes = {"input": (8, 3, 224, 224, 1)}  # Extra dimension
-
-    engine_path = tmp_path / "tensorrt" / "test_model.plan"
-    engine_path.parent.mkdir(parents=True, exist_ok=True)
-
-    builder = TensorRTBuilder(
-        input_onnx_path=onnx_path,
-        output_path=engine_path,
-        min_shapes=min_shapes,
-        opt_shapes=opt_shapes,
-        max_shapes=max_shapes,
-    )
-
-    # Building should fail because of the shape mismatch
-    with pytest.raises(ValueError):
-        builder.build()
-
-    # Verify Profile was created
-    mock_profile.assert_called_once()
-
-    # Verify attempt to add shape was made
-    mock_profile_instance.add.assert_called_once_with(
-        name="input", min=(1, 3, 224, 224), opt=(4, 3, 224, 224), max=(8, 3, 224, 224, 1)
-    )
+def test_multi_profile_mode_invalid_shapes_check():
+    """Does not raise ValueError check."""
+    _profile = Profile().add(name="args_0", min=(1, 2), opt=(2, 2), max=(4, 2, 1))

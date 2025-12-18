@@ -167,6 +167,15 @@ class TensorSpec:
             max_batch_size = max(max_batch_size, self.max_shape[axis])
         return max_batch_size
 
+    def get_min_batch_size(self) -> int | None:
+        """Get min batch size from tensor spec."""
+        min_batch_size = float("inf")
+        for axis in self.get_batch_axis_multipliers().keys():
+            min_batch_size = min(min_batch_size, self.min_shape[axis])
+        if min_batch_size == float("inf"):
+            return None
+        return int(min_batch_size)
+
     def has_batch_axis(self) -> bool:
         """Check if tensor has batch axis."""
         return any(isinstance(dim, str) and dim.startswith("batch") for dim in self.shape)

@@ -20,7 +20,7 @@ import nvtx.nvtx as nvtx
 
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "aitune"
 DEFAULT_MIN_NUM_SAMPLES = 100
-DEFAULT_MAX_NUM_SAMPLES_STORED = 1
+DEFAULT_MAX_NUM_SAMPLES_STORED = 1  # you can set infinity if you want to store/use all samples
 
 DEFAULT_PICKLE_PROTOCOL = 5
 
@@ -60,7 +60,7 @@ class AITuneConfig:
         """Initialize AITuneConfig."""
         self._cache_dir: Path = aitune_cache_dir()
         self._min_num_samples: int = DEFAULT_MIN_NUM_SAMPLES
-        self._max_num_samples_stored: int = DEFAULT_MAX_NUM_SAMPLES_STORED
+        self._max_num_samples_stored: int | float = DEFAULT_MAX_NUM_SAMPLES_STORED
         self._device_after_tuning: str = DEFAULT_DEVICE_AFTER_TUNING
         self.strict_mode: bool = True
         self.enable_hf_integrations: bool = True
@@ -78,7 +78,7 @@ class AITuneConfig:
         self._min_num_samples = min_num_samples
 
     @property
-    def max_num_samples_stored(self) -> int:
+    def max_num_samples_stored(self) -> int | float:
         """Get the minimum number of samples to collect before optimizing."""
         return self._max_num_samples_stored
 

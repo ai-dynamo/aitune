@@ -56,6 +56,20 @@ class TensorRTProfile:
         )
         return self
 
+    def __eq__(self, other: "TensorRTProfile") -> bool:
+        """Check if two TensorRTProfiles are equal."""
+        return hash(self) == hash(other)
+
+    def __hash__(self) -> int:
+        """Hash the TensorRTProfile."""
+        return hash(
+            tuple(
+                sorted(
+                    ((name, min_, opt_, max_) for name, (min_, opt_, max_) in self._profile.items()), key=lambda x: x[0]
+                )
+            )
+        )
+
     @property
     def profile(self) -> Profile:
         """Get the underlying Polygraphy Profile.
@@ -80,3 +94,20 @@ class TensorRTProfile:
             Official string representation
         """
         return repr(self._profile)
+
+    def to_dict(self) -> dict:
+        """Convert TensorRTProfile to dictionary."""
+        return self.profile_to_dict(self._profile)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TensorRTProfile":
+        """Create TensorRTProfile from dictionary."""
+        profile = cls()
+        for name, (min_, opt_, max_) in data.items():
+            profile.add_input_shape(name, tuple(min_), tuple(opt_), tuple(max_))
+        return profile
+
+    @classmethod
+    def profile_to_dict(cls, profile: Profile) -> dict:
+        """Convert Polygraphy Profile to dictionary."""
+        return {name: [min_, opt_, max_] for name, (min_, opt_, max_) in profile.items()}

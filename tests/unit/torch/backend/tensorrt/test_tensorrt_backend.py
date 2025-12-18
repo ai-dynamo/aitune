@@ -17,8 +17,10 @@ from typing import cast
 
 import pytest
 import torch
+from polygraphy.backend.trt import Profile
 
-from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend.tensorrt.tensorrt_backend import ProfileMode, TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -423,10 +425,6 @@ def test_build_with_dynamic_shapes(tmp_path, mocker):
     mock_builder_class.return_value = mock_builder
     mock_runtime_class.return_value = mock_runtime
 
-    # Set dynamic shapes - different values for min, opt, and max
-    min_shapes = {"args_0": (1, IN_FEATURES)}
-    max_shapes = {"args_0": (4, IN_FEATURES)}
-
     # Create backend with dynamic shapes
     backend = TensorRTBackend()
 
@@ -441,12 +439,12 @@ def test_build_with_dynamic_shapes(tmp_path, mocker):
     # Build the model
     _ = backend.build(model, graph_spec, samples, device=device, cache_dir=tmp_path)
 
-    # Verify builder was initialized with correct dynamic shapes
+    # Verify builder was initialized with profiles
     mock_builder_class.assert_called_once()
     call_kwargs = mock_builder_class.call_args.kwargs
-    assert call_kwargs["min_shapes"] == min_shapes
-    assert call_kwargs["opt_shapes"] == max_shapes
-    assert call_kwargs["max_shapes"] == max_shapes
+    assert "profiles" in call_kwargs
+    assert isinstance(call_kwargs["profiles"], list)
+    assert len(call_kwargs["profiles"]) == 1  # Single profile with min/max range
 
     # Verify the TensorRTBuilder.build method was called
     mock_builder.build.assert_called_once()
@@ -511,12 +509,12 @@ def test_build_without_dynamic_shapes(tmp_path, mocker):
     # Build the model
     _ = backend.build(model, graph_spec, samples, device=device, cache_dir=tmp_path)
 
-    # Verify builder was initialized with default shape settings (None)
+    # Verify builder was initialized with profiles
     mock_builder_class.assert_called_once()
     call_kwargs = mock_builder_class.call_args.kwargs
-    assert call_kwargs["min_shapes"] == {"args_0": (2, IN_FEATURES)}
-    assert call_kwargs["opt_shapes"] == {"args_0": (2, IN_FEATURES)}
-    assert call_kwargs["max_shapes"] == {"args_0": (2, IN_FEATURES)}
+    assert "profiles" in call_kwargs
+    assert isinstance(call_kwargs["profiles"], list)
+    assert len(call_kwargs["profiles"]) == 1  # Single profile for single batch size
 
     # Verify the TensorRTBuilder.build method was called
     mock_builder.build.assert_called_once()
@@ -566,3 +564,297 @@ def test_serialization(tmp_path):
     # Verify inference results match
     loaded_output = loaded_backend.infer(inputs[0])
     torch.testing.assert_close(reference_output, loaded_output, rtol=1e-2, atol=1e-2)
+
+
+def test_get_profiles_single_profile():
+    """Test the _get_profiles_from_shapes method."""
+    backend = TensorRTBackend()
+    backend._graph_spec = GraphSpec(
+        name="test_graph",
+        input_spec=SampleMetadata.from_inputs((torch.randn(1, IN_FEATURES),), {}),
+        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),)),
+    )
+    backend._graph_spec.input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, IN_FEATURES),), {}))
+    backend._graph_spec.input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(4, IN_FEATURES),), {}))
+
+    profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=[])
+    assert len(profiles) == 1
+
+    pr = profiles[0]
+    assert pr["args_0"].min == (1, IN_FEATURES)
+    assert pr["args_0"].opt == (4, IN_FEATURES)
+    assert pr["args_0"].max == (4, IN_FEATURES)
+
+
+def test_profiles_eq():
+    profile1 = TensorRTProfile().add_input_shape("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    profile2 = TensorRTProfile().add_input_shape("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    assert profile1 == profile2
+    assert hash(profile1) == hash(profile2)
+
+    profile1 = TensorRTProfile().add_input_shape("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    profile2 = TensorRTProfile().add_input_shape("args_1", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    assert profile1 != profile2
+
+    profile1 = TensorRTProfile().add_input_shape("args_0", (2, IN_FEATURES), (2, IN_FEATURES), (2, IN_FEATURES))
+    profile2 = TensorRTProfile().add_input_shape("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    assert profile1 != profile2
+
+
+def test_exception_when_max_num_samples_stored_is_set_to_1():
+    with pytest.raises(ValueError):
+        TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+
+
+@pytest.fixture
+def global_config_max_num_samples_all(mocker):
+    mock_global_config = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.global_config")
+    mock_global_config.max_num_samples_stored = float("inf")
+    return mock_global_config
+
+
+def test_get_profiles_multiple_profiles(global_config_max_num_samples_all):
+    """Test the get_profiles method with multiple profiles."""
+
+    backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+    backend._graph_spec = GraphSpec(
+        name="test_graph",
+        input_spec=SampleMetadata.from_inputs((torch.randn(1, IN_FEATURES),), {}, batch_size=1),
+        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),), batch_size=1),
+    )
+    backend._graph_spec.input_spec.update_shapes_seen(
+        SampleMetadata.from_inputs((torch.randn(8, IN_FEATURES),), {}, batch_size=8)
+    )
+
+    profiles = backend.get_profiles(
+        graph_spec=backend._graph_spec,
+        data=[
+            ((torch.randn(1, IN_FEATURES),), {}),
+            ((torch.randn(8, IN_FEATURES),), {}),
+        ],
+    )
+    assert len(profiles) == 2
+
+    pr = profiles[0]
+    assert pr["args_0"].min == (1, IN_FEATURES)
+    assert pr["args_0"].opt == (1, IN_FEATURES)
+    assert pr["args_0"].max == (1, IN_FEATURES)
+
+    pr = profiles[1]
+    assert pr["args_0"].min == (8, IN_FEATURES)
+    assert pr["args_0"].opt == (8, IN_FEATURES)
+    assert pr["args_0"].max == (8, IN_FEATURES)
+
+
+def test_get_profiles_multiple_profiles_with_kwargs(global_config_max_num_samples_all):
+    """Test the _get_profiles method with multiple profiles."""
+
+    samples = [
+        ((torch.randn(1, IN_FEATURES),), {"input_tensor": torch.randn(1, IN_FEATURES)}),
+        ((torch.randn(8, IN_FEATURES),), {"input_tensor": torch.randn(8, IN_FEATURES)}),
+    ]
+
+    backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+    backend._graph_spec = GraphSpec(
+        name="test_graph",
+        input_spec=SampleMetadata.from_inputs(samples[0][0], samples[0][1], batch_size=1),
+        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),), batch_size=1),
+    )
+    backend._graph_spec.input_spec.update_shapes_seen(
+        SampleMetadata.from_inputs(samples[1][0], samples[1][1], batch_size=8)
+    )
+
+    profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=samples)
+    assert len(profiles) == 2
+
+    pr = profiles[0]
+    assert pr["args_0"].min == (1, IN_FEATURES)
+    assert pr["args_0"].opt == (1, IN_FEATURES)
+    assert pr["args_0"].max == (1, IN_FEATURES)
+
+    assert pr["kwargs_input_tensor"].min == (1, IN_FEATURES)
+    assert pr["kwargs_input_tensor"].opt == (1, IN_FEATURES)
+    assert pr["kwargs_input_tensor"].max == (1, IN_FEATURES)
+
+    pr = profiles[1]
+    assert pr["args_0"].min == (8, IN_FEATURES)
+    assert pr["args_0"].opt == (8, IN_FEATURES)
+    assert pr["args_0"].max == (8, IN_FEATURES)
+
+    assert pr["kwargs_input_tensor"].min == (8, IN_FEATURES)
+    assert pr["kwargs_input_tensor"].opt == (8, IN_FEATURES)
+    assert pr["kwargs_input_tensor"].max == (8, IN_FEATURES)
+
+
+def test_get_profiles_with_user_provided_profiles():
+    """Test the _get_profiles method with user provided profiles."""
+
+    config_profiles = [
+        TensorRTProfile().add_input_shape(
+            name="args_0", min_shape=(1, IN_FEATURES), opt_shape=(2, IN_FEATURES), max_shape=(4, IN_FEATURES)
+        )
+    ]
+    backend = TensorRTBackend(TensorRTBackendConfig(profiles=config_profiles))
+    backend._graph_spec = GraphSpec(
+        name="test_graph",
+        input_spec=SampleMetadata.from_inputs((torch.randn(1, IN_FEATURES),), {}),
+        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),)),
+    )
+    profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=[])
+    assert len(profiles) == 1
+    assert profiles[0]["args_0"].min == (1, IN_FEATURES)
+    assert profiles[0]["args_0"].opt == (2, IN_FEATURES)
+    assert profiles[0]["args_0"].max == (4, IN_FEATURES)
+
+
+def test_save_and_load_trt_optimization_profiles(tmp_path, global_config_max_num_samples_all):
+    backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+    backend._graph_spec = GraphSpec(
+        name="test_graph",
+        input_spec=SampleMetadata.from_inputs((torch.randn(1, IN_FEATURES),), {}, batch_size=1),
+        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),), batch_size=1),
+    )
+    backend._graph_spec.input_spec.update_shapes_seen(
+        SampleMetadata.from_inputs((torch.randn(8, IN_FEATURES),), {}, batch_size=8)
+    )
+    samples = [
+        ((torch.randn(1, IN_FEATURES),), {"input_tensor": torch.randn(1, IN_FEATURES)}),
+        ((torch.randn(8, IN_FEATURES),), {"input_tensor": torch.randn(8, IN_FEATURES)}),
+    ]
+    profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=samples)
+    assert len(profiles) == 2
+
+    trt_optimization_profiles_path = backend._save_trt_optimization_profiles(profiles, tmp_path)
+
+    assert trt_optimization_profiles_path.exists()
+
+    loaded_profiles = backend._load_trt_optimization_profiles(trt_optimization_profiles_path)
+
+    assert len(loaded_profiles) == 2
+    assert loaded_profiles[0]["args_0"].min == (1, IN_FEATURES)
+    assert loaded_profiles[0]["args_0"].opt == (1, IN_FEATURES)
+    assert loaded_profiles[0]["args_0"].max == (1, IN_FEATURES)
+
+    assert loaded_profiles[1]["args_0"].min == (8, IN_FEATURES)
+    assert loaded_profiles[1]["args_0"].opt == (8, IN_FEATURES)
+    assert loaded_profiles[1]["args_0"].max == (8, IN_FEATURES)
+
+
+def test_set_optimization_profiles_01(mocker, global_config_max_num_samples_all):
+    backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+    backend._trt_optimization_profiles = [
+        Profile().add("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES)),
+        Profile().add("args_0", (8, IN_FEATURES), (8, IN_FEATURES), (8, IN_FEATURES)),
+    ]
+    mock_context = mocker.MagicMock()
+    backend._context = mock_context
+    backend._cuda_stream = mocker.MagicMock()
+    backend._cuda_stream.cuda_stream = "stream"
+
+    backend._set_optimization_profiles({"args_0": torch.randn(1, IN_FEATURES)})
+    mock_context.set_optimization_profile_async.assert_called_once_with(0, "stream")
+
+    backend._set_optimization_profiles({"args_0": torch.randn(8, IN_FEATURES)})
+    mock_context.set_optimization_profile_async.assert_called_with(1, "stream")
+
+
+def test_set_optimization_profiles_additional_kwargs(mocker, global_config_max_num_samples_all):
+    backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+    backend._trt_optimization_profiles = [
+        # first profile with args and kwargs
+        Profile().add("args_0", (1, 32), (1, 32), (1, 32)).add("kwargs_input_tensor", (1, 64), (1, 64), (1, 64)),
+        # second profile without kwargs_input_tensor
+        Profile().add("args_0", (8, 128), (8, 128), (8, 128)),
+        # third profile with additional args
+        Profile().add("args_0", (8, 256), (8, 256), (8, 256)).add("args_1", (8, 256), (8, 256), (8, 256)),
+    ]
+    mock_context = mocker.MagicMock()
+    backend._context = mock_context
+    backend._cuda_stream = mocker.MagicMock()
+    backend._cuda_stream.cuda_stream = "stream"
+
+    backend._set_optimization_profiles({
+        "args_0": torch.randn(1, 32),
+        "kwargs_input_tensor": torch.randn(1, 64),
+    })
+    mock_context.set_optimization_profile_async.assert_called_once_with(0, "stream")
+
+    backend._set_optimization_profiles({"args_0": torch.randn(8, 128)})
+    mock_context.set_optimization_profile_async.assert_called_with(1, "stream")
+
+    backend._set_optimization_profiles({"args_0": torch.randn(8, 256), "args_1": torch.randn(8, 256)})
+    mock_context.set_optimization_profile_async.assert_called_with(2, "stream")
+
+    with pytest.raises(RuntimeError):
+        backend._set_optimization_profiles({"args_0": torch.randn(8, 128), "kwargs_input_tensor": torch.randn(8, 64)})
+
+    with pytest.raises(RuntimeError):
+        backend._set_optimization_profiles({"args_0": torch.randn(8, 256)})
+
+
+def test_set_optimization_profiles_for_user_provided_profiles(mocker):
+    backend = TensorRTBackend(
+        config=TensorRTBackendConfig(
+            profiles=[
+                # we do not use build() in this test, so we provide profiles directly below
+            ]
+        )
+    )
+    backend._trt_optimization_profiles = [
+        # first profile with args and kwargs
+        Profile().add("args_0", (1, 32), (1, 32), (1, 64)).add("kwargs_input_tensor", (1, 32), (1, 64), (1, 64)),
+        # second profile without kwargs_input_tensor
+        Profile().add("args_0", (8, 128), (8, 128), (8, 256)),
+        # third profile with additional args
+        Profile().add("args_0", (8, 256), (8, 256), (8, 512)).add("args_1", (8, 256), (8, 256), (8, 512)),
+    ]
+    mock_context = mocker.MagicMock()
+    backend._context = mock_context
+    backend._cuda_stream = mocker.MagicMock()
+    backend._cuda_stream.cuda_stream = "stream"
+
+    backend._set_optimization_profiles({
+        "args_0": torch.randn(1, 48),
+        "kwargs_input_tensor": torch.randn(1, 48),
+    })
+    mock_context.set_optimization_profile_async.assert_called_once_with(0, "stream")
+
+    backend._set_optimization_profiles({"args_0": torch.randn(8, 192)})
+    mock_context.set_optimization_profile_async.assert_called_with(1, "stream")
+
+    backend._set_optimization_profiles({"args_0": torch.randn(8, 384), "args_1": torch.randn(8, 384)})
+    mock_context.set_optimization_profile_async.assert_called_with(2, "stream")
+
+    with pytest.raises(RuntimeError):
+        backend._set_optimization_profiles({"args_0": torch.randn(2, 48), "kwargs_input_tensor": torch.randn(2, 48)})
+
+    with pytest.raises(RuntimeError):
+        backend._set_optimization_profiles({"args_0": torch.randn(1, 48), "kwargs_input_tensor": torch.randn(1, 31)})
+
+    with pytest.raises(RuntimeError):
+        backend._set_optimization_profiles({"args_0": torch.randn(8, 257)})
+
+
+def test_tensorrt_backend_config_to_dict_with_profiles():
+    config = TensorRTBackendConfig(
+        profiles=[
+            TensorRTProfile()
+            .add_input_shape("args_0", (1, 32), (1, 32), (1, 32))
+            .add_input_shape("kwargs_input_tensor", (1, 64), (1, 64), (1, 64)),
+            TensorRTProfile().add_input_shape("args_0", (8, 128), (8, 128), (8, 128)),
+        ]
+    )
+    new_config = TensorRTBackendConfig.from_dict(config.to_dict())
+
+    assert len(new_config.profiles) == len(config.profiles)
+    assert "args_0" in new_config.profiles[0].profile
+    assert "kwargs_input_tensor" in new_config.profiles[0].profile
+
+    assert "args_0" in new_config.profiles[1].profile
+    assert "kwargs_input_tensor" not in new_config.profiles[1].profile
+
+
+def test_tensorrt_backend_config_to_dict_with_profiles_mode():
+    config = TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED)
+    new_config = TensorRTBackendConfig.from_dict(config.to_dict())
+    assert new_config.profiles == ProfileMode.SAMPLES_USED

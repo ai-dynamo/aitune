@@ -40,11 +40,8 @@ class TensorRTBuilder:
         optimization_level: int | None = None,
         compatibility_level: int | None = None,
         timing_cache: Path | None = None,
-        profiles: list[Any] | None = None,
+        profiles: list[Profile] | None = None,
         enable_tf32: bool = True,
-        min_shapes: dict[str, list[int] | tuple[int, ...]] | None = None,
-        opt_shapes: dict[str, list[int] | tuple[int, ...]] | None = None,
-        max_shapes: dict[str, list[int] | tuple[int, ...]] | None = None,
     ):
         """Initialize the TensorRT builder.
 
@@ -56,11 +53,8 @@ class TensorRTBuilder:
             optimization_level: TensorRT builder optimization level
             compatibility_level: TensorRT hardware compatibility level
             timing_cache: Path to TensorRT timing cache file
-            profiles: List of TensorRTProfile objects for optimization profiles
+            profiles: List of Profile objects for optimization profiles
             enable_tf32: Enable TF32 hardware acceleration
-            min_shapes: Dictionary of minimum input shapes
-            opt_shapes: Dictionary of optimal input shapes
-            max_shapes: Dictionary of maximum input shapes
         """
         self.input_onnx_path = input_onnx_path
         self.output_path = output_path
@@ -70,9 +64,6 @@ class TensorRTBuilder:
         self.timing_cache = timing_cache
         self.profiles = profiles or []
         self.enable_tf32 = enable_tf32
-        self.min_shapes = min_shapes
-        self.opt_shapes = opt_shapes
-        self.max_shapes = max_shapes
         self.system_monitor = SystemMonitor()
 
     def build(self) -> Path:
@@ -87,11 +78,8 @@ class TensorRTBuilder:
             # Prepare and validate inputs
             self._validate_onnx_file()
 
-            # Create TensorRT profiles
-            profiles = self._create_trt_profiles()
-
             # Build configuration
-            config = self._create_trt_config(profiles)
+            config = self._create_trt_config(self.profiles)
 
             # Create network, build and save engine
             network = self._create_trt_network()
@@ -114,38 +102,7 @@ class TensorRTBuilder:
         if not self.input_onnx_path.exists():
             raise FileNotFoundError(f"ONNX file not found: {self.input_onnx_path}")
 
-    def _create_trt_profiles(
-        self,
-    ) -> list:
-        """Create TensorRT optimization profiles.
-
-        Returns:
-            List of TensorRT optimization profiles
-        """
-        with self.system_monitor.system_stats_context(log_label="TensorRT profile creation"):
-            profiles = []
-
-            # First, add profiles from the TensorRTProfile objects if provided
-            for profile_obj in self.profiles:
-                logger.info("Adding optimization profile from TensorRTProfile: %s", profile_obj)
-                profiles.append(profile_obj.profile)
-
-            # Then, create a profile from the shape dictionaries if provided and no profiles were added
-            if not profiles and any([self.min_shapes, self.opt_shapes, self.max_shapes]):
-                logger.info("Creating optimization profiles from shape dictionaries")
-                profile = Profile()
-                for name, min_shape in (self.min_shapes or {}).items():
-                    opt_shape = self.opt_shapes.get(name) if self.opt_shapes else min_shape
-                    max_shape = self.max_shapes.get(name) if self.max_shapes else opt_shape
-                    logger.info(
-                        "Adding profile for '%s': min=%s, opt=%s, max=%s", name, min_shape, opt_shape, max_shape
-                    )
-                    profile.add(name=name, min=min_shape, opt=opt_shape, max=max_shape)
-                profiles = [profile]
-
-            return profiles
-
-    def _create_trt_config(self, profiles: list) -> Any:
+    def _create_trt_config(self, profiles: list[Profile]) -> Any:
         """Create TensorRT config.
 
         Args:

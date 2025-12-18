@@ -15,14 +15,18 @@
 
 import contextlib
 import copy
+import json
 import logging
-from dataclasses import dataclass
+from collections import OrderedDict
+from dataclasses import asdict, dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar
 
 import nvtx
 import torch
 import torch.nn as nn
+from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
@@ -34,6 +38,7 @@ from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.backend.tensorrt.tensorrt_runtime import TensorRTRuntime
 from aitune.torch.backend.tensorrt.torch_output_allocator import TorchOutputAllocator
 from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig, TorchQuantizer
+from aitune.torch.config import config as global_config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda import set_device as cuda_set_device
@@ -72,9 +77,38 @@ class TensorRTRunner:
         self._engine_info = None
 
 
+class ProfileMode(Enum):
+    """Mode how TRT optimization profiles will be generated for TensorRT engine.
+
+    Attributes:
+        SINGLE: auto-generate single profile from graph spec, default mode.
+        SAMPLES_USED: auto-generated multiple profiles from shapes of samples used for tuning.
+    """
+
+    SINGLE = "single"
+    SAMPLES_USED = "samples_used"
+
+
 @dataclass
 class TensorRTBackendConfig(BackendConfig):
-    """Configuration for TensorRT backend."""
+    """Configuration for TensorRT backend.
+
+    Attributes:
+        use_dynamo: Whether to use torch.dynamo for export.
+        workspace_size: The workspace size for the TensorRT engine.
+        opset_version: The ONNX opset version to use for export.
+        optimization_level: The optimization level for the TensorRT engine.
+        compatibility_level: The compatibility level for the TensorRT engine.
+        timing_cache: The path to the timing cache for the TensorRT engine.
+        profiles: How TensorRT optimization profiles are generated.
+            - SINGLE: auto-generate a single profile from the graph spec (default).
+            - SAMPLES_USED: auto-generate multiple profiles from shapes of samples used for tuning.
+            - list[TensorRTProfile]: use user-provided profiles directly.
+        device: The device to use for the TensorRT engine.
+        quantization_config: The quantization configuration for the TensorRT engine.
+        enable_tf32: Whether to enable TF32 hardware acceleration.
+        use_cuda_graphs: Whether to use CUDA graphs for the TensorRT engine.
+    """
 
     use_dynamo: bool = True
     workspace_size: int | None = None
@@ -82,7 +116,7 @@ class TensorRTBackendConfig(BackendConfig):
     optimization_level: int | None = None
     compatibility_level: int | None = None
     timing_cache: Path | None = None
-    profiles: list[TensorRTProfile] | None = None
+    profiles: ProfileMode | list[TensorRTProfile] = ProfileMode.SINGLE
     device: str = "cuda"
     quantization_config: ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None = None
     enable_tf32: bool = True
@@ -95,7 +129,26 @@ class TensorRTBackendConfig(BackendConfig):
     @classmethod
     def from_dict(cls, state_dict: dict):
         """Convert dict to TensorRTBackendConfig."""
+        if "profiles" in state_dict:
+            state_dict["profiles"] = cls.profiles_from_dict(state_dict["profiles"])
         return cls(**state_dict)
+
+    @classmethod
+    def profiles_from_dict(cls, data: str | list[dict]) -> ProfileMode | list[TensorRTProfile]:
+        """Convert dict to list of TensorRTProfile."""
+        if isinstance(data, list):
+            return [TensorRTProfile.from_dict(profile) for profile in data]
+        return ProfileMode(data)
+
+    def to_dict(self) -> dict:
+        """Convert TensorRTBackendConfig to dictionary."""
+        state_dict = asdict(self)
+        if isinstance(self.profiles, list):
+            state_dict["profiles"] = [
+                TensorRTProfile.profile_to_dict(profile.profile) for profile in state_dict["profiles"]
+            ]
+
+        return state_dict
 
 
 class TensorRTBackend(Backend, TensorRTRunner):
@@ -111,6 +164,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
     # State dictionary keys
     STATE_TYPE = "type"
     STATE_ENGINE_PATH = "engine_path"
+    STATE_TRT_OPTIMIZATION_PROFILES_PATH = "trt_optimization_profiles_path"
     STATE_OUTPUT_OBJECT = "output_object"
     STATE_GRAPH_SPEC = "graph_spec"
     STATE_DEVICE = "device"
@@ -137,6 +191,15 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         self._config = config or TensorRTBackendConfig()
 
+        if self._config.profiles == ProfileMode.SAMPLES_USED and global_config.max_num_samples_stored <= 1:
+            raise ValueError(
+                """aitune.torch.config.max_num_samples_stored is set to 1, change it to number of samples to use for profile generation.
+                Example:
+                from aitune.torch.config import config as global_config
+                global_config.max_num_samples_stored = <number of samples>
+                """
+            )
+
         self._context = None
         self._io_tensors = None
         self._output_names = None
@@ -149,12 +212,14 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         # build variables
         self._engine_path = None
+        self._trt_optimization_profiles_path = None
         self._output_object = None
         self._graph_spec = None
 
         # runtime variables
         self._output_allocator = None
         self._trt_runtime = None
+        self._trt_optimization_profiles: list[Profile] = []
 
         # CUDA graph variables
         self._cuda_graph = None
@@ -198,6 +263,16 @@ class TensorRTBackend(Backend, TensorRTRunner):
         engine_dir.mkdir(parents=True, exist_ok=True)
         return engine_dir / f"model{TRT_ENGINE_FILE_EXTENSION}"
 
+    def _prepare_trt_optimization_profiles_path(self, cache_dir: Path) -> Path:
+        """Prepare the TensorRT optimization profiles path.
+
+        Args:
+            cache_dir (Path): The cache directory to store the TensorRT optimization profiles.
+        """
+        optimization_profiles_dir = cache_dir / "tensorrt"
+        optimization_profiles_dir.mkdir(parents=True, exist_ok=True)
+        return optimization_profiles_dir / "model_optimization_profiles.json"
+
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Build the TensorRT model.
 
@@ -230,10 +305,12 @@ class TensorRTBackend(Backend, TensorRTRunner):
         else:
             self._engine_path = self._build_standard(module, graph_spec, data, cache_dir)
 
-        logger.info(
-            "TensorRT backend building finished successfully with engine path %s",
-            self._engine_path,
+        # Save optimization profiles after building the engine
+        self._trt_optimization_profiles_path = self._save_trt_optimization_profiles(
+            self._trt_optimization_profiles, cache_dir
         )
+
+        logger.info("TensorRT backend building finished successfully with engine path %s", self._engine_path)
         self._activate()
 
         return self
@@ -283,9 +360,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
-                min_shapes, opt_shapes, max_shapes = self._get_shapes(graph_spec=graph_spec)
-
                 engine_path = self._prepare_trt_engine_path(cache_dir)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path_quantized,
@@ -294,11 +370,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     optimization_level=self._config.optimization_level,
                     compatibility_level=self._config.compatibility_level,
                     timing_cache=self._config.timing_cache,
-                    profiles=self._config.profiles,
+                    profiles=self._trt_optimization_profiles,
                     enable_tf32=self._config.enable_tf32,
-                    min_shapes=min_shapes,
-                    opt_shapes=opt_shapes,
-                    max_shapes=max_shapes,
                 )
 
                 trt_builder.build()
@@ -361,9 +434,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
-                min_shapes, opt_shapes, max_shapes = self._get_shapes(graph_spec=graph_spec)
-
                 engine_path = self._prepare_trt_engine_path(cache_dir)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path_quantized,
@@ -372,11 +444,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     optimization_level=self._config.optimization_level,
                     compatibility_level=self._config.compatibility_level,
                     timing_cache=self._config.timing_cache,
-                    profiles=self._config.profiles,
+                    profiles=self._trt_optimization_profiles,
                     enable_tf32=self._config.enable_tf32,
-                    min_shapes=min_shapes,
-                    opt_shapes=opt_shapes,
-                    max_shapes=max_shapes,
                 )
 
                 trt_builder.build()
@@ -438,9 +507,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
-                min_shapes, opt_shapes, max_shapes = self._get_shapes(graph_spec=graph_spec)
-
                 engine_path = self._prepare_trt_engine_path(cache_dir)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path_autocasted,
@@ -449,11 +517,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     optimization_level=self._config.optimization_level,
                     compatibility_level=self._config.compatibility_level,
                     timing_cache=self._config.timing_cache,
-                    profiles=self._config.profiles,
+                    profiles=self._trt_optimization_profiles,
                     enable_tf32=self._config.enable_tf32,
-                    min_shapes=min_shapes,
-                    opt_shapes=opt_shapes,
-                    max_shapes=max_shapes,
                 )
 
                 trt_builder.build()
@@ -499,9 +564,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
             with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
-                min_shapes, opt_shapes, max_shapes = self._get_shapes(graph_spec=graph_spec)
-
                 engine_path = self._prepare_trt_engine_path(cache_dir)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path,
@@ -510,11 +574,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     optimization_level=self._config.optimization_level,
                     compatibility_level=self._config.compatibility_level,
                     timing_cache=self._config.timing_cache,
-                    profiles=self._config.profiles,
+                    profiles=self._trt_optimization_profiles,
                     enable_tf32=self._config.enable_tf32,
-                    min_shapes=min_shapes,
-                    opt_shapes=opt_shapes,
-                    max_shapes=max_shapes,
                 )
 
                 trt_builder.build()
@@ -551,6 +612,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Set input tensor shapes and addresses
                 logger.debug("Setting input tensor shapes and addresses")
                 self._set_input_tensors(inputs)
+                self._set_optimization_profiles(inputs)
 
                 # Run inference with timing
                 logger.debug("Executing TensorRT inference")
@@ -638,6 +700,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 raise RuntimeError(f"Failed to set output allocator for tensor '{output_name}'")
             logger.debug("Set output allocator for tensor '%s'", output_name)
 
+        # Load optimization profiles
+        self._trt_optimization_profiles = self._load_trt_optimization_profiles(self._trt_optimization_profiles_path)
+
     def _deactivate(self):
         """Deactivate the TensorRT engine."""
         logger.debug("Deactivating TensorRT backend")
@@ -706,6 +771,29 @@ class TensorRTBackend(Backend, TensorRTRunner):
         config_path = cache_dir / "config.json"
         self._config.to_json(config_path)
         logger.info("Config saved to %s", config_path)
+
+    def _save_trt_optimization_profiles(self, optimization_profiles: list[Profile], cache_dir: Path) -> Path:
+        """Save the TensorRT optimization profiles to a file."""
+        optimization_profiles_path = self._prepare_trt_optimization_profiles_path(cache_dir)
+        with open(optimization_profiles_path, "w") as f:
+            json.dump([TensorRTProfile.profile_to_dict(profile) for profile in optimization_profiles], f)
+        logger.info("TensorRT optimization profiles saved to %s", optimization_profiles_path)
+        return optimization_profiles_path
+
+    def _load_trt_optimization_profiles(self, trt_optimization_profiles_path: Path) -> list[Profile]:
+        """Load the TensorRT optimization profiles from a file."""
+        try:
+            with Path(trt_optimization_profiles_path).open("r") as f:
+                profiles_json = json.load(f)
+                profiles = [Profile() for _ in profiles_json]
+                for profile, profile_json in zip(profiles, profiles_json, strict=True):
+                    for name, (min_, opt_, max_) in profile_json.items():
+                        profile.add(name, tuple(min_), tuple(opt_), tuple(max_))
+                return profiles
+        except Exception as e:
+            logger.debug("Failed to load TensorRT optimization profiles: %s", e)
+            # profile 0 is used by default
+            return []
 
     def _prepare_outputs_for_return(self) -> Any:
         """Prepare the outputs for return.
@@ -822,6 +910,106 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 logger.error("Failed to set tensor address for %s: %s", name, e)
                 raise e
 
+    def _set_optimization_profiles(self, inputs: dict[str, torch.Tensor]):
+        """Set optimization profiles for the input tensors.
+
+        Args:
+            inputs: Dictionary mapping input names to tensors
+        """
+        if not self._trt_optimization_profiles:
+            return
+
+        if len(self._trt_optimization_profiles) == 1:
+            # Optimization profile 0 is the default profile
+            return
+
+        for idx, profile in enumerate(self._trt_optimization_profiles):
+            if len(profile) != len(inputs):
+                continue  # number of inputs mismatch, skipping profile
+
+            for name, (min_shape, _, max_shape) in profile.items():
+                # assuming that inputs can have different arguments, but this will not happen in practice
+                if name not in inputs:
+                    break  # no argument in input, skipping profile
+
+                tensor = inputs[name]
+                tensor_shape_matches = all(
+                    min_ <= actual and actual <= max_
+                    for (actual, min_, max_) in zip(tensor.shape, min_shape, max_shape, strict=True)
+                )
+                if not tensor_shape_matches:
+                    break  # shape mismatch, skipping profile
+
+            else:  # for else is executed if the loop did not break
+                # all shapes matched, setting optimization profile
+                self._context.set_optimization_profile_async(idx, self._cuda_stream.cuda_stream)
+                return
+
+        raise RuntimeError("No optimization profile found for the given inputs")
+
+    def get_profiles(self, graph_spec: GraphSpec, data: list[Sample]) -> list[Profile]:
+        """Create profiles from samples or from graph_spec.
+
+        If self._config.profiles is a list, return the user provided profiles.
+        If self._config.profiles is ProfileMode.SINGLE, create a single profile from the graph spec.
+        If self._config.profiles is ProfileMode.SAMPLES_USED, create profiles from shapes seen in samples.
+
+        Args:
+            graph_spec: Input graph spec
+            data: List of samples
+        Returns:
+            List of The Polygraphy Profile objects
+        """
+        # if user provided profiles, return them
+        if isinstance(self._config.profiles, list):
+            return [user_config.profile for user_config in self._config.profiles]
+
+        if self._config.profiles == ProfileMode.SINGLE:
+            # this will create a single profile from the graph spec
+            return self._get_profiles_from_shapes()
+
+        profiles = OrderedDict()
+        logger.info("Creating profiles from samples used for tuning")
+
+        # Create a profile
+        for idx, sample in enumerate(data):
+            profile = TensorRTProfile()
+            args, kwargs = sample
+            for locator, tensor_spec in graph_spec.input_spec.tensor_data:
+                if tensor_spec.name.startswith("args"):
+                    shape = locator.get_value(args).shape
+                else:
+                    shape = locator.get_value(kwargs).shape
+                profile.add_input_shape(tensor_spec.name, shape, shape, shape)
+
+            logger.debug("Created profile %d: %s", idx, profile)
+            profiles[profile] = True
+
+        return [profile.profile for profile in profiles.keys()]
+
+    def _get_profiles_from_shapes(self) -> list[Profile]:
+        """Create TensorRT optimization profiles.
+
+        Returns:
+            List of Polygraphy Profile objects
+        """
+        profiles = []
+
+        min_shapes, opt_shapes, max_shapes = self._get_shapes(self._graph_spec)
+
+        if any([min_shapes, opt_shapes, max_shapes]):
+            profile = Profile()
+            for name, min_shape in (min_shapes or {}).items():
+                opt_shape = opt_shapes.get(name) if opt_shapes else min_shape
+                max_shape = max_shapes.get(name) if max_shapes else opt_shape
+                logger.info("Adding profile for '%s': min=%s, opt=%s, max=%s", name, min_shape, opt_shape, max_shape)
+                profile.add(name=name, min=min_shape, opt=opt_shape, max=max_shape)
+            profiles = [profile]
+
+            logger.info("Single profile created from graph spec shapes")
+
+        return profiles
+
     def _get_shapes(
         self, graph_spec: GraphSpec
     ) -> tuple[dict[str, tuple[int, ...]], dict[str, tuple[int, ...]], dict[str, tuple[int, ...]]]:
@@ -907,6 +1095,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self.STATE_QUANTIZATION_CONFIG: self._config.quantization_config,
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_USE_CUDA_GRAPHS: self._config.use_cuda_graphs,
+            self.STATE_TRT_OPTIMIZATION_PROFILES_PATH: self._trt_optimization_profiles_path,
         }
 
     @classmethod
@@ -922,6 +1111,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """
         backend = cls()
         backend._engine_path = state_dict[cls.STATE_ENGINE_PATH]
+        backend._trt_optimization_profiles_path = state_dict.get(cls.STATE_TRT_OPTIMIZATION_PROFILES_PATH, [])
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend._device = state_dict[cls.STATE_DEVICE]
         backend.state = BackendState.CHECKPOINT_LOADED

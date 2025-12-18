@@ -51,6 +51,16 @@ class GraphSpec:
                 max_batch_size = max(max_batch_size, tensor_spec.max_shape[axis])
         return max_batch_size
 
+    def get_min_batch_size(self) -> int | None:
+        """Get min batch size from input spec."""
+        min_batch_size = float("inf")
+        for tensor_spec in self.input_spec.tensor_specs:
+            for axis in tensor_spec.get_batch_axis_multipliers().keys():
+                min_batch_size = min(min_batch_size, tensor_spec.min_shape[axis])
+        if min_batch_size == float("inf"):
+            return None
+        return int(min_batch_size)
+
     def to_dict(self) -> dict[str, Any]:
         """Convert TensorSpec to a serializable dictionary."""
         return {"type": self.__class__.__name__} | asdict(self)
