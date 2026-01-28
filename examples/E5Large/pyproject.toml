@@ -18,7 +18,7 @@ version = "0.1.0"
 description = "NVIDIA AI Tune E5 Large V2 Embedding Example"
 readme = "README.md"
 license-files = ["LICENSE"]
-requires-python = ">=3.9, <4"
+requires-python = ">=3.10, <3.13"
 
 dependencies = [
     "aitune",
@@ -63,7 +63,7 @@ e5large = ["e5large/*"]
 preview = true
 line-length = 120
 indent-width = 4
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["B", "C", "C4", "C90", "D", "E", "F", "I", "N", "W", "T", "T10", "T20", "UP", "CPY"]

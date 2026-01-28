@@ -23,7 +23,7 @@ requires-python = ">=3.10, < 3.13"
 dependencies = [
     "aitune",
     "diffusers>=0.25.0",
-    "transformers",
+    "transformers<5",
     "pillow",
     "sentencepiece",
     "protobuf",

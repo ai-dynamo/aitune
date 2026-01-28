@@ -24,7 +24,7 @@ dependencies = [
     "aitune",
     "diffusers>=0.25.0",
     "torch>=2.0.0",
-    "transformers",
+    "transformers<5",
     "pillow",
     "sentencepiece",
     "protobuf",
