@@ -115,7 +115,7 @@ class Module(wrapt.CallableObjectProxy):
 
         MODULE_REGISTRY.register(self._self_name, self)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Any) -> Any:
         """Delegate __getitem__ calls to the wrapped module.
 
         This allows the proxy to handle indexing operations on the wrapped module,

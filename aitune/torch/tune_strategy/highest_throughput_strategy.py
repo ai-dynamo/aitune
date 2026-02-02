@@ -22,6 +22,7 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -83,7 +84,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
         backends: list[Backend] | None = None,
         measurement_stop_strategy: MeasuringStopStrategy | None = None,
         profiling_stop_strategy: ProfilingStopStrategy | None = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Initializes strategy.
 
@@ -91,7 +92,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
             backends: List of backends to tune.
             measurement_stop_strategy: Measurement stop strategy.
             profiling_stop_strategy: Profiling stop strategy.
-            **kwargs: Additional arguments for the parent class
+            kwargs: Additional arguments for the parent class
         """
         super().__init__(**kwargs)
         self._backends = backends or self._default_backends()

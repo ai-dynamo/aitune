@@ -40,6 +40,7 @@ def inspect(
     number_of_iterations: int = DEFAULT_INSPECT_ITERATIONS,
     warmup_iterations: int = DEFAULT_WARMUP_ITERATIONS,
     min_depth: int = 0,
+    max_depth: int = 5,
 ) -> InspectedModulesInfo:
     """Inspect provided callable object searching for nn.Module members executed as part of forward pass.
 
@@ -50,13 +51,14 @@ def inspect(
         number_of_iterations: Number of iterations to run for inference.
         warmup_iterations: Number of iterations to run for warmup.
         min_depth: Minimum depth of the modules to inspect, if root level modules is not working, try to increase this value
+        max_depth: Maximum depth of the modules to inspect
     Returns:
         InspectedModulesInfo object.
     """
     setup_logging(format_string=LOG_FORMAT)
 
     logger.info("Inspecting object searching for executed nn.Module members.")
-    model_inspector = ModuleInspector(min_depth=min_depth)
+    model_inspector = ModuleInspector(min_depth=min_depth, max_depth=max_depth)
     model_inspector.inspect(obj)
 
     # If no inference function is provided, use the obj

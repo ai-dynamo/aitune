@@ -121,7 +121,6 @@ class TorchTensorRTAotBackend(Backend):
 
         Args:
             config: Configuration for TensorRT compilation
-            device: Device to run the model on
         """
         super().__init__()
         assert_cuda_is_available()

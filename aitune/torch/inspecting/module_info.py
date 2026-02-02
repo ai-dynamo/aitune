@@ -116,7 +116,6 @@ class InspectedModulesInfo:
         """Add a module to the specification.
 
         Args:
-            name: Name of the module.
             module: ModuleInfo object.
         """
         if module.object_path in self._modules:

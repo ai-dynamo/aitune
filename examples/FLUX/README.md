@@ -20,7 +20,7 @@ This example demonstrates how to use NVIDIA AITune to tune the Flux text-to-imag
 
 ## Environment Setup
 
-You can use either of the following options to setup the environment:
+You can use either of the following options to set up the environment:
 
 ### Option 1 - virtual environment managed by you
 
@@ -70,9 +70,9 @@ The generated image will be saved in the specified output directory.
 
 To run FLUX as AI Dynamo service, we have prepared a few additional configs and scripts.
 
-The service is split into backend (`flux/dynamo/backend.py`) and frontend (`flux/dynamo/frontend.py`) components. Docker and Docker Compose is used to make setup simple.
+The service is split into backend (`flux/dynamo/backend.py`) and frontend (`flux/dynamo/frontend.py`) components. Docker and Docker Compose are used to make setup simple.
 
-Firstly, start all services by running `HF_TOKEN=hf.... docker compose --profile all up --detach`. This will build and start all required services. The token for the HuggingFace is required to download the model.
+First, start all services by running `HF_TOKEN=hf.... docker compose --profile all up --detach`. This will build and start all required services. The token for the HuggingFace is required to download the model.
 
 After successful download, tuning and services start run below command to test the service.
 

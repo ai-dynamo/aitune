@@ -17,24 +17,33 @@
 from aitune.torch.config import aitune_cache_dir, config  # noqa: I001
 
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
+from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.inspecting import inspect, wrap
 from aitune.torch.module import Module
 from aitune.torch.tune_strategy import FirstWinsStrategy, HighestThroughputStrategy, OneBackendStrategy, TuneStrategy
 from aitune.torch.tuning import load, save, tune
+from aitune.torch.jit.config import config as jit_config
+from aitune.torch.jit.patched_module import PatchedModule
+from aitune.torch.jit.patcher import patch_for_jit_tuning
 
 __all__ = [
     "aitune_cache_dir",
+    "config",
+    "jit_config",
     "inspect",
     "wrap",
     "tune",
     "load",
     "save",
     "Module",
+    "PatchedModule",
     "TuneStrategy",
     "OneBackendStrategy",
     "FirstWinsStrategy",
     "HighestThroughputStrategy",
     "LocalTorchStorage",
+    "DataLoaderFactory",
+    "patch_for_jit_tuning",
 ]
 
 if config.enable_hf_integrations:

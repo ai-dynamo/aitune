@@ -71,10 +71,22 @@ clean-notebooks: ## remove Jupyter notebook output cells
 	@echo "Cleaning notebook outputs..."
 	find . -name '*.ipynb' -not -path "./.cache/*" -exec jupyter nbconvert --clear-output --inplace {} \;
 
-docs: clean-docs ## generate site
+docs: # TBD: uncomment after vdr clean-docs ## generate site
 	cp CHANGELOG.md docs
 	cp CONTRIBUTING.md docs
 	cp LICENSE docs/LICENSE.md
+	cp README.md docs/README.md
+	# Filter docs/README.md and substitute LICENSE to LICENSE.md
+	@sed 's/LICENSE/LICENSE.md/g' README.md > docs/README.md
+	@mkdir -p docs/examples
+	cp examples/README.md docs/examples/examples.md
+	# Copy example subdirectory READMEs with directory structure
+	@find examples -maxdepth 2 -mindepth 2 -name 'README.md' -type f | while read -r file; do \
+		subdir=$$(dirname "$$file" | sed 's|^examples/||'); \
+		mkdir -p "docs/examples/$$subdir"; \
+		cp "$$file" "docs/examples/$$subdir/README.md"; \
+	done
+
 	mkdocs build --clean
 
 docs-serve: docs

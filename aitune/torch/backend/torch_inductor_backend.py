@@ -119,7 +119,6 @@ class TorchInductorBackend(Backend):
 
         Args:
             config: Configuration for torch compile with inductor backend
-            device: Device to run the model on
         """
         super().__init__()
 

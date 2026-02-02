@@ -266,12 +266,12 @@ class Backend(ABC):
         self._deploy()
         self.state = BackendState.DEPLOYED
 
-    def infer(self, *args, **kwargs):
+    def infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with the given arguments.
 
         Args:
-            *args: Variable length argument list.
-            **kwargs: Arbitrary keyword arguments.
+            args: Variable length argument list.
+            kwargs: Arbitrary keyword arguments.
 
         Returns:
             Any: The result of the inference.

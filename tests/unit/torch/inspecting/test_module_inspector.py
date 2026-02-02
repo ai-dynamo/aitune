@@ -157,6 +157,15 @@ def test_inspect_nested_model(nested_model):
     assert root_module.name == "Sequential"
 
 
+def test_inspect_nested_model_max_depth(nested_model):
+    """Test inspecting a nested model."""
+    inspector = ModuleInspector(max_depth=1)
+    inspector.inspect(nested_model)
+
+    # Check that all modules were registered
+    assert len(inspector._module_info) == 4  # Sequential, Linear, NestedModule, Linear
+
+
 def test_inspect_model_with_dict(model_with_dict):
     """Test inspecting a model with dictionary attributes."""
     inspector = ModuleInspector()

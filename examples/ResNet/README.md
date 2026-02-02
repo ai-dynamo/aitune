@@ -20,7 +20,7 @@ This example demonstrates how to use NVIDIA AITune to tune a ResNet model.
 
 ## Environment Setup
 
-You can use either of the following options to setup the environment:
+You can use either of the following options to set up the environment:
 
 ### Option 1 - virtual environment managed by you
 

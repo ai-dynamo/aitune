@@ -27,11 +27,15 @@ theme:
         - navigation.sections
 extra_css:
     - assets/styles.css
-repo_url: https://github.com/ai-dynamo/aitune
+repo_url: https://gitlab-master.nvidia.com/dl/JoC/bermuda/ai-tune
+# official repo_url: https://github.com/ai-dynamo/aitune
 repo_name: Git Repository
 plugins:
     - autorefs
-    - htmlproofer
+    -   htmlproofer:
+            ignore_urls:
+                - '**/aot_tuning/backend/#aitune.torch.backend*'
+                - '**/backends/*/#aitune.torch.backend*'
     - mike
     -   mkdocstrings:
             enable_inventory: true
@@ -75,6 +79,51 @@ markdown_extensions:
 nav:
     -   Learn:
             -   Overview: README.md
+    -   Guides:
+            - Ahead-of-time Tuning: guides/aot_tuning.md
+            - Ahead-of-time Inspect: guides/aot_inspect.md
+            - Just-in-time Tuning: guides/jit_tuning.md
+            - Just-in-time Inspect: guides/jit_inspect.md
+            - Backends:
+                - TensorRT Backend: guides/backends/tensorrt_backend.md
+                - TensorRT Optimization Profiles: guides/backends/tensorrt_optimization_profiles.md
+                - Torch-TensorRT Backend (JIT): guides/backends/torch_tensorrt_jit_backend.md
+                - Torch-TensorRT Backend (AOT): guides/backends/torch_tensorrt_aot_backend.md
+                - TorchAO Backend: guides/backends/torchao_backend.md
+                - Torch Inductor Backend: guides/backends/torch_inductor_backend.md
+            - Tune Strategies: guides/tune_strategies/tune_strategies.md
+            - Deployment: guides/deployment/deployment.md
+    -   Examples:
+            - Overview: examples/examples.md
+            - E5Large: examples/E5Large/README.md
+            - ESM2: examples/ESM2/README.md
+            - FLUX: examples/FLUX/README.md
+            - JitTuning: examples/JitTuning/README.md
+            - LLM: examples/LLM/README.md
+            - ParakeetCTC: examples/ParakeetCTC/README.md
+            - ParakeetRNNT: examples/ParakeetRNNT/README.md
+            - ResNet: examples/ResNet/README.md
+            - StableDiffusion: examples/StableDiffusion/README.md
+    -   API:
+            -   Ahead-of-time Tuning API:
+                    -   Module: api/aot_tuning/module.md
+                    -   Tuning: api/aot_tuning/tuning.md
+                    -   Config: api/aot_tuning/config.md
+                    -   Backend: api/aot_tuning/backend.md
+                    -   Inspect: api/aot_tuning/inspect.md
+            -   Just-in-time Tuning API:
+                    -   Config: api/jit_tuning/config.md
+            -   Backends API:
+                    -   TensorRT Backend: api/backends/tensorrt_backend.md
+                    -   Torch-TensorRT Backend (JIT): api/backends/torch_tensorrt_jit_backend.md
+                    -   Torch-TensorRT Backend (AOT): api/backends/torch_tensorrt_aot_backend.md
+                    -   TorchAO Backend: api/backends/torchao_backend.md
+                    -   Torch Inductor Backend: api/backends/torch_inductor_backend.md
+            -   Tuning Strategies API:
+                    -   FirstWinsStrategy: api/tune_strategies/first_wins_strategy.md
+                    -   OneBackendStrategy: api/tune_strategies/one_backend_strategy.md
+                    -   HighestThroughputStrategy: api/tune_strategies/highest_throughput_strategy.md
+
     -   Resources:
             -   Changelog: CHANGELOG.md
             -   Known Issues: known_issues.md

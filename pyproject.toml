@@ -122,14 +122,13 @@ demo = [
     "nemo-toolkit[asr]"
 ]
 
-[dependency-groups]
-docs = [
-    "mike",
-    "mkdocs-htmlproofer-plugin",
-    "mkdocs-material",
-    "mkdocstrings[python]",
-    "mkdocstrings-python",
-    "GitPython",
+doc = [
+    "GitPython >= 3.1.30",
+    "mike ~= 1.1.0",
+    "mkdocs-htmlproofer-plugin >= 0.8.0",
+    "mkdocs-material >= 8.5.6",
+    "mkdocstrings[python] >= 0.24.0",
+    "mkdocstrings-python >= 1.7.0"
 ]
 
 

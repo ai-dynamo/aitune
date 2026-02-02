@@ -20,7 +20,7 @@ This example demonstrates how to use NVIDIA AITune to tune the Nemo ASR with Par
 
 ## Environment Setup
 
-You can use either of the following options to setup the environment:
+You can use either of the following options to set up the environment:
 
 ### Option 1 - virtual environment managed by you
 
@@ -67,9 +67,9 @@ Note: if `--audio_path` is omitted the default audio file, bundled with this exa
 
 To run ParakeetCTC as AI Dynamo service, we have prepared a few additional configs and scripts.
 
-Code starts in `parakeet_ctc/dynamo/backend.py`, Docker and Docker Compose is used to make setup simple.
+Code starts in `parakeet_ctc/dynamo/backend.py`. Docker and Docker Compose are used to make setup simple.
 
-Firstly, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
+First, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
 
 After successful tuning and services start run below command to test the service.
 

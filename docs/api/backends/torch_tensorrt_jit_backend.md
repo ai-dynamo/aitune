@@ -14,6 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-# NVIDIA AITune
+# Torch-TensorRT JIT Backend API
 
-README Placeholder
+## TorchTensorRTJitBackend
+
+::: aitune.torch.backend.TorchTensorRTJitBackend
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+## TorchTensorRTJitBackendConfig
+
+::: aitune.torch.backend.TorchTensorRTJitBackendConfig
+    options:
+      show_root_heading: true
+      heading_level: 3

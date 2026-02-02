@@ -338,10 +338,13 @@ workspace/
 docs/CHANGELOG.md
 docs/CONTRIBUTING.md
 docs/LICENSE.md
-docs/examples.md
+docs/README.md
+docs/examples/examples.md
+docs/examples/**/README.md
 version.yaml
 .devcontainer
 cache/
+
 
 .cursor
 demo/
@@ -359,3 +362,4 @@ notebooks/checkpoints/
 
 # images
 *.png
+

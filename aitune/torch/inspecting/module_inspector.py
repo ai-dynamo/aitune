@@ -30,9 +30,6 @@ dot notation, even for dictionaries and lists. (e.g., '.list.0.layers`,
 
 Environment variables that could be used:
 
-    AITUNE_INSPECT_MAX_RECURSION_DEPTH:
-        Maximum recursion depth to inspect, default is 5.
-
     AITUNE_INSPECT_DEBUG:
         Whether to enable more verbose debug mode for inspecting. Adds visited
         nodes, and execution order. Default is False.
@@ -43,7 +40,6 @@ Environment variables that could be used:
 
 """
 
-import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -117,13 +113,13 @@ class InspectContext:
 class ModuleInspector:
     """Class for inspecting PyTorch modules and tracking their execution."""
 
-    def __init__(self, min_depth: int = 0, max_depth: int | None = None):
+    def __init__(self, min_depth: int = 0, max_depth: int = 5):
         """Initialize the module inspector."""
         self._module_info: dict[Any, ModuleInfo] = {}
         self._original_forward: dict[Any, Any] = {}
         self._inspected_objects: set = set()  # Track objects that have been inspected
         self._min_recursion_depth = min_depth
-        self._max_recursion_depth = max_depth or _get_max_depth()
+        self._max_recursion_depth = max_depth
         self._execution_parent_module: list[ModuleInfo] = []
         if _get_inspect_debug():
             self._debug_inspecting_functions()
@@ -194,7 +190,7 @@ class ModuleInspector:
 
         # Skip Python built-in objects
         if obj.__class__.__module__ == "builtins":
-            if not isinstance(obj, (dict, list)):
+            if not isinstance(obj, dict | list):
                 return
 
         # Skip if object has already been inspected
@@ -431,10 +427,6 @@ class ModuleInspector:
         self._inspect_members = self._wrap_debug_inspect(self._inspect_members)
         self._inspect_module = self._wrap_debug_inspect(self._inspect_module)
         self._register_module = self._wrap_debug_inspect(self._register_module)
-
-
-def _get_max_depth() -> int:
-    return int(os.getenv("AITUNE_INSPECT_MAX_RECURSION_DEPTH", DEFAULT_MAX_RECURSION_DEPTH))
 
 
 def _get_inspect_debug() -> bool:

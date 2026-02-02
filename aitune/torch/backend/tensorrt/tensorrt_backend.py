@@ -1081,11 +1081,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 self._static_inputs = {}
 
     def to_dict(self):
-        """Returns the state_dict of the backend.
-
-        Returns:
-            dict: Dictionary containing the backend state
-        """
+        """Returns the state_dict of the backend."""
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_ENGINE_PATH: self._engine_path,
@@ -1100,15 +1096,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
     @classmethod
     def from_dict(cls, module: torch.nn.Module, state_dict: dict):
-        """Creates a backend from a state_dict.
-
-        Args:
-            module: The PyTorch module
-            state_dict: Dictionary containing the backend state
-
-        Returns:
-            TensorRTBackend: The reconstructed backend
-        """
+        """Creates a backend from a state_dict."""
         backend = cls()
         backend._engine_path = state_dict[cls.STATE_ENGINE_PATH]
         backend._trt_optimization_profiles_path = state_dict.get(cls.STATE_TRT_OPTIMIZATION_PROFILES_PATH, [])

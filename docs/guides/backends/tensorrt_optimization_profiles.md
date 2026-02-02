@@ -18,15 +18,15 @@ limitations under the License.
 
 ## Introduction
 
-TensorRT optimization profiles are a way to optimize the performance of a TensorRT engine. They are used to profile the performance of a model at different input shapes and batch sizes.
+TensorRT optimization profiles optimize the performance of a TensorRT engine. They are used to profile the performance of a model at different input shapes and batch sizes.
 
-By default, a single profile is generated from the graph spec - so one that supports the minimum and maximum shapes of the input tensors.
+By default, a single profile is generated from the graph spec that supports the minimum and maximum shapes of the input tensors.
 
 ## Using samples for profile generation
 
 ### Set the number of samples to use for profile generation
 
-You can set the number of samples to use for profile generation by setting the `max_num_samples_stored` in the `aitune.torch.config` module. By default, it is set to 1 as samples are stored for each backend, model modules and each batch size.
+You can set the number of samples to use for profile generation by setting the `max_num_samples_stored` in the `aitune.torch.config` module. By default, it is set to 1 as samples are stored for each backend, model module, and each batch size.
 
 ```python
 from aitune.torch.config import config as global_config
@@ -43,11 +43,11 @@ You can use the `ProfileMode.SAMPLES_USED` mode to auto-generate multiple profil
 backend = TensorRTBackend(TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
 ```
 
-### Use correct samples and right batch sizes during tuning
+### Use the correct samples and the right batch sizes during tuning
 
-You need to use the correct samples and right batch sizes during tuning. If you use a different batch size than the one used for profile generation, the model will not be able to run.
+If you use a different batch size than the one used for profile generation, the model will not be able to run.
 
-NOTE: As samples for single parameter has different shapes, we are wrapping them in a `DynamicShapeDataset` to handle different shapes.
+NOTE: As samples for a single parameter have different shapes, we are wrapping them in a `DynamicShapeDataset` to handle different shapes.
 
 ```python
 data1 = torch.randn((3, 224, 224), device=device).to(dtype)
@@ -62,9 +62,9 @@ tune(module, DynamicShapeDataset([data1, data2]), batch_sizes=[2, 8], device=dev
 
 module(data1.repeat(8, 1, 1, 1))
 module(data2.repeat(8, 1, 1, 1))
-
 ```
-See [`tests/functional/pytorch/027_aitune_torch_toy_model_tensorrt_backend.py`](../tests/functional/pytorch/027_aitune_torch_toy_model_tensorrt_backend.py) for a full example.
+
+See `tests/functional/pytorch/027_aitune_torch_toy_model_tensorrt_backend.py` for a full example.
 
 ## Using your own profiles
 
@@ -77,11 +77,11 @@ backend = TensorRTBackend(TensorRTBackendConfig(profiles=[
 ]))
 ```
 
-### Getting the arguments names `args_0` etc.
+### Getting the argument names
 
-The arguments names `args_0` etc. are the names of the input tensors in the model. You can get them from logs during tuning for default single profile mode.
+The argument names `args_0`, etc. are the names of the input tensors in the model. You can get them from logs during tuning for the default single profile mode.
 
-```
+```text
 INFO - 🎯 Tuning module: `toy-model` (all graphs)
 INFO - ------------------------------------------------------------
 INFO - 🚀 Tuning graph `0` for module `toy-model`:
