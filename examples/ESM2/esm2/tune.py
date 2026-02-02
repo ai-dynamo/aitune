@@ -20,7 +20,6 @@ from transformers import AutoTokenizer, EsmForMaskedLM
 
 import aitune.torch as ait
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorBackend
-from aitune.utils.logging import setup_logging
 
 DEVICE = torch.device("cuda")
 MODEL_NAME = "facebook/esm2_t33_650M_UR50D"
@@ -54,7 +53,7 @@ def tune(
     device: torch.device = DEVICE,
     batch_sizes: list[int] | None = None,
 ):
-    setup_logging(level=LOG_LEVEL)
+    logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", force=True)
     logger.info("Tuning ESM2 model...")
     with torch.no_grad():
         if batch_sizes is None:

@@ -19,19 +19,18 @@ from logging import basicConfig, getLogger
 import torch
 from PIL import Image
 
-from aitune.torch.backend.tensorrt import (
+from aitune.torch import HighestThroughputStrategy, LocalTorchStorage, Module, save, tune
+from aitune.torch.backend import (
     ONNXAutoCastConfig,
     ONNXQuantizationConfig,
     TensorRTBackend,
     TensorRTBackendConfig,
+    TorchAOBackend,
+    TorchAOBackendConfig,
+    TorchEagerBackend,
+    TorchInductorBackend,
+    TorchInductorBackendConfig,
 )
-from aitune.torch.backend.torch_eager import TorchEagerBackend
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend, TorchInductorBackendConfig
-from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendConfig
-from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
-from aitune.torch.module.wrapper_module import Module
-from aitune.torch.tune_strategy import HighestThroughputStrategy
-from aitune.torch.tuning import save, tune
 from resnet.cmd_args import get_parser
 from resnet.model import get_model, get_transform
 

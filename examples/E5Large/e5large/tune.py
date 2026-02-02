@@ -18,7 +18,6 @@ from logging import INFO, basicConfig, getLogger
 from pathlib import Path
 
 import torch
-from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch import HighestThroughputStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.config import config as global_config
@@ -81,7 +80,7 @@ def tune_model(
             show_progress_bar=False,
             convert_to_numpy=False,
             convert_to_tensor=True,
-            batch_size=global_context.get(BATCH_SIZE_KEY, 4),
+            batch_size=4,
             device="cuda",
         )
 

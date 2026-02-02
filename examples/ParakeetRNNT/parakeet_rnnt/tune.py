@@ -21,8 +21,13 @@ import torch
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
 from aitune.torch import HighestThroughputStrategy, TuneStrategy, inspect, save, tune, wrap
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorBackend
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackendConfig
+from aitune.torch.backend import (
+    TensorRTBackend,
+    TensorRTBackendConfig,
+    TorchEagerBackend,
+    TorchInductorBackend,
+    TorchInductorBackendConfig,
+)
 from parakeet_rnnt.cmd_args import parse_args
 from parakeet_rnnt.model import get_model
 

@@ -21,8 +21,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 from aitune.torch import Module, OneBackendStrategy
 from aitune.torch import tune as aitune
-from aitune.torch.backend import TorchEagerBackend, TorchInductorBackend
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackendConfig
+from aitune.torch.backend import TorchEagerBackend, TorchInductorBackend, TorchInductorBackendConfig
 from llm.cmd_args import get_tune_parser
 
 
@@ -106,6 +105,7 @@ def tune_model(model, tokenizer, cache="static"):
 
 def main():
     """Entry point for the script."""
+    basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     args = get_tune_parser().parse_args()
 
     generate_args = {
@@ -135,5 +135,4 @@ def main():
 
 
 if __name__ == "__main__":
-    basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     main()

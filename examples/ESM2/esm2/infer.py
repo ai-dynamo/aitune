@@ -20,7 +20,6 @@ import torch
 from transformers import AutoTokenizer
 
 import aitune.torch as ait
-from aitune.utils.logging import setup_logging
 from esm2.tune import DEVICE, LOG_LEVEL, MODEL_NAME, SAMPLE_SEQUENCE, get_model
 
 logger = logging.getLogger(__name__)
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 def infer(model_path: str = "esm2_tuned"):
     sample_sequence = os.environ.get("ESM2_SEQUENCE", SAMPLE_SEQUENCE)
 
-    setup_logging(level=LOG_LEVEL)
+    logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", force=True)
 
     with torch.no_grad():
         logger.info("Loading model...")

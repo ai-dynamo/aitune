@@ -24,8 +24,8 @@ from aitune.torch.backend import (
     TensorRTBackendConfig,
     TorchEagerBackend,
     TorchInductorBackend,
+    TorchQuantizationConfig,
 )
-from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig
 from flux.cmd_args import parse_args
 from flux.model import get_pipeline
 

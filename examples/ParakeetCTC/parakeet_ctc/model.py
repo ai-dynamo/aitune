@@ -20,8 +20,7 @@ import nemo.core.neural_types.neural_type
 import torch
 from nemo.core.classes.common import typecheck
 
-from aitune.torch import Module
-from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
+from aitune.torch import Module, TuneStrategy
 
 
 def get_model(model_name: str = "nvidia/parakeet-ctc-0.6b") -> nemo.collections.asr.models.EncDecCTCModel:
