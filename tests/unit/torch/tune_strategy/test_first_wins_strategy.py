@@ -23,7 +23,7 @@ from aitune.torch import Module, tune
 from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
-from tests.toy_backends import SleepBackend
+from tests.toy_backends import BuildFailsBackend, SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
 
 
@@ -190,3 +190,31 @@ def test_first_wins_strategy_find_max_batch_size_fails(torch_device):
     tune(model, sample, device=torch_device, disable_external_logging=False)
 
     assert model(sample.unsqueeze(0)) is not None  # Note: does not work without unsqueeze
+
+
+def test_first_wins_strategy_build_fails(torch_device, tmp_path):
+    class TestOutOfMemoryException(Exception):
+        """Test out of memory exception."""
+
+    strategy = FirstWinsStrategy(
+        backends=[
+            BuildFailsBackend(TestOutOfMemoryException),
+        ],
+    )
+    strategy.enable_find_max_batch_size(False)
+    strategy.enable_correctness_check(False)
+
+    model = ToyTorchModel().eval().to(torch_device)
+    sample = model.sample().to(torch_device)
+
+    model = Module(model, strategy=strategy)
+
+    with pytest.raises(RuntimeError) as _exc_info:
+        tune(model, sample, device=torch_device, disable_external_logging=False)
+
+    # Check if TestOutOfMemoryException is mentioned in the build log
+    log_files = list(tmp_path.rglob("build.log"))
+    assert len(log_files) == 1, "No build.log file found in tmp_path"
+    log_file = log_files[0]
+
+    assert "TestOutOfMemoryException" in log_file.read_text()

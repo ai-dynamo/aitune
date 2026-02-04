@@ -211,11 +211,15 @@ class Backend(ABC):
         After building, the backend should be activated.
         """
         if self.state == BackendState.INIT:
-            self._assert_device(device)
-            self._set_device(device)
-            ready_backend = self._build(module, graph_spec, data, cache_dir)
-            self.state = BackendState.ACTIVE
-            return ready_backend
+            try:
+                self._assert_device(device)
+                self._set_device(device)
+                ready_backend = self._build(module, graph_spec, data, cache_dir)
+                self.state = BackendState.ACTIVE
+                return ready_backend
+            except Exception as e:
+                self._logger.error("Failed to build backend(%s): %s", self.__class__.__name__, e, exc_info=True)
+                raise e
         else:
             raise RuntimeError(f"Backend {self.name} build should be called only once")
 
