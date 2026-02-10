@@ -77,9 +77,7 @@ def main():
     for _ in range(5):
         batch()
 
-    output_dir = Path(os.environ.get("AITUNE_OUTPUT_DIR", "output"))
-    output_dir.mkdir(parents=True, exist_ok=True)
-    html_path = output_dir / "inspect_sd15.html"
+    html_path = "inspect_sd15.html"
     inspection.save_report(html_path, "SD15")
 
 
@@ -117,24 +115,6 @@ If you click on a particular module, the detailed view shows execution stats and
 - Inspection data is collected only for modules that actually execute.
 - Running multiple batches with different shapes helps capture dynamic behavior.
 - The report is generated from in-memory inspection data at `save_report` time.
-
-## Troubleshooting
-
-### Empty or incomplete report
-
-Make sure your model runs at least a few iterations before calling `save_report`.
-Logging at `INFO` can help confirm that execution happened.
-
-### Report not found
-
-Confirm the output directory exists and is writable, then check the resolved path:
-
-```python
-from pathlib import Path
-
-html_path = Path("output/inspect_sd15.html")
-print(html_path.resolve())
-```
 
 ## Next Steps
 

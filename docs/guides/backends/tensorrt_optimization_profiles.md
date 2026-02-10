@@ -40,6 +40,9 @@ global_config.max_num_samples_stored = 100
 You can use the `ProfileMode.SAMPLES_USED` mode to auto-generate multiple profiles from shapes of samples used for tuning.
 
 ```python
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend.tensorrt import TensorRTProfile, ProfileMode
+
 backend = TensorRTBackend(TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
 ```
 
@@ -50,15 +53,18 @@ If you use a different batch size than the one used for profile generation, the 
 NOTE: As samples for a single parameter have different shapes, we are wrapping them in a `DynamicShapeDataset` to handle different shapes.
 
 ```python
+import aitune.torch as ait
+from aitune.torch.dataloader import DynamicShapeDataset
+
 data1 = torch.randn((3, 224, 224), device=device).to(dtype)
 data2 = torch.randn((3, 448, 448), device=device).to(dtype)
 
 global_config.max_num_samples_stored = 4 # 2 samples x 2 batch sizes
 
 backend = TensorRTBackend(TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
-module = Module(model, "toy-model", strategy=OneBackendStrategy(backend).enable_find_max_batch_size(False))
+module = ait.Module(model, "toy-model", strategy=ait.OneBackendStrategy(backend).enable_find_max_batch_size(False))
 
-tune(module, DynamicShapeDataset([data1, data2]), batch_sizes=[2, 8], device=device)  # will generate 4 profiles
+ait.tune(module, DynamicShapeDataset([data1, data2]), batch_sizes=[2, 8], device=device)  # will generate 4 profiles
 
 module(data1.repeat(8, 1, 1, 1))
 module(data2.repeat(8, 1, 1, 1))

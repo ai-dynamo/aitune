@@ -29,8 +29,9 @@ The Torch-TensorRT JIT backend integrates TensorRT acceleration through `torch.c
 ## Quick Start
 
 ```python
-from aitune.torch.backend import TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig
+from aitune.torch.backend import TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig, TorchTensorRTConfig
 import aitune.torch as ait
+import torch
 
 # Configure backend
 config = TorchTensorRTJitBackendConfig(
@@ -121,70 +122,15 @@ config = TorchTensorRTJitBackendConfig(
 )
 ```
 
-## Complete Examples
-
-### Example 1: ResNet with FP16
-
-```python
-import torch
-import torchvision.models as models
-import aitune.torch as ait
-from aitune.torch.backend import TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig
-from torch_tensorrt.dynamo import CompilationSettings
-
-model = models.resnet50(pretrained=True)
-model.eval().cuda()
-
-# Configure with FP16
-config = TorchTensorRTJitBackendConfig(
-    compile_config=CompilationSettings(
-        enabled_precisions={torch.float16},
-    )
-)
-backend = TorchTensorRTJitBackend(config)
-
-# Tune
-wrapped_model = ait.Module(model, "resnet50", strategy=ait.OneBackendStrategy(backend))
-input_data = torch.randn(1, 3, 224, 224, device="cuda")
-ait.tune(wrapped_model, input_data)
-
-# Inference
-output = wrapped_model(input_data)
-```
-
-### Example 2: Dynamic Shapes
-
-```python
-config = TorchTensorRTJitBackendConfig(
-    compile_config=CompilationSettings(
-        enabled_precisions={torch.float16},
-    ),
-    dynamic_shapes=True,  # Enable dynamic shapes
-)
-backend = TorchTensorRTJitBackend(config)
-
-# Tune with varying batch sizes
-input_data = [
-    torch.randn(1, 3, 224, 224, device="cuda"),
-    torch.randn(4, 3, 224, 224, device="cuda"),
-    torch.randn(8, 3, 224, 224, device="cuda"),
-]
-
-# Wrap model and tune with varying batch sizes
-wrapped_model = ait.Module(model, "dynamic-shapes", strategy=ait.OneBackendStrategy(backend))
-
-ait.tune(wrapped_model, input_data)
-```
-
 ## JIT vs AOT Torch-TensorRT
 
-| Feature | JIT Backend | AOT Backend |
-|---------|-------------|-------------|
-| **Compilation** | Runtime (first inference) | Ahead-of-time (during tuning) |
-| **Model Storage** | Not saved separately | Saved as .pt file |
-| **Startup Time** | Slower (compilation overhead) | Faster (pre-compiled) |
-| **Flexibility** | Auto-recompiles on changes | Fixed after compilation |
-| **Use Case** | Development, experimentation | Production deployment |
+| Feature           | JIT Backend                   | AOT Backend                   |
+|-------------------|-------------------------------|-------------------------------|
+| **Compilation**   | Runtime (first inference)     | Ahead-of-time (during tuning) |
+| **Model Storage** | Not saved separately          | Saved                         |
+| **Startup Time**  | Slower (compilation overhead) | Faster (pre-compiled)         |
+| **Flexibility**   | Auto-recompiles on changes    | Fixed after compilation       |
+| **Use Case**      | Development, experimentation  | Production deployment         |
 
 ## Understanding JIT/AOT Terminology
 
@@ -192,12 +138,12 @@ It's important to distinguish between two uses of "JIT" and "AOT" in AITune:
 
 ### AITune Tuning Modes
 
-- **AOT (Ahead-of-Time) Tuning**: The declarative approach using `inspect()`, `wrap()`, and `tune()`
+- **Ahead-of-Time Tuning**: The declarative approach using `inspect()`, `wrap()`, and `tune()`
   - You explicitly select modules to tune
   - Full control over the tuning process
   - Works with any backend (JIT or AOT)
 
-- **JIT (Just-in-Time) Tuning**: The automatic approach using environment variables or imports
+- **Just-in-Time Tuning**: The automatic approach using environment variables or imports
   - No code changes required
   - AITune automatically discovers and tunes modules
   - Works with any backend (JIT or AOT)

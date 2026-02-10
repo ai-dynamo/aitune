@@ -219,7 +219,6 @@ Each backend has its own corresponding configuration:
 from aitune.torch.backend import TensorRTBackendConfig, TensorRTBackend
 
 config = TensorRTBackendConfig(
-    precision="fp16",
     use_cuda_graphs=True,
     workspace_size=1 << 30,  # 1GB
 )
@@ -233,7 +232,6 @@ See backend-specific documentation:
 - [TorchAO Backend](backends/torchao_backend.md)
 - [Torch TensorRT AOT Backend](backends/torch_tensorrt_aot_backend.md)
 - [Torch TensorRT JIT Backend](backends/torch_tensorrt_jit_backend.md)
-
 
 ## Dry Run Mode
 

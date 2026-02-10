@@ -100,64 +100,18 @@ config = TorchAOBackendConfig(
 )
 ```
 
-## Complete Examples
-
-### Example 1: LLM with INT4
-
-```python
-import torch
-import aitune.torch as ait
-from aitune.torch.backend import TorchAOBackend, TorchAOBackendConfig
-from transformers import AutoModelForCausalLM
-
-# Load LLM
-model = AutoModelForCausalLM.from_pretrained("gpt2")
-model.eval().cuda()
-
-# Configure INT4 quantization
-config = TorchAOBackendConfig(quantization="int4wo")
-backend = TorchAOBackend(config)
-
-# Tune
-wrapped_model = ait.Module(model, "gpt2", strategy=ait.OneBackendStrategy(backend))
-ait.tune(wrapped_model, calibration_data)
-
-# Use quantized model
-output = wrapped_model(input_ids)
-```
-
-### Example 2: Comparing Quantization Schemes
-
-```python
-quantization_types = ["int4wo", "int8wo", "fp8wo"]
-
-for quant_type in quantization_types:
-    config = TorchAOBackendConfig(quantization=quant_type)
-    backend = TorchAOBackend(config)
-
-    # Tune and evaluate
-    model_copy = deepcopy(original_model)
-    wrapped = ait.Module(model_copy, f"model_{quant_type}", strategy=ait.OneBackendStrategy(backend))
-    ait.tune(wrapped, calibration_data)
-
-    # Evaluate accuracy and speed
-    accuracy = evaluate(wrapped, test_data)
-    speed = benchmark(wrapped, test_data)
-    print(f"{quant_type}: accuracy={accuracy:.3f}, speed={speed:.2f}ms")
-```
-
 ## Quantization Comparison
 
-| Type | Weights | Activations | Memory Reduction | Speed | Accuracy |
-|------|---------|-------------|------------------|-------|----------|
-| int4wo | INT4 | FP16/FP32 | ~4x | High | Good |
-| int8wo | INT8 | FP16/FP32 | ~2x | High | Better |
-| int8dq | INT8 | INT8 | ~2x | Very High | Good |
-| fp8wo | FP8 | FP16/FP32 | ~2x | Very High | Excellent |
-| fp8dq | FP8 | FP8 | ~2x | Very High | Excellent |
-| fp6e3m2 | FP6 | FP16/FP32 | ~2.7x | High | Very Good |
-| fp5e2m2 | FP5 | FP16/FP32 | ~3.2x | High | Good |
-| fp4e2m1 | FP4 | FP16/FP32 | ~4x | High | Moderate |
+| Type    | Weights | Activations | Memory Reduction | Speed     | Accuracy  |
+|---------|---------|-------------|------------------|-----------|-----------|
+| int4wo  | INT4    | FP16/FP32   | ~4x              | High      | Good      |
+| int8wo  | INT8    | FP16/FP32   | ~2x              | High      | Better    |
+| int8dq  | INT8    | INT8        | ~2x              | Very High | Good      |
+| fp8wo   | FP8     | FP16/FP32   | ~2x              | Very High | Excellent |
+| fp8dq   | FP8     | FP8         | ~2x              | Very High | Excellent |
+| fp6e3m2 | FP6     | FP16/FP32   | ~2.7x            | High      | Very Good |
+| fp5e2m2 | FP5     | FP16/FP32   | ~3.2x            | High      | Good      |
+| fp4e2m1 | FP4     | FP16/FP32   | ~4x              | High      | Moderate  |
 
 ## Best Practices
 

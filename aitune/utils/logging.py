@@ -386,13 +386,13 @@ def control_output(log_file: str | Path | None = None):
     """Silences or redirects stdout, stderr, and logs within the invoked context.
 
     Args:
-        log_file: Optional file path to log output to (independent of suppress_stdout)
+        log_file: Optional file path to log output to
 
-    Behavior matrix:
-        suppress_stdout=True, log_file=None       → Complete suppression (to /dev/null)
-        suppress_stdout=True, log_file="file.log" → Redirect to file only, no console
-        suppress_stdout=False, log_file=None      → Normal console output
-        suppress_stdout=False, log_file="file.log"→ Tee mode: console AND file
+    Behavior matrix based on CONSOLE_OUTPUT_ENABLE environment variable and log_file:
+        CONSOLE_OUTPUT_ENABLE=False, log_file=None       → Complete suppression (to /dev/null)
+        CONSOLE_OUTPUT_ENABLE=False, log_file="file.log" → Redirect to file only, no console
+        CONSOLE_OUTPUT_ENABLE=True, log_file=None      → Normal console output
+        CONSOLE_OUTPUT_ENABLE=True, log_file="file.log"→ Tee mode: console AND file
 
     Example usage:
         # Suppress all output
@@ -402,14 +402,6 @@ def control_output(log_file: str | Path | None = None):
         # Redirect output to file only
         with control_output(log_file="output.log"):
             print("Goes to file, not console")
-
-        # Allow normal console output
-        with control_output(suppress_stdout=False):
-            print("Shown on console")
-
-        # Tee mode: both console and file
-        with control_output(suppress_stdout=False, log_file="output.log"):
-            print("Goes to BOTH console and file")
     """
     # If no suppression and no log file, do nothing
     if CONSOLE_OUTPUT_ENABLE and not log_file:
@@ -452,7 +444,7 @@ def control_output(log_file: str | Path | None = None):
                     yield
 
             else:
-                # suppress_stdout=False with log_file: tee mode (console AND file)
+                # CONSOLE_OUTPUT_ENABLE set to True with log_file: tee mode (console AND file)
                 # Add a FileHandler for logging (keeps console handlers active)
                 file_handler = logging.FileHandler(str(log_file), mode="a")
                 # Copy formatter from existing handler if available

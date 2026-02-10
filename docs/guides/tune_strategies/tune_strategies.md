@@ -30,11 +30,11 @@ AITune provides three built-in strategies:
 
 Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. If you want a safer default with minimal tuning time, `FirstWinsStrategy` balances reliability and speed. When absolute throughput matters and you can afford longer tuning, choose `HighestThroughputStrategy`.
 
-| Strategy | When to Use | Tuning Time | Reliability | Performance |
-|----------|-------------|-------------|-------------|-------------|
-| OneBackendStrategy | Known backend works, production | Fast | High (if backend works) | Depends on backend |
-| FirstWinsStrategy | Want reliability, quick tuning | Fast-Medium | Very High | Good |
-| HighestThroughputStrategy | Maximum performance, have time | Slow | High | Best |
+| Strategy                  | When to Use                     | Tuning Time | Reliability             | Performance        |
+|---------------------------|---------------------------------|-------------|-------------------------|--------------------|
+| OneBackendStrategy        | Known backend works, production | Fast        | High (if backend works) | Depends on backend |
+| FirstWinsStrategy         | Want reliability, quick tuning  | Fast-Medium | Very High               | Good               |
+| HighestThroughputStrategy | Maximum performance, have time  | Slow        | High                    | Best               |
 
 ## OneBackendStrategy
 
@@ -47,7 +47,7 @@ from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
 import aitune.torch as ait
 
 # Configure backend
-config = TensorRTBackendConfig(precision="fp16")
+config = TensorRTBackendConfig()
 backend = TensorRTBackend(config)
 
 # Create strategy
@@ -73,35 +73,6 @@ ait.tune(model, input_data)
 - Unknown models (might fail)
 - Maximum performance discovery
 
-### Complete Example
-
-```python
-import torch
-import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
-
-# Load model
-model = YourModel()
-model.eval().cuda()
-
-# Configure TensorRT with FP16
-config = TensorRTBackendConfig(
-    precision="fp16",
-    workspace_size=1 << 30,
-)
-backend = TensorRTBackend(config)
-
-# Use OneBackendStrategy
-strategy = ait.OneBackendStrategy(backend=backend)
-wrapped_model = ait.Module(model, "model", strategy=strategy)
-
-# Tune
-input_data = torch.randn(1, 3, 224, 224, device="cuda")
-ait.tune(wrapped_model, input_data)
-
-# If TensorRT fails, tuning fails (no fallback)
-```
-
 ## FirstWinsStrategy
 
 Tries multiple backends in order. Uses the first one that successfully builds.
@@ -119,7 +90,7 @@ import aitune.torch as ait
 
 # List backends in priority order
 backends = [
-    TensorRTBackend(config=TensorRTBackendConfig(precision="fp16")),
+    TensorRTBackend(config=TensorRTBackendConfig()),
     TorchInductorBackend(),
     TorchEagerBackend(),  # Fallback (always works)
 ]
@@ -154,32 +125,6 @@ ait.tune(model, input_data)
 - When you know which backend works
 - Detailed performance comparison
 
-### Complete Example
-
-```python
-import aitune.torch as ait
-from aitune.torch.backend import (
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchInductorBackend,
-    TorchInductorBackendConfig,
-    TorchEagerBackend,
-)
-
-# Priority order: TensorRT (best) → Inductor (good) → Eager (fallback)
-backends = [
-    TensorRTBackend(config=TensorRTBackendConfig(precision="fp16")),
-    TorchInductorBackend(config=TorchInductorBackendConfig(mode="max-autotune")),
-    TorchEagerBackend(),
-]
-
-strategy = ait.FirstWinsStrategy(backends=backends)
-wrapped_model = ait.Module(model, "reliable-model", strategy=strategy)
-ait.tune(wrapped_model, input_data)
-
-# Result: Uses TensorRT if it works, otherwise tries Inductor, finally Eager
-```
-
 ### Best Practices
 
 1. **Order by Performance**: Put fastest backends first
@@ -205,7 +150,7 @@ import aitune.torch as ait
 
 # List all candidate backends
 backends = [
-    TensorRTBackend(config=TensorRTBackendConfig(precision="fp16")),
+    TensorRTBackend(config=TensorRTBackendConfig()),
     TorchInductorBackend(config=TorchInductorBackendConfig(mode="max-autotune")),
     TorchAOBackend(config=TorchAOBackendConfig(quantization="fp8wo")),
 ]
@@ -213,8 +158,6 @@ backends = [
 # Create strategy
 strategy = ait.HighestThroughputStrategy(
     backends=backends,
-    number_of_iterations=100,  # Profiling iterations
-    warmup_iterations=10,       # Warmup before profiling
 )
 
 # Use in tuning
@@ -247,67 +190,6 @@ ait.tune(model, input_data)
 - Development iteration (overkill)
 - Memory-constrained systems (keeps multiple builds)
 
-### Configuration Options
-
-```python
-strategy = ait.HighestThroughputStrategy(
-    backends=backends,
-    number_of_iterations=100,    # More = more accurate, slower
-    warmup_iterations=10,         # Warmup before measurement
-    enable_correctness_check=True,  # Validate outputs
-)
-```
-
-### Complete Example
-
-```python
-import aitune.torch as ait
-from aitune.torch.backend import (
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchInductorBackend,
-    TorchInductorBackendConfig,
-    TorchAOBackend,
-    TorchAOBackendConfig,
-)
-
-# Compare multiple backends with different configs
-backends = [
-    # TensorRT with FP16
-    TensorRTBackend(config=TensorRTBackendConfig(
-        precision="fp16",
-        use_cuda_graphs=True,
-    )),
-
-    # Torch Inductor
-    TorchInductorBackend(config=TorchInductorBackendConfig(
-        mode="max-autotune",
-    )),
-
-    # TorchAO with FP8
-    TorchAOBackend(config=TorchAOBackendConfig(
-        quantization="fp8wo",
-    )),
-
-    # TorchAO with INT4
-    TorchAOBackend(config=TorchAOBackendConfig(
-        quantization="int4wo",
-    )),
-]
-
-# Find the fastest
-strategy = ait.HighestThroughputStrategy(
-    backends=backends,
-    number_of_iterations=100,
-    warmup_iterations=20,
-)
-
-wrapped_model = ait.Module(model, "optimized-model", strategy=strategy)
-ait.tune(wrapped_model, input_data)
-
-# Result: Uses the backend with highest measured throughput
-```
-
 ## Best Practices
 
 1. **Development**: Use `FirstWinsStrategy` with fallback
@@ -315,7 +197,6 @@ ait.tune(wrapped_model, input_data)
 3. **Benchmarking**: Use `HighestThroughputStrategy` to find the best option
 4. **Always Validate**: Test tuned models before deployment
 5. **Cache Results**: Save tuned models to avoid re-tuning
-
 
 ## Next Steps
 

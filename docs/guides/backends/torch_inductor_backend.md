@@ -31,6 +31,7 @@ The Torch Inductor backend uses PyTorch's built-in compiler (`torch.compile` wit
 ```python
 from aitune.torch.backend import TorchInductorBackend, TorchInductorBackendConfig
 import aitune.torch as ait
+import torch
 
 # Configure backend
 config = TorchInductorBackendConfig(mode="max-autotune")
@@ -139,83 +140,6 @@ config = TorchInductorBackendConfig(
 )
 ```
 
-## Complete Examples
-
-### Example 1: ResNet with Max Autotune
-
-```python
-import torch
-import torchvision.models as models
-import aitune.torch as ait
-from aitune.torch.backend import TorchInductorBackend, TorchInductorBackendConfig
-
-# Load model
-model = models.resnet50(pretrained=True)
-model.eval().cuda()
-
-# Configure for maximum performance
-config = TorchInductorBackendConfig(
-    mode="max-autotune",
-    autocast_enabled=True,
-    autocast_dtype=torch.float16,
-)
-backend = TorchInductorBackend(config)
-
-# Tune
-wrapped_model = ait.Module(model, "resnet50", strategy=OneBackendStrategy(backend))
-input_data = torch.randn(8, 3, 224, 224, device="cuda")
-ait.tune(wrapped_model, input_data)
-
-# Inference
-output = wrapped_model(input_data)
-```
-
-### Example 2: Low Latency with CUDA Graphs
-
-```python
-config = TorchInductorBackendConfig(
-    mode="reduce-overhead",  # Uses CUDA graphs
-    dynamic=False,  # Specialize for fixed shapes
-)
-backend = TorchInductorBackend(config)
-
-# Tune with fixed batch size
-wrapped_model = ait.Module(model, "low-latency", strategy=OneBackendStrategy(backend))
-input_data = torch.randn(1, 3, 224, 224, device="cuda")
-ait.tune(wrapped_model, input_data)
-```
-
-### Example 3: Dynamic Shapes
-
-```python
-config = TorchInductorBackendConfig(
-    mode="default",
-    dynamic=True,  # Enable dynamic shapes
-)
-backend = TorchInductorBackend(config)
-
-# Tune with multiple batch sizes
-input_data = [
-    torch.randn(1, 3, 224, 224, device="cuda"),
-    torch.randn(4, 3, 224, 224, device="cuda"),
-    torch.randn(8, 3, 224, 224, device="cuda"),
-]
-wrapped_model = ait.Module(model, "dynamic", strategy=OneBackendStrategy(backend))
-ait.tune(wrapped_model, input_data)
-
-# Works with any batch size
-output = wrapped_model(torch.randn(6, 3, 224, 224, device="cuda"))
-```
-
-## Mode Comparison
-
-| Mode | CUDA Graphs | Auto-tuning | Overhead | Best For |
-|------|-------------|-------------|----------|----------|
-| default | No | Moderate | Normal | General use |
-| reduce-overhead | Yes | Moderate | Low | Low latency, small batch |
-| max-autotune | Yes | Aggressive | Low | Maximum performance |
-| max-autotune-no-cudagraphs | No | Aggressive | Normal | Max performance, variable shapes |
-
 ## Debugging
 
 ### Enable Logging
@@ -291,13 +215,13 @@ config = TorchInductorBackendConfig(
 
 ## Comparison with Other Backends
 
-| Feature | Inductor | TensorRT | TorchAO |
-|---------|----------|----------|---------|
-| **Dependencies** | None | TensorRT | torchao |
-| **Setup** | Easy | Moderate | Easy |
-| **Performance** | Good | Excellent | Good |
-| **Quantization** | Limited | Advanced | Extensive |
-| **Portability** | Excellent | NVIDIA only | Good |
+| Feature          | Inductor  | TensorRT    | TorchAO   |
+|------------------|-----------|-------------|-----------|
+| **Dependencies** | None      | TensorRT    | torchao   |
+| **Setup**        | Easy      | Moderate    | Easy      |
+| **Performance**  | Good      | Excellent   | Good      |
+| **Quantization** | Limited   | Advanced    | Extensive |
+| **Portability**  | Excellent | NVIDIA only | Good      |
 
 ## Next Steps
 

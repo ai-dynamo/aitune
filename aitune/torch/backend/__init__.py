@@ -29,6 +29,7 @@ from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackendConfig,
 )
 from aitune.torch.backend.torch_tensorrt_jit_backend import (
+    TorchTensorRTConfig,
     TorchTensorRTJitBackend,
     TorchTensorRTJitBackendConfig,
 )
@@ -49,6 +50,7 @@ __all__ = [
     "TorchEagerBackendConfig",
     "TorchTensorRTAotBackend",
     "TorchTensorRTAotBackendConfig",
+    "TorchTensorRTConfig",
     "TorchTensorRTJitBackend",
     "TorchTensorRTJitBackendConfig",
     "TorchQuantizationConfig",

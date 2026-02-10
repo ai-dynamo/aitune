@@ -150,7 +150,7 @@ class TuneStrategy(ABC):
     ) -> Backend:
         """Tunes given torch module with provided graph_spec and data.
 
-        Note: each tuning operation should do a deepcopy of a backend as tuning could be called multiple times for the
+        Note: each tuning operation should do a deep copy of a backend as tuning could be called multiple times for the
         same module i.e. if there are different graph specs
 
         Returns:

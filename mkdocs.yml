@@ -93,6 +93,9 @@ nav:
                 - Torch Inductor Backend: guides/backends/torch_inductor_backend.md
             - Tune Strategies: guides/tune_strategies/tune_strategies.md
             - Deployment: guides/deployment/deployment.md
+            - Advanced:
+                - Tuning Workflow: guides/advanced/tuning_workflow.md
+                - Execution Graphs: guides/advanced/execution_graphs.md
     -   Examples:
             - Overview: examples/examples.md
             - E5Large: examples/E5Large/README.md

@@ -64,6 +64,7 @@ dependencies = [
     "autowrapt>=1.0",
     "nvtx",
     "tabulate>=0.9.0",
+    "onnx-ir<=0.1.15", # 0.1.16 fails with torch 2.9.1 tests/unit/torch/backend/tensorrt/test_onnx_exporter_dynamo.py::test_should_work_with_simple
 ]
 
 [project.urls]

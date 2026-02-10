@@ -34,11 +34,11 @@ The TensorRT backend:
 ### Basic Usage
 
 ```python
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, ONNXAutoCastConfig, ONNXQuantizationConfig, TorchQuantizationConfig
 import aitune.torch as ait
 
 # Configure TensorRT backend
-config = TensorRTBackendConfig(precision="fp16")
+config = TensorRTBackendConfig(use_dynamo=True)
 backend = TensorRTBackend(config)
 
 # Use with tuning
@@ -53,7 +53,7 @@ ait.tune(model, input_data)
 
 ```python
 config = TensorRTBackendConfig(
-    precision="fp16",
+    quantization_config=ONNXAutoCastConfig(precision="fp16"),
     workspace_size=1 << 30,  # 1GB workspace
 )
 backend = TensorRTBackend(config)
@@ -63,7 +63,6 @@ backend = TensorRTBackend(config)
 
 ```python
 config = TensorRTBackendConfig(
-    precision="fp16",
     use_cuda_graphs=True,  # Enable CUDA graphs
 )
 backend = TensorRTBackend(config)
@@ -163,10 +162,10 @@ config = TensorRTBackendConfig(
 Hardware compatibility level for the engine.
 
 ```python
-from polygraphy.backend.trt import HardwareCompatibilityLevel
+import tensorrt as trt
 
 config = TensorRTBackendConfig(
-    compatibility_level=HardwareCompatibilityLevel.AMPERE_PLUS,
+    compatibility_level=trt.HardwareCompatibilityLevel.AMPERE_PLUS,
 )
 ```
 
@@ -229,29 +228,31 @@ Device for TensorRT engine.
 config = TensorRTBackendConfig(
     device="cuda",  # Default
 )
-
-# Or specific GPU
-config = TensorRTBackendConfig(
-    device="cuda:1",
-)
 ```
 
 ### quantization_config
 
-Quantization configuration for INT8/FP16 mixed precision.
+TensorRT backend supports multiple quantization methods through TensorRT Model Optimizer integration.
 
 ```python
-from modelopt.onnx.quantization import QuantizationConfig
+config = TensorRTBackendConfig(
+    quantization_config=ONNXAutoCastConfig(precision="fp16"),
+)
+
+# or
 
 config = TensorRTBackendConfig(
-    quantization_config=QuantizationConfig(
-        algorithm="max",
-        quant_format="int8",
-    ),
+    quantization_config=ONNXQuantizationConfig(precision="fp16"),
+)
+
+# or
+
+config = TensorRTBackendConfig(
+    quantization_config=TorchQuantizationConfig(quantization_config="FP8_DEFAULT_CFG"),
 )
 ```
 
-See [Quantization](#quantization) section for details.
+For a detailed information take a look at Model Optimizer [documentation](https://github.com/NVIDIA/Model-Optimizer).
 
 ### enable_tf32
 
@@ -386,203 +387,6 @@ Use the `Name` column value (e.g., `args_0`) in your profiles.
 4. **Multiple Profiles**: Use for distinct size categories, not slight variations
 5. **Test Runtime Shapes**: Verify your production shapes are covered
 
-## Quantization
-
-TensorRT backend supports multiple quantization methods through TensorRT Model Optimizer integration.
-
-### FP16 Precision
-
-```python
-config = TensorRTBackendConfig(precision="fp16")
-backend = TensorRTBackend(config)
-```
-
-### INT8 Quantization
-
-```python
-from modelopt.onnx.quantization import QuantizationConfig
-
-quantization_config = QuantizationConfig(
-    algorithm="max",  # or "minmax", "entropy"
-    quant_format="int8",
-)
-
-config = TensorRTBackendConfig(
-    quantization_config=quantization_config,
-)
-backend = TensorRTBackend(config)
-```
-
-### Mixed Precision (AutoCast)
-
-```python
-from modelopt.onnx.quantization import AutoCastConfig
-
-autocast_config = AutoCastConfig(
-    fp16=True,
-    int8=True,
-)
-
-config = TensorRTBackendConfig(
-    quantization_config=autocast_config,
-)
-backend = TensorRTBackend(config)
-```
-
-### PyTorch Quantization
-
-```python
-from modelopt.torch.quantization import QuantizationConfig as TorchQuantizationConfig
-
-quantization_config = TorchQuantizationConfig(
-    quant_cfg={
-        "quant_cfg": "*default_quant_cfg*",
-        "algorithm": "max",
-    }
-)
-
-config = TensorRTBackendConfig(
-    quantization_config=quantization_config,
-)
-backend = TensorRTBackend(config)
-```
-
-## CUDA Graphs
-
-CUDA Graphs reduce CPU overhead by capturing and replaying GPU operations.
-
-### Enabling CUDA Graphs
-
-```python
-config = TensorRTBackendConfig(
-    precision="fp16",
-    use_cuda_graphs=True,
-)
-backend = TensorRTBackend(config)
-```
-
-### How It Works
-
-1. **First Inference**: Graph is captured (slower)
-2. **Subsequent Inferences**: Graph is replayed (faster)
-3. **Shape Change**: Graph is automatically re-captured
-
-### When to Use
-
-**Benefits**:
-
-- Small to medium models
-- Repeated inference with the same shapes
-- Latency-critical applications
-
-**Not recommended**:
-
-- Very large models (graph capture overhead)
-- Frequently changing input shapes
-- Memory-constrained environments
-
-### Performance Example
-
-```python
-import time
-import torch
-import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
-
-# Without CUDA graphs
-config_no_graphs = TensorRTBackendConfig(precision="fp16", use_cuda_graphs=False)
-backend_no_graphs = TensorRTBackend(config_no_graphs)
-
-# With CUDA graphs
-config_graphs = TensorRTBackendConfig(precision="fp16", use_cuda_graphs=True)
-backend_graphs = TensorRTBackend(config_graphs)
-
-# Measure performance (after warmup)
-# ... results show 10-30% latency reduction for small models
-```
-
-## Complete Examples
-
-### Example 1: ResNet50 with FP16
-
-```python
-import torch
-import torchvision.models as models
-import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
-from aitune.torch.tune_strategy import OneBackendStrategy
-
-# Load model
-model = models.resnet50(pretrained=True)
-model.eval()
-model.to("cuda")
-
-# Configure TensorRT
-config = TensorRTBackendConfig(
-    precision="fp16",
-    workspace_size=1 << 30,
-    enable_tf32=True,
-)
-backend = TensorRTBackend(config)
-strategy = OneBackendStrategy(backend=backend)
-
-# Wrap and tune
-wrapped_model = ait.Module(model, "resnet50", strategy=strategy)
-input_data = torch.randn(1, 3, 224, 224, device="cuda")
-ait.tune(wrapped_model, input_data)
-
-# Inference
-output = wrapped_model(input_data)
-```
-
-### Example 2: Dynamic Shapes with Custom Profiles
-
-```python
-import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
-from aitune.torch.backend.tensorrt import TensorRTProfile
-
-# Define profiles for different batch sizes
-profiles = [
-    TensorRTProfile()
-        .add_input_shape("args_0", (1, 3, 224, 224), (1, 3, 224, 224), (1, 3, 224, 224)),
-    TensorRTProfile()
-        .add_input_shape("args_0", (4, 3, 224, 224), (4, 3, 224, 224), (4, 3, 224, 224)),
-    TensorRTProfile()
-        .add_input_shape("args_0", (8, 3, 224, 224), (8, 3, 224, 224), (8, 3, 224, 224)),
-]
-
-config = TensorRTBackendConfig(
-    precision="fp16",
-    profiles=profiles,
-)
-backend = TensorRTBackend(config)
-
-# Use in tuning
-# ...
-```
-
-### Example 3: INT8 Quantization
-
-```python
-from modelopt.onnx.quantization import QuantizationConfig
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
-
-# Configure INT8 quantization
-quantization_config = QuantizationConfig(
-    algorithm="max",
-    quant_format="int8",
-)
-
-config = TensorRTBackendConfig(
-    quantization_config=quantization_config,
-    workspace_size=2 << 30,  # 2GB for quantization
-)
-backend = TensorRTBackend(config)
-
-# Use in tuning with calibration data
-# ...
-```
 
 ## Troubleshooting
 

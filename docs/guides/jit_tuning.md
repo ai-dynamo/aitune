@@ -63,20 +63,28 @@ images = pipe("A beautiful landscape")
 For fine-grained control, you can use the `@patch_for_jit_tuning` decorator on specific functions:
 
 ```python
-from aitune.torch import patch_for_jit_tuning
+from aitune.torch import patch_for_jit_tuning, jit_config
+import timm
+import torch
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+jit_config.min_samples = 2
+jit_config.batch_axis_required = False
 
 @patch_for_jit_tuning
-def inference_pipeline(model, input_data):
+def create_resnet():
     """This function will have JIT tuning enabled."""
-    with torch.no_grad():
-        return model(input_data)
+    return timm.create_model("resnet18", pretrained=False).to("cuda")
 
 # Your model
-model = YourModel().cuda()
-input_data = torch.randn(1, 3, 224, 224, device="cuda")
+model = create_resnet().cuda()
 
-# Tuning happens automatically when the decorated function is called
-output = inference_pipeline(model, input_data)
+# Tuning happens automatically when the model is called
+with torch.no_grad():
+    output = model(torch.randn(1, 3, 224, 224, device="cuda"))
+    output = model(torch.randn(2, 3, 224, 224, device="cuda"))
 ```
 
 This approach allows you to:
@@ -111,8 +119,9 @@ import torch
 class DynamicModule(torch.nn.Module):
 
     def __init__(self):
-        self.child_a = Linear(10, 20)
-        self.child_b = Linear(10, 20)
+        super().__init__()
+        self.child_a = torch.nn.Linear(10, 20)
+        self.child_b = torch.nn.Linear(10, 20)
 
     def forward(self, x):
         if x.sum() > 0:  # Graph break: conditional on input
@@ -279,7 +288,7 @@ from aitune.torch.backend import (
 )
 
 jit_config.backends = [
-    TensorRTBackend(config=TensorRTBackendConfig(precision="fp16")),
+    TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
     TorchInductorBackend(),
 ]
 ```
@@ -393,7 +402,7 @@ To investigate what may have failed in the process, you can see the history of j
 ```python
 from aitune.torch import PatchedModule
 
-print(PatchedModule.history)
+PatchedModule.print_history()
 ```
 
 Here is abbreviated example from `ResNet`
