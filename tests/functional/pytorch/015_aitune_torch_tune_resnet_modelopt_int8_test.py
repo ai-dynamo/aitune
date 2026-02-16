@@ -67,8 +67,7 @@ if __name__ == "__main__":
                 quantization_config=ONNXQuantizationConfig(
                     precision="int8",
                     calibration_method="max",
-                ),
-                use_dynamo=False,
+                )
             )
         ),
         torch.float32,

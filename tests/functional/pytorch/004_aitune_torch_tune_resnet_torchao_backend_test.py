@@ -67,8 +67,6 @@ def test_tune_resnet_torchao():
 
     for dtype, quantization in product(dtypes, quantizations):
         try:
-            if quantization == "int4wo" and dtype != torch.bfloat16:
-                continue  # int4wo is not supported on float16 or float32
             if quantization in ["fp8wo", "fp8dq"] and not is_sm_at_least_89():
                 continue  # fp8wo and fp8dq are not supported on this device
             logger.info("Testing %s and %s", quantization, dtype)

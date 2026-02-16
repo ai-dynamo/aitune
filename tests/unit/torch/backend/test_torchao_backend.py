@@ -16,7 +16,7 @@ from unittest.mock import Mock
 import pytest
 import torch
 import torch.nn as nn
-from torchao.quantization import FPXWeightOnlyConfig, Int8WeightOnlyConfig
+from torchao.quantization import Int8WeightOnlyConfig
 from torchao.utils import is_sm_at_least_89
 
 from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendConfig
@@ -54,7 +54,7 @@ def build_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
 
 
 def test_torchao_config_key():
-    config = TorchAOBackendConfig(quantization="int4wo")
+    config = TorchAOBackendConfig(quantization="int8wo")
     key1 = config.key()
     key2 = config.key()
 
@@ -62,15 +62,9 @@ def test_torchao_config_key():
 
 
 def test_torchao_config_describe():
-    config = TorchAOBackendConfig(quantization="int4wo")
+    config = TorchAOBackendConfig(quantization="int8wo")
     describe = config.describe()
-    assert describe == "quantization_config=Int4WeightOnlyConfig(group_size=32)"
-
-
-def test_torchao_config_describe_with_kwargs():
-    config = TorchAOBackendConfig(quantization="fp6e3m2")
-    describe = config.describe()
-    assert describe == "quantization_config=FPXWeightOnlyConfig(ebits=3,mbits=2)"
+    assert describe == "quantization_config=Int8WeightOnlyConfig()"
 
 
 def test_torchao_config_initialization():
@@ -118,8 +112,6 @@ def do_test_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
     ids=["bfloat16", "float16", "float32"],
 )
 def test_torchao_backend_build(quantization, dtype, model, sample_data, torch_device, tmp_path):
-    if quantization == "int4wo" and dtype != torch.bfloat16:
-        pytest.skip("int4wo is not supported on float16 or float32")
     if quantization in ["fp8wo", "fp8dq"] and not is_sm_at_least_89():
         pytest.skip("fp8wo and fp8dq are not supported on this device")
 
@@ -131,8 +123,8 @@ def test_torchao_backend_build(quantization, dtype, model, sample_data, torch_de
 @requires_cuda
 @pytest.mark.parametrize(
     "quantization_config",
-    [Int8WeightOnlyConfig(group_size=16), FPXWeightOnlyConfig(2, 3)],
-    ids=["int8wo with different group size", "fp6 with lower exponent but higher mantissa"],
+    [Int8WeightOnlyConfig(group_size=16)],
+    ids=["int8wo with different group size"],
 )
 def test_torchao_backend_build_with_user_config(quantization_config, model, sample_data, torch_device, tmp_path):
     config = TorchAOBackendConfig(quantization_config=quantization_config)
@@ -148,11 +140,7 @@ def test_invalid_quantization_type():
 @requires_cuda
 @pytest.mark.parametrize("quantization", TorchAOBackendConfig._QUANTIZATION_CONFIGS.keys())
 def test_serialization(quantization, tmp_path, model, sample_data, torch_device):
-    if quantization == "int4wo":
-        dtype = torch.bfloat16
-    else:
-        dtype = torch.float16
-
+    dtype = torch.float16
     if quantization in ["fp8wo", "fp8dq"] and not is_sm_at_least_89():
         pytest.skip("fp8wo and fp8dq are not supported on this device")
 

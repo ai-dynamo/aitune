@@ -18,10 +18,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import modelopt
 import modelopt.onnx.quantization as moq
 import onnx
 import torch
-from modelopt.onnx.quantization.qdq_utils import fp4qdq_to_2dq
+from packaging.version import Version
+
+if Version(modelopt.__version__) < Version("0.40.0"):
+    from modelopt.onnx.quantization.qdq_utils import fp4qdq_to_2dq
+
+    # Note: https://nvidia.github.io/TensorRT-Model-Optimizer/reference/generated/modelopt.onnx.quantization.qdq_utils.html#modelopt.onnx.quantization.qdq_utils.fp4qdq_to_2dq
+    modelopt_fp4_exporter = fp4qdq_to_2dq
+else:
+    # Note: https://nvidia.github.io/Model-Optimizer/reference/generated/modelopt.onnx.export.html#modelopt.onnx.export.NVFP4QuantExporter
+    from modelopt.onnx.export import NVFP4QuantExporter
+
+    modelopt_fp4_exporter = NVFP4QuantExporter.process_model
 
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
@@ -113,11 +125,9 @@ class ONNXQuantizer:
         # Load the exported ONNX model
         onnx_model = onnx.load(onnx_path)
 
-        # Apply fp4qdq_to_2dq transformation for TensorRT optimization
-        # Note: https://nvidia.github.io/TensorRT-Model-Optimizer/reference/generated/modelopt.onnx.quantization.qdq_utils.html#modelopt.onnx.quantization.qdq_utils.fp4qdq_to_2dq
         # Used for FP4 nodes
-        logger.info("Applying fp4qdq_to_2dq transformation")
-        post_processed_model = fp4qdq_to_2dq(onnx_model)
+        logger.info("Applying nvfp4 quant exporter transformation")
+        post_processed_model = modelopt_fp4_exporter(onnx_model)
 
         #  Workaround for missing ir_version and opset, this is not needed for TensorRT
         if not hasattr(post_processed_model, "ir_version"):

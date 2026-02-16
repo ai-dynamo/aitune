@@ -20,7 +20,7 @@ The TorchAO backend leverages PyTorch's torchao library for quantization-based m
 
 ## Overview
 
-- **Weight-Only Quantization**: INT4, INT8, FP8, FP6, FP5, FP4
+- **Weight-Only Quantization**: INT8, FP8
 - **Dynamic Quantization**: INT8 and FP8 with dynamic activations
 - **Easy Configuration**: Predefined quantization types
 - **Pure PyTorch**: No external dependencies beyond torchao
@@ -47,23 +47,11 @@ ait.tune(model, input_data)
 ### Weight-Only Quantization
 
 ```python
-# INT4 weight-only
-config = TorchAOBackendConfig(quantization="int4wo")
-
 # INT8 weight-only
 config = TorchAOBackendConfig(quantization="int8wo")
 
 # FP8 weight-only (default)
 config = TorchAOBackendConfig(quantization="fp8wo")
-
-# FP6 E3M2
-config = TorchAOBackendConfig(quantization="fp6e3m2")
-
-# FP5 E2M2
-config = TorchAOBackendConfig(quantization="fp5e2m2")
-
-# FP4 E2M1
-config = TorchAOBackendConfig(quantization="fp4e2m1")
 ```
 
 ### Dynamic Quantization
@@ -82,18 +70,16 @@ config = TorchAOBackendConfig(quantization="fp8dq")
 
 ```python
 config = TorchAOBackendConfig(
-    quantization="int4wo",  # Choose quantization type
+    quantization="int8wo",  # Choose quantization type
 )
 ```
 
 ### Custom Configuration
 
 ```python
-from torchao.quantization import Int4WeightOnlyConfig
+from torchao.quantization import Int8WeightOnlyConfig
 
-custom_config = Int4WeightOnlyConfig(
-    group_size=64,  # Quantization group size
-)
+custom_config = Int8WeightOnlyConfig()
 
 config = TorchAOBackendConfig(
     quantization_config=custom_config,
@@ -104,19 +90,15 @@ config = TorchAOBackendConfig(
 
 | Type    | Weights | Activations | Memory Reduction | Speed     | Accuracy  |
 |---------|---------|-------------|------------------|-----------|-----------|
-| int4wo  | INT4    | FP16/FP32   | ~4x              | High      | Good      |
 | int8wo  | INT8    | FP16/FP32   | ~2x              | High      | Better    |
 | int8dq  | INT8    | INT8        | ~2x              | Very High | Good      |
 | fp8wo   | FP8     | FP16/FP32   | ~2x              | Very High | Excellent |
 | fp8dq   | FP8     | FP8         | ~2x              | Very High | Excellent |
-| fp6e3m2 | FP6     | FP16/FP32   | ~2.7x            | High      | Very Good |
-| fp5e2m2 | FP5     | FP16/FP32   | ~3.2x            | High      | Good      |
-| fp4e2m1 | FP4     | FP16/FP32   | ~4x              | High      | Moderate  |
 
 ## Best Practices
 
 1. **Start with FP8**: Best accuracy/performance trade-off
-2. **Use INT4 for Memory**: When memory is critical
+2. **Use INT8 for Memory**: When memory is critical
 3. **Dynamic Quantization**: Better accuracy, slightly higher overhead
 4. **Validate Accuracy**: Always test quantized model accuracy
 5. **Calibration Data**: Use representative samples
@@ -128,7 +110,7 @@ config = TorchAOBackendConfig(
 **Solution**: Try less aggressive quantization:
 
 ```python
-# Instead of int4wo, try int8wo or fp8wo
+# Instead of int8wo, try fp8wo
 config = TorchAOBackendConfig(quantization="fp8wo")
 ```
 

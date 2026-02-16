@@ -29,8 +29,6 @@ from torchao.core.config import AOBaseConfig
 from torchao.quantization import (
     Float8DynamicActivationFloat8WeightConfig,
     Float8WeightOnlyConfig,
-    FPXWeightOnlyConfig,
-    Int4WeightOnlyConfig,
     Int8DynamicActivationInt8WeightConfig,
     Int8WeightOnlyConfig,
     PerTensor,
@@ -44,7 +42,7 @@ from aitune.utils.hashing import hash_string
 
 logger = getLogger(__name__)
 
-QuantizationType = Literal["int4wo", "int8wo", "int8dq", "fp8wo", "fp8dq", "fp6e3m2", "fp5e2m2", "fp4e2m1"]
+QuantizationType = Literal["int8wo", "int8dq", "fp8wo", "fp8dq"]
 DEFAULT_QUANTIZATION = "fp8wo"
 
 
@@ -56,14 +54,10 @@ class TorchAOBackendConfig(BackendConfig):
     quantization_config: AOBaseConfig | None = None
 
     _QUANTIZATION_CONFIGS = {
-        "int4wo": Int4WeightOnlyConfig(group_size=32),
         "int8wo": Int8WeightOnlyConfig(),
         "int8dq": Int8DynamicActivationInt8WeightConfig(),
         "fp8wo": Float8WeightOnlyConfig(),
         "fp8dq": Float8DynamicActivationFloat8WeightConfig(granularity=PerTensor()),
-        "fp6e3m2": FPXWeightOnlyConfig(3, 2),
-        "fp5e2m2": FPXWeightOnlyConfig(2, 2),
-        "fp4e2m1": FPXWeightOnlyConfig(2, 1),
     }
 
     def __post_init__(self):
@@ -122,14 +116,10 @@ class TorchAOBackend(Backend):
     """Backend that does torch quantization.
 
     Supported quantizations:
-        - int4wo
         - int8wo
         - int8dq
         - fp8wo
         - fp8dq
-        - fp6e3m2
-        - fp5e2m2
-        - fp4e2m1
 
     If you would like to use customize quantization, you can pass in a quantization config.
     """

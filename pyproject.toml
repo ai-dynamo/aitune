@@ -47,24 +47,21 @@ keywords = [
 license = { text = "Apache 2.0" }
 requires-python = ">=3.10,<3.13"
 dependencies = [
-    "dill>=0.3.8",
-    "numpy<2",
-    "onnx<1.19", # known issue with int8 PTQ
-    "onnxscript~=0.5.0",
-    "onnx_graphsurgeon~=0.5",
-    "polygraphy>=0.49.0",
-    "psutil",
-    "nvidia-ml-py",
-    "tensorrt>=10.5",
-    "torch>=2.5.1",
-    "torchao==0.13",
-    "torch_tensorrt>2",
-    "wrapt~=2.0",
-    "nvidia-modelopt[onnx]>=0.33.0",
     "autowrapt>=1.0",
+    "dill>=0.3.8",
+    "nvidia-ml-py",
+    "nvidia-modelopt[onnx]>=0.40.0",
+    "numpy<2",
     "nvtx",
+    "onnxscript<=0.5.4",
+    "onnx-ir<=0.1.15",
+    "psutil",
     "tabulate>=0.9.0",
-    "onnx-ir<=0.1.15", # 0.1.16 fails with torch 2.9.1 tests/unit/torch/backend/tensorrt/test_onnx_exporter_dynamo.py::test_should_work_with_simple
+    "tensorrt>=10.5",
+    "torch>=2.7",
+    "torchao>=0.13",
+    "torch-tensorrt>2",
+    "wrapt~=2.0"
 ]
 
 [project.urls]
@@ -79,7 +76,7 @@ test = [
     "pytest-cov",
     "pillow",
     "datasets>=3.3.2",
-    "transformers<5",
+    "transformers",
     "setuptools",
     "importlib-metadata; python_version < '3.10'",
 ]
@@ -97,7 +94,6 @@ dev = [
     "pre-commit-uv",
     "pytype",
     "tox",
-    "tox-uv>1.28",
     "uv>=0.9.0",
     "nbconvert>=7.17.0",
 ]
@@ -131,7 +127,6 @@ doc = [
     "mkdocstrings[python] >= 0.24.0",
     "mkdocstrings-python >= 1.7.0"
 ]
-
 
 [build-system]
 requires = ["setuptools>=65.3.0", "setuptools_scm[toml]>=8.3", "wheel>=0.37.1"]

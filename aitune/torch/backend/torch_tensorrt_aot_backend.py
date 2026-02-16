@@ -21,7 +21,6 @@ from typing import Any, ClassVar, Literal
 import nvtx
 import torch
 import torch.nn as nn
-from packaging.version import Version
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.config import DEFAULT_PICKLE_PROTOCOL
@@ -167,11 +166,6 @@ class TorchTensorRTAotBackend(Backend):
             batch_size = min(max_batch_size, 2)
             args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=batch_size)
 
-        save_kwargs = {}
-        if Version(torch.__version__) >= Version("2.7"):
-            logger.info("Using pickle protocol %d.", self._config.pickle_protocol)
-            save_kwargs["pickle_protocol"] = self._config.pickle_protocol
-
         # Create input signature for dynamic shapes
         logger.info("Preparing input signature for dynamic shapes.")
         input_signature = []
@@ -212,7 +206,8 @@ class TorchTensorRTAotBackend(Backend):
         torch_tensorrt.save(
             trt_model_compiled,
             self._exported_model_path.as_posix(),
-            **save_kwargs,
+            retrace=False,
+            pickle_protocol=self._config.pickle_protocol,
         )
 
         logger.info("Module has been compiled and saved with TensorRT.")
@@ -221,7 +216,7 @@ class TorchTensorRTAotBackend(Backend):
 
     def _activate(self):
         """Load compiled module."""
-        self._opt_module = torch.export.load(self._exported_model_path.as_posix()).module().to(self._device)
+        self._opt_module = torch_tensorrt.load(self._exported_model_path.as_posix()).module().to(self._device)
 
     @nvtx.annotate(message="TorchTensorRTAotBackend.infer", domain="AITune", color="purple")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
