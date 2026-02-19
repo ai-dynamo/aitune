@@ -41,7 +41,7 @@ def get_flux_pipeline(model_name: str = "hf-internal-testing/tiny-flux-pipe", de
     Returns:
         FluxPipeline: The loaded Flux pipeline
     """
-    pipe = FluxPipeline.from_pretrained(model_name, torch_dtype=torch.float16).to(device="cuda", dtype=torch.float16)
+    pipe = FluxPipeline.from_pretrained(model_name, torch_dtype=torch.float16).to(device=device, dtype=torch.float16)
     torch.cuda.empty_cache()
     return pipe
 

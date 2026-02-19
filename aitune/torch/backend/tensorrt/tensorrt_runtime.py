@@ -26,6 +26,7 @@ from aitune.utils.system_monitor import SystemMonitor
 trt = lazy_import("tensorrt")
 
 TRT_ENGINE_FILE_EXTENSION = ".plan"
+LOGGING_PREFIX = "[TRT]"
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -62,15 +63,15 @@ class PythonTRTLogger(trt.ILogger):
 
         # Map TensorRT severity to Python logging levels
         if severity == trt.Logger.INTERNAL_ERROR:
-            self.python_logger.critical("[TRT] %s", msg)
+            self.python_logger.critical("%s %s", LOGGING_PREFIX, msg)
         elif severity == trt.Logger.ERROR:
-            self.python_logger.error("[TRT] %s", msg)
+            self.python_logger.error("%s %s", LOGGING_PREFIX, msg)
         elif severity == trt.Logger.WARNING:
-            self.python_logger.warning("[TRT] %s", msg)
+            self.python_logger.warning("%s %s", LOGGING_PREFIX, msg)
         elif severity == trt.Logger.INFO:
-            self.python_logger.info("[TRT] %s", msg)
+            self.python_logger.info("%s %s", LOGGING_PREFIX, msg)
         elif severity == trt.Logger.VERBOSE:
-            self.python_logger.debug("[TRT] %s", msg)
+            self.python_logger.debug("%s %s", LOGGING_PREFIX, msg)
 
 
 class TensorRTRuntime:

@@ -377,10 +377,6 @@ def test_deepcopy():
     model = Identity()
     module = Module(model, TEST_MODULE_NAME)
 
-    # with pytest.raises(Exception, match="Cannot deepcopy a module"):
-    #     # this may fail do to decorating forward method with wrapt.decorator
-    #     deepcopy(model)
-
     module._restore_original_forward()
     deepcopy(model)  # this must not fail
 

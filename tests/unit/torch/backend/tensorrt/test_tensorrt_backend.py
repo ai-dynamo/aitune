@@ -109,7 +109,22 @@ def test_tensorrt_backend_init():
     # Test with default parameters
     backend = TensorRTBackend()
 
-    # Test with custom parameters
+    assert backend._config is not None
+    assert backend._system_monitor is not None
+    assert backend._context is None
+    assert backend._io_tensors is None
+    assert backend._output_names is None
+    assert backend._input_names is None
+    assert backend._engine_path is None
+    assert backend._engine_info is None
+    assert backend._cuda_stream is None
+    assert backend._start_time is None
+    assert backend._end_time is None
+    assert backend._outputs is None
+
+
+def test_tensorrt_backend_init_with_custom_parameters():
+    """Test TensorRTBackend initialization with custom parameters."""
     config = TensorRTBackendConfig(
         use_dynamo=True,
         opset_version=16,

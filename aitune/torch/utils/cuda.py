@@ -78,21 +78,4 @@ def set_device(device: str | torch.device):
         device: Device string or torch.device object. If string is 'cuda', it will be converted to 'cuda:0'.
     """
     device = get_device(device)
-
-    if isinstance(device, torch.device):
-        torch.cuda.set_device(device)
-        return
-    elif isinstance(device, str):
-        pattern = r"^cuda:(\d+)$"
-        match = re.match(pattern, device)
-        if match:
-            torch.cuda.set_device(device)
-            return
-
-        pattern = r"^cuda$"
-        match = re.match(pattern, device)
-        if match:
-            torch.cuda.set_device(0)
-            return
-
-    raise ValueError("device must be 'cuda' or in format 'cuda:<device_id>'")
+    torch.cuda.set_device(device)

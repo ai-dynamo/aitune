@@ -892,8 +892,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
                 tensor = static_tensor
 
-                # TODO: can we have user provided static inputs?
-
             try:
                 # Set input tensor shape directly
                 self._context.set_input_shape(name, shape)

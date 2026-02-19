@@ -65,7 +65,6 @@ def test_flux_like_tiny():
     device = torch.device("cuda")
 
     pipe = diffusers.FluxPipeline.from_pretrained("hf-internal-testing/tiny-flux-pipe")
-    # pipe = diffusers.FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev")
     pipe.to(device)
 
     def call_wrapper(*args, **kwargs):

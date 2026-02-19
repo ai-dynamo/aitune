@@ -32,7 +32,7 @@ from aitune.torch.utils.cuda import assert_is_available as assert_cuda_is_availa
 try:
     import torch_tensorrt
     from torch_tensorrt.dynamo import CompilationSettings as TorchTensorRTConfig
-except (ImportError, RuntimeError, FileNotFoundError, OSError):
+except (ImportError, RuntimeError, OSError):
     torch_tensorrt = None
 
     @dataclass

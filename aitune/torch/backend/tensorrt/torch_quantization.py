@@ -215,7 +215,7 @@ class TorchQuantizer:
 
         return config_mapping[config_name]
 
-    def _configure_quantizers_for_onnx_export(self, model: nn.Module, verbose: bool = False):
+    def _configure_quantizers_for_onnx_export(self, model: nn.Module):
         """Configure quantizers in the model for ONNX export.
 
         Sets appropriate attributes on input and weight quantizers to ensure proper ONNX export.
@@ -224,7 +224,6 @@ class TorchQuantizer:
 
         Args:
             model: The quantized PyTorch model with quantizers to configure
-            verbose: Whether to log detailed information about each configured quantizer
         """
         logger.info("Configuring quantizers for ONNX export")
 

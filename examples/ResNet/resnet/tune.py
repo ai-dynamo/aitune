@@ -62,7 +62,6 @@ def tune_model(
 
     module_name = f"example-{model_name}"
 
-    # TODO: add default backends for INT8 quantization stream
     module = Module(
         model,
         module_name,

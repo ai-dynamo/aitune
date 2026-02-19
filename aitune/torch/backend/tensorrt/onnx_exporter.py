@@ -274,9 +274,8 @@ def _create_nested_structure(locator: Locator, root: Any = None, last: Any = Non
 
     parent = parents[0]
     for accessor, current in zip(accessors, parents[1:] + [last], strict=True):
-        if isinstance(parent, list):
-            if len(parent) <= accessor:
-                parent.extend([None] * (accessor - len(parent) + 1))
+        if isinstance(parent, list) and len(parent) <= accessor:
+            parent.extend([None] * (accessor - len(parent) + 1))
 
         if accessor in parent:
             current = parent[accessor]

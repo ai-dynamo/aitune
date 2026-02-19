@@ -42,4 +42,4 @@ WORKDIR /opt/aitune/dynamo/app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install .[dynamo]
 
-CMD python -m $EXAMPLE_NAME.dynamo.backend
+CMD python -m "${EXAMPLE_NAME}.dynamo.backend"

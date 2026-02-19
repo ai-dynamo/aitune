@@ -64,7 +64,6 @@ def tune_model(
         ]
     ).enable_find_max_batch_size(False)
 
-    # pipeline = wrap_pipeline(model_name, model, strategy=strategy)
     pipeline = model
 
     def call_wrapper(*args, **kwargs):

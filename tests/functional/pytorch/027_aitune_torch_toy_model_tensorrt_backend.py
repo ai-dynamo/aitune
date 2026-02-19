@@ -70,7 +70,7 @@ def testing_multi_profile_with_samples():
     try:
         module(data1.repeat(4, 1, 1, 1))
     except RuntimeError:
-        assert True, "Expected exception when passing sample with shape that is not in any profile"
+        pass  # expected exception when passing sample with shape that is not in any profile
     else:
         raise AssertionError("Expected exception when passing sample with shape that is not in any profile")
 

@@ -178,9 +178,6 @@ def test_should_work_basic_dynamic_shapes():
 
 
 def test_what_if_once_arg_once_kwarg():
-    def _forward(x):
-        return x + 0.1
-
     input_metadata = SampleMetadata.from_inputs((torch.randn(10, 10),), {})
     try:
         input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"x": torch.randn(20, 10)}))
@@ -203,7 +200,7 @@ def test_should_extract_dynamic_shapes_from_graph_spec(simple_module_and_args, t
     y = torch.randn(5, 5).to(torch_device)
     z = torch.randn(2, 10).to(torch_device)
     w = torch.randn(2, 10).to(torch_device)
-    output = module(x, y, z, w)
+    module(x, y, z, w)
 
     input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"y": y, "z": z, "w": w, "x": x}))
 

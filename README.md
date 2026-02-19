@@ -63,7 +63,7 @@ The NVIDIA AITune can be installed from `pypi.org`.
 ### Installing from PyPI (Recommended)
 
 ```bash
-pip install aitune
+pip install --index-extra-url https://pypi.nvidia.com aitune
 ```
 
 ### Installing from Source
@@ -73,18 +73,18 @@ pip install aitune
 ## Internal NVIDIA use
 git clone https://gitlab-master.nvidia.com/dl/JoC/bermuda/ai-tune.git
 cd ai-tune
-pip install .
+pip install --index-extra-url https://pypi.nvidia.com .
 
 ## Official (valid after first release)
 git clone https://github.com/ai-dynamo/aitune
 cd aitune
-pip install .
+pip install --index-extra-url https://pypi.nvidia.com .
 ```
 
 or with editable mode for development
 
 ```bash
-pip install -e .
+pip install --index-extra-url https://pypi.nvidia.com -e .
 ```
 
 ## Quick Start

@@ -29,7 +29,7 @@ from aitune.torch.jit.patcher import Patcher
 Patcher.patch_torch()
 
 
-def wrapt_auto_enable(module):
+def wrapt_auto_enable(_):
     """Entry point for enabling JIT tuning by autowrapt."""
     import logging
 

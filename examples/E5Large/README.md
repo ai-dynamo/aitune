@@ -27,7 +27,7 @@ You can use either of the following options to set up the environment:
 Activate your virtual environment and install the dependencies:
 
 ```bash
-pip install .
+pip install --index-extra-url https://pypi.nvidia.com .
 ```
 
 ### Option 2 - virtual environment managed by `uv`
