@@ -88,7 +88,6 @@ dev = [
     "pdbpp >= 0.10",
     "pip >= 21.1",
     "ruff >= 0.3.0",
-    "twine >= 4.0",
     "ipykernel",
     "pre-commit",
     "pre-commit-uv",
@@ -105,18 +104,6 @@ functional-test = [
     "transformers>=4.54,<5",
     "sentencepiece>=0.2.0",
     "urllib3>=2.6.3", # sec
-]
-
-demo = [
-    "diffusers",
-    "urllib3>=2.6.3", # sec
-    "transformers>=4.54,<5",
-    "ipykernel",
-    "sentencepiece>=0.2.0",
-    "timm>=1.0.14",
-    "matplotlib>=3.10.8",
-    "fonttools>=4.61.1", # sec
-    "nemo-toolkit[asr]"
 ]
 
 doc = [

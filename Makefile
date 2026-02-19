@@ -115,7 +115,6 @@ coverage: ## check code coverage quickly with the default Python
 dist: clean ## builds source and wheel package
 	python3 -m build .
 	ls -lh dist
-	twine check dist/*
 
 install: clean ## install the package to the active Python's site-packages
 	$(PIP_INSTALL) --upgrade pip
