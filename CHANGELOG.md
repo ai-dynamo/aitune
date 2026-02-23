@@ -17,9 +17,12 @@ limitations under the License.
 # Changelog
 
 ## 0.3.0 (unreleased)
+- feat: JIT tuning requires single sample only - tune on first model call
+- feat: JIT tuning default fallback to Torch Inductor backend
 - feat: allow to override tuning device in JIT tuning, when set to none, use the module device
 - feat: add support for multi-profile engine with auto generated and user provided profiles in TensorRT backend
 - fix: handling dynamic shapes in TorchTensorRT AoT backend
+- misc: added documentation
 
 
 ## 0.2.0

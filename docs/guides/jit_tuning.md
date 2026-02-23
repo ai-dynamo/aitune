@@ -208,18 +208,10 @@ jit_config.backends = [
 Minimum number of samples to record before attempting tuning.
 
 ```python
-jit_config.min_samples = 2  # Default: 2
+jit_config.min_samples = 1  # Default: 1
 ```
 
-AITune needs at minimum 2 samples to detect the model's hierarchy. Based on the data seen, it also detects input and output shapes in order to detect dynamic dimensions and minimum/maximum shapes which are required by some backends. If you cannot control data feed to the model, you can increase this setting so that AITune has enough samples to detect proper edge shapes.
-
-#### batch_axis_required
-
-The just-in-time tuning starts based on the `min_samples` and `batch_axis_required`. The latter prevents premature tuning if the AITune has not detected any dynamic axes, i.e., when the data fed was just of the same batch size. If you aren't concerned about batching (constant, in particular `batch size = 1`) you can turn this flag to `False`.
-
-```python
-jit_config.batch_axis_required = True  # Default: True
-```
+AITune needs at minimum 1 sample to perform tuning. Multiple samples are required to detect that the model has dynamic axes. Based on the data seen, it detects input and output shapes with dynamic dimensions and minimum/maximum shapes which are required by some backends. If you cannot control data feed to the model, you can increase this setting so that AITune has enough samples to detect proper edge shapes.
 
 #### max_depth_level
 
@@ -439,7 +431,6 @@ import logging
 
 logging.basicConfig(level=logging.DEBUG)
 jit_config.min_samples = 2
-jit_config.batch_axis_required = False
 jit_config.min_parameters = 0
 ```
 

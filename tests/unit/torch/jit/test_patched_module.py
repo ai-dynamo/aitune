@@ -36,13 +36,23 @@ class CustomType:
     """Custom type for testing."""
 
 
+@pytest.fixture(autouse=True)
+def reset_jit_config():
+    """Reset JIT config to defaults after each test so changes are scoped to the test."""
+    yield
+    config.reset_to_defaults()
+
+
 @pytest.fixture
 def mock_trt_backend():
     """Create a mock TensorRT backend for testing."""
     mock_backend = Mock()
     mock_backend.name = "MockTensorRTBackend"
-    mock_backend.build.return_value = mock_backend
+    mock_backend.describe.return_value = "MockTensorRTBackend"
     mock_backend.key.return_value = "MockTensorRTBackend"
+
+    mock_backend.build.return_value = mock_backend
+
     config.backends = [mock_backend]
     # in case strategy does a deepcopy, return self
     mock_backend.__deepcopy__ = lambda _: mock_backend
@@ -68,7 +78,7 @@ def test_jit_dry_run_success(mock_trt_backend, torch_device):
     sink = TestSink()
     PatchedModule.print_hierarchy(sink=sink.write)
     assert PRINT_HIERARCHY_HEADER in sink.output[0]
-    assert re.match(r".*ToyTorchModel.*state=tuned.*(dry-run tuning success).*call_count=2", sink.output[1])
+    assert re.match(r".*ToyTorchModel.*state=tuned.*(dry-run tuning success).*call_count=1", sink.output[1])
 
 
 @requires_cuda
@@ -90,7 +100,7 @@ def test_jit_dry_run_failure(mock_trt_backend, torch_device):
     sink = TestSink()
     PatchedModule.print_hierarchy(sink=sink.write)
     assert PRINT_HIERARCHY_HEADER in sink.output[0]
-    assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=2", sink.output[1])
+    assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=1", sink.output[1])
 
 
 @requires_cuda
@@ -121,15 +131,16 @@ def test_jit_tuning_success(mock_trt_backend, torch_device, scenario):
 
     assert PRINT_HIERARCHY_HEADER in sink.output[0]
     if scenario == "success":
-        assert re.match(r".*ToyTorchModel.*state=tuned.*(MockTensorRTBackend).*call_count=2", sink.output[1])
+        assert re.match(r".*ToyTorchModel.*state=tuned.*(MockTensorRTBackend).*call_count=1", sink.output[1])
     elif scenario == "correctness_error":
-        assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=2", sink.output[1])
+        assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=1", sink.output[1])
     elif scenario == "backend_build_error":
-        assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=2", sink.output[1])
+        assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=1", sink.output[1])
 
 
 @requires_cuda
 def test_jit_tuning_with_module_hooks(mock_trt_backend, torch_device, mocker):
+    config.min_samples = 2
     config.dry_run = False
     config.inspect_mode = False
     config.detect_graph_breaks = False
@@ -198,8 +209,8 @@ def test_jit_tuning_graph_break(mock_trt_backend, torch_device, mocker):
     sink = TestSink()
     PatchedModule.print_hierarchy(sink=sink.write)
     assert PRINT_HIERARCHY_HEADER in sink.output[0]
-    assert re.match(r".*ToyTorchModel.*state=eager.*(graph break).*call_count=2", sink.output[1])
-    assert re.match(r".*Linear.*state=eager.*(graph break).*call_count=2", sink.output[2])
+    assert re.match(r".*ToyTorchModel.*state=eager.*(graph break).*call_count=1", sink.output[1]), sink.output[1]
+    assert re.match(r".*Linear.*state=eager.*(graph break).*call_count=1", sink.output[2]), sink.output[2]
 
 
 @requires_cuda
@@ -252,7 +263,7 @@ def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend, torch_d
 
     mock_trt_backend.build.assert_called()
     assert PRINT_HIERARCHY_HEADER in sink.output[0]
-    assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=2", sink.output[1])
+    assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=1", sink.output[1])
     assert re.match(r".*Linear.*state=skipped.*call_count=1", sink.output[2])
     assert re.match(r".*Linear.*state=skipped.*call_count=1", sink.output[3])
 
@@ -312,6 +323,7 @@ def test_forward_method_should_have_same_signature(mock_trt_backend, torch_devic
 
 
 def test_each_module_has_unique_cache_dir():
+    config.min_samples = 2
     config.dry_run = False
     config.inspect_mode = False
 

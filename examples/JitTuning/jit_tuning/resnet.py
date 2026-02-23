@@ -20,6 +20,8 @@ import numpy as np
 import timm
 import torch
 
+from aitune.torch.jit.config import config as ait_jit_config
+
 logger = getLogger(__name__)
 
 
@@ -70,6 +72,9 @@ def run(
     log_level: str = "INFO",
 ):
     initialize_logger(log_level)
+
+    ait_jit_config.min_samples = 2
+
     resnet = timm.create_model("resnet50", pretrained=False).to("cuda")
     resnet.eval()
     warm_up(resnet, max_batch_size)

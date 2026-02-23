@@ -16,7 +16,7 @@
 # /// script
 # dependencies = ["diffusers>0.35","transformers<5","accelerate","ftfy"]
 # scope = "nightly"
-# allow_failure = true
+# allow_failure = false
 # additional_tags = ["mem/80g"]
 # ///
 import re
@@ -78,7 +78,9 @@ def test_jit_wan():
     assert PRINT_HIERARCHY_HEADER in history[0]
     assert re.match(r".*UMT5EncoderModel.*state=recording", history[1])
     assert re.match(r".*WanTransformer3DModel.*state=recording", history[2])
-    assert re.match(r".*WanTransformer3DModel.*state=tuned.*TensorRTBackend", history[3])
+    assert re.match(r".*WanTransformer3DModel.*state=tuned.*TensorRTBackend", history[3]) or re.match(
+        r".*WanTransformer3DModel.*state=tuned.*TorchInductorBackend", history[3]
+    )
     assert re.match(r".*WanCausalConv3d.*state=recording", history[4])
     assert re.match(r".*WanDecoder3d.*state=recording", history[5])
     assert re.match(r".*WanCausalConv3d.*state=recording", history[6])

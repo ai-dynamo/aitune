@@ -83,7 +83,7 @@ Installing from PyPI (Recommended)
 
 .. code-block:: bash
 
-    pip install --index-extra-url https://pypi.nvidia.com aitune
+    pip install --extra-index-url https://pypi.nvidia.com aitune
 
 Installing from Source
 ~~~~~~~~~~~~~~~~~~~~~~

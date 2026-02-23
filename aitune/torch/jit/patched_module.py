@@ -258,7 +258,26 @@ class PatchedModule:
             self._proxy_forward()
         finally:
             PatchedModule.stack.pop()
+
+        self._tune_on_init()
+
         return result
+
+    def _tune_on_init(self):
+        """Tune the module on init."""
+        # if min_samples is greater than 1, we don't need to tune on init
+        if config.min_samples > 1:
+            return
+
+        # if module is on skip list, we don't need to tune on init
+        if self._should_be_skipped():
+            self._update_state(ModuleState.SKIPPED)
+            _to_hist(f"Module on skip list: {str(self)}")
+            self._unpatch_hierarchy(include_self=True)
+            return
+
+        if self._should_be_tuned():
+            self.tune()
 
     def _forward_recording(self, wrapped, instance, args, kwargs):
         """Forward call for the recording state.
@@ -381,6 +400,9 @@ class PatchedModule:
 
     def _should_be_tuned(self):
         """Check if the module should be tuned."""
+        if config.min_samples == 1:
+            return self._allowed_to_tune
+
         min_samples_check = self._call_count >= config.min_samples
 
         dynamic_axes_check = False
@@ -535,7 +557,7 @@ class PatchedModule:
                     "JIT tuning has been enabled and requires at least %d samples. None of top level modules had enough samples.",
                     config.min_samples,
                 )
-            elif config.batch_axis_required:
+            elif config.min_samples > 1 and config.batch_axis_required:
                 logging.warning(
                     """
 JIT tuning has been enabled and requires two different batch sizes to detect dynamic axes.

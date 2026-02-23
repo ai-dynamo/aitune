@@ -23,6 +23,8 @@ import torch
 from diffusers import AutoPipelineForText2Image
 from torch.utils.data import DataLoader
 
+from aitune.torch.jit.config import config as ait_jit_config
+
 DEFAULT_PROMPTS_FILE = Path(__file__).parent / "prompts.txt"
 
 logger = getLogger(__name__)
@@ -118,6 +120,8 @@ def run(
     max_batch_size: int,
     log_level: str,
 ):
+    ait_jit_config.min_samples = 2
+
     initialize_logger(log_level)
     pipe = load_pipeline(model)
 
