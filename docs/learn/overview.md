@@ -21,11 +21,11 @@ limitations under the License.
 
 **NVIDIA AITune** is an inference toolkit designed for tuning and deploying Deep Learning models with a focus on NVIDIA GPUs. It provides model tuning capabilities through compilation and conversion paths that can significantly improve inference speed and efficiency across various AI workloads including Computer Vision, Natural Language Processing, Speech Recognition, and Generative AI.
 
-The toolkit enables seamless tuning of PyTorch models and pipelines using various backends such as TensorRT, Torch-TensorRT, TorchAO, and Torch Inductor under single Python API. The resulting tuned models are ready for deployment in production environments.
+The toolkit enables seamless tuning of PyTorch models and pipelines using various backends such as TensorRT, Torch-TensorRT, TorchAO, and Torch Inductor through a single Python API. The resulting tuned models are ready for deployment in production environments.
+
+NVIDIA AITune works with your environment — relying first on your software versions — and selects the best-performing backend for your software and hardware setup, guiding you to supported technologies.
 
 **Note**: This is the first release. The API may change in future versions.
-
-## Features at Glance
 
 The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 
@@ -36,7 +36,7 @@ The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 | Model Tuning                | Enhance the performance of models such as ResNET and BERT for efficient inference deployment                              |
 | Pipeline Tuning             | Streamline Python code pipelines for models such as Stable Diffusion and Flux using seamless model wrapping and tuning    |
 | Model Export and Conversion | Automate the process of exporting and converting models between various formats with focus on TensorRT and Torch-TensorRT |
-| Correctness Testing         | Ensures the tuned models produce correct outputs validating on provided data samples                                      |
+| Correctness Testing         | Ensures tuned models produce correct outputs by validating on provided data samples                                       |
 | Performance Profiling       | Profiles models to select the optimal backend based on performance metrics such as latency and throughput                 |
 | Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                        |
 | JIT tuning                  | Just-in-time tuning of a model or a pipeline without any code changes required                                            |

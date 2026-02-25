@@ -40,6 +40,8 @@ python your_script.py
 
 Your script will run with automatic tuning enabled.
 
+*Note:* Setting the environment variable affects the entire shell session, which may impact other Python processes running in the same shell. We recommend either setting the environment variable immediately before running your script, or using import-based activation inside the script instead.
+
 ### Alternative: Import-Based Activation
 
 You can also enable just-in-time tuning by adding a single import at the beginning of your script:

@@ -52,7 +52,7 @@ cd aitune
 pip install --extra-index-url https://pypi.nvidia.com .
 ```
 
-or with editable mode for development
+or use editable mode for development:
 
 ```bash
 pip install --extra-index-url https://pypi.nvidia.com -e .

@@ -22,7 +22,9 @@ limitations under the License.
 
 **NVIDIA AITune** is an inference toolkit designed for tuning and deploying Deep Learning models with a focus on NVIDIA GPUs. It provides model tuning capabilities through compilation and conversion paths that can significantly improve inference speed and efficiency across various AI workloads including Computer Vision, Natural Language Processing, Speech Recognition, and Generative AI.
 
-The toolkit enables seamless tuning of PyTorch models and pipelines using various backends such as TensorRT, Torch-TensorRT, TorchAO, and Torch Inductor under single Python API. The resulting tuned models are ready for deployment in production environments.
+The toolkit enables seamless tuning of PyTorch models and pipelines using various backends such as TensorRT, Torch-TensorRT, TorchAO, and Torch Inductor through a single Python API. The resulting tuned models are ready for deployment in production environments.
+
+NVIDIA AITune works with your environment — relying first on your software versions — and selects the best-performing backend for your software and hardware setup, guiding you to supported technologies.
 
 **Note**: This is the first release. The API may change in future versions.
 
@@ -37,7 +39,7 @@ The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 | Model Tuning                | Enhance the performance of models such as ResNET and BERT for efficient inference deployment                              |
 | Pipeline Tuning             | Streamline Python code pipelines for models such as Stable Diffusion and Flux using seamless model wrapping and tuning    |
 | Model Export and Conversion | Automate the process of exporting and converting models between various formats with focus on TensorRT and Torch-TensorRT |
-| Correctness Testing         | Ensures the tuned models produce correct outputs validating on provided data samples                                      |
+| Correctness Testing         | Ensures tuned models produce correct outputs by validating on provided data samples                                       |
 | Performance Profiling       | Profiles models to select the optimal backend based on performance metrics such as latency and throughput                 |
 | Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                        |
 | JIT tuning                  | Just-in-time tuning of a model or a pipeline without any code changes required                                            |
@@ -81,7 +83,7 @@ cd aitune
 pip install --extra-index-url https://pypi.nvidia.com .
 ```
 
-or with editable mode for development
+or use editable mode for development:
 
 ```bash
 pip install --extra-index-url https://pypi.nvidia.com -e .
@@ -89,11 +91,11 @@ pip install --extra-index-url https://pypi.nvidia.com -e .
 
 ## Quick Start
 
-The quick start section provides examples of possible tuning and deployment paths provided in NVIDIA AITune.
+This quick start provides examples of tuning and deployment paths available in NVIDIA AITune.
 
-NVIDIA AITune allows seamless tuning of models for deployment, such as converting them to TensorRT, without requiring any changes to the original Python pipelines.
+NVIDIA AITune enables seamless tuning of models for deployment (for example, converting them to TensorRT) without requiring changes to your original Python pipelines.
 
-There are two modes AITune supports:
+NVIDIA AITune supports two modes:
 
 * Ahead-of-time tuning — provide a model or a pipeline, and a dataset/dataloader. You can either rely on `inspect` to detect promising modules to tune or manually select them.
 * Just-in-time tuning — set a special environment variable, run your script without changes, and AITune will, on the fly, detect modules and tune them one by one.
@@ -102,11 +104,11 @@ Ahead-of-time mode is more powerful and allows you to tweak more settings, where
 
 ### Ahead-of-time tuning
 
-The below code presents Stable Diffusion pipeline tuning.
+The code below demonstrates Stable Diffusion pipeline tuning.
 
-AITune allows annotating torch.nn.Modules manually or using the `inspect` functionality, where modules are automatically picked, then the user can verify them and schedule for tuning.
+You can annotate `torch.nn.Module`s manually or use the `inspect` functionality to have modules picked automatically; you can then verify them and schedule them for tuning.
 
-At the beginning, install required 3rd party dependencies:
+First, install the required third-party dependencies:
 
 ```bash
 pip install transformers diffusers torch
@@ -119,11 +121,11 @@ import aitune.torch as ait
 from diffusers import DiffusionPipeline
 
 # Initialize pipeline
-pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers")
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5")
 pipe.to("cuda")
 ```
 
- Next, `inspect` the pipeline components and display the summary:
+Next, `inspect` the pipeline components and display the summary:
 
 ```python
 # Prepare input data
@@ -143,7 +145,7 @@ def infer(prompt):
 modules_info.describe()
 ```
 
-Finally, `wrap` the selected modules and `tune` in scope of the pipeline:
+Finally, `wrap` the selected modules and `tune` within the pipeline:
 
 ```python
 # Wrap modules for tuning
@@ -154,7 +156,7 @@ pipe = ait.wrap(pipe, modules)
 ait.tune(pipe, input_data)
 ```
 
-At this point, you can simply use the original pipeline to generate prediction with tuned models directly in Python:
+At this point, you can use the pipeline to generate predictions with the tuned models directly in Python:
 
 ```python
 # Run inference on tuned pipeline
@@ -165,7 +167,7 @@ image = images[0][0]
 image.save("landscape.png")
 ```
 
-Once the pipeline has been tuned, you can save the most performant version of the modules for later deployment:
+Once the pipeline has been tuned, you can save the best-performing version of the modules for later deployment:
 
 ```python
 ait.save(pipe, "tuned_pipe.ait")
@@ -174,7 +176,7 @@ ait.save(pipe, "tuned_pipe.ait")
 And load the tuned pipeline directly:
 
 ```python
-pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers")
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5")
 pipe.to("cuda")
 ait.load(pipe, "tuned_pipe.ait")
 ```
@@ -186,7 +188,7 @@ In this mode, there is no need to modify the user's code. At the beginning, AITu
 * a graph break is detected, i.e., torch.nn.Module contains conditional logic on inputs, meaning there is no guarantee of a static, correct graph of computations, or
 * there is an error during tuning
 
-such a module is left intact and AITune tries to tune this module's children. This process continues until the depth of module reaches a certain limit.
+that module is left unchanged and AITune tries to tune its children. This process continues until the module depth reaches a configured limit.
 
 To turn on this mode, just set the following environment variable:
 
@@ -194,7 +196,7 @@ To turn on this mode, just set the following environment variable:
 export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
 ```
 
-Next, you can run user script without modifying it e.g.
+You can then run your script without modifying it, for example:
 
 ```bash
 python your_script.py
@@ -339,6 +341,8 @@ checkpoints/
 
 You can copy the checkpoint file `tuned_model.ait` and SHA sums file to a target host or folder to use it for inference.
 
+*Note:* We recommend to deploy `*.ait` package on the same hardware as tuning has been performed for functional and performance compatibility.
+
 ### Load
 
 The `load` function enables you to load previously tuned models from a checkpoint file.
@@ -360,9 +364,9 @@ NVIDIA AITune supports multiple tuning backends, each with different characteris
 The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT engine. It offers the best performance for production deployments. The backend integrates [TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer) in a seamless flow.
 
 ```python
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, ONNXAutoCastConfig
 
-config = TensorRTBackendConfig(precision="fp16")
+config = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig()) # FP16 autocast through ModelOpt
 backend = TensorRTBackend(config)
 ```
 
@@ -386,9 +390,10 @@ Torch-TensorRT JIT backend integrates TensorRT tuning directly into PyTorch, pro
 `torch.compile`.
 
 ```python
-from aitune.torch.backend import TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig
+import torch
+from aitune.torch.backend import TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig, TorchTensorRTConfig
 
-config = TorchTensorRTJitBackendConfig(precision="fp16")
+config = TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}))
 backend = TorchTensorRTJitBackend(config)
 ```
 
@@ -397,9 +402,10 @@ backend = TorchTensorRTJitBackend(config)
 Torch-TensorRT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through `torch_tensorrt.compile`.
 
 ```python
-from aitune.torch.backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig
+import torch
+from aitune.torch.backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig, TorchTensorRTConfig
 
-config = TorchTensorRTAotBackendConfig(precision="fp16")
+config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}))
 backend = TorchTensorRTAotBackend(config)
 ```
 

@@ -31,28 +31,32 @@ repo_url: https://github.com/ai-dynamo/aitune
 repo_name: GitHub Repository
 plugins:
     - autorefs
-    -   htmlproofer:
-            ignore_urls:
-                - '**/aot_tuning/backend/#aitune.torch.backend*'
-                - '**/backends/*/#aitune.torch.backend*'
+    - htmlproofer:
+        ignore_urls:
+            - '**/aot_tuning/backend/#aitune.torch.backend*'
+            - '**/backends/*/#aitune.torch.backend*'
     - mike
-    -   mkdocstrings:
-            enable_inventory: true
-            handlers:
-                python:
-                    import:
-                        - https://docs.python.org/3/objects.inv
-                    options:
-                        docstring_style: google
-                        show_root_heading: true
-                        heading_level: 2
-                        line_length: 120
-                        docstring_section_style: list
-                        merge_init_into_class: true
-                        separate_signature: true
-                        inherited_members: true
-                        signature_crossrefs: true
+    - mkdocstrings:
+        enable_inventory: true
+        handlers:
+            python:
+                import:
+                    - https://docs.python.org/3/objects.inv
+                options:
+                    docstring_style: google
+                    show_root_heading: true
+                    heading_level: 2
+                    line_length: 120
+                    docstring_section_style: list
+                    merge_init_into_class: true
+                    separate_signature: true
+                    inherited_members: true
+                    signature_crossrefs: true
     - search
+    - redirects:
+        redirect_maps:
+            index.md: learn/overview.md
+
 watch:
     - aitune
     - docs

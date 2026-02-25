@@ -22,9 +22,9 @@ NVIDIA AITune supports multiple tuning backends, each with different characteris
 The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT engine. It offers the best performance for production deployments. The backend integrates [TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer) in a seamless flow.
 
 ```python
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, ONNXAutoCastConfig
 
-config = TensorRTBackendConfig(precision="fp16")
+config = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig()) # FP16 autocast through ModelOpt
 backend = TensorRTBackend(config)
 ```
 
@@ -44,30 +44,32 @@ backend = TensorRTBackend(config)
 
 ## Torch-TensorRT Backend (JIT)
 
-Torch-TensorRT JIT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through
+The Torch-TensorRT JIT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through
 `torch.compile`.
 
 ```python
-from aitune.torch.backend import TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig
+import torch
+from aitune.torch.backend import TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig, TorchTensorRTConfig
 
-config = TorchTensorRTJitBackendConfig(precision="fp16")
+config = TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}))
 backend = TorchTensorRTJitBackend(config)
 ```
 
 ## Torch-TensorRT Backend (AOT)
 
-Torch-TensorRT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through `torch_tensorrt.compile`.
+The Torch-TensorRT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through `torch_tensorrt.compile`.
 
 ```python
-from aitune.torch.backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig
+import torch
+from aitune.torch.backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig, TorchTensorRTConfig
 
-config = TorchTensorRTAotBackendConfig(precision="fp16")
+config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}))
 backend = TorchTensorRTAotBackend(config)
 ```
 
 ## TorchAO Backend
 
-TorchAO backend leverages PyTorch's AO (Accelerated Optimization) framework for model tuning.
+The TorchAO backend leverages PyTorch's AO (Accelerated Optimization) framework for model tuning.
 
 ```python
 from aitune.torch.backend import TorchAOBackend
@@ -77,7 +79,7 @@ backend = TorchAOBackend()
 
 ## Torch Inductor Backend
 
-Torch Inductor backend uses PyTorch's Inductor compiler for model tuning.
+The Torch Inductor backend uses PyTorch's Inductor compiler for model tuning.
 
 ```python
 from aitune.torch.backend import TorchInductorBackend

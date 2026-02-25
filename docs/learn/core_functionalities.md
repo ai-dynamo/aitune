@@ -100,6 +100,8 @@ checkpoints/
 
 You can copy the checkpoint file `tuned_model.ait` and SHA sums file to a target host or folder to use it for inference.
 
+*Note:* We recommend deploying the `*.ait` package on the same hardware used for tuning to ensure functional and performance compatibility.
+
 ## Load
 
 The `load` function enables you to load previously tuned models from a checkpoint file.

@@ -15,24 +15,24 @@ limitations under the License.
 -->
 # Quick Start
 
-The quick start section provides examples of possible tuning and deployment paths provided in NVIDIA AITune.
+This quick start provides examples of tuning and deployment paths available in NVIDIA AITune.
 
-NVIDIA AITune allows seamless tuning of models for deployment, such as converting them to TensorRT, without requiring any changes to the original Python pipelines.
+NVIDIA AITune enables seamless tuning of models for deployment (for example, converting them to TensorRT) without requiring changes to your original Python pipelines.
 
-There are two modes AITune supports:
+NVIDIA AITune supports two modes:
 
 * Ahead-of-time tuning — provide a model or a pipeline, and a dataset/dataloader. You can either rely on `inspect` to detect promising modules to tune or manually select them.
 * Just-in-time tuning — set a special environment variable, run your script without changes, and AITune will, on the fly, detect modules and tune them one by one.
 
-Ahead-of-time mode is more powerful and allows you to tweak more settings, whereas just-in-time works out of the box but offers less control over the tuning process. For a more detailed comparison, see the [Comparison between AOT and JIT tuning](quick_start.md#comparison-between-ahead-of-time-and-just-in-time-tuning) section.
+Ahead-of-time mode is more powerful and allows you to tweak more settings, whereas just-in-time works out of the box but offers less control over the tuning process. For a more detailed comparison, see the [Comparison between AOT and JIT tuning](#comparison-between-ahead-of-time-and-just-in-time-tuning) section.
 
 ## Ahead-of-time tuning
 
-The below code presents Stable Diffusion pipeline tuning.
+The code below demonstrates Stable Diffusion pipeline tuning.
 
-AITune allows annotating torch.nn.Modules manually or using the `inspect` functionality, where modules are automatically picked, then the user can verify them and schedule for tuning.
+You can annotate `torch.nn.Module`s manually or use the `inspect` functionality to have modules picked automatically; you can then verify them and schedule them for tuning.
 
-At the beginning, install required 3rd party dependencies:
+First, install the required third-party dependencies:
 
 ```bash
 pip install transformers diffusers torch
@@ -49,7 +49,7 @@ pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-
 pipe.to("cuda")
 ```
 
- Next, `inspect` the pipeline components and display the summary:
+Next, `inspect` the pipeline components and display the summary:
 
 ```python
 # Prepare input data
@@ -69,7 +69,7 @@ def infer(prompt):
 modules_info.describe()
 ```
 
-Finally, `wrap` the selected modules and `tune` in scope of the pipeline:
+Finally, `wrap` the selected modules and `tune` within the pipeline:
 
 ```python
 # Wrap modules for tuning
@@ -80,7 +80,7 @@ pipe = ait.wrap(pipe, modules)
 ait.tune(pipe, input_data)
 ```
 
-At this point, you can simply use the original pipeline to generate prediction with tuned models directly in Python:
+At this point, you can use the pipeline to generate predictions with the tuned models directly in Python:
 
 ```python
 # Run inference on tuned pipeline
@@ -91,7 +91,7 @@ image = images[0][0]
 image.save("landscape.png")
 ```
 
-Once the pipeline has been tuned, you can save the most performant version of the modules for later deployment:
+Once the pipeline has been tuned, you can save the best-performing version of the modules for later deployment:
 
 ```python
 ait.save(pipe, "tuned_pipe.ait")
@@ -112,7 +112,7 @@ In this mode, there is no need to modify the user's code. At the beginning, AITu
 * a graph break is detected, i.e., torch.nn.Module contains conditional logic on inputs, meaning there is no guarantee of a static, correct graph of computations, or
 * there is an error during tuning
 
-such a module is left intact and AITune tries to tune this module's children. This process continues until the depth of module reaches a certain limit.
+that module is left unchanged and AITune tries to tune its children. This process continues until the module depth reaches a configured limit.
 
 To turn on this mode, just set the following environment variable:
 
@@ -120,7 +120,7 @@ To turn on this mode, just set the following environment variable:
 export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
 ```
 
-Next, you can run user script without modifying it e.g.
+You can then run your script without modifying it, for example:
 
 ```bash
 python your_script.py
