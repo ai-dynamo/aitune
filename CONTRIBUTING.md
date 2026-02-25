@@ -42,7 +42,7 @@ Look through the GitHub issues for features. Anything tagged with "enhancement" 
 
 ### Write Documentation
 
-The NVIDIA AITune could always use more documentation, whether as part of
+NVIDIA AITune could always use more documentation, whether as part of
 the official NVIDIA AITune docs, in docstrings, or even on the web in blog posts,
 articles, and such.
 

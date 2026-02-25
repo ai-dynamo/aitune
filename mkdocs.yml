@@ -27,9 +27,8 @@ theme:
         - navigation.sections
 extra_css:
     - assets/styles.css
-repo_url: https://gitlab-master.nvidia.com/dl/JoC/bermuda/ai-tune
-# official repo_url: https://github.com/ai-dynamo/aitune
-repo_name: Git Repository
+repo_url: https://github.com/ai-dynamo/aitune
+repo_name: GitHub Repository
 plugins:
     - autorefs
     -   htmlproofer:
@@ -59,7 +58,6 @@ watch:
     - docs
     - mkdocs.yml
     - LICENSE
-    - README.md
     - CHANGELOG.md
     - CONTRIBUTING.md
 view_uri_template: blob/{ref}/{path}  # used by scripts/rewrite_links_to_repo.py hook
@@ -78,7 +76,11 @@ markdown_extensions:
     - pymdownx.superfences
 nav:
     -   Learn:
-            -   Overview: README.md
+            -   Overview: learn/overview.md
+            -   Install: learn/install.md
+            -   Quick Start: learn/quick_start.md
+            -   Core Functionalities: learn/core_functionalities.md
+            -   Backends: learn/backends.md
     -   Guides:
             - Ahead-of-time Tuning: guides/aot_tuning.md
             - Ahead-of-time Inspect: guides/aot_inspect.md
@@ -96,6 +98,7 @@ nav:
             - Advanced:
                 - Tuning Workflow: guides/advanced/tuning_workflow.md
                 - Execution Graphs: guides/advanced/execution_graphs.md
+                - NVTX Profiling: guides/advanced/profiling_nvtx.md
     -   Examples:
             - Overview: examples/examples.md
             - E5Large: examples/E5Large/README.md

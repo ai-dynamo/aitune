@@ -76,7 +76,7 @@ You can use NGC Containers for PyTorch which contain all necessary dependencies:
 Install
 -------
 
-The NVIDIA AITune can be installed from ``pypi.org``.
+NVIDIA AITune can be installed from ``pypi.org``.
 
 Installing from PyPI (Recommended)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -381,7 +381,7 @@ Useful Links
 
 .. |License| image:: https://img.shields.io/badge/License-Apache%202.0-blue.svg
    :target: https://github.com/ai-dynamo/aitune/blob/main/LICENSE
-.. |Python| image:: https://img.shields.io/badge/python-3.9+-blue.svg
+.. |Python| image:: https://img.shields.io/badge/python-3.10+-blue.svg
    :target: https://www.python.org/downloads/
-.. |PyTorch| image:: https://img.shields.io/badge/PyTorch-2.5.1+-red.svg
+.. |PyTorch| image:: https://img.shields.io/badge/PyTorch-2.7+-red.svg
    :target: https://pytorch.org/

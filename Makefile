@@ -75,9 +75,6 @@ docs: # TBD: uncomment after vdr clean-docs ## generate site
 	cp CHANGELOG.md docs
 	cp CONTRIBUTING.md docs
 	cp LICENSE docs/LICENSE.md
-	cp README.md docs/README.md
-	# Filter docs/README.md and substitute LICENSE to LICENSE.md
-	@sed 's/LICENSE/LICENSE.md/g' README.md > docs/README.md
 	@mkdir -p docs/examples
 	cp examples/README.md docs/examples/examples.md
 	# Copy example subdirectory READMEs with directory structure

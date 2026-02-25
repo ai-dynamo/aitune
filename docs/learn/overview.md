@@ -1,0 +1,42 @@
+<!--
+Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+# NVIDIA AITune
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](../LICENSE.md)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.7+-red.svg)](https://pytorch.org/)
+
+**NVIDIA AITune** is an inference toolkit designed for tuning and deploying Deep Learning models with a focus on NVIDIA GPUs. It provides model tuning capabilities through compilation and conversion paths that can significantly improve inference speed and efficiency across various AI workloads including Computer Vision, Natural Language Processing, Speech Recognition, and Generative AI.
+
+The toolkit enables seamless tuning of PyTorch models and pipelines using various backends such as TensorRT, Torch-TensorRT, TorchAO, and Torch Inductor under single Python API. The resulting tuned models are ready for deployment in production environments.
+
+**Note**: This is the first release. The API may change in future versions.
+
+## Features at Glance
+
+The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
+
+| Feature                     | Description                                                                                                               |
+|-----------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| Ease-of-use                 | Single line of code to run all possible tuning paths directly from your source code                                       |
+| Wide Backend Support        | Compatible with various tuning backends including TensorRT, Torch-TensorRT, TorchAO, and Torch Inductor                   |
+| Model Tuning                | Enhance the performance of models such as ResNET and BERT for efficient inference deployment                              |
+| Pipeline Tuning             | Streamline Python code pipelines for models such as Stable Diffusion and Flux using seamless model wrapping and tuning    |
+| Model Export and Conversion | Automate the process of exporting and converting models between various formats with focus on TensorRT and Torch-TensorRT |
+| Correctness Testing         | Ensures the tuned models produce correct outputs validating on provided data samples                                      |
+| Performance Profiling       | Profiles models to select the optimal backend based on performance metrics such as latency and throughput                 |
+| Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                        |
+| JIT tuning                  | Just-in-time tuning of a model or a pipeline without any code changes required                                            |
