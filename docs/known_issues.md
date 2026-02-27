@@ -15,3 +15,5 @@ limitations under the License.
 -->
 
 # Known Issues and Limitations
+
+- **Multi-GPU support.** AITune currently only supports single-GPU configurations.

@@ -27,6 +27,14 @@ NVIDIA AITune works with your environment — relying first on your software ver
 
 **Note**: This is the first release. The API may change in future versions.
 
+## When to Use AITune
+
+AITune provides compute graph optimizations for PyTorch models at the `nn.Module` level. Use AITune when you want automated inference optimization with minimal code changes.
+
+If your model is supported by a dedicated serving framework and benefits from runtime optimizations (e.g. continuous batching, speculative decoding), use frameworks like TensorRT-LLM, vLLM, or SGLang for best performance. Use AITune for general PyTorch models and pipelines that lack such specialized tooling.
+
+## Features at Glance
+
 The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 
 | Feature                     | Description                                                                                                               |

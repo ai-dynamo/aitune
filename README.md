@@ -44,6 +44,12 @@ The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 | Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                        |
 | JIT tuning                  | Just-in-time tuning of a model or a pipeline without any code changes required                                            |
 
+## When to Use AITune
+
+AITune provides compute graph optimizations for PyTorch models at the `nn.Module` level. Use AITune when you want automated inference optimization with minimal code changes.
+
+If your model is supported by a dedicated serving framework and benefits from runtime optimizations (e.g. continuous batching, speculative decoding), use frameworks like TensorRT-LLM, vLLM, or SGLang for best performance. Use AITune for general PyTorch models and pipelines that lack such specialized tooling.
+
 ## Prerequisites
 
 Before proceeding with the installation of NVIDIA AITune, ensure your system meets the following criteria:
