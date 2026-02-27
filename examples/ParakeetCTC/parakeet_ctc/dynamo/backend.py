@@ -161,7 +161,7 @@ class ParakeetCTCBatchedBackend:
                         override_config=TranscribeConfig(
                             batch_size=min(len(audio_paths), self.max_batch_size),
                             verbose=False,
-                            _internal=InternalTranscribeConfig(device="cuda"),
+                            _internal=InternalTranscribeConfig(device=torch.device("cuda")),
                         ),
                     )
 

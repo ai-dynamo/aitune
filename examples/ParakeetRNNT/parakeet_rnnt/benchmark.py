@@ -38,7 +38,7 @@ def benchmark(model, test_files, num_runs=1):
         return model.transcribe(
             *args,
             **kwargs,
-            override_config=TranscribeConfig(_internal=InternalTranscribeConfig(device="cuda")),
+            override_config=TranscribeConfig(_internal=InternalTranscribeConfig(device=torch.device("cuda"))),
             verbose=False,
         )
 

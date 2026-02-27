@@ -22,6 +22,7 @@ limitations under the License.
 - feat: allow to override tuning device in JIT tuning, when set to none, use the module device
 - feat: add support for multi-profile engine with auto generated and user provided profiles in TensorRT backend
 - fix: handling dynamic shapes in TorchTensorRT AoT backend
+- fix: creating calibration data for ModelOpt ONNX PTQ in TensorRT backend
 - misc: added documentation
 
 

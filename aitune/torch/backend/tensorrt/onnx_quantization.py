@@ -21,7 +21,6 @@ from typing import Literal
 import modelopt
 import modelopt.onnx.quantization as moq
 import onnx
-import torch
 from packaging.version import Version
 
 if Version(modelopt.__version__) < Version("0.40.0"):
@@ -35,6 +34,7 @@ else:
 
     modelopt_fp4_exporter = NVFP4QuantExporter.process_model
 
+from aitune.torch.backend.tensorrt.modelopt_calibration import prepare_calibration_data
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.utils.system_monitor import SystemMonitor
@@ -142,35 +142,6 @@ class ONNXQuantizer:
 
         logger.info("ModelOpt post-processing completed successfully")
 
-    def _prepare_calibration_data(self, data: list[Sample], graph_spec: GraphSpec) -> list[dict[str, torch.Tensor]]:
-        """Prepare calibration data with proper input names mapping.
-
-        Args:
-            data: List of Sample objects containing calibration data
-            graph_spec: Graph specification containing input names mapping
-
-        Returns:
-            List of dictionaries mapping input names to tensors for calibration
-        """
-        logger.info("Preparing calibration data with proper input names for %d samples", len(data))
-        calibration_data_with_names = []
-
-        for sample in data:
-            args, kwargs = sample
-            input_dict = {}
-            for locator, tensor_spec in graph_spec.input_spec.tensor_data:
-                if tensor_spec.name.startswith("args"):
-                    input_dict[tensor_spec.name] = locator.get_value(args)
-                else:
-                    input_dict[tensor_spec.name] = locator.get_value(kwargs)
-            calibration_data_with_names.append(input_dict)
-            logger.info("Mapped sample to input names: %s", list(input_dict.keys()))
-
-        logger.info(
-            "Successfully prepared %s calibration samples with proper input names", len(calibration_data_with_names)
-        )
-        return calibration_data_with_names
-
     def quantize(
         self,
         input_onnx_path: str | Path,
@@ -197,11 +168,10 @@ class ONNXQuantizer:
             ValueError: If unsupported precision is specified
             RuntimeError: If quantization fails
         """
-        # TODO: Temporarily disable, re-enable when proper calibration data handling is implemented.
-        # if samples is not None:
-        #     calibration_data = self._prepare_calibration_data(samples, graph_spec)
-        # else:
-        #     calibration_data = None
+        if samples is not None and graph_spec is not None:
+            calibration_data = prepare_calibration_data(samples, graph_spec)
+        else:
+            calibration_data = None
 
         input_onnx_path = Path(input_onnx_path)
         output_path = Path(output_path)
@@ -220,8 +190,8 @@ class ONNXQuantizer:
                 "calibration_method": config.calibration_method,
             }
 
-            # if calibration_data is not None:
-            #     quantize_kwargs["calibration_data"] = calibration_data
+            if calibration_data is not None:
+                quantize_kwargs["calibration_data"] = calibration_data
 
             moq.quantize(**quantize_kwargs)
 

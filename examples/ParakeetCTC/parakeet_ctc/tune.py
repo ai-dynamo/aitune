@@ -17,6 +17,7 @@ import os
 from logging import basicConfig, getLogger
 from pathlib import Path
 
+import torch
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
 from aitune.torch import FirstWinsStrategy, TuneStrategy, inspect, save, tune, wrap
@@ -54,7 +55,7 @@ def tune_model(
             override_config=TranscribeConfig(
                 batch_size=len(kwargs["audio"]),
                 verbose=False,
-                _internal=InternalTranscribeConfig(device="cuda"),
+                _internal=InternalTranscribeConfig(device=torch.device("cuda")),
             ),
         )
 

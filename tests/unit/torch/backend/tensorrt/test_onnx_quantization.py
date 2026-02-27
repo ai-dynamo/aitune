@@ -19,7 +19,6 @@ from pathlib import Path
 
 from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizer
 from tests.toy_models.onnx_models import ToyOnnxModel
-from tests.toy_models.torch_models import ToyTorchModel
 
 
 def test_apply_model_opt_post_processing(tmp_path):
@@ -34,20 +33,3 @@ def test_apply_model_opt_post_processing(tmp_path):
     assert onnx_copy_path.exists()
     assert onnx_copy_path.is_file()
     assert onnx_copy_path.stat().st_size > 0
-
-
-def test_prepare_calibration_data():
-    quantizer = ONNXQuantizer()
-    torch_model = ToyTorchModel()
-
-    cpu_samples = torch_model.samples()
-    graph_spec = torch_model.graph_spec()
-
-    calibration_samples = quantizer._prepare_calibration_data(
-        data=cpu_samples,
-        graph_spec=graph_spec,
-    )
-
-    assert calibration_samples[0]["args_0"][0].shape == cpu_samples[0][0][0][0].shape
-    assert calibration_samples[0]["args_0"][1].shape == cpu_samples[0][0][0][1].shape
-    assert len(calibration_samples[0]["args_0"]) == len(cpu_samples[0][0][0]) == 2  # two batched samples.

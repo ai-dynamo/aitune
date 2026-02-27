@@ -42,7 +42,7 @@ def do_inference(
         return pipeline.transcribe(
             *args,
             **kwargs,
-            override_config=TranscribeConfig(_internal=InternalTranscribeConfig(device="cuda")),
+            override_config=TranscribeConfig(_internal=InternalTranscribeConfig(device=torch.device("cuda"))),
             verbose=False,
         )
 

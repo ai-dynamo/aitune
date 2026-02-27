@@ -77,7 +77,7 @@ def tune_model(
             override_config=TranscribeConfig(
                 batch_size=batch_size,
                 verbose=False,
-                _internal=InternalTranscribeConfig(device="cuda"),
+                _internal=InternalTranscribeConfig(device=torch.device("cuda")),
             ),
         )
 

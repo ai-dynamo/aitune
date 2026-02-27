@@ -47,6 +47,7 @@ class ONNXModelInfo:
             # Extract all information
             self._input_names = [input_data.name for input_data in model.graph.input]
             self._output_names = [output_data.name for output_data in model.graph.output]
+            self._input_shapes = self._get_tensor_shapes(model.graph.input)
 
             # Extract opset versions
             self._opset_version = None
@@ -66,6 +67,7 @@ class ONNXModelInfo:
 
             logger.info("Extracted information for model:")
             logger.info("  Inputs: %s", self._input_names)
+            logger.info("  Input shapes: %s", self._input_shapes)
             logger.info("  Outputs: %s", self._output_names)
             logger.info("  OpSet version: %s", self._opset_version)
             logger.info("  Producer: %s %s", self._producer_name, self._producer_version)
@@ -97,6 +99,34 @@ class ONNXModelInfo:
             List of input tensor names
         """
         return self._input_names
+
+    @property
+    def input_shapes(self) -> dict[str, list[int | str | None]]:
+        """Input name -> shape (list of dims; int for static, str for dynamic/symbolic).
+
+        Returns:
+            Dict mapping each input name to its shape. Dynamic dimensions
+            appear as dim_param string (e.g. "batch"); static as int; unknown as None.
+        """
+        return self._input_shapes
+
+    @staticmethod
+    def _get_tensor_shapes(value_info_list) -> dict[str, list[int | str | None]]:
+        """Extract shapes from ONNX graph ValueInfoProto list (e.g. model.graph.input)."""
+        shapes = {}
+        for val in value_info_list:
+            if not val.type.HasField("tensor_type") or not val.type.tensor_type.HasField("shape"):
+                continue
+            dims = []
+            for d in val.type.tensor_type.shape.dim:
+                if d.HasField("dim_value"):
+                    dims.append(int(d.dim_value))
+                elif d.HasField("dim_param"):
+                    dims.append(d.dim_param)
+                else:
+                    dims.append(None)
+            shapes[val.name] = dims
+        return shapes
 
     @property
     def output_names(self) -> list[str]:
