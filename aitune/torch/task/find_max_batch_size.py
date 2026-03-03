@@ -30,6 +30,7 @@ from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inferen
 from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStrategy
 from aitune.torch.task.profiling.metrics import get_throughput
 from aitune.torch.task.profiling.profiling import ProfilingResults, ProfilingStatus, profile_backend
+from aitune.utils.logging import control_output
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,10 @@ def find_max_batch_size(
         cache_dir: Cache directory to store the backend artifacts.
     """
     backend = TorchEagerBackend()
-    backend.build(module, graph_spec, data, device, cache_dir)
+    backend_cache_dir = cache_dir / backend.key()
+    log_file = _log_file(backend_cache_dir, "build.log")
+    with control_output(log_file=log_file):
+        backend.build(module, graph_spec, data, device, backend_cache_dir)
     return calculate_highest_throughput_for_backend(backend, name, graph_spec, data, profiling_config)
 
 
@@ -128,3 +132,9 @@ def get_throughput_per_batch_size(
         throughput_per_batch_size.append((batch_size, throughput))
 
     return sorted(throughput_per_batch_size, key=lambda x: x[1], reverse=True)
+
+
+def _log_file(cache_dir: Path, filename: str) -> Path:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    log_file = cache_dir / filename
+    return log_file

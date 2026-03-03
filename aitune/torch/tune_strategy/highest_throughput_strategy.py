@@ -30,6 +30,7 @@ import torch.nn as nn
 from aitune.torch.backend import (
     Backend,
     TensorRTBackend,
+    TensorRTBackendConfig,
     TorchEagerBackend,
     TorchInductorBackend,
     TorchTensorRTAotBackend,
@@ -231,6 +232,7 @@ class HighestThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
         """Returns default backends."""
         return [
             TensorRTBackend(),
+            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
             TorchInductorBackend(),
             TorchTensorRTJitBackend(),
             TorchTensorRTAotBackend(),

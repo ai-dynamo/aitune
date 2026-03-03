@@ -85,6 +85,7 @@ nav:
             -   Quick Start: learn/quick_start.md
             -   Core Functionalities: learn/core_functionalities.md
             -   Backends: learn/backends.md
+            -   Observability: learn/observability.md
     -   Guides:
             - Ahead-of-time Tuning: guides/aot_tuning.md
             - Ahead-of-time Inspect: guides/aot_inspect.md
@@ -103,6 +104,7 @@ nav:
                 - Tuning Workflow: guides/advanced/tuning_workflow.md
                 - Execution Graphs: guides/advanced/execution_graphs.md
                 - NVTX Profiling: guides/advanced/profiling_nvtx.md
+
     -   Examples:
             - Overview: examples/examples.md
             - E5Large: examples/E5Large/README.md

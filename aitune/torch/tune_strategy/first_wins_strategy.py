@@ -19,7 +19,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorBackend
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
@@ -89,6 +89,7 @@ class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
         """Returns default backends."""
         return [
             TensorRTBackend(),
+            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
             TorchInductorBackend(),
             TorchEagerBackend(),
         ]

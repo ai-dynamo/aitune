@@ -205,7 +205,7 @@ class Module(wrapt.CallableObjectProxy):
                 self.enable_recording()
             else:
                 raise RuntimeError("Module is already tuned. Use force=True to reset tuned module.")
-        elif self._self_state == ModuleState.PASSTHROUGH or self._self_state == ModuleState.INIT:
+        elif self._self_state in [ModuleState.PASSTHROUGH, ModuleState.INIT]:
             self._deactivate_wrapper()
             self._self_state = ModuleState.RECORDING
             if self._self_prev_recording is None:
@@ -222,6 +222,8 @@ class Module(wrapt.CallableObjectProxy):
         """Activates the module backends."""
         if self._self_state == ModuleState.TUNED:
             self._activate_wrapper()
+        elif self._self_state == ModuleState.PASSTHROUGH:
+            return
         else:
             raise RuntimeError("Module is not tuned. Cannot activate backends.")
 

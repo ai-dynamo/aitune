@@ -16,6 +16,7 @@
 Looks for best batch size for the module using Torch Eager backend.
 """
 
+import traceback
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
@@ -40,6 +41,7 @@ from aitune.torch.task.profiling.measuring_stop_strategy import StableWindowMeas
 from aitune.torch.task.profiling.measuring_strategy import ModelExecutionTimeMeasuringStrategy
 from aitune.torch.task.profiling.profiling_stop_strategy import ThroughputSaturatedProfilingStopStrategy
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
+from aitune.utils.logging import control_output
 
 DEFAULT_MAX_BATCH_SIZE = 2**20
 
@@ -99,22 +101,32 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
         """Finds max batch size for the module."""
         if self.find_config.enable_find_max_batch_size:
             self._logger.info("🚀 Finding max batch size for %s", name)
-            backend = self.find_config.default_backend_class()
-            backend.build(module, graph_spec, deepcopy(data), device, cache_dir)
-            max_batch_size, best_throughput, _ = calculate_highest_throughput_for_backend(
-                backend,
-                name,
-                graph_spec,
-                data,
-                self.find_config.profiling_config,
-            )
-            self._logger.info(
-                "✅ Max batch size for %s is %d with throughput %.2f samples/s",
-                name,
-                max_batch_size,
-                best_throughput,
-            )
-            graph_spec.input_spec.update_max_batch_size(data[0], max_batch_size)
+            find_max_batch_size_cache_dir = cache_dir / "find_max_batch_size"
+            build_log_file = self._log_file(find_max_batch_size_cache_dir, "build.log")
+            try:
+                backend = self.find_config.default_backend_class()
+                with control_output(log_file=build_log_file):
+                    backend.build(module, graph_spec, deepcopy(data), device, find_max_batch_size_cache_dir)
+
+                max_batch_size, best_throughput, _ = calculate_highest_throughput_for_backend(
+                    backend,
+                    name,
+                    graph_spec,
+                    data,
+                    self.find_config.profiling_config,
+                )
+                self._logger.info(
+                    "✅ Max batch size for %s is %d with throughput %.2f samples/s",
+                    name,
+                    max_batch_size,
+                    best_throughput,
+                )
+                graph_spec.input_spec.update_max_batch_size(data[0], max_batch_size)
+            except Exception:
+                error_log_file = self._log_file(find_max_batch_size_cache_dir, "error.log")
+                error_log_file.write_text(f"Build log file: {build_log_file}\n\nError:\n{traceback.format_exc()}")
+                self._logger.info("⚠️ Finding max batch size for `%s` failed (log file: %s)", name, error_log_file)
+                raise
 
     def _pre_tune(
         self,

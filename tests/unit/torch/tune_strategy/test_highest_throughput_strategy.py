@@ -22,7 +22,7 @@ from aitune.torch import Module
 from aitune.torch.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
-from aitune.torch.module.wrapper_module import get_object_name
+from aitune.torch.module.wrapper_module import ModuleState, get_object_name
 from aitune.torch.task.correctness import CorrectnessValueError
 from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, StableWindowMeasuringStopStrategy
 from aitune.torch.task.profiling.profiling_stop_strategy import (
@@ -217,8 +217,9 @@ def test_highest_throughput_strategy_fails_backend_if_all_of_backends_fails(torc
     batch_sizes = list(range(1, 17))
 
     model = Module(model, strategy=strategy)
-    with pytest.raises(RuntimeError, match="No correct backend found with throughput > 0"):
-        tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
+    tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
+
+    assert model.state == ModuleState.PASSTHROUGH
 
 
 def test_highest_throughput_strategy_select_backend_if_one_of_backends_succeeds(torch_device):
@@ -264,5 +265,5 @@ def test_highest_throughput_strategy_find_max_batch_size_fails(torch_device):
 
     model = Module(model, strategy=strategy)
 
-    with pytest.raises(RuntimeError, match="Build failed"):
-        tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
+    tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
+    assert model.state == ModuleState.PASSTHROUGH

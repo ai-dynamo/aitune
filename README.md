@@ -108,6 +108,17 @@ NVIDIA AITune supports two modes:
 
 Ahead-of-time mode is more powerful and allows you to tweak more settings, whereas just-in-time works out of the box but offers less control over the tuning process. For a more detailed comparison, see the [Comparison between AOT and JIT tuning](#comparison-between-ahead-of-time-and-just-in-time-tuning) section.
 
+### Enabling logging
+
+The tuning process guides the user through decisions and steps that are performed to tune every selected module.
+
+We recommend to enable the INFO logging level for better verbosity.
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO, force=True)
+```
+
 ### Ahead-of-time tuning
 
 The code below demonstrates Stable Diffusion pipeline tuning.
@@ -196,16 +207,35 @@ In this mode, there is no need to modify the user's code. At the beginning, AITu
 
 that module is left unchanged and AITune tries to tune its children. This process continues until the module depth reaches a configured limit.
 
-To turn on this mode, just set the following environment variable:
+First, install the required third-party dependencies:
 
 ```bash
-export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
+pip install transformers diffusers torch
 ```
 
-You can then run your script without modifying it, for example:
+Prepare the example script for tuning `my_script.py`:
+
+```python
+# Enable JIT tuning
+import aitune.torch.jit.enable
+
+from diffusers import DiffusionPipeline
+
+# Initialize pipeline
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5")
+pipe.to("cuda")
+
+# First call - tuning the model
+pipe("A beautiful landscape with mountains and a lake")
+
+# Second call - using tuned model
+pipe("A beautiful landscape with mountains and a lake")
+```
+
+You can then run your script:
 
 ```bash
-python your_script.py
+python my_script.py
 ```
 
 #### Configuring just-in-time tuning

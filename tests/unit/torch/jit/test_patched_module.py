@@ -190,6 +190,7 @@ def test_jit_tuning_with_module_hooks(mock_trt_backend, torch_device, mocker):
 
 @requires_cuda
 def test_jit_tuning_graph_break(mock_trt_backend, torch_device, mocker):
+    config.max_depth_level = 2
     config.dry_run = False
     config.inspect_mode = False
     config.detect_graph_breaks = True
@@ -215,6 +216,7 @@ def test_jit_tuning_graph_break(mock_trt_backend, torch_device, mocker):
 
 @requires_cuda
 def test_jit_tuning_skip_module(mock_trt_backend, torch_device, mocker):
+    config.max_depth_level = 2
     config.dry_run = False
     config.inspect_mode = False
     config.detect_graph_breaks = False
@@ -242,6 +244,7 @@ def test_jit_tuning_skip_module(mock_trt_backend, torch_device, mocker):
 
 @requires_cuda
 def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend, torch_device):
+    config.max_depth_level = 2
     config.dry_run = False
     config.inspect_mode = False
     config.detect_graph_breaks = False

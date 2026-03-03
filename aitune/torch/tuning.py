@@ -28,7 +28,7 @@ from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
 from aitune.torch.config import DEFAULT_DEVICE, aitune_cache_dir
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
 from aitune.torch.module.tensor_spec import InfoLevel
-from aitune.torch.module.wrapper_module import Module
+from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.utils.cuda import synchronize as cuda_synchronize
 from aitune.torch.utils.device import get_device
@@ -50,6 +50,7 @@ def tune(
     dry_run: bool = False,
     disable_external_logging: bool = False,
     clear_cache: bool = False,
+    ignore_failing_modules: bool = True,
 ) -> None:
     """Tune a callable which runs inference on a pipeline or a model.
 
@@ -64,6 +65,7 @@ def tune(
         dry_run: If True, only dry run the tuning.
         disable_external_logging: If True, libraries logging will be suppressed.
         clear_cache: If True, the cache will be cleared before tuning.
+        ignore_failing_modules: If True, failing modules will be ignored and tuning will continue.
 
     Note:
         Max batch size is limited by specified batch_size.
@@ -93,9 +95,21 @@ def tune(
             for other_module in MODULE_REGISTRY.modules.values():
                 if other_module != module:
                     other_module.deactivate()
+
             logger.info("════════════════════════════════════════════════════════════════")
             logger.info("🎯 Tuning module: `%s` (all graphs)", module.name)
-            module.tune(device=device, dry_run=dry_run)
+            try:
+                module.tune(device=device, dry_run=dry_run)
+            except Exception:
+                # If ignore_failing_modules is False, we will raise the error and stop tuning.
+                if not ignore_failing_modules:
+                    raise
+
+                # If ignore_failing_modules is True, we use original forward for this module and continue tuning the next module.
+                logger.info("⚠️ Tuning module: `%s` failed", module.name)
+                module.enable_passthrough()
+                continue
+
             logger.info("✅ Tuning module: `%s` (all graphs) completed.", module.name)
 
         # Activate the backends after tuning for inference
@@ -199,9 +213,12 @@ def _activate_tuned_modules() -> None:
 
 def _describe_module(module: Module):
     logger.info("📦 module: %s", module.name)
-    for metadata, backend in module.module.backends.items():
-        logger.info(" ➤ graph: %s", metadata.describe(InfoLevel.MEDIUM))
-        logger.info("   backend: %s", backend.describe())
+    if module.state == ModuleState.TUNED:
+        for metadata, backend in module.module.backends.items():
+            logger.info(" ➤ graph: %s", metadata.describe(InfoLevel.MEDIUM))
+            logger.info("   backend: %s", backend.describe())
+    else:
+        logger.info(" ➤ tuning failed: using original module")
 
 
 def _clear_cache():
