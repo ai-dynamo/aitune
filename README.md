@@ -478,7 +478,7 @@ Tries backends in priority order and returns the first one that succeeds. If a b
 ```python
 from aitune.torch.tune_strategy import FirstWinsStrategy
 
-strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
+strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend()])
 ```
 
 ### OneBackendStrategy

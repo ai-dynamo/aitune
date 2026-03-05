@@ -385,7 +385,7 @@ Internally a `PatchedModule` can be in the following states:
 - INIT: "⏳" before the first forward call; hierarchy is not fully resolved yet.
 - RECORDING: "🔴" after the first forward call; hierarchy resolved and collecting samples.
 - TUNED: "🎯" tuning succeeded; the module forwards through a tuned backend.
-- EAGER: "⚠️" tuning failed or was not possible; module runs in eager mode.
+- EAGER: "⚠️" tuning failed or was not possible; module falls back to the original unmodified model.
 - SKIPPED: "🚫" explicitly skipped (e.g., in `skip_modules`) and not tuned.
 - DETACHED: "☑️" detached because a parent module was tuned, so children are unpatched.
 

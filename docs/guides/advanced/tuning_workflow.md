@@ -171,7 +171,6 @@ Tries backends in priority order and returns the first one that builds and valid
 strategy = ait.FirstWinsStrategy([
     ait.backend.TensorRTBackend(),
     ait.backend.TorchInductorBackend(),
-    ait.backend.TorchEagerBackend(),
 ])
 ```
 

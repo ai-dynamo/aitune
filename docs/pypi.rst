@@ -344,7 +344,7 @@ moves on to the next candidate instead of aborting.
 
     from aitune.torch.tune_strategy import FirstWinsStrategy
 
-    strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
+    strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend()])
 
 OneBackendStrategy
 ~~~~~~~~~~~~~~~~~~

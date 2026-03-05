@@ -89,7 +89,7 @@ ait.tune(model, input_data)
 
 ## FirstWinsStrategy
 
-Tries backends in priority order and returns the first one that successfully builds and validates. If a backend fails, the strategy moves on to the next candidate instead of aborting. List backends from fastest to most compatible — for example, TensorRT first, then Torch Inductor, and finally `TorchEagerBackend` as a universal fallback that always succeeds (it runs the original, unoptimized model).
+Tries backends in priority order and returns the first one that successfully builds and validates. If a backend fails, the strategy moves on to the next candidate instead of aborting. If all backends fail, the error is caught and the original model is used as-is. List backends from fastest to most compatible — for example, TensorRT first, then Torch Inductor.
 
 ### Usage
 
@@ -98,7 +98,6 @@ from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
     TorchInductorBackend,
-    TorchEagerBackend,
 )
 import aitune.torch as ait
 
@@ -106,7 +105,6 @@ import aitune.torch as ait
 backends = [
     TensorRTBackend(config=TensorRTBackendConfig()),  # Best performance, but may not support all models
     TorchInductorBackend(),                            # Good performance, broader compatibility
-    TorchEagerBackend(),                               # Always works (no optimization, baseline performance)
 ]
 
 # Create strategy
@@ -130,7 +128,7 @@ ait.tune(model, input_data)
 
 - Experimentation with unknown or diverse models
 - CI/CD pipelines where different models may need different backends
-- Maximum reliability (with a universal fallback like `TorchEagerBackend`)
+- Maximum reliability (if all backends fail, the original model is used as-is)
 - Quick validation that *something* works before investing in backend-specific tuning
 
 ❌ **Not ideal for**:
@@ -142,7 +140,7 @@ ait.tune(model, input_data)
 ### Best Practices
 
 1. **Order by Performance**: Put fastest backends first
-2. **Always Include Fallback**: End with `TorchEagerBackend()` for reliability
+2. **Automatic Fallback**: If all backends fail, the original model is used as-is
 3. **Similar Configurations**: Use compatible configs (e.g., all FP16)
 
 ## HighestThroughputStrategy
