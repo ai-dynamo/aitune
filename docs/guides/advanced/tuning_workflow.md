@@ -165,7 +165,7 @@ The tuning strategy determines which backend(s) to try and how to select the bes
 
 #### FirstWinsStrategy
 
-Returns the first backend that builds and validates successfully:
+Tries backends in priority order and returns the first one that builds and validates successfully. Not every backend can handle every model (e.g., TensorRT may fail during ONNX export, Torch Inductor may hit graph breaks), so this strategy provides automatic fallback instead of aborting.
 
 ```python
 strategy = ait.FirstWinsStrategy([
@@ -183,11 +183,11 @@ strategy = ait.FirstWinsStrategy([
 4. Return first successful backend
 5. Skip profiling for speed
 
-**Use Case**: Fast tuning when you want a working optimized backend quickly.
+**Use Case**: Fast tuning with automatic fallback, especially for models you haven't validated against every backend.
 
 #### OneBackendStrategy
 
-Uses only a specific backend:
+Uses exactly one backend, failing immediately with the original error if it cannot build. Unlike `FirstWinsStrategy` with a single backend, `OneBackendStrategy` surfaces the original exception rather than catching it.
 
 ```python
 strategy = ait.OneBackendStrategy(ait.backend.TorchInductorBackend())
@@ -199,7 +199,7 @@ strategy = ait.OneBackendStrategy(ait.backend.TorchInductorBackend())
 2. Validate correctness
 3. Return the backend
 
-**Use Case**: When you know which backend works best for your model.
+**Use Case**: Production with a validated backend where you want deterministic behavior.
 
 #### HighestThroughputStrategy
 

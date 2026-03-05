@@ -118,9 +118,11 @@ On first load, the checkpoint file is decompressed and the tuned and original mo
 
 NVIDIA AITune provides different strategies for selecting the optimal backend configuration. The strategies align with a common interface for the tuning process.
 
+Not every backend can tune every model — each relies on different compilation technology with its own limitations (e.g., ONNX export for TensorRT, graph breaks in Torch Inductor, unsupported layers in TorchAO). Strategies control how AITune handles this.
+
 ## FirstWinsStrategy
 
-Selects the first backend that successfully tunes the model.
+Tries backends in priority order and returns the first one that succeeds. If a backend fails, the strategy moves on to the next candidate instead of aborting.
 
 ```python
 from aitune.torch.tune_strategy import FirstWinsStrategy
@@ -130,7 +132,7 @@ strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend()
 
 ## OneBackendStrategy
 
-Tunes the model using only a specific backend.
+Uses exactly one backend, failing immediately with the original error if it cannot build. Use this when you have already validated that a backend works and want deterministic behavior. Unlike `FirstWinsStrategy` with a single backend, `OneBackendStrategy` surfaces the original exception rather than catching it.
 
 ```python
 from aitune.torch.tune_strategy import OneBackendStrategy
@@ -140,7 +142,7 @@ strategy = OneBackendStrategy(backend=TensorRTBackend())
 
 ## HighestThroughputStrategy
 
-Selects the backend configuration that provides the highest throughput.
+Profiles all compatible backends and selects the fastest. Use this when maximum throughput matters and you can afford longer tuning time.
 
 ```python
 from aitune.torch.tune_strategy import HighestThroughputStrategy

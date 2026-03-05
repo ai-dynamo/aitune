@@ -26,6 +26,17 @@ AITune provides three built-in strategies:
 - **FirstWinsStrategy**: Tries backends in order, uses the first that succeeds
 - **HighestThroughputStrategy**: Profiles all backends, selects the fastest
 
+## Why Backends Can Fail
+
+Not every backend can successfully tune every model. Each backend relies on a different compilation or export technology, and each has its own limitations:
+
+- **TensorRT** requires exporting the model to ONNX. Models with unsupported operators, complex dynamic control flow, or symbolic shape constraints may fail during ONNX export or TensorRT engine building. Memory constraints can also prevent the engine from being built.
+- **Torch Inductor** uses `torch.compile`, which may encounter *graph breaks* on unsupported Python constructs or operations, causing partial or failed compilation.
+- **TorchAO** applies quantization transformations that may not support all layer types or model architectures.
+- **Torch-TensorRT** combines PyTorch's compiler with TensorRT, inheriting potential limitations from both.
+
+Because of these differences, a backend that fails on one model may succeed on another, and vice versa. This is the core motivation behind strategies like `FirstWinsStrategy`: by trying multiple backends in priority order, you get automatic fallback when your preferred backend cannot handle a particular model.
+
 ## Choosing a Strategy
 
 Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. If you want a safer default with minimal tuning time, `FirstWinsStrategy` balances reliability and speed. When absolute throughput matters and you can afford longer tuning, choose `HighestThroughputStrategy`.
@@ -38,7 +49,10 @@ Use the table below as a quick decision guide. If you already know a backend is 
 
 ## OneBackendStrategy
 
-Uses exactly one backend. Fails if that backend fails.
+Uses exactly one backend, failing immediately with the original error if it cannot build. Use this when you have already validated that a backend works and want deterministic, reproducible behavior in production.
+
+!!! note
+    `OneBackendStrategy` may look equivalent to `FirstWinsStrategy` with a single backend, but the key difference is error handling: `OneBackendStrategy` raises the backend's original exception on failure, while `FirstWinsStrategy` catches errors and tries the next candidate.
 
 ### Usage
 
@@ -75,7 +89,7 @@ ait.tune(model, input_data)
 
 ## FirstWinsStrategy
 
-Tries multiple backends in order. Uses the first one that successfully builds.
+Tries backends in priority order and returns the first one that successfully builds and validates. If a backend fails, the strategy moves on to the next candidate instead of aborting. List backends from fastest to most compatible — for example, TensorRT first, then Torch Inductor, and finally `TorchEagerBackend` as a universal fallback that always succeeds (it runs the original, unoptimized model).
 
 ### Usage
 
@@ -88,11 +102,11 @@ from aitune.torch.backend import (
 )
 import aitune.torch as ait
 
-# List backends in priority order
+# List backends in priority order (fastest → most compatible)
 backends = [
-    TensorRTBackend(config=TensorRTBackendConfig()),
-    TorchInductorBackend(),
-    TorchEagerBackend(),  # Fallback (always works)
+    TensorRTBackend(config=TensorRTBackendConfig()),  # Best performance, but may not support all models
+    TorchInductorBackend(),                            # Good performance, broader compatibility
+    TorchEagerBackend(),                               # Always works (no optimization, baseline performance)
 ]
 
 # Create strategy
@@ -107,23 +121,23 @@ ait.tune(model, input_data)
 
 1. Tries first backend (e.g., TensorRT)
 2. If successful → uses it, done
-3. If fails → tries next backend
+3. If fails (e.g., unsupported op, export error, memory limit) → tries next backend
 4. Repeats until a backend succeeds or all fail
 
 ### When to Use
 
 ✅ **Good for**:
 
-- Experimentation with unknown models
-- Maximum reliability (with fallback)
-- Quick validation that something works
-- Diverse model types
+- Experimentation with unknown or diverse models
+- CI/CD pipelines where different models may need different backends
+- Maximum reliability (with a universal fallback like `TorchEagerBackend`)
+- Quick validation that *something* works before investing in backend-specific tuning
 
 ❌ **Not ideal for**:
 
-- Maximum performance (stops at first success)
-- When you know which backend works
-- Detailed performance comparison
+- Maximum performance (stops at first success, not the fastest)
+- When you already know which backend works (use `OneBackendStrategy` instead)
+- Detailed performance comparison (use `HighestThroughputStrategy` instead)
 
 ### Best Practices
 
