@@ -54,12 +54,13 @@ pip install transformers diffusers torch
 Then initialize the pipeline:
 
 ```python
+import torch
 from diffusers import DiffusionPipeline
 
 import aitune.torch as ait
 
 # Initialize pipeline
-pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers")
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5", torch_dtype=torch.float16)
 pipe.to("cuda")
 ```
 
@@ -114,7 +115,7 @@ ait.save(pipe, "tuned_pipe.ait")
 And load the tuned pipeline directly:
 
 ```python
-pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers")
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5", torch_dtype=torch.float16)
 pipe.to("cuda")
 ait.load(pipe, "tuned_pipe.ait")
 ```
@@ -131,7 +132,7 @@ that module is left unchanged and AITune tries to tune its children. This proces
 First, install the required third-party dependencies:
 
 ```bash
-pip install transformers diffusers torch
+pip install transformers<5 diffusers torch
 ```
 
 Prepare the script with the model for tuning `my_script.py`:
@@ -143,7 +144,7 @@ import aitune.torch.jit.enable
 from diffusers import DiffusionPipeline
 
 # Initialize pipeline
-pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5")
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5", torch_dtype=torch.float16)
 pipe.to("cuda")
 
 # First call - tuning the model
@@ -158,6 +159,8 @@ You can then run your script:
 ```bash
 python my_script.py
 ```
+
+*Note*: The `import aitune.torch.jit.enable` must be a first import in your code. The alternative option is to use `export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning` to avoid any source code modification.
 
 ### Configuring just-in-time tuning
 
