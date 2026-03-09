@@ -35,6 +35,7 @@ import aitune.torch as ait
 from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
 from aitune.torch.config import aitune_cache_dir
 
+from ..sample_data import ensure_sample_audio
 from ..tune import get_model, tune_model
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,7 @@ class ParakeetRNNTBatchedBackend:
         self.max_batch_size = config.get("Backend", {}).get("max_batch_size", 8)
         self.batch_timeout = config.get("Backend", {}).get("batch_timeout", 0.5)  # seconds
 
-        self.tuning_audio_path = config.get("Backend", {}).get("tuning_audio_path", "./2086-149220-0033.wav")
+        self.tuning_audio_path = config.get("Backend", {}).get("tuning_audio_path", str(ensure_sample_audio()))
         self.audio_storage_path = Path(config.get("Backend", {}).get("audio_storage_path", "/tmp/audio"))
         self.force_tune = config.get("Backend", {}).get("force_tune", False)
         self.audio_storage_path.mkdir(parents=True, exist_ok=True)

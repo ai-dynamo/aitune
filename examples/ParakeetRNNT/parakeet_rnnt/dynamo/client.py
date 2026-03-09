@@ -22,9 +22,11 @@ from pathlib import Path
 
 import aiohttp
 
+from parakeet_rnnt.sample_data import ensure_sample_audio
+
 logger = logging.getLogger(__name__)
 
-AUDIO_PATH = (Path(__file__).parent.parent.parent / "2086-149220-0033.wav").as_posix()
+AUDIO_PATH = ensure_sample_audio(Path(__file__).parent.parent.parent).as_posix()
 
 
 class ParakeetRNNTClient:

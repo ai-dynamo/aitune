@@ -11,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Common command line arguments for ResNet."""
+"""Common command line arguments for ParakeetCTC."""
 
 import argparse
 from pathlib import Path
+
+from parakeet_ctc.sample_data import ensure_sample_audio
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,8 +34,8 @@ def parse_args() -> argparse.Namespace:
         "-a",
         "--audio_path",
         type=Path,
-        default=Path(__file__).parent.parent / "2086-149220-0033.wav",
-        help="Audio path",
+        default=ensure_sample_audio(),
+        help="Audio path (downloaded automatically if not provided)",
     )
     parser.add_argument(
         "--tuned-model-path",

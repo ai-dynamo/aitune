@@ -1,10 +1,24 @@
-A highly detailed and photorealistic portrait of an old wizard with a long beard, intricate robes, and a glowing staff, in a dark, atmospheric fantasy setting. Cinematic lighting, dramatic shadows.
-A watercolor painting of a serene Japanese garden with a small pond, blooming cherry blossoms, and a stone lantern. Soft, pastel color palette, peaceful atmosphere.
-A futuristic cyberpunk city street at night, with neon signs, flying cars, and a heavy rain shower reflecting the lights on the wet pavement. Unreal Engine, highly detailed, vibrant colors.
-A close-up macro photograph of a bumblebee collecting nectar from a sunflower. Shallow depth of field, natural light, high detail.
-A low-poly 3D render of a cozy log cabin in a snowy forest. Warm light glowing from the windows, simple geometry, blender 3d.
-A pop art portrait of a famous celebrity, with bold colors, thick black outlines, and a comic book aesthetic. By Andy Warhol.
-A surreal image of a floating island with a single, twisted tree on top, suspended in a cloudy sky above a calm ocean. Fantasy, dreamy, ethereal lighting.
-An epic wide shot of a medieval castle on a cliffside, with a stormy sea crashing below. Golden hour lighting, dramatic clouds, cinematic.
-A black and white photograph of a man and a woman dancing in a vintage ballroom. Film noir style, high contrast, sharp focus.
-A minimalist vector illustration of a cat sitting on a windowsill, looking at a bird. Clean lines, simple shapes, limited color palette.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+Photorealistic close-up of an elderly sorcerer featuring a flowing beard, elaborate ceremonial garments, and a luminous magical staff set against a moody, dark fantasy backdrop with cinematic light and deep shadows.
+Gentle watercolor depiction of a tranquil garden in the Japanese style, featuring a koi pond, sakura trees in full bloom, and a traditional stone lantern, rendered in muted pastels with a calm mood.
+Nighttime scene of a neon-drenched street in a futuristic metropolis, complete with hovering vehicles and a downpour casting colorful reflections across slick asphalt. Rendered in Unreal Engine with rich, saturated hues.
+Extreme close-up macro shot of a honeybee gathering pollen from a large sunflower head, captured in natural daylight with a narrow focal plane and fine textural detail.
+Stylized low-polygon 3D scene of a rustic wooden cabin nestled among snow-covered pines, with a cozy amber glow emanating from its windows, created in Blender.
+Vibrant pop-art–style portrait of a well-known public figure, employing saturated flat colors, heavy black contours, and a retro comic-strip look inspired by Warhol.
+Dreamlike fantasy composition of a levitating landmass crowned by a lone gnarled tree, hovering amid overcast skies above a still ocean, bathed in soft, otherworldly light.
+Grand panoramic view of a stone fortress perched atop seaside cliffs while turbulent waves crash far below, illuminated by late-afternoon golden light under brooding storm clouds.
+Monochrome photograph of a couple mid-dance inside an ornate vintage ballroom, shot in a film-noir aesthetic with stark contrast and crisp focus.
+Clean vector-style drawing of a feline perched on a window ledge observing a small bird outside, using minimal linework, basic geometric forms, and a restrained color scheme.

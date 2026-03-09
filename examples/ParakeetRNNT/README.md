@@ -40,18 +40,28 @@ uv sync
 
 ## Usage
 
+### Sample audio file
+
+The example uses a sample audio file that is **downloaded automatically** when you run the
+commands below without an explicit `--audio_path`.
+You can also download it manually:
+
+```bash
+wget https://dldata-public.s3.us-east-2.amazonaws.com/2086-149220-0033.wav
+```
+
 ### Tuning and inference the model
 
 To tune the ASR model, run:
 
 ```bash
-tune --audio_path 2086-149220-0033.wav
+tune
 ```
 
 To infer the ASR model, run:
 
 ```bash
-inference --audio_path 2086-149220-0033.wav
+inference
 ```
 
 

@@ -92,10 +92,13 @@ def load_pipeline(model: str):
 
 
 def get_prompts(file_with_prompts):
-    """Get prompts from a file."""
+    """Get prompts from a file.
+
+    Lines starting with '#' and blank lines are skipped
+    """
     if not Path(file_with_prompts).exists():
         raise FileNotFoundError(f"File with prompts not found: {file_with_prompts}")
-    prompts = [line.strip() for line in open(file_with_prompts)]
+    prompts = [line.strip() for line in open(file_with_prompts) if line.strip() and not line.strip().startswith("#")]
     if not prompts:
         raise ValueError("No prompts found in the file")
     return prompts

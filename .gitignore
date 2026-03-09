@@ -363,3 +363,5 @@ notebooks/checkpoints/
 # images
 *.png
 
+# audio samples (downloaded on demand)
+*.wav
