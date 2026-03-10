@@ -35,7 +35,7 @@ endef
 export PRINT_HELP_PYSCRIPT
 
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
-PIP_INSTALL := pip install --extra-index-url https://pypi.ngc.nvidia.com
+PIP_INSTALL := pip install --extra-index-url https://pypi.nvidia.com
 
 help:
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
