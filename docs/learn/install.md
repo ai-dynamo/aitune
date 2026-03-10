@@ -41,12 +41,6 @@ pip install --extra-index-url https://pypi.nvidia.com aitune
 
 ```bash
 # Clone the repository
-## Internal NVIDIA use
-git clone https://gitlab-master.nvidia.com/dl/JoC/bermuda/ai-tune.git
-cd ai-tune
-pip install --extra-index-url https://pypi.nvidia.com .
-
-## Official (valid after first release)
 git clone https://github.com/ai-dynamo/aitune
 cd aitune
 pip install --extra-index-url https://pypi.nvidia.com .
