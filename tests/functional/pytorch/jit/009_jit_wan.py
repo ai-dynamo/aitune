@@ -51,7 +51,7 @@ def test_jit_wan():
     disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards"""
 
     config.dry_run = False
-    config.min_samples = 70
+    config.min_samples = 68
     config.batch_axis_required = False
     config.max_depth_level = 1
     config.detect_graph_breaks = True
