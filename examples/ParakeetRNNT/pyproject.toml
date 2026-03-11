@@ -50,5 +50,3 @@ parakeet_rnnt = ["**/*"]
 
 [tool.aitune]
 docker_image = "nvcr.io/nvidia/pytorch:25.10-py3"
-[[tool.aitune.arguments]]
-audio_path = "2086-149220-0033.wav"
