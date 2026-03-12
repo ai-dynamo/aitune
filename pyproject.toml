@@ -20,8 +20,8 @@ classifiers = [
     "Operating System :: Unix",
     "Operating System :: MacOS",
 ]
-authors = []
-maintainers = []
+authors = [{ name = "NVIDIA Corporation" }]
+maintainers = [{ name = "NVIDIA Corporation" }]
 keywords = [
     "dynamo",
     "inference",
@@ -55,7 +55,7 @@ dependencies = [
 
 [project.urls]
 "Documentation" = "https://ai-dynamo.github.io/aitune"
-"Source" = "https://github.com/ai-dynamo/aitune"
+"Repository" = "https://github.com/ai-dynamo/aitune.git"
 "Tracker" = "https://github.com/ai-dynamo/aitune/issues"
 
 [project.optional-dependencies]
