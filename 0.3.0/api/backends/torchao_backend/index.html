@@ -1,0 +1,4118 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../torch_tensorrt_aot_backend/">
+      
+      
+        <link rel="next" href="../torch_inductor_backend/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>TorchAO Backend - NVIDIA AITune</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../assets/styles.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#torchao-backend-api" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="NVIDIA AITune" class="md-header__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NVIDIA AITune
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              TorchAO Backend
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../learn/overview/" class="md-tabs__link">
+          
+  
+  
+  Learn
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../guides/aot_tuning/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../examples/examples/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../aot_tuning/module/" class="md-tabs__link">
+          
+  
+  
+  API
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../CHANGELOG/" class="md-tabs__link">
+          
+  
+  
+  Resources
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="NVIDIA AITune" class="md-nav__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../../assets/logo.png" alt="logo">
+
+    </a>
+    NVIDIA AITune
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Learn
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Learn
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/core_functionalities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Functionalities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/aot_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/aot_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/jit_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/jit_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/tensorrt_optimization_profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Optimization Profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/torchao_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/tune_strategies/tune_strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tune Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/deployment/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/advanced/tuning_workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/advanced/execution_graphs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/advanced/profiling_nvtx/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NVTX Profiling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/E5Large/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    E5Large
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ESM2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESM2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/FLUX/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLUX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/JitTuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JitTuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/LLM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ParakeetCTC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetCTC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ParakeetRNNT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetRNNT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ResNet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResNet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/StableDiffusion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    StableDiffusion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Ahead-of-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aot_tuning/module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aot_tuning/tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aot_tuning/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aot_tuning/backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aot_tuning/inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Just-in-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../jit_tuning/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#torchaobackend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TorchAOBackend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TorchAOBackend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TorchAOBackend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TorchAOBackend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        device
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.is_active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        is_active
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.activate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        activate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.deactivate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        deactivate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.deploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        deploy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.describe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        describe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.from_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.infer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        infer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#torchaobackendconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TorchAOBackendConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TorchAOBackendConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TorchAOBackendConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TorchAOBackendConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.__post_init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __post_init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.describe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        describe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.from_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.to_json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_json
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Strategies API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tuning Strategies API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tune_strategies/first_wins_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FirstWinsStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tune_strategies/one_backend_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OneBackendStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tune_strategies/highest_throughput_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HighestThroughputStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resources
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Resources
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../known_issues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../LICENSE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#torchaobackend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TorchAOBackend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TorchAOBackend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TorchAOBackend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TorchAOBackend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        device
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.is_active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        is_active
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.activate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        activate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        build
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.deactivate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        deactivate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.deploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        deploy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.describe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        describe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.from_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.infer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        infer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackend.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#torchaobackendconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TorchAOBackendConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TorchAOBackendConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TorchAOBackendConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TorchAOBackendConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.__post_init__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __post_init__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.describe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        describe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.from_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.backend.TorchAOBackendConfig.to_json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_json
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+
+<h1 id="torchao-backend-api">TorchAO Backend API</h1>
+<h2 id="torchaobackend">TorchAOBackend</h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="aitune.torch.backend.TorchAOBackend" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">aitune.torch.backend.TorchAOBackend</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">TorchAOBackend</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="aitune.torch.backend.Backend (aitune.torch.backend.backend.Backend)" href="../../aot_tuning/backend/#aitune.torch.backend.Backend">Backend</a></code></p>
+
+
+
+        <p>Backend that does torch quantization.</p>
+
+
+<details class="supported-quantizations" open>
+  <summary>Supported quantizations</summary>
+  <ul>
+<li>int8wo</li>
+<li>int8dq</li>
+<li>fp8wo</li>
+<li>fp8dq</li>
+</ul>
+</details>        <p>If you would like to use customize quantization, you can pass in a quantization config.</p>
+
+        <p>Initializes backend.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>config</code></b>
+              (<code><a class="autorefs autorefs-internal" title="aitune.torch.backend.TorchAOBackendConfig
+
+
+  
+      dataclass
+   (aitune.torch.backend.torchao_backend.TorchAOBackendConfig)" href="#aitune.torch.backend.TorchAOBackendConfig">TorchAOBackendConfig</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The configuration to use.</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-125">125</a></span>
+<span class="normal"><a href="#__codelineno-0-126">126</a></span>
+<span class="normal"><a href="#__codelineno-0-127">127</a></span>
+<span class="normal"><a href="#__codelineno-0-128">128</a></span>
+<span class="normal"><a href="#__codelineno-0-129">129</a></span>
+<span class="normal"><a href="#__codelineno-0-130">130</a></span>
+<span class="normal"><a href="#__codelineno-0-131">131</a></span>
+<span class="normal"><a href="#__codelineno-0-132">132</a></span>
+<span class="normal"><a href="#__codelineno-0-133">133</a></span>
+<span class="normal"><a href="#__codelineno-0-134">134</a></span>
+<span class="normal"><a href="#__codelineno-0-135">135</a></span>
+<span class="normal"><a href="#__codelineno-0-136">136</a></span>
+<span class="normal"><a href="#__codelineno-0-137">137</a></span>
+<span class="normal"><a href="#__codelineno-0-138">138</a></span>
+<span class="normal"><a href="#__codelineno-0-139">139</a></span>
+<span class="normal"><a href="#__codelineno-0-140">140</a></span>
+<span class="normal"><a href="#__codelineno-0-141">141</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-125" name="__codelineno-0-125"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<a id="__codelineno-0-126" name="__codelineno-0-126"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-127" name="__codelineno-0-127"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">TorchAOBackendConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="p">):</span>
+<a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Initializes backend.</span>
+<a id="__codelineno-0-130" name="__codelineno-0-130"></a>
+<a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-132" name="__codelineno-0-132"></a><span class="sd">        config: The configuration to use.</span>
+<a id="__codelineno-0-133" name="__codelineno-0-133"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-134" name="__codelineno-0-134"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-0-135" name="__codelineno-0-135"></a>    <span class="c1"># initialize variables</span>
+<a id="__codelineno-0-136" name="__codelineno-0-136"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="n">TorchAOBackendConfig</span><span class="p">(</span><span class="n">quantization</span><span class="o">=</span><span class="n">DEFAULT_QUANTIZATION</span><span class="p">)</span>
+<a id="__codelineno-0-137" name="__codelineno-0-137"></a>
+<a id="__codelineno-0-138" name="__codelineno-0-138"></a>    <span class="c1"># build variables</span>
+<a id="__codelineno-0-139" name="__codelineno-0-139"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_quant_module</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-140" name="__codelineno-0-140"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_orig_module</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-141" name="__codelineno-0-141"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="o">=</span> <span class="kc">None</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.device" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">device</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">device</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Get the device of the backend.</p>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="torch.device">device</span></code>
+          –
+          <div class="doc-md-description">
+            <p>The device the module is using.</p>
+          </div>
+        </li>
+    </ul>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.is_active" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">is_active</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">is_active</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Returns True if the backend is active.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.name" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">name</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">name</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Name of a backend.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.activate" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">activate</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">activate</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Activates backend.</p>
+<p>After activating, the backend should be ready to do inference.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-215">215</a></span>
+<span class="normal"><a href="#__codelineno-0-216">216</a></span>
+<span class="normal"><a href="#__codelineno-0-217">217</a></span>
+<span class="normal"><a href="#__codelineno-0-218">218</a></span>
+<span class="normal"><a href="#__codelineno-0-219">219</a></span>
+<span class="normal"><a href="#__codelineno-0-220">220</a></span>
+<span class="normal"><a href="#__codelineno-0-221">221</a></span>
+<span class="normal"><a href="#__codelineno-0-222">222</a></span>
+<span class="normal"><a href="#__codelineno-0-223">223</a></span>
+<span class="normal"><a href="#__codelineno-0-224">224</a></span>
+<span class="normal"><a href="#__codelineno-0-225">225</a></span>
+<span class="normal"><a href="#__codelineno-0-226">226</a></span>
+<span class="normal"><a href="#__codelineno-0-227">227</a></span>
+<span class="normal"><a href="#__codelineno-0-228">228</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="nd">@nvtx</span><span class="o">.</span><span class="n">annotate</span><span class="p">(</span><span class="n">domain</span><span class="o">=</span><span class="s2">&quot;AITune&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;black&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="k">def</span><span class="w"> </span><span class="nf">activate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Activates backend.</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a><span class="sd">    After activating, the backend should be ready to do inference.</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">INIT</span><span class="p">:</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot activate backend </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, backend should be built first&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">DEPLOYED</span><span class="p">:</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot activate backend </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, backend is already deployed&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">INACTIVE</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">CHECKPOINT_LOADED</span><span class="p">:</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_activate</span><span class="p">()</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">ACTIVE</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.build" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">build</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">build</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">graph_spec</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">cache_dir</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Build the model with the given arguments.</p>
+<p>Building a backend should be idempotent i.e. do not cause side effects. A model is not necessarily pure
+functional and can have an internal state (like kv cache for LLMs). That is why build can call a sample of
+inputs at most once so that subsequent calls have exact same state as the first call for the given sample.</p>
+<p>After building, the backend should be activated.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-186">186</a></span>
+<span class="normal"><a href="#__codelineno-0-187">187</a></span>
+<span class="normal"><a href="#__codelineno-0-188">188</a></span>
+<span class="normal"><a href="#__codelineno-0-189">189</a></span>
+<span class="normal"><a href="#__codelineno-0-190">190</a></span>
+<span class="normal"><a href="#__codelineno-0-191">191</a></span>
+<span class="normal"><a href="#__codelineno-0-192">192</a></span>
+<span class="normal"><a href="#__codelineno-0-193">193</a></span>
+<span class="normal"><a href="#__codelineno-0-194">194</a></span>
+<span class="normal"><a href="#__codelineno-0-195">195</a></span>
+<span class="normal"><a href="#__codelineno-0-196">196</a></span>
+<span class="normal"><a href="#__codelineno-0-197">197</a></span>
+<span class="normal"><a href="#__codelineno-0-198">198</a></span>
+<span class="normal"><a href="#__codelineno-0-199">199</a></span>
+<span class="normal"><a href="#__codelineno-0-200">200</a></span>
+<span class="normal"><a href="#__codelineno-0-201">201</a></span>
+<span class="normal"><a href="#__codelineno-0-202">202</a></span>
+<span class="normal"><a href="#__codelineno-0-203">203</a></span>
+<span class="normal"><a href="#__codelineno-0-204">204</a></span>
+<span class="normal"><a href="#__codelineno-0-205">205</a></span>
+<span class="normal"><a href="#__codelineno-0-206">206</a></span>
+<span class="normal"><a href="#__codelineno-0-207">207</a></span>
+<span class="normal"><a href="#__codelineno-0-208">208</a></span>
+<span class="normal"><a href="#__codelineno-0-209">209</a></span>
+<span class="normal"><a href="#__codelineno-0-210">210</a></span>
+<span class="normal"><a href="#__codelineno-0-211">211</a></span>
+<span class="normal"><a href="#__codelineno-0-212">212</a></span>
+<span class="normal"><a href="#__codelineno-0-213">213</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span>
+<a id="__codelineno-0-187" name="__codelineno-0-187"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-188" name="__codelineno-0-188"></a>    <span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+<a id="__codelineno-0-189" name="__codelineno-0-189"></a>    <span class="n">graph_spec</span><span class="p">:</span> <span class="n">GraphSpec</span><span class="p">,</span>
+<a id="__codelineno-0-190" name="__codelineno-0-190"></a>    <span class="n">data</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Sample</span><span class="p">],</span>
+<a id="__codelineno-0-191" name="__codelineno-0-191"></a>    <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+<a id="__codelineno-0-192" name="__codelineno-0-192"></a>    <span class="n">cache_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Backend&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Build the model with the given arguments.</span>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">    Building a backend should be idempotent i.e. do not cause side effects. A model is not necessarily pure</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">    functional and can have an internal state (like kv cache for LLMs). That is why build can call a sample of</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">    inputs at most once so that subsequent calls have exact same state as the first call for the given sample.</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">    After building, the backend should be activated.</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">INIT</span><span class="p">:</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a>        <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_assert_device</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_set_device</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a>            <span class="n">ready_backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">graph_spec</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">cache_dir</span><span class="p">)</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">ACTIVE</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a>            <span class="k">return</span> <span class="n">ready_backend</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a>        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Failed to build backend(</span><span class="si">%s</span><span class="s2">): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a>            <span class="k">raise</span> <span class="n">e</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Backend </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> build should be called only once&quot;</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.deactivate" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">deactivate</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">deactivate</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Deactivates backend.</p>
+<p>After deactivating, the backend cannot be used to do inference.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-230">230</a></span>
+<span class="normal"><a href="#__codelineno-0-231">231</a></span>
+<span class="normal"><a href="#__codelineno-0-232">232</a></span>
+<span class="normal"><a href="#__codelineno-0-233">233</a></span>
+<span class="normal"><a href="#__codelineno-0-234">234</a></span>
+<span class="normal"><a href="#__codelineno-0-235">235</a></span>
+<span class="normal"><a href="#__codelineno-0-236">236</a></span>
+<span class="normal"><a href="#__codelineno-0-237">237</a></span>
+<span class="normal"><a href="#__codelineno-0-238">238</a></span>
+<span class="normal"><a href="#__codelineno-0-239">239</a></span>
+<span class="normal"><a href="#__codelineno-0-240">240</a></span>
+<span class="normal"><a href="#__codelineno-0-241">241</a></span>
+<span class="normal"><a href="#__codelineno-0-242">242</a></span>
+<span class="normal"><a href="#__codelineno-0-243">243</a></span>
+<span class="normal"><a href="#__codelineno-0-244">244</a></span>
+<span class="normal"><a href="#__codelineno-0-245">245</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="k">def</span><span class="w"> </span><span class="nf">deactivate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Deactivates backend.</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">    After deactivating, the backend cannot be used to do inference.</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">INIT</span><span class="p">:</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot deactivate backend </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, backend should be built first&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">DEPLOYED</span><span class="p">:</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot deactivate backend </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, backend is already deployed&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">CHECKPOINT_LOADED</span><span class="p">:</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot deactivate backend </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, backend has already been deployed&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">ACTIVE</span><span class="p">:</span>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_deactivate</span><span class="p">()</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_clean_memory</span><span class="p">()</span>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">INACTIVE</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.deploy" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">deploy</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">deploy</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Deploys the backend.</p>
+<p>After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>device</code></b>
+              (<code><span title="torch.device">device</span> | None</code>)
+          –
+          <div class="doc-md-description">
+            <p>The device to deploy the backend on.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-247">247</a></span>
+<span class="normal"><a href="#__codelineno-0-248">248</a></span>
+<span class="normal"><a href="#__codelineno-0-249">249</a></span>
+<span class="normal"><a href="#__codelineno-0-250">250</a></span>
+<span class="normal"><a href="#__codelineno-0-251">251</a></span>
+<span class="normal"><a href="#__codelineno-0-252">252</a></span>
+<span class="normal"><a href="#__codelineno-0-253">253</a></span>
+<span class="normal"><a href="#__codelineno-0-254">254</a></span>
+<span class="normal"><a href="#__codelineno-0-255">255</a></span>
+<span class="normal"><a href="#__codelineno-0-256">256</a></span>
+<span class="normal"><a href="#__codelineno-0-257">257</a></span>
+<span class="normal"><a href="#__codelineno-0-258">258</a></span>
+<span class="normal"><a href="#__codelineno-0-259">259</a></span>
+<span class="normal"><a href="#__codelineno-0-260">260</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="k">def</span><span class="w"> </span><span class="nf">deploy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span> <span class="o">|</span> <span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Deploys the backend.</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">    After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">        device: The device to deploy the backend on.</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">CHECKPOINT_LOADED</span><span class="p">:</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot deploy backend </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, backend should be loaded from a checkpoint&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_set_device</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_deploy</span><span class="p">()</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">DEPLOYED</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.describe" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">describe</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">describe</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Returns the description of the backend.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-147">147</a></span>
+<span class="normal"><a href="#__codelineno-0-148">148</a></span>
+<span class="normal"><a href="#__codelineno-0-149">149</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-147" name="__codelineno-0-147"></a><span class="k">def</span><span class="w"> </span><span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-148" name="__codelineno-0-148"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the description of the backend.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="o">.</span><span class="n">describe</span><span class="p">()</span><span class="si">}</span><span class="s2">)&quot;</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.from_dict" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">from_dict</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_dict</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Creates a backend from a state_dict.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-204">204</a></span>
+<span class="normal"><a href="#__codelineno-0-205">205</a></span>
+<span class="normal"><a href="#__codelineno-0-206">206</a></span>
+<span class="normal"><a href="#__codelineno-0-207">207</a></span>
+<span class="normal"><a href="#__codelineno-0-208">208</a></span>
+<span class="normal"><a href="#__codelineno-0-209">209</a></span>
+<span class="normal"><a href="#__codelineno-0-210">210</a></span>
+<span class="normal"><a href="#__codelineno-0-211">211</a></span>
+<span class="normal"><a href="#__codelineno-0-212">212</a></span>
+<span class="normal"><a href="#__codelineno-0-213">213</a></span>
+<span class="normal"><a href="#__codelineno-0-214">214</a></span>
+<span class="normal"><a href="#__codelineno-0-215">215</a></span>
+<span class="normal"><a href="#__codelineno-0-216">216</a></span>
+<span class="normal"><a href="#__codelineno-0-217">217</a></span>
+<span class="normal"><a href="#__codelineno-0-218">218</a></span>
+<span class="normal"><a href="#__codelineno-0-219">219</a></span>
+<span class="normal"><a href="#__codelineno-0-220">220</a></span>
+<span class="normal"><a href="#__codelineno-0-221">221</a></span>
+<span class="normal"><a href="#__codelineno-0-222">222</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="nd">@classmethod</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a backend from a state_dict.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a>    <span class="k">if</span> <span class="n">state_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">STATE_TYPE</span><span class="p">)</span> <span class="o">!=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="p">:</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid state_dict type: </span><span class="si">{</span><span class="n">state_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">STATE_TYPE</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a>    <span class="k">if</span> <span class="n">module</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Module is required to create a backend from a state_dict.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">TorchAOBackendConfig</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="bp">cls</span><span class="o">.</span><span class="n">STATE_CONFIG</span><span class="p">])</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a>    <span class="n">backend</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a>    <span class="n">backend</span><span class="o">.</span><span class="n">_data</span> <span class="o">=</span> <span class="n">state_dict</span><span class="p">[</span><span class="bp">cls</span><span class="o">.</span><span class="n">STATE_DATA</span><span class="p">]</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a>    <span class="n">backend</span><span class="o">.</span><span class="n">_device</span> <span class="o">=</span> <span class="n">state_dict</span><span class="p">[</span><span class="bp">cls</span><span class="o">.</span><span class="n">STATE_DEVICE</span><span class="p">]</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a>    <span class="n">backend</span><span class="o">.</span><span class="n">_orig_module</span> <span class="o">=</span> <span class="n">module</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a>    <span class="n">module</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="bp">cls</span><span class="o">.</span><span class="n">STATE_ORIG_MODULE</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a>    <span class="n">backend</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">CHECKPOINT_LOADED</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a>    <span class="k">return</span> <span class="n">backend</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.infer" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">infer</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">infer</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Run inference with the given arguments.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>args</code></b>
+              (<code><span title="typing.Any">Any</span></code>, default:
+                  <code>()</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Variable length argument list.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>kwargs</code></b>
+              (<code><span title="typing.Any">Any</span></code>, default:
+                  <code>{}</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Arbitrary keyword arguments.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+<b><code>Any</code></b> (              <code><span title="typing.Any">Any</span></code>
+)          –
+          <div class="doc-md-description">
+            <p>The result of the inference.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-262">262</a></span>
+<span class="normal"><a href="#__codelineno-0-263">263</a></span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span>
+<span class="normal"><a href="#__codelineno-0-265">265</a></span>
+<span class="normal"><a href="#__codelineno-0-266">266</a></span>
+<span class="normal"><a href="#__codelineno-0-267">267</a></span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="k">def</span><span class="w"> </span><span class="nf">infer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Run inference with the given arguments.</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">        args: Variable length argument list.</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">        kwargs: Arbitrary keyword arguments.</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">        Any: The result of the inference.</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">ACTIVE</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">BackendState</span><span class="o">.</span><span class="n">DEPLOYED</span><span class="p">:</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot run inference, backend </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> should be activated first&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_infer</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.key" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">key</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">key</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Returns the key of the backend.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-143">143</a></span>
+<span class="normal"><a href="#__codelineno-0-144">144</a></span>
+<span class="normal"><a href="#__codelineno-0-145">145</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-143" name="__codelineno-0-143"></a><span class="k">def</span><span class="w"> </span><span class="nf">key</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-144" name="__codelineno-0-144"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the key of the backend.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-145" name="__codelineno-0-145"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="o">.</span><span class="n">key</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackend.to_dict" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">to_dict</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_dict</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Returns the state_dict of the backend.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-192">192</a></span>
+<span class="normal"><a href="#__codelineno-0-193">193</a></span>
+<span class="normal"><a href="#__codelineno-0-194">194</a></span>
+<span class="normal"><a href="#__codelineno-0-195">195</a></span>
+<span class="normal"><a href="#__codelineno-0-196">196</a></span>
+<span class="normal"><a href="#__codelineno-0-197">197</a></span>
+<span class="normal"><a href="#__codelineno-0-198">198</a></span>
+<span class="normal"><a href="#__codelineno-0-199">199</a></span>
+<span class="normal"><a href="#__codelineno-0-200">200</a></span>
+<span class="normal"><a href="#__codelineno-0-201">201</a></span>
+<span class="normal"><a href="#__codelineno-0-202">202</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the state_dict of the backend.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_orig_module</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Backend has not been properly initialized. Please call build() first.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a>    <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">STATE_TYPE</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">STATE_CONFIG</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(),</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">STATE_ORIG_MODULE</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_orig_module</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">STATE_DATA</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">,</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">STATE_DEVICE</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_device</span><span class="p">,</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a>    <span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="torchaobackendconfig">TorchAOBackendConfig</h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="aitune.torch.backend.TorchAOBackendConfig" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">aitune.torch.backend.TorchAOBackendConfig</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">TorchAOBackendConfig</span><span class="p">(</span><span class="n">quantization</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">quantization_config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="aitune.torch.backend.backend.BackendConfig
+
+
+  
+      dataclass
+  " href="../../aot_tuning/backend/#aitune.torch.backend.backend.BackendConfig">BackendConfig</a></code></p>
+
+
+
+        <p>Configuration for TorchAOBackend.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackendConfig.__post_init__" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">__post_init__</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">__post_init__</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Post init for TorchAOBackendConfig.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#__codelineno-0-58">58</a></span>
+<span class="normal"><a href="#__codelineno-0-59">59</a></span>
+<span class="normal"><a href="#__codelineno-0-60">60</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Post init for TorchAOBackendConfig.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">quantization</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Only one of quantization or quantization_config should be provided.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">quantization</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Either quantization or quantization_config should be provided.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span><span class="p">:</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_quantization_config</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">quantization</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackendConfig.describe" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">describe</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">describe</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Returns the description of the backend.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-72">72</a></span>
+<span class="normal"><a href="#__codelineno-0-73">73</a></span>
+<span class="normal"><a href="#__codelineno-0-74">74</a></span>
+<span class="normal"><a href="#__codelineno-0-75">75</a></span>
+<span class="normal"><a href="#__codelineno-0-76">76</a></span>
+<span class="normal"><a href="#__codelineno-0-77">77</a></span>
+<span class="normal"><a href="#__codelineno-0-78">78</a></span>
+<span class="normal"><a href="#__codelineno-0-79">79</a></span>
+<span class="normal"><a href="#__codelineno-0-80">80</a></span>
+<span class="normal"><a href="#__codelineno-0-81">81</a></span>
+<span class="normal"><a href="#__codelineno-0-82">82</a></span>
+<span class="normal"><a href="#__codelineno-0-83">83</a></span>
+<span class="normal"><a href="#__codelineno-0-84">84</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="k">def</span><span class="w"> </span><span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the description of the backend.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a>    <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span><span class="o">.</span><span class="vm">__class__</span><span class="p">):</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>        <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">default</span> <span class="ow">is</span> <span class="n">MISSING</span> <span class="ow">and</span> <span class="n">f</span><span class="o">.</span><span class="n">default_factory</span> <span class="ow">is</span> <span class="n">MISSING</span><span class="p">:</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a>            <span class="n">kwargs</span><span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a>    <span class="n">changed_fields</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_changed_fields</span><span class="p">(</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span><span class="p">,</span>
+<a id="__codelineno-0-81" name="__codelineno-0-81"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span><span class="o">.</span><span class="vm">__class__</span><span class="p">(</span><span class="o">*</span><span class="n">kwargs</span><span class="p">),</span>
+<a id="__codelineno-0-82" name="__codelineno-0-82"></a>        <span class="n">include</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span>
+<a id="__codelineno-0-83" name="__codelineno-0-83"></a>    <span class="p">)</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;quantization_config=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">changed_fields</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackendConfig.from_dict" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">from_dict</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Convert dict to TorchAOBackendConfig.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-92">92</a></span>
+<span class="normal"><a href="#__codelineno-0-93">93</a></span>
+<span class="normal"><a href="#__codelineno-0-94">94</a></span>
+<span class="normal"><a href="#__codelineno-0-95">95</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="nd">@classmethod</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert dict to TorchAOBackendConfig.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">quantization_config</span><span class="o">=</span><span class="n">loads</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s2">&quot;quantization_config&quot;</span><span class="p">]))</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackendConfig.key" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">key</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">key</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Returns the key of the backend configuration.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-62">62</a></span>
+<span class="normal"><a href="#__codelineno-0-63">63</a></span>
+<span class="normal"><a href="#__codelineno-0-64">64</a></span>
+<span class="normal"><a href="#__codelineno-0-65">65</a></span>
+<span class="normal"><a href="#__codelineno-0-66">66</a></span>
+<span class="normal"><a href="#__codelineno-0-67">67</a></span>
+<span class="normal"><a href="#__codelineno-0-68">68</a></span>
+<span class="normal"><a href="#__codelineno-0-69">69</a></span>
+<span class="normal"><a href="#__codelineno-0-70">70</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="k">def</span><span class="w"> </span><span class="nf">key</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the key of the backend configuration.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a>    <span class="n">config_dict</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a>        <span class="s2">&quot;quantization_config&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span><span class="p">,</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a>    <span class="p">}</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a>    <span class="n">config_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_json</span><span class="p">(</span><span class="n">config_dict</span><span class="p">)</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a>    <span class="n">config_dict_str</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">config_dict</span><span class="p">)</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="n">key</span> <span class="o">=</span> <span class="n">hash_string</span><span class="p">(</span><span class="n">config_dict_str</span><span class="p">)</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="k">return</span> <span class="n">key</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackendConfig.to_dict" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">to_dict</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_dict</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Convert TorchAOBackendConfig to dict.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/torchao_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-86">86</a></span>
+<span class="normal"><a href="#__codelineno-0-87">87</a></span>
+<span class="normal"><a href="#__codelineno-0-88">88</a></span>
+<span class="normal"><a href="#__codelineno-0-89">89</a></span>
+<span class="normal"><a href="#__codelineno-0-90">90</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-87" name="__codelineno-0-87"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert TorchAOBackendConfig to dict.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-88" name="__codelineno-0-88"></a>    <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-89" name="__codelineno-0-89"></a>        <span class="s2">&quot;quantization_config&quot;</span><span class="p">:</span> <span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">quantization_config</span><span class="p">),</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.backend.TorchAOBackendConfig.to_json" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">to_json</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_json</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Saves the backend configuration to a file.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/backend/backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-107">107</a></span>
+<span class="normal"><a href="#__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#__codelineno-0-111">111</a></span>
+<span class="normal"><a href="#__codelineno-0-112">112</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-107" name="__codelineno-0-107"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_json</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Path</span><span class="p">):</span>
+<a id="__codelineno-0-108" name="__codelineno-0-108"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Saves the backend configuration to a file.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="n">config_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+<a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="n">config_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_json</span><span class="p">(</span><span class="n">config_dict</span><span class="p">)</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-0-112" name="__codelineno-0-112"></a>        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">config_dict</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+Copyright © 2025-2026 NVIDIA Corporation
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.top", "navigation.tabs", "navigation.tabs.sticky", "navigation.expand", "navigation.sections"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

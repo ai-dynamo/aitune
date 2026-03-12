@@ -1,0 +1,4031 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../tuning_workflow/">
+      
+      
+        <link rel="next" href="../profiling_nvtx/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Execution Graphs - NVIDIA AITune</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../assets/styles.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#execution-graphs" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="NVIDIA AITune" class="md-header__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NVIDIA AITune
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Execution Graphs
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../learn/overview/" class="md-tabs__link">
+          
+  
+  
+  Learn
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../aot_tuning/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../examples/examples/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../api/aot_tuning/module/" class="md-tabs__link">
+          
+  
+  
+  API
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../CHANGELOG/" class="md-tabs__link">
+          
+  
+  
+  Resources
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="NVIDIA AITune" class="md-nav__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../../assets/logo.png" alt="logo">
+
+    </a>
+    NVIDIA AITune
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Learn
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Learn
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/core_functionalities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Functionalities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aot_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aot_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../jit_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../jit_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/tensorrt_optimization_profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Optimization Profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torchao_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tune_strategies/tune_strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tune Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tuning_workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution Graphs
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-defines-an-execution-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Defines an Execution Graph?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#graph-detection-in-the-tuning-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Graph Detection in the Tuning Workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-guide-covers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What This Guide Covers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#introduction-to-samplemetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Introduction to SampleMetadata
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Introduction to SampleMetadata">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-samplemetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is SampleMetadata?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Concepts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-metadata-from-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating Metadata from Inputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#strict-vs-non-strict-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strict vs. Non-Strict Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#working-with-nested-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Working with Nested Structures
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Working with Nested Structures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#understanding-locators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Understanding Locators
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#describing-metadata-infolevel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Describing Metadata - InfoLevel
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-shape-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dynamic Shape Tracking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dynamic Shape Tracking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#understanding-the-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Understanding the Results
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batch-manipulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch Manipulation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Batch Manipulation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-make_batch-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How make_batch() Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tensorspec-deep-dive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TensorSpec Deep Dive
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TensorSpec Deep Dive">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tensorspec-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TensorSpec Attributes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#useful-tensorspec-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Useful TensorSpec Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-example-complete-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical Example - Complete Workflow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Practical Example - Complete Workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-takeaways" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Takeaways
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-in-ai-tune-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use in AI-Tune Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../profiling_nvtx/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NVTX Profiling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/E5Large/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    E5Large
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ESM2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESM2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/FLUX/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLUX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/JitTuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JitTuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/LLM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ParakeetCTC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetCTC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ParakeetRNNT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetRNNT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ResNet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResNet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/StableDiffusion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    StableDiffusion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Ahead-of-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Just-in-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/jit_tuning/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/torchao_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Strategies API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tuning Strategies API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/tune_strategies/first_wins_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FirstWinsStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/tune_strategies/one_backend_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OneBackendStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/tune_strategies/highest_throughput_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HighestThroughputStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resources
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Resources
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../known_issues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../LICENSE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-defines-an-execution-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Defines an Execution Graph?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#graph-detection-in-the-tuning-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Graph Detection in the Tuning Workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-guide-covers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What This Guide Covers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#introduction-to-samplemetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Introduction to SampleMetadata
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Introduction to SampleMetadata">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-samplemetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is SampleMetadata?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Concepts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-metadata-from-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating Metadata from Inputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#strict-vs-non-strict-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strict vs. Non-Strict Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#working-with-nested-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Working with Nested Structures
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Working with Nested Structures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#understanding-locators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Understanding Locators
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#describing-metadata-infolevel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Describing Metadata - InfoLevel
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-shape-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dynamic Shape Tracking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dynamic Shape Tracking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#understanding-the-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Understanding the Results
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#batch-manipulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batch Manipulation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Batch Manipulation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-make_batch-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How make_batch() Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tensorspec-deep-dive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TensorSpec Deep Dive
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TensorSpec Deep Dive">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tensorspec-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TensorSpec Attributes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#useful-tensorspec-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Useful TensorSpec Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-example-complete-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical Example - Complete Workflow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Practical Example - Complete Workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-takeaways" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Takeaways
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-in-ai-tune-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use in AI-Tune Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+
+<h1 id="execution-graphs">Execution Graphs</h1>
+<h2 id="overview">Overview</h2>
+<p>During the tuning process, AITune analyzes module inputs to detect unique <strong>execution graphs</strong>—distinct computational paths through your model based on input characteristics. Understanding execution graphs is crucial because:</p>
+<ul>
+<li><strong>Separate Optimization</strong>: Each graph is tuned independently with its own optimized backend</li>
+<li><strong>Dynamic Shape Support</strong>: Graphs capture relationships between batch sizes, dynamic dimensions, and static shapes</li>
+<li><strong>Input Routing</strong>: At inference time, inputs are automatically routed to the correct optimized graph</li>
+</ul>
+<h2 id="what-defines-an-execution-graph">What Defines an Execution Graph?</h2>
+<p>AITune creates a new execution graph when it encounters inputs that differ in these ways:</p>
+<ul>
+<li><strong>Tensor Rank</strong>: Tensors with different numbers of dimensions</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">module</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>       <span class="c1"># Graph 0: rank-2 tensor</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">module</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>    <span class="c1"># Graph 1: rank-3 tensor (different graph!)</span>
+</code></pre></div>
+<ul>
+<li><strong>Argument Structure</strong>: Different combinations of positional and keyword arguments</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">module</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>              <span class="c1"># Graph 0</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">module</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">mask</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>   <span class="c1"># Graph 1: additional kwarg</span>
+</code></pre></div>
+<ul>
+<li><strong>Non-Tensor Arguments</strong> (in strict mode): Different primitive values or configurations</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">module</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;train&quot;</span><span class="p">)</span>    <span class="c1"># Graph 0</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">module</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;eval&quot;</span><span class="p">)</span>     <span class="c1"># Graph 1 (if strict_mode=True)</span>
+</code></pre></div>
+<p><strong>Important</strong>: Tensors with the same rank but different shapes belong to the <strong>same graph</strong>. AITune handles shape variations through dynamic shape tracking (batch axes and dynamic dimensions).</p>
+<h2 id="graph-detection-in-the-tuning-workflow">Graph Detection in the Tuning Workflow</h2>
+<p>Execution graphs are detected during the <strong>Sample Gathering Phase</strong> of tuning:</p>
+<ol>
+<li>Your model is executed with samples from the dataset</li>
+<li>Each wrapped module records input/output metadata using <code>SampleMetadata</code></li>
+<li>AITune compares metadata to identify unique graph patterns</li>
+<li>Each unique pattern becomes a separate <code>GraphSpec</code></li>
+<li>During <strong>Module Tuning</strong>, each graph is optimized independently</li>
+</ol>
+<p>For a complete overview of the tuning process, see <a href="../tuning_workflow/">Tuning Workflow</a>.</p>
+<h2 id="what-this-guide-covers">What This Guide Covers</h2>
+<p>This guide explores the technical details of execution graphs through the lens of <code>SampleMetadata</code>, the core class responsible for:</p>
+<ul>
+<li>Capturing tensor metadata (shapes, dtypes, structure)</li>
+<li>Detecting batch axes vs. dynamic dimensions</li>
+<li>Tracking shape ranges (min/max) across samples</li>
+<li>Enabling dynamic batching and shape inference</li>
+</ul>
+<p>By the end of this guide, you'll understand how AITune:</p>
+<ul>
+<li>Identifies which inputs belong to the same graph</li>
+<li>Learns dynamic shape patterns from multiple samples</li>
+<li>Uses this information to optimize each execution path separately</li>
+</ul>
+<h2 id="introduction-to-samplemetadata">Introduction to SampleMetadata</h2>
+<h3 id="what-is-samplemetadata">What is SampleMetadata?</h3>
+<p><code>SampleMetadata</code> is a class designed to capture and track metadata about function inputs and outputs, particularly focusing on PyTorch tensors. It serves several important purposes:</p>
+<ul>
+<li><strong>Tensor Tracking</strong>: Automatically discovers and tracks all tensors in complex nested data structures</li>
+<li><strong>Shape Inference</strong>: Learns about dynamic dimensions and batch axes by observing multiple samples</li>
+<li><strong>Model Optimization</strong>: Enables optimization backends to understand input/output characteristics</li>
+<li><strong>Dynamic Batching</strong>: Supports scaling tensors to different batch sizes based on learned patterns</li>
+</ul>
+<h3 id="key-concepts">Key Concepts</h3>
+<ol>
+<li><strong>Locators</strong>: Navigate through nested structures (tuples, lists, dicts, dataclasses and registered user types) to find tensors</li>
+<li><strong>TensorSpec</strong>: Underlying representation that tracks shape, dtype, and batch axis information</li>
+<li><strong>Dynamic Dimensions</strong>: Dimensions that vary across samples (e.g., sequence length in NLP)</li>
+<li><strong>Batch Axes</strong>: Dimensions that scale proportionally with batch size</li>
+</ol>
+<p>Let's start with a simple example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aitune.torch.module.sample_metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">SampleMetadata</span><span class="p">,</span> <span class="n">InfoLevel</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Create a simple tensor and capture its metadata</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">simple_tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">simple_tensor</span><span class="p">,)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">metadata</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="nb">print</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">metadata</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Tensors:
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>╒═══════════╤════════╤═══════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│ Locator   │ Name   │ Shape     │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>╞═══════════╪════════╪═══════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>│ [0]       │ args_0 │ [2, 3, 4] │ [2, 3, 4]   │ [2, 3, 4]   │ torch.float32 │
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>╘═══════════╧════════╧═══════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<p>The output shows that <code>SampleMetadata</code> automatically detected the tensor, assigned it a name (<code>args_0</code>), and captured its shape <code>[2, 3, 4]</code> along with data type information.</p>
+<h2 id="creating-metadata-from-inputs">Creating Metadata from Inputs</h2>
+<p>The primary way to create <code>SampleMetadata</code> is through the <code>from_inputs()</code> static method. This method accepts:</p>
+<ul>
+<li><code>args</code>: Positional arguments (typically a tuple)</li>
+<li><code>kwargs</code>: Keyword arguments (a dictionary)</li>
+<li><code>strict</code>: Boolean flag controlling whether to track non-tensor data (default: <code>False</code>)</li>
+</ul>
+<p>Let's explore different input patterns:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Example 1: Multiple tensors in args</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">args</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">meta1</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Example 1 - Multiple args:&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="nb">print</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">meta1</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Example 1 - Multiple args:
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Tensors:
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>╒═══════════╤════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>│ Locator   │ Name   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>╞═══════════╪════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>│ [0]       │ args_0 │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>├───────────┼────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>│ [1]       │ args_1 │ [4, 5]  │ [4, 5]      │ [4, 5]      │ torch.float32 │
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>╘═══════════╧════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Example 2: Tensors in kwargs</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">args</span> <span class="o">=</span> <span class="p">()</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">&quot;input_tensor&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="s2">&quot;mask&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="p">}</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">meta2</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Example 2 - Kwargs only:&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="nb">print</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">meta2</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Example 2 - Kwargs only:
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>Tensors:
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>╒══════════════════╤═════════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>│ Locator          │ Name                │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>╞══════════════════╪═════════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>│ [&#39;input_tensor&#39;] │ kwargs_input_tensor │ [3, 4]  │ [3, 4]      │ [3, 4]      │ torch.float32 │
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>├──────────────────┼─────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>│ [&#39;mask&#39;]         │ kwargs_mask         │ [3, 1]  │ [3, 1]      │ [3, 1]      │ torch.float32 │
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>╘══════════════════╧═════════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Example 3: Mixed primitives and tensors</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">args</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="s2">&quot;some_string&quot;</span><span class="p">,</span>           <span class="c1"># Primitive - ignored by default</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>       <span class="c1"># Tensor - tracked</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="mi">42</span><span class="p">,</span>                      <span class="c1"># Primitive - ignored by default</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">)</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="s2">&quot;learning_rate&quot;</span><span class="p">:</span> <span class="mf">0.001</span><span class="p">,</span>  <span class="c1"># Primitive - ignored by default</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="p">}</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="n">meta3</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Example 3 - Mixed types (strict=False):&quot;</span><span class="p">)</span>
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="nb">print</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">meta3</span><span class="p">))</span>
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Notice that only tensors are tracked!&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>Example 3 - Mixed types (strict=False):
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>Tensors:
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>╒═══════════╤═════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>│ Locator   │ Name        │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>╞═══════════╪═════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>│ [1]       │ args_1      │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>│ [&#39;data&#39;]  │ kwargs_data │ [3, 3]  │ [3, 3]      │ [3, 3]      │ torch.float32 │
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>╘═══════════╧═════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<p>Notice that only tensors are tracked!</p>
+<h2 id="strict-vs-non-strict-mode">Strict vs. Non-Strict Mode</h2>
+<p>By default during tuning, AITune operates in <strong>strict mode</strong> (<code>config.strict_mode=True</code>), which means <code>SampleMetadata</code> captures both tensors and non-tensor data (primitives, strings, etc.). This ensures different argument values create different execution graphs.</p>
+<p>However, when calling <code>SampleMetadata.from_inputs()</code> directly with <code>strict=False</code>, it only tracks tensors and ignores all other data types. This is useful when you only care about tensor shapes for optimization purposes.</p>
+<p><strong>Strict mode</strong> (<code>strict=True</code>) is useful for:</p>
+<ul>
+<li>Validating that function signatures match expected patterns</li>
+<li>Debugging data flow through complex pipelines</li>
+<li>Ensuring reproducibility of function calls</li>
+</ul>
+<p>Let's compare the two modes:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Same inputs, different modes</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;t&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="s2">&quot;other&quot;</span><span class="p">:</span> <span class="s2">&quot;abc&quot;</span><span class="p">}</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Non-strict mode (default)</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">meta_non_strict</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Non-Strict Mode (strict=False):&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="nb">print</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">meta_non_strict</span><span class="p">))</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="c1"># Strict mode</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="n">meta_strict</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Strict Mode (strict=True):&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="nb">print</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">meta_strict</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Non-Strict Mode (strict=False):
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>Tensors:
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>╒═══════════╤══════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>│ Locator   │ Name     │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>╞═══════════╪══════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>│ [3]       │ args_3   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>├───────────┼──────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>│ [&#39;t&#39;]     │ kwargs_t │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>╘═══════════╧══════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>================================================================================
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>Strict Mode (strict=True):
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>Tensors:
+<a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>╒═══════════╤══════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>│ Locator   │ Name     │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>╞═══════════╪══════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>│ [3]       │ args_3   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+<a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>├───────────┼──────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>│ [&#39;t&#39;]     │ kwargs_t │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+<a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>╘═══════════╧══════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+<a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a>Other:
+<a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a>╒═══════════╤══════════════╤═════════╕
+<a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a>│ Locator   │ Name         │ Value   │
+<a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a>╞═══════════╪══════════════╪═════════╡
+<a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>│ [0]       │ args_0       │ 1       │
+<a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a>├───────────┼──────────────┼─────────┤
+<a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a>│ [1]       │ args_1       │ 2       │
+<a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a>├───────────┼──────────────┼─────────┤
+<a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a>│ [2]       │ args_2       │ 3       │
+<a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a>├───────────┼──────────────┼─────────┤
+<a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a>│ [&#39;other&#39;] │ kwargs_other │ abc     │
+<a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a>╘═══════════╧══════════════╧═════════╛
+</code></pre></div>
+<p>Notice that in strict mode, we see an additional "Other" section that includes the primitive values (1, 2, 3, and "abc").</p>
+<h2 id="working-with-nested-structures">Working with Nested Structures</h2>
+<p>One of the most powerful features of <code>SampleMetadata</code> is its ability to handle deeply nested data structures. Real-world model inputs often involve complex combinations of:</p>
+<ul>
+<li><strong>Tuples and Lists</strong>: For variable-length sequences</li>
+<li><strong>Dictionaries</strong>: For named parameters</li>
+<li><strong>Dataclasses</strong>: For structured configuration objects</li>
+</ul>
+<p><code>SampleMetadata</code> uses <strong>Locators</strong> to navigate these structures and find all tensors, no matter how deeply nested they are.</p>
+<p>Let's create a complex nested example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Define a custom dataclass</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nd">@dataclass</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">ModelInput</span><span class="p">:</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">metadata</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Create complex nested structure</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">args</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>    <span class="s2">&quot;first_arg&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>                                      <span class="c1"># Simple tensor</span>
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>    <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">3</span><span class="p">)),</span>                    <span class="c1"># Tuple of tensors</span>
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>    <span class="p">{</span><span class="s2">&quot;t&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">4</span><span class="p">)},</span>                               <span class="c1"># Dict with tensor</span>
+<a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>    <span class="n">ModelInput</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span> <span class="n">metadata</span><span class="o">=</span><span class="s2">&quot;info&quot;</span><span class="p">),</span>    <span class="c1"># Dataclass with tensor</span>
+<a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="p">]</span>
+<a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>
+<a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>    <span class="s2">&quot;t1&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>    <span class="s2">&quot;t2&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">)],</span>        <span class="c1"># List of tensors</span>
+<a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>    <span class="s2">&quot;t3&quot;</span><span class="p">:</span> <span class="n">ModelInput</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">metadata</span><span class="o">=</span><span class="s2">&quot;xyz&quot;</span><span class="p">),</span>
+<a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a>    <span class="s2">&quot;last&quot;</span><span class="p">:</span> <span class="s2">&quot;other&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="p">}</span>
+<a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a>
+<a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a><span class="n">nested_meta</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="nb">print</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">nested_meta</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Tensors:
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>╒═════════════╤════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>│ Locator     │ Name           │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>╞═════════════╪════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>│ [1]         │ args_1         │ [1]     │ [1]         │ [1]         │ torch.float32 │
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>│ [2][0]      │ args_2_0       │ [2]     │ [2]         │ [2]         │ torch.float32 │
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>│ [2][1]      │ args_2_1       │ [3]     │ [3]         │ [3]         │ torch.float32 │
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>│ [3][&#39;t&#39;]    │ args_3_t       │ [4]     │ [4]         │ [4]         │ torch.float32 │
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>│ [4].data    │ args_4.data    │ [5]     │ [5]         │ [5]         │ torch.float32 │
+<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>│ [&#39;t1&#39;]      │ kwargs_t1      │ [1, 1]  │ [1, 1]      │ [1, 1]      │ torch.float32 │
+<a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>│ [&#39;t2&#39;][0]   │ kwargs_t2_0    │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+<a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>│ [&#39;t2&#39;][1]   │ kwargs_t2_1    │ [3, 3]  │ [3, 3]      │ [3, 3]      │ torch.float32 │
+<a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a>├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a>│ [&#39;t3&#39;].data │ kwargs_t3.data │ [4, 4]  │ [4, 4]      │ [4, 4]      │ torch.float32 │
+<a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a>╘═════════════╧════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+<a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a>Other:
+<a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a>╒═════════════════╤════════════════════╤═══════════╕
+<a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a>│ Locator         │ Name               │ Value     │
+<a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a>╞═════════════════╪════════════════════╪═══════════╡
+<a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a>│ [0]             │ args_0             │ first_arg │
+<a id="__codelineno-14-28" name="__codelineno-14-28" href="#__codelineno-14-28"></a>├─────────────────┼────────────────────┼───────────┤
+<a id="__codelineno-14-29" name="__codelineno-14-29" href="#__codelineno-14-29"></a>│ [4].metadata    │ args_4.metadata    │ info      │
+<a id="__codelineno-14-30" name="__codelineno-14-30" href="#__codelineno-14-30"></a>├─────────────────┼────────────────────┼───────────┤
+<a id="__codelineno-14-31" name="__codelineno-14-31" href="#__codelineno-14-31"></a>│ [&#39;last&#39;]        │ kwargs_last        │ other     │
+<a id="__codelineno-14-32" name="__codelineno-14-32" href="#__codelineno-14-32"></a>├─────────────────┼────────────────────┼───────────┤
+<a id="__codelineno-14-33" name="__codelineno-14-33" href="#__codelineno-14-33"></a>│ [&#39;t3&#39;].metadata │ kwargs_t3.metadata │ xyz       │
+<a id="__codelineno-14-34" name="__codelineno-14-34" href="#__codelineno-14-34"></a>╘═════════════════╧════════════════════╧═══════════╛
+</code></pre></div>
+<h3 id="understanding-locators">Understanding Locators</h3>
+<p>The <strong>Locator</strong> column shows the path to each tensor in the nested structure:</p>
+<ul>
+<li><code>[1]</code>: Second element of args (0-indexed)</li>
+<li><code>[2][0]</code>: First element of the tuple at args[2]</li>
+<li><code>[3]['t']</code>: Value at key 't' in the dict at args[3]</li>
+<li><code>[4].data</code>: The 'data' attribute of the dataclass at args[4]</li>
+<li><code>['t2'][0]</code>: First element of the list at kwargs['t2']</li>
+<li><code>['t3'].data</code>: The 'data' attribute of the dataclass at kwargs['t3']</li>
+</ul>
+<p>This allows <code>SampleMetadata</code> to precisely locate and manipulate tensors in complex structures.</p>
+<h2 id="describing-metadata-infolevel">Describing Metadata - InfoLevel</h2>
+<p><code>SampleMetadata</code> provides three levels of detail when displaying information, controlled by the <code>InfoLevel</code> enum:</p>
+<ol>
+<li><strong><code>InfoLevel.SHORT</code></strong>: Compact representation with just tensor names</li>
+<li><strong><code>InfoLevel.MEDIUM</code></strong>: Includes locators and current shapes (simple table format)</li>
+<li><strong><code>InfoLevel.FULL</code></strong>: Complete details including min/max shapes and dtypes (fancy table format)</li>
+</ol>
+<p>Let's see the same metadata displayed at all three levels:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Create sample metadata</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;mask&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)}</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">meta</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;InfoLevel.SHORT:&quot;</span><span class="p">)</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">meta</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">SHORT</span><span class="p">))</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;InfoLevel.MEDIUM:&quot;</span><span class="p">)</span>
+<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="nb">print</span><span class="p">(</span><span class="n">meta</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">MEDIUM</span><span class="p">))</span>
+<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>
+<a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;InfoLevel.FULL:&quot;</span><span class="p">)</span>
+<a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="nb">print</span><span class="p">(</span><span class="n">meta</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">FULL</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>InfoLevel.SHORT:
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>Tensors: args_0, args_1, kwargs_mask
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>================================================================================
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>InfoLevel.MEDIUM:
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>Tensors:
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>Locator    Name         Shape
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>---------  -----------  ---------
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>[0]        args_0       [2, 3]
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>[1]        args_1       [4, 5, 6]
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>[&#39;mask&#39;]   kwargs_mask  [2, 1]
+<a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>
+<a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>================================================================================
+<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>
+<a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>InfoLevel.FULL:
+<a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>Tensors:
+<a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>╒═══════════╤═════════════╤═══════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>│ Locator   │ Name        │ Shape     │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>╞═══════════╪═════════════╪═══════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a>│ [0]       │ args_0      │ [2, 3]    │ [2, 3]      │ [2, 3]      │ torch.float32 │
+<a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a>├───────────┼─────────────┼───────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a>│ [1]       │ args_1      │ [4, 5, 6] │ [4, 5, 6]   │ [4, 5, 6]   │ torch.float32 │
+<a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a>├───────────┼─────────────┼───────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a>│ [&#39;mask&#39;]  │ kwargs_mask │ [2, 1]    │ [2, 1]      │ [2, 1]      │ torch.float32 │
+<a id="__codelineno-16-26" name="__codelineno-16-26" href="#__codelineno-16-26"></a>╘═══════════╧═════════════╧═══════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<p>The <code>FULL</code> level is particularly useful because it shows:</p>
+<ul>
+<li><strong>Min Shape</strong>: The smallest dimensions seen for each axis</li>
+<li><strong>Max Shape</strong>: The largest dimensions seen for each axis</li>
+<li><strong>Dtype</strong>: The PyTorch data type of the tensor</li>
+</ul>
+<p>These become interesting when we start tracking multiple samples with different shapes.</p>
+<h2 id="dynamic-shape-tracking">Dynamic Shape Tracking</h2>
+<p>One of the most sophisticated features of <code>SampleMetadata</code> is its ability to learn about <strong>dynamic dimensions</strong> and <strong>batch axes</strong> by observing multiple samples with different shapes.</p>
+<h3 id="how-it-works">How It Works</h3>
+<p>When you call <code>update_shapes_seen()</code> with metadata from a different sample:</p>
+<ol>
+<li><strong>Batch Axis Detection</strong>: If a dimension scales proportionally with batch size and the multiplier is an integer, it's marked as a batch axis (e.g., <code>batch0</code>, <code>batch1</code>)</li>
+<li><strong>Dynamic Dimension Detection</strong>: If a dimension changes but not proportionally to batch size, it's marked as a dynamic dimension (e.g., <code>dim0</code>, <code>dim1</code>)</li>
+<li><strong>Min/Max Tracking</strong>: The minimum and maximum values seen for each dimension are tracked</li>
+</ol>
+<p>Let's see this in action:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Create initial metadata with batch size 1</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">args_initial</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="p">]</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="n">kwargs_initial</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>    <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span>  <span class="c1"># First dim batch, second dynamic</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="p">}</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>
+<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="n">meta_initial</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args_initial</span><span class="p">,</span> <span class="n">kwargs_initial</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Initial Metadata (batch_size=1):&quot;</span><span class="p">)</span>
+<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="nb">print</span><span class="p">(</span><span class="n">meta_initial</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">FULL</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>Initial Metadata (batch_size=1):
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>Tensors:
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>╒═══════════╤═════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>│ Locator   │ Name        │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>╞═══════════╪═════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>│ [0]       │ args_0      │ [1]     │ [1]         │ [1]         │ torch.float32 │
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>│ [1]       │ args_1      │ [2]     │ [2]         │ [2]         │ torch.float32 │
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>│ [2]       │ args_2      │ [5]     │ [5]         │ [5]         │ torch.float32 │
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>│ [&#39;data&#39;]  │ kwargs_data │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.float32 │
+<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>╘═══════════╧═════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Create second metadata with different shapes and batch size 2</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">args_second</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span>      <span class="c1"># Doubled (batch axis)</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>      <span class="c1"># Changed but not proportionally (dynamic)</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">15</span><span class="p">),</span>     <span class="c1"># Changed but not proportionally (dynamic)</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="p">]</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="n">kwargs_second</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>    <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">25</span><span class="p">),</span>  <span class="c1"># First dim doubled, second changed</span>
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="p">}</span>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="n">meta_second</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args_second</span><span class="p">,</span> <span class="n">kwargs_second</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Second Metadata (batch_size=2):&quot;</span><span class="p">)</span>
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="nb">print</span><span class="p">(</span><span class="n">meta_second</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">FULL</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>Second Metadata (batch_size=2):
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>Tensors:
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>╒═══════════╤═════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>│ Locator   │ Name        │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>╞═══════════╪═════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>│ [0]       │ args_0      │ [2]     │ [2]         │ [2]         │ torch.float32 │
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>│ [1]       │ args_1      │ [5]     │ [5]         │ [5]         │ torch.float32 │
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>│ [2]       │ args_2      │ [15]    │ [15]        │ [15]        │ torch.float32 │
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>│ [&#39;data&#39;]  │ kwargs_data │ [2, 25] │ [2, 25]     │ [2, 25]     │ torch.float32 │
+<a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>╘═══════════╧═════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Update the initial metadata with information from the second sample</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">meta_initial</span><span class="o">.</span><span class="n">update_shapes_seen</span><span class="p">(</span><span class="n">meta_second</span><span class="p">)</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Updated Metadata (after seeing both samples):&quot;</span><span class="p">)</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">meta_initial</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">FULL</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>Updated Metadata (after seeing both samples):
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>Tensors:
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>╒═══════════╤═════════════╤════════════════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>│ Locator   │ Name        │ Shape              │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>╞═══════════╪═════════════╪════════════════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>│ [0]       │ args_0      │ [&#39;batch0&#39;]         │ [1]         │ [2]         │ torch.float32 │
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>├───────────┼─────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>│ [1]       │ args_1      │ [&#39;dim0&#39;]           │ [2]         │ [5]         │ torch.float32 │
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>├───────────┼─────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>│ [2]       │ args_2      │ [&#39;dim0&#39;]           │ [5]         │ [15]        │ torch.float32 │
+<a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>├───────────┼─────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>│ [&#39;data&#39;]  │ kwargs_data │ [&#39;batch0&#39;, &#39;dim1&#39;] │ [1, 10]     │ [2, 25]     │ torch.float32 │
+<a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>╘═══════════╧═════════════╧════════════════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<h3 id="understanding-the-results">Understanding the Results</h3>
+<p>After updating, notice how the shapes have been transformed:</p>
+<ul>
+<li><strong><code>batch0</code></strong>: Dimensions that doubled when batch size doubled (1→2)</li>
+<li><strong><code>dim0</code>, <code>dim1</code></strong>: Dimensions that changed but not proportionally to batch size</li>
+<li><strong>Min/Max Shape</strong>: Now show the range of values observed</li>
+</ul>
+<p>This information is crucial for:</p>
+<ul>
+<li><strong>Model compilation</strong>: Backends can create optimized graphs for dynamic shapes</li>
+<li><strong>Memory planning</strong>: Knowing the range helps allocate appropriate buffers</li>
+<li><strong>Validation</strong>: Ensuring new inputs fall within expected ranges</li>
+</ul>
+<h2 id="batch-manipulation">Batch Manipulation</h2>
+<p>Once <code>SampleMetadata</code> has learned about batch axes through <code>update_shapes_seen()</code>, it can use the <code>make_batch()</code> method to scale tensors to a target batch size.</p>
+<h3 id="how-make_batch-works">How <code>make_batch()</code> Works</h3>
+<p>The method uses <strong>batch axis multipliers</strong> to determine how to scale each dimension:</p>
+<ol>
+<li><strong>Multiplier = 1</strong>: Standard batch axis, scales linearly with batch size</li>
+<li><strong>Multiplier &gt; 1</strong>: Stacked batch axis (e.g., when inputs are vertically stacked)</li>
+<li><strong>Slicing</strong>: If current size &gt; target, slice the tensor</li>
+<li><strong>Repeating</strong>: If current size &lt; target, repeat the tensor</li>
+</ol>
+<p>Let's see this in action:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># First, create metadata and teach it about batch axes</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">args1</span> <span class="o">=</span> <span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)]</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="n">kwargs1</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;mask&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">)}</span>
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="n">meta</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args1</span><span class="p">,</span> <span class="n">kwargs1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="c1"># Second sample with batch size 2</span>
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="n">args2</span> <span class="o">=</span> <span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">)]</span>
+<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="n">kwargs2</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;mask&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">10</span><span class="p">)}</span>
+<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>
+<a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="n">meta2</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args2</span><span class="p">,</span> <span class="n">kwargs2</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="n">meta</span><span class="o">.</span><span class="n">update_shapes_seen</span><span class="p">(</span><span class="n">meta2</span><span class="p">)</span>
+<a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>
+<a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Learned Metadata:&quot;</span><span class="p">)</span>
+<a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a><span class="nb">print</span><span class="p">(</span><span class="n">meta</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">FULL</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>Learned Metadata:
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>Tensors:
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>╒═══════════╤═════════════╤════════════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>│ Locator   │ Name        │ Shape          │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>╞═══════════╪═════════════╪════════════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>│ [0]       │ args_0      │ [&#39;batch0&#39;, 5]  │ [1, 5]      │ [2, 5]      │ torch.float32 │
+<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>├───────────┼─────────────┼────────────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>│ [1]       │ args_1      │ [&#39;batch0&#39;, 3]  │ [2, 3]      │ [4, 3]      │ torch.float32 │
+<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>├───────────┼─────────────┼────────────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>│ [&#39;mask&#39;]  │ kwargs_mask │ [&#39;batch0&#39;, 10] │ [1, 10]     │ [2, 10]     │ torch.float32 │
+<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>╘═══════════╧═════════════╧════════════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Now use make_batch to scale to a larger batch size</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">original_args</span> <span class="o">=</span> <span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)]</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="n">original_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;mask&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">)}</span>
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Original shapes:&quot;</span><span class="p">)</span>
+<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  args[0]: </span><span class="si">{</span><span class="n">original_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  args[1]: </span><span class="si">{</span><span class="n">original_args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  kwargs[&#39;mask&#39;]: </span><span class="si">{</span><span class="n">original_kwargs</span><span class="p">[</span><span class="s1">&#39;mask&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="nb">print</span><span class="p">()</span>
+<a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>
+<a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="c1"># Scale to batch size 10</span>
+<a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="n">batched_args</span><span class="p">,</span> <span class="n">batched_kwargs</span> <span class="o">=</span> <span class="n">meta</span><span class="o">.</span><span class="n">make_batch</span><span class="p">(</span><span class="n">original_args</span><span class="p">,</span> <span class="n">original_kwargs</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>
+<a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;After make_batch(batch_size=10):&quot;</span><span class="p">)</span>
+<a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  args[0]: </span><span class="si">{</span><span class="n">batched_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  args[1]: </span><span class="si">{</span><span class="n">batched_args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  kwargs[&#39;mask&#39;]: </span><span class="si">{</span><span class="n">batched_kwargs</span><span class="p">[</span><span class="s1">&#39;mask&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>Original shapes:
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>  args[0]: torch.Size([1, 5])
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>  args[1]: torch.Size([2, 3])
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>  kwargs[&#39;mask&#39;]: torch.Size([1, 10])
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>After make_batch(batch_size=10):
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>  args[0]: torch.Size([10, 5])
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>  args[1]: torch.Size([20, 3])
+<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>  kwargs[&#39;mask&#39;]: torch.Size([10, 10])
+</code></pre></div>
+<p>Notice how:</p>
+<ul>
+<li>The first dimensions (batch axes) scaled to match the target batch size of 10</li>
+<li><code>args[1]</code> has a multiplier of 2 (it's a stacked batch), so it scaled to 20 (10 × 2)</li>
+<li>Non-batch dimensions (like the 5, 3, 10) remained unchanged</li>
+</ul>
+<h2 id="tensorspec-deep-dive">TensorSpec Deep Dive</h2>
+<p><code>SampleMetadata</code> is actually a container for multiple <code>TensorSpec</code> objects, where each <code>TensorSpec</code> represents one tensor in the input/output structure.</p>
+<h3 id="tensorspec-attributes">TensorSpec Attributes</h3>
+<ul>
+<li><strong><code>name</code></strong>: Symbolic name (e.g., <code>args_0</code>, <code>kwargs_mask</code>)</li>
+<li><strong><code>shape</code></strong>: Current shape representation (may include symbolic dimensions)</li>
+<li><strong><code>min_shape</code></strong>: Minimum dimensions observed</li>
+<li><strong><code>max_shape</code></strong>: Maximum dimensions observed</li>
+<li><strong><code>dtype</code></strong>: PyTorch data type</li>
+<li><strong><code>_bs_multipliers</code></strong>: Internal batch size multipliers for each axis</li>
+</ul>
+<p>Let's inspect TensorSpec objects directly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Create metadata with dynamic shapes</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="n">args1</span> <span class="o">=</span> <span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">)]</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="n">kwargs1</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">)}</span>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="n">meta</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args1</span><span class="p">,</span> <span class="n">kwargs1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>
+<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="n">args2</span> <span class="o">=</span> <span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">)]</span>
+<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="n">kwargs2</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">)}</span>
+<a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="n">meta2</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">args2</span><span class="p">,</span> <span class="n">kwargs2</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a><span class="n">meta</span><span class="o">.</span><span class="n">update_shapes_seen</span><span class="p">(</span><span class="n">meta2</span><span class="p">)</span>
+<a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>
+<a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a><span class="c1"># Access individual TensorSpec objects</span>
+<a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Individual TensorSpec objects:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a><span class="k">for</span> <span class="n">locator</span><span class="p">,</span> <span class="n">tensor_spec</span> <span class="ow">in</span> <span class="n">meta</span><span class="o">.</span><span class="n">tensor_data</span><span class="p">:</span>
+<a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Locator: </span><span class="si">{</span><span class="n">locator</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-27-15" name="__codelineno-27-15" href="#__codelineno-27-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Name: </span><span class="si">{</span><span class="n">tensor_spec</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Shape: </span><span class="si">{</span><span class="n">tensor_spec</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Min Shape: </span><span class="si">{</span><span class="n">tensor_spec</span><span class="o">.</span><span class="n">min_shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-27-18" name="__codelineno-27-18" href="#__codelineno-27-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Max Shape: </span><span class="si">{</span><span class="n">tensor_spec</span><span class="o">.</span><span class="n">max_shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-27-19" name="__codelineno-27-19" href="#__codelineno-27-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Dtype: </span><span class="si">{</span><span class="n">tensor_spec</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-27-20" name="__codelineno-27-20" href="#__codelineno-27-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Has batch axis: </span><span class="si">{</span><span class="n">tensor_spec</span><span class="o">.</span><span class="n">has_batch_axis</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-27-21" name="__codelineno-27-21" href="#__codelineno-27-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Has dynamic axis: </span><span class="si">{</span><span class="n">tensor_spec</span><span class="o">.</span><span class="n">has_dynamic_axis</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-27-22" name="__codelineno-27-22" href="#__codelineno-27-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Batch multipliers: </span><span class="si">{</span><span class="n">tensor_spec</span><span class="o">.</span><span class="n">get_batch_axis_multipliers</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>Individual TensorSpec objects:
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>Locator: [0]
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>  Name: args_0
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>  Shape: [&#39;batch0&#39;, 5]
+<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>  Min Shape: [1, 5]
+<a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a>  Max Shape: [2, 5]
+<a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>  Dtype: torch.float32
+<a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>  Has batch axis: True
+<a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>  Has dynamic axis: False
+<a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a>  Batch multipliers: {0: 1}
+<a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a>Locator: [&#39;data&#39;]
+<a id="__codelineno-28-13" name="__codelineno-28-13" href="#__codelineno-28-13"></a>  Name: kwargs_data
+<a id="__codelineno-28-14" name="__codelineno-28-14" href="#__codelineno-28-14"></a>  Shape: [&#39;batch0&#39;, &#39;batch1&#39;]
+<a id="__codelineno-28-15" name="__codelineno-28-15" href="#__codelineno-28-15"></a>  Min Shape: [1, 10]
+<a id="__codelineno-28-16" name="__codelineno-28-16" href="#__codelineno-28-16"></a>  Max Shape: [2, 20]
+<a id="__codelineno-28-17" name="__codelineno-28-17" href="#__codelineno-28-17"></a>  Dtype: torch.float32
+<a id="__codelineno-28-18" name="__codelineno-28-18" href="#__codelineno-28-18"></a>  Has batch axis: True
+<a id="__codelineno-28-19" name="__codelineno-28-19" href="#__codelineno-28-19"></a>  Has dynamic axis: False
+<a id="__codelineno-28-20" name="__codelineno-28-20" href="#__codelineno-28-20"></a>  Batch multipliers: {0: 1, 1: 10}
+</code></pre></div>
+<h3 id="useful-tensorspec-methods">Useful TensorSpec Methods</h3>
+<ul>
+<li><strong><code>has_batch_axis()</code></strong>: Returns True if the tensor has at least one batch dimension</li>
+<li><strong><code>has_dynamic_axis()</code></strong>: Returns True if the tensor has at least one dynamic dimension</li>
+<li><strong><code>get_batch_axis_multipliers()</code></strong>: Returns a dict mapping axis index to its batch multiplier</li>
+<li><strong><code>matches(other)</code></strong>: Checks if two TensorSpecs are compatible</li>
+</ul>
+<p>These methods are used internally by <code>SampleMetadata</code> to perform operations like <code>make_batch()</code>.</p>
+<h2 id="practical-example-complete-workflow">Practical Example - Complete Workflow</h2>
+<p>Let's put everything together with a realistic scenario: profiling a model with variable-length sequences (like in NLP tasks).</p>
+<h3 id="scenario">Scenario</h3>
+<p>We have a language model that takes:</p>
+<ul>
+<li>Input IDs with shape <code>(batch_size, sequence_length)</code></li>
+<li>Attention mask with shape <code>(batch_size, sequence_length)</code></li>
+<li>Position IDs with shape <code>(batch_size, sequence_length)</code></li>
+</ul>
+<p>We'll profile it with different batch sizes and sequence lengths to learn the dynamic shapes.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Simulate model profiling</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="nd">@dataclass</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">ModelInputs</span><span class="p">:</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="n">input_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="n">attention_mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>    <span class="n">position_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="c1"># Sample 1: batch_size=1, seq_len=10</span>
+<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="n">sample1_args</span> <span class="o">=</span> <span class="p">()</span>
+<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="n">sample1_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>    <span class="s2">&quot;inputs&quot;</span><span class="p">:</span> <span class="n">ModelInputs</span><span class="p">(</span>
+<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a>        <span class="n">input_ids</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">)),</span>
+<a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a>        <span class="n">attention_mask</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span>
+<a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a>        <span class="n">position_ids</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+<a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a>    <span class="p">)</span>
+<a id="__codelineno-29-16" name="__codelineno-29-16" href="#__codelineno-29-16"></a><span class="p">}</span>
+<a id="__codelineno-29-17" name="__codelineno-29-17" href="#__codelineno-29-17"></a>
+<a id="__codelineno-29-18" name="__codelineno-29-18" href="#__codelineno-29-18"></a><span class="n">metadata</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">sample1_args</span><span class="p">,</span> <span class="n">sample1_kwargs</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-29-19" name="__codelineno-29-19" href="#__codelineno-29-19"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;After Sample 1 (batch=1, seq_len=10):&quot;</span><span class="p">)</span>
+<a id="__codelineno-29-20" name="__codelineno-29-20" href="#__codelineno-29-20"></a><span class="nb">print</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">FULL</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>After Sample 1 (batch=1, seq_len=10):
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>Tensors:
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>╒═══════════════════════════╤══════════════════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>│ Locator                   │ Name                         │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>╞═══════════════════════════╪══════════════════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>│ [&#39;inputs&#39;].input_ids      │ kwargs_inputs.input_ids      │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.int64   │
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>├───────────────────────────┼──────────────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>│ [&#39;inputs&#39;].attention_mask │ kwargs_inputs.attention_mask │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.float32 │
+<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>├───────────────────────────┼──────────────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>│ [&#39;inputs&#39;].position_ids   │ kwargs_inputs.position_ids   │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.int64   │
+<a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>╘═══════════════════════════╧══════════════════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Sample 2: batch_size=2, seq_len=15</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">sample2_args</span> <span class="o">=</span> <span class="p">()</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="n">sample2_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>    <span class="s2">&quot;inputs&quot;</span><span class="p">:</span> <span class="n">ModelInputs</span><span class="p">(</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>        <span class="n">input_ids</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">15</span><span class="p">)),</span>
+<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>        <span class="n">attention_mask</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">15</span><span class="p">),</span>
+<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a>        <span class="n">position_ids</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">15</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>    <span class="p">)</span>
+<a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a><span class="p">}</span>
+<a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a>
+<a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a><span class="n">metadata2</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">sample2_args</span><span class="p">,</span> <span class="n">sample2_kwargs</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a><span class="n">metadata</span><span class="o">.</span><span class="n">update_shapes_seen</span><span class="p">(</span><span class="n">metadata2</span><span class="p">)</span>
+<a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a>
+<a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;After Sample 2 (batch=2, seq_len=15):&quot;</span><span class="p">)</span>
+<a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a><span class="nb">print</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">FULL</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>After Sample 2 (batch=2, seq_len=15):
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>Tensors:
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>╒═══════════════════════════╤══════════════════════════════╤════════════════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>│ Locator                   │ Name                         │ Shape              │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a>╞═══════════════════════════╪══════════════════════════════╪════════════════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a>│ [&#39;inputs&#39;].input_ids      │ kwargs_inputs.input_ids      │ [&#39;batch0&#39;, &#39;dim1&#39;] │ [1, 10]     │ [2, 15]     │ torch.int64   │
+<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a>├───────────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a>│ [&#39;inputs&#39;].attention_mask │ kwargs_inputs.attention_mask │ [&#39;batch0&#39;, &#39;dim1&#39;] │ [1, 10]     │ [2, 15]     │ torch.float32 │
+<a id="__codelineno-32-9" name="__codelineno-32-9" href="#__codelineno-32-9"></a>├───────────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-32-10" name="__codelineno-32-10" href="#__codelineno-32-10"></a>│ [&#39;inputs&#39;].position_ids   │ kwargs_inputs.position_ids   │ [&#39;batch0&#39;, &#39;dim1&#39;] │ [1, 10]     │ [2, 15]     │ torch.int64   │
+<a id="__codelineno-32-11" name="__codelineno-32-11" href="#__codelineno-32-11"></a>╘═══════════════════════════╧══════════════════════════════╧════════════════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Sample 3: batch_size=4, seq_len=20</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="n">sample3_args</span> <span class="o">=</span> <span class="p">()</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="n">sample3_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>    <span class="s2">&quot;inputs&quot;</span><span class="p">:</span> <span class="n">ModelInputs</span><span class="p">(</span>
+<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a>        <span class="n">input_ids</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">20</span><span class="p">)),</span>
+<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a>        <span class="n">attention_mask</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span>
+<a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a>        <span class="n">position_ids</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a>    <span class="p">)</span>
+<a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="p">}</span>
+<a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a>
+<a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a><span class="n">metadata3</span> <span class="o">=</span> <span class="n">SampleMetadata</span><span class="o">.</span><span class="n">from_inputs</span><span class="p">(</span><span class="n">sample3_args</span><span class="p">,</span> <span class="n">sample3_kwargs</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-33-12" name="__codelineno-33-12" href="#__codelineno-33-12"></a><span class="n">metadata</span><span class="o">.</span><span class="n">update_shapes_seen</span><span class="p">(</span><span class="n">metadata3</span><span class="p">)</span>
+<a id="__codelineno-33-13" name="__codelineno-33-13" href="#__codelineno-33-13"></a>
+<a id="__codelineno-33-14" name="__codelineno-33-14" href="#__codelineno-33-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;After Sample 3 (batch=4, seq_len=20):&quot;</span><span class="p">)</span>
+<a id="__codelineno-33-15" name="__codelineno-33-15" href="#__codelineno-33-15"></a><span class="nb">print</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">InfoLevel</span><span class="o">.</span><span class="n">FULL</span><span class="p">))</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>After Sample 3 (batch=4, seq_len=20):
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>Tensors:
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>╒═══════════════════════════╤══════════════════════════════╤════════════════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a>│ Locator                   │ Name                         │ Shape              │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a>╞═══════════════════════════╪══════════════════════════════╪════════════════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a>│ [&#39;inputs&#39;].input_ids      │ kwargs_inputs.input_ids      │ [&#39;batch0&#39;, &#39;dim1&#39;] │ [1, 10]     │ [4, 20]     │ torch.int64   │
+<a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a>├───────────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a>│ [&#39;inputs&#39;].attention_mask │ kwargs_inputs.attention_mask │ [&#39;batch0&#39;, &#39;dim1&#39;] │ [1, 10]     │ [4, 20]     │ torch.float32 │
+<a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a>├───────────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+<a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a>│ [&#39;inputs&#39;].position_ids   │ kwargs_inputs.position_ids   │ [&#39;batch0&#39;, &#39;dim1&#39;] │ [1, 10]     │ [4, 20]     │ torch.int64   │
+<a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a>╘═══════════════════════════╧══════════════════════════════╧════════════════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<h3 id="analysis">Analysis</h3>
+<p>After observing three samples with different batch sizes and sequence lengths:</p>
+<ul>
+<li><strong>First dimension</strong>: Identified as <code>batch0</code> because it scaled proportionally (1→2→4)</li>
+<li><strong>Second dimension</strong>: Identified as <code>dim1</code> because it varied dynamically (10→15→20)</li>
+<li><strong>Min/Max ranges</strong>: Captured the observed ranges for both dimensions</li>
+</ul>
+<p>This information can now be used by optimization backends to compile efficient code for these dynamic shapes.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Now we can create inputs for any batch size!</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="n">test_input_args</span> <span class="o">=</span> <span class="p">()</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="n">test_input_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>    <span class="s2">&quot;inputs&quot;</span><span class="p">:</span> <span class="n">ModelInputs</span><span class="p">(</span>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>        <span class="n">input_ids</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">12</span><span class="p">)),</span>
+<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>        <span class="n">attention_mask</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">12</span><span class="p">),</span>
+<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a>        <span class="n">position_ids</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">12</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a>    <span class="p">)</span>
+<a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a><span class="p">}</span>
+<a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a>
+<a id="__codelineno-35-11" name="__codelineno-35-11" href="#__codelineno-35-11"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Original test input shapes:&quot;</span><span class="p">)</span>
+<a id="__codelineno-35-12" name="__codelineno-35-12" href="#__codelineno-35-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  input_ids: </span><span class="si">{</span><span class="n">test_input_kwargs</span><span class="p">[</span><span class="s1">&#39;inputs&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">input_ids</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-35-13" name="__codelineno-35-13" href="#__codelineno-35-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  attention_mask: </span><span class="si">{</span><span class="n">test_input_kwargs</span><span class="p">[</span><span class="s1">&#39;inputs&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">attention_mask</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-35-14" name="__codelineno-35-14" href="#__codelineno-35-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  position_ids: </span><span class="si">{</span><span class="n">test_input_kwargs</span><span class="p">[</span><span class="s1">&#39;inputs&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">position_ids</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-35-15" name="__codelineno-35-15" href="#__codelineno-35-15"></a><span class="nb">print</span><span class="p">()</span>
+<a id="__codelineno-35-16" name="__codelineno-35-16" href="#__codelineno-35-16"></a>
+<a id="__codelineno-35-17" name="__codelineno-35-17" href="#__codelineno-35-17"></a><span class="c1"># Scale to batch size 8</span>
+<a id="__codelineno-35-18" name="__codelineno-35-18" href="#__codelineno-35-18"></a><span class="n">scaled_args</span><span class="p">,</span> <span class="n">scaled_kwargs</span> <span class="o">=</span> <span class="n">metadata</span><span class="o">.</span><span class="n">make_batch</span><span class="p">(</span><span class="n">test_input_args</span><span class="p">,</span> <span class="n">test_input_kwargs</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+<a id="__codelineno-35-19" name="__codelineno-35-19" href="#__codelineno-35-19"></a>
+<a id="__codelineno-35-20" name="__codelineno-35-20" href="#__codelineno-35-20"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;After scaling to batch_size=8:&quot;</span><span class="p">)</span>
+<a id="__codelineno-35-21" name="__codelineno-35-21" href="#__codelineno-35-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  input_ids: </span><span class="si">{</span><span class="n">scaled_kwargs</span><span class="p">[</span><span class="s1">&#39;inputs&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">input_ids</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-35-22" name="__codelineno-35-22" href="#__codelineno-35-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  attention_mask: </span><span class="si">{</span><span class="n">scaled_kwargs</span><span class="p">[</span><span class="s1">&#39;inputs&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">attention_mask</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-35-23" name="__codelineno-35-23" href="#__codelineno-35-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  position_ids: </span><span class="si">{</span><span class="n">scaled_kwargs</span><span class="p">[</span><span class="s1">&#39;inputs&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">position_ids</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-35-24" name="__codelineno-35-24" href="#__codelineno-35-24"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Note: Batch dimension scaled to 8, but sequence length (dim1) remained at 12&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>Original test input shapes:
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>  input_ids: torch.Size([2, 12])
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>  attention_mask: torch.Size([2, 12])
+<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>  position_ids: torch.Size([2, 12])
+<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>
+<a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a>After scaling to batch_size=8:
+<a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a>  input_ids: torch.Size([8, 12])
+<a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a>  attention_mask: torch.Size([8, 12])
+<a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a>  position_ids: torch.Size([8, 12])
+<a id="__codelineno-36-10" name="__codelineno-36-10" href="#__codelineno-36-10"></a>
+<a id="__codelineno-36-11" name="__codelineno-36-11" href="#__codelineno-36-11"></a>Note: Batch dimension scaled to 8, but sequence length (dim1) remained at 12
+</code></pre></div>
+<h2 id="summary">Summary</h2>
+<h3 id="key-takeaways">Key Takeaways</h3>
+<ol>
+<li>
+<p><strong>Purpose</strong>: <code>SampleMetadata</code> captures and tracks metadata about tensors in complex data structures, enabling model optimization and dynamic batching.</p>
+</li>
+<li>
+<p><strong>Creation</strong>: Use <code>SampleMetadata.from_inputs(args, kwargs, strict=bool)</code> to create metadata from function inputs.</p>
+</li>
+<li>
+<p><strong>Strict Mode</strong>: Controls whether only tensors (<code>strict=False</code>) or all data types (<code>strict=True</code>) are tracked.</p>
+</li>
+<li>
+<p><strong>Nested Structures</strong>: Automatically handles tuples, lists, dicts, and dataclasses using Locators.</p>
+</li>
+<li>
+<p><strong>InfoLevel</strong>: Three display modes (SHORT, MEDIUM, FULL) provide different levels of detail.</p>
+</li>
+<li>
+<p><strong>Dynamic Shape Learning</strong>: <code>update_shapes_seen()</code> learns about batch axes and dynamic dimensions by observing multiple samples.</p>
+</li>
+<li>
+<p><strong>Batch Manipulation</strong>: <code>make_batch()</code> can scale tensors to any batch size based on learned batch axis multipliers.</p>
+</li>
+<li>
+<p><strong>TensorSpec</strong>: The underlying representation of each tensor, containing shape, dtype, and batch information.</p>
+</li>
+</ol>
+<h3 id="use-in-ai-tune-pipeline">Use in AI-Tune Pipeline</h3>
+<p><code>SampleMetadata</code> is a fundamental building block in the AITune library, used by:</p>
+<ul>
+<li><strong>RecordingModule</strong>: Captures input/output metadata during profiling</li>
+<li><strong>Backends</strong>: Use metadata to configure optimized execution (TensorRT, TorchScript, etc.)</li>
+<li><strong>Graph Compilation</strong>: Enables the creation of optimized graphs for dynamic shapes</li>
+</ul>
+<h3 id="source-code">Source Code</h3>
+<p>For more details, see:</p>
+<ul>
+<li><code>aitune/torch/module/sample_metadata.py</code></li>
+<li><code>aitune/torch/module/tensor_spec.py</code></li>
+<li><code>aitune/torch/module/locator.py</code></li>
+</ul>
+<p>If you would like to tinker with <code>SampleMetadata</code>, you can find this example in <code>notebooks/sample_metadata_walkthrough.ipynb</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+Copyright © 2025-2026 NVIDIA Corporation
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.top", "navigation.tabs", "navigation.tabs.sticky", "navigation.expand", "navigation.sections"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

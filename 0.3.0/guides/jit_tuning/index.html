@@ -1,0 +1,3734 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../aot_inspect/">
+      
+      
+        <link rel="next" href="../jit_inspect/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Just-in-time Tuning - NVIDIA AITune</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../assets/styles.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#just-in-time-tuning-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="NVIDIA AITune" class="md-header__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NVIDIA AITune
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Just-in-time Tuning
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../learn/overview/" class="md-tabs__link">
+          
+  
+  
+  Learn
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../aot_tuning/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/examples/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/aot_tuning/module/" class="md-tabs__link">
+          
+  
+  
+  API
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../CHANGELOG/" class="md-tabs__link">
+          
+  
+  
+  Resources
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="NVIDIA AITune" class="md-nav__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../assets/logo.png" alt="logo">
+
+    </a>
+    NVIDIA AITune
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Learn
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Learn
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../learn/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../learn/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../learn/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../learn/core_functionalities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Functionalities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../learn/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../learn/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../aot_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../aot_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enabling-just-in-time-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enabling Just-in-Time Tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alternative-import-based-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alternative: Import-Based Activation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-annotation-decorator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Annotation (Decorator)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-just-in-time-tuning-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Just-in-Time Tuning Works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How Just-in-Time Tuning Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#graph-of-execution-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Graph of Execution Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#programmatic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Programmatic Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#min_samples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        min_samples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#max_depth_level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        max_depth_level
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#min_parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        min_parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detect_graph_breaks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        detect_graph_breaks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skip_modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        skip_modules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache_dir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cache_dir
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations-and-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations and Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Limitations and Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-no-persistent-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. No Persistent Caching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-no-benchmarking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. No Benchmarking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-requires-multiple-samples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Requires Multiple Samples
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#just-in-time-tuning-vs-ahead-of-time-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Just-in-Time Tuning vs Ahead-of-Time Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging-just-in-time-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging Just-in-Time Tuning
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Debugging Just-in-Time Tuning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enable-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enable Logging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dry-run-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dry Run Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tuning-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning History
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-issues-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues and Solutions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Issues and Solutions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#issue-modules-not-being-tuned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Modules Not Being Tuned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-strange-errors-or-recompilations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Strange Errors or Recompilations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jit_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/tensorrt_optimization_profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Optimization Profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/torchao_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tune_strategies/tune_strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tune Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/tuning_workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/execution_graphs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/profiling_nvtx/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NVTX Profiling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/E5Large/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    E5Large
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/ESM2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESM2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/FLUX/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLUX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/JitTuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JitTuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/LLM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/ParakeetCTC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetCTC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/ParakeetRNNT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetRNNT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/ResNet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResNet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/StableDiffusion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    StableDiffusion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Ahead-of-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/aot_tuning/module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/aot_tuning/tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/aot_tuning/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/aot_tuning/backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/aot_tuning/inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Just-in-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/jit_tuning/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/torchao_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Strategies API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tuning Strategies API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/tune_strategies/first_wins_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FirstWinsStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/tune_strategies/one_backend_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OneBackendStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/tune_strategies/highest_throughput_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HighestThroughputStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resources
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Resources
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known_issues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LICENSE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enabling-just-in-time-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enabling Just-in-Time Tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alternative-import-based-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alternative: Import-Based Activation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-annotation-decorator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Annotation (Decorator)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-just-in-time-tuning-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Just-in-Time Tuning Works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How Just-in-Time Tuning Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#graph-of-execution-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Graph of Execution Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#programmatic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Programmatic Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#min_samples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        min_samples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#max_depth_level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        max_depth_level
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#min_parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        min_parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detect_graph_breaks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        detect_graph_breaks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skip_modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        skip_modules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache_dir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cache_dir
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations-and-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations and Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Limitations and Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-no-persistent-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. No Persistent Caching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-no-benchmarking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. No Benchmarking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-requires-multiple-samples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Requires Multiple Samples
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#just-in-time-tuning-vs-ahead-of-time-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Just-in-Time Tuning vs Ahead-of-Time Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging-just-in-time-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging Just-in-Time Tuning
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Debugging Just-in-Time Tuning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enable-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enable Logging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dry-run-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dry Run Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tuning-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning History
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-issues-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues and Solutions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Issues and Solutions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#issue-modules-not-being-tuned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Modules Not Being Tuned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-strange-errors-or-recompilations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Strange Errors or Recompilations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+
+<h1 id="just-in-time-tuning-guide">Just-in-Time Tuning Guide</h1>
+<p>Just-in-time tuning enables automatic model tuning without modifying your existing code. You can enable it with an environment variable and run your script - AITune will automatically discover and tune modules during execution.</p>
+<h2 id="overview">Overview</h2>
+<p>Just-in-time tuning provides a zero-code-change approach to model tuning:</p>
+<ul>
+<li><strong>Automatic Discovery</strong>: Automatically detects PyTorch modules during execution</li>
+<li><strong>Zero Code Changes</strong>: No need to modify your existing scripts</li>
+<li><strong>Hierarchical Tuning</strong>: Recursively tunes modules from top to bottom</li>
+<li><strong>Configurable</strong>: Fine-tune behavior through environment variables or configuration</li>
+</ul>
+<h2 id="quick-start">Quick Start</h2>
+<h3 id="enabling-just-in-time-tuning">Enabling Just-in-Time Tuning</h3>
+<p>The simplest way to enable JIT tuning is through an environment variable:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AUTOWRAPT_BOOTSTRAP</span><span class="o">=</span>aitune_enable_jit_tuning
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>your_script.py
+</code></pre></div>
+<p>Your script will run with automatic tuning enabled.</p>
+<p><em>Note:</em> Setting the environment variable affects the entire shell session, which may impact other Python processes running in the same shell. We recommend either setting the environment variable immediately before running your script, or using import-based activation inside the script instead.</p>
+<h3 id="alternative-import-based-activation">Alternative: Import-Based Activation</h3>
+<p>You can also enable just-in-time tuning by adding a single import at the beginning of your script:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">aitune.torch.jit.enable</span>  <span class="c1"># Enable JIT tuning</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Your existing code remains unchanged</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">diffusers</span><span class="w"> </span><span class="kn">import</span> <span class="n">DiffusionPipeline</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">pipe</span> <span class="o">=</span> <span class="n">DiffusionPipeline</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;stabilityai/stable-diffusion-3-medium-diffusers&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">pipe</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Tuning happens automatically during inference</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">images</span> <span class="o">=</span> <span class="n">pipe</span><span class="p">(</span><span class="s2">&quot;A beautiful landscape&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="using-annotation-decorator">Using Annotation (Decorator)</h3>
+<p>For fine-grained control, you can use the <code>@patch_for_jit_tuning</code> decorator on specific functions:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">patch_for_jit_tuning</span><span class="p">,</span> <span class="n">jit_config</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">timm</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">min_samples</span> <span class="o">=</span> <span class="mi">2</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">batch_axis_required</span> <span class="o">=</span> <span class="kc">False</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nd">@patch_for_jit_tuning</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_resnet</span><span class="p">():</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;This function will have JIT tuning enabled.&quot;&quot;&quot;</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="k">return</span> <span class="n">timm</span><span class="o">.</span><span class="n">create_model</span><span class="p">(</span><span class="s2">&quot;resnet18&quot;</span><span class="p">,</span> <span class="n">pretrained</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># Your model</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">model</span> <span class="o">=</span> <span class="n">create_resnet</span><span class="p">()</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># Tuning happens automatically when the model is called</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>    <span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">))</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>    <span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">))</span>
+</code></pre></div>
+<p>This approach allows you to:</p>
+<ul>
+<li>Enable just-in-time tuning for specific functions only</li>
+<li>Keep the rest of your code unchanged</li>
+</ul>
+<h2 id="how-just-in-time-tuning-works">How Just-in-Time Tuning Works</h2>
+<p>Just-in-time tuning follows this process:</p>
+<ol>
+<li><strong>Initial Runs</strong>: The first few inferences are used to detect model architecture and record input/output shapes</li>
+<li><strong>Module Discovery</strong>: Identifies all PyTorch modules in the execution path</li>
+<li>
+<p><strong>Hierarchical Tuning</strong>: Attempts to tune modules starting from the top level:</p>
+</li>
+<li>
+<p>If successful, the module is tuned</p>
+</li>
+<li>If a graph break is detected or tuning fails, AITune recursively tunes child modules</li>
+<li><strong>Depth Limiting</strong>: Stops at a configurable depth level</li>
+</ol>
+<h3 id="graph-of-execution-detection">Graph of Execution Detection</h3>
+<p>AITune has two mechanisms to detect different graphs of execution:</p>
+<ul>
+<li>The first one is based on method signature. If inputs for a particular module change, different <code>Graphs</code> are created. Each of them has a separate backend.</li>
+<li>The second one uses the torch dynamo feature to detect graph breaks when a module contains conditional logic based on input data.</li>
+</ul>
+<p>Here is an example of a graph break:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">DynamicModule</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">child_a</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">child_b</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>        <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>  <span class="c1"># Graph break: conditional on input</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">child_a</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">child_b</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</code></pre></div>
+<p>When AITune detects a graph break, it skips tuning that module and attempts to tune this module's children.</p>
+<h2 id="configuration">Configuration</h2>
+<p>The main configuration of the tuning process is in the <code>config</code> object - this is the common configuration between ahead-of-time and just-in-time mode. On top of that, there are settings particular for the just-in-time mode in <code>jit_config</code>.</p>
+<p>This example shows how to get those configuration objects:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ait</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># main config</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">ait</span><span class="o">.</span><span class="n">config</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># just in time config</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">ait</span><span class="o">.</span><span class="n">jit_config</span>
+</code></pre></div>
+<h3 id="environment-variables">Environment Variables</h3>
+<p>Control just-in-time tuning behavior with environment variables:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Enable just-in-time tuning</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AUTOWRAPT_BOOTSTRAP</span><span class="o">=</span>aitune_enable_jit_tuning
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Set cache directory</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AITUNE_JIT_CACHE_DIR</span><span class="o">=</span>/path/to/cache
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Run your script</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>python<span class="w"> </span>your_script.py
+</code></pre></div>
+<h3 id="programmatic-configuration">Programmatic Configuration</h3>
+<p>For more control, configure just-in-time tuning in your code:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">jit_config</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Minimum samples before tuning</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">min_samples</span> <span class="o">=</span> <span class="mi">2</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Require batch axis detection</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">batch_axis_required</span> <span class="o">=</span> <span class="kc">True</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Maximum module depth</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">max_depth_level</span> <span class="o">=</span> <span class="mi">2</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># Minimum parameters to consider tuning</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">min_parameters</span> <span class="o">=</span> <span class="mi">1000</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1"># Enable/disable graph break detection</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">detect_graph_breaks</span> <span class="o">=</span> <span class="kc">True</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="c1"># Skip specific module types</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">skip_modules</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;BatchNorm2d&quot;</span><span class="p">,</span> <span class="s2">&quot;LayerNorm&quot;</span><span class="p">]</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="c1"># Set device for tuning</span>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="c1"># Enable dry run mode</span>
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">dry_run</span> <span class="o">=</span> <span class="kc">False</span>
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="c1"># Configure backends</span>
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aitune.torch.backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">TensorRTBackend</span><span class="p">,</span> <span class="n">TensorRTBackendConfig</span>
+<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">backends</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>    <span class="n">TensorRTBackend</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">TensorRTBackendConfig</span><span class="p">(</span><span class="n">use_dynamo</span><span class="o">=</span><span class="kc">True</span><span class="p">)),</span>
+<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="p">]</span>
+</code></pre></div>
+<h3 id="configuration-options">Configuration Options</h3>
+<h4 id="min_samples">min_samples</h4>
+<p>Minimum number of samples to record before attempting tuning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">min_samples</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Default: 1</span>
+</code></pre></div>
+<p>AITune needs at minimum 1 sample to perform tuning. Multiple samples are required to detect that the model has dynamic axes. Based on the data seen, it detects input and output shapes with dynamic dimensions and minimum/maximum shapes which are required by some backends. If you cannot control data feed to the model, you can increase this setting so that AITune has enough samples to detect proper edge shapes.</p>
+<h4 id="max_depth_level">max_depth_level</h4>
+<p>Maximum depth of a module in module hierarchy to be considered for tuning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">max_depth_level</span> <span class="o">=</span> <span class="mi">2</span>  <span class="c1"># Default: 2</span>
+</code></pre></div>
+<p><strong>Example</strong>:</p>
+<ul>
+<li>Depth 0: Root module only</li>
+<li>Depth 1: Root and immediate children</li>
+<li>Depth 2: Root, children, and grandchildren</li>
+</ul>
+<h4 id="min_parameters">min_parameters</h4>
+<p>Minimum number of parameters for a module to be considered for tuning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">min_parameters</span> <span class="o">=</span> <span class="mi">1000</span>  <span class="c1"># Default: 0</span>
+</code></pre></div>
+<p><strong>Why it matters</strong>: Small modules may not benefit from tuning and can be skipped to save time.</p>
+<h4 id="detect_graph_breaks">detect_graph_breaks</h4>
+<p>Enable graph break detection.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">detect_graph_breaks</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Default: True</span>
+</code></pre></div>
+<p><strong>Why it matters</strong>: Graph breaks prevent static optimization. When disabled, AITune may attempt to tune modules with dynamic control flow (which will likely fail).</p>
+<h4 id="skip_modules">skip_modules</h4>
+<p>List of module class names to skip during tuning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">skip_modules</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;BatchNorm2d&quot;</span><span class="p">,</span> <span class="s2">&quot;LayerNorm&quot;</span><span class="p">,</span> <span class="s2">&quot;Dropout&quot;</span><span class="p">]</span>
+</code></pre></div>
+<p><strong>Why it matters</strong>: Some modules (like normalization layers) typically don't benefit from tuning.</p>
+<h4 id="cache_dir">cache_dir</h4>
+<p>Directory for caching tuned modules.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">cache_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/path/to/cache&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Note</strong>: Currently, just-in-time mode does not support persistent caching across runs.</p>
+<h4 id="backends">backends</h4>
+<p>List of backends to try during tuning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aitune.torch.backend</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="n">TensorRTBackend</span><span class="p">,</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">TensorRTBackendConfig</span><span class="p">,</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">TorchInductorBackend</span><span class="p">,</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="p">)</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">backends</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>    <span class="n">TensorRTBackend</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">TensorRTBackendConfig</span><span class="p">(</span><span class="n">use_dynamo</span><span class="o">=</span><span class="kc">True</span><span class="p">)),</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>    <span class="n">TorchInductorBackend</span><span class="p">(),</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="p">]</span>
+</code></pre></div>
+<p>This setting is common for all tuned modules.</p>
+<h2 id="limitations-and-considerations">Limitations and Considerations</h2>
+<h3 id="1-no-persistent-caching">1. No Persistent Caching</h3>
+<p>Just-in-time tuning does not cache results across runs. Each time you start a new Python interpreter, tuning starts from scratch.</p>
+<h3 id="2-no-benchmarking">2. No Benchmarking</h3>
+<p>Dynamic axes are detected; however, they cannot be matched against real batch sizes. This is due to missing explicit data source, and hence, AITune cannot control batch size. Without this information, it cannot extrapolate batches to any size, which is required by benchmarking functionality.</p>
+<h3 id="3-requires-multiple-samples">3. Requires Multiple Samples</h3>
+<p>At least 2 samples are needed to start tuning. If you need detection of dynamic axes and min/max shape, you should either feed such data into a model or change <code>min_samples</code> limits.</p>
+<h2 id="just-in-time-tuning-vs-ahead-of-time-tuning">Just-in-Time Tuning vs Ahead-of-Time Tuning</h2>
+<p>The following table summarizes the difference between those two modes:</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Ahead-of-time</th>
+<th>Just-in-time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Detecting dynamic axes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Extrapolating batches</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Benchmarking</td>
+<td>Yes</td>
+<td>No (no extrapolating batches)</td>
+</tr>
+<tr>
+<td>Modules for tuning</td>
+<td>User has full control</td>
+<td>Picked automatically</td>
+</tr>
+<tr>
+<td>Selecting tune strategy</td>
+<td>Global or per module</td>
+<td>Global</td>
+</tr>
+<tr>
+<td>Available strategies</td>
+<td>All</td>
+<td>Limited (no benchmarking)</td>
+</tr>
+<tr>
+<td>Tune time</td>
+<td>Slow</td>
+<td>Quick</td>
+</tr>
+<tr>
+<td>Saving artifacts</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Load tuned model time</td>
+<td>Quick</td>
+<td>Re-tuning required</td>
+</tr>
+<tr>
+<td>Code changes required</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Caching</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<h2 id="debugging-just-in-time-tuning">Debugging Just-in-Time Tuning</h2>
+<p>Just-in-time tuning does not require modification of the original python script. To assist or debug the tuning process, there are several features that might be helpful.</p>
+<h3 id="enable-logging">Enable Logging</h3>
+<p>Make sure your logging level is at least <code>INFO</code>. If tuning happens you should be able to see appropriate log entries.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="dry-run-mode">Dry Run Mode</h3>
+<p>To test which modules are captured without an actual tuning, change the following <code>config</code> option:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">jit_config</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">dry_run</span> <span class="o">=</span> <span class="kc">True</span>
+</code></pre></div>
+<p>It will log what is about to happen in a real scenario.</p>
+<h3 id="model-hierarchy">Model Hierarchy</h3>
+<p>If you would like to see the hierarchy of a model AITune discovered, you can use the following code:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">PatchedModule</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">PatchedModule</span><span class="o">.</span><span class="n">print_hierarchy</span><span class="p">()</span>
+</code></pre></div>
+<p>Here is an example from <code>ResNet</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>JIT Tuning Hierarchy:
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>├─ ResNet 📊11.7M level=0🪜 state=tuned🎯 (TensorRTBackend) call_count=4
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>  ├─ Conv2d 📊9.4K level=1🪜 state=detached☑️ call_count=4
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>  ├─ BatchNorm2d 📊128 level=1🪜 state=detached☑️ call_count=4
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>  ├─ BasicBlock 📊74.0K level=1🪜 state=detached☑️ call_count=4
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    ├─ Conv2d 📊36.9K level=2🪜 state=detached☑️ call_count=4
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>    ├─ BatchNorm2d 📊128 level=2🪜 state=detached☑️ call_count=4
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>    ├─ Conv2d 📊36.9K level=2🪜 state=detached☑️ call_count=4
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>    ├─ BatchNorm2d 📊128 level=2🪜 state=detached☑️ call_count=4
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>
+<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>... rest of the hierarchy is abbreviated ...
+</code></pre></div>
+<p>The hierarchy output is a tree view of the model modules that AITune discovered while tracing. Each line represents a module instance, with indentation showing parent-child relationships. The markers provide context about how AITune treats each module:</p>
+<ul>
+<li>Module name (e.g., <code>ResNet</code>, <code>Conv2d</code>) identifies the layer type or submodule.</li>
+<li><code>📊</code> shows the parameter count for that module (e.g., <code>11.7M</code>, <code>9.4K</code>).</li>
+<li><code>level</code> is the depth in the module tree (root is <code>0</code>).</li>
+<li><code>state</code> indicates how AITune handled the module during tuning (for example <code>tuned</code> or <code>detached</code>).</li>
+<li>Backend in parentheses (e.g., <code>TensorRTBackend</code>) is shown for tuned modules.</li>
+<li><code>call_count</code> is the number of times the module was observed during collection.</li>
+</ul>
+<p>Internally a <code>PatchedModule</code> can be in the following states:</p>
+<ul>
+<li>INIT: "⏳" before the first forward call; hierarchy is not fully resolved yet.</li>
+<li>RECORDING: "🔴" after the first forward call; hierarchy resolved and collecting samples.</li>
+<li>TUNED: "🎯" tuning succeeded; the module forwards through a tuned backend.</li>
+<li>EAGER: "⚠️" tuning failed or was not possible; module falls back to the original unmodified model.</li>
+<li>SKIPPED: "🚫" explicitly skipped (e.g., in <code>skip_modules</code>) and not tuned.</li>
+<li>DETACHED: "☑️" detached because a parent module was tuned, so children are unpatched.</li>
+</ul>
+<h3 id="tuning-history">Tuning History</h3>
+<p>To investigate what may have failed in the process, you can see the history of just-in-time tuning:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">PatchedModule</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">PatchedModule</span><span class="o">.</span><span class="n">print_history</span><span class="p">()</span>
+</code></pre></div>
+<p>Here is abbreviated example from <code>ResNet</code></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a> &#39;New top module: ResNet 📊11.7M level=0🪜 state=init⏳ call_count=1&#39;,
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a> ...
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a> &#39;New child module: Linear 📊513.0K level=1🪜 state=init⏳ call_count=1&#39;,
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a> &#39;No graph breaks in ResNet 📊11.7M. Checking took 4.13s&#39;,
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a> &#39;Tuning ResNet 📊11.7M took 8.60s&#39;,
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a> &#39;Unpatching child module: Linear 📊513.0K level=1🪜 state=detached☑️ call_count=4&#39;,
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a> ...
+</code></pre></div>
+<p>Basically, <code>history</code> is a list of steps just-in-time tuning took during the process.</p>
+<h2 id="common-issues-and-solutions">Common Issues and Solutions</h2>
+<h3 id="issue-modules-not-being-tuned">Issue: Modules Not Being Tuned</h3>
+<p><strong>Possible causes</strong>:</p>
+<ul>
+<li>Not enough samples (<code>min_samples</code> not met)</li>
+<li>Module too small (<code>min_parameters</code> threshold)</li>
+<li>Module in <code>skip_modules</code> list</li>
+<li>Graph breaks detected</li>
+<li>In some environments the <code>export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning</code> does not start just-in-time tuning. This is a known issue. If it happens, try using a decorator or import to start tuning.</li>
+</ul>
+<p><strong>Solution</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">jit_config</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">min_samples</span> <span class="o">=</span> <span class="mi">2</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="n">jit_config</span><span class="o">.</span><span class="n">min_parameters</span> <span class="o">=</span> <span class="mi">0</span>
+</code></pre></div>
+<h3 id="issue-strange-errors-or-recompilations">Issue: Strange Errors or Recompilations</h3>
+<p>Check if the following scenario has happened:</p>
+<ul>
+<li>AITune got enough samples, it tuned a module</li>
+<li>AITune got another sample but with larger min/max shapes</li>
+</ul>
+<p>In such a case - backend was tuned for shapes say (1, 10) but it may later get data with shapes (2, 20) - which are out of bound. This may result in backend failure depending on the technology used or a recompilation (e.g. <code>TorchInductor</code> backend).</p>
+<h2 id="next-steps">Next Steps</h2>
+<ul>
+<li>Learn about <a href="../jit_inspect/">just-in-time Inspect</a> for detailed module analysis</li>
+<li>Learn about <a href="../aot_tuning/">AOT Tuning</a> as an alternative approach</li>
+<li>Explore <a href="../backends/tensorrt_backend/">Backend Configuration</a></li>
+<li>Review <a href="../deployment/deployment/">Deployment Guide</a> for production use</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+Copyright © 2025-2026 NVIDIA Corporation
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.top", "navigation.tabs", "navigation.tabs.sticky", "navigation.expand", "navigation.sections"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

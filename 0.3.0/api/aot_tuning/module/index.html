@@ -1,0 +1,3882 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../../../examples/StableDiffusion/">
+      
+      
+        <link rel="next" href="../tuning/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Module - NVIDIA AITune</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../assets/styles.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#aot-tuning-module-api" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="NVIDIA AITune" class="md-header__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NVIDIA AITune
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Module
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../learn/overview/" class="md-tabs__link">
+          
+  
+  
+  Learn
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../guides/aot_tuning/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../examples/examples/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  API
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../CHANGELOG/" class="md-tabs__link">
+          
+  
+  
+  Resources
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="NVIDIA AITune" class="md-nav__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../../assets/logo.png" alt="logo">
+
+    </a>
+    NVIDIA AITune
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Learn
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Learn
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/core_functionalities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Functionalities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/aot_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/aot_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/jit_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/jit_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/tensorrt_optimization_profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Optimization Profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/torchao_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/backends/torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/tune_strategies/tune_strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tune Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/deployment/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/advanced/tuning_workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/advanced/execution_graphs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/advanced/profiling_nvtx/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NVTX Profiling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/E5Large/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    E5Large
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ESM2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESM2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/FLUX/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLUX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/JitTuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JitTuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/LLM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ParakeetCTC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetCTC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ParakeetRNNT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetRNNT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ResNet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResNet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/StableDiffusion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    StableDiffusion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Ahead-of-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Module">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Module">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        device
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.graph_specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        graph_specs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.__getitem__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __getitem__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.activate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        activate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.deactivate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        deactivate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.enable_passthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enable_passthrough
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.enable_recording" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enable_recording
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.from_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.is_state_dict_valid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        is_state_dict_valid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.tune" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tune
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Just-in-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../jit_tuning/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torchao_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Strategies API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tuning Strategies API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tune_strategies/first_wins_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FirstWinsStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tune_strategies/one_backend_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OneBackendStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tune_strategies/highest_throughput_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HighestThroughputStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resources
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Resources
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../known_issues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../LICENSE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Module">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Module">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        device
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.graph_specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        graph_specs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.__getitem__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        __getitem__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.activate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        activate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.deactivate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        deactivate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.enable_passthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enable_passthrough
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.enable_recording" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enable_recording
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.from_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.is_state_dict_valid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        is_state_dict_valid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aitune.torch.Module.tune" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tune
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+
+<h1 id="aot-tuning-module-api">AOT Tuning Module API</h1>
+<h2 id="module">Module</h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="aitune.torch.Module" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">aitune.torch.Module</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Module</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">strategy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">strategies</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="wrapt.CallableObjectProxy">CallableObjectProxy</span></code></p>
+
+
+
+        <p>AITune module wrapper.</p>
+<p>This class wraps a torch module and provides tuning functionality.
+The module can be in 3 different states:
+- <code>passthrough</code>: the module is not tuned, and will behave identically to the original module.
+- <code>recording</code>: the module records samples and detects multi-graphs, this is a necessary step before tuning.
+- <code>tuned</code>: the module is tuned and uses underlying tuned module.</p>
+<p>You can go from passthrough and recording with <code>enablePassthrough</code> and <code>enableRecording</code> methods.</p>
+<p>You can go from tuned to passthrough/recording only if the force flag is True - then the module will be reset.</p>
+<p>This wrapper can be used in place of a torch module, and will behave identically to the original module.</p>
+
+
+<details class="example" open>
+  <summary>Example</summary>
+  <blockquote>
+<blockquote>
+<blockquote>
+<p>model = torch.nn.Linear(10, 10)
+model = Module(model, "name")</p>
+</blockquote>
+</blockquote>
+</blockquote>
+</details>
+        <p>Initializes module.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>module</code></b>
+              (<code><span title="torch.nn.Module">Module</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>torch module to wrap.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>name</code></b>
+              (<code><span title="str">str</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>module name which differences from other tuned modules.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>strategy</code></b>
+              (<code><span title="aitune.torch.tune_strategy.tune_strategy.TuneStrategy">TuneStrategy</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>optional strategy, which will be used for all encountered graphs</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>strategies</code></b>
+              (<code><span title="aitune.torch.module.wrapper_module.StrategyList">StrategyList</span> | <span title="aitune.torch.module.wrapper_module.StrategyMap">StrategyMap</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>list or dict of strategies, each for a graph</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-74"> 74</a></span>
+<span class="normal"><a href="#__codelineno-0-75"> 75</a></span>
+<span class="normal"><a href="#__codelineno-0-76"> 76</a></span>
+<span class="normal"><a href="#__codelineno-0-77"> 77</a></span>
+<span class="normal"><a href="#__codelineno-0-78"> 78</a></span>
+<span class="normal"><a href="#__codelineno-0-79"> 79</a></span>
+<span class="normal"><a href="#__codelineno-0-80"> 80</a></span>
+<span class="normal"><a href="#__codelineno-0-81"> 81</a></span>
+<span class="normal"><a href="#__codelineno-0-82"> 82</a></span>
+<span class="normal"><a href="#__codelineno-0-83"> 83</a></span>
+<span class="normal"><a href="#__codelineno-0-84"> 84</a></span>
+<span class="normal"><a href="#__codelineno-0-85"> 85</a></span>
+<span class="normal"><a href="#__codelineno-0-86"> 86</a></span>
+<span class="normal"><a href="#__codelineno-0-87"> 87</a></span>
+<span class="normal"><a href="#__codelineno-0-88"> 88</a></span>
+<span class="normal"><a href="#__codelineno-0-89"> 89</a></span>
+<span class="normal"><a href="#__codelineno-0-90"> 90</a></span>
+<span class="normal"><a href="#__codelineno-0-91"> 91</a></span>
+<span class="normal"><a href="#__codelineno-0-92"> 92</a></span>
+<span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
+<span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
+<span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
+<span class="normal"><a href="#__codelineno-0-96"> 96</a></span>
+<span class="normal"><a href="#__codelineno-0-97"> 97</a></span>
+<span class="normal"><a href="#__codelineno-0-98"> 98</a></span>
+<span class="normal"><a href="#__codelineno-0-99"> 99</a></span>
+<span class="normal"><a href="#__codelineno-0-100">100</a></span>
+<span class="normal"><a href="#__codelineno-0-101">101</a></span>
+<span class="normal"><a href="#__codelineno-0-102">102</a></span>
+<span class="normal"><a href="#__codelineno-0-103">103</a></span>
+<span class="normal"><a href="#__codelineno-0-104">104</a></span>
+<span class="normal"><a href="#__codelineno-0-105">105</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="n">module</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="n">strategy</span><span class="p">:</span> <span class="n">TuneStrategy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a>    <span class="n">strategies</span><span class="p">:</span> <span class="n">StrategyList</span> <span class="o">|</span> <span class="n">StrategyMap</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80"></a><span class="p">):</span>
+<a id="__codelineno-0-81" name="__codelineno-0-81"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Initializes module.</span>
+<a id="__codelineno-0-82" name="__codelineno-0-82"></a>
+<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="sd">        module: torch module to wrap.</span>
+<a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="sd">        name: module name which differences from other tuned modules.</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">        strategy: optional strategy, which will be used for all encountered graphs</span>
+<a id="__codelineno-0-87" name="__codelineno-0-87"></a><span class="sd">        strategies: list or dict of strategies, each for a graph</span>
+<a id="__codelineno-0-88" name="__codelineno-0-88"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_name</span> <span class="o">=</span> <span class="n">sanitize_model_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="ow">or</span> <span class="n">get_object_name</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+<a id="__codelineno-0-91" name="__codelineno-0-91"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_orig_forward</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">forward</span>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_original_forward_pre_hooks</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">_forward_pre_hooks</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_original_forward_hooks</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">_forward_hooks</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_proxy_forward</span> <span class="o">=</span> <span class="n">wrapt</span><span class="o">.</span><span class="n">decorator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_forward</span><span class="p">)(</span><span class="n">module</span><span class="o">.</span><span class="n">forward</span><span class="p">)</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a>    <span class="n">module</span><span class="o">.</span><span class="n">forward</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_proxy_forward</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_setup_strategies</span><span class="p">(</span><span class="n">strategy</span><span class="p">,</span> <span class="n">strategies</span><span class="p">)</span>
+<a id="__codelineno-0-97" name="__codelineno-0-97"></a>
+<a id="__codelineno-0-98" name="__codelineno-0-98"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_device</span> <span class="o">=</span> <span class="n">get_module_device</span><span class="p">(</span><span class="n">module</span><span class="p">)</span> <span class="ow">or</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">=</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">INIT</span>
+<a id="__codelineno-0-100" name="__codelineno-0-100"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_prev_recording</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102"></a>
+<a id="__codelineno-0-103" name="__codelineno-0-103"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_system_monitor</span> <span class="o">=</span> <span class="n">SystemMonitor</span><span class="p">()</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a>
+<a id="__codelineno-0-105" name="__codelineno-0-105"></a>    <span class="n">MODULE_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_self_name</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="aitune.torch.Module.device" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">device</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">device</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Get the device of the module.</p>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="torch.device">device</span></code>
+          –
+          <div class="doc-md-description">
+            <p>The device the module is using.</p>
+          </div>
+        </li>
+    </ul>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="aitune.torch.Module.graph_specs" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">graph_specs</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">graph_specs</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Multi-graphs of the module.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="aitune.torch.Module.module" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">module</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">module</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Get the backends of the module.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="aitune.torch.Module.name" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">name</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">name</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Get the name of the module.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="aitune.torch.Module.state" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">state</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">state</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Get the state of the module.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.Module.__getitem__" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">__getitem__</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">__getitem__</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Delegate <strong>getitem</strong> calls to the wrapped module.</p>
+<p>This allows the proxy to handle indexing operations on the wrapped module,
+which is particularly useful for Sequential modules and other indexable modules.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>key</code></b>
+              (<code><span title="typing.Any">Any</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>The index or key to use for accessing the wrapped module.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="typing.Any">Any</span></code>
+          –
+          <div class="doc-md-description">
+            <p>The result of accessing the wrapped module with the given key.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-107">107</a></span>
+<span class="normal"><a href="#__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#__codelineno-0-111">111</a></span>
+<span class="normal"><a href="#__codelineno-0-112">112</a></span>
+<span class="normal"><a href="#__codelineno-0-113">113</a></span>
+<span class="normal"><a href="#__codelineno-0-114">114</a></span>
+<span class="normal"><a href="#__codelineno-0-115">115</a></span>
+<span class="normal"><a href="#__codelineno-0-116">116</a></span>
+<span class="normal"><a href="#__codelineno-0-117">117</a></span>
+<span class="normal"><a href="#__codelineno-0-118">118</a></span>
+<span class="normal"><a href="#__codelineno-0-119">119</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-107" name="__codelineno-0-107"></a><span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-108" name="__codelineno-0-108"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Delegate __getitem__ calls to the wrapped module.</span>
+<a id="__codelineno-0-109" name="__codelineno-0-109"></a>
+<a id="__codelineno-0-110" name="__codelineno-0-110"></a><span class="sd">    This allows the proxy to handle indexing operations on the wrapped module,</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111"></a><span class="sd">    which is particularly useful for Sequential modules and other indexable modules.</span>
+<a id="__codelineno-0-112" name="__codelineno-0-112"></a>
+<a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-114" name="__codelineno-0-114"></a><span class="sd">        key: The index or key to use for accessing the wrapped module.</span>
+<a id="__codelineno-0-115" name="__codelineno-0-115"></a>
+<a id="__codelineno-0-116" name="__codelineno-0-116"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-117" name="__codelineno-0-117"></a><span class="sd">        The result of accessing the wrapped module with the given key.</span>
+<a id="__codelineno-0-118" name="__codelineno-0-118"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-119" name="__codelineno-0-119"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__wrapped__</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.Module.activate" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">activate</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">activate</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Activates the module backends.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-210">210</a></span>
+<span class="normal"><a href="#__codelineno-0-211">211</a></span>
+<span class="normal"><a href="#__codelineno-0-212">212</a></span>
+<span class="normal"><a href="#__codelineno-0-213">213</a></span>
+<span class="normal"><a href="#__codelineno-0-214">214</a></span>
+<span class="normal"><a href="#__codelineno-0-215">215</a></span>
+<span class="normal"><a href="#__codelineno-0-216">216</a></span>
+<span class="normal"><a href="#__codelineno-0-217">217</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="k">def</span><span class="w"> </span><span class="nf">activate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Activates the module backends.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">==</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">TUNED</span><span class="p">:</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_activate_wrapper</span><span class="p">()</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">==</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">PASSTHROUGH</span><span class="p">:</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a>        <span class="k">return</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Module is not tuned. Cannot activate backends.&quot;</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.Module.deactivate" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">deactivate</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">deactivate</span><span class="p">()</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Deactivates the module backends.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-219">219</a></span>
+<span class="normal"><a href="#__codelineno-0-220">220</a></span>
+<span class="normal"><a href="#__codelineno-0-221">221</a></span>
+<span class="normal"><a href="#__codelineno-0-222">222</a></span>
+<span class="normal"><a href="#__codelineno-0-223">223</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-219" name="__codelineno-0-219"></a><span class="k">def</span><span class="w"> </span><span class="nf">deactivate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Deactivates the module backends.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">==</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">TUNED</span><span class="p">:</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a>        <span class="n">wrapper</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">TunedModule</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span><span class="p">)</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a>        <span class="n">wrapper</span><span class="o">.</span><span class="n">deactivate</span><span class="p">()</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.Module.enable_passthrough" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">enable_passthrough</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">enable_passthrough</span><span class="p">(</span><span class="n">force</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Enables passthrough mode.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>force</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>if True, force the module to be in the passthrough mode.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-163">163</a></span>
+<span class="normal"><a href="#__codelineno-0-164">164</a></span>
+<span class="normal"><a href="#__codelineno-0-165">165</a></span>
+<span class="normal"><a href="#__codelineno-0-166">166</a></span>
+<span class="normal"><a href="#__codelineno-0-167">167</a></span>
+<span class="normal"><a href="#__codelineno-0-168">168</a></span>
+<span class="normal"><a href="#__codelineno-0-169">169</a></span>
+<span class="normal"><a href="#__codelineno-0-170">170</a></span>
+<span class="normal"><a href="#__codelineno-0-171">171</a></span>
+<span class="normal"><a href="#__codelineno-0-172">172</a></span>
+<span class="normal"><a href="#__codelineno-0-173">173</a></span>
+<span class="normal"><a href="#__codelineno-0-174">174</a></span>
+<span class="normal"><a href="#__codelineno-0-175">175</a></span>
+<span class="normal"><a href="#__codelineno-0-176">176</a></span>
+<span class="normal"><a href="#__codelineno-0-177">177</a></span>
+<span class="normal"><a href="#__codelineno-0-178">178</a></span>
+<span class="normal"><a href="#__codelineno-0-179">179</a></span>
+<span class="normal"><a href="#__codelineno-0-180">180</a></span>
+<span class="normal"><a href="#__codelineno-0-181">181</a></span>
+<span class="normal"><a href="#__codelineno-0-182">182</a></span>
+<span class="normal"><a href="#__codelineno-0-183">183</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-163" name="__codelineno-0-163"></a><span class="k">def</span><span class="w"> </span><span class="nf">enable_passthrough</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<a id="__codelineno-0-164" name="__codelineno-0-164"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Enables passthrough mode.</span>
+<a id="__codelineno-0-165" name="__codelineno-0-165"></a>
+<a id="__codelineno-0-166" name="__codelineno-0-166"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-167" name="__codelineno-0-167"></a><span class="sd">        force: if True, force the module to be in the passthrough mode.</span>
+<a id="__codelineno-0-168" name="__codelineno-0-168"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-169" name="__codelineno-0-169"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">==</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">TUNED</span><span class="p">:</span>
+<a id="__codelineno-0-170" name="__codelineno-0-170"></a>        <span class="k">if</span> <span class="n">force</span><span class="p">:</span>
+<a id="__codelineno-0-171" name="__codelineno-0-171"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_reset</span><span class="p">()</span>
+<a id="__codelineno-0-172" name="__codelineno-0-172"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">enable_passthrough</span><span class="p">()</span>
+<a id="__codelineno-0-173" name="__codelineno-0-173"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-174" name="__codelineno-0-174"></a>            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Module is already tuned. Use force=True to reset tuned module.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-175" name="__codelineno-0-175"></a>    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">==</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">RECORDING</span><span class="p">:</span>
+<a id="__codelineno-0-176" name="__codelineno-0-176"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_self_prev_recording</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_deactivate_wrapper</span><span class="p">()</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">=</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">PASSTHROUGH</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span> <span class="o">=</span> <span class="n">PassthroughModule</span><span class="p">(</span>
+<a id="__codelineno-0-181" name="__codelineno-0-181"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">__wrapped__</span><span class="p">,</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_self_device</span><span class="p">,</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a>    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.Module.enable_recording" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">enable_recording</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">enable_recording</span><span class="p">(</span><span class="n">force</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Enables recording mode.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>force</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>if True, force the module to be in the recording mode.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-185">185</a></span>
+<span class="normal"><a href="#__codelineno-0-186">186</a></span>
+<span class="normal"><a href="#__codelineno-0-187">187</a></span>
+<span class="normal"><a href="#__codelineno-0-188">188</a></span>
+<span class="normal"><a href="#__codelineno-0-189">189</a></span>
+<span class="normal"><a href="#__codelineno-0-190">190</a></span>
+<span class="normal"><a href="#__codelineno-0-191">191</a></span>
+<span class="normal"><a href="#__codelineno-0-192">192</a></span>
+<span class="normal"><a href="#__codelineno-0-193">193</a></span>
+<span class="normal"><a href="#__codelineno-0-194">194</a></span>
+<span class="normal"><a href="#__codelineno-0-195">195</a></span>
+<span class="normal"><a href="#__codelineno-0-196">196</a></span>
+<span class="normal"><a href="#__codelineno-0-197">197</a></span>
+<span class="normal"><a href="#__codelineno-0-198">198</a></span>
+<span class="normal"><a href="#__codelineno-0-199">199</a></span>
+<span class="normal"><a href="#__codelineno-0-200">200</a></span>
+<span class="normal"><a href="#__codelineno-0-201">201</a></span>
+<span class="normal"><a href="#__codelineno-0-202">202</a></span>
+<span class="normal"><a href="#__codelineno-0-203">203</a></span>
+<span class="normal"><a href="#__codelineno-0-204">204</a></span>
+<span class="normal"><a href="#__codelineno-0-205">205</a></span>
+<span class="normal"><a href="#__codelineno-0-206">206</a></span>
+<span class="normal"><a href="#__codelineno-0-207">207</a></span>
+<span class="normal"><a href="#__codelineno-0-208">208</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="k">def</span><span class="w"> </span><span class="nf">enable_recording</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Enables recording mode.</span>
+<a id="__codelineno-0-187" name="__codelineno-0-187"></a>
+<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">        force: if True, force the module to be in the recording mode.</span>
+<a id="__codelineno-0-190" name="__codelineno-0-190"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-191" name="__codelineno-0-191"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">==</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">TUNED</span><span class="p">:</span>
+<a id="__codelineno-0-192" name="__codelineno-0-192"></a>        <span class="k">if</span> <span class="n">force</span><span class="p">:</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_reset</span><span class="p">()</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">enable_recording</span><span class="p">()</span>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a>            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Module is already tuned. Use force=True to reset tuned module.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a>    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="ow">in</span> <span class="p">[</span><span class="n">ModuleState</span><span class="o">.</span><span class="n">PASSTHROUGH</span><span class="p">,</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">INIT</span><span class="p">]:</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_deactivate_wrapper</span><span class="p">()</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">=</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">RECORDING</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_prev_recording</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span> <span class="o">=</span> <span class="n">RecordingModule</span><span class="p">(</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">__wrapped__</span><span class="p">,</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">_self_name</span><span class="p">,</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a>            <span class="p">)</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a>            <span class="c1"># continue with previous recording</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_prev_recording</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_self_prev_recording</span> <span class="o">=</span> <span class="kc">None</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.Module.from_dict" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">from_dict</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_dict</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Create a wrapper module from a state dictionary.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-230">230</a></span>
+<span class="normal"><a href="#__codelineno-0-231">231</a></span>
+<span class="normal"><a href="#__codelineno-0-232">232</a></span>
+<span class="normal"><a href="#__codelineno-0-233">233</a></span>
+<span class="normal"><a href="#__codelineno-0-234">234</a></span>
+<span class="normal"><a href="#__codelineno-0-235">235</a></span>
+<span class="normal"><a href="#__codelineno-0-236">236</a></span>
+<span class="normal"><a href="#__codelineno-0-237">237</a></span>
+<span class="normal"><a href="#__codelineno-0-238">238</a></span>
+<span class="normal"><a href="#__codelineno-0-239">239</a></span>
+<span class="normal"><a href="#__codelineno-0-240">240</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="nd">@staticmethod</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a wrapper module from a state dictionary.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">Module</span><span class="o">.</span><span class="n">is_state_dict_valid</span><span class="p">(</span><span class="n">state_dict</span><span class="p">):</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid dictionary format for </span><span class="si">{</span><span class="n">Module</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a>    <span class="bp">self</span> <span class="o">=</span> <span class="n">Module</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">[</span><span class="n">Module</span><span class="o">.</span><span class="n">NAME_KEY</span><span class="p">])</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">=</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">TUNED</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span> <span class="o">=</span> <span class="n">TunedModule</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">[</span><span class="n">Module</span><span class="o">.</span><span class="n">TUNED_MODULE_KEY</span><span class="p">])</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_deploy_wrapper</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a>    <span class="k">return</span> <span class="bp">self</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.Module.is_state_dict_valid" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">is_state_dict_valid</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">is_state_dict_valid</span><span class="p">(</span><span class="n">state_dict</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Check if the state dictionary has a wrapper module.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-225">225</a></span>
+<span class="normal"><a href="#__codelineno-0-226">226</a></span>
+<span class="normal"><a href="#__codelineno-0-227">227</a></span>
+<span class="normal"><a href="#__codelineno-0-228">228</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="nd">@staticmethod</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="k">def</span><span class="w"> </span><span class="nf">is_state_dict_valid</span><span class="p">(</span><span class="n">state_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Check if the state dictionary has a wrapper module.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a>    <span class="k">return</span> <span class="n">state_dict</span> <span class="ow">and</span> <span class="n">Module</span><span class="o">.</span><span class="vm">__name__</span> <span class="ow">in</span> <span class="n">state_dict</span><span class="p">[</span><span class="n">Module</span><span class="o">.</span><span class="n">TYPE_KEY</span><span class="p">]</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.Module.to_dict" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">to_dict</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_dict</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">destination</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">keep_vars</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Convert the wrapper module to a state dictionary.</p>
+<p>The method follows torch.state_dict format so that it could be called recursively from torch.nn.Module.state_dict.
+The name of the function follows aitune convention of from/to dict. Special alias is created to match torch
+convention i.e. state_dict.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-242">242</a></span>
+<span class="normal"><a href="#__codelineno-0-243">243</a></span>
+<span class="normal"><a href="#__codelineno-0-244">244</a></span>
+<span class="normal"><a href="#__codelineno-0-245">245</a></span>
+<span class="normal"><a href="#__codelineno-0-246">246</a></span>
+<span class="normal"><a href="#__codelineno-0-247">247</a></span>
+<span class="normal"><a href="#__codelineno-0-248">248</a></span>
+<span class="normal"><a href="#__codelineno-0-249">249</a></span>
+<span class="normal"><a href="#__codelineno-0-250">250</a></span>
+<span class="normal"><a href="#__codelineno-0-251">251</a></span>
+<span class="normal"><a href="#__codelineno-0-252">252</a></span>
+<span class="normal"><a href="#__codelineno-0-253">253</a></span>
+<span class="normal"><a href="#__codelineno-0-254">254</a></span>
+<span class="normal"><a href="#__codelineno-0-255">255</a></span>
+<span class="normal"><a href="#__codelineno-0-256">256</a></span>
+<span class="normal"><a href="#__codelineno-0-257">257</a></span>
+<span class="normal"><a href="#__codelineno-0-258">258</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">destination</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">keep_vars</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert the wrapper module to a state dictionary.</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="sd">    The method follows torch.state_dict format so that it could be called recursively from torch.nn.Module.state_dict.</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">    The name of the function follows aitune convention of from/to dict. Special alias is created to match torch</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">    convention i.e. state_dict.</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">!=</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">TUNED</span><span class="p">:</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Module is not tuned. Cannot save state_dict.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a>    <span class="n">destination</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span> <span class="k">if</span> <span class="n">destination</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">destination</span>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a>    <span class="n">destination</span><span class="p">[</span><span class="n">prefix</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">TYPE_KEY</span><span class="p">:</span> <span class="n">Module</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>  <span class="c1"># self.__class__ returns wrapped class, use direct class object instead</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">NAME_KEY</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_name</span><span class="p">,</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">TUNED_MODULE_KEY</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(),</span>  <span class="c1"># pytype: disable=attribute-error</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a>    <span class="p">}</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="k">return</span> <span class="n">destination</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="aitune.torch.Module.tune" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">tune</span>
+
+
+</h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">tune</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">strategy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dry_run</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Tunes the module.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>device</code></b>
+              (<code><span title="torch.device">device</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>the device to use for tuning</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>strategy</code></b>
+              (<code><span title="aitune.torch.tune_strategy.tune_strategy.TuneStrategy">TuneStrategy</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>the tuning strategy to use</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>dry_run</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>if True, only dry run the tuning</p>
+          </div>
+        </li>
+    </ul>
+
+
+<details class="note" open>
+  <summary>Note</summary>
+  <p>if module has already defined strategy/strategies those will take precedence over the provided one.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>aitune/torch/module/wrapper_module.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-262">262</a></span>
+<span class="normal"><a href="#__codelineno-0-263">263</a></span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span>
+<span class="normal"><a href="#__codelineno-0-265">265</a></span>
+<span class="normal"><a href="#__codelineno-0-266">266</a></span>
+<span class="normal"><a href="#__codelineno-0-267">267</a></span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span>
+<span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span>
+<span class="normal"><a href="#__codelineno-0-286">286</a></span>
+<span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span>
+<span class="normal"><a href="#__codelineno-0-295">295</a></span>
+<span class="normal"><a href="#__codelineno-0-296">296</a></span>
+<span class="normal"><a href="#__codelineno-0-297">297</a></span>
+<span class="normal"><a href="#__codelineno-0-298">298</a></span>
+<span class="normal"><a href="#__codelineno-0-299">299</a></span>
+<span class="normal"><a href="#__codelineno-0-300">300</a></span>
+<span class="normal"><a href="#__codelineno-0-301">301</a></span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span>
+<span class="normal"><a href="#__codelineno-0-303">303</a></span>
+<span class="normal"><a href="#__codelineno-0-304">304</a></span>
+<span class="normal"><a href="#__codelineno-0-305">305</a></span>
+<span class="normal"><a href="#__codelineno-0-306">306</a></span>
+<span class="normal"><a href="#__codelineno-0-307">307</a></span>
+<span class="normal"><a href="#__codelineno-0-308">308</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="k">def</span><span class="w"> </span><span class="nf">tune</span><span class="p">(</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a>    <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a>    <span class="n">strategy</span><span class="p">:</span> <span class="n">TuneStrategy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a>    <span class="n">dry_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="p">):</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Tunes the module.</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="sd">        device: the device to use for tuning</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">        strategy: the tuning strategy to use</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">        dry_run: if True, only dry run the tuning</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="sd">    Note:</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">        if module has already defined strategy/strategies those will take precedence over the provided one.</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">==</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">TUNED</span><span class="p">:</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Module: &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_self_name</span><span class="si">}</span><span class="s2">&#39; has already been tuned. Reset it to do it again.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a>    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">==</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">INIT</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">==</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">PASSTHROUGH</span><span class="p">:</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Module: &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_self_name</span><span class="si">}</span><span class="s2">&#39; has not recorded any samples. Cannot tune it.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>    <span class="n">device</span> <span class="o">=</span> <span class="n">device</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_device</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>    <span class="n">recording</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">RecordingModule</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span><span class="p">)</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a>    <span class="n">backends</span><span class="p">:</span> <span class="n">OrderedDict</span><span class="p">[</span><span class="n">SampleMetadata</span><span class="p">,</span> <span class="n">Backend</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>    <span class="n">strategies</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_strategies_for_graph_specs</span><span class="p">(</span><span class="n">strategy</span><span class="p">,</span> <span class="n">recording</span><span class="o">.</span><span class="n">graph_specs</span><span class="p">,</span> <span class="n">dry_run</span><span class="p">)</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>    <span class="k">for</span> <span class="n">strategy</span><span class="p">,</span> <span class="n">graph_spec</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">strategies</span><span class="p">,</span> <span class="n">recording</span><span class="o">.</span><span class="n">graph_specs</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>        <span class="n">cache_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_graph_cache_dir</span><span class="p">(</span><span class="n">graph_spec</span><span class="p">)</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a>        <span class="n">data</span> <span class="o">=</span> <span class="n">recording</span><span class="o">.</span><span class="n">samples_for_graph_spec</span><span class="p">(</span><span class="n">graph_spec</span><span class="p">)</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="k">if</span> <span class="n">dry_run</span><span class="p">:</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a>            <span class="n">strategy</span><span class="o">.</span><span class="n">tune_dry_run</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__wrapped__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_name</span><span class="p">,</span> <span class="n">graph_spec</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">cache_dir</span><span class="p">)</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a>            <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">_restore_original_forward</span><span class="p">()</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a>                <span class="n">backends</span><span class="p">[</span><span class="n">graph_spec</span><span class="o">.</span><span class="n">input_spec</span><span class="p">]</span> <span class="o">=</span> <span class="n">strategy</span><span class="o">.</span><span class="n">tune</span><span class="p">(</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a>                    <span class="bp">self</span><span class="o">.</span><span class="n">__wrapped__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_self_name</span><span class="p">,</span> <span class="n">graph_spec</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">cache_dir</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>                <span class="p">)</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a>            <span class="k">finally</span><span class="p">:</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">_proxy_forward</span><span class="p">()</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">dry_run</span><span class="p">:</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_self_prev_recording</span> <span class="o">=</span> <span class="n">recording</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_self_state</span> <span class="o">=</span> <span class="n">ModuleState</span><span class="o">.</span><span class="n">TUNED</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_self_wrapper</span> <span class="o">=</span> <span class="n">TunedModule</span><span class="p">(</span><span class="n">backends</span><span class="p">)</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_offload</span><span class="p">(</span><span class="n">backends</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+Copyright © 2025-2026 NVIDIA Corporation
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.top", "navigation.tabs", "navigation.tabs.sticky", "navigation.expand", "navigation.sections"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

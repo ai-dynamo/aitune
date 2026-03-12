@@ -1,0 +1,3386 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../../deployment/deployment/">
+      
+      
+        <link rel="next" href="../execution_graphs/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Tuning Workflow - NVIDIA AITune</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../assets/styles.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tuning-workflow" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="NVIDIA AITune" class="md-header__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NVIDIA AITune
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tuning Workflow
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../learn/overview/" class="md-tabs__link">
+          
+  
+  
+  Learn
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../aot_tuning/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../examples/examples/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../api/aot_tuning/module/" class="md-tabs__link">
+          
+  
+  
+  API
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../CHANGELOG/" class="md-tabs__link">
+          
+  
+  
+  Resources
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="NVIDIA AITune" class="md-nav__button md-logo" aria-label="NVIDIA AITune" data-md-component="logo">
+      
+  <img src="../../../assets/logo.png" alt="logo">
+
+    </a>
+    NVIDIA AITune
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ai-dynamo/aitune" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Repository
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Learn
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Learn
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/core_functionalities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Functionalities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../learn/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aot_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../aot_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../jit_tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../jit_inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/tensorrt_optimization_profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Optimization Profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torchao_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends/torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tune_strategies/tune_strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tune Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Workflow
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-tuning-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Tuning Process
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Tuning Process">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-sample-gathering-phase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Sample Gathering Phase
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Sample Gathering Phase">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sample-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sample Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-graph-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Graph Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-module-by-module-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Module-by-Module Tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-strategy-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Strategy Execution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Strategy Execution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#firstwinsstrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FirstWinsStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#onebackendstrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OneBackendStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#highestthroughputstrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HighestThroughputStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-backend-building-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Backend Building and Validation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Backend Building and Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validation-phase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Phase
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-backend-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Backend Activation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow-customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow Customization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow Customization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#monitoring-the-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring the Workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../execution_graphs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution Graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../profiling_nvtx/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NVTX Profiling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/E5Large/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    E5Large
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ESM2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESM2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/FLUX/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLUX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/JitTuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JitTuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/LLM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ParakeetCTC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetCTC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ParakeetRNNT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ParakeetRNNT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/ResNet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResNet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/StableDiffusion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    StableDiffusion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ahead-of-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Ahead-of-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/aot_tuning/inspect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inspect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Just-in-time Tuning API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Just-in-time Tuning API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/jit_tuning/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backends API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/tensorrt_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TensorRT Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/torch_tensorrt_jit_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (JIT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/torch_tensorrt_aot_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch-TensorRT Backend (AOT)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/torchao_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TorchAO Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/backends/torch_inductor_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Torch Inductor Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuning Strategies API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tuning Strategies API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/tune_strategies/first_wins_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FirstWinsStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/tune_strategies/one_backend_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OneBackendStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/tune_strategies/highest_throughput_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HighestThroughputStrategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resources
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Resources
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../known_issues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Issues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../LICENSE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-tuning-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Tuning Process
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Tuning Process">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-sample-gathering-phase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Sample Gathering Phase
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Sample Gathering Phase">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sample-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sample Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-graph-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Graph Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-module-by-module-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Module-by-Module Tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-strategy-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Strategy Execution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Strategy Execution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#firstwinsstrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FirstWinsStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#onebackendstrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OneBackendStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#highestthroughputstrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HighestThroughputStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-backend-building-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Backend Building and Validation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Backend Building and Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validation-phase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Phase
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-backend-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Backend Activation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow-customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow Customization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow Customization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#monitoring-the-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring the Workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+
+<h1 id="tuning-workflow">Tuning Workflow</h1>
+<p>This guide provides an in-depth look at AITune's tuning process, explaining how samples are gathered, how modules are tuned, and how strategies and backends work together to optimize your models.</p>
+<h2 id="overview">Overview</h2>
+<p>The AITune tuning workflow is structured as follows:</p>
+<ol>
+<li><strong>Sample Gathering</strong>: Execute the model with different batch sizes to collect metadata</li>
+<li><strong>Graph Detection</strong>: Identify unique computational graphs based on input characteristics</li>
+<li><strong>Module Tuning</strong>: Optimize each wrapped module sequentially</li>
+<li><strong>Strategy Execution</strong>: Apply a tuning strategy to select the best backend</li>
+<li><strong>Backend Activation</strong>: Set up the optimized backends for inference</li>
+</ol>
+<h2 id="the-tuning-process">The Tuning Process</h2>
+<h3 id="1-sample-gathering-phase">1. Sample Gathering Phase</h3>
+<p>When you call <code>ait.tune()</code>, AITune first enters the sample gathering phase:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ait</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Wrap your module</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">module</span> <span class="o">=</span> <span class="n">ait</span><span class="o">.</span><span class="n">Module</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;my_model&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Tune with different batch sizes</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">ait</span><span class="o">.</span><span class="n">tune</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">batch_sizes</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">])</span>
+</code></pre></div>
+<p>During this phase:</p>
+<ul>
+<li>The function/model is executed with samples from the dataset</li>
+<li>Each execution uses a different batch size (from <code>batch_sizes</code> parameter)</li>
+<li><strong>Metadata is recorded</strong> for each execution:</li>
+<li>Input/Output shapes, dtypes, and structure</li>
+<li>Batch size information (stored in global context)</li>
+<li>Wrapped modules automatically detect and record this metadata</li>
+</ul>
+<p><strong>Key Point</strong>: At least 2 different batch sizes are required to detect batch dimensions. If only one batch size is provided, AITune assumes static shapes.</p>
+<h4 id="sample-generation">Sample Generation</h4>
+<p>AITune uses <code>samples_generator</code> to iterate through the dataset:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">for</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span> <span class="ow">in</span> <span class="n">samples_generator</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">batch_sizes</span><span class="p">,</span> <span class="n">max_num_batches_per_batch_size</span><span class="p">):</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="k">with</span> <span class="n">global_context</span><span class="p">:</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="n">global_context</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">BATCH_SIZE_KEY</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>            <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li><strong><code>batch_size</code></strong>: Current batch size being processed</li>
+<li><strong><code>args</code>, <code>kwargs</code></strong>: Actual data samples for this batch</li>
+<li><strong><code>max_num_batches_per_batch_size</code></strong>: Limits how many model executions are done per batch size (useful to limit large datasets)</li>
+</ul>
+<p>The global context tracks the current batch size, allowing wrapped modules to correlate shape changes with batch size changes.</p>
+<h3 id="2-graph-detection">2. Graph Detection</h3>
+<p>As samples are collected, wrapped modules detect unique computational graphs:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Example: Different input structures create different graphs</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">module</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>              <span class="c1"># Graph 0</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">module</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">mask</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>   <span class="c1"># Graph 1 (different kwargs)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">module</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>           <span class="c1"># Graph 2 (different tensor rank)</span>
+</code></pre></div>
+<p><strong>Graph Identity Rules</strong>:</p>
+<ul>
+<li>Tensors with different ranks → different graphs</li>
+<li>Different tensor shapes but same rank → same graph (dynamic shapes)</li>
+<li>Different non-tensor arguments (in strict mode) → different graphs</li>
+</ul>
+<p>Note:</p>
+<ul>
+<li>If strict mode is turned off, only tensor data is taken into account when detecting graphs. The strict mode can be turned off with:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ait</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">ait</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">strict_mode</span><span class="o">=</span><span class="kc">False</span> <span class="c1"># by default this is turned on.</span>
+</code></pre></div>
+<ul>
+<li>For a particular graph, there is only a limited number of samples collected to limit memory usage. This threshold can be set with:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">aitune.torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ait</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">ait</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">max_num_samples_stored</span><span class="o">=</span><span class="mi">10</span>
+</code></pre></div>
+<p>Each unique graph is represented by a <code>GraphSpec</code> containing:</p>
+<ul>
+<li><strong>Name</strong>: Unique identifier (e.g., "0", "1", "2")</li>
+<li><strong>Input Spec</strong>: <code>SampleMetadata</code> describing expected inputs</li>
+<li><strong>Output Spec</strong>: <code>SampleMetadata</code> describing expected outputs</li>
+</ul>
+<p><strong>Batch and Dynamic Dimensions</strong>:</p>
+<p>After seeing multiple samples, AITune identifies:</p>
+<ul>
+<li><strong>Batch dimensions</strong> (e.g., <code>batch0</code>): Scale proportionally with batch size</li>
+<li><strong>Dynamic dimensions</strong> (e.g., <code>dim0</code>): Vary independently of batch size</li>
+<li><strong>Static dimensions</strong>: Never change</li>
+</ul>
+<p>Example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a># After seeing samples: with batch_size=1 and batch_size=2
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>tensor[1, 10, 512] # for batch_size=1
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>tensor[2, 50, 512] # for batch_size=2
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a># Detected shape are:
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>tensor[&#39;batch0&#39;, &#39;dim1&#39;, 512]  # First dim is batch, second is dynamic, third is static
+</code></pre></div>
+<p>See also <a href="../execution_graphs/">Execution Graphs</a> - in depth explanation of detecting graphs and sample metadata.</p>
+<h3 id="3-module-by-module-tuning">3. Module-by-Module Tuning</h3>
+<p>After sample gathering, AITune tunes each wrapped module sequentially:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">for</span> <span class="n">module</span> <span class="ow">in</span> <span class="n">MODULE_REGISTRY</span><span class="o">.</span><span class="n">modules</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="c1"># Deactivate other modules to free memory</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="k">for</span> <span class="n">other_module</span> <span class="ow">in</span> <span class="n">MODULE_REGISTRY</span><span class="o">.</span><span class="n">modules</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="k">if</span> <span class="n">other_module</span> <span class="o">!=</span> <span class="n">module</span><span class="p">:</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>            <span class="n">other_module</span><span class="o">.</span><span class="n">deactivate</span><span class="p">()</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="c1"># Tune this module</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="n">module</span><span class="o">.</span><span class="n">tune</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dry_run</span><span class="o">=</span><span class="n">dry_run</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Why Sequential?</strong></p>
+<ul>
+<li><strong>Memory Management</strong>: Deactivating other modules frees GPU memory for tuning</li>
+<li><strong>Isolation</strong>: Prevents interference between module optimizations</li>
+<li><strong>Predictability</strong>: Each module gets full system resources</li>
+</ul>
+<p>For each module, each graph is tuned separately, i.e., a strategy is called for data captured for the specific graph only and:</p>
+<ul>
+<li>Strategy tries to build a backend or backends and select the best one</li>
+<li>Each backend is validated against outputs, i.e., tensor shapes, values, NaNs (not a number)</li>
+</ul>
+<h3 id="4-strategy-execution">4. Strategy Execution</h3>
+<p>The tuning strategy determines which backend(s) to try and how to select the best one. AITune provides three built-in strategies:</p>
+<h4 id="firstwinsstrategy">FirstWinsStrategy</h4>
+<p>Tries backends in priority order and returns the first one that builds and validates successfully. Not every backend can handle every model (e.g., TensorRT may fail during ONNX export, Torch Inductor may hit graph breaks), so this strategy provides automatic fallback instead of aborting.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">strategy</span> <span class="o">=</span> <span class="n">ait</span><span class="o">.</span><span class="n">FirstWinsStrategy</span><span class="p">([</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="n">ait</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">TensorRTBackend</span><span class="p">(),</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">ait</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">TorchInductorBackend</span><span class="p">(),</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">])</span>
+</code></pre></div>
+<p><strong>Workflow</strong>:</p>
+<ol>
+<li>Try each backend in order</li>
+<li>Build the backend with the module and graph spec</li>
+<li>Validate correctness by comparing outputs</li>
+<li>Return first successful backend</li>
+<li>Skip profiling for speed</li>
+</ol>
+<p><strong>Use Case</strong>: Fast tuning with automatic fallback, especially for models you haven't validated against every backend.</p>
+<h4 id="onebackendstrategy">OneBackendStrategy</h4>
+<p>Uses exactly one backend, failing immediately with the original error if it cannot build. Unlike <code>FirstWinsStrategy</code> with a single backend, <code>OneBackendStrategy</code> surfaces the original exception rather than catching it.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">strategy</span> <span class="o">=</span> <span class="n">ait</span><span class="o">.</span><span class="n">OneBackendStrategy</span><span class="p">(</span><span class="n">ait</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">TorchInductorBackend</span><span class="p">())</span>
+</code></pre></div>
+<p><strong>Workflow</strong>:</p>
+<ol>
+<li>Build the specified backend</li>
+<li>Validate correctness</li>
+<li>Return the backend</li>
+</ol>
+<p><strong>Use Case</strong>: Production with a validated backend where you want deterministic behavior.</p>
+<h4 id="highestthroughputstrategy">HighestThroughputStrategy</h4>
+<p>Before actual tuning, this strategy tries to estimate <code>max_batch_size</code>. It does so by incrementing <code>batch_size</code> (in powers of 2) and measuring throughput using the original module. The <code>max_batch_size</code> is picked for the best throughput and then is used for selecting the best backend:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">strategy</span> <span class="o">=</span> <span class="n">ait</span><span class="o">.</span><span class="n">HighestThroughputStrategy</span><span class="p">([</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">ait</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">TensorRTBackend</span><span class="p">(),</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">ait</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">TorchInductorBackend</span><span class="p">(),</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">ait</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">TorchEagerBackend</span><span class="p">(),</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="p">])</span>
+</code></pre></div>
+<p><strong>Workflow</strong>:</p>
+<ol>
+<li>Estimate <code>max_batch_size</code></li>
+<li>Try each backend in order</li>
+<li>Build and validate each working backend</li>
+<li>Profile throughput for each backend given <code>max_batch_size</code></li>
+<li>Return backend with the highest throughput</li>
+</ol>
+<p><strong>Use Case</strong>: When performance is critical and you want the absolute fastest backend.</p>
+<h3 id="5-backend-building-and-validation">5. Backend Building and Validation</h3>
+<p>A backend represents a different technology for tuning a torch module, e.g., <code>TensorRT</code>, <code>TorchInductor</code>, and it is used by a strategy. Before it is used, it acts as a blueprint, i.e., it is copied, and each copy is used to build, validate, and activate a particular tuned module. This is done so that it has no side-effects on different modules or graphs.</p>
+<p>Each backend is a small state machine that enforces safe usage:</p>
+<ul>
+<li><code>INIT</code> → <code>ACTIVE</code>: <code>build()</code> succeeds. A build is allowed only once and must set up a runnable backend.</li>
+<li><code>ACTIVE</code> → <code>INACTIVE</code>: <code>deactivate()</code> releases resources (and clears compiler/runtime caches).</li>
+<li><code>INACTIVE</code> → <code>ACTIVE</code>: <code>activate()</code> restores the backend for inference.</li>
+<li><code>CHECKPOINT_LOADED</code> → <code>ACTIVE</code> or <code>DEPLOYED</code>: A backend created from a checkpoint can be activated for tinkering or
+  deployed for final use.</li>
+<li><code>ACTIVE</code> → <code>DEPLOYED</code>: <code>deploy()</code> finalizes the backend. After this, state changes are not allowed.</li>
+</ul>
+<p>The backend's state is governed by the strategy and the user must not change it. After a module is successfully tuned, it can be used to do inference - the backend will be in <code>ACTIVE</code> or <code>DEPLOYED</code> states.</p>
+<h4 id="validation-phase">Validation Phase</h4>
+<p>After building a backend, the strategy tries to validate it. This is enabled by default and can be turned off with <code>strategy.enable_correctness_check(False)</code>.</p>
+<p>AITune validates correctness by running the tuned backend on sample data. These checks are required to ensure the backend is correctly built:</p>
+<ol>
+<li>Python basic types <code>int</code>, <code>float</code> must be finite.</li>
+<li>Tensors values must be finite.</li>
+<li>All nested structures are checked against points 1 and 2.</li>
+<li>Tensor shapes must match against original data i.e. static, dynamic and batch axes must match.</li>
+</ol>
+<p>This ensures tuning does not break the module.</p>
+<h3 id="6-backend-activation">6. Backend Activation</h3>
+<p>After tuning is complete, all tuned modules are activated:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">for</span> <span class="n">module</span> <span class="ow">in</span> <span class="n">MODULE_REGISTRY</span><span class="o">.</span><span class="n">modules</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">module</span><span class="o">.</span><span class="n">activate</span><span class="p">()</span>
+</code></pre></div>
+<p><strong>Activation</strong> means:</p>
+<ol>
+<li>Load the optimized backend into memory</li>
+<li>Prepare for inference</li>
+<li>Route future calls to the optimized backend</li>
+</ol>
+<p>Now your model is ready for optimized inference!</p>
+<h2 id="workflow-customization">Workflow Customization</h2>
+<p>The workflow can be adapted by implementing a custom strategy or a backend.</p>
+<h3 id="custom-strategy">Custom Strategy</h3>
+<p>If you would like to write a custom strategy, extend the <code>TuneStrategy</code> class and implement the <code>_tune</code> method:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_tune</span><span class="p">(</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>        <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>        <span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>        <span class="n">graph_spec</span><span class="p">:</span> <span class="n">GraphSpec</span><span class="p">,</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>        <span class="n">data</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Sample</span><span class="p">],</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>        <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>        <span class="n">cache_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Backend</span><span class="p">:</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Tunes given torch module with provided graph_spec and data.</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="sd">        Note: each tuning operation should perform a deep copy of a backend as tuning could be called multiple times for the</span>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="sd">        same module, i.e., if there are different graph specs</span>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="sd">            The tuned and activated backend.</span>
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>
+<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="sd">            RuntimeError: if the backend fails any check.</span>
+<a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>        <span class="o">...</span>
+</code></pre></div>
+<p>If needed, you can also extend the<code>_pre_tune</code> and <code>_post_tune</code> methods, which are invoked before and after the <code>_tune</code>.</p>
+<h3 id="custom-backend">Custom Backend</h3>
+<p>To write a custom backend, extend the <code>Backend</code> base class and <code>BackendConfig</code> data class which serves as a config for your custom backend. The following methods are required to be implemented:</p>
+<ul>
+<li><code>key()</code> - Returns a stable identifier for the backend/config combination; used for caching and lookup.</li>
+<li><code>describe()</code> - Returns a short human-readable description of the backend/config changes.</li>
+<li><code>to_dict()</code> - Serializes backend state; includes <code>Path</code> objects for artifacts to bundle in checkpoints.</li>
+<li><code>from_dict()</code> - Reconstructs a backend instance from the serialized state.</li>
+<li><code>is_jit</code> - Boolean property indicating whether the backend is of just-in-time type. This information helps AITune manage resources as just-in-time backends require the original torch module for activation. Otherwise, the original module can be offloaded to system memory.</li>
+<li><code>_build()</code> - Builds backend artifacts for a specific module/graph and returns a ready backend.</li>
+<li><code>_activate()</code> - Loads/initializes the backend for inference after it was inactive or checkpoint-loaded.</li>
+<li><code>_deactivate()</code> - Releases runtime resources and makes the backend inactive.</li>
+<li><code>_deploy()</code> - Finalizes the backend for deployment; after this it cannot change state.</li>
+<li><code>_infer()</code> - Executes inference with the backend for the provided inputs.</li>
+</ul>
+<p>For serialization with <code>ait.load</code> and <code>ait.save</code>, the <code>to_dict</code> and <code>from_dict</code> methods are used. Anything placed in the dictionary will be saved and restored as a checkpoint. Path objects will be copied to the checkpoints folder and can be used by a backend in the <code>_deploy</code> method.</p>
+<h2 id="monitoring-the-workflow">Monitoring the Workflow</h2>
+<p>AITune provides detailed logging throughout the tuning process.</p>
+<p>Example logs from tuning ResNet (an example is placed in the <code>examples/ResNet</code> folder):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>2026-02-04 13:32:38,340 - INFO - ════════════════════════════════════════════════════════════════
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>2026-02-04 13:32:38,340 - INFO - 🎯 Tuning module: `example-resnet50` (all graphs)
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>2026-02-04 13:32:38,342 - INFO - ------------------------------------------------------------
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>2026-02-04 13:32:38,342 - INFO - 🚀 Tuning graph `0` for module `example-resnet50`:
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>2026-02-04 13:32:38,342 - INFO -   number of parameters: 25557032
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>2026-02-04 13:32:38,342 - INFO -   number of layers: 10
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>2026-02-04 13:32:38,342 - INFO -   precisions: torch.float32
+</code></pre></div>
+<p>Now the logs will show the inputs and outputs of the module:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>2026-02-04 13:32:38,342 - INFO -   graph_spec:
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>2026-02-04 13:32:38,343 - INFO -     input_spec:
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a> Tensors:
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>╒═══════════╤════════╤═════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>│ Locator   │ Name   │ Shape                   │ Min Shape        │ Max Shape        │ Dtype         │
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>╞═══════════╪════════╪═════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>│ [0]       │ args_0 │ [&#39;batch0&#39;, 3, 224, 224] │ [1, 3, 224, 224] │ [4, 3, 224, 224] │ torch.float32 │
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>╘═══════════╧════════╧═════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>2026-02-04 13:32:38,343 - INFO -     output_spec:
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a> Tensors:
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>╒═══════════╤═════════╤══════════════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>│ Locator   │ Name    │ Shape            │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>╞═══════════╪═════════╪══════════════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>│           │ outputs │ [&#39;batch0&#39;, 1000] │ [1, 1000]   │ [4, 1000]   │ torch.float32 │
+<a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>╘═══════════╧═════════╧══════════════════╧═════════════╧═════════════╧═══════════════╛
+</code></pre></div>
+<p>As you can see, AITune detected the batch axis as the first one, hence the name <code>batch0</code> and input shapes <code>3x224x224</code>, i.e., batch of images, and output shape <code>1000</code>, i.e., batch of categories.</p>
+<p>Next, you can see the Highest Throughput Strategy builds backends one by one:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>2026-02-04 13:32:38,343 - INFO -   num samples: 1
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>2026-02-04 13:32:38,343 - INFO -   device: cuda:0
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>2026-02-04 13:32:38,343 - INFO -   cache_dir: /home/pbazan/.cache/aitune/example-resnet50/0
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>2026-02-04 13:32:38,343 - INFO -   strategy:
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>2026-02-04 13:32:38,343 - INFO -     name: Highest Throughput Strategy
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>2026-02-04 13:32:38,343 - INFO -     description: evaluate all backends, return backend with highest throughput
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>2026-02-04 13:32:38,343 - INFO -     backends:
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>2026-02-04 13:32:38,343 - INFO -       TensorRTBackend(quantization_config=ONNXQuantizationConfig(precision=&#39;int8&#39;, calibration_method=&#39;max&#39;, use_model_opt_post_processing=False))
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>2026-02-04 13:32:38,343 - INFO -       TensorRTBackend(use_dynamo=False,quantization_config=ONNXQuantizationConfig(precision=&#39;int8&#39;, calibration_method=&#39;max&#39;, use_model_opt_post_processing=False))
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>2026-02-04 13:32:38,343 - INFO -       TensorRTBackend(quantization_config=ONNXAutoCastConfig(precision=&#39;fp16&#39;, keep_io_types=True))
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>2026-02-04 13:32:38,343 - INFO -       TensorRTBackend(use_dynamo=False,quantization_config=ONNXAutoCastConfig(precision=&#39;fp16&#39;, keep_io_types=True))
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>2026-02-04 13:32:38,343 - INFO -       TorchAOBackend(quantization_config=Int8WeightOnlyConfig())
+<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>2026-02-04 13:32:38,343 - INFO -       TorchInductorBackend(autocast_enabled=True,autocast_dtype=torch.float16)
+<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>2026-02-04 13:32:38,343 - INFO -       TorchEagerBackend()
+<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>2026-02-04 13:32:38,343 - INFO - ⏳ Executing strategy `HighestThroughputStrategy` on module `example-resnet50` (graph: 0)
+<a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>2026-02-04 13:32:38,343 - INFO - 🤖 backend: TensorRTBackend(quantization_config=ONNXQuantizationConfig(precision=&#39;int8&#39;, calibration_method=&#39;max&#39;, use_model_opt_post_processing=False))
+<a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>2026-02-04 13:32:38,343 - INFO -     🔄 in progress...please wait
+<a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>2026-02-04 13:32:58,024 - INFO -     ✅ backend built
+<a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>2026-02-04 13:32:58,030 - INFO -     ✅ backend validated
+<a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a>2026-02-04 13:32:58,044 - INFO -     ✅ backend profiled - throughput: 10051.17 samples/s, batch size: 4
+<a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a>2026-02-04 13:32:58,044 - INFO -     🎯 new best throughput for TensorRTBackend(quantization_config=ONNXQuantizationConfig(precision=&#39;int8&#39;, calibration_method=&#39;max&#39;, use_model_opt_post_processing=False)) is 10051.17 samples/s, batch size: 4
+<a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a>2026-02-04 13:32:58,044 - INFO -     ⏱️ completed in 19.70s
+<a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a>2026-02-04 13:32:58,044 - INFO - 🤖 backend: TensorRTBackend(use_dynamo=False,quantization_config=ONNXQuantizationConfig(precision=&#39;int8&#39;, calibration_method=&#39;max&#39;, use_model_opt_post_processing=False))
+<a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a>2026-02-04 13:32:58,044 - INFO -     🔄 in progress...please wait
+<a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a>2026-02-04 13:33:14,828 - INFO -     ✅ backend built
+<a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a>2026-02-04 13:33:14,829 - INFO -     ✅ backend validated
+<a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a>2026-02-04 13:33:14,843 - INFO -     ✅ backend profiled - throughput: 10624.58 samples/s, batch size: 4
+<a id="__codelineno-14-28" name="__codelineno-14-28" href="#__codelineno-14-28"></a>2026-02-04 13:33:14,843 - INFO -     🎯 new best throughput for TensorRTBackend(use_dynamo=False,quantization_config=ONNXQuantizationConfig(precision=&#39;int8&#39;, calibration_method=&#39;max&#39;, use_model_opt_post_processing=False)) is 10624.58 samples/s, batch size: 4
+<a id="__codelineno-14-29" name="__codelineno-14-29" href="#__codelineno-14-29"></a>2026-02-04 13:33:14,844 - INFO -     ⏱️ completed in 16.80s
+<a id="__codelineno-14-30" name="__codelineno-14-30" href="#__codelineno-14-30"></a>2026-02-04 13:33:14,845 - INFO - 🤖 backend: TensorRTBackend(quantization_config=ONNXAutoCastConfig(precision=&#39;fp16&#39;, keep_io_types=True))
+<a id="__codelineno-14-31" name="__codelineno-14-31" href="#__codelineno-14-31"></a>2026-02-04 13:33:14,845 - INFO -     🔄 in progress...please wait
+<a id="__codelineno-14-32" name="__codelineno-14-32" href="#__codelineno-14-32"></a>2026-02-04 13:33:36,037 - INFO -     ✅ backend built
+<a id="__codelineno-14-33" name="__codelineno-14-33" href="#__codelineno-14-33"></a>2026-02-04 13:33:36,038 - INFO -     ✅ backend validated
+<a id="__codelineno-14-34" name="__codelineno-14-34" href="#__codelineno-14-34"></a>2026-02-04 13:33:36,054 - INFO -     ✅ backend profiled - throughput: 7812.03 samples/s, batch size: 4
+<a id="__codelineno-14-35" name="__codelineno-14-35" href="#__codelineno-14-35"></a>2026-02-04 13:33:36,054 - INFO -     ⏱️ completed in 21.21s
+<a id="__codelineno-14-36" name="__codelineno-14-36" href="#__codelineno-14-36"></a>2026-02-04 13:33:36,056 - INFO - 🤖 backend: TensorRTBackend(use_dynamo=False,quantization_config=ONNXAutoCastConfig(precision=&#39;fp16&#39;, keep_io_types=True))
+<a id="__codelineno-14-37" name="__codelineno-14-37" href="#__codelineno-14-37"></a>2026-02-04 13:33:36,056 - INFO -     🔄 in progress...please wait
+<a id="__codelineno-14-38" name="__codelineno-14-38" href="#__codelineno-14-38"></a>2026-02-04 13:33:55,150 - INFO -     ✅ backend built
+<a id="__codelineno-14-39" name="__codelineno-14-39" href="#__codelineno-14-39"></a>2026-02-04 13:33:55,151 - INFO -     ✅ backend validated
+<a id="__codelineno-14-40" name="__codelineno-14-40" href="#__codelineno-14-40"></a>2026-02-04 13:33:55,167 - INFO -     ✅ backend profiled - throughput: 8096.70 samples/s, batch size: 4
+<a id="__codelineno-14-41" name="__codelineno-14-41" href="#__codelineno-14-41"></a>2026-02-04 13:33:55,167 - INFO -     ⏱️ completed in 19.11s
+<a id="__codelineno-14-42" name="__codelineno-14-42" href="#__codelineno-14-42"></a>2026-02-04 13:33:55,169 - INFO - 🤖 backend: TorchAOBackend(quantization_config=Int8WeightOnlyConfig())
+<a id="__codelineno-14-43" name="__codelineno-14-43" href="#__codelineno-14-43"></a>2026-02-04 13:33:55,169 - INFO -     🔄 in progress...please wait
+<a id="__codelineno-14-44" name="__codelineno-14-44" href="#__codelineno-14-44"></a>2026-02-04 13:34:04,296 - INFO -     ✅ backend built
+<a id="__codelineno-14-45" name="__codelineno-14-45" href="#__codelineno-14-45"></a>2026-02-04 13:34:04,305 - INFO -     ✅ backend validated
+<a id="__codelineno-14-46" name="__codelineno-14-46" href="#__codelineno-14-46"></a>2026-02-04 13:34:10,986 - INFO -     ✅ backend profiled - throughput: 23666.16 samples/s, batch size: 4
+<a id="__codelineno-14-47" name="__codelineno-14-47" href="#__codelineno-14-47"></a>2026-02-04 13:34:10,986 - INFO -     🎯 new best throughput for TorchAOBackend(quantization_config=Int8WeightOnlyConfig()) is 23666.16 samples/s, batch size: 4
+<a id="__codelineno-14-48" name="__codelineno-14-48" href="#__codelineno-14-48"></a>2026-02-04 13:34:10,995 - INFO -     ⏱️ completed in 15.83s
+<a id="__codelineno-14-49" name="__codelineno-14-49" href="#__codelineno-14-49"></a>2026-02-04 13:34:10,995 - INFO - 🤖 backend: TorchInductorBackend(autocast_enabled=True,autocast_dtype=torch.float16)
+<a id="__codelineno-14-50" name="__codelineno-14-50" href="#__codelineno-14-50"></a>2026-02-04 13:34:10,996 - INFO -     🔄 in progress...please wait
+<a id="__codelineno-14-51" name="__codelineno-14-51" href="#__codelineno-14-51"></a>2026-02-04 13:34:24,011 - INFO -     ✅ backend built
+<a id="__codelineno-14-52" name="__codelineno-14-52" href="#__codelineno-14-52"></a>2026-02-04 13:34:24,013 - INFO -     ✅ backend validated
+<a id="__codelineno-14-53" name="__codelineno-14-53" href="#__codelineno-14-53"></a>2026-02-04 13:34:32,533 - INFO -     ✅ backend profiled - throughput: 3637.62 samples/s, batch size: 4
+<a id="__codelineno-14-54" name="__codelineno-14-54" href="#__codelineno-14-54"></a>2026-02-04 13:34:32,533 - INFO -     ⏱️ completed in 21.54s
+<a id="__codelineno-14-55" name="__codelineno-14-55" href="#__codelineno-14-55"></a>2026-02-04 13:34:32,533 - INFO - 🤖 backend: TorchEagerBackend()
+<a id="__codelineno-14-56" name="__codelineno-14-56" href="#__codelineno-14-56"></a>2026-02-04 13:34:32,533 - INFO -     🔄 in progress...please wait
+<a id="__codelineno-14-57" name="__codelineno-14-57" href="#__codelineno-14-57"></a>2026-02-04 13:34:32,536 - INFO -     ✅ backend built
+<a id="__codelineno-14-58" name="__codelineno-14-58" href="#__codelineno-14-58"></a>2026-02-04 13:34:32,538 - INFO -     ✅ backend validated
+<a id="__codelineno-14-59" name="__codelineno-14-59" href="#__codelineno-14-59"></a>2026-02-04 13:34:32,580 - INFO -     ✅ backend profiled - throughput: 2974.79 samples/s, batch size: 4
+<a id="__codelineno-14-60" name="__codelineno-14-60" href="#__codelineno-14-60"></a>2026-02-04 13:34:32,580 - INFO -     ⏱️ completed in 47.56ms
+</code></pre></div>
+<p>Finally the winning backend is presented:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>2026-02-04 13:34:32,580 - INFO - 🎯 Strategy HighestThroughputStrategy execution finished:
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>2026-02-04 13:34:32,581 - INFO - ✅ Selected TorchAOBackend(quantization_config=Int8WeightOnlyConfig()) for module example-resnet50 and graph spec Name=0
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>Input_spec:
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>Tensors:
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>╒═══════════╤════════╤═════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>│ Locator   │ Name   │ Shape                   │ Min Shape        │ Max Shape        │ Dtype         │
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>╞═══════════╪════════╪═════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>│ [0]       │ args_0 │ [&#39;batch0&#39;, 3, 224, 224] │ [1, 3, 224, 224] │ [4, 3, 224, 224] │ torch.float32 │
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>╘═══════════╧════════╧═════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>Output_spec:
+<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>Tensors:
+<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>╒═══════════╤═════════╤══════════════════╤═════════════╤═════════════╤═══════════════╕
+<a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>│ Locator   │ Name    │ Shape            │ Min Shape   │ Max Shape   │ Dtype         │
+<a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>╞═══════════╪═════════╪══════════════════╪═════════════╪═════════════╪═══════════════╡
+<a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>│           │ outputs │ [&#39;batch0&#39;, 1000] │ [1, 1000]   │ [4, 1000]   │ torch.float32 │
+<a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>╘═══════════╧═════════╧══════════════════╧═════════════╧═════════════╧═══════════════╛
+<a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>.
+<a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>2026-02-04 13:34:32,581 - INFO -    Batch size: 4, throughput: 23666.16 samples/s
+<a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>2026-02-04 13:34:32,581 - INFO - ⏱️ Tune `HighestThroughputStrategy`: completed in 1.90min
+<a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>2026-02-04 13:34:32,581 - INFO - ✅ Tuning module: `example-resnet50` (all graphs) completed.
+<a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a>2026-02-04 13:34:32,581 - INFO - ════════════════════════════════════════════════════════════════
+</code></pre></div>
+<p>If you do not see logs, make sure the logger is configured to at least <code>INFO</code> level:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="../execution_graphs/">Execution Graphs</a> - Understanding graph detection</li>
+<li><a href="../../tune_strategies/tune_strategies/">Tune Strategies</a> - Strategy reference</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+Copyright © 2025-2026 NVIDIA Corporation
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.top", "navigation.tabs", "navigation.tabs.sticky", "navigation.expand", "navigation.sections"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
