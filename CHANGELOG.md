@@ -5,6 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # Changelog
 
+## 0.4.0 (unreleased)
+
 ## 0.3.0
 - feat: JIT tuning requires single sample only - tune on first model call
 - feat: JIT tuning default fallback to Torch Inductor backend

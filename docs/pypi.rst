@@ -15,6 +15,15 @@ NVIDIA AITune works with your environment — relying first on your software ver
 
 **Note**: This is the first release. The API may change in future versions.
 
+  **NOTICE AND DISCLAIMER: This software automatically retrieves, accesses or interacts with external materials.
+  Those retrieved materials are not distributed with this software and are governed solely by separate terms,
+  conditions and licenses. You are solely responsible for finding, reviewing and complying with all applicable terms,
+  conditions, and licenses, and for verifying the security, integrity and suitability of any retrieved materials for
+  your specific use case. This software is provided "AS IS", without warranty of any kind. The author makes no
+  representations or warranties regarding any retrieved materials, and assumes no liability for any losses,
+  damages, liabilities or legal consequences from your use or inability to use this software or any retrieved
+  materials. Use this software and the retrieved materials at your own risk.**
+
 Features at Glance
 ------------------
 
@@ -95,7 +104,10 @@ Installing from Source
     cd aitune
     pip install --extra-index-url https://pypi.nvidia.com .
 
-    # Or use editable mode for development
+or use editable mode for development:
+
+.. code-block:: bash
+
     pip install --extra-index-url https://pypi.nvidia.com -e .
 
 Quick Start
@@ -105,7 +117,34 @@ This quick start provides examples of tuning and deployment paths available in N
 
 NVIDIA AITune enables seamless tuning of models for deployment (for example, converting them to TensorRT) without requiring changes to your original Python pipelines.
 
-The code below demonstrates Stable Diffusion pipeline tuning. First, install the required third-party dependencies:
+NVIDIA AITune supports two modes:
+
+* Ahead-of-time tuning — provide a model or a pipeline, and a dataset/dataloader. You can either rely on ``inspect`` to detect promising modules to tune or manually select them.
+* Just-in-time tuning — set a special environment variable, run your script without changes, and AITune will, on the fly, detect modules and tune them one by one.
+
+Ahead-of-time mode is more powerful and allows you to tweak more settings, whereas just-in-time works out of the box but offers less control over the tuning process. For a more detailed comparison, see the `Comparison between ahead-of-time and just-in-time tuning`_ section below.
+
+Enabling logging
+~~~~~~~~~~~~~~~~
+
+The tuning process guides the user through decisions and steps that are performed to tune every selected module.
+
+We recommend to enable the INFO logging level for better verbosity.
+
+.. code-block:: python
+
+    import logging
+
+    logging.basicConfig(level=logging.INFO, force=True)
+
+Ahead-of-time tuning
+~~~~~~~~~~~~~~~~~~~~
+
+The code below demonstrates Stable Diffusion pipeline tuning.
+
+You can annotate ``torch.nn.Module``\ s manually or use the ``inspect`` functionality to have modules picked automatically; you can then verify them and schedule them for tuning.
+
+First, install the required third-party dependencies:
 
 .. code-block:: bash
 
@@ -135,6 +174,12 @@ Next, `inspect` the pipeline components and display the summary:
 
     # Inspect pipeline to get modules
     modules_info = ait.inspect(pipe, input_data)
+
+
+    # Optional: inference function, if you need more control over execution
+    # def infer(prompt):
+    #     return pipe(prompt, width=1024, height=1024, num_inference_steps=10)
+    # modules_info = ait.inspect(pipe, input_data, inference_function=infer)
 
     # Display modules info
     modules_info.describe()
@@ -175,18 +220,130 @@ And load the tuned pipeline directly:
     pipe.to("cuda")
     ait.load(pipe, "tuned_pipe.ait")
 
+Just-in-time tuning
+~~~~~~~~~~~~~~~~~~~
+
+In this mode, there is no need to modify the user's code. At the beginning, AITune uses a few inferences to detect model architecture and hierarchy of a model. Then it tries to tune modules one by one starting from the top. If there is one of the following conditions:
+
+* a graph break is detected, i.e., ``torch.nn.Module`` contains conditional logic on inputs, meaning there is no guarantee of a static, correct graph of computations, or
+* there is an error during tuning
+
+that module is left unchanged and AITune tries to tune its children. This process continues until the module depth reaches a configured limit.
+
+First, install the required third-party dependencies:
+
+.. code-block:: bash
+
+    pip install "transformers<5" diffusers torch
+
+Prepare the example script for tuning ``my_script.py``:
+
+.. code-block:: python
+
+    # Enable JIT tuning
+    import aitune.torch.jit.enable
+
+    # HuggingFace dependencies
+    import torch
+    from diffusers import DiffusionPipeline
+
+    # Initialize pipeline
+    pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5", torch_dtype=torch.float16)
+    pipe.to("cuda")
+
+    # First call - tuning the model
+    pipe("A beautiful landscape with mountains and a lake")
+
+    # Second call - using tuned model
+    pipe("A beautiful landscape with mountains and a lake")
+
+You can then run your script:
+
+.. code-block:: bash
+
+    python my_script.py
+
+*Note*: The ``import aitune.torch.jit.enable`` must be a first import in your code. The alternative option is to use ``export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning`` to avoid any source code modification.
+
+Configuring just-in-time tuning
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If there is a need to adjust just-in-time options, you can do it but currently this requires modifying code to import the JIT config:
+
+.. code-block:: python
+
+    from aitune.torch.jit.config import config
+    from aitune.torch.backend import TensorRTBackend
+
+    config.max_depth_level = 1 # change the default maximum depth level for nested modules to be tuned
+    config.detect_graph_breaks = False # turn off graph break detection
+    config.backends = [TensorRTBackend()] # change the backends
+
+.. _comparison-aot-jit:
+
+Comparison between ahead-of-time and just-in-time tuning
+--------------------------------------------------------
+
+The ahead-of-time tuning gives you the most control over the tuning process:
+
+* it detects the batch axis and dynamic axes (axes that change shape independently of batch size, e.g., sequence length in LLMs)
+* allows picking modules to tune
+* you can pick a tuning strategy (e.g., best throughput) for the whole process or per-module
+* you can pick tuning backends (e.g., TensorRT, TorchInductor, TorchAO) which will be used by the strategy
+* you can mix different backends in the same model/pipeline
+* you can manually verify the tuning process (note: AITune performs basic checks for NaNs and errors)
+* you can save the resulting artifact and later read it from disk
+
+The big advantage of just-in-time tuning is that you don't need to modify the user's script to tune a model. However, it has some disadvantages — since it cannot access data directly (you don't provide a dataloader):
+
+* it cannot deduce batch size nor do benchmarking
+* input/output shapes depend on the data seen, so for example, TRT backend will build a profile only for that data
+* it needs at least two inference calls — first to get model/pipeline hierarchy and second one for actual tuning
+* if you need dynamic axes (e.g., TRT backend), you need to provide two different batch sizes
+* there is limited support of strategies due to unknown batch size
+* you can specify backends for the whole model
+
+The following table summarizes the difference between modes:
+
++------------------------+-----------------------+-------------------------------+
+| Feature                | Ahead-of-time         | Just-in-time                  |
++========================+=======================+===============================+
+| Detecting dynamic axes | Yes                   | Yes                           |
++------------------------+-----------------------+-------------------------------+
+| Extrapolating batches  | Yes                   | No                            |
++------------------------+-----------------------+-------------------------------+
+| Benchmarking           | Yes                   | No (no extrapolating batches) |
++------------------------+-----------------------+-------------------------------+
+| Modules for tuning     | User has full control | Picked automatically          |
++------------------------+-----------------------+-------------------------------+
+| Selecting tune strategy| Global or per module  | Global                        |
++------------------------+-----------------------+-------------------------------+
+| Available strategies   | All                   | Limited (no benchmarking)     |
++------------------------+-----------------------+-------------------------------+
+| Tune time              | Slow                  | Quick                         |
++------------------------+-----------------------+-------------------------------+
+| Saving artifacts       | Yes                   | No                            |
++------------------------+-----------------------+-------------------------------+
+| Load tuned model time  | Quick                 | Re-tuning required            |
++------------------------+-----------------------+-------------------------------+
+| Code changes required  | Yes                   | No                            |
++------------------------+-----------------------+-------------------------------+
+| Caching                | Yes                   | No                            |
++------------------------+-----------------------+-------------------------------+
+
+Note: Currently, JIT mode does not support caching results, i.e., every time a new Python interpreter starts, the tuning process starts from scratch.
+
 Core Functionalities
 --------------------
 
-Inspect
-~~~~~~~
+Inspect for AOT tuning
+~~~~~~~~~~~~~~~~~~~~~~
 
 The ``inspect`` function allows you to analyze PyTorch models and pipelines to understand their structure, parameters, and execution flow. It provides detailed insights into model architecture and helps identify tuning opportunities.
 
 .. code-block:: python
 
     import aitune.torch as ait
-    import torch
     import torch.nn as nn
 
     class SimpleModel(nn.Module):
@@ -198,10 +355,27 @@ The ``inspect`` function allows you to analyze PyTorch models and pipelines to u
             return self.linear(x)
 
     model = SimpleModel()
-    dataset = torch.randn(1, 100)
 
     # Inspect the model
     ait.inspect(model, dataset)
+
+Inspect for JIT tuning
+~~~~~~~~~~~~~~~~~~~~~~
+
+JIT tuning also has a corresponding ``inspect`` mode which gathers information about the model/pipeline and allows checking model input and output arguments, hierarchy of the model, etc.
+
+Here is a short snippet how to use it:
+
+.. code-block:: python
+
+    # required imports
+    import aitune.torch.jit.enable_inspection as inspection
+
+    # your code goes here
+    # ...
+
+    # you can export report to html file
+    inspection.save_report("filename.html", "YOUR_MODEL_NAME")
 
 Tune
 ~~~~
@@ -253,7 +427,7 @@ Example output:
 
 You can copy the checkpoint file ``tuned_model.ait`` and SHA sums file to a target host or folder to use it for inference.
 
-*Note:* We recommend deploying ``*.ait`` package on the same hardware as tuning has been performed for functional and performance compatibility.
+*Note:* We recommend to deploy ``*.ait`` package on the same hardware as tuning has been performed for functional and performance compatibility.
 
 
 Load
@@ -283,13 +457,15 @@ The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT
 
     from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, ONNXAutoCastConfig
 
-    config = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig())
+    config = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig())  # FP16 autocast through ModelOpt
     backend = TensorRTBackend(config)
 
 CUDA Graphs Support
 ~~~~~~~~~~~~~~~~~~~
 
-The TensorRT backend supports CUDA Graphs for reduced CPU overhead and improved inference performance. This feature is disabled by default.
+The TensorRT backend supports CUDA Graphs for reduced CPU overhead and improved inference performance. CUDA Graphs automatically capture and replay GPU operations, eliminating kernel launch overhead for repeated inference calls. This feature is disabled by default.
+
+Keep in mind that graphs are automatically recaptured when input shapes change.
 
 .. code-block:: python
 
@@ -315,7 +491,7 @@ Torch-TensorRT JIT backend integrates TensorRT tuning directly into PyTorch, pro
 Torch-TensorRT Backend (AOT)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Torch-TensorRT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through ``torch_tensorrt.compile``.
+Torch-TensorRT AOT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through ``torch_tensorrt.compile``.
 
 .. code-block:: python
 
@@ -393,12 +569,44 @@ can afford longer tuning time.
 
     strategy = HighestThroughputStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
 
+Profiling with NVTX
+-------------------
+
+NVIDIA AITune includes NVTX (NVIDIA Tools Extension) annotations for profiling and debugging. NVTX marks key operations in the code, making them visible in profiling tools like NVIDIA Nsight Systems.
+
+**Note**: NVTX annotations are disabled by default to avoid overhead in production environments.
+
+Enabling NVTX
+~~~~~~~~~~~~~
+
+To enable NVTX profiling, set the environment variable before running your script:
+
+.. code-block:: bash
+
+    export NVTX_ENABLE=1
+    python your_script.py
+
+Using with Nsight Systems
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Once enabled, you can profile your application with Nsight Systems:
+
+.. code-block:: bash
+
+    NVTX_ENABLE=1 nsys profile -o output.nsys-rep python your_script.py
+
+The NVTX annotations will appear as colored regions in the timeline, helping you identify:
+
+* Backend inference calls (TensorRT, Torch-TensorRT, TorchAO, etc.)
+* Tuning operation
+* Performance bottlenecks
+
 Examples
 --------
 
 We offer comprehensive examples that showcase the utilization of NVIDIA AITune's diverse features. These examples are designed to elucidate the processes of tuning, profiling, testing, and deployment of models.
 
-For detailed examples and step-by-step guides, please visit our `Examples Catalog <https://github.com/ai-dynamo/aitune/tree/main/examples>`_. The catalog includes practical implementations for various AI workloads including computer vision, natural language processing, speech recognition, and generative AI models.
+For detailed examples and step-by-step guides, please visit our `Examples Catalog <examples/examples.md>`_. The catalog includes practical implementations for various AI workloads including computer vision, natural language processing, speech recognition, and generative AI models.
 
 Useful Links
 ------------
@@ -407,10 +615,6 @@ Useful Links
 * `Contributing <https://github.com/ai-dynamo/aitune/blob/main/CONTRIBUTING.md>`_
 * `License <https://github.com/ai-dynamo/aitune/blob/main/LICENSE>`_
 
-Links valid after first official release:
-
-* `Documentation <https://github.com/ai-dynamo/aitune>`_
-* `GitHub Issues <https://github.com/ai-dynamo/aitune/issues>`_
 
 .. |License| image:: https://img.shields.io/badge/License-Apache%202.0-blue.svg
    :target: https://github.com/ai-dynamo/aitune/blob/main/LICENSE
