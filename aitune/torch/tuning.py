@@ -19,7 +19,7 @@ from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_gene
 from aitune.torch.module.tensor_spec import InfoLevel
 from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
-from aitune.torch.utils.cuda import synchronize as cuda_synchronize
+from aitune.torch.utils.cuda_utils import synchronize as cuda_synchronize
 from aitune.torch.utils.device import get_device
 from aitune.utils.logging import libraries_logging, setup_logging
 from aitune.utils.timer import Timer

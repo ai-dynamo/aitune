@@ -10,7 +10,7 @@ import torch
 
 from aitune.torch.jit.patcher import jit_reset
 from aitune.torch.module_registry import MODULE_REGISTRY
-from aitune.torch.utils.cuda import is_available as is_cuda_available
+from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
 from aitune.utils.logging import setup_logging
 
 

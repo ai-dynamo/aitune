@@ -4,7 +4,7 @@
 
 import pytest
 
-from aitune.torch.utils.cuda import is_available as is_cuda_available
+from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
 
 requires_cuda = pytest.mark.skipif(not is_cuda_available(), reason="CUDA is not available")
 

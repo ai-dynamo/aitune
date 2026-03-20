@@ -16,7 +16,7 @@ from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.utils.cuda import assert_is_available as assert_cuda_is_available
+from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 
 try:
     import torch_tensorrt

@@ -12,7 +12,7 @@ from aitune.torch.backend.tensorrt.tensorrt_builder import (
 )
 from aitune.torch.backend.tensorrt.tensorrt_profile import Profile
 from aitune.torch.backend.tensorrt.tensorrt_runtime import TensorRTRuntime
-from aitune.torch.utils.cuda import is_available as is_cuda_available
+from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
 from tests.toy_models import ToyOnnxModel
 
 

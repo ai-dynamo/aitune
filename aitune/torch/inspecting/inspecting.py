@@ -11,7 +11,7 @@ import torch
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, ensure_enough_samples, samples_generator
 from aitune.torch.inspecting.module_info import InspectedModulesInfo
 from aitune.torch.inspecting.module_inspector import ModuleInspector
-from aitune.torch.utils.cuda import synchronize
+from aitune.torch.utils.cuda_utils import synchronize
 from aitune.utils.logging import setup_logging
 
 logger = getLogger(__name__)

@@ -40,7 +40,7 @@ import torch
 
 from aitune.torch.config import get_bool_env_variable
 from aitune.torch.inspecting.module_info import DictOfModulesInfo, ListOfModulesInfo, ModuleInfo, ObjectOfModulesInfo
-from aitune.torch.utils.cuda import synchronize
+from aitune.torch.utils.cuda_utils import synchronize
 
 logger = getLogger(__name__)
 

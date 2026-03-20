@@ -30,7 +30,7 @@ from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationCo
 from aitune.torch.config import config as global_config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.utils.cuda import set_device as cuda_set_device
+from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
 from aitune.torch.utils.module import offload
 from aitune.utils.system_monitor import SystemMonitor
 

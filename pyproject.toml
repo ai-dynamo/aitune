@@ -40,7 +40,7 @@ dependencies = [
     "dill>=0.3.8",
     "nvidia-ml-py",
     "nvidia-modelopt[onnx]>=0.40.0",
-    "numpy<2",
+    "numpy>=2.0.0",
     "nvtx",
     "onnxscript<=0.5.4",
     "onnx-ir<=0.1.15",
