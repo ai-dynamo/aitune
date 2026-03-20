@@ -114,5 +114,5 @@ config = TorchAOBackendConfig(quantization="fp8dq")
 ## Next Steps
 
 - Learn about [TensorRT Backend](tensorrt_backend.md) for maximum performance
-- Compare with [Torch Inductor Backend](torch_inductor_backend.md)
+- Compare with [Torch Inductor JIT Backend](torch_inductor_jit_backend.md)
 - Review [Deployment Guide](../deployment/deployment.md)

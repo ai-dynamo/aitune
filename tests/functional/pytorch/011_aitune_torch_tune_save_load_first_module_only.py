@@ -18,7 +18,7 @@ from logging import INFO, basicConfig, getLogger
 import torch
 from diffusers import StableDiffusionPipeline
 
-from aitune.torch.backend import TensorRTBackend, TorchInductorBackend, TorchTensorRTAotBackend
+from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend, TorchTensorRTAotBackend
 from aitune.torch.module import Module
 from aitune.torch.tune_strategy import FirstWinsStrategy
 from aitune.torch.tuning import load, save, tune
@@ -50,7 +50,7 @@ def _tune_and_save(save_path: pathlib.Path, device: str = "cuda"):
     pipeline.text_encoder = Module(
         pipeline.text_encoder,
         "text_encoder",
-        strategy=FirstWinsStrategy(backends=[TensorRTBackend(), TorchTensorRTAotBackend(), TorchInductorBackend()]),
+        strategy=FirstWinsStrategy(backends=[TensorRTBackend(), TorchTensorRTAotBackend(), TorchInductorJitBackend()]),
     )
 
     tune(

@@ -3,18 +3,18 @@ SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All 
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Torch Inductor Backend API
+# Torch Inductor JIT Backend API
 
-## TorchInductorBackend
+## TorchInductorJitBackend
 
-::: aitune.torch.backend.TorchInductorBackend
+::: aitune.torch.backend.TorchInductorJitBackend
     options:
       show_root_heading: true
       heading_level: 3
 
-## TorchInductorBackendConfig
+## TorchInductorJitBackendConfig
 
-::: aitune.torch.backend.TorchInductorBackendConfig
+::: aitune.torch.backend.TorchInductorJitBackendConfig
     options:
       show_root_heading: true
       heading_level: 3

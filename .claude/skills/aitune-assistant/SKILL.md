@@ -105,7 +105,8 @@ Use AOT when:
 
 ### Torch Inductor Backend
 - **Best for**: PyTorch compiler-based optimization
-- **Simple**: `TorchInductorBackend()` with no config needed
+- **Jit**: Uses `torch.compile` integration
+- **AoT**: Uses `torch._inductor.aoti_compile_and_package` path
 
 ## Tuning Strategies
 

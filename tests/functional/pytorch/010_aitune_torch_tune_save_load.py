@@ -13,7 +13,7 @@ import timm
 import torch
 
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig
 from aitune.torch.backend.torch_tensorrt_jit_backend import (
     TorchTensorRTConfig,
@@ -123,7 +123,7 @@ def test_backends_serialization():
         TensorRTBackend,
         tensorrt_aot_backend,
         tensorrt_jit_backend,
-        TorchInductorBackend,
+        TorchInductorJitBackend,
     ]:
         with tempfile.TemporaryDirectory() as temp_dir:
             logger.info("Testing %s", backend_factory.__name__)

@@ -267,12 +267,12 @@ List of backends to try during tuning.
 from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchInductorBackend,
+    TorchInductorJitBackend,
 )
 
 jit_config.backends = [
     TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
-    TorchInductorBackend(),
+    TorchInductorJitBackend(),
 ]
 ```
 

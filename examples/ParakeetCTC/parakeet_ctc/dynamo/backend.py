@@ -21,7 +21,7 @@ from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeCo
 from pydantic import BaseModel, Field
 
 import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
+from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorJitBackend
 from aitune.torch.config import aitune_cache_dir
 
 from ..sample_data import ensure_sample_audio
@@ -96,7 +96,7 @@ class ParakeetCTCBatchedBackend:
         strategy = ait.FirstWinsStrategy(
             backends=[
                 TensorRTBackend(),
-                TorchInductorBackend(),
+                TorchInductorJitBackend(),
                 TorchEagerBackend(),
             ]
         ).enable_find_max_batch_size(enable=False)

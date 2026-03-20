@@ -116,7 +116,7 @@ Tries backends in priority order and returns the first one that succeeds. If a b
 ```python
 from aitune.torch.tune_strategy import FirstWinsStrategy
 
-strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend()])
+strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend()])
 ```
 
 ## OneBackendStrategy
@@ -136,5 +136,5 @@ Profiles all compatible backends and selects the fastest. Use this when maximum 
 ```python
 from aitune.torch.tune_strategy import HighestThroughputStrategy
 
-strategy = HighestThroughputStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
+strategy = HighestThroughputStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend(), TorchEagerBackend()])
 ```

@@ -10,7 +10,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 from aitune.torch import Module, OneBackendStrategy
 from aitune.torch import tune as aitune
-from aitune.torch.backend import TorchEagerBackend, TorchInductorBackend, TorchInductorBackendConfig
+from aitune.torch.backend import TorchEagerBackend, TorchInductorJitBackend, TorchInductorJitBackendConfig
 from llm.cmd_args import get_tune_parser
 
 
@@ -70,7 +70,7 @@ def tune_model(model, tokenizer, cache="static"):
             strategies=[
                 OneBackendStrategy(TorchEagerBackend()).enable_find_max_batch_size(False),  # for prefill phase
                 OneBackendStrategy(
-                    TorchInductorBackend(TorchInductorBackendConfig(mode="reduce-overhead"))
+                    TorchInductorJitBackend(TorchInductorJitBackendConfig(mode="reduce-overhead"))
                 ).enable_find_max_batch_size(False),  # for decode phase
             ],
         )

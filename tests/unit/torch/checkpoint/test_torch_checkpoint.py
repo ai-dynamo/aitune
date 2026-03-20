@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
 from aitune.torch.module.wrapper_module import Module
@@ -86,7 +86,7 @@ def _tune_save_load_helper(model_factory, samples, output_dir, wrap_model_fn, ch
 @pytest.mark.parametrize(
     "backend",
     [
-        pytest.param(TorchInductorBackend(), id="torch_inductor"),
+        pytest.param(TorchInductorJitBackend(), id="torch_inductor"),
         pytest.param(TensorRTBackend(), id="tensorrt"),
     ],
 )  # make one test at least for jit and aot backend
@@ -104,7 +104,7 @@ def test_tune_save_load_whole_model_with_device_map(model_factory, sample, torch
     """Test tuning, saving and loading a whole model wrapped in a single Module."""
 
     def wrap_whole_model(model):
-        return Module(model, "demo-simple", strategy=OneBackendStrategy(TorchInductorBackend()))
+        return Module(model, "demo-simple", strategy=OneBackendStrategy(TorchInductorJitBackend()))
 
     _tune_save_load_helper(
         model_factory,
@@ -121,7 +121,7 @@ def test_tune_save_load_whole_model_with_invalid_device_map(model_factory, sampl
     """Test tuning, saving and loading a whole model wrapped in a single Module."""
 
     def wrap_whole_model(model):
-        return Module(model, "demo-simple", strategy=OneBackendStrategy(TorchInductorBackend()))
+        return Module(model, "demo-simple", strategy=OneBackendStrategy(TorchInductorJitBackend()))
 
     with pytest.raises(ValueError, match="Some modules in the device_map were not found: .*"):
         _tune_save_load_helper(
@@ -139,8 +139,8 @@ def test_tune_save_load_part_of_model(model_factory, sample, checkpoint):
     """Test tuning, saving and loading a model with individual layers wrapped in Modules."""
 
     def wrap_partial_model(model):
-        model.linear1 = Module(model.linear1, "demo-simple1", strategy=OneBackendStrategy(TorchInductorBackend()))
-        model.linear2 = Module(model.linear2, "demo-simple2", strategy=OneBackendStrategy(TorchInductorBackend()))
+        model.linear1 = Module(model.linear1, "demo-simple1", strategy=OneBackendStrategy(TorchInductorJitBackend()))
+        model.linear2 = Module(model.linear2, "demo-simple2", strategy=OneBackendStrategy(TorchInductorJitBackend()))
         return model
 
     _tune_save_load_helper(model_factory, sample, "partial_model_test.ait", wrap_partial_model, checkpoint)
@@ -151,8 +151,8 @@ def test_tune_save_load_part_of_model_with_full_device_map(model_factory, sample
     """Test tuning, saving and loading a model with individual layers wrapped in Modules."""
 
     def wrap_partial_model(model):
-        model.linear1 = Module(model.linear1, "demo-simple1", strategy=OneBackendStrategy(TorchInductorBackend()))
-        model.linear2 = Module(model.linear2, "demo-simple2", strategy=OneBackendStrategy(TorchInductorBackend()))
+        model.linear1 = Module(model.linear1, "demo-simple1", strategy=OneBackendStrategy(TorchInductorJitBackend()))
+        model.linear2 = Module(model.linear2, "demo-simple2", strategy=OneBackendStrategy(TorchInductorJitBackend()))
         return model
 
     _tune_save_load_helper(
@@ -170,8 +170,8 @@ def test_tune_save_load_part_of_model_with_partial_device_map(model_factory, sam
     """Test tuning, saving and loading a model with individual layers wrapped in Modules."""
 
     def wrap_partial_model(model):
-        model.linear1 = Module(model.linear1, "demo-simple1", strategy=OneBackendStrategy(TorchInductorBackend()))
-        model.linear2 = Module(model.linear2, "demo-simple2", strategy=OneBackendStrategy(TorchInductorBackend()))
+        model.linear1 = Module(model.linear1, "demo-simple1", strategy=OneBackendStrategy(TorchInductorJitBackend()))
+        model.linear2 = Module(model.linear2, "demo-simple2", strategy=OneBackendStrategy(TorchInductorJitBackend()))
         return model
 
     _tune_save_load_helper(
@@ -189,8 +189,8 @@ def test_tune_save_load_part_of_model_with_invalid_device_map(model_factory, sam
     """Test tuning, saving and loading a model with individual layers wrapped in Modules."""
 
     def wrap_partial_model(model):
-        model.linear1 = Module(model.linear1, "demo-simple1", strategy=OneBackendStrategy(TorchInductorBackend()))
-        model.linear2 = Module(model.linear2, "demo-simple2", strategy=OneBackendStrategy(TorchInductorBackend()))
+        model.linear1 = Module(model.linear1, "demo-simple1", strategy=OneBackendStrategy(TorchInductorJitBackend()))
+        model.linear2 = Module(model.linear2, "demo-simple2", strategy=OneBackendStrategy(TorchInductorJitBackend()))
         return model
 
     with pytest.raises(ValueError, match="Some modules in the device_map were not found: .*"):
@@ -209,8 +209,12 @@ def test_tune_save_load_pipeline(pipeline_factory, sample, checkpoint):
     """Test tuning, saving and loading a pipeline."""
 
     def wrap_pipeline(pipeline):
-        pipeline.linear1 = Module(pipeline.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorBackend()))
-        pipeline.linear2 = Module(pipeline.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorBackend()))
+        pipeline.linear1 = Module(
+            pipeline.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorJitBackend())
+        )
+        pipeline.linear2 = Module(
+            pipeline.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorJitBackend())
+        )
         return pipeline
 
     _tune_save_load_helper(pipeline_factory, sample, "pipeline_test.ait", wrap_pipeline, checkpoint)
@@ -221,8 +225,12 @@ def test_tune_save_load_pipeline_with_full_device_map(pipeline_factory, sample, 
     """Test tuning, saving and loading a pipeline."""
 
     def wrap_pipeline(pipeline):
-        pipeline.linear1 = Module(pipeline.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorBackend()))
-        pipeline.linear2 = Module(pipeline.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorBackend()))
+        pipeline.linear1 = Module(
+            pipeline.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorJitBackend())
+        )
+        pipeline.linear2 = Module(
+            pipeline.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorJitBackend())
+        )
         return pipeline
 
     _tune_save_load_helper(
@@ -240,8 +248,12 @@ def test_tune_save_load_pipeline_with_partial_device_map(pipeline_factory, sampl
     """Test tuning, saving and loading a pipeline."""
 
     def wrap_pipeline(pipeline):
-        pipeline.linear1 = Module(pipeline.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorBackend()))
-        pipeline.linear2 = Module(pipeline.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorBackend()))
+        pipeline.linear1 = Module(
+            pipeline.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorJitBackend())
+        )
+        pipeline.linear2 = Module(
+            pipeline.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorJitBackend())
+        )
         return pipeline
 
     _tune_save_load_helper(
@@ -259,8 +271,12 @@ def test_tune_save_load_pipeline_with_invalid_device_map(pipeline_factory, sampl
     """Test tuning, saving and loading a pipeline."""
 
     def wrap_pipeline(pipeline):
-        pipeline.linear1 = Module(pipeline.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorBackend()))
-        pipeline.linear2 = Module(pipeline.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorBackend()))
+        pipeline.linear1 = Module(
+            pipeline.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorJitBackend())
+        )
+        pipeline.linear2 = Module(
+            pipeline.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorJitBackend())
+        )
         return pipeline
 
     with pytest.raises(ValueError, match="Some modules in the device_map were not found: .*"):
@@ -283,10 +299,10 @@ def test_tune_save_load_complex_pipeline(complex_pipeline_factory, sample, torch
         expected = pipeline(test_data)
 
     pipeline.net.linear1 = Module(
-        pipeline.net.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorBackend())
+        pipeline.net.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorJitBackend())
     )
     pipeline.net.linear2 = Module(
-        pipeline.net.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorBackend())
+        pipeline.net.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorJitBackend())
     )
 
     tune(pipeline, sample, batch_sizes=[1, 2], dry_run=False, disable_external_logging=False)
@@ -313,10 +329,10 @@ def test_tune_save_load_complex_pipeline_with_device_map(complex_pipeline_factor
         expected = pipeline(test_data)
 
     pipeline.net.linear1 = Module(
-        pipeline.net.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorBackend())
+        pipeline.net.linear1, "demo-simple3", strategy=OneBackendStrategy(TorchInductorJitBackend())
     )
     pipeline.net.linear2 = Module(
-        pipeline.net.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorBackend())
+        pipeline.net.linear2, "demo-simple4", strategy=OneBackendStrategy(TorchInductorJitBackend())
     )
 
     tune(pipeline, sample, batch_sizes=[1, 2], dry_run=False, disable_external_logging=False)

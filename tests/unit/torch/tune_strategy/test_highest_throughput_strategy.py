@@ -10,7 +10,7 @@ import pytest
 from aitune.torch import Module
 from aitune.torch.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.module.wrapper_module import ModuleState, get_object_name
 from aitune.torch.task.correctness import CorrectnessValueError
 from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, StableWindowMeasuringStopStrategy
@@ -106,7 +106,7 @@ def test_highest_throughput_strategy_num_steps_all_samples(torch_device):
 
     strategy = HighestThroughputStrategy(
         backends=[
-            TorchInductorBackend(),
+            TorchInductorJitBackend(),
             TorchEagerBackend(),
         ],
         measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=10),
@@ -150,7 +150,7 @@ def test_highest_throughput_strategy_num_steps_all_samples(torch_device):
 def test_highest_throughput_strategy_stable_window(torch_device):
     strategy = HighestThroughputStrategy(
         backends=[
-            TorchInductorBackend(),
+            TorchInductorJitBackend(),
         ],
         measurement_stop_strategy=StableWindowMeasuringStopStrategy(window_size=10, stability_percentage=90),
         profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(throughput_cutoff_threshold=0.99),

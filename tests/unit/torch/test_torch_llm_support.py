@@ -10,7 +10,7 @@ import pytest
 import torch
 
 from aitune.torch import Module, OneBackendStrategy
-from aitune.torch.backend import TorchInductorBackend
+from aitune.torch.backend import TorchInductorJitBackend
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.wrapper_module import ModuleState
 
@@ -261,7 +261,7 @@ def test_llm_dynamic_cache(cache_type, registered_type, torch_device):
     else:
         assert len(model.graph_specs) == 1, "Expected 1 graph due to ignored kv cache type"
 
-    model.tune(device=torch_device, strategy=OneBackendStrategy(TorchInductorBackend()), dry_run=False)
+    model.tune(device=torch_device, strategy=OneBackendStrategy(TorchInductorJitBackend()), dry_run=False)
     assert model.state == ModuleState.TUNED, "Model should be in tuned state after tuning"
 
     tuned_result, kv_cache = model.generate(prompt_token_ids, cache_type(), max_seq_len=MAX_SEQ_LEN)

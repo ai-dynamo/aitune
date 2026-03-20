@@ -5,7 +5,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend import TensorRTBackend, TorchInductorBackend
+from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend
 from aitune.torch.inspecting.module_info import ModuleInfo
 from aitune.torch.inspecting.module_inspector import DictOfModulesInfo, ListOfModulesInfo
 from aitune.torch.inspecting.wrapping import wrap
@@ -99,7 +99,7 @@ def test_wrap_multiple_modules(nested_model):
 
 def test_wrap_with_strategy(simple_model):
     """Test wrapping with a strategy."""
-    strategy = FirstWinsStrategy(backends=[TorchInductorBackend(), TensorRTBackend()])
+    strategy = FirstWinsStrategy(backends=[TorchInductorJitBackend(), TensorRTBackend()])
 
     # When wrapping with a strategy
     wrapped_model = wrap(
@@ -120,8 +120,8 @@ def test_wrap_with_strategy(simple_model):
 def test_wrap_with_strategies_list(simple_model):
     """Test wrapping with a strategy."""
     strategies = [
-        FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend()]),
-        OneBackendStrategy(backend=TorchInductorBackend()),
+        FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend()]),
+        OneBackendStrategy(backend=TorchInductorJitBackend()),
     ]
 
     # When wrapping with a strategy
@@ -147,8 +147,8 @@ def test_wrap_with_strategies_map(simple_model):
     sample_metadata2 = SampleMetadata.from_inputs(args=samples[0], kwargs={})
 
     strategies = {
-        sample_metadata1: FirstWinsStrategy(backends=[TorchInductorBackend(), TensorRTBackend()]),
-        sample_metadata2: OneBackendStrategy(backend=TorchInductorBackend()),
+        sample_metadata1: FirstWinsStrategy(backends=[TorchInductorJitBackend(), TensorRTBackend()]),
+        sample_metadata2: OneBackendStrategy(backend=TorchInductorJitBackend()),
     }
 
     # When wrapping with a strategy
@@ -214,7 +214,7 @@ def test_wrap_custom_object():
     custom_obj = CustomObject()
     parent = ModuleInfo(module=custom_obj)
 
-    strategy = FirstWinsStrategy(backends=[TorchInductorBackend(), TensorRTBackend()])
+    strategy = FirstWinsStrategy(backends=[TorchInductorJitBackend(), TensorRTBackend()])
 
     module_info = [ModuleInfo(name="model", module=custom_obj.model, parent=parent)]
 
@@ -247,7 +247,7 @@ def test_wrap_custom_object_nested():
     custom_obj = CustomObject()
     parent = ModuleInfo(module=custom_obj)
 
-    strategy = FirstWinsStrategy(backends=[TorchInductorBackend(), TensorRTBackend()])
+    strategy = FirstWinsStrategy(backends=[TorchInductorJitBackend(), TensorRTBackend()])
 
     module_info = [ModuleInfo(name="layer", module=custom_obj.layer, parent=parent)]
 
@@ -274,7 +274,7 @@ def test_wrap_custom_object_multiple_modules():
     custom_obj = CustomObject()
     parent = ModuleInfo(module=custom_obj)
 
-    strategy = FirstWinsStrategy(backends=[TorchInductorBackend(), TensorRTBackend()])
+    strategy = FirstWinsStrategy(backends=[TorchInductorJitBackend(), TensorRTBackend()])
 
     module_info = [
         ModuleInfo(name="model1", module=custom_obj.model1, parent=parent),
@@ -302,7 +302,7 @@ def test_wrap_custom_object_without_modules():
 
     custom_obj = CustomObject()
 
-    strategy = FirstWinsStrategy(backends=[TorchInductorBackend(), TensorRTBackend()])
+    strategy = FirstWinsStrategy(backends=[TorchInductorJitBackend(), TensorRTBackend()])
 
     # When wrapping custom object without modules
     wrapped_obj = wrap(custom_obj, [], strategy=strategy)
@@ -328,7 +328,7 @@ def test_wrap_custom_object_with_attributes():
     custom_obj = CustomObject()
     parent = ModuleInfo(module=custom_obj)
 
-    strategy = FirstWinsStrategy(backends=[TorchInductorBackend(), TensorRTBackend()])
+    strategy = FirstWinsStrategy(backends=[TorchInductorJitBackend(), TensorRTBackend()])
 
     module_info = [ModuleInfo(name="model", module=custom_obj.model, parent=parent)]
 

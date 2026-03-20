@@ -6,7 +6,7 @@ import os
 from logging import basicConfig, getLogger
 
 from aitune.torch import FirstWinsStrategy, inspect, save, tune, wrap
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorBackend
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorJitBackend
 from stable_diffusion.cmd_args import parse_args
 from stable_diffusion.model import get_pipeline
 
@@ -38,7 +38,7 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
             backends=[
                 TensorRTBackend(),
                 TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-                TorchInductorBackend(),
+                TorchInductorJitBackend(),
                 TorchEagerBackend(),
             ]
         )

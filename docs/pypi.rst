@@ -519,9 +519,9 @@ Torch Inductor backend uses PyTorch's Inductor compiler for model tuning.
 
 .. code-block:: python
 
-    from aitune.torch.backend import TorchInductorBackend
+    from aitune.torch.backend import TorchInductorJitBackend
 
-    backend = TorchInductorBackend()
+    backend = TorchInductorJitBackend()
 
 Tune Strategies
 ---------------
@@ -542,7 +542,7 @@ moves on to the next candidate instead of aborting.
 
     from aitune.torch.tune_strategy import FirstWinsStrategy
 
-    strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorBackend()])
+    strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend()])
 
 OneBackendStrategy
 ~~~~~~~~~~~~~~~~~~
@@ -567,7 +567,7 @@ can afford longer tuning time.
 
     from aitune.torch.tune_strategy import HighestThroughputStrategy
 
-    strategy = HighestThroughputStrategy(backends=[TensorRTBackend(), TorchInductorBackend(), TorchEagerBackend()])
+    strategy = HighestThroughputStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend(), TorchEagerBackend()])
 
 Profiling with NVTX
 -------------------

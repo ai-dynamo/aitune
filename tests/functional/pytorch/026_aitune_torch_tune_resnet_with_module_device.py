@@ -13,7 +13,7 @@ from logging import basicConfig
 import timm
 import torch
 
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 
@@ -49,7 +49,7 @@ def test_resnet50():
     assert len(module.graph_specs) == 1
 
     # then - verify tuning
-    strategy = OneBackendStrategy(TorchInductorBackend())
+    strategy = OneBackendStrategy(TorchInductorJitBackend())
     module.tune(device=None, strategy=strategy, dry_run=False)
     actual_arg_max = module(data)
     torch.testing.assert_close(actual_arg_max, expected_arg_max, rtol=1e-4, atol=1e-5)

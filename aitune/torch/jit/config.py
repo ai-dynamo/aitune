@@ -10,7 +10,7 @@ import torch
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTBackendConfig
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import DEFAULT_DEVICE
 from aitune.torch.utils.device import get_device
 
@@ -40,7 +40,7 @@ class Config:
         default_factory=lambda: [
             TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
             TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorBackend(),
+            TorchInductorJitBackend(),
         ]
     )  # backends to use for JIT tuning
 

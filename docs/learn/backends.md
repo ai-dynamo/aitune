@@ -71,7 +71,7 @@ backend = TorchAOBackend()
 The Torch Inductor backend uses PyTorch's Inductor compiler for model tuning.
 
 ```python
-from aitune.torch.backend import TorchInductorBackend
+from aitune.torch.backend import TorchInductorJitBackend
 
-backend = TorchInductorBackend()
+backend = TorchInductorJitBackend()
 ```

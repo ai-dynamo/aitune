@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from aitune.torch.backend.backend import Backend
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import AITuneConfig
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
@@ -67,8 +67,8 @@ def test_serialization():
     kwargs = {}
     graph1 = SampleMetadata.from_inputs((1,), kwargs, strict=True)
     graph2 = SampleMetadata.from_inputs((torch.randn(2),), kwargs, strict=True)
-    backend1 = TorchInductorBackend()
-    backend2 = TorchInductorBackend()
+    backend1 = TorchInductorJitBackend()
+    backend2 = TorchInductorJitBackend()
     backend1._orig_module = Mock(spec=torch.nn.Module)
     backend2._orig_module = Mock(spec=torch.nn.Module)
     backends = OrderedDict({graph1: backend1, graph2: backend2})

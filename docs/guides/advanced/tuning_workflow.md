@@ -159,7 +159,7 @@ Tries backends in priority order and returns the first one that builds and valid
 ```python
 strategy = ait.FirstWinsStrategy([
     ait.backend.TensorRTBackend(),
-    ait.backend.TorchInductorBackend(),
+    ait.backend.TorchInductorJitBackend(),
 ])
 ```
 
@@ -178,7 +178,7 @@ strategy = ait.FirstWinsStrategy([
 Uses exactly one backend, failing immediately with the original error if it cannot build. Unlike `FirstWinsStrategy` with a single backend, `OneBackendStrategy` surfaces the original exception rather than catching it.
 
 ```python
-strategy = ait.OneBackendStrategy(ait.backend.TorchInductorBackend())
+strategy = ait.OneBackendStrategy(ait.backend.TorchInductorJitBackend())
 ```
 
 **Workflow**:
@@ -196,7 +196,7 @@ Before actual tuning, this strategy tries to estimate `max_batch_size`. It does 
 ```python
 strategy = ait.HighestThroughputStrategy([
     ait.backend.TensorRTBackend(),
-    ait.backend.TorchInductorBackend(),
+    ait.backend.TorchInductorJitBackend(),
     ait.backend.TorchEagerBackend(),
 ])
 ```
@@ -361,7 +361,7 @@ Next, you can see the Highest Throughput Strategy builds backends one by one:
 2026-02-04 13:32:38,343 - INFO -       TensorRTBackend(quantization_config=ONNXAutoCastConfig(precision='fp16', keep_io_types=True))
 2026-02-04 13:32:38,343 - INFO -       TensorRTBackend(use_dynamo=False,quantization_config=ONNXAutoCastConfig(precision='fp16', keep_io_types=True))
 2026-02-04 13:32:38,343 - INFO -       TorchAOBackend(quantization_config=Int8WeightOnlyConfig())
-2026-02-04 13:32:38,343 - INFO -       TorchInductorBackend(autocast_enabled=True,autocast_dtype=torch.float16)
+2026-02-04 13:32:38,343 - INFO -       TorchInductorJitBackend(autocast_enabled=True,autocast_dtype=torch.float16)
 2026-02-04 13:32:38,343 - INFO -       TorchEagerBackend()
 2026-02-04 13:32:38,343 - INFO - ⏳ Executing strategy `HighestThroughputStrategy` on module `example-resnet50` (graph: 0)
 2026-02-04 13:32:38,343 - INFO - 🤖 backend: TensorRTBackend(quantization_config=ONNXQuantizationConfig(precision='int8', calibration_method='max', use_model_opt_post_processing=False))
@@ -397,7 +397,7 @@ Next, you can see the Highest Throughput Strategy builds backends one by one:
 2026-02-04 13:34:10,986 - INFO -     ✅ backend profiled - throughput: 23666.16 samples/s, batch size: 4
 2026-02-04 13:34:10,986 - INFO -     🎯 new best throughput for TorchAOBackend(quantization_config=Int8WeightOnlyConfig()) is 23666.16 samples/s, batch size: 4
 2026-02-04 13:34:10,995 - INFO -     ⏱️ completed in 15.83s
-2026-02-04 13:34:10,995 - INFO - 🤖 backend: TorchInductorBackend(autocast_enabled=True,autocast_dtype=torch.float16)
+2026-02-04 13:34:10,995 - INFO - 🤖 backend: TorchInductorJitBackend(autocast_enabled=True,autocast_dtype=torch.float16)
 2026-02-04 13:34:10,996 - INFO -     🔄 in progress...please wait
 2026-02-04 13:34:24,011 - INFO -     ✅ backend built
 2026-02-04 13:34:24,013 - INFO -     ✅ backend validated

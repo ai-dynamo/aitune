@@ -11,7 +11,7 @@ import pytest
 import torch
 
 from aitune.torch.backend.torch_eager import TorchEagerBackend
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
 from aitune.torch.module.graph_spec import GraphSpec
@@ -276,7 +276,7 @@ def test_tune_with_torch_compile_backend_direct_call(module, torch_device):
     module(torch.tensor(1))
     assert len(module.graph_specs) == 1
 
-    strategy = OneBackendStrategy(backend=TorchInductorBackend())
+    strategy = OneBackendStrategy(backend=TorchInductorJitBackend())
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
     assert module.state == ModuleState.TUNED
 
@@ -291,7 +291,7 @@ def test_tune_with_torch_compile_backend_simulate_redirection(module, torch_devi
     module.simulate_redirection(torch.tensor(1))
     assert len(module.graph_specs) == 1
 
-    strategy = OneBackendStrategy(backend=TorchInductorBackend())
+    strategy = OneBackendStrategy(backend=TorchInductorJitBackend())
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
     assert module.state == ModuleState.TUNED
 
@@ -306,7 +306,7 @@ def test_tune_with_torch_compile_backend_simulate_prefill_decode(module, torch_d
     module.simulate_prefill_decode(torch.tensor(1))
     assert len(module.graph_specs) == 2
 
-    strategy = OneBackendStrategy(backend=TorchInductorBackend()).enable_find_max_batch_size(False)
+    strategy = OneBackendStrategy(backend=TorchInductorJitBackend()).enable_find_max_batch_size(False)
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
     assert module.state == ModuleState.TUNED
 
@@ -324,7 +324,7 @@ def test_serialization(torch_device):
 
     # Record samples and tune the module
     module(torch.tensor(1))
-    strategy = OneBackendStrategy(backend=TorchInductorBackend())
+    strategy = OneBackendStrategy(backend=TorchInductorJitBackend())
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
     assert module.state == ModuleState.TUNED
 

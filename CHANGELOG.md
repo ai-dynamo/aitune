@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 0.4.0 (unreleased)
 - feat: Torch Inductor Ahead-of-Time (AoT) backend support added
+- chore: Renamed TorchInductorBackend to TorchInductorJitBackend - breaking change
 
 ## 0.3.0
 - feat: JIT tuning requires single sample only - tune on first model call

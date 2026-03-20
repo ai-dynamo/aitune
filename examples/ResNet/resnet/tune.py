@@ -17,8 +17,8 @@ from aitune.torch.backend import (
     TorchAOBackend,
     TorchAOBackendConfig,
     TorchEagerBackend,
-    TorchInductorBackend,
-    TorchInductorBackendConfig,
+    TorchInductorJitBackend,
+    TorchInductorJitBackendConfig,
 )
 from resnet.cmd_args import get_parser
 from resnet.model import get_model, get_transform
@@ -81,8 +81,8 @@ def tune_model(
                 ),
                 # Gives 3x TRT throughput but after load if fails
                 TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo")),
-                TorchInductorBackend(
-                    config=TorchInductorBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)
+                TorchInductorJitBackend(
+                    config=TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)
                 ),
                 TorchEagerBackend(),
             ]

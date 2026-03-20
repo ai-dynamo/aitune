@@ -217,7 +217,7 @@ backend = TensorRTBackend(config)
 See backend-specific documentation:
 
 - [TensorRT Backend](backends/tensorrt_backend.md)
-- [Torch-Inductor Backend](backends/torch_inductor_backend.md)
+- [Torch-Inductor JIT Backend](backends/torch_inductor_jit_backend.md)
 - [TorchAO Backend](backends/torchao_backend.md)
 - [Torch TensorRT AOT Backend](backends/torch_tensorrt_aot_backend.md)
 - [Torch TensorRT JIT Backend](backends/torch_tensorrt_jit_backend.md)
@@ -285,7 +285,7 @@ Other:
 2026-01-26 16:23:44,371 - INFO -     description: evaluate backends in order, return first working backend
 2026-01-26 16:23:44,371 - INFO -     backends:
 2026-01-26 16:23:44,371 - INFO -       TensorRTBackend(quantization_config=None)
-2026-01-26 16:23:44,371 - INFO -       TorchInductorBackend()
+2026-01-26 16:23:44,371 - INFO -       TorchInductorJitBackend()
 2026-01-26 16:23:44,372 - INFO -       TorchEagerBackend()
 2026-01-26 16:23:44,372 - INFO - ✅ Tuning module: `transformer` (all graphs) completed.
 ```

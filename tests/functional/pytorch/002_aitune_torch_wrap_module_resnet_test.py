@@ -15,7 +15,7 @@ import timm
 import torch
 
 from aitune.torch import Module, OneBackendStrategy
-from aitune.torch.backend import TorchInductorBackend
+from aitune.torch.backend import TorchInductorJitBackend
 
 
 def test_resnet50():
@@ -39,7 +39,7 @@ def test_resnet50():
     assert len(module.graph_specs) == 1
 
     # then - verify tuning
-    strategy = OneBackendStrategy(TorchInductorBackend())
+    strategy = OneBackendStrategy(TorchInductorJitBackend())
     module.tune(device=device, strategy=strategy, dry_run=False)
     out = module(data)
     actual_probs = torch.nn.functional.softmax(out[0], dim=0)

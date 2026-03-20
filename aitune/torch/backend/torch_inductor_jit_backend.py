@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Torch Inductor backend."""
+"""Torch Inductor JIT backend."""
 
 import gc
 from copy import deepcopy
@@ -21,7 +21,7 @@ logger = getLogger(__name__)
 
 
 @dataclass
-class TorchInductorBackendConfig(BackendConfig):
+class TorchInductorJitBackendConfig(BackendConfig):
     """Configuration for torch.compile with inductor backend.
 
     Args:
@@ -83,11 +83,11 @@ class TorchInductorBackendConfig(BackendConfig):
 
     @classmethod
     def from_dict(cls, state_dict: dict):
-        """Convert dict to TorchInductorBackendConfig."""
+        """Convert dict to TorchInductorJitBackendConfig."""
         return cls(**state_dict)
 
 
-class TorchInductorBackend(Backend):
+class TorchInductorJitBackend(Backend):
     """Backend that does torch compilation with Inductor."""
 
     is_jit = True
@@ -102,7 +102,7 @@ class TorchInductorBackend(Backend):
 
     def __init__(
         self,
-        config: TorchInductorBackendConfig | None = None,
+        config: TorchInductorJitBackendConfig | None = None,
     ):
         """Initializes backend.
 
@@ -112,7 +112,7 @@ class TorchInductorBackend(Backend):
         super().__init__()
 
         # initialize variables
-        self._config = config or TorchInductorBackendConfig()
+        self._config = config or TorchInductorJitBackendConfig()
 
         # build variables
         self._compiled_module = None
@@ -185,7 +185,7 @@ class TorchInductorBackend(Backend):
         if self._compiled_module is None:  # TBD pb: after introducing module states this should be changed
             self._compile()
 
-    @nvtx.annotate(message="TorchInductorBackend.infer", domain="AITune", color="lightblue")
+    @nvtx.annotate(message="TorchInductorJitBackend.infer", domain="AITune", color="lightblue")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Runs inference with the given arguments.
 
@@ -250,7 +250,7 @@ class TorchInductorBackend(Backend):
         if module is None:
             raise ValueError("Module is required to create a backend from a state_dict.")
 
-        config = TorchInductorBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
+        config = TorchInductorJitBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend = cls(config=config)
         backend._output_dtype = state_dict[cls.STATE_OUTPUT_DTYPE]

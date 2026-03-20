@@ -86,14 +86,14 @@ Tries backends in priority order and returns the first one that successfully bui
 from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchInductorBackend,
+    TorchInductorJitBackend,
 )
 import aitune.torch as ait
 
 # List backends in priority order (fastest → most compatible)
 backends = [
     TensorRTBackend(config=TensorRTBackendConfig()),  # Best performance, but may not support all models
-    TorchInductorBackend(),                            # Good performance, broader compatibility
+    TorchInductorJitBackend(),                            # Good performance, broader compatibility
 ]
 
 # Create strategy
@@ -142,8 +142,8 @@ Tries all backends, profiles their performance, and selects the fastest.
 from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchInductorBackendConfig,
-    TorchInductorBackend,
+    TorchInductorJitBackendConfig,
+    TorchInductorJitBackend,
     TorchAOBackend,
     TorchAOBackendConfig
 )
@@ -152,7 +152,7 @@ import aitune.torch as ait
 # List all candidate backends
 backends = [
     TensorRTBackend(config=TensorRTBackendConfig()),
-    TorchInductorBackend(config=TorchInductorBackendConfig(mode="max-autotune")),
+    TorchInductorJitBackend(config=TorchInductorJitBackendConfig(mode="max-autotune")),
     TorchAOBackend(config=TorchAOBackendConfig(quantization="fp8wo")),
 ]
 
@@ -201,6 +201,6 @@ ait.tune(model, input_data)
 
 ## Next Steps
 
-- Learn about specific backends: [TensorRT](../backends/tensorrt_backend.md), [Torch-TensorRT](../backends/torch_tensorrt_jit_backend.md), [TorchAO](../backends/torchao_backend.md), [Inductor](../backends/torch_inductor_backend.md)
+- Learn about specific backends: [TensorRT](../backends/tensorrt_backend.md), [Torch-TensorRT](../backends/torch_tensorrt_jit_backend.md), [TorchAO](../backends/torchao_backend.md), [Inductor](../backends/torch_inductor_jit_backend.md)
 - Explore [Deployment Guide](../deployment/deployment.md)
 - Review [AOT Tuning](../aot_tuning.md) for strategy usage

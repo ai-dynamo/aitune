@@ -14,8 +14,8 @@ from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
     TorchEagerBackend,
-    TorchInductorBackend,
-    TorchInductorBackendConfig,
+    TorchInductorJitBackend,
+    TorchInductorJitBackendConfig,
 )
 from parakeet_rnnt.cmd_args import parse_args
 from parakeet_rnnt.model import get_model
@@ -48,7 +48,7 @@ def tune_model(
         backends=[
             TensorRTBackend(),
             TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorBackend(TorchInductorBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)),
+            TorchInductorJitBackend(TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)),
             TorchEagerBackend(),
         ]
     ).enable_find_max_batch_size(False)

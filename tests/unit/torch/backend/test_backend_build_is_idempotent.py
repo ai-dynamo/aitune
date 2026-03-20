@@ -8,7 +8,7 @@ import torch.nn as nn
 
 from aitune.torch.backend import (
     TorchEagerBackend,
-    TorchInductorBackend,
+    TorchInductorJitBackend,
     TorchTensorRTJitBackend,
 )
 from aitune.torch.backend.backend import Backend
@@ -51,7 +51,7 @@ def build_backend(backend: Backend, torch_device: torch.device, tmp_path: Path):
     [
         TorchEagerBackend,
         TorchAOBackend,
-        TorchInductorBackend,
+        TorchInductorJitBackend,
         TorchTensorRTJitBackend,
         # TensorRTBackend, - not supported yet
         # TorchTensorRTAotBackend,- not supported yet

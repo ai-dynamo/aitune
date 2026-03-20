@@ -12,7 +12,7 @@ from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
     TorchEagerBackend,
-    TorchInductorBackend,
+    TorchInductorJitBackend,
     TorchQuantizationConfig,
 )
 from flux.cmd_args import parse_args
@@ -67,7 +67,7 @@ def tune_model(
                 ),
                 # TensorRTBackend(TensorRTBackendConfig(use_dynamo=True)),
                 TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
-                TorchInductorBackend(),
+                TorchInductorJitBackend(),
                 TorchEagerBackend(),
             ]
         )

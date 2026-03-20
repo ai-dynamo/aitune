@@ -3,9 +3,9 @@ SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All 
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Torch Inductor Backend Guide
+# Torch Inductor JIT Backend Guide
 
-The Torch Inductor backend uses PyTorch's built-in compiler (`torch.compile` with `backend="inductor"`) for model tuning. It provides automatic kernel fusion and optimization without external dependencies.
+The Torch Inductor JIT backend uses PyTorch's built-in compiler (`torch.compile` with `backend="inductor"`) for model tuning. It provides automatic kernel fusion and optimization without external dependencies.
 
 ## Overview
 
@@ -18,13 +18,13 @@ The Torch Inductor backend uses PyTorch's built-in compiler (`torch.compile` wit
 ## Quick Start
 
 ```python
-from aitune.torch.backend import TorchInductorBackend, TorchInductorBackendConfig
+from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 import aitune.torch as ait
 import torch
 
 # Configure backend
-config = TorchInductorBackendConfig(mode="max-autotune")
-backend = TorchInductorBackend(config)
+config = TorchInductorJitBackendConfig(mode="max-autotune")
+backend = TorchInductorJitBackend(config)
 
 # Use in tuning
 from aitune.torch.tune_strategy import OneBackendStrategy
@@ -36,11 +36,11 @@ ait.tune(model, input_data)
 
 ## Configuration Options
 
-### TorchInductorBackendConfig
+### TorchInductorJitBackendConfig
 
 ```python
 @dataclass
-class TorchInductorBackendConfig(BackendConfig):
+class TorchInductorJitBackendConfig(BackendConfig):
     fullgraph: bool = False
     dynamic: bool | None = None
     mode: str | None = None
@@ -55,16 +55,16 @@ Predefined optimization modes:
 
 ```python
 # Default mode (balanced)
-config = TorchInductorBackendConfig(mode="default")
+config = TorchInductorJitBackendConfig(mode="default")
 
 # Reduce Python overhead with CUDA graphs
-config = TorchInductorBackendConfig(mode="reduce-overhead")
+config = TorchInductorJitBackendConfig(mode="reduce-overhead")
 
 # Maximum auto-tuning
-config = TorchInductorBackendConfig(mode="max-autotune")
+config = TorchInductorJitBackendConfig(mode="max-autotune")
 
 # Max autotune without CUDA graphs
-config = TorchInductorBackendConfig(mode="max-autotune-no-cudagraphs")
+config = TorchInductorJitBackendConfig(mode="max-autotune-no-cudagraphs")
 ```
 
 **Mode Details**:
@@ -79,7 +79,7 @@ config = TorchInductorBackendConfig(mode="max-autotune-no-cudagraphs")
 Require complete graph capture:
 
 ```python
-config = TorchInductorBackendConfig(
+config = TorchInductorJitBackendConfig(
     fullgraph=True,  # Error if graph breaks occur
     mode="max-autotune",
 )
@@ -91,13 +91,13 @@ Control dynamic shape behavior:
 
 ```python
 # Always generate dynamic kernels
-config = TorchInductorBackendConfig(dynamic=True)
+config = TorchInductorJitBackendConfig(dynamic=True)
 
 # Never generate dynamic kernels (always specialize)
-config = TorchInductorBackendConfig(dynamic=False)
+config = TorchInductorJitBackendConfig(dynamic=False)
 
 # Auto-detect (default)
-config = TorchInductorBackendConfig(dynamic=None)
+config = TorchInductorJitBackendConfig(dynamic=None)
 ```
 
 ### options
@@ -106,7 +106,7 @@ Custom inductor options:
 
 ```python
 # See all options: torch._inductor.list_options()
-config = TorchInductorBackendConfig(
+config = TorchInductorJitBackendConfig(
     options={
         "triton.cudagraphs": True,
         "max_autotune": True,
@@ -122,7 +122,7 @@ config = TorchInductorBackendConfig(
 Enable automatic mixed precision:
 
 ```python
-config = TorchInductorBackendConfig(
+config = TorchInductorJitBackendConfig(
     mode="max-autotune",
     autocast_enabled=True,
     autocast_dtype=torch.float16,
@@ -178,7 +178,7 @@ TORCH_LOGS=graph_breaks python your_script.py
 **Solution**: Reduce auto-tuning:
 
 ```python
-config = TorchInductorBackendConfig(mode="default")
+config = TorchInductorJitBackendConfig(mode="default")
 ```
 
 ### Issue: Not using CUDA graphs
@@ -196,7 +196,7 @@ TORCH_LOGS=perf_hints python your_script.py
 **Solution**: Enable dynamic shapes:
 
 ```python
-config = TorchInductorBackendConfig(
+config = TorchInductorJitBackendConfig(
     mode="default",
     dynamic=True,
 )

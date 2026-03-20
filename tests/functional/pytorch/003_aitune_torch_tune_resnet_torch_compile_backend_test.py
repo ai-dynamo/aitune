@@ -14,7 +14,7 @@ import timm
 import torch
 
 from aitune.torch import tune
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend, TorchInductorBackendConfig
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
@@ -22,7 +22,7 @@ from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 logger = getLogger(__name__)
 
 
-def do_test(backend: TorchInductorBackend):
+def do_test(backend: TorchInductorJitBackend):
     # given
     device = torch.device("cuda")
 
@@ -51,8 +51,8 @@ def test_tune_resnet_torch_inductor():
     for mode in modes:
         try:
             logger.info("Testing mode: %s", mode)
-            config = TorchInductorBackendConfig(mode=mode)
-            do_test(TorchInductorBackend(config=config))
+            config = TorchInductorJitBackendConfig(mode=mode)
+            do_test(TorchInductorJitBackend(config=config))
         except Exception as e:
             logger.error("Error with mode %s: %s", mode, e)
             errors.append(f"Error with mode {mode}: {e}")

@@ -18,7 +18,7 @@ import torch
 from diffusers import FluxPipeline
 
 from aitune.torch import FirstWinsStrategy, inspect, tune, wrap
-from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorBackend
+from aitune.torch.backend import TensorRTBackend, TorchEagerBackend, TorchInductorJitBackend
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackendConfig
 from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig
 from aitune.torch.module_registry import MODULE_REGISTRY
@@ -112,7 +112,7 @@ def test_flux_tensorrt_modelopt_fp8():
                         )
                     ),
                     # Fallback 2: Torch Inductor backend
-                    TorchInductorBackend(),
+                    TorchInductorJitBackend(),
                     # Fallback 3: Torch Eager backend
                     TorchEagerBackend(),
                 ]

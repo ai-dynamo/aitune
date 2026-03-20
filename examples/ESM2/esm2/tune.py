@@ -8,7 +8,7 @@ import torch
 from transformers import AutoTokenizer, EsmForMaskedLM
 
 import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorBackend
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorJitBackend
 
 DEVICE = torch.device("cuda")
 MODEL_NAME = "facebook/esm2_t33_650M_UR50D"
@@ -59,7 +59,7 @@ def tune(
             backends=[
                 TensorRTBackend(),
                 TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
-                TorchInductorBackend(),
+                TorchInductorJitBackend(),
                 TorchEagerBackend(),
             ]
         )

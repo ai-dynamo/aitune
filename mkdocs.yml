@@ -86,7 +86,8 @@ nav:
                 - Torch-TensorRT Backend (JIT): guides/backends/torch_tensorrt_jit_backend.md
                 - Torch-TensorRT Backend (AOT): guides/backends/torch_tensorrt_aot_backend.md
                 - TorchAO Backend: guides/backends/torchao_backend.md
-                - Torch Inductor Backend: guides/backends/torch_inductor_backend.md
+                - Torch Inductor JIT Backend: guides/backends/torch_inductor_jit_backend.md
+                - Torch Inductor AOT Backend: guides/backends/torch_inductor_aot_backend.md
             - Tune Strategies: guides/tune_strategies/tune_strategies.md
             - Deployment: guides/deployment/deployment.md
             - Advanced:
@@ -119,7 +120,8 @@ nav:
                     -   Torch-TensorRT Backend (JIT): api/backends/torch_tensorrt_jit_backend.md
                     -   Torch-TensorRT Backend (AOT): api/backends/torch_tensorrt_aot_backend.md
                     -   TorchAO Backend: api/backends/torchao_backend.md
-                    -   Torch Inductor Backend: api/backends/torch_inductor_backend.md
+                    -   Torch Inductor JIT Backend: api/backends/torch_inductor_jit_backend.md
+                    -   Torch Inductor AOT Backend: api/backends/torch_inductor_aot_backend.md
             -   Tuning Strategies API:
                     -   FirstWinsStrategy: api/tune_strategies/first_wins_strategy.md
                     -   OneBackendStrategy: api/tune_strategies/one_backend_strategy.md

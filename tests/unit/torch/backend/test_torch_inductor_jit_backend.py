@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for TorchInductorBackend."""
+"""Unit tests for TorchInductorJitBackend."""
 
 from unittest.mock import Mock
 
@@ -8,7 +8,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.torch_inductor_backend import TorchInductorBackend, TorchInductorBackendConfig
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.checkpoint.storage_tasks import TorchLoadTask, TorchSaveTask
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
@@ -87,8 +87,8 @@ def do_test_backend(backend, dtype, model, sample_data, tmp_path):
 )
 def test_torch_inductor_backend_build(mode, dtype, model, sample_data, tmp_path):
     """Test backend build with different modes and dtypes."""
-    config = TorchInductorBackendConfig(mode=mode)
-    backend = TorchInductorBackend(config=config)
+    config = TorchInductorJitBackendConfig(mode=mode)
+    backend = TorchInductorJitBackend(config=config)
     do_test_backend(backend, dtype, model, sample_data, tmp_path)
 
 
@@ -101,8 +101,8 @@ def test_torch_inductor_backend_with_options(model, sample_data, tmp_path):
         "aggressive_fusion": True,
         "debug": True,
     }
-    config = TorchInductorBackendConfig(options=options)
-    backend = TorchInductorBackend(config=config)
+    config = TorchInductorJitBackendConfig(options=options)
+    backend = TorchInductorJitBackend(config=config)
     do_test_backend(backend, torch.float32, model, sample_data, tmp_path)
 
 
@@ -114,26 +114,26 @@ def test_torch_inductor_backend_with_options(model, sample_data, tmp_path):
 )
 def test_torch_inductor_backend_with_autocast(autocast_dtype, model, sample_data, tmp_path):
     """Test backend with autocast enabled."""
-    config = TorchInductorBackendConfig(autocast_enabled=True, autocast_dtype=autocast_dtype)
-    backend = TorchInductorBackend(config=config)
+    config = TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=autocast_dtype)
+    backend = TorchInductorJitBackend(config=config)
     do_test_backend(backend, torch.float32, model, sample_data, tmp_path)
 
 
 def test_torch_inductor_backend_with_mode_and_options():
     """Test backend with mode and options."""
     with pytest.raises(ValueError, match="Cannot specify both 'mode' and 'options' parameters in config. "):
-        config = TorchInductorBackendConfig(mode="max-autotune", options={"max_autotune": True})
-        TorchInductorBackend(config=config)
+        config = TorchInductorJitBackendConfig(mode="max-autotune", options={"max_autotune": True})
+        TorchInductorJitBackend(config=config)
 
 
 @requires_cuda
 def test_serialization(model, sample_data, tmp_path):
-    backend = backend_build(TorchInductorBackend(), torch.float16, model, sample_data, tmp_path)
+    backend = backend_build(TorchInductorJitBackend(), torch.float16, model, sample_data, tmp_path)
     state_dict = backend.to_dict()  # type: ignore
 
     TorchSaveTask().save(tmp_path, state_dict)
     state_dict = TorchLoadTask().load(tmp_path)
-    loaded_backend = TorchInductorBackend.from_dict(model, state_dict)
+    loaded_backend = TorchInductorJitBackend.from_dict(model, state_dict)
 
     loaded_backend.activate()
     sample_data = move_to_dtype(sample_data, torch.float16)

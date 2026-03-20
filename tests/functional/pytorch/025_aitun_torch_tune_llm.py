@@ -18,7 +18,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 from aitune.torch import Module, OneBackendStrategy
 from aitune.torch import tune as aitune
-from aitune.torch.backend import TorchEagerBackend, TorchInductorBackend
+from aitune.torch.backend import TorchEagerBackend, TorchInductorJitBackend
 
 
 def get_model_and_tokenizer(model_id="Qwen/Qwen2.5-0.5B-Instruct"):
@@ -76,7 +76,7 @@ def tune_model(model, tokenizer, cache="static"):
             model.__class__.__name__,
             strategies=[
                 OneBackendStrategy(TorchEagerBackend()).enable_find_max_batch_size(False),  # for prefill phase
-                OneBackendStrategy(TorchInductorBackend()).enable_find_max_batch_size(False),  # for decode phase
+                OneBackendStrategy(TorchInductorJitBackend()).enable_find_max_batch_size(False),  # for decode phase
             ],
         )
 
