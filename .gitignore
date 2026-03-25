@@ -354,3 +354,8 @@ notebooks/checkpoints/
 
 # audio samples (downloaded on demand)
 *.wav
+
+# agents generated files
+tuning/
+
+.worktrees/
