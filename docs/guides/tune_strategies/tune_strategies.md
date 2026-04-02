@@ -13,7 +13,7 @@ AITune provides three built-in strategies:
 
 - **OneBackendStrategy**: Uses a single specified backend
 - **FirstWinsStrategy**: Tries backends in order, uses the first that succeeds
-- **HighestThroughputStrategy**: Profiles all backends, selects the fastest
+- **MaxThroughputStrategy**: Profiles all backends, selects the fastest
 
 ## Why Backends Can Fail
 
@@ -28,13 +28,13 @@ Because of these differences, a backend that fails on one model may succeed on a
 
 ## Choosing a Strategy
 
-Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. If you want a safer default with minimal tuning time, `FirstWinsStrategy` balances reliability and speed. When absolute throughput matters and you can afford longer tuning, choose `HighestThroughputStrategy`.
+Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. If you want a safer default with minimal tuning time, `FirstWinsStrategy` balances reliability and speed. When absolute throughput matters and you can afford longer tuning, choose `MaxThroughputStrategy`.
 
 | Strategy                  | When to Use                     | Tuning Time | Reliability             | Performance        |
 |---------------------------|---------------------------------|-------------|-------------------------|--------------------|
 | OneBackendStrategy        | Known backend works, production | Fast        | High (if backend works) | Depends on backend |
 | FirstWinsStrategy         | Want reliability, quick tuning  | Fast-Medium | Very High               | Good               |
-| HighestThroughputStrategy | Maximum performance, have time  | Slow        | High                    | Best               |
+| MaxThroughputStrategy     | Maximum performance, have time  | Slow        | High                    | Best               |
 
 ## OneBackendStrategy
 
@@ -124,7 +124,7 @@ ait.tune(model, input_data)
 
 - Maximum performance (stops at first success, not the fastest)
 - When you already know which backend works (use `OneBackendStrategy` instead)
-- Detailed performance comparison (use `HighestThroughputStrategy` instead)
+- Detailed performance comparison (use `MaxThroughputStrategy` instead)
 
 ### Best Practices
 
@@ -132,7 +132,7 @@ ait.tune(model, input_data)
 2. **Automatic Fallback**: If all backends fail, the original model is used as-is
 3. **Similar Configurations**: Use compatible configs (e.g., all FP16)
 
-## HighestThroughputStrategy
+## MaxThroughputStrategy
 
 Tries all backends, profiles their performance, and selects the fastest.
 
@@ -157,7 +157,7 @@ backends = [
 ]
 
 # Create strategy
-strategy = ait.HighestThroughputStrategy(
+strategy = ait.MaxThroughputStrategy(
     backends=backends,
 )
 
@@ -173,7 +173,7 @@ ait.tune(model, input_data)
    - Runs warmup iterations
    - Measures throughput over N iterations
    - Records performance metrics
-3. Selects backend with highest throughput
+3. Selects backend with maximum throughput
 4. Returns best performing backend
 
 ### When to Use
@@ -195,7 +195,7 @@ ait.tune(model, input_data)
 
 1. **Development**: Use `FirstWinsStrategy` with fallback
 2. **Production**: Use `OneBackendStrategy` with validated backend
-3. **Benchmarking**: Use `HighestThroughputStrategy` to find the best option
+3. **Benchmarking**: Use `MaxThroughputStrategy` to find the best option
 4. **Always Validate**: Test tuned models before deployment
 5. **Cache Results**: Save tuned models to avoid re-tuning
 

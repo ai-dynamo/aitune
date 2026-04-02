@@ -26,7 +26,7 @@ class TunedModule:
     # Error messages
     ERROR_NO_BACKENDS = "No backends provided"
     ERROR_UNKNOWN_BACKEND = "Unknown backend type: {}"
-    ERROR_NO_BACKEND_FOUND = "No backend found for a graph with pytree metadata: {}"
+    ERROR_NO_BACKEND_FOUND = "No backend found for a graph with metadata: {}"
 
     def __init__(
         self,

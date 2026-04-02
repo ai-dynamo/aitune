@@ -24,7 +24,7 @@ def mock_profiling_config():
     )
 
 
-def test_highest_throughput_strategy_find_max_batch_size(mock_profiling_config, torch_device, tmp_path):
+def test_max_throughput_strategy_find_max_batch_size(mock_profiling_config, torch_device, tmp_path):
     model = ToyTorchModel()
     sample = model.sample().to(torch_device)
     _, throughput, _ = find_max_batch_size(
@@ -67,7 +67,7 @@ def test_get_throughput_per_batch_size(mock_profiling_config):
 
     # Verify results
     assert len(throughput_per_batch_size) == 3
-    assert throughput_per_batch_size[0][0] == 4  # Highest throughput should be batch size 4
+    assert throughput_per_batch_size[0][0] == 4  # Maximum throughput should be batch size 4
     assert throughput_per_batch_size[1][0] == 2  # Second highest should be batch size 2
     assert throughput_per_batch_size[2][0] == 1  # Lowest should be batch size 1
 

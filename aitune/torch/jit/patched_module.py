@@ -23,6 +23,7 @@ from aitune.torch.module.recording_module import RecordingModule, Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
+from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
 from aitune.torch.utils.module import count_parameters, format_num_parameters, get_module_device, offload
 from aitune.utils.system_monitor import SystemMonitor
@@ -134,7 +135,7 @@ class PatchedModule:
                     if config.dry_run:
                         self._simulate_dry_run(strategy, current, graph_spec, data, device, cache_dir)
                     else:
-                        backend = self._tune(device, current, strategy, graph_spec, cache_dir, data)
+                        backend = self._tune(strategy, current, graph_spec, data, device, cache_dir)
                         backends[graph_spec.input_spec] = backend
                 if backends:
                     current._wrapper = TunedModule(backends)
@@ -163,26 +164,43 @@ class PatchedModule:
                     current._extra_state_info = "tuning error"
                 _to_hist(f"Failed to tune module, unpatched: {str(current)}")
 
-    def _simulate_dry_run(self, strategy, current, graph_spec, data, device, cache_dir):
+    def _simulate_dry_run(
+        self,
+        strategy: TuneStrategy,
+        module: "PatchedModule",
+        graph_spec: GraphSpec,
+        data: list[Sample],
+        device: torch.device,
+        cache_dir: Path,
+    ):
         """Simulate tuning in dry-run mode.
 
         It runs tune_dry_run but it also raises exception with probability of `config.dry_run_failure_probability`.
 
         This is done to simulate failures during JIT tuning to see how it would behave.
         """
-        _to_hist(f"Tuning in dry-run module: {str(current)}")
-        strategy.tune_dry_run(current.__wrapped__, current._name, graph_spec, data, device, cache_dir)
+        _to_hist(f"Tuning in dry-run module: {str(module)}")
+        strategy.tune_dry_run(module.__wrapped__, module._name, graph_spec, data, device, cache_dir)
         if failure := random.random() < config.dry_run_failure_probability:
             raise RuntimeError(f"Tuning failed in dry-run mode with probability {failure:.2f}")
 
-    def _tune(self, device, current, strategy, graph_spec, cache_dir, data):
-        """Tune the module.
-
-        It throws exception if graph break is detected.
-        """
+    def _tune(
+        self,
+        strategy: TuneStrategy,
+        module: "PatchedModule",
+        graph_spec: GraphSpec,
+        data: list[Sample],
+        device: torch.device,
+        cache_dir: Path,
+    ):
+        """Tune the module with optional graph break detection and timing."""
         if config.detect_graph_breaks:
-            self._throw_if_has_graph_break(current, data)
-        backend = self._tune_module(strategy, current, graph_spec, data, device, cache_dir)
+            self._throw_if_has_graph_break(module, data)
+
+        start = perf_counter()
+        backend = strategy.tune(module.__wrapped__, module._name, graph_spec, data, device, cache_dir)
+        duration = perf_counter() - start
+        _to_hist(f"Tuning {module._name} took {duration:.2f}s")
         return backend
 
     def _should_be_skipped(self):
@@ -434,25 +452,6 @@ class PatchedModule:
         with self._system_monitor.system_stats_context(log_label="Offloading module to meta device"):
             offload(self.__wrapped__, device=global_config.device_after_tuning)
 
-    def _tune_module(
-        self,
-        strategy,
-        module: "PatchedModule",
-        graph_spec: GraphSpec,
-        data: list[Sample],
-        device: torch.device,
-        cache_dir: Path,
-    ):
-        """Tune the module.
-
-        Adds to history the duration of the tuning.
-        """
-        start = perf_counter()
-        backend = strategy.tune(module.__wrapped__, module._name, graph_spec, data, device, cache_dir)
-        duration = perf_counter() - start
-        _to_hist(f"Tuning {module._name} took {duration:.2f}s")
-        return backend
-
     def _unpatch(self):
         """Unpatch the module.
 
@@ -540,8 +539,8 @@ class PatchedModule:
         if len(PatchedModule.heads) == 0:
             logging.error("JIT tuning has been enabled but no modules were found.")
         elif not PatchedModule.attempted_tuning:
-            to_few_samples = [h._call_count < config.min_samples for h in PatchedModule.heads]
-            if all(to_few_samples):
+            too_few_samples = [h._call_count < config.min_samples for h in PatchedModule.heads]
+            if all(too_few_samples):
                 logging.warning(
                     "JIT tuning has been enabled and requires at least %d samples. None of top level modules had enough samples.",
                     config.min_samples,

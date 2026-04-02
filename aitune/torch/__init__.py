@@ -9,7 +9,7 @@ from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.inspecting import inspect, wrap
 from aitune.torch.module import Module
-from aitune.torch.tune_strategy import FirstWinsStrategy, HighestThroughputStrategy, OneBackendStrategy, TuneStrategy
+from aitune.torch.tune_strategy import FirstWinsStrategy, MaxThroughputStrategy, OneBackendStrategy, TuneStrategy
 from aitune.torch.tuning import load, save, tune
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import PatchedModule
@@ -29,7 +29,7 @@ __all__ = [
     "TuneStrategy",
     "OneBackendStrategy",
     "FirstWinsStrategy",
-    "HighestThroughputStrategy",
+    "MaxThroughputStrategy",
     "LocalTorchStorage",
     "DataLoaderFactory",
     "patch_for_jit_tuning",

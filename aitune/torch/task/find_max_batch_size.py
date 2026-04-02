@@ -36,7 +36,7 @@ def find_max_batch_size(
 ) -> tuple[int, float, ProfilingResults]:
     """Finds max batch size for Torch Compile as a baseline.
 
-    Uses profiling with highest throughput strategy to find max batch size.
+    Uses profiling with max throughput strategy to find max batch size.
 
     Note: This function expects user to set profiling_config.max_batch_size to the highest batch size they want to profile.
 
@@ -55,20 +55,20 @@ def find_max_batch_size(
     log_file = _log_file(backend_cache_dir, "build.log")
     with control_output(log_file=log_file):
         backend.build(module, graph_spec, data, device, backend_cache_dir)
-    return calculate_highest_throughput_for_backend(backend, name, graph_spec, data, profiling_config)
+    return find_max_throughput_for_backend(backend, name, graph_spec, data, profiling_config)
 
 
-def calculate_highest_throughput_for_backend(
+def find_max_throughput_for_backend(
     backend: Backend,
     name: str,
     graph_spec: GraphSpec,
     data: list[Sample],
     profiling_config: ProfilingConfig,
 ) -> tuple[int, float, ProfilingResults]:
-    """Calculates highest throughput for a backend.
+    """Calculates maximum throughput for a backend.
 
     Args:
-        module: Model to calculate highest throughput for.
+        module: Model to calculate maximum throughput for.
         name: Name of the model.
         graph_spec: Graph spec of the model.
         data: Data to profile.
@@ -78,7 +78,7 @@ def calculate_highest_throughput_for_backend(
 
     Returns:
         Tuple containing:
-            - Batch size with highest throughput.
+            - Batch size with maximum throughput.
             - Throughput for the batch size.
             - Backend used for the calculation.
             - Profiling results.

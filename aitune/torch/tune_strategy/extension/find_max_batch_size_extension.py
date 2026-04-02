@@ -24,7 +24,7 @@ from aitune.torch.config import (
 )
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.task.find_max_batch_size import calculate_highest_throughput_for_backend
+from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.measuring_stop_strategy import StableWindowMeasuringStopStrategy
 from aitune.torch.task.profiling.measuring_strategy import ModelExecutionTimeMeasuringStrategy
@@ -97,7 +97,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
                 with control_output(log_file=build_log_file):
                     backend.build(module, graph_spec, deepcopy(data), device, find_max_batch_size_cache_dir)
 
-                max_batch_size, best_throughput, _ = calculate_highest_throughput_for_backend(
+                max_batch_size, best_throughput, _ = find_max_throughput_for_backend(
                     backend,
                     name,
                     graph_spec,
@@ -152,7 +152,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
             Profiling config for finding max batch size.
 
         Note:
-            The profiling config will use defaults from highest throughput strategy.
+            The profiling config will use defaults from max throughput strategy.
         """
         return ProfilingConfig(
             batching=batching,

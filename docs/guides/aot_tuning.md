@@ -124,7 +124,7 @@ ait.tune(
 
 Tuning time depends on the tuned modules' size, used strategy, and number of backends. Modules are tuned one by one. If a strategy has many backends to pick from, it takes the one that fulfills specific strategy criteria. Each backend is validated against returning proper numeric results (check against NANs and infinity) and output shapes.
 
-Note: If you specify a batch size that is not a power of 2, it will be used to gather samples but the actual search for the highest throughput will round it up to the nearest power of 2.
+Note: If you specify a batch size that is not a power of 2, it will be used to gather samples but the actual search for maximum throughput will round it up to the nearest power of 2.
 
 ### 4. Persistence Phase
 

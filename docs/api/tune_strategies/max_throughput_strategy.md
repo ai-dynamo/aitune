@@ -3,9 +3,9 @@ SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All 
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# HighestThroughputStrategy API
+# MaxThroughputStrategy API
 
-::: aitune.torch.tune_strategy.HighestThroughputStrategy
+::: aitune.torch.tune_strategy.MaxThroughputStrategy
     options:
       show_root_heading: true
       heading_level: 2

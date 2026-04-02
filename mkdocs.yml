@@ -125,7 +125,7 @@ nav:
             -   Tuning Strategies API:
                     -   FirstWinsStrategy: api/tune_strategies/first_wins_strategy.md
                     -   OneBackendStrategy: api/tune_strategies/one_backend_strategy.md
-                    -   HighestThroughputStrategy: api/tune_strategies/highest_throughput_strategy.md
+                    -   MaxThroughputStrategy: api/tune_strategies/max_throughput_strategy.md
 
     -   Resources:
             -   Changelog: CHANGELOG.md

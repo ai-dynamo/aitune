@@ -8,7 +8,7 @@ from logging import basicConfig, getLogger
 import torch
 from PIL import Image
 
-from aitune.torch import HighestThroughputStrategy, LocalTorchStorage, Module, save, tune
+from aitune.torch import LocalTorchStorage, MaxThroughputStrategy, Module, save, tune
 from aitune.torch.backend import (
     ONNXAutoCastConfig,
     ONNXQuantizationConfig,
@@ -54,7 +54,7 @@ def tune_model(
     module = Module(
         model,
         module_name,
-        strategy=HighestThroughputStrategy(
+        strategy=MaxThroughputStrategy(
             backends=[
                 TensorRTBackend(
                     config=TensorRTBackendConfig(

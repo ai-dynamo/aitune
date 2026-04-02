@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
-from aitune.torch import HighestThroughputStrategy, TuneStrategy, inspect, save, tune, wrap
+from aitune.torch import MaxThroughputStrategy, TuneStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
@@ -44,7 +44,7 @@ def tune_model(
 
     batch_sizes = batch_sizes or [1, 2, 4]
 
-    strategy = strategy or HighestThroughputStrategy(
+    strategy = strategy or MaxThroughputStrategy(
         backends=[
             TensorRTBackend(),
             TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),

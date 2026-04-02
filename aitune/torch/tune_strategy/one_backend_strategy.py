@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Simple tune strategy."""
 
-from copy import deepcopy
 from pathlib import Path
 
 import torch
@@ -12,8 +11,7 @@ from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
-from aitune.utils.logging import control_output, log
-from aitune.utils.timer import Timer
+from aitune.utils.logging import log
 
 
 class OneBackendStrategy(TuneStrategyFindMaxBatchSizeExtension):
@@ -42,25 +40,21 @@ class OneBackendStrategy(TuneStrategyFindMaxBatchSizeExtension):
             sink=self._sink,
         )
 
-        backend_cache_dir = cache_dir / self._backend.key()
-        log_file = self._log_file(backend_cache_dir, "build.log")
+        built = self._build_and_validate_backend(
+            self._backend,
+            module,
+            name,
+            graph_spec,
+            data,
+            device,
+            cache_dir,
+            raise_on_failure=True,
+        )
+        assert built is not None
 
-        with Timer(sink=self._sink, depth=2):
-            try:
-                log("🤖 backend: %s", self._backend.describe(), sink=self._sink)
-                log("🔄 in progress...please wait", depth=2, sink=self._sink)
-                with control_output(log_file=log_file):
-                    backend = deepcopy(self._backend)
-                    backend = backend.build(module, graph_spec, deepcopy(data), device, backend_cache_dir)
-                log("✅ backend built", depth=2, sink=self._logger.info)
-                self.check_correctness(backend, name, graph_spec, data)
-                log("✅ backend validated", depth=2, sink=self._logger.info)
-                log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)
-                log("✅ Selected backend: %s", backend.describe(), sink=self._sink)
-                return backend
-            except Exception as exception:
-                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
-                raise exception
+        log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)
+        log("✅ Selected backend: %s", built.describe(), sink=self._sink)
+        return built
 
     def _describe_parts(self):
         """Describes the tuning."""

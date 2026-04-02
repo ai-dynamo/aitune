@@ -19,7 +19,7 @@ from aitune.torch.task.profiling.profiling_stop_strategy import (
     ThroughputSaturatedProfilingStopStrategy,
 )
 from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
-from aitune.torch.tune_strategy.highest_throughput_strategy import HighestThroughputStrategy
+from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
 from aitune.torch.tuning import tune
 from tests.toy_backends import BuildFailsBackend, SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
@@ -38,12 +38,12 @@ def mock_backend():
 def test_describe(mock_backend):
     """Test describe method."""
     backends = [mock_backend, mock_backend]
-    strategy = HighestThroughputStrategy(backends)
+    strategy = MaxThroughputStrategy(backends)
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
     assert (
         strategy.describe()
-        == "name: Highest Throughput Strategy\ndescription: evaluate all backends, return backend with highest throughput\nbackends:\n  mock_backend\n  mock_backend"
+        == "name: Max Throughput Strategy\ndescription: evaluate all backends, return backend with max throughput\nbackends:\n  mock_backend\n  mock_backend"
     )
 
 
@@ -53,11 +53,11 @@ def test_sanity_batch_sizes_generator():
     assert 2**20 in batch_sizes
 
 
-def test_highest_throughput_strategy_tune_highest_throughput_backend(torch_device, tmp_path):
+def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_path):
     profiling_config = TuneStrategyFindMaxBatchSizeExtension.default_profiling_config(max_batch_size=8)
     slower = SleepBackend(sleep_time=1e-2)
     faster = SleepBackend(sleep_time=1e-5)
-    strategy = HighestThroughputStrategy(backends=[slower, faster])
+    strategy = MaxThroughputStrategy(backends=[slower, faster])
     strategy.set_find_max_batch_size_profiling_config(profiling_config)
     strategy.enable_correctness_check(False)
 
@@ -70,17 +70,17 @@ def test_highest_throughput_strategy_tune_highest_throughput_backend(torch_devic
 
     model.forward = forward_slow
 
-    highest_throughput_backend = strategy.tune(
+    max_throughput_backend = strategy.tune(
         model, "test", model.graph_spec(batch_sizes=[1, 2]), [((sample,), {})], torch_device, tmp_path
     )
-    highest_throughput_backend = cast(SleepBackend, highest_throughput_backend)
+    max_throughput_backend = cast(SleepBackend, max_throughput_backend)
 
-    assert highest_throughput_backend.sleep_time == faster.sleep_time
+    assert max_throughput_backend.sleep_time == faster.sleep_time
 
 
-def test_highest_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_path):
+def test_max_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_path):
     profiling_config = TuneStrategyFindMaxBatchSizeExtension.default_profiling_config(max_batch_size=8)
-    strategy = HighestThroughputStrategy(backends=[SleepBackend(sleep_time=1e-5)])
+    strategy = MaxThroughputStrategy(backends=[SleepBackend(sleep_time=1e-5)])
     strategy.set_find_max_batch_size_profiling_config(profiling_config)
     strategy.enable_correctness_check(False)
     model = ToyTorchModel().eval().to(torch_device)
@@ -100,11 +100,11 @@ def test_highest_throughput_strategy_max_batch_size_in_graph_spec(torch_device, 
 
 
 @requires_cuda
-def test_highest_throughput_strategy_num_steps_all_samples(torch_device):
+def test_max_throughput_strategy_num_steps_all_samples(torch_device):
     find_profiling_config = TuneStrategyFindMaxBatchSizeExtension.default_profiling_config(max_batch_size=16)
     find_profiling_config.measurement_stop_strategy = NumStepsMeasuringStopStrategy(num_steps=10)
 
-    strategy = HighestThroughputStrategy(
+    strategy = MaxThroughputStrategy(
         backends=[
             TorchInductorJitBackend(),
             TorchEagerBackend(),
@@ -129,7 +129,7 @@ def test_highest_throughput_strategy_num_steps_all_samples(torch_device):
     assert strategy.results[0].graph_spec_name == "0"
 
     assert len(strategy.results[0].measurements) == n_steps * n_batch_sizes * n_backends
-    assert len(strategy.results[0].highest_throughput_results) == n_backends
+    assert len(strategy.results[0].max_throughput_results) == n_backends
 
     assert all(m.model_name == get_object_name(model) for m in strategy.results[0].measurements)
     assert all(m.backend_details is not None for m in strategy.results[0].measurements)
@@ -147,8 +147,8 @@ def test_highest_throughput_strategy_num_steps_all_samples(torch_device):
 
 
 @requires_cuda
-def test_highest_throughput_strategy_stable_window(torch_device):
-    strategy = HighestThroughputStrategy(
+def test_max_throughput_strategy_stable_window(torch_device):
+    strategy = MaxThroughputStrategy(
         backends=[
             TorchInductorJitBackend(),
         ],
@@ -169,7 +169,7 @@ def test_highest_throughput_strategy_stable_window(torch_device):
     assert strategy.results[0].graph_spec_name == "0"
 
     assert len(strategy.results[0].measurements) >= n_backends * n_steps
-    assert len(strategy.results[0].highest_throughput_results) == n_backends
+    assert len(strategy.results[0].max_throughput_results) == n_backends
 
     assert all(m.model_name == get_object_name(model) for m in strategy.results[0].measurements)
     assert all(m.backend_details is not None for m in strategy.results[0].measurements)
@@ -189,9 +189,9 @@ class ActivateFailsBackend(SleepBackend):
         raise RuntimeError("Activate failed")
 
 
-def test_highest_throughput_strategy_fails_backend_if_all_of_backends_fails(torch_device):
+def test_max_throughput_strategy_fails_backend_if_all_of_backends_fails(torch_device):
     """If all backends fails it should raise an error."""
-    strategy = HighestThroughputStrategy(
+    strategy = MaxThroughputStrategy(
         backends=[
             BuildFailsBackend(RuntimeError),
             BuildFailsBackend(MemoryError),
@@ -211,9 +211,9 @@ def test_highest_throughput_strategy_fails_backend_if_all_of_backends_fails(torc
     assert model.state == ModuleState.PASSTHROUGH
 
 
-def test_highest_throughput_strategy_select_backend_if_one_of_backends_succeeds(torch_device):
+def test_max_throughput_strategy_select_backend_if_one_of_backends_succeeds(torch_device):
     """If backend fails it should be skipped and TorchEagerBackend should be used as a fallback."""
-    strategy = HighestThroughputStrategy(
+    strategy = MaxThroughputStrategy(
         backends=[
             BuildFailsBackend(RuntimeError),
             BuildFailsBackend(MemoryError),
@@ -234,9 +234,9 @@ def test_highest_throughput_strategy_select_backend_if_one_of_backends_succeeds(
     assert model(sample.unsqueeze(0)) is not None  # Note: does not work without unsqueeze
 
 
-def test_highest_throughput_strategy_find_max_batch_size_fails(torch_device):
+def test_max_throughput_strategy_find_max_batch_size_fails(torch_device):
     """If find max batch size fails, there is no recovery."""
-    strategy = HighestThroughputStrategy(
+    strategy = MaxThroughputStrategy(
         backends=[
             SleepBackend(),
         ],

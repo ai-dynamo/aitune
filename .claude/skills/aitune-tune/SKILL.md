@@ -49,7 +49,7 @@ backend = TensorRTBackend(config)
 |---|---|
 | `OneBackendStrategy` | Use exactly one specified backend |
 | `FirstWinsStrategy` | Use the first backend that compiles successfully |
-| `HighestThroughputStrategy` | Profile all backends, select the fastest |
+| `MaxThroughputStrategy` | Profile all backends, select the fastest |
 
 
 # Common Issues
@@ -125,7 +125,7 @@ from aitune.torch.backend import (
     TorchTensorRTJitBackend, TorchTensorRTAotBackend,
     TorchAOBackend, TorchInductorBackend,
 )
-from aitune.torch.tune_strategy import OneBackendStrategy, HighestThroughputStrategy
+from aitune.torch.tune_strategy import OneBackendStrategy, MaxThroughputStrategy
 
 # TensorRT fp16 (default production choice)
 cfg = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(), use_cuda_graphs=True, use_dynamo=True)

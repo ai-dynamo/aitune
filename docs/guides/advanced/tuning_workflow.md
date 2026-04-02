@@ -189,12 +189,12 @@ strategy = ait.OneBackendStrategy(ait.backend.TorchInductorJitBackend())
 
 **Use Case**: Production with a validated backend where you want deterministic behavior.
 
-#### HighestThroughputStrategy
+#### MaxThroughputStrategy
 
 Before actual tuning, this strategy tries to estimate `max_batch_size`. It does so by incrementing `batch_size` (in powers of 2) and measuring throughput using the original module. The `max_batch_size` is picked for the best throughput and then is used for selecting the best backend:
 
 ```python
-strategy = ait.HighestThroughputStrategy([
+strategy = ait.MaxThroughputStrategy([
     ait.backend.TensorRTBackend(),
     ait.backend.TorchInductorJitBackend(),
     ait.backend.TorchEagerBackend(),
@@ -207,7 +207,7 @@ strategy = ait.HighestThroughputStrategy([
 2. Try each backend in order
 3. Build and validate each working backend
 4. Profile throughput for each backend given `max_batch_size`
-5. Return backend with the highest throughput
+5. Return backend with the maximum throughput
 
 **Use Case**: When performance is critical and you want the absolute fastest backend.
 
@@ -346,15 +346,15 @@ Now the logs will show the inputs and outputs of the module:
 
 As you can see, AITune detected the batch axis as the first one, hence the name `batch0` and input shapes `3x224x224`, i.e., batch of images, and output shape `1000`, i.e., batch of categories.
 
-Next, you can see the Highest Throughput Strategy builds backends one by one:
+Next, you can see the Max Throughput Strategy builds backends one by one:
 
 ```text
 2026-02-04 13:32:38,343 - INFO -   num samples: 1
 2026-02-04 13:32:38,343 - INFO -   device: cuda:0
 2026-02-04 13:32:38,343 - INFO -   cache_dir: /home/pbazan/.cache/aitune/example-resnet50/0
 2026-02-04 13:32:38,343 - INFO -   strategy:
-2026-02-04 13:32:38,343 - INFO -     name: Highest Throughput Strategy
-2026-02-04 13:32:38,343 - INFO -     description: evaluate all backends, return backend with highest throughput
+2026-02-04 13:32:38,343 - INFO -     name: Max Throughput Strategy
+2026-02-04 13:32:38,343 - INFO -     description: evaluate all backends, return backend with maximum throughput
 2026-02-04 13:32:38,343 - INFO -     backends:
 2026-02-04 13:32:38,343 - INFO -       TensorRTBackend(quantization_config=ONNXQuantizationConfig(precision='int8', calibration_method='max', use_model_opt_post_processing=False))
 2026-02-04 13:32:38,343 - INFO -       TensorRTBackend(use_dynamo=False,quantization_config=ONNXQuantizationConfig(precision='int8', calibration_method='max', use_model_opt_post_processing=False))
@@ -363,7 +363,7 @@ Next, you can see the Highest Throughput Strategy builds backends one by one:
 2026-02-04 13:32:38,343 - INFO -       TorchAOBackend(quantization_config=Int8WeightOnlyConfig())
 2026-02-04 13:32:38,343 - INFO -       TorchInductorJitBackend(autocast_enabled=True,autocast_dtype=torch.float16)
 2026-02-04 13:32:38,343 - INFO -       TorchEagerBackend()
-2026-02-04 13:32:38,343 - INFO - ⏳ Executing strategy `HighestThroughputStrategy` on module `example-resnet50` (graph: 0)
+2026-02-04 13:32:38,343 - INFO - ⏳ Executing strategy `MaxThroughputStrategy` on module `example-resnet50` (graph: 0)
 2026-02-04 13:32:38,343 - INFO - 🤖 backend: TensorRTBackend(quantization_config=ONNXQuantizationConfig(precision='int8', calibration_method='max', use_model_opt_post_processing=False))
 2026-02-04 13:32:38,343 - INFO -     🔄 in progress...please wait
 2026-02-04 13:32:58,024 - INFO -     ✅ backend built
@@ -414,7 +414,7 @@ Next, you can see the Highest Throughput Strategy builds backends one by one:
 Finally the winning backend is presented:
 
 ```text
-2026-02-04 13:34:32,580 - INFO - 🎯 Strategy HighestThroughputStrategy execution finished:
+2026-02-04 13:34:32,580 - INFO - 🎯 Strategy MaxThroughputStrategy execution finished:
 2026-02-04 13:34:32,581 - INFO - ✅ Selected TorchAOBackend(quantization_config=Int8WeightOnlyConfig()) for module example-resnet50 and graph spec Name=0
 Input_spec:
 Tensors:
@@ -432,7 +432,7 @@ Tensors:
 ╘═══════════╧═════════╧══════════════════╧═════════════╧═════════════╧═══════════════╛
 .
 2026-02-04 13:34:32,581 - INFO -    Batch size: 4, throughput: 23666.16 samples/s
-2026-02-04 13:34:32,581 - INFO - ⏱️ Tune `HighestThroughputStrategy`: completed in 1.90min
+2026-02-04 13:34:32,581 - INFO - ⏱️ Tune `MaxThroughputStrategy`: completed in 1.90min
 2026-02-04 13:34:32,581 - INFO - ✅ Tuning module: `example-resnet50` (all graphs) completed.
 2026-02-04 13:34:32,581 - INFO - ════════════════════════════════════════════════════════════════
 ```

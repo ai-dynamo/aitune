@@ -18,7 +18,7 @@ from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.task.correctness import check_output_correctness, check_output_tensor_shapes
 from aitune.torch.utils.module import count_parameters
-from aitune.utils.logging import log
+from aitune.utils.logging import control_output, log
 from aitune.utils.timer import Timer
 
 
@@ -110,6 +110,63 @@ class TuneStrategy(ABC):
     def clone(self) -> "TuneStrategy":
         """Clones the tune strategy."""
         return deepcopy(self)
+
+    def _build_and_validate_backend(
+        self,
+        backend: Backend,
+        module: nn.Module,
+        name: str,
+        graph_spec: GraphSpec,
+        data: list[Sample],
+        device: torch.device,
+        cache_dir: Path,
+        *,
+        raise_on_failure: bool = False,
+    ) -> Backend | None:
+        """Build and validate a backend with standardized error handling and logging.
+
+        This method encapsulates the common workflow shared by all strategies:
+        deep-copy the backend, build it, run correctness checks, and handle failures.
+
+        Args:
+            backend: Backend to build (will be deep copied).
+            module: Module to tune.
+            name: Module name.
+            graph_spec: Graph specification.
+            data: Sample data.
+            device: Target device.
+            cache_dir: Cache directory for this module/graph.
+            raise_on_failure: If True, re-raise the original exception instead of returning None.
+
+        Returns:
+            The built and validated backend, or None on failure.
+        """
+        backend_cache_dir = cache_dir / backend.key()
+        log_file = self._log_file(backend_cache_dir, "build.log")
+
+        with Timer(sink=self._sink, depth=2):
+            try:
+                log("🤖 backend: %s", backend.describe(), sink=self._sink)
+                log("🔄 in progress...please wait", depth=2, sink=self._sink)
+
+                with control_output(log_file=log_file):
+                    backend = deepcopy(backend)
+                    backend = backend.build(module, graph_spec, deepcopy(data), device, backend_cache_dir)
+
+                log("✅ backend built", depth=2, sink=self._sink)
+                self.check_correctness(backend, name, graph_spec, data)
+                log("✅ backend validated", depth=2, sink=self._sink)
+
+                return backend
+
+            except Exception:
+                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
+                if raise_on_failure:
+                    raise
+                if backend.is_active:
+                    backend.deactivate()
+                module.to(device)  # move module back to device as failed backend could move it to cpu
+                return None
 
     def _pre_tune(
         self,

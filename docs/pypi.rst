@@ -557,7 +557,7 @@ a single backend, ``OneBackendStrategy`` surfaces the original exception rather 
 
     strategy = OneBackendStrategy(backend=TensorRTBackend())
 
-HighestThroughputStrategy
+MaxThroughputStrategy
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Profiles all compatible backends and selects the fastest. Use this when maximum throughput matters and you
@@ -565,9 +565,9 @@ can afford longer tuning time.
 
 .. code-block:: python
 
-    from aitune.torch.tune_strategy import HighestThroughputStrategy
+    from aitune.torch.tune_strategy import MaxThroughputStrategy
 
-    strategy = HighestThroughputStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend(), TorchEagerBackend()])
+    strategy = MaxThroughputStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend(), TorchEagerBackend()])
 
 Profiling with NVTX
 -------------------
