@@ -20,7 +20,6 @@ from polygraphy.logger import G_LOGGER
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCast, ONNXAutoCastConfig
-from aitune.torch.backend.tensorrt.onnx_exporter import ONNXExporter
 from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig, ONNXQuantizer
 from aitune.torch.backend.tensorrt.tensorrt_builder import TensorRTBuilder
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
@@ -28,6 +27,7 @@ from aitune.torch.backend.tensorrt.tensorrt_runtime import TensorRTRuntime
 from aitune.torch.backend.tensorrt.torch_output_allocator import TorchOutputAllocator
 from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig, TorchQuantizer
 from aitune.torch.config import config as global_config
+from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
@@ -336,12 +336,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     opset_version=self._config.opset_version,
                     output_path=onnx_path_quantized,
                 )
-                onnx_exporter.export(
-                    module=module,
-                    sample=data[0],
-                    graph_spec=graph_spec,
-                    verbose=False,  # Disable verbose ONNX export to avoid excessive internal C++ logging
-                )
+                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
 
             with self._system_monitor.system_stats_context(log_label="Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -395,12 +390,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     output_path=onnx_path,
                 )
 
-                onnx_exporter.export(
-                    module=module,
-                    sample=data[0],
-                    graph_spec=graph_spec,
-                    verbose=False,  # Disable verbose ONNX export to avoid excessive internal C++ logging
-                )
+                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
 
             with self._system_monitor.system_stats_context(log_label="Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -469,12 +459,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     output_path=onnx_path,
                 )
 
-                onnx_exporter.export(
-                    module=module,
-                    sample=data[0],
-                    graph_spec=graph_spec,
-                    verbose=False,  # Disable verbose ONNX export to avoid excessive internal C++ logging
-                )
+                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
 
             with self._system_monitor.system_stats_context(log_label="Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -540,12 +525,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     output_path=onnx_path,
                 )
 
-                onnx_exporter.export(
-                    module=module,
-                    sample=data[0],
-                    graph_spec=graph_spec,
-                    verbose=False,  # Disable verbose ONNX export to avoid excessive internal C++ logging
-                )
+                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
 
             with self._system_monitor.system_stats_context(log_label="Offloading model to cpu device"):
                 offload(module, device="cpu")

@@ -3,12 +3,52 @@
 """ONNX Model Info module for extracting information from ONNX models."""
 
 import logging
+from enum import Enum
 from pathlib import Path
 
 import onnx
 
 # Setup logger
 logger = logging.getLogger(__name__)
+
+
+class ONNXPrecision(str, Enum):
+    """Post-export quantization precision for the ONNX model.
+
+    All modes use standard ONNX operators and are compatible with the ONNX
+    Runtime CUDA Execution Provider without TensorRT.
+
+    +----------+-------------------+---------------------------------------------+
+    | Precision| Required ORT ver. | Notes                                       |
+    +==========+===================+=============================================+
+    | FP16     | Any               | Converts model weights & ops to FP16 via    |
+    |          |                   | ``onnxconverter_common``                    |
+    +----------+-------------------+---------------------------------------------+
+    | INT8     | Any               | Dynamic weight-only INT8 quantization via   |
+    |          |                   | ``onnxruntime.quantization`` — no           |
+    |          |                   | calibration data required                   |
+    +----------+-------------------+---------------------------------------------+
+    | FP8      | >= 1.16           | Dynamic weight-only FP8 E4M3 quantization   |
+    |          |                   | via ``onnxruntime.quantization``            |
+    +----------+-------------------+---------------------------------------------+
+    | INT4     | >= 1.16           | Dynamic weight-only INT4 quantization via   |
+    |          |                   | ``onnxruntime.quantization``                |
+    +----------+-------------------+---------------------------------------------+
+    """
+
+    FP16 = "fp16"
+    INT8 = "int8"
+    FP8 = "fp8"
+    INT4 = "int4"
+
+
+# Maps ONNX TensorProto data_type integers to ONNXPrecision values.
+ONNX_DTYPE_TO_PRECISION: dict[int, "ONNXPrecision"] = {
+    10: ONNXPrecision.FP16,  # TensorProto.FLOAT16
+    3: ONNXPrecision.INT8,  # TensorProto.INT8
+    17: ONNXPrecision.FP8,  # TensorProto.FLOAT8E4M3FN  (onnx >= 1.14)
+    22: ONNXPrecision.INT4,  # TensorProto.INT4           (onnx >= 1.15)
+}
 
 
 class ONNXModelInfo:
@@ -37,6 +77,7 @@ class ONNXModelInfo:
             self._input_names = [input_data.name for input_data in model.graph.input]
             self._output_names = [output_data.name for output_data in model.graph.output]
             self._input_shapes = self._get_tensor_shapes(model.graph.input)
+            self._precision = self._precision(model)
 
             # Extract opset versions
             self._opset_version = None
@@ -57,6 +98,7 @@ class ONNXModelInfo:
             logger.info("Extracted information for model:")
             logger.info("  Inputs: %s", self._input_names)
             logger.info("  Input shapes: %s", self._input_shapes)
+            logger.info("  Precision: %s", self._precision)
             logger.info("  Outputs: %s", self._output_names)
             logger.info("  OpSet version: %s", self._opset_version)
             logger.info("  Producer: %s %s", self._producer_name, self._producer_version)
@@ -136,6 +178,15 @@ class ONNXModelInfo:
         return self._opset_version
 
     @property
+    def precision(self) -> "ONNXPrecision":
+        """Precision of the model.
+
+        Returns:
+            Precision
+        """
+        return self._precision
+
+    @property
     def producer_name(self) -> str:
         """Name of the producer/framework that created the model.
 
@@ -170,3 +221,27 @@ class ONNXModelInfo:
             Documentation string
         """
         return self._doc_string
+
+    def _precision(self, model: onnx.ModelProto) -> "ONNXPrecision | None":
+        found = {
+            ONNX_DTYPE_TO_PRECISION[init.data_type]
+            for init in model.graph.initializer
+            if init.data_type in ONNX_DTYPE_TO_PRECISION
+        }
+
+        # QDQ (Quantize-Dequantize) models keep weights as FP32 in initializers;
+        # precision is instead encoded in the zero-point type of QuantizeLinear nodes.
+        if not found:
+            initializer_dtypes = {init.name: init.data_type for init in model.graph.initializer}
+            for node in model.graph.node:
+                if node.op_type == "QuantizeLinear" and len(node.input) > 2:
+                    zp_dtype = initializer_dtypes.get(node.input[2])
+                    if zp_dtype in ONNX_DTYPE_TO_PRECISION:
+                        found.add(ONNX_DTYPE_TO_PRECISION[zp_dtype])
+
+        if not found:
+            return None
+
+        # Return the lowest precision (most compressed) present in the model.
+        precision_order = [ONNXPrecision.INT4, ONNXPrecision.FP8, ONNXPrecision.INT8, ONNXPrecision.FP16]
+        return min(found, key=lambda p: precision_order.index(p))

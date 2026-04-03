@@ -15,7 +15,7 @@ import onnx
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.tensorrt.onnx_exporter import ONNXExporter
+from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 

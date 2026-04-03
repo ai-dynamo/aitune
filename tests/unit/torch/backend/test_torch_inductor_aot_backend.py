@@ -112,7 +112,7 @@ def test_build_dynamic_shapes_static(backend):
     """Single sample → no shape updates → all static dims → None."""
     args = (torch.randn(2, 32),)
     meta = SampleMetadata.from_inputs(args, {}, batch_size=2)
-    result = backend._build_dynamic_shapes(args, {}, _empty_graph_spec(meta))
+    result = backend._build_dynamic_shapes(args, {}, _empty_graph_spec(meta), ([], ["x"]))
     assert result is None
 
 
@@ -123,12 +123,12 @@ def test_build_dynamic_shapes_batch_axis(backend):
     meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
     meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
 
-    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta))
+    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta), ([], ["x"]))
 
     assert result is not None
     assert len(result) == 1
-    assert isinstance(result[0], dict)
-    assert 0 in result[0], "axis 0 should be marked as batch dynamic"
+    assert isinstance(result["x"], dict)
+    assert 0 in result["x"], "axis 0 should be marked as batch dynamic"
 
 
 def test_build_dynamic_shapes_dynamic_axis(backend):
@@ -138,11 +138,11 @@ def test_build_dynamic_shapes_dynamic_axis(backend):
     meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
     meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
 
-    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta))
+    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta), ([], ["x"]))
 
     assert result is not None
-    assert isinstance(result[0], dict)
-    assert 1 in result[0], "axis 1 should be marked as dynamic (non-batch)"
+    assert isinstance(result["x"], dict)
+    assert 1 in result["x"], "axis 1 should be marked as dynamic (non-batch)"
 
 
 def test_build_dynamic_shapes_mixed_batch_and_dynamic(backend):
@@ -152,24 +152,49 @@ def test_build_dynamic_shapes_mixed_batch_and_dynamic(backend):
     meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
     meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
 
-    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta))
+    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta), ([], ["x"]))
 
     assert result is not None
-    assert 0 in result[0], "axis 0 should be batch"
-    assert 1 in result[0], "axis 1 should be dynamic"
+    assert 0 in result["x"], "axis 0 should be batch"
+    assert 1 in result["x"], "axis 1 should be dynamic"
 
 
 def test_build_dynamic_shapes_batch_multiplier(backend):
-    """Axis 0 = 2 * batch_size → derived dim should be applied."""
-    args1 = (torch.randn(2, 10),)  # bs=1, axis_0 = 2*bs
-    args2 = (torch.randn(4, 10),)  # bs=2, axis_0 = 2*bs
+    """Axis 0 = 2 * batch_size (CFG-style UNet) → batch Dim uses actual axis values [2, 4]."""
+    args1 = (torch.randn(2, 10),)  # bs=1, axis_0 = 2
+    args2 = (torch.randn(4, 10),)  # bs=2, axis_0 = 4
     meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
     meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
 
-    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta))
+    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta), ([], ["x"]))
 
     assert result is not None
-    assert 0 in result[0], "axis 0 should carry a derived batch dim"
+    assert 0 in result["x"], "axis 0 should be marked as batch dynamic"
+    batch_dim = backend._make_batch_dim(list(_empty_graph_spec(meta).input_spec.tensor_specs))
+    assert batch_dim is not None
+    assert batch_dim.min == 2, "batch Dim min must equal the actual minimum axis_0 value"
+    assert batch_dim.max == 4, "batch Dim max must equal the actual maximum axis_0 value"
+
+
+def test_build_dynamic_shapes_batch_multiplier_only_bs1_with_dynamic_spatial(backend):
+    """CFG-doubled batch axis that is always 2 (batch=1 only) + dynamic spatial dims.
+
+    Mirrors the stable-diffusion case: batch is always 1 so axis_0 is always 2 (constant),
+    but image height/width vary across recordings.  The batch axis must NOT be marked
+    dynamic (min_val == max_val → static), while the spatial dims must still be symbolic.
+    """
+    # batch=1 only; axis_0 = 2 always; height/width vary
+    args1 = (torch.randn(2, 4, 32, 32),)
+    args2 = (torch.randn(2, 4, 64, 64),)
+    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
+    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=1))
+
+    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta), ([], ["x"]))
+
+    assert result is not None, "spatial dynamic dims should produce a non-None result"
+    assert 0 not in result["x"], "axis 0 (always 2) must NOT be marked dynamic"
+    assert 2 in result["x"], "height axis should be dynamic"
+    assert 3 in result["x"], "width axis should be dynamic"
 
 
 def test_build_dynamic_shapes_shared_dim_across_tensors(backend):
@@ -179,14 +204,14 @@ def test_build_dynamic_shapes_shared_dim_across_tensors(backend):
     meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
     meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
 
-    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta))
+    result = backend._build_dynamic_shapes(args1, {}, _empty_graph_spec(meta), ([], ["x", "y"]))
 
     assert result is not None
-    assert result[0][1] is result[1][1], "shared dim name must map to the same Dim instance"
+    assert result["x"][1] is result["y"][1], "shared dim name must map to the same Dim instance"
 
 
-def test_build_dynamic_shapes_kwargs_not_covered(backend):
-    """Tensors only in kwargs → no args batch axis → returns None."""
+def test_build_dynamic_shapes_kwargs_are_covered(backend):
+    """Dynamic kwargs are now included in the returned shapes dict."""
     arg = torch.randn(2, 32)
     kw1 = {"x": torch.randn(1, 10)}
     kw2 = {"x": torch.randn(2, 10)}
@@ -194,8 +219,38 @@ def test_build_dynamic_shapes_kwargs_not_covered(backend):
     meta = SampleMetadata.from_inputs((arg,), kw1, batch_size=1)
     meta.update_shapes_seen(SampleMetadata.from_inputs((arg,), kw2, batch_size=2))
 
-    result = backend._build_dynamic_shapes((arg,), kw1, _empty_graph_spec(meta))
-    assert result is None
+    result = backend._build_dynamic_shapes((arg,), kw1, _empty_graph_spec(meta), ([], ["arg", "x"]))
+    assert result is not None
+    assert "x" in result
+    assert 0 in result["x"], "axis 0 of kwargs tensor should be marked as batch dynamic"
+
+
+def test_build_dynamic_shapes_optional_none_kwargs_padded(backend):
+    """Optional kwargs that are None at recording time must still appear in dynamic_shapes.
+
+    torch.export.export requires that every key present in the kwargs passed to it
+    is covered in dynamic_shapes, even if the value is None (= no dynamic dims).
+    This mirrors the failure mode observed with UNet-style models where optional
+    arguments (timestep_cond, cross_attention_kwargs, …) are None at tune time.
+    """
+    arg = torch.randn(1, 10)
+    # Only the mandatory tensor kwarg is recorded; the optional ones are None.
+    kw_recorded = {"x": torch.randn(1, 10)}
+    kw_recorded_bs2 = {"x": torch.randn(2, 10)}
+    meta = SampleMetadata.from_inputs((arg,), kw_recorded, batch_size=1)
+    meta.update_shapes_seen(SampleMetadata.from_inputs((arg,), kw_recorded_bs2, batch_size=2))
+
+    # Actual kwargs dict passed to export includes a None-valued optional and a dict-valued optional.
+    actual_kwargs = {"x": torch.randn(1, 10), "opt_none": None, "opt_dict": {"key": "val"}}
+    result = backend._build_dynamic_shapes(
+        (arg,), actual_kwargs, _empty_graph_spec(meta), ([], ["arg", "x", "opt_none", "opt_dict"])
+    )
+
+    assert result is not None
+    assert "opt_none" in result, "optional None kwarg must be present in dynamic_shapes"
+    assert "opt_dict" in result, "optional dict kwarg must be present in dynamic_shapes"
+    assert result["opt_none"] is None, "None kwarg should map to None in dynamic_shapes"
+    assert result["opt_dict"] == {}, "dict kwarg should map to {} in dynamic_shapes"
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +360,7 @@ def test_to_dict_contains_required_keys(mock_aoti, backend, model, graph_spec, s
     assert state[TorchInductorAotBackend.STATE_DEVICE] == torch_device
 
 
+@requires_cuda
 def test_from_dict_restores_state(tmp_path, torch_device):
     compiled_path = tmp_path / "model.pt2"
     state = {
@@ -318,6 +374,7 @@ def test_from_dict_restores_state(tmp_path, torch_device):
     assert restored.state == BackendState.CHECKPOINT_LOADED
 
 
+@requires_cuda
 def test_from_dict_wrong_type_raises(tmp_path, torch_device):
     state = {TorchInductorAotBackend.STATE_TYPE: "WrongBackend"}
     with pytest.raises(ValueError, match="Invalid state_dict type"):

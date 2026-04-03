@@ -3,6 +3,11 @@
 """Torch backend module."""
 
 from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.onnx_runtime_backend import (
+    ONNXExecutionProvider,
+    ONNXRuntimeBackend,
+    ONNXRuntimeBackendConfig,
+)
 from aitune.torch.backend.tensorrt import (
     ONNXAutoCastConfig,
     ONNXQuantizationConfig,
@@ -28,7 +33,10 @@ from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendC
 __all__ = [
     "Backend",
     "ONNXAutoCastConfig",
+    "ONNXExecutionProvider",
     "ONNXQuantizationConfig",
+    "ONNXRuntimeBackend",
+    "ONNXRuntimeBackendConfig",
     "TensorRTBackend",
     "TensorRTBackendConfig",
     "TensorRTProfile",

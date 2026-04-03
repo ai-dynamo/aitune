@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import nvtx
 import torch
@@ -15,24 +15,15 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.utils.module import offload
+from aitune.torch.utils.module import get_forward_arguments_names, offload
+from aitune.torch.utils.shapes import (
+    create_inputs_mapping,
+    create_ordered_dynamic_shapes,
+    print_dynamic_shapes,
+    war_for_positional_arguments,
+)
 
 logger = getLogger(__name__)
-
-
-def _none_at_tensors(obj: Any) -> Any:
-    """Return a copy of *obj* with every ``torch.Tensor`` leaf replaced by ``None``.
-
-    Preserves the type of containers (tuple, list, dict).
-    """
-    if isinstance(obj, torch.Tensor):
-        return None
-    if isinstance(obj, dict):
-        return {k: _none_at_tensors(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        inner = [_none_at_tensors(v) for v in obj]
-        return type(obj)(inner)
-    return obj
 
 
 @dataclass
@@ -80,8 +71,6 @@ class TorchInductorAotBackend(Backend):
     STATE_COMPILED_MODEL_PATH = "compiled_model_path"
     STATE_DEVICE = "device"
 
-    _devices: ClassVar[list[str]] = ["cpu", "cuda"]
-
     def __init__(self, config: TorchInductorAotBackendConfig | None = None):
         """Initialize TorchInductorAotBackend.
 
@@ -117,7 +106,11 @@ class TorchInductorAotBackend(Backend):
             batch_size = min(max_batch_size, 2)
             args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=batch_size)
 
-        dynamic_shapes = self._build_dynamic_shapes(args, kwargs, graph_spec)
+        forward_args = get_forward_arguments_names(module.forward)
+        dynamic_shapes = self._build_dynamic_shapes(args, kwargs, graph_spec, forward_args)
+
+        if dynamic_shapes is not None:
+            print_dynamic_shapes(dynamic_shapes)
 
         logger.info("Exporting model with torch.export.export.")
         with torch.no_grad():
@@ -144,8 +137,10 @@ class TorchInductorAotBackend(Backend):
         self._activate()
         return self
 
-    def _build_dynamic_shapes(self, args: tuple, kwargs: dict, graph_spec: GraphSpec) -> list | None:
-        """Build a dynamic_shapes list for ``torch.export.export`` from graph_spec.
+    def _build_dynamic_shapes(
+        self, args: tuple, kwargs: dict, graph_spec: GraphSpec, forward_args: tuple[list[str], list[str]]
+    ) -> dict | None:
+        """Build a dynamic_shapes dict for ``torch.export.export``, keyed by parameter name.
 
         Creates one ``torch.export.Dim`` per symbolic dimension class:
 
@@ -155,13 +150,10 @@ class TorchInductorAotBackend(Backend):
         - **Dynamic axes** (``"dim*"``): one ``Dim.AUTO`` per unique symbolic name (e.g. ``"dim1"``
           for sequence length); torch.export infers valid ranges and divisibility constraints.
 
-        Note: dynamic dimensions residing exclusively in kwargs tensors are not covered; those
-        tensors will be compiled with static shapes.
-
         Returns:
-            A list matching the structure of ``args`` with ``{axis: Dim}`` dicts at tensor
-            positions that carry dynamic dimensions, or ``None`` if no dynamic dimension is
-            found in the positional args.
+            A dict mapping each forward parameter name to its ``{axis: Dim}`` constraints,
+            covering both positional args and keyword arguments, or ``None`` if no dynamic
+            dimension is found.
         """
         input_spec = graph_spec.input_spec
         if not any(ts.has_batch_axis() or ts.has_dynamic_axis() for ts in input_spec.tensor_specs):
@@ -170,40 +162,52 @@ class TorchInductorAotBackend(Backend):
         batch_dim = self._make_batch_dim(input_spec.tensor_specs)
         dynamic_dims = self._make_dynamic_dims(input_spec.tensor_specs)
 
-        dynamic_shapes_args = list(_none_at_tensors(args))
-        has_args_dynamic = False
-        for locator, tensor_spec in input_spec.tensor_data:
-            if not tensor_spec.name.startswith("args"):
-                continue
-            if not (tensor_spec.has_batch_axis() or tensor_spec.has_dynamic_axis()):
-                continue
-            has_args_dynamic = True
-            axis_dims = self._axis_dims_for_tensor(tensor_spec, batch_dim, dynamic_dims)
-            dynamic_shapes_args = list(locator.set_value(tuple(dynamic_shapes_args), axis_dims))
+        # Build flat map: tensor_spec_name → {axis: Dim} for all tensor specs
+        spec_to_dims: dict[str, dict] = {}
+        for tensor_spec in input_spec.tensor_specs:
+            if tensor_spec.has_batch_axis() or tensor_spec.has_dynamic_axis():
+                spec_to_dims[tensor_spec.name] = self._axis_dims_for_tensor(tensor_spec, batch_dim, dynamic_dims)
+            else:
+                spec_to_dims[tensor_spec.name] = {}
 
-        return dynamic_shapes_args if has_args_dynamic else None
+        # Map spec names to forward parameter names (handles both args and kwargs)
+        fwd_args, fwd_kwargs = forward_args
+        input_args, input_kwargs = create_inputs_mapping(input_spec)
+        war_for_positional_arguments(input_args, fwd_args, fwd_kwargs)
+        result = create_ordered_dynamic_shapes(fwd_args, fwd_kwargs, input_args, input_kwargs, spec_to_dims)
+
+        # WAR: Non-tensor kwargs have to be mentioned in dynamic shapes - adding missing ones.
+        # torch.export.export requires that every key present in the kwargs passed to it
+        # appears in dynamic_shapes. Optional kwargs that are None at recording time are
+        # absent from input_kwargs but are still forwarded to export.
+        for key in kwargs:
+            if key not in result:
+                result[key] = {} if isinstance(kwargs[key], (dict, list)) else None
+
+        return result
 
     @staticmethod
     def _make_batch_dim(tensor_specs) -> Any:
-        """Create a base ``torch.export.Dim`` for batch axes, or ``None`` if no batch axis exists.
+        """Create a ``torch.export.Dim`` for batch axes, or ``None`` if the batch is static.
 
-        The Dim's min/max represent the base batch size (axis size divided by multiplier).
+        Uses the actual axis values from ``TensorSpec.min_shape`` / ``max_shape`` directly.
+        For a CFG-doubled UNet with ``batch_sizes=[1, 2]``, ``axis_0 ∈ [2, 4]``, so the
+        Dim range is ``[2, 4]`` and the axis constraint is just ``batch_dim`` with no multiplier.
+
+        Returns ``None`` when ``min_val == max_val``: all recordings had the same batch axis
+        size, so the dimension is static and should not be marked dynamic.
         """
         if not any(ts.has_batch_axis() for ts in tensor_specs):
             return None
-        min_base: float = float("inf")
-        max_base = 1
+        min_val = float("inf")
+        max_val = 0
         for ts in tensor_specs:
-            for axis, multiplier in ts.get_batch_axis_multipliers().items():
-                min_base = min(min_base, ts.min_shape[axis] // multiplier)
-                max_base = max(max_base, ts.max_shape[axis] // multiplier)
-        # Do not pass min=1: torch.export.Dim defaults to min=2, which avoids
-        # torch.export specialising the batch dimension as a constant when exporting
-        # at batch_size=1.
-        dim_kwargs: dict[str, int] = {"max": max_base}
-        if min_base not in (float("inf"), 1):
-            dim_kwargs["min"] = int(min_base)
-        return torch.export.Dim("batch", **dim_kwargs)
+            for axis in ts.get_batch_axis_multipliers():
+                min_val = min(min_val, ts.min_shape[axis])
+                max_val = max(max_val, ts.max_shape[axis])
+        if min_val == max_val:
+            return None
+        return torch.export.Dim("batch", min=int(min_val), max=int(max_val))
 
     @staticmethod
     def _make_dynamic_dims(tensor_specs) -> dict[str, Any]:
@@ -225,8 +229,9 @@ class TorchInductorAotBackend(Backend):
     def _axis_dims_for_tensor(tensor_spec, batch_dim: Any, dynamic_dims: dict[str, Any]) -> dict[int, Any]:
         """Return the ``{axis_index: Dim}`` mapping for a single tensor spec."""
         axis_dims: dict[int, Any] = {}
-        for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
-            axis_dims[axis] = multiplier * batch_dim if multiplier != 1 else batch_dim
+        if batch_dim is not None:
+            for axis in tensor_spec.get_batch_axis_multipliers():
+                axis_dims[axis] = batch_dim
         for i, entry in enumerate(tensor_spec.shape):
             if isinstance(entry, str) and entry.startswith("dim"):
                 axis_dims[i] = dynamic_dims[entry]

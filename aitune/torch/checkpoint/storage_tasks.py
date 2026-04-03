@@ -144,11 +144,21 @@ class CopyBackendArtifactsTask(SaveTask):
                 elif property_name == TunedModule.BACKENDS_KEY:
                     # value is a backends_data (see TunedModule.to_dict())
                     for _, backend_data in value:
+                        # Each backend gets its own numbered subdirectory so that artifacts with
+                        # identical filenames from different backends do not collide, and each
+                        # artifact is stored under its original name (required e.g. by ONNX
+                        # Runtime which resolves external-data paths from the name embedded in
+                        # the .onnx protobuf).
+                        backend_dir = target_path / str(next(counter))
+                        backend_dir.mkdir()
                         for backend_property_name, backend_value in backend_data.items():
                             # look for Path objects
                             if isinstance(backend_value, Path):
-                                new_path = target_path / f"{next(counter)}_{backend_value.name}"
-                                shutil.copy(backend_value, new_path)
+                                new_path = backend_dir / backend_value.name
+                                if backend_value.is_dir():
+                                    shutil.copytree(backend_value, new_path)
+                                else:
+                                    shutil.copy(backend_value, new_path)
                                 backend_data[backend_property_name] = new_path  # overwrite with new path
 
 

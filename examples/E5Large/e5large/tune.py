@@ -8,7 +8,7 @@ from pathlib import Path
 
 import torch
 from aitune.torch import MaxThroughputStrategy, inspect, save, tune, wrap
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorAotBackend
 from aitune.torch.config import config as global_config
 
 from .cmd_args import get_parser
@@ -92,8 +92,9 @@ def tune_model(
         modules,
         strategy=MaxThroughputStrategy(
             backends=[
-                TensorRTBackend(),  # fails, symbolic_shapes.ConstraintViolationError - probably requires user specified dynamic shapes
+                # TensorRTBackend(),  # fails on correctness validation
                 TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
+                TorchInductorAotBackend(),
             ]
         ).enable_find_max_batch_size(True),
     )

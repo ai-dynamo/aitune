@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 0.4.0 (unreleased)
 - feat: Torch Inductor Ahead-of-Time (AoT) backend support added
+- feat: ONNXRuntime backend support - CUDA and TensorRT execution providers
 - chore: Renamed TorchInductorBackend to TorchInductorJitBackend - breaking change
 
 ## 0.3.0
