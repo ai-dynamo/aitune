@@ -57,24 +57,28 @@ The generated image will be saved in the specified output directory.
 
 ### AI Dynamo FLUX Deployment
 
-To run FLUX as AI Dynamo service, we have prepared a few additional configs and scripts.
+Serves the tuned FLUX model as an OpenAI-compatible image generation endpoint via [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo).
 
-The service is split into backend (`flux/dynamo/backend.py`) and frontend (`flux/dynamo/frontend.py`) components. Docker and Docker Compose are used to make setup simple.
+**Prerequisite:** tune the model first and set `Backend.tuned_model_path` in `config.yaml`.
 
-First, start all services by running `HF_TOKEN=hf.... docker compose --profile all up --detach`. This will build and start all required services. The token for the HuggingFace is required to download the model.
+`run_dynamo.sh` starts everything in one command — it launches the Dynamo HTTP frontend and the backend worker, waits for both to be ready, then runs a smoke-test image generation request:
 
-After successful download, tuning and services start run below command to test the service.
-
-```sh
-python -m flux.dynamo.client --help # to see the prompts
-python -m flux.dynamo.client --num-requests 1
-python -m flux.dynamo.client --num-requests 2
-python -m flux.dynamo.client --num-requests 4
-python -m flux.dynamo.client --num-requests 8
-python -m flux.dynamo.client --num-requests 100
+```bash
+./run_dynamo.sh
+# Starting the frontend...
+# Starting the backend...
+# Waiting for dyn://aitune.backend.generate to appear in /health...
+# Image saved to output.png
 ```
 
-Finally, to shut it down use `docker compose --profile all down`.
+The frontend listens on port 8000 (OpenAI-compatible). You can also call it directly:
+
+```bash
+python -m flux.dynamo.client --prompt "A futuristic cityscape at night"
+# Image saved to output.png
+```
+
+Or use any OpenAI-compatible client pointed at `http://localhost:8000/v1` with model `black-forest-labs/FLUX.1-dev`.
 
 #### Dynamic batching
 

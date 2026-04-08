@@ -8,7 +8,7 @@ Backend:
   prompt: "A beautiful sunset over a calm ocean"
   sizes: [[512, 512]]
   steps: 10
-  # tuned_model_path: "tuned_model.pt"
+  tuned_model_path: "stable_diffusion.ait"
   force_tune: false
   image_storage_path: "/images"
   ServiceArgs:

@@ -7,6 +7,7 @@ from logging import INFO, basicConfig, getLogger
 from pathlib import Path
 
 import torch
+from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch import MaxThroughputStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorAotBackend
 from aitune.torch.config import config as global_config
@@ -59,8 +60,6 @@ def tune_model(
     ]
     input_list = [i["sentences"] for i in input_texts]
 
-    embeddings = model.encode(sentences=input_list, batch_size=4, normalize_embeddings=True, convert_to_tensor=True)
-
     def call_wrapper(*args, **kwargs):
         return model.encode(
             *args,
@@ -69,9 +68,11 @@ def tune_model(
             show_progress_bar=False,
             convert_to_numpy=False,
             convert_to_tensor=True,
-            batch_size=4,
+            batch_size=global_context.get(BATCH_SIZE_KEY, 4),
             device="cuda",
         )
+
+    embeddings = call_wrapper(sentences=input_list)
 
     # NOTE: without min_depth=2, inspector finds a wrapper module `pipeline._modules["0"]` and fails with incorrect input in tunning
     #     with error: RuntimeError: Only Tensors created explicitly by the user (graph leaves) support the deepcopy protocol at the moment. @ torch/_tensor.py", line 136, in __deepcopy__
@@ -93,10 +94,13 @@ def tune_model(
         strategy=MaxThroughputStrategy(
             backends=[
                 # TensorRTBackend(),  # fails on correctness validation
+                # TRT 10.10 fails, symbolic_shapes.ConstraintViolationError - probably requires user specified dynamic shapes
+                # TRT 10.14 fails in value checking - it produces different results then eager mode
+                # TensorRTBackend(),
                 TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
                 TorchInductorAotBackend(),
             ]
-        ).enable_find_max_batch_size(True),
+        ).enable_find_max_batch_size(False),  # NOTE: We need only batch size specified by the user
     )
 
     tune(call_wrapper, input_texts, batch_sizes=[1], dry_run=True)

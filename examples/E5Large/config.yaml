@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 Backend:
-  model_name: "intfloat/e5-large-v2"
+  model_name: intfloat/e5-large-v2
   max_batch_size: 8
   batch_timeout: 0.5
   force_tune: false
-  tuned_model_path: null  # If null, will use default cache directory
+  tuned_model_path: e5large_tuned.pt
 

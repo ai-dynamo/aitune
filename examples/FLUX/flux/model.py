@@ -5,8 +5,10 @@
 import torch
 from diffusers import FluxPipeline
 
+MODEL_NAME = "black-forest-labs/FLUX.1-dev"
 
-def get_pipeline(model_name: str = "black-forest-labs/FLUX.1-dev", device: str = "cuda"):
+
+def get_pipeline(model_name: str = MODEL_NAME, device: str = "cuda"):
     """Get a pretrained Flux model from HuggingFace.
 
     Args:

@@ -26,6 +26,20 @@ NVIDIA AITune can be installed from `pypi.org`.
 pip install --extra-index-url https://pypi.nvidia.com aitune
 ```
 
+### PyTorch 2.10 + CUDA 13 (torch210 extra)
+
+To use PyTorch 2.10 with CUDA 13 support, install the `torch210` optional dependency group:
+
+```bash
+pip install --extra-index-url https://pypi.nvidia.com --index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
+```
+
+When using `uv`, add `--torch-backend=cu130` so that uv resolves the CUDA 13 variants of the PyTorch packages:
+
+```bash
+uv pip install --torch-backend=cu130 --extra-index-url https://pypi.nvidia.com "aitune[torch210]"
+```
+
 ## Installing from Source
 
 ```bash
@@ -39,4 +53,10 @@ or use editable mode for development:
 
 ```bash
 pip install --extra-index-url https://pypi.nvidia.com -e .
+```
+
+To install the `torch210` extra from source with `uv`:
+
+```bash
+uv pip install --torch-backend=cu130 --extra-index-url https://pypi.nvidia.com -e ".[torch210]"
 ```

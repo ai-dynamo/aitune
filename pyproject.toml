@@ -63,6 +63,7 @@ test = [
     "pytest>=9.0.0",
     "pytest-mock",
     "pytest-cov",
+    "pytest-xdist",
     "pillow",
     "datasets>=3.3.2",
     "transformers<5",
@@ -93,6 +94,18 @@ functional-test = [
     "transformers>=4.54,<5",
     "sentencepiece>=0.2.0",
     "urllib3>=2.6.3", # sec
+]
+
+dynamo = [
+    "ai-dynamo-runtime>=0.1",
+    "uvloop",
+]
+
+torch210 = [
+    "torch>=2.10",
+    "torch-tensorrt>=2.10",
+    "torchao>=0.16",
+    "nvidia-cuda-runtime-cu13==0.0.0a0"
 ]
 
 doc = [
@@ -130,7 +143,10 @@ log_cli = true
 addopts = ["--import-mode=importlib", "--doctest-modules"]
 pythonpath = ["."]
 testpaths = ["aitune", "tests/unit"]
-markers = ["slow: mark test as slow"]
+markers = [
+    "slow: mark test as slow",
+    "dynamo: mark test as requiring ai-dynamo-runtime (skip without aitune[dynamo])",
+]
 
 [tool.ruff]
 preview = true

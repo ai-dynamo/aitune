@@ -94,6 +94,8 @@ nav:
                 - Tuning Workflow: guides/advanced/tuning_workflow.md
                 - Execution Graphs: guides/advanced/execution_graphs.md
                 - NVTX Profiling: guides/advanced/profiling_nvtx.md
+            - AI Agents:
+                - Tuning Assistant: guides/tuning-assistant.md
 
     -   Examples:
             - Overview: examples/examples.md

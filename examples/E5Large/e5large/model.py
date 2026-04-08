@@ -4,8 +4,10 @@
 
 from sentence_transformers import SentenceTransformer
 
+MODEL_NAME = "intfloat/e5-large-v2"
 
-def get_model(model_name: str = "intfloat/e5-large-v2", device: str = "cuda"):
+
+def get_model(model_name: str = MODEL_NAME, device: str = "cuda"):
     """Get a pretrained SentenceTransformer.
 
     Args:

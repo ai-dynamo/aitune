@@ -50,30 +50,32 @@ inference --prompt "query: What is the capital city of France?"
 - `--prompt`: Text prompt for embedding (default: "query: how much protein should a female eat")
 - `--max-batch-size`: Maximum batch size (default: 4)
 
-### AI Dynamo E5Large Deployment
+### AI Dynamo E5Large
 
-To run E5Large as AI Dynamo service, we have prepared a few additional configs and scripts.
+Serves the tuned E5Large model as an OpenAI-compatible embedding endpoint via [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo).
 
-The service is split into backend (`e5large/dynamo/backend.py`) and frontend (`e5large/dynamo/frontend.py`) components. Docker and Docker Compose are used to make setup simple.
+**Prerequisite:** tune the model first and set `Backend.tuned_model_path` in `config.yaml`.
 
-First, start all services by running `HF_TOKEN=hf.... docker compose --profile all up --detach`. This will build and start all required services. The token for the HuggingFace is required to download the model.
+`run_dynamo.sh` starts everything in one command — it launches the Dynamo HTTP frontend and the backend worker, waits for both to be ready, then runs a smoke-test embedding request:
 
-After successful download, tuning and services start run below command to test the service.
-
-```sh
-python -m e5large.dynamo.client --help # to see the prompts
-python -m e5large.dynamo.client --num-requests 1
-python -m e5large.dynamo.client --num-requests 2
-python -m e5large.dynamo.client --num-requests 4
-python -m e5large.dynamo.client --num-requests 8
-python -m e5large.dynamo.client --num-requests 100
+```bash
+./run_dynamo.sh
+# Starting the frontend...
+# Starting the backend...
+# Waiting for dyn://aitune.backend.generate to appear in /health...
+# Embedding dim: 1024
+# First 5 values: [0.022, -0.034, ...]
 ```
 
-Finally, to shut it down use `docker compose --profile all down`.
+The frontend listens on port 8000 (OpenAI-compatible). You can also call it directly:
 
-#### Dynamic batching
+```bash
+python -m e5large.dynamo.client --sentence "query: What is the capital city of France?"
+# Embedding dim: 1024
+# First 5 values: [...]
+```
 
-The service uses dynamic batching — requests are grouped and processed together for efficiency. Currently, there is one frontend and one worker. To support multiple workers, move batching to a separate service that handles request grouping.
+Or use any OpenAI-compatible client pointed at `http://localhost:8000/v1` with model `intfloat/e5-large-v2`.
 
 
 ## Model Details

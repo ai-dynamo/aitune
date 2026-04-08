@@ -1,0 +1,116 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["ai-dynamo<2.0.0", "openai", "aitune"]
+# use_gated_hf_token = true
+# [environment]
+# DYN_DISCOVERY_BACKEND = "file"
+# ///
+"""Dynamo worker end-to-end integration test.
+
+Starts a real Dynamo HTTP frontend and a fake embedding backend (returns random
+torch.randn vectors), sends one OpenAI-compatible embedding request, asserts the
+response shape, then kills all subprocesses.
+
+Run with:
+    uv run tests/functional/dynamo/001_worker_e2e.py
+"""
+
+import multiprocessing
+import subprocess
+import sys
+import time
+import urllib.request
+from typing import Any
+
+import torch
+
+import aitune.dynamo as dyn
+
+# Dynamo's register_model fetches config.json from HuggingFace for ModelType.Embedding —
+# use a real model ID so the metadata lookup succeeds. Actual inference returns torch.randn.
+_MODEL = "intfloat/e5-large-v2"
+_PORT = 8000
+_BASE_URL = f"http://localhost:{_PORT}/v1"
+
+
+def embed(request: Any) -> torch.Tensor:
+    """Return random embeddings — no real model needed.
+
+    Args:
+        request: An object with an ``input`` attribute that is either a string
+            or a list of strings (the Dynamo ``EmbeddingRequest`` shape).
+
+    Returns:
+        A ``torch.Tensor`` of shape ``(n_sentences, 1024)`` with random values.
+    """
+    sentences = request.input if isinstance(request.input, list) else [request.input]
+    return torch.randn(len(sentences), 1024)
+
+
+def run_backend() -> None:
+    """Entry point for the backend multiprocessing.Process."""
+    config = dyn.DynamoWorkerConfig(type="embedding", model_path=_MODEL)
+    dyn.dynamo_worker(embed, config)
+
+
+def _poll(url: str, match: str, retries: int = 20, delay: float = 2) -> None:
+    """Poll *url* until *match* appears in the response body.
+
+    Args:
+        url: HTTP URL to GET.
+        match: Substring to look for in the response body.
+        retries: Maximum number of attempts.
+        delay: Seconds between attempts.
+
+    Raises:
+        RuntimeError: If *match* is not found within *retries* attempts.
+    """
+    for attempt in range(1, retries + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=5) as resp:
+                if match in resp.read().decode():
+                    return
+        except OSError:
+            pass
+        if attempt < retries:
+            print(f"  waiting for {match!r} in {url} (attempt {attempt}/{retries})...")
+            time.sleep(delay)
+    raise RuntimeError(f"Timed out waiting for {match!r} to appear in {url}")
+
+
+def main() -> None:
+    """Run the full e2e flow: frontend + backend + one embedding request."""
+    frontend = subprocess.Popen(
+        [sys.executable, "-m", "dynamo.frontend", "--http-port", str(_PORT)],
+    )
+    backend = multiprocessing.Process(target=run_backend, daemon=True)
+    backend.start()
+
+    try:
+        print("Waiting for Dynamo endpoint to register...")
+        _poll(f"http://localhost:{_PORT}/health", "dyn://aitune.backend.generate")
+
+        print("Waiting for model to appear in /v1/models...")
+        _poll(f"http://localhost:{_PORT}/v1/models", _MODEL)
+
+        from openai import OpenAI
+
+        client = OpenAI(base_url=_BASE_URL, api_key="unused")
+        response = client.embeddings.create(model=_MODEL, input="hello world")
+
+        assert len(response.data) == 1, f"Expected 1 embedding, got {len(response.data)}"
+        assert response.data[0].object == "embedding", f"Unexpected object type: {response.data[0].object}"
+        assert len(response.data[0].embedding) == 1024, f"Expected 1024 dims, got {len(response.data[0].embedding)}"
+
+        print("OK — embedding shape (1, 1024)")
+    finally:
+        backend.kill()
+        backend.join(timeout=5)
+        frontend.kill()
+        frontend.wait()
+
+
+if __name__ == "__main__":
+    main()

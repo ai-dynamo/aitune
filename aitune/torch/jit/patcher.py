@@ -165,4 +165,6 @@ def patch_for_jit_tuning(func: Callable[..., T]) -> Callable[..., T]:
 def jit_reset():
     """Reset the JIT patcher."""
     Patcher.unpatch_torch(unpatch_modules=True)
+    atexit.unregister(PatchedModule.on_python_exit)
+    atexit.unregister(InspectModule.on_python_exit)
     InspectModule.reset() if config.inspect_mode else PatchedModule.reset()

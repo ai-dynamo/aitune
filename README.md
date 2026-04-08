@@ -145,6 +145,7 @@ modules_info = ait.inspect(pipe, input_data)
 def infer(prompt):
     return pipe(prompt, width=1024, height=1024, num_inference_steps=10)
 
+
 # modules_info = ait.inspect(pipe, input_data, inference_function=infer)
 
 # Display modules info
@@ -239,9 +240,9 @@ If there is a need to adjust just-in-time options, you can do it but currently t
 from aitune.torch.jit.config import config
 from aitune.torch.backend import TensorRTBackend
 
-config.max_depth_level = 1 # change the default maximum depth level for nested modules to be tuned
-config.detect_graph_breaks = False # turn off graph break detection
-config.backends = [TensorRTBackend()] # change the backends
+config.max_depth_level = 1  # change the default maximum depth level for nested modules to be tuned
+config.detect_graph_breaks = False  # turn off graph break detection
+config.backends = [TensorRTBackend()]  # change the backends
 ```
 
 ## Comparison between ahead-of-time and just-in-time tuning
@@ -293,6 +294,7 @@ The `inspect` function allows you to analyze PyTorch models and pipelines to und
 import aitune.torch as ait
 import torch.nn as nn
 
+
 class SimpleModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -300,6 +302,7 @@ class SimpleModel(nn.Module):
 
     def forward(self, x):
         return self.linear(x)
+
 
 model = SimpleModel()
 
@@ -338,9 +341,11 @@ model = SimpleModel()
 # Wrap the model
 model = ait.Module(model)
 
+
 # Define inference function
 def inference_fn(x):
     return model(x)
+
 
 # Tune the model
 ait.tune(
@@ -356,6 +361,7 @@ The `save` function allows you to persist tuned models for later use. It stores 
 ```python
 # Save the tuned model
 import aitune.torch as ait
+
 ait.save(model, "tuned_model.ait")
 ```
 
@@ -379,6 +385,7 @@ The `load` function enables you to load previously tuned models from a checkpoin
 ```python
 # Load the tuned model
 import aitune.torch as ait
+
 tuned_model = ait.load(model, "tuned_model.ait")
 ```
 
@@ -395,7 +402,7 @@ The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT
 ```python
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, ONNXAutoCastConfig
 
-config = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig()) # FP16 autocast through ModelOpt
+config = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig())  # FP16 autocast through ModelOpt
 backend = TensorRTBackend(config)
 ```
 

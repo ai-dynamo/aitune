@@ -18,7 +18,7 @@ dependencies = [
 [project.optional-dependencies]
 dynamo = [
     "aitune-examples-common",
-    "ai-dynamo==0.6.0",
+    "ai-dynamo<2.0.0",
     "uvicorn",
     "aiohttp",
     "aiofiles>=24.1.0",
@@ -27,7 +27,7 @@ dynamo = [
 ]
 
 [tool.uv.sources]
-aitune = { path  = "../../" }
+aitune = { path  = "../../", editable = true }
 aitune-examples-common = { path = "../../examples/common" }
 
 [project.scripts]

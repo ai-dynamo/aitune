@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All 
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Flux Pipeline Tuning with NVIDIA AITune
+# Stable Diffusion Pipeline Tuning with NVIDIA AITune
 
 This example demonstrates how to use NVIDIA AITune to tune the Stable Diffusion text-to-image model from Hugging Face's diffusers library.
 
@@ -58,24 +58,28 @@ The generated image will be saved in the specified output directory.
 
 ### AI Dynamo Stable Diffusion Deployment
 
-To run Stable Diffusion as AI Dynamo service, we have prepared a few additional configs and scripts.
+Serves the tuned Stable Diffusion model as an OpenAI-compatible image generation endpoint via [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo).
 
-Code starts in `stable_diffusion/dynamo/backend.py`. Docker and Docker Compose are used to make setup simple.
+**Prerequisite:** tune the model first and set `Backend.tuned_model_path` in `config.yaml`.
 
-First, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
+`run_dynamo.sh` starts everything in one command — it launches the Dynamo HTTP frontend and the backend worker, waits for both to be ready, then runs a smoke-test image generation request:
 
-After successful tuning and services start run below command to test the service.
-
-```sh
-python -m stable_diffusion.dynamo.client --help # to see the prompts
-python -m stable_diffusion.dynamo.client --num-requests 1
-python -m stable_diffusion.dynamo.client --num-requests 2
-python -m stable_diffusion.dynamo.client --num-requests 4
-python -m stable_diffusion.dynamo.client --num-requests 8
-python -m stable_diffusion.dynamo.client --num-requests 100
+```bash
+./run_dynamo.sh
+# Starting the frontend...
+# Starting the backend...
+# Waiting for dyn://aitune.backend.generate to appear in /health...
+# Image saved to output.png
 ```
 
-Finally, to shut it down use `docker compose --profile all down`.
+The frontend listens on port 8000 (OpenAI-compatible). You can also call it directly:
+
+```bash
+python -m stable_diffusion.dynamo.client --prompt "A serene mountain landscape at sunset"
+# Image saved to output.png
+```
+
+Or use any OpenAI-compatible client pointed at `http://localhost:8000/v1` with model `stabilityai/stable-diffusion-3-medium-diffusers`.
 
 #### Dynamic batching
 

@@ -5,8 +5,10 @@
 import torch
 from diffusers import DiffusionPipeline
 
+MODEL_NAME = "stabilityai/stable-diffusion-3-medium-diffusers"
 
-def get_pipeline(model_name: str = "stabilityai/stable-diffusion-3-medium-diffusers", device: str = "cuda"):
+
+def get_pipeline(model_name: str = MODEL_NAME, device: str = "cuda"):
     """Get a pretrained Stable Diffusion model from HuggingFace.
 
     Args:

@@ -357,5 +357,6 @@ notebooks/checkpoints/
 
 # agents generated files
 tuning/
-
+docs/superpowers/
+.claude/agent-memory-local/
 .worktrees/

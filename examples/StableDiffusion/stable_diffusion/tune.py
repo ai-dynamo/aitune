@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tune Stable Diffusion model."""
 
+import logging
 import os
-from logging import basicConfig, getLogger
 
 from aitune.torch import FirstWinsStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorJitBackend
 from stable_diffusion.cmd_args import parse_args
 from stable_diffusion.model import get_pipeline
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=None, strategy=None):
@@ -70,7 +70,9 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
 def main():
     """Entry point for the script."""
     log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
-    basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
+    logging.basicConfig(
+        level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True
+    )
     args = parse_args()
     tune_model(
         model_name=args.model_name,

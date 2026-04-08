@@ -21,8 +21,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dynamo = [
-    "aitune-examples-common",
-    "ai-dynamo==0.6.0",
+    "ai-dynamo<2.0.0",
+    "openai",
     "uvicorn",
     "aiohttp",
     "aiofiles",
@@ -31,8 +31,7 @@ dynamo = [
 ]
 
 [tool.uv.sources]
-aitune = { path = "../../" }
-aitune-examples-common = { path = "../../examples/common" }
+aitune = { path = "../../", editable = true }
 
 [project.scripts]
 tune = "flux.tune:main"
