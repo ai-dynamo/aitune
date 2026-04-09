@@ -521,7 +521,7 @@ python your_script.py
 Once enabled, you can profile your application with Nsight Systems:
 
 ```bash
-NVTX_ENABLE=1 nsys profile -o output.nsys-rep python your_script.py
+NVTX_ENABLE=1 nsys profile -o output.nsys-rep -trace=cuda,nvtx,osrt python your_script.py
 ```
 
 The NVTX annotations will appear as colored regions in the timeline, helping you identify:
@@ -529,6 +529,94 @@ The NVTX annotations will appear as colored regions in the timeline, helping you
 * Backend inference calls (TensorRT, Torch-TensorRT, TorchAO, etc.)
 * Tuning operation
 * Performance bottlenecks
+
+
+
+## Hardware Metrics
+
+NVIDIA AITune can collect hardware metrics during tuning and inference, giving you visibility into resource utilization per module and backend. Metrics are collected in a background process and reported at program exit.
+
+**Note**: Hardware metrics collection is disabled by default to avoid overhead in production environments.
+
+### Enabling Hardware Metrics
+
+Set the environment variable before running your script:
+
+```bash
+export AITUNE_HARDWARE_METRICS=1
+python your_script.py
+```
+
+### Collected Metrics
+
+The following metrics are sampled continuously (every 100 ms by default) and aggregated per module and backend:
+
+| Category | Metrics |
+|---|---|
+| **GPU memory** (per device) | `cuda:N` used memory [GB] |
+| **GPU utilization** (per device) | `cuda:N` utilization mean / max [%] |
+| **GPU power** (per device) | `cuda:N` power mean / max [W] |
+| **Host CPU** | CPU utilization [%] |
+| **Host memory** | Used / free system memory |
+| **PyTorch allocator** | Allocated and reserved CUDA memory |
+
+GPU metrics require NVML (available when running on a system with NVIDIA drivers). If NVML is unavailable, only host and PyTorch metrics are collected.
+
+### Output
+
+At program exit, AITune logs a summary table and writes a timestamped CSV file to the working directory:
+
+```text
+hardware_metrics_20260402_153012.csv
+```
+
+The log summary looks like:
+
+```text
+INFO Hardware metrics summary:
+╒════════════════════════╤══════════════════════════════╤════════════╤════════════╤══════════════╤═════════════╤═════════════╤═════════════╕
+│ Module                 │ Backend                      │    Host    │   Cuda:0   │    Cuda:0    │   Cuda:0    │  Power [W]  │  Power [W]  │
+│                        │                              │  Mem [GB]  │  Mem [GB]  │  Util% mean  │  Util% max  │    mean     │     max     │
+╞════════════════════════╪══════════════════════════════╪════════════╪════════════╪══════════════╪═════════════╪═════════════╪═════════════╡
+│ CLIPTextModel          │ TensorRTBackend(             │   15.53    │    1.73    │     1.03     │      7      │    72.33    │   112.26    │
+│                        │     quantization_config=None │            │            │              │             │             │             │
+│                        │ )                            │            │            │              │             │             │             │
+├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+│ Decoder                │ TensorRTBackend(             │   15.43    │    1.81    │      12      │     56      │   100.88    │   148.19    │
+│                        │     quantization_config=None │            │            │              │             │             │             │
+│                        │ )                            │            │            │              │             │             │             │
+├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+│ Decoder                │ TensorRTBackend(             │   15.46    │    1.8     │    33.38     │     60      │   117.22    │   167.79    │
+│                        │     use_dynamo=False,        │            │            │              │             │             │             │
+│                        │     quantization_config=None │            │            │              │             │             │             │
+│                        │ )                            │            │            │              │             │             │             │
+├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+│ Decoder                │ TorchInductorJitBackend()    │   15.53    │    1.7     │     3.12     │     85      │    85.92    │   179.21    │
+├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+│ FluxTransformer2DModel │ TensorRTBackend(             │   14.36    │    1.79    │      0       │      0      │    67.84    │    71.79    │
+│                        │     quantization_config=None │            │            │              │             │             │             │
+│                        │ )                            │            │            │              │             │             │             │
+├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+│ FluxTransformer2DModel │ TensorRTBackend(             │   14.35    │    1.79    │      0       │      0      │    63.46    │    63.46    │
+│                        │     use_dynamo=False,        │            │            │              │             │             │             │
+│                        │     quantization_config=None │            │            │              │             │             │             │
+│                        │ )                            │            │            │              │             │             │             │
+├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+│ FluxTransformer2DModel │ TorchInductorJitBackend()    │   15.53    │    1.79    │     2.44     │     85      │    84.09    │   179.21    │
+├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+│ T5EncoderModel         │ TensorRTBackend(             │   16.65    │    1.77    │     1.76     │     85      │    70.57    │   179.21    │
+│                        │     quantization_config=None │            │            │              │             │             │             │
+│                        │ )                            │            │            │              │             │             │             │
+╘════════════════════════╧══════════════════════════════╧════════════╧════════════╧══════════════╧═════════════╧═════════════╧═════════════╛
+```
+
+### Combining with NVTX
+
+Hardware metrics and NVTX profiling can be enabled together:
+
+```bash
+AITUNE_HARDWARE_METRICS=1 NVTX_ENABLE=1 nsys profile -o output.nsys-rep -trace=cuda,nvtx,osrt python your_script.py
+```
 
 ## Examples
 

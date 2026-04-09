@@ -10,7 +10,7 @@ from typing import Any
 from polygraphy.backend.trt import CreateConfig, Profile, engine_from_network, network_from_onnx_path, save_engine
 from wrapt import lazy_import
 
-from aitune.utils.system_monitor import SystemMonitor
+from aitune.utils.monitoring import annotate
 
 trt = lazy_import("tensorrt")
 
@@ -53,7 +53,6 @@ class TensorRTBuilder:
         self.timing_cache = timing_cache
         self.profiles = profiles or []
         self.enable_tf32 = enable_tf32
-        self.system_monitor = SystemMonitor()
 
     def build(self) -> Path:
         """Build the TensorRT engine.
@@ -100,7 +99,7 @@ class TensorRTBuilder:
         Returns:
             TensorRT configuration object
         """
-        with self.system_monitor.system_stats_context(log_label="TensorRT config creation"):
+        with annotate("build: TensorRT config creation"):
             # Build configuration using the new method
             config_kwargs = self._build_create_config_kwargs(
                 max_workspace_size=self.workspace_size,
@@ -123,7 +122,7 @@ class TensorRTBuilder:
             TensorRT network
         """
         logger.info("Creating TensorRT network from ONNX: %s", self.input_onnx_path)
-        with self.system_monitor.system_stats_context(log_label="Creating TensorRT network"):
+        with annotate("build: Creating TensorRT network"):
             network = network_from_onnx_path(self.input_onnx_path.as_posix(), strongly_typed=True)
             logger.info("Network created successfully")
             return network
@@ -139,7 +138,7 @@ class TensorRTBuilder:
             TensorRT engine
         """
         logger.info("Building TensorRT engine")
-        with self.system_monitor.system_stats_context(log_label="Engine building from network"):
+        with annotate("build: Engine building from network"):
             engine = engine_from_network(network=network, config=config)
             logger.info("Engine built successfully")
             return engine
@@ -220,7 +219,7 @@ class TensorRTBuilder:
         """
         try:
             logger.info("Saving TensorRT engine to %s", path)
-            with self.system_monitor.system_stats_context(log_label="Saving engine"):
+            with annotate("build: Saving engine"):
                 save_engine(engine=engine, path=path.as_posix())
                 logger.info("TensorRT engine built and saved successfully: %s", path)
         except Exception as e:

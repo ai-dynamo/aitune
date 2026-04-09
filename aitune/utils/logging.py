@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from aitune.global_context import LIBRARY_LOGGING_KEY, global_context
-from aitune.torch.config import CONSOLE_OUTPUT_ENABLE
+from aitune.utils.env_vars import CONSOLE_OUTPUT_ENABLE
 
 
 def setup_logging(
@@ -40,7 +40,6 @@ def setup_logging(
 
     # Set specific modules to different levels
     set_module_level("aitune.torch.backend.tensorrt", logging.DEBUG)  # Verbose TensorRT logs
-    set_module_level("aitune.utils.system_monitor", logging.INFO)     # Normal system logs
 
 
     Args:
@@ -96,9 +95,6 @@ def setup_logging(
     if log_file:
         logging.info("Logs are being written to: %s", os.path.abspath(log_file))
 
-    if root_level == logging.DEBUG:
-        enable_gpu_memory_logging()
-
 
 def set_module_level(module_name: str, level: int | str):
     """Set logging level for a specific module.
@@ -114,17 +110,6 @@ def set_module_level(module_name: str, level: int | str):
     logger = logging.getLogger(module_name)
     logger.setLevel(level)
     logging.info("Set logging level for %s to %s", module_name, logging.getLevelName(level))
-
-
-def enable_gpu_memory_logging():
-    """Enable detailed GPU memory logging in the SystemMonitor.
-
-    This sets the logging level for the SystemMonitor module to DEBUG,
-    allowing system statistics logs to be displayed. By default, the
-    SystemMonitor logs at DEBUG level, but those logs won't be visible
-    unless the module's logger level is also set to DEBUG.
-    """
-    set_module_level("aitune.utils.system_monitor", logging.DEBUG)
 
 
 @contextmanager

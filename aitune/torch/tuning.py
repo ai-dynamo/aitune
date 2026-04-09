@@ -7,10 +7,9 @@ from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
 
-import nvtx
 import torch
 
-from aitune.global_context import BATCH_SIZE_KEY, global_context
+from aitune.global_context import BATCH_SIZE_KEY, MODULE_CONTEXT_KEY, global_context
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
@@ -22,6 +21,7 @@ from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.utils.cuda_utils import synchronize as cuda_synchronize
 from aitune.torch.utils.device import get_device
 from aitune.utils.logging import libraries_logging, setup_logging
+from aitune.utils.monitoring import annotate
 from aitune.utils.timer import Timer
 
 logger = getLogger(__name__)
@@ -29,7 +29,7 @@ logger = getLogger(__name__)
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 
-@nvtx.annotate(domain="AITune", color="green")
+@annotate(color="yellow")
 def tune(
     func: Callable,
     dataset: DatasetLike | DataLoaderFactory | torch.Tensor,
@@ -61,6 +61,7 @@ def tune(
     """
     # Setup logging
     setup_logging(format_string=LOG_FORMAT)
+
     if clear_cache:
         _clear_cache()
 
@@ -88,7 +89,9 @@ def tune(
             logger.info("════════════════════════════════════════════════════════════════")
             logger.info("🎯 Tuning module: `%s` (all graphs)", module.name)
             try:
-                module.tune(device=device, dry_run=dry_run)
+                with global_context:
+                    global_context.set(MODULE_CONTEXT_KEY, module.name)
+                    module.tune(device=device, dry_run=dry_run)
             except Exception:
                 # If ignore_failing_modules is False, we will raise the error and stop tuning.
                 if not ignore_failing_modules:
@@ -195,7 +198,9 @@ def _activate_tuned_modules() -> None:
     logger.info("✅ Completed tuning all modules.")
     logger.info("🎯 Activating tuned modules for inference:")
     for module in MODULE_REGISTRY.modules.values():
-        module.activate()
+        with global_context:
+            global_context.set(MODULE_CONTEXT_KEY, module.name)
+            module.activate()
         _describe_module(module)
     logger.info("════════════════════════════════════════════════════════════════")
 

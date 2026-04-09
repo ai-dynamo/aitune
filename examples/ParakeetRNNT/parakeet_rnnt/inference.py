@@ -9,12 +9,14 @@ import torch
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
 from aitune.torch import load
+from aitune.utils.monitoring import annotate
 from parakeet_rnnt.model import get_model
 from parakeet_rnnt.tune import parse_args
 
 logger = getLogger(__name__)
 
 
+@annotate(name="inference", color="green")
 def do_inference(
     model_name: str,
     audio_path: Path,

@@ -27,7 +27,7 @@ from aitune.torch.tune_strategy.tune_strategy import (
     TuneStrategy,
 )
 from aitune.torch.utils.module import get_module_device, offload
-from aitune.utils.system_monitor import SystemMonitor
+from aitune.utils.monitoring import annotate
 
 logger = getLogger(__name__)
 
@@ -99,8 +99,6 @@ class Module(wrapt.CallableObjectProxy):
         self._self_state = ModuleState.INIT
         self._self_wrapper = None
         self._self_prev_recording = None
-
-        self._system_monitor = SystemMonitor()
 
         MODULE_REGISTRY.register(self._self_name, self)
 
@@ -304,7 +302,7 @@ class Module(wrapt.CallableObjectProxy):
         if not dry_run:
             self._self_prev_recording = recording
             self._self_state = ModuleState.TUNED
-            self._self_wrapper = TunedModule(backends)
+            self._self_wrapper = TunedModule(backends, module_name=self._self_name)
             self._offload(backends)
 
     def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:
@@ -463,7 +461,7 @@ class Module(wrapt.CallableObjectProxy):
         if any(backend.is_jit for backend in backends.values()):
             return None
 
-        with self._system_monitor.system_stats_context(log_label="Offloading module to meta device"):
+        with annotate("Offloading module to meta device"):
             offload(self.__wrapped__, device=global_config.device_after_tuning)
 
 

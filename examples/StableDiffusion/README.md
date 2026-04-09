@@ -56,6 +56,14 @@ inference --prompt "A beautiful landscape with mountains and a lake" --output-di
 The generated image will be saved in the specified output directory.
 
 
+### Logging hardware metrics
+
+If you would like to log hardware metrics during tuning or inference, export `AITUNE_HARDWARE_METRICS=True` environment variable, e.g.
+
+```bash
+AITUNE_HARDWARE_METRICS=True uv run inference --prompt "A beautiful landscape with mountains and a lake"
+```
+
 ### AI Dynamo Stable Diffusion Deployment
 
 Serves the tuned Stable Diffusion model as an OpenAI-compatible image generation endpoint via [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo).

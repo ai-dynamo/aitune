@@ -18,12 +18,10 @@ from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tuning import tune
-from aitune.utils import system_resource_monitor
 
 logger = getLogger(__name__)
 
 
-@system_resource_monitor(logger_func=logger.info)
 def do_test(backend: TorchAOBackend, dtype: torch.dtype):
     # given
     model = timm.create_model("resnet18", pretrained=False)

@@ -7,6 +7,7 @@ import logging
 import torch
 from aitune.torch import load
 from aitune.torch.config import config as global_config
+from aitune.utils.monitoring import annotate
 
 from .cmd_args import get_parser
 from .model import get_model
@@ -41,6 +42,7 @@ def main():
     #      If we leave it as is and without specifying device in encode method, tensors will be moved to meta device, breaking the inference.
     # model.to = lambda *_args: None
 
+    @annotate(name="inference", color="green")
     def infer(*args, **kwargs):
         return model.encode(
             *args,

@@ -12,7 +12,6 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, DummyBackend
-from aitune.torch.backend.tensorrt.onnx_autocast import SystemMonitor
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -34,7 +33,6 @@ class TuneStrategy(ABC):
         """
         self._sink = sink or self._logger.info
         self._enable_correctness_check = True
-        self._system_monitor = SystemMonitor()
 
     def tune_dry_run(
         self,

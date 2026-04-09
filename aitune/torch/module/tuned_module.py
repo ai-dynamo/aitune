@@ -7,6 +7,7 @@ from typing import Any
 
 import torch
 
+from aitune.global_context import MODULE_CONTEXT_KEY, global_context
 from aitune.torch.backend.backend import Backend
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
@@ -21,6 +22,7 @@ class TunedModule:
     BACKENDS_KEY = "backends"
     CHECK_GRAPH_KEY = "check_graph"
     IS_ANY_JIT_KEY = "is_any_jit"
+    MODULE_NAME_KEY = "module_name"
     TYPE_KEY = "type"
 
     # Error messages
@@ -31,20 +33,22 @@ class TunedModule:
     def __init__(
         self,
         backends: OrderedDict[SampleMetadata, Backend],
+        module_name: str,
         check_graph: bool = True,
         config: AITuneConfig | None = None,
     ) -> None:
         """Initializes module.
 
         Args:
-            module: module to be tuned.
             backends: dictionary of backends to be used for inference.
+            module_name: Name of the module, used to tag hardware metrics during inference.
             check_graph: whether to check the graph of the sample before calling the backend.
                 If True, the graph of the sample is checked against the graph of the backend.
                 If False, the graph of the sample is not checked against the graph of the backend.
             config: Configuration for the module, if not provided, global config is used.
         """
         self._backends = backends
+        self._module_name = module_name
         self._check_graph = check_graph
         if len(self._backends) == 0:
             raise ValueError(self.ERROR_NO_BACKENDS)
@@ -60,7 +64,9 @@ class TunedModule:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run the call through the tuned module."""
         sample = (args, kwargs)
-        output = self._backend_func(sample)
+        with global_context:
+            global_context.set(MODULE_CONTEXT_KEY, self._module_name)
+            output = self._backend_func(sample)
         return output
 
     @property
@@ -129,6 +135,7 @@ class TunedModule:
         return TunedModule(
             backends=backends,
             check_graph=state_dict[TunedModule.CHECK_GRAPH_KEY],
+            module_name=state_dict.get(TunedModule.MODULE_NAME_KEY, "Unknown"),  # for backward compatibility
         )
 
     def to_dict(self):
@@ -144,4 +151,5 @@ class TunedModule:
             self.BACKENDS_KEY: backends_data,
             self.CHECK_GRAPH_KEY: self._check_graph,
             self.IS_ANY_JIT_KEY: is_any_jit,
+            self.MODULE_NAME_KEY: self._module_name,
         }

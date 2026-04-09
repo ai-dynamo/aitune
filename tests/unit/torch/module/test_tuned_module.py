@@ -25,7 +25,7 @@ def get_tuned_module(check_graph=True, strict_mode=False):
     backend2 = Mock()
     backends = OrderedDict({graph1: backend1, graph2: backend2})
 
-    module = TunedModule(backends=backends, check_graph=check_graph, config=config)
+    module = TunedModule(backends=backends, check_graph=check_graph, config=config, module_name="test")
     return backend1, backend2, module
 
 
@@ -33,7 +33,7 @@ def test_unique_backend():
     metadata = Mock(spec=SampleMetadata)
     backend = Mock(spec=Backend)
     backends = OrderedDict({metadata: backend})
-    module = TunedModule(backends=backends, check_graph=False)
+    module = TunedModule(backends=backends, check_graph=False, module_name="test")
 
     module(2)
     backend.infer.assert_called_with(2)
@@ -73,7 +73,7 @@ def test_serialization():
     backend2._orig_module = Mock(spec=torch.nn.Module)
     backends = OrderedDict({graph1: backend1, graph2: backend2})
 
-    module = TunedModule(backends=backends, check_graph=True)
+    module = TunedModule(backends=backends, check_graph=True, module_name="test")
     # Serialize
     state_dict = module.to_dict()
 

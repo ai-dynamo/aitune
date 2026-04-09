@@ -33,7 +33,7 @@ def aitune_cache_dir(mocker, tmp_path):
     config_module = sys.modules["aitune.torch.config"]
 
     cache_dir = tmp_path / "aitune_cache"
-    mocker.patch.object(config_module, "DEFAULT_CACHE_DIR", cache_dir)
+    mocker.patch.object(config_module, "_AITUNE_CACHE_DIR", cache_dir)
     return cache_dir
 
 

@@ -8,6 +8,7 @@ import torch
 from PIL import Image
 
 from aitune.torch import load
+from aitune.utils.monitoring import annotate
 from resnet.cmd_args import get_parser
 from resnet.model import get_model, get_transform
 
@@ -25,6 +26,7 @@ def add_args(parser):
     return parser
 
 
+@annotate(name="inference", color="green")
 def do_inference(model_name, tuned_model_path, image_path, expected_class_id=None):
     """Do inference on a tuned ResNet model.
 

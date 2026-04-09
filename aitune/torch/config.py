@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Inplace configuration."""
 
-import os
 from pathlib import Path
 
 import nvtx.nvtx as nvtx
+
+from aitune.utils.env_vars import AITUNE_CACHE_DIR as _AITUNE_CACHE_DIR
 
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "aitune"
 DEFAULT_MIN_NUM_SAMPLES = 100
@@ -22,14 +23,11 @@ DEFAULT_WINDOW_SIZE = 10
 DEFAULT_DEVICE = "cuda:0"
 DEFAULT_DEVICE_AFTER_TUNING = "meta"
 
-# Disable NVTX by default, enable with NVTX_ENABLE=1
-NVTX_ENABLE = os.getenv("NVTX_ENABLE") in ("1", "true", "True", "yes", "Yes", "YES")
+# NVTX is by default enabled. Otherwise we allow overwriting it by AITUNE env variable NVTX_ENABLE
 if not nvtx._ENABLED:
-    nvtx._ENABLED = NVTX_ENABLE
+    from aitune.utils.env_vars import NVTX_ENABLE
 
-# Console output configuration
-CONSOLE_OUTPUT_ENABLE = os.getenv("AITUNE_CONSOLE_OUTPUT") in ("1", "true", "True", "yes", "Yes", "YES")
-SYSTEM_MONITOR_ENABLE = os.getenv("AITUNE_SYSTEM_MONITOR") in ("1", "true", "True", "yes", "Yes", "YES")
+    nvtx._ENABLED = NVTX_ENABLE
 
 
 def aitune_cache_dir() -> Path:
@@ -38,8 +36,7 @@ def aitune_cache_dir() -> Path:
     Returns:
         Cache dir from environment variable or DEFAULT_CACHE_DIR.
     """
-    cache_dir = os.environ.get("AITUNE_CACHE_DIR", DEFAULT_CACHE_DIR)
-    return Path(cache_dir)
+    return _AITUNE_CACHE_DIR
 
 
 class AITuneConfig:
@@ -95,14 +92,6 @@ class AITuneConfig:
     def device_after_tuning(self, device_after_tuning: str) -> None:
         """Set the device to use after tuning."""
         self._device_after_tuning = device_after_tuning
-
-
-def get_bool_env_variable(env_variable: str, default: bool) -> bool:
-    """Get a boolean environment variable."""
-    value = os.environ.get(env_variable)
-    if value is None:
-        return default
-    return value in ["1", "true", "True", "yes", "Yes", "YES"]
 
 
 config = AITuneConfig()

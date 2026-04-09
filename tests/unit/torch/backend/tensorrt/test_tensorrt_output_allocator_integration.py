@@ -52,56 +52,55 @@ def test_output_allocator_integration():
 
     # Mock the TensorRT runtime class to prevent real instantiation
     with patch("aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTRuntime") as mock_runtime_class:
-        with patch.object(backend, "_system_monitor"):
-            # Setup mock engine info
-            mock_engine_info = MagicMock()
-            mock_engine_info.output_dtypes = {"output_0": torch.float32}
-            mock_engine_info.output_names = ["output_0"]
-            mock_engine_info.input_names = ["input_0"]
+        # Setup mock engine info
+        mock_engine_info = MagicMock()
+        mock_engine_info.output_dtypes = {"output_0": torch.float32}
+        mock_engine_info.output_names = ["output_0"]
+        mock_engine_info.input_names = ["input_0"]
 
-            # Setup mock context
-            mock_context = MagicMock()
-            mock_context.set_output_allocator.return_value = True  # Mock successful allocation
-            mock_io_tensors = {}
-            mock_input_names = ["input_0"]
-            mock_output_names = ["output_0"]
+        # Setup mock context
+        mock_context = MagicMock()
+        mock_context.set_output_allocator.return_value = True  # Mock successful allocation
+        mock_io_tensors = {}
+        mock_input_names = ["input_0"]
+        mock_output_names = ["output_0"]
 
-            # Create mock runtime instance
-            mock_runtime_instance = MagicMock()
-            mock_runtime_instance.load_engine.return_value = b"mock_engine_bytes"
-            mock_runtime_instance.create_execution_context.return_value = (
-                mock_context,
-                mock_io_tensors,
-                mock_input_names,
-                mock_output_names,
-                mock_engine_info,
-            )
+        # Create mock runtime instance
+        mock_runtime_instance = MagicMock()
+        mock_runtime_instance.load_engine.return_value = b"mock_engine_bytes"
+        mock_runtime_instance.create_execution_context.return_value = (
+            mock_context,
+            mock_io_tensors,
+            mock_input_names,
+            mock_output_names,
+            mock_engine_info,
+        )
 
-            # Configure the class mock to return our instance
-            mock_runtime_class.return_value = mock_runtime_instance
+        # Configure the class mock to return our instance
+        mock_runtime_class.return_value = mock_runtime_instance
 
-            # Set up required attributes for activation (no actual file paths)
-            backend._model_name = "test_model"
-            backend._engine_path = "mock_engine.plan"  # Don't use actual file path
-            backend._device = torch.device("cuda:0")  # Set device for activation
+        # Set up required attributes for activation (no actual file paths)
+        backend._model_name = "test_model"
+        backend._engine_path = "mock_engine.plan"  # Don't use actual file path
+        backend._device = torch.device("cuda:0")  # Set device for activation
 
-            # Set the backend state to INACTIVE so we can activate it
-            # This simulates the backend being built and then deactivated
-            backend.state = BackendState.INACTIVE
+        # Set the backend state to INACTIVE so we can activate it
+        # This simulates the backend being built and then deactivated
+        backend.state = BackendState.INACTIVE
 
-            # Activate the backend
-            backend.activate()
+        # Activate the backend
+        backend.activate()
 
-            # Verify that output allocator was created and set
-            assert backend._output_allocator is not None
-            assert isinstance(backend._output_allocator, TorchOutputAllocator)
-            assert backend._output_allocator._engine_info == mock_engine_info
+        # Verify that output allocator was created and set
+        assert backend._output_allocator is not None
+        assert isinstance(backend._output_allocator, TorchOutputAllocator)
+        assert backend._output_allocator._engine_info == mock_engine_info
 
-            # Verify that the context's output allocator was set
-            mock_context.set_output_allocator.assert_called_once_with("output_0", backend._output_allocator)
+        # Verify that the context's output allocator was set
+        mock_context.set_output_allocator.assert_called_once_with("output_0", backend._output_allocator)
 
-            # Clean up
-            backend.deactivate()
+        # Clean up
+        backend.deactivate()
 
 
 @requires_cuda
@@ -113,7 +112,6 @@ def test_output_allocator_inference_flow(tmp_path):
     with patch.multiple(
         backend,
         _trt_runtime=MagicMock(),
-        _system_monitor=MagicMock(),
         _graph_spec=MagicMock(),
         _output_names=["output_0"],
     ):
@@ -178,34 +176,32 @@ def test_output_allocator_cleanup():
     """Test that output allocator is properly cleaned up during deactivation."""
     backend = TensorRTBackend()
 
-    # Mock system monitor to avoid actual context creation
-    with patch.object(backend, "_system_monitor"):
-        # Manually set up the allocator and other components
-        backend._output_allocator = TorchOutputAllocator()
-        backend._context = MagicMock()
-        backend._io_tensors = {}
-        backend._input_names = ["input_0"]
-        backend._output_names = ["output_0"]
-        backend._engine_info = MagicMock()
-        backend._cuda_stream = torch.cuda.Stream()
-        backend._start_time = torch.cuda.Event(enable_timing=True)
-        backend._end_time = torch.cuda.Event(enable_timing=True)
-        backend._trt_builder = MagicMock()
-        backend._onnx_exporter = MagicMock()
-        backend._trt_runtime = MagicMock()
+    # Manually set up the allocator and other components
+    backend._output_allocator = TorchOutputAllocator()
+    backend._context = MagicMock()
+    backend._io_tensors = {}
+    backend._input_names = ["input_0"]
+    backend._output_names = ["output_0"]
+    backend._engine_info = MagicMock()
+    backend._cuda_stream = torch.cuda.Stream()
+    backend._start_time = torch.cuda.Event(enable_timing=True)
+    backend._end_time = torch.cuda.Event(enable_timing=True)
+    backend._trt_builder = MagicMock()
+    backend._onnx_exporter = MagicMock()
+    backend._trt_runtime = MagicMock()
 
-        # Set the backend state to ACTIVE so we can deactivate it
-        backend.state = BackendState.ACTIVE
+    # Set the backend state to ACTIVE so we can deactivate it
+    backend.state = BackendState.ACTIVE
 
-        # Verify allocator exists before deactivation
-        assert backend._output_allocator is not None
+    # Verify allocator exists before deactivation
+    assert backend._output_allocator is not None
 
-        # Deactivate the backend
-        backend.deactivate()
+    # Deactivate the backend
+    backend.deactivate()
 
-        # The deactivate method should have attempted to delete the allocator
-        # (Note: The actual deletion might not be visible due to Python's garbage collection,
-        # but we can verify the method completed without errors)
+    # The deactivate method should have attempted to delete the allocator
+    # (Note: The actual deletion might not be visible due to Python's garbage collection,
+    # but we can verify the method completed without errors)
 
 
 @requires_cuda
@@ -236,65 +232,64 @@ def test_output_allocator_multiple_outputs():
 
     # Mock the TensorRT runtime class to prevent real instantiation
     with patch("aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTRuntime") as mock_runtime_class:
-        with patch.object(backend, "_system_monitor"):
-            # Setup mock engine info with multiple outputs
-            mock_engine_info = MagicMock()
-            mock_engine_info.output_dtypes = {
-                "output_0": torch.float32,
-                "output_1": torch.float16,
-            }
-            mock_engine_info.output_names = ["output_0", "output_1"]
-            mock_engine_info.input_names = ["input_0"]
+        # Setup mock engine info with multiple outputs
+        mock_engine_info = MagicMock()
+        mock_engine_info.output_dtypes = {
+            "output_0": torch.float32,
+            "output_1": torch.float16,
+        }
+        mock_engine_info.output_names = ["output_0", "output_1"]
+        mock_engine_info.input_names = ["input_0"]
 
-            # Setup mock context
-            mock_context = MagicMock()
-            mock_context.set_output_allocator.return_value = True  # Mock successful setting
-            mock_io_tensors = {}
-            mock_input_names = ["input_0"]
-            mock_output_names = ["output_0", "output_1"]
+        # Setup mock context
+        mock_context = MagicMock()
+        mock_context.set_output_allocator.return_value = True  # Mock successful setting
+        mock_io_tensors = {}
+        mock_input_names = ["input_0"]
+        mock_output_names = ["output_0", "output_1"]
 
-            # Create mock runtime instance
-            mock_runtime_instance = MagicMock()
-            mock_runtime_instance.load_engine.return_value = b"mock_engine_bytes"
-            mock_runtime_instance.create_execution_context.return_value = (
-                mock_context,
-                mock_io_tensors,
-                mock_input_names,
-                mock_output_names,
-                mock_engine_info,
-            )
+        # Create mock runtime instance
+        mock_runtime_instance = MagicMock()
+        mock_runtime_instance.load_engine.return_value = b"mock_engine_bytes"
+        mock_runtime_instance.create_execution_context.return_value = (
+            mock_context,
+            mock_io_tensors,
+            mock_input_names,
+            mock_output_names,
+            mock_engine_info,
+        )
 
-            # Configure the class mock to return our instance
-            mock_runtime_class.return_value = mock_runtime_instance
+        # Configure the class mock to return our instance
+        mock_runtime_class.return_value = mock_runtime_instance
 
-            # Set up required attributes for activation
-            backend._model_name = "test_multi_output_model"
-            backend._engine_path = "mock_multi_engine.plan"  # Don't use actual file path
-            backend._device = torch.device("cuda:0")  # Set device for activation
+        # Set up required attributes for activation
+        backend._model_name = "test_multi_output_model"
+        backend._engine_path = "mock_multi_engine.plan"  # Don't use actual file path
+        backend._device = torch.device("cuda:0")  # Set device for activation
 
-            # Set the backend state to INACTIVE so we can activate it
-            backend.state = BackendState.INACTIVE
+        # Set the backend state to INACTIVE so we can activate it
+        backend.state = BackendState.INACTIVE
 
-            # Activate the backend
-            backend.activate()
+        # Activate the backend
+        backend.activate()
 
-            # Verify that output allocator was created
-            assert backend._output_allocator is not None
-            assert isinstance(backend._output_allocator, TorchOutputAllocator)
+        # Verify that output allocator was created
+        assert backend._output_allocator is not None
+        assert isinstance(backend._output_allocator, TorchOutputAllocator)
 
-            # Verify that set_output_allocator was called for each output tensor
-            expected_calls = [
-                ("output_0", backend._output_allocator),
-                ("output_1", backend._output_allocator),
-            ]
-            actual_calls = mock_context.set_output_allocator.call_args_list
+        # Verify that set_output_allocator was called for each output tensor
+        expected_calls = [
+            ("output_0", backend._output_allocator),
+            ("output_1", backend._output_allocator),
+        ]
+        actual_calls = mock_context.set_output_allocator.call_args_list
 
-            assert len(actual_calls) == 2
-            for i, (expected_args, actual_call) in enumerate(zip(expected_calls, actual_calls, strict=True)):
-                assert actual_call[0] == expected_args, f"Call {i}: expected {expected_args}, got {actual_call[0]}"
+        assert len(actual_calls) == 2
+        for i, (expected_args, actual_call) in enumerate(zip(expected_calls, actual_calls, strict=True)):
+            assert actual_call[0] == expected_args, f"Call {i}: expected {expected_args}, got {actual_call[0]}"
 
-            # Clean up
-            backend.deactivate()
+        # Clean up
+        backend.deactivate()
 
 
 @requires_cuda
@@ -304,42 +299,41 @@ def test_output_allocator_set_failure():
 
     # Mock the TensorRT runtime class to prevent real instantiation
     with patch("aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTRuntime") as mock_runtime_class:
-        with patch.object(backend, "_system_monitor"):
-            # Setup mock engine info
-            mock_engine_info = MagicMock()
-            mock_engine_info.output_dtypes = {"output_0": torch.float32}
-            mock_engine_info.output_names = ["output_0"]
-            mock_engine_info.input_names = ["input_0"]
+        # Setup mock engine info
+        mock_engine_info = MagicMock()
+        mock_engine_info.output_dtypes = {"output_0": torch.float32}
+        mock_engine_info.output_names = ["output_0"]
+        mock_engine_info.input_names = ["input_0"]
 
-            # Setup mock context that fails to set allocator
-            mock_context = MagicMock()
-            mock_context.set_output_allocator.return_value = False  # Mock failure
-            mock_io_tensors = {}
-            mock_input_names = ["input_0"]
-            mock_output_names = ["output_0"]
+        # Setup mock context that fails to set allocator
+        mock_context = MagicMock()
+        mock_context.set_output_allocator.return_value = False  # Mock failure
+        mock_io_tensors = {}
+        mock_input_names = ["input_0"]
+        mock_output_names = ["output_0"]
 
-            # Create mock runtime instance
-            mock_runtime_instance = MagicMock()
-            mock_runtime_instance.load_engine.return_value = b"mock_engine_bytes"
-            mock_runtime_instance.create_execution_context.return_value = (
-                mock_context,
-                mock_io_tensors,
-                mock_input_names,
-                mock_output_names,
-                mock_engine_info,
-            )
+        # Create mock runtime instance
+        mock_runtime_instance = MagicMock()
+        mock_runtime_instance.load_engine.return_value = b"mock_engine_bytes"
+        mock_runtime_instance.create_execution_context.return_value = (
+            mock_context,
+            mock_io_tensors,
+            mock_input_names,
+            mock_output_names,
+            mock_engine_info,
+        )
 
-            # Configure the class mock to return our instance
-            mock_runtime_class.return_value = mock_runtime_instance
+        # Configure the class mock to return our instance
+        mock_runtime_class.return_value = mock_runtime_instance
 
-            # Set up required attributes for activation
-            backend._model_name = "test_model"
-            backend._engine_path = "mock_engine.plan"  # Don't use actual file path
-            backend._device = torch.device("cuda:0")  # Set device for activation
+        # Set up required attributes for activation
+        backend._model_name = "test_model"
+        backend._engine_path = "mock_engine.plan"  # Don't use actual file path
+        backend._device = torch.device("cuda:0")  # Set device for activation
 
-            # Set the backend state to INACTIVE so we can activate it
-            backend.state = BackendState.INACTIVE
+        # Set the backend state to INACTIVE so we can activate it
+        backend.state = BackendState.INACTIVE
 
-            # Activation should raise an error due to allocator setting failure
-            with pytest.raises(RuntimeError, match="Failed to set output allocator for tensor 'output_0'"):
-                backend.activate()
+        # Activation should raise an error due to allocator setting failure
+        with pytest.raises(RuntimeError, match="Failed to set output allocator for tensor 'output_0'"):
+            backend.activate()

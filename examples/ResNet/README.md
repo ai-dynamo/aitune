@@ -53,6 +53,14 @@ or for uv:
 uv run inference --model-name resnet50 --image-path your_image
 ```
 
+### Logging hardware metrics
+
+If you would like to log hardware metrics during tuning or inference export `AITUNE_HARDWARE_METRICS=True` envorinment variable e.g.
+
+```bash
+AITUNE_HARDWARE_METRICS=True uv run tune
+```
+
 ### AI Dynamo ResNet Deployment with Batching
 
 To run ResNet as AI Dynamo service with dynamic batching, we have prepared additional configs and scripts.

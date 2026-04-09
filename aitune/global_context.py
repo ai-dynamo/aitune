@@ -2,8 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Global context for torch."""
 
+import threading
+
 BATCH_SIZE_KEY = "batch_size"
 LIBRARY_LOGGING_KEY = "library_logging"
+BACKEND_CONTEXT_KEY = "current_backend"
+MODULE_CONTEXT_KEY = "current_module"
 
 
 class GlobalContext:
@@ -25,15 +29,18 @@ class GlobalContext:
     def __init__(self):
         """Initialize the global context."""
         self._data_stack = [{}]  # Stack to support nested contexts
+        self._lock = threading.Lock()
 
     def __enter__(self):
         """Enter a new context."""
-        self._data_stack.append(self._data_stack[-1].copy())  # Push a copy of the current context
+        with self._lock:
+            self._data_stack.append(self._data_stack[-1].copy())  # Push a copy of the current context
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Exit the current context."""
-        self._data_stack.pop()  # Pop the current context
+        with self._lock:
+            self._data_stack.pop()  # Pop the current context
         return False
 
     @property
@@ -43,29 +50,34 @@ class GlobalContext:
 
     def set(self, key, value):
         """Set a key-value pair in the current context."""
-        self._current_data[key] = value
+        with self._lock:
+            self._current_data[key] = value
 
     def get(self, key, default=None):
         """Get a value from the current context."""
-        for data in reversed(self._data_stack):
-            if key in data:
-                return data[key]
+        with self._lock:
+            for data in reversed(self._data_stack):
+                if key in data:
+                    return data[key]
         return default
 
     def __getitem__(self, key):
         """Get a value from the current context."""
-        for data in reversed(self._data_stack):
-            if key in data:
-                return data[key]
+        with self._lock:
+            for data in reversed(self._data_stack):
+                if key in data:
+                    return data[key]
         raise KeyError(key)
 
     def __setitem__(self, key, value):
         """Set a key-value pair in the current context."""
-        self._current_data[key] = value
+        with self._lock:
+            self._current_data[key] = value
 
     def clear(self):
         """Clear the current context."""
-        self._data_stack = [{}]
+        with self._lock:
+            self._data_stack = [{}]
 
 
 global_context = GlobalContext()

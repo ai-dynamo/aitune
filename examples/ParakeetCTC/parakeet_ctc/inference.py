@@ -11,6 +11,7 @@ import torch
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
 from aitune.torch import load
+from aitune.utils.monitoring import annotate
 
 from .model import get_model
 from .tune import parse_args
@@ -18,6 +19,7 @@ from .tune import parse_args
 logger = getLogger(__name__)
 
 
+@annotate(name="inference", color="green")
 def do_inference(
     model_name: str,
     audio_path: Path,

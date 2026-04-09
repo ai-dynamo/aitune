@@ -93,7 +93,7 @@ nav:
             - Advanced:
                 - Tuning Workflow: guides/advanced/tuning_workflow.md
                 - Execution Graphs: guides/advanced/execution_graphs.md
-                - NVTX Profiling: guides/advanced/profiling_nvtx.md
+                - Profiling and Hardware Metrics: guides/advanced/profiling_and_hardware_metrics.md
             - AI Agents:
                 - Tuning Assistant: guides/tuning-assistant.md
 

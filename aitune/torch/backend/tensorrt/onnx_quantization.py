@@ -26,7 +26,7 @@ else:
 from aitune.torch.backend.tensorrt.modelopt_calibration import prepare_calibration_data
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.utils.system_monitor import SystemMonitor
+from aitune.utils.monitoring import annotate
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -98,10 +98,6 @@ class ONNXQuantizer:
         - rtn_dq: RTN-DQ calibration (INT4 only)
     """
 
-    def __init__(self):
-        """Initialize the ONNX quantizer."""
-        self.system_monitor = SystemMonitor()
-
     @staticmethod
     def apply_model_opt_post_processing(onnx_path: Path):
         """Apply ModelOpt post-processing optimizations to the exported ONNX model.
@@ -168,7 +164,7 @@ class ONNXQuantizer:
         logger.info("Starting ONNX quantization: %s -> %s", input_onnx_path, output_path)
         logger.info("Quantization precision: %s, calibration method: %s", config.precision, config.calibration_method)
 
-        with self.system_monitor.system_stats_context(log_label=f"ONNX {config.precision} quantization"):
+        with annotate(f"build: ONNX {config.precision} quantization"):
             # Perform quantization
             logger.info("Performing %s quantization", config.precision.upper())
 

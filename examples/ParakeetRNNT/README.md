@@ -54,6 +54,14 @@ inference
 ```
 
 
+### Logging hardware metrics
+
+If you would like to log hardware metrics during tuning or inference, export `AITUNE_HARDWARE_METRICS=True` environment variable, e.g.
+
+```bash
+AITUNE_HARDWARE_METRICS=True uv run inference
+```
+
 ### AI Dynamo ParakeetRNNT Deployment
 
 To run ParakeetRNNT as AI Dynamo service, we have prepared a few additional configs and scripts.

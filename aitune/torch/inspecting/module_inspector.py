@@ -38,9 +38,9 @@ from typing import Any
 
 import torch
 
-from aitune.torch.config import get_bool_env_variable
 from aitune.torch.inspecting.module_info import DictOfModulesInfo, ListOfModulesInfo, ModuleInfo, ObjectOfModulesInfo
 from aitune.torch.utils.cuda_utils import synchronize
+from aitune.utils.env_vars import get_bool_env_variable
 
 logger = getLogger(__name__)
 

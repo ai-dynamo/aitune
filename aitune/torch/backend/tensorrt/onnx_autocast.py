@@ -15,7 +15,7 @@ from packaging.version import Version
 from aitune.torch.backend.tensorrt.modelopt_calibration import prepare_calibration_data
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.utils.system_monitor import SystemMonitor
+from aitune.utils.monitoring import annotate
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -45,10 +45,6 @@ class ONNXAutoCast:
 
     This class provides functionality to autocast ONNX models using NVIDIA ModelOpt.
     """
-
-    def __init__(self):
-        """Initialize the ONNX quantizer."""
-        self.system_monitor = SystemMonitor()
 
     def autocast(
         self,
@@ -91,7 +87,7 @@ class ONNXAutoCast:
         logger.info("Starting ONNX autocast: %s -> %s", input_onnx_path, output_path)
         logger.info("Autocast precision: %s", config.precision)
 
-        with self.system_monitor.system_stats_context(log_label=f"ONNX {config.precision} autocast"):
+        with annotate(f"build: ONNX {config.precision} autocast"):
             # Perform autocast
             logger.info("Performing %s autocast", config.precision.upper())
 

@@ -314,6 +314,47 @@ def test_forward_method_should_have_same_signature(mock_trt_backend, torch_devic
     assert set(inspect.signature(model.forward).parameters.keys()) == {"x", "y", "z", "pos"}
 
 
+def test_get_fully_qualified_name():
+    """_get_fully_qualified_name returns dot-separated path; index only for duplicates."""
+    PatchedModule.fq_name_counter.clear()
+
+    root = PatchedModule(torch.nn.Linear(1, 1))
+    root._parent = None
+    root._fq_name = "Linear"
+    assert root._get_fully_qualified_name() == "Linear"
+
+    parent = PatchedModule(torch.nn.Linear(1, 1))
+    parent._parent = None
+    parent._fq_name = "Model"
+    child = PatchedModule(torch.nn.Linear(1, 1))
+    child._parent = parent
+    child._fq_name = "Linear"
+    assert child._get_fully_qualified_name() == "Model.Linear"
+
+    # 3-level hierarchy: grandparent → parent → child
+    PatchedModule.fq_name_counter.clear()
+    grandparent = PatchedModule(torch.nn.Linear(1, 1))
+    grandparent._parent = None
+    grandparent._fq_name = "GrandParent"
+    mid = PatchedModule(torch.nn.Linear(1, 1))
+    mid._parent = grandparent
+    mid._fq_name = "GrandParent.Mid"
+    grandchild = PatchedModule(torch.nn.Linear(1, 1))
+    grandchild._parent = mid
+    assert grandchild._get_fully_qualified_name() == "GrandParent.Mid.Linear"
+
+    # Duplicate path: second "Linear" at root gets index 1
+    PatchedModule.fq_name_counter.clear()
+    first = PatchedModule(torch.nn.Linear(1, 1))
+    first._parent = None
+    first._fq_name = "Linear"
+    second = PatchedModule(torch.nn.Linear(1, 1))
+    second._parent = None
+    second._fq_name = "Linear"
+    assert first._get_fully_qualified_name() == "Linear"
+    assert second._get_fully_qualified_name() == "Linear.1"
+
+
 def test_each_module_has_unique_cache_dir():
     config.min_samples = 2
     config.dry_run = False

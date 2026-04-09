@@ -9,7 +9,6 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any
 
-import nvtx
 import torch
 import torch.nn as nn
 
@@ -185,7 +184,6 @@ class TorchInductorJitBackend(Backend):
         if self._compiled_module is None:  # TBD pb: after introducing module states this should be changed
             self._compile()
 
-    @nvtx.annotate(message="TorchInductorJitBackend.infer", domain="AITune", color="lightblue")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Runs inference with the given arguments.
 

@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Test for tune function."""
 
-import logging
 from collections import Counter
 from unittest.mock import Mock
 
@@ -14,7 +13,7 @@ from aitune.torch import tuning
 from aitune.torch.config import DEFAULT_DEVICE
 from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.module_registry import MODULE_REGISTRY
-from aitune.torch.tuning import LOG_FORMAT, tune
+from aitune.torch.tuning import tune
 
 
 class DummyDataset(Dataset):
@@ -114,64 +113,6 @@ def test_tune_with_dataloader_factory(mocker):
 
     # then
     assert mock_module.call_count > 0
-
-
-def test_tune_log_level(mocker):
-    """Test that the tune function correctly responds to global logging level."""
-    # given
-    mock_func = Mock()
-    dataset = DummyDataset(size=1)  # Small dataset for quick test
-
-    # Mock the enable_gpu_memory_logging function
-    mock_enable_gpu_memory_logging = mocker.patch("aitune.utils.logging.enable_gpu_memory_logging")
-    spy_setup_logging = mocker.spy(tuning, "setup_logging")
-
-    # Get the root logger to check its level
-    root_logger = logging.getLogger()
-    original_level = root_logger.level
-
-    mocker.patch.dict(MODULE_REGISTRY.modules, {}, clear=True)
-
-    try:
-        # Test 1: Global logging level DEBUG - should enable GPU memory logging
-        root_logger.setLevel(logging.DEBUG)
-        tune(mock_func, dataset, batch_sizes=[1])
-        spy_setup_logging.assert_called_once_with(format_string=LOG_FORMAT)
-        mock_enable_gpu_memory_logging.assert_called_once()
-
-        # Reset
-        mock_enable_gpu_memory_logging.reset_mock()
-        spy_setup_logging.reset_mock()
-
-        # Test 2: Global logging level WARNING - should NOT enable GPU memory logging
-        root_logger.setLevel(logging.WARNING)
-        tune(mock_func, dataset, batch_sizes=[1])
-        spy_setup_logging.assert_called_once_with(format_string=LOG_FORMAT)
-        mock_enable_gpu_memory_logging.assert_not_called()
-
-        # Reset
-        mock_enable_gpu_memory_logging.reset_mock()
-        spy_setup_logging.reset_mock()
-
-        # Test 3: Global logging level INFO - should NOT enable GPU memory logging
-        root_logger.setLevel(logging.INFO)
-        tune(mock_func, dataset, batch_sizes=[1])
-        spy_setup_logging.assert_called_once_with(format_string=LOG_FORMAT)
-        mock_enable_gpu_memory_logging.assert_not_called()
-
-        # Reset
-        mock_enable_gpu_memory_logging.reset_mock()
-        spy_setup_logging.reset_mock()
-
-        # Test 4: Global logging level ERROR - should NOT enable GPU memory logging
-        root_logger.setLevel(logging.ERROR)
-        tune(mock_func, dataset, batch_sizes=[1])
-        spy_setup_logging.assert_called_once_with(format_string=LOG_FORMAT)
-        mock_enable_gpu_memory_logging.assert_not_called()
-
-    finally:
-        # Restore original logging level
-        root_logger.setLevel(original_level)
 
 
 def test_tune_disable_external_logging(mocker):

@@ -14,6 +14,7 @@ from typing import ClassVar, cast
 import torch
 import wrapt
 
+from aitune.global_context import MODULE_CONTEXT_KEY, global_context
 from aitune.torch.backend.backend import Backend
 from aitune.torch.config import config as global_config
 from aitune.torch.jit.config import config
@@ -26,7 +27,7 @@ from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
 from aitune.torch.utils.module import count_parameters, format_num_parameters, get_module_device, offload
-from aitune.utils.system_monitor import SystemMonitor
+from aitune.utils.monitoring import annotate
 
 PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
 PRINT_HIERARCHY_NO_MODULES_HEADER = "No modules in hierarchy"
@@ -77,6 +78,7 @@ class PatchedModule:
     heads: ClassVar[list["PatchedModule"]] = []  # the top level modules
     history: ClassVar[list[str]] = []  # for tracking purposes
     patched_classes: ClassVar[Counter[str]] = Counter()  # for generating unique names
+    fq_name_counter: ClassVar[Counter[str]] = Counter()  # for unique fully qualified names (base_fqn -> count)
     attempted_tuning: ClassVar[bool] = False
     module_counter: ClassVar[int] = 0
 
@@ -97,6 +99,7 @@ class PatchedModule:
         self._parent: PatchedModule | None = None
         self._children: list[PatchedModule] = []
         self._allowed_to_tune = False
+        self._fq_name: str | None = None
         # routing maps state to forward method implementation, to split large logic into smaller parts
         self._forward_routing = {
             ModuleState.INIT: self._forward_init,
@@ -105,8 +108,18 @@ class PatchedModule:
         }
         self._extra_state_info: str = ""  # for tracking purposes
         self._update_state(ModuleState.INIT)
-        self._system_monitor = SystemMonitor()
 
+    @property
+    def fq_name(self) -> str:
+        """Get the fully qualified name of the module.
+
+        This is guaranteed to be unique after first forward call.
+        """
+        if self._fq_name is None:
+            raise ValueError("Fully qualified name is not available before first forward call.")
+        return self._fq_name
+
+    @annotate(name="tune", color="yellow")
     def tune(
         self,
     ):
@@ -135,10 +148,12 @@ class PatchedModule:
                     if config.dry_run:
                         self._simulate_dry_run(strategy, current, graph_spec, data, device, cache_dir)
                     else:
-                        backend = self._tune(strategy, current, graph_spec, data, device, cache_dir)
+                        with global_context:
+                            global_context.set(MODULE_CONTEXT_KEY, current.fq_name)
+                            backend = self._tune(strategy, current, graph_spec, data, device, cache_dir)
                         backends[graph_spec.input_spec] = backend
                 if backends:
-                    current._wrapper = TunedModule(backends)
+                    current._wrapper = TunedModule(backends, module_name=current.fq_name)
                     current._extra_state_info = ", ".join([b.name for b in backends.values()])
                 else:
                     current._wrapper = PassthroughModule(current.__wrapped__, device=device)
@@ -256,6 +271,7 @@ class PatchedModule:
             PatchedModule.heads.append(self)
             _to_hist(f"New top module: {str(self)}")
 
+        self._fq_name = self._get_fully_qualified_name()
         self._update_state(ModuleState.RECORDING)
         self._wrapper = RecordingModule(self.__wrapped__, self._name)
         PatchedModule.stack.append(self)
@@ -307,6 +323,7 @@ class PatchedModule:
             self.tune()
         return result
 
+    @annotate(name="inference", color="green")
     def _forward_tuned(self, wrapped, instance, args, kwargs):
         """Forward call for the tuned state."""
         try:
@@ -333,6 +350,19 @@ class PatchedModule:
             hierarchy_names += current._name + str(current._id)
             todo.extend(current._children)
         return hashlib.sha256(hierarchy_names.encode()).hexdigest()[:10]
+
+    def _get_fully_qualified_name(self) -> str:
+        """Return a unique fully qualified name for this module in the hierarchy.
+
+        Builds the path from root to this module by prepending the parent's already-computed
+        fq_name (e.g. grand_parent_name.parent_name.name). An index suffix is only added when
+        there is a duplicate path (same path seen more than once).
+        """
+        name = self.__wrapped__.__class__.__name__
+        base_qualified = f"{self._parent.fq_name}.{name}" if self._parent is not None else name
+        index = PatchedModule.fq_name_counter[base_qualified]
+        PatchedModule.fq_name_counter[base_qualified] += 1
+        return f"{base_qualified}.{index}" if index > 0 else base_qualified
 
     def _patch_device_attribute(self, device: torch.device):
         """Patch the device attribute of the module and its parents.
@@ -449,7 +479,7 @@ class PatchedModule:
         if any(backend.is_jit for backend in backends.values()):
             return
 
-        with self._system_monitor.system_stats_context(log_label="Offloading module to meta device"):
+        with annotate("Offloading module to meta device"):
             offload(self.__wrapped__, device=global_config.device_after_tuning)
 
     def _unpatch(self):

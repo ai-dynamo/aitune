@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import nvtx
 import torch
 import torch.nn as nn
 
@@ -62,7 +61,7 @@ class TorchEagerBackend(Backend):
 
     def describe(self) -> str:
         """Returns the description of the backend."""
-        return f"{self.__class__.__name__}({self._config.describe()}{self._config.describe()})"
+        return f"{self.__class__.__name__}({self._config.describe()})"
 
     @staticmethod
     def _get_dtype(module: nn.Module, data: list[Sample]) -> torch.dtype:
@@ -100,7 +99,6 @@ class TorchEagerBackend(Backend):
         """Activates runner."""
         pass
 
-    @nvtx.annotate(message="TorchEagerBackend.infer", domain="AITune", color="blue")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Runs inference with the given arguments.
 

@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Configuration for JIT module."""
 
-import os
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
@@ -13,8 +12,7 @@ from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, Tens
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import DEFAULT_DEVICE
 from aitune.torch.utils.device import get_device
-
-DEFAULT_JIT_CACHE_DIR = Path.home() / ".cache" / "aitune.jit"
+from aitune.utils.env_vars import AITUNE_JIT_CACHE_DIR as _AITUNE_JIT_CACHE_DIR
 
 
 @dataclass
@@ -35,7 +33,7 @@ class Config:
     detect_graph_breaks: bool = False  # if True, graph break detection is enabled before tuning
     skip_modules: list[str] = field(default_factory=list)  # list of modules (class names) to skip
 
-    cache_dir: Path = Path(os.environ.get("AITUNE_JIT_CACHE_DIR", DEFAULT_JIT_CACHE_DIR))
+    cache_dir: Path = field(default_factory=lambda: _AITUNE_JIT_CACHE_DIR)
     backends: list[Backend] = field(
         default_factory=lambda: [
             TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),

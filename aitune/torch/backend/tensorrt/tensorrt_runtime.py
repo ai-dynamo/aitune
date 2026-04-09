@@ -10,7 +10,7 @@ from wrapt import lazy_import
 
 from aitune.global_context import LIBRARY_LOGGING_KEY, global_context
 from aitune.torch.backend.tensorrt.tensorrt_engine_info import TensorRTEngineInfo
-from aitune.utils.system_monitor import SystemMonitor
+from aitune.utils.monitoring import annotate
 
 trt = lazy_import("tensorrt")
 
@@ -76,7 +76,6 @@ class TensorRTRuntime:
             cuda_graph: Whether to use CUDA graphs for inference
         """
         self.cuda_graph = cuda_graph
-        self.system_monitor = SystemMonitor()
 
     def load_engine(self, engine_path: str | Path) -> bytes:
         """Load the TensorRT engine.
@@ -90,7 +89,7 @@ class TensorRTRuntime:
         engine_path = Path(engine_path)
         logger.debug("Loading TensorRT engine from %s", engine_path)
 
-        with self.system_monitor.system_stats_context(log_label="Loading engine file"):
+        with annotate("Loading engine file"):
             try:
                 # Check if engine exists
                 if not engine_path.exists():
@@ -124,7 +123,7 @@ class TensorRTRuntime:
         """
         logger.debug("Creating TensorRT execution context")
 
-        with self.system_monitor.system_stats_context(log_label="Creating execution context"):
+        with annotate("Creating execution context"):
             try:
                 # Create runtime and deserialize engine
                 log_level = global_context.get(LIBRARY_LOGGING_KEY, logger.level)

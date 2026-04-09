@@ -41,6 +41,7 @@ dependencies = [
     "nvidia-ml-py",
     "nvidia-modelopt[onnx]>=0.40.0",
     "numpy>=2.0.0",
+    "pandas>=2.3",
     "nvtx",
     "onnxscript<=0.5.4",
     "onnx-ir<=0.1.15",

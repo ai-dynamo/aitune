@@ -11,13 +11,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar
 
-import nvtx
 import torch
 import torch.nn as nn
 
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.utils.hashing import hash_string
+from aitune.utils.monitoring import annotate, with_backend_context
 
 
 class BackendState(Enum):
@@ -172,6 +172,7 @@ class BackendConfig:
         return changed_fields
 
 
+@with_backend_context
 class Backend(ABC):
     """Backend interface for tuning a module."""
 
@@ -183,6 +184,7 @@ class Backend(ABC):
         self.state = BackendState.INIT
         self._device = None
 
+    @annotate(color="orange")
     def build(
         self,
         module: nn.Module,
@@ -212,7 +214,7 @@ class Backend(ABC):
         else:
             raise RuntimeError(f"Backend {self.name} build should be called only once")
 
-    @nvtx.annotate(domain="AITune", color="black")
+    @annotate(color="cyan")
     def activate(self):
         """Activates backend.
 
@@ -227,6 +229,7 @@ class Backend(ABC):
             self._activate()
             self.state = BackendState.ACTIVE
 
+    @annotate(color="red")
     def deactivate(self):
         """Deactivates backend.
 
@@ -244,6 +247,7 @@ class Backend(ABC):
             self._clean_memory()
             self.state = BackendState.INACTIVE
 
+    @annotate(color="cyan")
     def deploy(self, device: torch.device | None):
         """Deploys the backend.
 
@@ -259,6 +263,7 @@ class Backend(ABC):
         self._deploy()
         self.state = BackendState.DEPLOYED
 
+    @annotate(color="green")
     def infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with the given arguments.
 

@@ -9,12 +9,14 @@ from pathlib import Path
 import torch
 
 import aitune.torch as ait
+from aitune.utils.monitoring import annotate
 from flux.cmd_args import parse_args
 from flux.model import get_pipeline
 
 logger = getLogger(__name__)
 
 
+@annotate(name="inference", color="green")
 def do_inference(
     model_name,
     prompt,

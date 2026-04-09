@@ -12,7 +12,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar
 
-import nvtx
 import torch
 import torch.nn as nn
 from polygraphy.backend.trt import Profile
@@ -32,7 +31,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
 from aitune.torch.utils.module import offload
-from aitune.utils.system_monitor import SystemMonitor
+from aitune.utils.monitoring import annotate
 
 G_LOGGER.use_python_logging_system = True
 
@@ -174,9 +173,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
             config: Configuration for TensorRT backend
         """
         super().__init__()
-
-        # Create system monitor for tracking memory usage
-        self._system_monitor = SystemMonitor()
 
         self._config = config or TensorRTBackendConfig()
 
@@ -320,7 +316,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         """
         try:
-            with self._system_monitor.system_stats_context(log_label="ModelOpt Torch quantization"):
+            with annotate("build: ModelOpt Torch quantization"):
                 torch_quantizer = TorchQuantizer()
                 module = torch_quantizer.quantize(
                     module=module,
@@ -328,7 +324,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     config=self._config.quantization_config,
                 )
 
-            with self._system_monitor.system_stats_context(log_label="ONNX export"):
+            with annotate("build: ONNX export"):
                 onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
 
                 onnx_exporter = ONNXExporter(
@@ -338,10 +334,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 )
                 onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
 
-            with self._system_monitor.system_stats_context(log_label="Offloading model to cpu device"):
+            with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
 
-            with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
+            with annotate("build: TensorRT engine build"):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
@@ -380,7 +376,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            with self._system_monitor.system_stats_context(log_label="ONNX export"):
+            with annotate("build: ONNX export"):
                 logger.info("Initializing ONNX exporter")
 
                 onnx_path = self._prepare_onnx_model_path(cache_dir)
@@ -392,10 +388,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
                 onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
 
-            with self._system_monitor.system_stats_context(log_label="Offloading model to cpu device"):
+            with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
 
-            with self._system_monitor.system_stats_context(log_label="ONNX quantization"):
+            with annotate("build: ONNX quantization"):
                 logger.info("Initializing ONNX quantizer")
                 onnx_quantizer = ONNXQuantizer()
 
@@ -410,7 +406,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     graph_spec=graph_spec,
                 )
 
-            with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
+            with annotate("build: TensorRT engine build"):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
@@ -449,7 +445,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            with self._system_monitor.system_stats_context(log_label="ONNX export"):
+            with annotate("build: ONNX export"):
                 logger.info("Initializing ONNX exporter")
 
                 onnx_path = self._prepare_onnx_model_path(cache_dir)
@@ -461,10 +457,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
                 onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
 
-            with self._system_monitor.system_stats_context(log_label="Offloading model to cpu device"):
+            with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
 
-            with self._system_monitor.system_stats_context(log_label="ONNX autocast"):
+            with annotate("build: ONNX autocast"):
                 logger.info("Initializing ONNX autocast")
                 onnx_autocast = ONNXAutoCast()
 
@@ -478,7 +474,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     graph_spec=graph_spec,
                 )
 
-            with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
+            with annotate("build: TensorRT engine build"):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
@@ -515,7 +511,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            with self._system_monitor.system_stats_context(log_label="ONNX export"):
+            with annotate("build: ONNX export"):
                 logger.info("Initializing ONNX exporter")
 
                 onnx_path = self._prepare_onnx_model_path(cache_dir)
@@ -527,10 +523,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
                 onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
 
-            with self._system_monitor.system_stats_context(log_label="Offloading model to cpu device"):
+            with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
 
-            with self._system_monitor.system_stats_context(log_label="TensorRT engine build"):
+            with annotate("build: TensorRT engine build"):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
@@ -554,7 +550,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._deactivate()
             raise e
 
-    @nvtx.annotate(message="TensorRTBackend.infer", domain="AITune", color="green")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Infer using the TensorRT engine.
 
@@ -631,13 +626,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
         cuda_set_device(self._device)
 
         self._trt_runtime = TensorRTRuntime()
-        with self._system_monitor.system_stats_context(log_label="Loading engine"):
-            engine_bytes = self._trt_runtime.load_engine(engine_path=self._engine_path)
+        engine_bytes = self._trt_runtime.load_engine(engine_path=self._engine_path)
 
-        with self._system_monitor.system_stats_context(log_label="Creating execution context"):
-            self._context, self._io_tensors, self._input_names, self._output_names, self._engine_info = (
-                self._trt_runtime.create_execution_context(engine_bytes=engine_bytes)
-            )
+        self._context, self._io_tensors, self._input_names, self._output_names, self._engine_info = (
+            self._trt_runtime.create_execution_context(engine_bytes=engine_bytes)
+        )
 
         # Initialize CUDA stream for inference
         logger.debug("Creating dedicated CUDA stream for inference")
@@ -677,37 +670,36 @@ class TensorRTBackend(Backend, TensorRTRunner):
         logger.debug("Deactivating TensorRT backend")
         self._trt_runtime = None
 
-        with self._system_monitor.system_stats_context(log_label="Deactivation"):
-            try:
-                with contextlib.ExitStack() as stack:
-                    if self._context:
-                        stack.enter_context(self._context)
+        try:
+            with contextlib.ExitStack() as stack:
+                if self._context:
+                    stack.enter_context(self._context)
 
-                if self._output_allocator is not None:
-                    self._output_allocator.clear()
+            if self._output_allocator is not None:
+                self._output_allocator.clear()
 
-                # Safely delete attributes if they exist
-                for attr_name in [
-                    "_io_tensors",
-                    "_input_names",
-                    "_output_names",
-                    "_engine_info",
-                    "_cuda_stream",
-                    "_start_time",
-                    "_end_time",
-                    "_outputs",
-                    "_context",
-                    "_output_allocator",
-                    "_cuda_graph",
-                    "_last_input_shapes",
-                    "_static_inputs",
-                    "_infer_cuda_graph",
-                ]:
-                    if hasattr(self, attr_name):
-                        delattr(self, attr_name)
+            # Safely delete attributes if they exist
+            for attr_name in [
+                "_io_tensors",
+                "_input_names",
+                "_output_names",
+                "_engine_info",
+                "_cuda_stream",
+                "_start_time",
+                "_end_time",
+                "_outputs",
+                "_context",
+                "_output_allocator",
+                "_cuda_graph",
+                "_last_input_shapes",
+                "_static_inputs",
+                "_infer_cuda_graph",
+            ]:
+                if hasattr(self, attr_name):
+                    delattr(self, attr_name)
 
-            except Exception as e:
-                logger.error("Failed to delete TensorRT objects: %s", e)
+        except Exception as e:
+            logger.error("Failed to delete TensorRT objects: %s", e)
 
     def _deploy(self):
         """Deploys the backend.

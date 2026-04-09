@@ -10,7 +10,6 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, Literal
 
-import nvtx
 import torch
 import torch.nn as nn
 from dill import dumps, loads
@@ -161,7 +160,6 @@ class TorchAOBackend(Backend):
         """Activates backend."""
         self._do_torchao_quantization()
 
-    @nvtx.annotate(message="TorchAOBackend.infer", domain="AITune", color="cyan")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Runs inference with the given arguments.
 

@@ -10,6 +10,11 @@ SPDX-License-Identifier: Apache-2.0
 - feat: ONNXRuntime backend support - CUDA and TensorRT execution providers
 - feat: Dynamo worker support - serve AITune-tuned models as Dynamo endpoints
 - chore: Renamed TorchInductorBackend to TorchInductorJitBackend - breaking change
+- feat: new hardware metrics collection via subprocess-based hardware monitor
+- breaking change: removed SystemMonitor class from public API; use new hardware metrics collection instead
+- breaking change: removed system_resource_monitor function from public API
+- breaking change: removed enable_gpu_memory_logging function from public API
+
 
 ## 0.3.0
 - feat: JIT tuning requires single sample only - tune on first model call

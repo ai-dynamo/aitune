@@ -7,12 +7,14 @@ from logging import basicConfig, getLogger
 from pathlib import Path
 
 from aitune.torch import load
+from aitune.utils.monitoring import annotate
 from stable_diffusion.cmd_args import parse_args
 from stable_diffusion.model import get_pipeline
 
 logger = getLogger(__name__)
 
 
+@annotate(name="inference", color="green")
 def do_inference(
     model_name,
     prompt,

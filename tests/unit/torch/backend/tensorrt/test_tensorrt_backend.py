@@ -99,7 +99,6 @@ def test_tensorrt_backend_init():
     backend = TensorRTBackend()
 
     assert backend._config is not None
-    assert backend._system_monitor is not None
     assert backend._context is None
     assert backend._io_tensors is None
     assert backend._output_names is None
@@ -123,7 +122,6 @@ def test_tensorrt_backend_init_with_custom_parameters():
     )
 
     assert backend._config is not None
-    assert backend._system_monitor is not None
     assert backend._context is None
     assert backend._io_tensors is None
     assert backend._output_names is None

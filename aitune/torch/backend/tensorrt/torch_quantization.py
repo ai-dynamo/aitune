@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.module.recording_module import Sample
-from aitune.utils.system_monitor import SystemMonitor
+from aitune.utils.monitoring import annotate
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -52,10 +52,6 @@ class TorchQuantizer:
     INT8, FP8, and INT4 quantization with different calibration methods.
     """
 
-    def __init__(self):
-        """Initialize the Torch quantizer."""
-        self.system_monitor = SystemMonitor()
-
     def quantize(
         self,
         module: nn.Module,
@@ -84,7 +80,7 @@ class TorchQuantizer:
         # Note: Create copy because ModelOpt quantizer modifies the model during quantization
         # https://nvidia.github.io/TensorRT-Model-Optimizer/guides/6_save_load.html
         logger.info("Creating a deep copy of the model for quantization")
-        with self.system_monitor.system_stats_context(log_label="Model deep copy"):
+        with annotate("build: Model deep copy"):
             model_copy = deepcopy(module)
 
             # Offload model to CPU
@@ -105,7 +101,7 @@ class TorchQuantizer:
 
         # Quantize the model
         logger.info("Starting model quantization with config: %s", config.quantization_config)
-        with self.system_monitor.system_stats_context(log_label="Model quantization"):
+        with annotate("build: Model quantization"):
             quantized_model = mtq.quantize(model_copy, quant_config, forward_loop)
 
         logger.info("Model quantization completed successfully")
