@@ -119,3 +119,23 @@ def test_serialization(model, sample_data, tmp_path):
     sample_data = move_to_dtype(sample_data, torch.float16)
     args, kwargs = sample_data[0]
     torch.testing.assert_close(backend.infer(*args, **kwargs), loaded_backend.infer(*args, **kwargs))
+
+
+# --- TorchEagerBackendConfig.from_dict ---
+
+
+def test_eager_config_from_dict_defaults():
+    config = TorchEagerBackendConfig.from_dict({})
+    assert config == TorchEagerBackendConfig()
+
+
+def test_eager_config_from_dict_custom_fields():
+    config = TorchEagerBackendConfig.from_dict({"autocast_enabled": True, "autocast_dtype": torch.float16})
+    assert config.autocast_enabled is True
+    assert config.autocast_dtype == torch.float16
+
+
+def test_eager_config_from_dict_round_trip():
+    original = TorchEagerBackendConfig(autocast_enabled=True)
+    restored = TorchEagerBackendConfig.from_dict(original.to_dict())
+    assert restored == original

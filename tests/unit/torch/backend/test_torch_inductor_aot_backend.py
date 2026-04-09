@@ -623,3 +623,22 @@ def test_serialization_round_trip(torch_device, tmp_path):
 
     args, kwargs = samples[0]
     torch.testing.assert_close(backend.infer(*args, **kwargs), loaded.infer(*args, **kwargs))
+
+
+# --- TorchInductorAotBackendConfig.from_dict ---
+
+
+def test_inductor_aot_config_from_dict_defaults():
+    config = TorchInductorAotBackendConfig.from_dict({})
+    assert config == TorchInductorAotBackendConfig()
+
+
+def test_inductor_aot_config_from_dict_custom_fields():
+    config = TorchInductorAotBackendConfig.from_dict({"inductor_configs": {"max_autotune": True}})
+    assert config.inductor_configs == {"max_autotune": True}
+
+
+def test_inductor_aot_config_from_dict_round_trip():
+    original = TorchInductorAotBackendConfig(inductor_configs={"coordinate_descent_tuning": True})
+    restored = TorchInductorAotBackendConfig.from_dict(original.to_dict())
+    assert restored == original

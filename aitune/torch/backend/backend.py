@@ -100,6 +100,16 @@ class BackendConfig:
         changed_fields = self._get_changed_fields(self, default)
         return ",".join(changed_fields)
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "BackendConfig":
+        """Initialise config from a plain dict (e.g. parsed from YAML).
+
+        The default implementation passes all keys as keyword arguments.
+        Override in subclasses that need type conversion (e.g. nested dicts,
+        enum values, or pickle-serialised objects).
+        """
+        return cls(**data)
+
     def to_dict(self):
         """Returns the state_dict of the backend."""
         return asdict(self)
@@ -300,8 +310,8 @@ class Backend(ABC):
 
     @classmethod
     @abstractmethod
-    def from_dict(cls, module: nn.Module | None, state_dict: dict):
-        """Creates a backend from a state_dict."""
+    def from_dict(cls, module: torch.nn.Module | None, state_dict: dict):
+        """Creates a backend from a module and state_dict."""
         pass
 
     @property
@@ -393,7 +403,7 @@ class Backend(ABC):
         if device.type not in self._devices:
             raise ValueError(f"Device {device.type} is not supported by the backend {self.name}")
 
-    def _set_device(self, device: torch.device):
+    def _set_device(self, device: torch.device | None):
         """Set the device of the backend.
 
         Args:
@@ -461,6 +471,6 @@ class DummyBackend(Backend):
         return {}
 
     @classmethod
-    def from_dict(cls, module: nn.Module | None, state_dict: dict):
-        """Creates a backend from a state_dict."""
+    def from_dict(cls, module: torch.nn.Module | None, state_dict: dict):
+        """Creates a backend from a module and state_dict."""
         return cls()

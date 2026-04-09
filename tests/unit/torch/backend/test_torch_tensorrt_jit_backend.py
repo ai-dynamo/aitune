@@ -225,3 +225,36 @@ def test_serialization(torch_tensorrt_jit_backend, model, sample_data, torch_dev
     loaded_backend.activate()
     args, kwargs = sample_data[0]
     torch.testing.assert_close(backend.infer(*args, **kwargs), loaded_backend.infer(*args, **kwargs))
+
+
+# --- TorchTensorRTJitBackendConfig.from_dict ---
+
+
+def test_tensorrt_jit_config_from_dict_defaults():
+    config = TorchTensorRTJitBackendConfig.from_dict({})
+    default = TorchTensorRTJitBackendConfig()
+    assert config.fullgraph == default.fullgraph
+    assert config.dynamic_shapes == default.dynamic_shapes
+    assert config.autocast_enabled == default.autocast_enabled
+    assert config.autocast_dtype == default.autocast_dtype
+
+
+def test_tensorrt_jit_config_from_dict_nested_compile_config_dict():
+    import aitune.torch.backend.torch_tensorrt_jit_backend as _mod
+
+    data = {"compile_config": {"enabled_precisions": {torch.float16}, "workspace_size": 1024}}
+    config = TorchTensorRTJitBackendConfig.from_dict(data)
+    assert isinstance(config.compile_config, _mod.TorchTensorRTConfig)
+    assert config.compile_config.workspace_size == 1024
+
+
+def test_tensorrt_jit_config_from_dict_compile_config_instance_passthrough():
+    config_instance = TorchTensorRTJitBackendConfig().compile_config
+    config = TorchTensorRTJitBackendConfig.from_dict({"compile_config": config_instance})
+    assert config.compile_config is config_instance
+
+
+def test_tensorrt_jit_config_from_dict_round_trip():
+    original = TorchTensorRTJitBackendConfig(fullgraph=True)
+    restored = TorchTensorRTJitBackendConfig.from_dict(original.to_dict())
+    assert restored.fullgraph == original.fullgraph

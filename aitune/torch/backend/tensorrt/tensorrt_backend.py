@@ -115,11 +115,20 @@ class TensorRTBackendConfig(BackendConfig):
         return ["quantization_config"]
 
     @classmethod
-    def from_dict(cls, state_dict: dict):
-        """Convert dict to TensorRTBackendConfig."""
-        if "profiles" in state_dict:
-            state_dict["profiles"] = cls.profiles_from_dict(state_dict["profiles"])
-        return cls(**state_dict)
+    def from_dict(cls, data: dict) -> "TensorRTBackendConfig":
+        """Initialise config from a plain dict (e.g. parsed from YAML).
+
+        ``profiles`` may be passed as a string (``ProfileMode`` value) or a
+        list of profile dicts and will be reconstructed automatically.
+        ``quantization_config`` may be passed as a dict with a ``_type`` key
+        (produced by ``to_dict()``) and will be reconstructed automatically.
+        """
+        data = dict(data)
+        if "profiles" in data:
+            data["profiles"] = cls.profiles_from_dict(data["profiles"])
+        if isinstance(data.get("quantization_config"), dict):
+            data["quantization_config"] = cls.quantization_config_from_dict(data["quantization_config"])
+        return cls(**data)
 
     @classmethod
     def profiles_from_dict(cls, data: str | list[dict]) -> ProfileMode | list[TensorRTProfile]:
@@ -128,6 +137,25 @@ class TensorRTBackendConfig(BackendConfig):
             return [TensorRTProfile.from_dict(profile) for profile in data]
         return ProfileMode(data)
 
+    @classmethod
+    def quantization_config_from_dict(
+        cls, data: dict
+    ) -> ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig:
+        """Reconstruct a quantization config from a dict produced by ``to_dict()``.
+
+        The dict must contain a ``_type`` key with the class name.
+        """
+        _type_map = {
+            "ONNXAutoCastConfig": ONNXAutoCastConfig,
+            "ONNXQuantizationConfig": ONNXQuantizationConfig,
+            "TorchQuantizationConfig": TorchQuantizationConfig,
+        }
+        data = dict(data)
+        type_name = data.pop("_type", None)
+        if type_name not in _type_map:
+            raise ValueError(f"Unknown quantization_config type: {type_name!r}. Expected one of {list(_type_map)}")
+        return _type_map[type_name].from_dict(data)
+
     def to_dict(self) -> dict:
         """Convert TensorRTBackendConfig to dictionary."""
         state_dict = asdict(self)
@@ -135,7 +163,11 @@ class TensorRTBackendConfig(BackendConfig):
             state_dict["profiles"] = [
                 TensorRTProfile.profile_to_dict(profile.profile) for profile in state_dict["profiles"]
             ]
-
+        if self.quantization_config is not None:
+            state_dict["quantization_config"] = {
+                "_type": type(self.quantization_config).__name__,
+                **asdict(self.quantization_config),
+            }
         return state_dict
 
 

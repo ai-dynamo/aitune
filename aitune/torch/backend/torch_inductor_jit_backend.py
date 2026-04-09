@@ -80,11 +80,6 @@ class TorchInductorJitBackendConfig(BackendConfig):
                 "for custom configurations, but not both."
             )
 
-    @classmethod
-    def from_dict(cls, state_dict: dict):
-        """Convert dict to TorchInductorJitBackendConfig."""
-        return cls(**state_dict)
-
 
 class TorchInductorJitBackend(Backend):
     """Backend that does torch compilation with Inductor."""

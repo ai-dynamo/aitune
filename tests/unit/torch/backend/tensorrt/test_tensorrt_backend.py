@@ -860,3 +860,93 @@ def test_tensorrt_backend_config_to_dict_with_profiles_mode():
     config = TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED)
     new_config = TensorRTBackendConfig.from_dict(config.to_dict())
     assert new_config.profiles == ProfileMode.SAMPLES_USED
+
+
+# --- TensorRTBackendConfig.from_dict ---
+
+
+def test_tensorrt_config_from_dict_defaults():
+    config = TensorRTBackendConfig.from_dict({})
+    assert config == TensorRTBackendConfig()
+
+
+def test_tensorrt_config_from_dict_profile_mode_single_string():
+    config = TensorRTBackendConfig.from_dict({"profiles": "single"})
+    assert config.profiles == ProfileMode.SINGLE
+
+
+def test_tensorrt_config_from_dict_profile_mode_samples_used_string():
+    config = TensorRTBackendConfig.from_dict({"profiles": "samples_used"})
+    assert config.profiles == ProfileMode.SAMPLES_USED
+
+
+def test_tensorrt_config_from_dict_custom_fields():
+    config = TensorRTBackendConfig.from_dict({"use_dynamo": False, "workspace_size": 1024, "enable_tf32": False})
+    assert config.use_dynamo is False
+    assert config.workspace_size == 1024
+    assert config.enable_tf32 is False
+
+
+def test_tensorrt_config_from_dict_round_trip():
+    original = TensorRTBackendConfig(use_dynamo=False, workspace_size=512)
+    restored = TensorRTBackendConfig.from_dict(original.to_dict())
+    assert restored.use_dynamo == original.use_dynamo
+    assert restored.workspace_size == original.workspace_size
+    assert restored.profiles == original.profiles
+
+
+def test_tensorrt_config_from_dict_with_onnx_autocast_config_instance():
+    from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
+
+    quant_cfg = ONNXAutoCastConfig(precision="fp16")
+    config = TensorRTBackendConfig.from_dict({"quantization_config": quant_cfg})
+    assert isinstance(config.quantization_config, ONNXAutoCastConfig)
+    assert config.quantization_config.precision == "fp16"
+
+
+def test_tensorrt_config_from_dict_with_onnx_quantization_config_instance():
+    from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig
+
+    quant_cfg = ONNXQuantizationConfig(precision="int8", calibration_method="max")
+    config = TensorRTBackendConfig.from_dict({"quantization_config": quant_cfg})
+    assert isinstance(config.quantization_config, ONNXQuantizationConfig)
+    assert config.quantization_config.precision == "int8"
+    assert config.quantization_config.calibration_method == "max"
+
+
+def test_tensorrt_config_from_dict_with_torch_quantization_config_instance():
+    from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig
+
+    quant_cfg = TorchQuantizationConfig(quantization_config="FP8_DEFAULT_CFG")
+    config = TensorRTBackendConfig.from_dict({"quantization_config": quant_cfg})
+    assert isinstance(config.quantization_config, TorchQuantizationConfig)
+    assert config.quantization_config.quantization_config == "FP8_DEFAULT_CFG"
+
+
+def test_tensorrt_config_onnx_autocast_round_trip():
+    from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
+
+    original = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="bf16"))
+    restored = TensorRTBackendConfig.from_dict(original.to_dict())
+    assert isinstance(restored.quantization_config, ONNXAutoCastConfig)
+    assert restored.quantization_config.precision == "bf16"
+
+
+def test_tensorrt_config_onnx_quantization_round_trip():
+    from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig
+
+    original = TensorRTBackendConfig(quantization_config=ONNXQuantizationConfig(precision="fp8"))
+    restored = TensorRTBackendConfig.from_dict(original.to_dict())
+    assert isinstance(restored.quantization_config, ONNXQuantizationConfig)
+    assert restored.quantization_config.precision == "fp8"
+
+
+def test_tensorrt_config_torch_quantization_round_trip():
+    from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig
+
+    original = TensorRTBackendConfig(
+        quantization_config=TorchQuantizationConfig(quantization_config="INT8_DEFAULT_CFG")
+    )
+    restored = TensorRTBackendConfig.from_dict(original.to_dict())
+    assert isinstance(restored.quantization_config, TorchQuantizationConfig)
+    assert restored.quantization_config.quantization_config == "INT8_DEFAULT_CFG"

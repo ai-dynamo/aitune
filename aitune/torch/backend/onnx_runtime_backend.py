@@ -75,12 +75,16 @@ class ONNXRuntimeBackendConfig(BackendConfig):
     opset_version: int | None = None
 
     @classmethod
-    def from_dict(cls, state_dict: dict):
-        """Convert dict to ONNXRuntimeBackendConfig."""
-        d = dict(state_dict)
-        if "execution_provider" in d and d["execution_provider"] is not None:
-            d["execution_provider"] = ONNXExecutionProvider(d["execution_provider"])
-        return cls(**d)
+    def from_dict(cls, data: dict) -> "ONNXRuntimeBackendConfig":
+        """Initialise config from a plain dict (e.g. parsed from YAML).
+
+        ``execution_provider`` may be passed as a string and will be
+        converted to an ``ONNXExecutionProvider`` enum value automatically.
+        """
+        data = dict(data)
+        if data.get("execution_provider") is not None:
+            data["execution_provider"] = ONNXExecutionProvider(data["execution_provider"])
+        return cls(**data)
 
 
 class ONNXRuntimeBackend(Backend):

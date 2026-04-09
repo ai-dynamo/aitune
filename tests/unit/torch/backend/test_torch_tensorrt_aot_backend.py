@@ -288,3 +288,34 @@ def test_serialization(torch_device, tmp_path):
     loaded_backend.activate()
     args, kwargs = samples[0]
     torch.testing.assert_close(backend.infer(*args, **kwargs), loaded_backend.infer(*args, **kwargs))
+
+
+# --- TorchTensorRTAotBackendConfig.from_dict ---
+
+
+def test_tensorrt_aot_config_from_dict_defaults():
+    config = TorchTensorRTAotBackendConfig.from_dict({})
+    default = TorchTensorRTAotBackendConfig()
+    assert config.ir == default.ir
+    assert config.pickle_protocol == default.pickle_protocol
+
+
+def test_tensorrt_aot_config_from_dict_nested_compile_config_dict():
+    import aitune.torch.backend.torch_tensorrt_aot_backend as _mod
+
+    data = {"compile_config": {"enabled_precisions": {torch.float16}, "workspace_size": 2048}}
+    config = TorchTensorRTAotBackendConfig.from_dict(data)
+    assert isinstance(config.compile_config, _mod.TorchTensorRTConfig)
+    assert config.compile_config.workspace_size == 2048
+
+
+def test_tensorrt_aot_config_from_dict_compile_config_instance_passthrough():
+    config_instance = TorchTensorRTAotBackendConfig().compile_config
+    config = TorchTensorRTAotBackendConfig.from_dict({"compile_config": config_instance})
+    assert config.compile_config is config_instance
+
+
+def test_tensorrt_aot_config_from_dict_round_trip():
+    original = TorchTensorRTAotBackendConfig(ir="dynamo")
+    restored = TorchTensorRTAotBackendConfig.from_dict(original.to_dict())
+    assert restored.ir == original.ir

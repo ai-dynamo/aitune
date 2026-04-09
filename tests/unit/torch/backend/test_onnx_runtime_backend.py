@@ -394,3 +394,32 @@ def test_from_dict_restores_state(tmp_path, torch_device):
 def test_from_dict_wrong_type_raises():
     with pytest.raises(ValueError, match="Invalid state_dict type"):
         ONNXRuntimeBackend.from_dict(None, {ONNXRuntimeBackend.STATE_TYPE: "WrongBackend"})
+
+
+# --- ONNXRuntimeBackendConfig.from_dict ---
+
+
+def test_onnx_config_from_dict_defaults():
+    config = ONNXRuntimeBackendConfig.from_dict({})
+    assert config == ONNXRuntimeBackendConfig()
+
+
+def test_onnx_config_from_dict_string_execution_provider_cuda():
+    config = ONNXRuntimeBackendConfig.from_dict({"execution_provider": "cuda"})
+    assert config.execution_provider == ONNXExecutionProvider.CUDA
+
+
+def test_onnx_config_from_dict_string_execution_provider_tensorrt():
+    config = ONNXRuntimeBackendConfig.from_dict({"execution_provider": "tensorrt"})
+    assert config.execution_provider == ONNXExecutionProvider.TENSORRT
+
+
+def test_onnx_config_from_dict_none_execution_provider():
+    config = ONNXRuntimeBackendConfig.from_dict({"execution_provider": None})
+    assert config.execution_provider is None
+
+
+def test_onnx_config_from_dict_round_trip():
+    original = ONNXRuntimeBackendConfig(execution_provider=ONNXExecutionProvider.CUDA, use_dynamo=False)
+    restored = ONNXRuntimeBackendConfig.from_dict(original.to_dict())
+    assert restored == original

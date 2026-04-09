@@ -39,11 +39,6 @@ class TorchInductorAotBackendConfig(BackendConfig):
 
     inductor_configs: dict[str, Any] | None = None
 
-    @classmethod
-    def from_dict(cls, state_dict: dict):
-        """Convert dict to TorchInductorAotBackendConfig."""
-        return cls(**state_dict)
-
 
 class TorchInductorAotBackend(Backend):
     """Backend that compiles models using AOT Inductor (``torch._inductor.aoti_compile_and_package``).

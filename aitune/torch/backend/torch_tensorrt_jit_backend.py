@@ -72,10 +72,16 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         return state_dict
 
     @classmethod
-    def from_dict(cls, state_dict: dict):
-        """Convert dict to TorchTensorRTJitBackendConfig."""
-        state_dict["compile_config"] = TorchTensorRTConfig(**state_dict["compile_config"])
-        return cls(**state_dict)
+    def from_dict(cls, data: dict) -> "TorchTensorRTJitBackendConfig":
+        """Initialise config from a plain dict (e.g. parsed from YAML).
+
+        ``compile_config`` may be passed as a nested dict and will be
+        reconstructed into a ``TorchTensorRTConfig`` instance automatically.
+        """
+        data = dict(data)
+        if isinstance(data.get("compile_config"), dict):
+            data["compile_config"] = TorchTensorRTConfig(**data["compile_config"])
+        return cls(**data)
 
 
 class TorchTensorRTJitBackend(Backend):

@@ -164,3 +164,33 @@ def test_serialization(quantization, tmp_path, model, sample_data, torch_device)
         if loaded_backend:
             loaded_backend.deactivate()
         raise e
+
+
+# --- TorchAOBackendConfig.from_dict ---
+
+
+def test_torchao_config_from_dict_yaml_path_string_quantization():
+    config = TorchAOBackendConfig.from_dict({"quantization": "fp8wo"})
+    assert config.quantization == "fp8wo"
+    assert config.quantization_config is not None
+
+
+def test_torchao_config_from_dict_yaml_path_int8wo():
+    config = TorchAOBackendConfig.from_dict({"quantization": "int8wo"})
+    assert config.quantization == "int8wo"
+
+
+def test_torchao_config_from_dict_checkpoint_path_bytes():
+    from dill import dumps
+    from torchao.quantization import Float8WeightOnlyConfig
+
+    quant_config = Float8WeightOnlyConfig()
+    data = {"quantization_config": dumps(quant_config)}
+    config = TorchAOBackendConfig.from_dict(data)
+    assert config.quantization_config is not None
+
+
+def test_torchao_config_from_dict_round_trip():
+    original = TorchAOBackendConfig(quantization="int8wo")
+    restored = TorchAOBackendConfig.from_dict(original.to_dict())
+    assert isinstance(restored.quantization_config, type(original.quantization_config))

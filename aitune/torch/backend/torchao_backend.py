@@ -89,9 +89,20 @@ class TorchAOBackendConfig(BackendConfig):
         }
 
     @classmethod
-    def from_dict(cls, state_dict: dict):
-        """Convert dict to TorchAOBackendConfig."""
-        return cls(quantization_config=loads(state_dict["quantization_config"]))
+    def from_dict(cls, data: dict) -> "TorchAOBackendConfig":
+        """Initialise config from a plain dict (e.g. parsed from YAML).
+
+        Supports two forms:
+
+        - ``{"quantization": "int8wo"}`` — user-facing YAML form; ``quantization``
+          must be one of the supported ``QuantizationType`` literals.
+        - ``{"quantization_config": <bytes>}`` — internal checkpoint form produced
+          by ``to_dict()``, where ``quantization_config`` is pickle-serialised.
+        """
+        data = dict(data)
+        if isinstance(data.get("quantization_config"), bytes):
+            return cls(quantization_config=loads(data["quantization_config"]))
+        return cls(**data)
 
     def _get_quantization_config(self, quantization):
         if quantization not in self._QUANTIZATION_CONFIGS:

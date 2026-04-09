@@ -27,11 +27,6 @@ class TorchEagerBackendConfig(BackendConfig):
     autocast_enabled: bool = False
     autocast_dtype: torch.dtype | None = None
 
-    @classmethod
-    def from_dict(cls, state_dict: dict):
-        """Convert dict to TorchEagerBackendConfig."""
-        return cls(**state_dict)
-
 
 class TorchEagerBackend(Backend):
     """Backend that runs the model in eager mode without any optimizations."""

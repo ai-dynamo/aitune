@@ -139,3 +139,23 @@ def test_serialization(model, sample_data, tmp_path):
     sample_data = move_to_dtype(sample_data, torch.float16)
     args, kwargs = sample_data[0]
     torch.testing.assert_close(backend.infer(*args, **kwargs), loaded_backend.infer(*args, **kwargs))
+
+
+# --- TorchInductorJitBackendConfig.from_dict ---
+
+
+def test_inductor_jit_config_from_dict_defaults():
+    config = TorchInductorJitBackendConfig.from_dict({})
+    assert config == TorchInductorJitBackendConfig()
+
+
+def test_inductor_jit_config_from_dict_custom_fields():
+    config = TorchInductorJitBackendConfig.from_dict({"fullgraph": True, "mode": "max-autotune"})
+    assert config.fullgraph is True
+    assert config.mode == "max-autotune"
+
+
+def test_inductor_jit_config_from_dict_round_trip():
+    original = TorchInductorJitBackendConfig(fullgraph=True, dynamic=True)
+    restored = TorchInductorJitBackendConfig.from_dict(original.to_dict())
+    assert restored == original
