@@ -12,7 +12,8 @@ from pathlib import Path
 import timm
 import torch
 
-from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
+from aitune.torch.backend.tensorrt import TensorRTBackend
+from aitune.torch.backend.torch_inductor_aot_backend import TorchInductorAotBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig
 from aitune.torch.backend.torch_tensorrt_jit_backend import (
@@ -123,6 +124,7 @@ def test_backends_serialization():
         TensorRTBackend,
         tensorrt_aot_backend,
         tensorrt_jit_backend,
+        TorchInductorAotBackend,
         TorchInductorJitBackend,
     ]:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -300,7 +300,7 @@ class Backend(ABC):
 
     @classmethod
     @abstractmethod
-    def from_dict(cls, state_dict: dict):
+    def from_dict(cls, module: nn.Module | None, state_dict: dict):
         """Creates a backend from a state_dict."""
         pass
 
@@ -461,6 +461,6 @@ class DummyBackend(Backend):
         return {}
 
     @classmethod
-    def from_dict(cls, state_dict: dict):
+    def from_dict(cls, module: nn.Module | None, state_dict: dict):
         """Creates a backend from a state_dict."""
         return cls()

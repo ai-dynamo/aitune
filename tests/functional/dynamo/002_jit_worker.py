@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["ai-dynamo<2.0.0", "openai", "aitune", "sentence-transformers"]
+# dependencies = ["ai-dynamo<2.0.0", "openai", "aitune", "sentence-transformers==5.3.0"]
 # use_gated_hf_token = true
 # [environment]
 # DYN_DISCOVERY_BACKEND = "file"

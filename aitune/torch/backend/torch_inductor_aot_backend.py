@@ -95,16 +95,10 @@ class TorchInductorAotBackend(Backend):
         self._save_config(cache_dir)
 
         module = module.eval().to(self._device)
-        args, kwargs = deepcopy(data[0])
+
+        args, kwargs = self._prepare_export_sample(data[0], graph_spec)
         args = tuple(a.to(self._device) if isinstance(a, torch.Tensor) else a for a in args)
         kwargs = {k: v.to(self._device) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
-
-        # torch.export.export specialises batch=1 as a constant; use batch>=2 when a batch axis
-        # is present to keep the dimension symbolic (same pattern as TorchTensorRTAotBackend).
-        if graph_spec.input_spec.has_batch_axis():
-            max_batch_size = graph_spec.get_max_batch_size()
-            batch_size = min(max_batch_size, 2)
-            args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=batch_size)
 
         forward_args = get_forward_arguments_names(module.forward)
         dynamic_shapes = self._build_dynamic_shapes(args, kwargs, graph_spec, forward_args)
@@ -142,13 +136,20 @@ class TorchInductorAotBackend(Backend):
     ) -> dict | None:
         """Build a dynamic_shapes dict for ``torch.export.export``, keyed by parameter name.
 
-        Creates one ``torch.export.Dim`` per symbolic dimension class:
+        Creates one explicit ``torch.export.Dim(name, min=min_shape, max=max_shape)`` per
+        symbolic dimension class, using the ranges accumulated by ``update_shapes_seen``
+        across all recorded samples:
 
-        - **Batch axes** (``"batch*"``): a single base ``batch`` Dim whose min/max represent the
-          base batch size. Axes with a multiplier > 1 use a derived expression
-          (e.g. ``2 * batch_dim``), which requires PyTorch >= 2.4.
-        - **Dynamic axes** (``"dim*"``): one ``Dim.AUTO`` per unique symbolic name (e.g. ``"dim1"``
-          for sequence length); torch.export infers valid ranges and divisibility constraints.
+        - **Batch axes** (``"batch*"``): a single ``batch`` Dim covering the observed batch
+          range. Axes with a multiplier > 1 use a derived expression (e.g. ``2 * batch_dim``).
+        - **Dynamic axes** (``"dim*"``): ``Dim.AUTO`` per axis, letting torch.export infer
+          all constraints automatically — cross-tensor equality (e.g. batch shared across
+          ``sample`` and ``encoder_hidden_states`` in UNet) and divisibility (e.g.
+          spatial dims that must be multiples of 8).  Axes whose min and max are identical
+          are treated as static.
+
+        ``Dim.AUTO`` 0/1 hint-specialisation is avoided by ``_prepare_export_sample``,
+        which expands any size-1 dynamic axis to 2 before the export call.
 
         Returns:
             A dict mapping each forward parameter name to its ``{axis: Dim}`` constraints,
@@ -160,13 +161,12 @@ class TorchInductorAotBackend(Backend):
             return None
 
         batch_dim = self._make_batch_dim(input_spec.tensor_specs)
-        dynamic_dims = self._make_dynamic_dims(input_spec.tensor_specs)
 
         # Build flat map: tensor_spec_name → {axis: Dim} for all tensor specs
         spec_to_dims: dict[str, dict] = {}
         for tensor_spec in input_spec.tensor_specs:
             if tensor_spec.has_batch_axis() or tensor_spec.has_dynamic_axis():
-                spec_to_dims[tensor_spec.name] = self._axis_dims_for_tensor(tensor_spec, batch_dim, dynamic_dims)
+                spec_to_dims[tensor_spec.name] = self._axis_dims_for_tensor(tensor_spec, batch_dim)
             else:
                 spec_to_dims[tensor_spec.name] = {}
 
@@ -210,32 +210,90 @@ class TorchInductorAotBackend(Backend):
         return torch.export.Dim("batch", min=int(min_val), max=int(max_val))
 
     @staticmethod
-    def _make_dynamic_dims(tensor_specs) -> dict[str, Any]:
-        """Create one ``torch.export.Dim.AUTO`` per unique ``"dim*"`` symbolic name.
+    def _axis_dims_for_tensor(tensor_spec, batch_dim: Any) -> dict[int, Any]:
+        """Return the ``{axis_index: Dim}`` mapping for a single tensor spec.
 
-        ``Dim.AUTO`` lets torch.export infer the valid range and any divisibility
-        constraints automatically from the model, avoiding false constraint-violation
-        errors that arise when an explicit min/max range contains values that violate
-        internal model guards (e.g. strided-convolution divisibility requirements).
+        ``batch*`` axes share the common ``batch_dim`` so torch.export treats them as
+        a single symbolic value across all tensors.
+
+        ``dim*`` axes use ``Dim.AUTO`` so torch.export infers all constraints
+        automatically:
+
+        - **Cross-tensor equality**: when two tensors' axes must be equal at runtime
+          (e.g. batch on ``sample`` and ``encoder_hidden_states`` in UNet), ``Dim.AUTO``
+          detects this during tracing and merges the symbols automatically. Explicit
+          per-tensor ``Dim`` objects would instead enforce independence and raise a
+          ``ConstraintViolationError``.
+        - **Divisibility**: when a spatial axis must be a multiple of 8 (e.g. UNet
+          latent spatial dims), ``Dim.AUTO`` infers ``axis = 8 * base_dim`` automatically.
+          An explicit range like ``[32, 64]`` would include invalid values and raise a
+          ``ConstraintViolationError``.
+
+        0/1 hint-specialisation (which only affects ``Dim.AUTO``) is avoided upstream
+        in ``_prepare_export_sample`` by expanding any size-1 dynamic axis to 2.
         """
-        names: set[str] = set()
-        for ts in tensor_specs:
-            for entry in ts.shape:
-                if isinstance(entry, str) and entry.startswith("dim"):
-                    names.add(entry)
-        return dict.fromkeys(names, torch.export.Dim.AUTO)
-
-    @staticmethod
-    def _axis_dims_for_tensor(tensor_spec, batch_dim: Any, dynamic_dims: dict[str, Any]) -> dict[int, Any]:
-        """Return the ``{axis_index: Dim}`` mapping for a single tensor spec."""
         axis_dims: dict[int, Any] = {}
         if batch_dim is not None:
             for axis in tensor_spec.get_batch_axis_multipliers():
                 axis_dims[axis] = batch_dim
         for i, entry in enumerate(tensor_spec.shape):
             if isinstance(entry, str) and entry.startswith("dim"):
-                axis_dims[i] = dynamic_dims[entry]
+                if tensor_spec.min_shape[i] != tensor_spec.max_shape[i]:
+                    axis_dims[i] = torch.export.Dim.AUTO
         return axis_dims
+
+    @staticmethod
+    def _prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
+        """Return a copy of ``sample`` with all dynamic axes having hint > 1.
+
+        ``torch.export.export`` specialises any axis whose hint is 0 or 1 as a
+        compile-time constant, breaking inference at other sizes.  Two cases:
+
+        - **batch* axes**: delegate to ``input_spec.make_batch(batch_size=min(max_batch_size, 2))``
+          which scales all batch tensors consistently. When ``max_batch_size == 1``, the batch
+          dimension is static (``min == max``), so no expansion is needed.  ``make_batch``
+          internally deepcopies the sample, so no separate copy is needed for this path.
+        - **dim* axes** (JIT mode, where batch is mislabelled): for each axis that is
+          truly dynamic (``min_shape < max_shape``) but has a current hint ≤ 1, double
+          the tensor along that axis via ``torch.cat``.  A hint of 2 is sufficient to
+          keep the dimension symbolic.
+        """
+        input_spec = graph_spec.input_spec
+
+        # batch* path: make_batch handles deepcopy and consistent scaling.
+        if input_spec.has_batch_axis():
+            max_batch_size = graph_spec.get_max_batch_size()
+            batch_size = min(max_batch_size, 2)
+            args, kwargs = input_spec.make_batch(*sample, batch_size=batch_size)
+        else:
+            args, kwargs = deepcopy(sample)
+
+        # dim* path: expand any remaining size-1 dynamic axes to 2.
+        for locator, tensor_spec in input_spec.tensor_data:
+            container = args if tensor_spec.name.startswith("args") else kwargs
+            try:
+                tensor = locator.get_value(container)
+            except (IndexError, KeyError):
+                continue
+            if not isinstance(tensor, torch.Tensor):
+                continue
+            modified = False
+            for i, entry in enumerate(tensor_spec.shape):
+                if (
+                    isinstance(entry, str)
+                    and entry.startswith("dim")
+                    and tensor_spec.min_shape[i] < tensor_spec.max_shape[i]
+                    and tensor_spec.max_shape[i] >= 2
+                    and tensor.shape[i] <= 1
+                ):
+                    tensor = torch.cat([tensor, tensor], dim=i)
+                    modified = True
+            if modified:
+                if tensor_spec.name.startswith("args"):
+                    args = locator.set_value(args, tensor)
+                else:
+                    kwargs = locator.set_value(kwargs, tensor)
+        return args, kwargs
 
     def _activate(self):
         """Load the compiled model from disk."""
