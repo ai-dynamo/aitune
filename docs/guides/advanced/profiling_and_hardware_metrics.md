@@ -18,14 +18,14 @@ NVTX (NVIDIA Tools Extension) annotations mark key operations in the AITune life
 ### Enabling NVTX
 
 ```bash
-export NVTX_ENABLE=1
+export AITUNE_NVTX_EVENTS=1
 python your_script.py
 ```
 
 ### Using with Nsight Systems
 
 ```bash
-NVTX_ENABLE=1 nsys profile -o output.nsys-rep python your_script.py
+AITUNE_NVTX_EVENTS=1 nsys profile -o output.nsys-rep python your_script.py
 ```
 
 The NVTX annotations will appear as colored regions in the timeline, helping you identify:
@@ -62,10 +62,18 @@ GPU metrics require NVML (available on systems with NVIDIA drivers). If NVML is 
 
 ### Output
 
-At program exit, AITune logs a summary table and writes a timestamped CSV file to the working directory:
+At program exit, AITune logs a summary table and writes a CSV file to the working directory.
+
+By default a timestamped filename is used:
 
 ```
 hardware_metrics_20260402_153012.csv
+```
+
+To write to a fixed path instead, set `AITUNE_HARDWARE_METRICS_PATH`:
+
+```bash
+export AITUNE_HARDWARE_METRICS_PATH=hardware_metrics.csv
 ```
 
 ## Annotating Ahead-of-time Inference Functions
@@ -89,5 +97,5 @@ This is the same pattern used in all AITune examples (ResNet, FLUX, StableDiffus
 Both features can be enabled together for a full profiling run:
 
 ```bash
-AITUNE_HARDWARE_METRICS=1 NVTX_ENABLE=1 nsys profile -o output.nsys-rep python your_script.py
+AITUNE_HARDWARE_METRICS=1 AITUNE_NVTX_EVENTS=1 nsys profile -o output.nsys-rep python your_script.py
 ```

@@ -9,11 +9,14 @@ SPDX-License-Identifier: Apache-2.0
 - feat: Torch Inductor Ahead-of-Time (AoT) backend support added
 - feat: ONNXRuntime backend support - CUDA and TensorRT execution providers
 - feat: Dynamo worker support - serve AITune-tuned models as Dynamo endpoints
+- feat: New hardware metrics collection via subprocess-based hardware monitor
+- feat: Hardware metrics output path can be configured via AITUNE_HARDWARE_METRICS_PATH environment variable
+- chore: Split hardware metrics table if there is a multi-gpu system
 - chore: Renamed TorchInductorBackend to TorchInductorJitBackend - breaking change
-- feat: new hardware metrics collection via subprocess-based hardware monitor
-- breaking change: removed SystemMonitor class from public API; use new hardware metrics collection instead
-- breaking change: removed system_resource_monitor function from public API
-- breaking change: removed enable_gpu_memory_logging function from public API
+- breaking change: NVTX_ENABLE environment variable renamed to AITUNE_NVTX_EVENTS
+- breaking change: Removed SystemMonitor class from public API; use new hardware metrics collection instead
+- breaking change: Removed system_resource_monitor function from public API
+- breaking change: Removed enable_gpu_memory_logging function from public API
 
 
 ## 0.3.0

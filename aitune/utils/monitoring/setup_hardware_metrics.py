@@ -11,7 +11,7 @@ import pandas as pd
 from pynvml import NVMLError
 from tabulate import tabulate
 
-from aitune.utils.env_vars import HARDWARE_METRICS_ENABLED
+from aitune.utils.env_vars import HARDWARE_METRICS_ENABLED, HARDWARE_METRICS_PATH
 from aitune.utils.monitoring.hardware_metrics.collector import (
     HardwareMetricsCollector,
     NoOpHardwareMetricsCollector,
@@ -65,6 +65,27 @@ def get_hardware_metrics() -> pd.DataFrame | None:
     return None
 
 
+def _split_for_logging(flat: pd.DataFrame, n_index_cols: int) -> list[pd.DataFrame]:
+    """Split a wide metrics table into narrower sub-tables for logging.
+
+    Each split contains the index columns (Module, Backend) plus up to 6
+    metric columns. Returns the original frame unchanged when there are at
+    most 6 metric columns.
+    """
+    n_metric_cols = len(flat.columns) - n_index_cols
+    index_indices = list(range(n_index_cols))
+
+    chunk_size = 6
+    if n_metric_cols <= chunk_size:
+        return [flat]
+
+    splits = []
+    for i in range(0, n_metric_cols, chunk_size):
+        col_indices = index_indices + list(range(n_index_cols + i, n_index_cols + min(i + chunk_size, n_metric_cols)))
+        splits.append(flat.iloc[:, col_indices])
+    return splits
+
+
 def dump_metrics(metrics: pd.DataFrame):
     """Logs metrics summary and dumps the metrics to a CSV file.
 
@@ -77,12 +98,21 @@ def dump_metrics(metrics: pd.DataFrame):
     flat = df_summary.reset_index()
     flat["Backend"] = flat["Backend"].apply(format_backend_label_for_display)
     n_index_cols = df_summary.index.nlevels
-    col_align = ("left",) * n_index_cols + ("center",) * len(df_summary.columns)
-    logging.info(
-        "Hardware metrics summary:\n%s",
-        tabulate(flat, headers="keys", tablefmt="fancy_grid", colalign=col_align, showindex=False),
-    )  # noqa: T201
-    date_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    metrics_file = f"hardware_metrics_{date_time}.csv"
+
+    splits = _split_for_logging(flat, n_index_cols)
+    n_splits = len(splits)
+    for split_idx, split in enumerate(splits):
+        col_align = ("left",) * n_index_cols + ("center",) * (len(split.columns) - n_index_cols)
+        label = f" ({split_idx + 1}/{n_splits})" if n_splits > 1 else ""
+        logging.info(
+            "Hardware metrics summary%s:\n%s",
+            label,
+            tabulate(split, headers="keys", tablefmt="fancy_grid", colalign=col_align, showindex=False),
+        )
+    if HARDWARE_METRICS_PATH is not None:
+        metrics_file = HARDWARE_METRICS_PATH
+    else:
+        date_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        metrics_file = f"hardware_metrics_{date_time}.csv"
     metrics.to_csv(metrics_file, index=False)
     logging.info("Dumped hardware metrics to CSV file: %s", metrics_file)

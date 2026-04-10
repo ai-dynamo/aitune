@@ -512,7 +512,7 @@ NVIDIA AITune includes NVTX (NVIDIA Tools Extension) annotations for profiling a
 To enable NVTX profiling, set the environment variable before running your script:
 
 ```bash
-export NVTX_ENABLE=1
+export AITUNE_NVTX_EVENTS=1
 python your_script.py
 ```
 
@@ -521,7 +521,7 @@ python your_script.py
 Once enabled, you can profile your application with Nsight Systems:
 
 ```bash
-NVTX_ENABLE=1 nsys profile -o output.nsys-rep -trace=cuda,nvtx,osrt python your_script.py
+AITUNE_NVTX_EVENTS=1 nsys profile -o output.nsys-rep -trace=cuda,nvtx,osrt python your_script.py
 ```
 
 The NVTX annotations will appear as colored regions in the timeline, helping you identify:
@@ -564,10 +564,18 @@ GPU metrics require NVML (available when running on a system with NVIDIA drivers
 
 ### Output
 
-At program exit, AITune logs a summary table and writes a timestamped CSV file to the working directory:
+At program exit, AITune logs a summary table and writes a CSV file to the working directory.
+
+By default a timestamped filename is used:
 
 ```text
 hardware_metrics_20260402_153012.csv
+```
+
+To write to a fixed path instead, set `AITUNE_HARDWARE_METRICS_PATH`:
+
+```bash
+export AITUNE_HARDWARE_METRICS_PATH=hardware_metrics.csv
 ```
 
 The log summary looks like:
@@ -615,7 +623,7 @@ INFO Hardware metrics summary:
 Hardware metrics and NVTX profiling can be enabled together:
 
 ```bash
-AITUNE_HARDWARE_METRICS=1 NVTX_ENABLE=1 nsys profile -o output.nsys-rep -trace=cuda,nvtx,osrt python your_script.py
+AITUNE_HARDWARE_METRICS=1 AITUNE_NVTX_EVENTS=1 nsys profile -o output.nsys-rep -trace=cuda,nvtx,osrt python your_script.py
 ```
 
 ## Examples

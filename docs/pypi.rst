@@ -583,7 +583,7 @@ To enable NVTX profiling, set the environment variable before running your scrip
 
 .. code-block:: bash
 
-    export NVTX_ENABLE=1
+    export AITUNE_NVTX_EVENTS=1
     python your_script.py
 
 Using with Nsight Systems
@@ -593,7 +593,7 @@ Once enabled, you can profile your application with Nsight Systems:
 
 .. code-block:: bash
 
-    NVTX_ENABLE=1 nsys profile -o output.nsys-rep python your_script.py
+    AITUNE_NVTX_EVENTS=1 nsys profile -o output.nsys-rep python your_script.py
 
 The NVTX annotations will appear as colored regions in the timeline, helping you identify:
 

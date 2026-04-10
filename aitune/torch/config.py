@@ -23,11 +23,11 @@ DEFAULT_WINDOW_SIZE = 10
 DEFAULT_DEVICE = "cuda:0"
 DEFAULT_DEVICE_AFTER_TUNING = "meta"
 
-# NVTX is by default enabled. Otherwise we allow overwriting it by AITUNE env variable NVTX_ENABLE
+# NVTX is by default enabled. Otherwise we allow overwriting it by AITUNE env variable AITUNE_NVTX_EVENTS
 if not nvtx._ENABLED:
-    from aitune.utils.env_vars import NVTX_ENABLE
+    from aitune.utils.env_vars import AITUNE_NVTX_EVENTS
 
-    nvtx._ENABLED = NVTX_ENABLE
+    nvtx._ENABLED = AITUNE_NVTX_EVENTS
 
 
 def aitune_cache_dir() -> Path:
