@@ -4,6 +4,7 @@
 
 import dataclasses
 import itertools
+from collections import UserDict
 from collections.abc import Generator
 from enum import IntEnum
 from functools import cache
@@ -276,7 +277,7 @@ class Locator:
         """
         if issubclass(obj_type, list | tuple):
             return Locator._iter_sequence
-        elif issubclass(obj_type, dict):
+        elif issubclass(obj_type, (dict, UserDict)):
             return Locator._iter_dict
         elif dataclasses.is_dataclass(obj_type):
             return Locator._iter_dataclass

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import dataclasses
+from collections import UserDict
 
 import torch
 
@@ -391,3 +392,67 @@ def test_locator_leaf_name():
 
     locator = Locator((("field", ObjectType.DATACLASS), (0, ObjectType.SEQUENCE), ("key", ObjectType.DICT)))
     assert locator.leaf_name == "key"
+
+
+class TensorUserDict(UserDict):
+    """Minimal UserDict subclass mimicking BatchEncoding shape."""
+
+    pass
+
+
+def test_find_leaves_user_dict_non_strict():
+    """UserDict subclass is traversed; tensors found, non-tensors skipped."""
+    t1 = torch.tensor([1, 2, 3])
+    t2 = torch.tensor([4, 5, 6])
+    obj = TensorUserDict({"input_ids": t1, "attention_mask": t2, "meta": "some_string"})
+
+    results = list(Locator.find_leaves(obj, only_tensors=True))
+
+    assert len(results) == 2
+    locators = {str(loc): val for loc, val in results}
+    assert "['input_ids']" in locators
+    assert "['attention_mask']" in locators
+    assert torch.equal(locators["['input_ids']"], t1)
+    assert torch.equal(locators["['attention_mask']"], t2)
+
+
+def test_find_leaves_user_dict_all_leaves():
+    """UserDict subclass is traversed; all leaves returned when only_tensors=False."""
+    t = torch.tensor([1, 2, 3])
+    obj = TensorUserDict({"input_ids": t, "meta": "some_string"})
+
+    results = list(Locator.find_leaves(obj, only_tensors=False))
+
+    assert len(results) == 2
+    locators = {str(loc): val for loc, val in results}
+    assert "['input_ids']" in locators
+    assert "['meta']" in locators
+    assert torch.equal(locators["['input_ids']"], t)
+    assert locators["['meta']"] == "some_string"
+
+
+def test_find_leaves_user_dict_nested_inside_dict():
+    """UserDict nested inside a plain dict is fully traversed."""
+    t = torch.tensor([7, 8])
+    obj = {"outer": TensorUserDict({"input_ids": t, "flag": True})}
+
+    results = list(Locator.find_leaves(obj, only_tensors=False))
+
+    assert len(results) == 2
+    locators = {str(loc): val for loc, val in results}
+    assert "['outer']['input_ids']" in locators
+    assert "['outer']['flag']" in locators
+    assert torch.equal(locators["['outer']['input_ids']"], t)
+    assert locators["['outer']['flag']"] is True
+
+
+def test_find_leaves_user_dict_locator_get_value():
+    """Locators returned for UserDict leaves correctly retrieve values via get_value."""
+    t = torch.tensor([1, 2])
+    obj = TensorUserDict({"input_ids": t})
+
+    results = list(Locator.find_leaves(obj, only_tensors=False))
+    assert len(results) == 1
+    locator, _ = results[0]
+    assert torch.equal(locator.get_value(obj), t)
+    assert str(locator) == "['input_ids']"
