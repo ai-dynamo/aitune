@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 import wrapt
 
-from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
+from aitune.torch.libs.onnx.onnx_exporter import _ONNX_FALLBACK_SUPPORTED, ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.utils.module import get_forward_arguments_names
@@ -547,6 +547,7 @@ def test_does_onnx_export_work_with_nested_tensors(simple_module_and_args, torch
     assert dynamic_shapes["zw"]["w"][0] is torch.export.Dim.AUTO
 
     model_path = tmp_path / "nested_tensors.onnx"
+    export_kwargs = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
     ep = torch.onnx.export(
         module,
         args=(),
@@ -555,8 +556,8 @@ def test_does_onnx_export_work_with_nested_tensors(simple_module_and_args, torch
         output_names=["outputs"],
         f="nested_tensors.onnx",
         dynamo=True,
-        fallback=False,
         dynamic_shapes=dynamic_shapes,
+        **export_kwargs,
     )
     ep.save(model_path)
 
@@ -657,6 +658,7 @@ def test_does_onnx_export_work_with_nested_tensors_list(simple_module_and_args, 
     assert dynamic_shapes["zw"][1][0] is torch.export.Dim.AUTO
 
     model_path = tmp_path / "nested_tensors.onnx"
+    export_kwargs = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
     ep = torch.onnx.export(
         module,
         args=(),
@@ -665,8 +667,8 @@ def test_does_onnx_export_work_with_nested_tensors_list(simple_module_and_args, 
         output_names=["outputs"],
         f="nested_tensors.onnx",
         dynamo=True,
-        fallback=False,
         dynamic_shapes=dynamic_shapes,
+        **export_kwargs,
     )
     ep.save(model_path)
 

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """ONNX Exporter module for TensorRT backend."""
 
+import inspect
 import logging
 from collections import defaultdict
 from pathlib import Path
@@ -21,6 +22,10 @@ from aitune.torch.utils.shapes import (
     print_dynamic_shapes,
     war_for_positional_arguments,
 )
+
+# torch.onnx.export(dynamo=True, fallback=...) was removed in 2.11 (and some nightlies before).
+# Inspect the signature directly rather than relying on version string parsing.
+_ONNX_FALLBACK_SUPPORTED = "fallback" in inspect.signature(torch.onnx.export).parameters
 
 # File extension constants
 ONNX_FILE_EXTENSION = ".onnx"
@@ -133,6 +138,10 @@ class ONNXExporter:
         # NOTE: dynamic shapes could be created as list but we need names for WAR above
         dynamic_shapes = list(dynamic_shapes.values())
 
+        export_kwargs = {}
+        if _ONNX_FALLBACK_SUPPORTED:
+            export_kwargs["fallback"] = False
+
         torch.onnx.export(
             module,
             f=onnx_path.as_posix(),
@@ -143,8 +152,8 @@ class ONNXExporter:
             input_names=input_names,
             output_names=output_names,
             dynamic_shapes=dynamic_shapes,
-            fallback=False,
             verbose=verbose,
+            **export_kwargs,
         )
         logger.info("ONNX model exported successfully: %s", onnx_path)
 
