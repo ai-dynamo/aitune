@@ -34,6 +34,12 @@ def run_child_receiver():
             if data == "send_results_back":
                 df = pd.DataFrame(collected_metrics)  # convert to DataFrame to save memory
                 ipc.send(df)
+            elif isinstance(data, dict) and data.get("command") == "snapshot":
+                df = pd.DataFrame(collected_metrics)
+                df.to_csv(data["path"], index=False)
+                if data.get("reset", True):
+                    collected_metrics.clear()
+                ipc.send(None)  # acknowledgment
             elif data == "quit":
                 break
             else:

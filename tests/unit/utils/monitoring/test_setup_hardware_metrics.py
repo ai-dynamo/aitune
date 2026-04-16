@@ -11,12 +11,10 @@ import aitune.utils.monitoring.setup_hardware_metrics as setup
 
 @pytest.fixture(autouse=True)
 def reset_singleton():
-    """Resets the singleton instances before and after each test."""
-    setup._DEFAULT_COLLECTOR = None
-    setup._DEFAULT_RECEIVER = None
+    """Resets the session to a clean state before and after each test."""
+    setup._DEFAULT_SESSION = setup.HardwareMetricsSession()
     yield
-    setup._DEFAULT_COLLECTOR = None
-    setup._DEFAULT_RECEIVER = None
+    setup._DEFAULT_SESSION = setup.HardwareMetricsSession()
 
 
 def test_get_default_collector_singleton():
@@ -48,23 +46,19 @@ def test_get_default_collector_singleton():
 
 
 def test_get_default_collector_disabled():
-    """Test get_default_collector when HARDWARE_METRICS_ENABLED is False."""
-    with (
-        patch("aitune.utils.monitoring.setup_hardware_metrics.HARDWARE_METRICS_ENABLED", False),
-        patch("aitune.utils.monitoring.setup_hardware_metrics.NoOpHardwareMetricsCollector") as mock_base_collector_cls,
-    ):
-        mock_base_collector_instance = MagicMock()
-        mock_base_collector_cls.return_value = mock_base_collector_instance
+    """Test get_default_collector returns noop collector when HARDWARE_METRICS_ENABLED is False."""
+    from aitune.utils.monitoring.hardware_metrics.collector import NoOpHardwareMetricsCollector
 
+    with patch("aitune.utils.monitoring.setup_hardware_metrics.HARDWARE_METRICS_ENABLED", False):
         collector = setup.get_default_collector()
-        assert collector == mock_base_collector_instance
-        mock_base_collector_cls.assert_called_once()
+        assert isinstance(collector, NoOpHardwareMetricsCollector)
+        assert setup._DEFAULT_SESSION._collector is None  # real collector never created
 
 
 def test_get_metrics():
     """Test that get_metrics calls the receiver's get_metrics."""
     mock_receiver = MagicMock()
-    setup._DEFAULT_RECEIVER = mock_receiver
+    setup._DEFAULT_SESSION._receiver = mock_receiver
     mock_df = MagicMock()
     mock_receiver.get_metrics.return_value = mock_df
 
@@ -90,8 +84,105 @@ def test_dump_metrics_uses_renamed_backend_column(caplog, tmp_path, monkeypatch)
 
 def test_get_metrics_none():
     """Test that get_metrics returns None if no receiver is set."""
-    setup._DEFAULT_RECEIVER = None
+    setup._DEFAULT_SESSION._receiver = None
     assert setup.get_hardware_metrics() is None
+
+
+# ── enable / disable ─────────────────────────────────────────────────────────
+
+
+def test_enable_sets_runtime_flag():
+    """enable_hardware_metrics() sets _RUNTIME_ENABLED to True."""
+    setup.enable_hardware_metrics()
+    assert setup._DEFAULT_SESSION._runtime_enabled is True
+
+
+def test_disable_stops_and_resets_active_receiver():
+    """disable_hardware_metrics() dumps metrics, unregisters atexit, stops receiver, resets state."""
+    mock_receiver = MagicMock()
+    mock_handler = MagicMock()
+    mock_df = MagicMock()
+    mock_receiver.get_metrics.return_value = mock_df
+    setup._DEFAULT_SESSION._receiver = mock_receiver
+    setup._DEFAULT_SESSION._collector = MagicMock()
+    setup._DEFAULT_SESSION._atexit_handler = mock_handler
+
+    with (
+        patch("aitune.utils.monitoring.setup_hardware_metrics.dump_metrics") as mock_dump,
+        patch("aitune.utils.monitoring.setup_hardware_metrics.atexit.unregister") as mock_unregister,
+    ):
+        setup.disable_hardware_metrics()
+
+    mock_unregister.assert_called_once_with(mock_handler)
+    mock_receiver.get_metrics.assert_called_once()
+    mock_dump.assert_called_once_with(mock_df)
+    mock_receiver.stop.assert_called_once()
+    assert setup._DEFAULT_SESSION._receiver is None
+    assert setup._DEFAULT_SESSION._collector is None
+    assert setup._DEFAULT_SESSION._atexit_handler is None
+    assert setup._DEFAULT_SESSION._runtime_enabled is False
+
+
+def test_disable_no_op_when_receiver_none():
+    """disable_hardware_metrics() is safe when no receiver is active."""
+    setup._DEFAULT_SESSION._receiver = None
+    setup.disable_hardware_metrics()  # must not raise
+    assert setup._DEFAULT_SESSION._runtime_enabled is False
+
+
+def test_get_default_collector_returns_noop_when_disabled():
+    """get_default_collector() returns noop when _RUNTIME_ENABLED is False."""
+    from aitune.utils.monitoring.hardware_metrics.collector import NoOpHardwareMetricsCollector
+
+    setup._DEFAULT_SESSION._runtime_enabled = False
+    collector = setup.get_default_collector()
+    assert isinstance(collector, NoOpHardwareMetricsCollector)
+    assert setup._DEFAULT_SESSION._collector is None  # real collector never created
+
+
+def test_get_default_collector_initializes_when_enabled():
+    """get_default_collector() initializes real collector when _RUNTIME_ENABLED is True."""
+    with (
+        patch("aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsCollector") as mock_cls,
+        patch("aitune.utils.monitoring.setup_hardware_metrics.ParentReceiver") as mock_rcv,
+        patch("aitune.utils.monitoring.setup_hardware_metrics.atexit.register"),
+    ):
+        mock_cls.return_value = MagicMock()
+        mock_rcv.return_value = MagicMock()
+        setup._DEFAULT_SESSION._runtime_enabled = True
+
+        collector = setup.get_default_collector()
+
+        assert collector is mock_cls.return_value
+        mock_rcv.return_value.start.assert_called_once()
+
+
+# ── snapshot ──────────────────────────────────────────────────────────────────
+
+
+def test_snapshot_delegates_to_receiver(tmp_path):
+    """snapshot() calls receiver.snapshot() with correct path and reset_metrics."""
+    mock_receiver = MagicMock()
+    setup._DEFAULT_SESSION._receiver = mock_receiver
+    path = tmp_path / "metrics.csv"
+
+    setup.snapshot(path)
+
+    mock_receiver.snapshot.assert_called_once_with(path, True)
+
+
+def test_snapshot_no_op_when_receiver_none(tmp_path, caplog):
+    """snapshot() logs warning and returns without error when receiver is None."""
+    import logging
+
+    setup._DEFAULT_SESSION._receiver = None
+    path = tmp_path / "metrics.csv"
+
+    with caplog.at_level(logging.WARNING):
+        setup.snapshot(path)
+
+    assert not path.exists()
+    assert "not active" in caplog.text
 
 
 # ── _split_for_logging ────────────────────────────────────────────────────────

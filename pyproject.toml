@@ -103,7 +103,7 @@ dynamo = [
 ]
 
 torch210 = [
-    "torch>=2.10",
+    "torch==2.10",
     "torch-tensorrt>=2.10",
     "torchao>=0.16",
     "nvidia-cuda-runtime-cu13==0.0.0a0"

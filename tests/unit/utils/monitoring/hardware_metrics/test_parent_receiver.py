@@ -4,6 +4,7 @@
 
 import time
 from collections.abc import Generator
+from pathlib import Path
 from queue import Queue
 
 import pandas as pd
@@ -22,6 +23,37 @@ def receiver_and_queue() -> Generator[tuple[ParentReceiver, Queue], None, None]:
     finally:
         if receiver.ipc is not None:
             receiver.stop()
+
+
+def test_parent_receiver_snapshot_sends_correct_command(tmp_path):
+    """snapshot() sends the correct dict command to the child IPC and waits for ack."""
+    from unittest.mock import MagicMock
+
+    from aitune.utils.monitoring.hardware_metrics.parent_receiver import ParentReceiver
+
+    queue = Queue()
+    receiver = ParentReceiver(queue)
+    mock_ipc = MagicMock()
+    mock_ipc.receive.return_value = None
+    receiver.ipc = mock_ipc
+
+    path = tmp_path / "snap.csv"
+    receiver.snapshot(path, reset_metrics=True)
+
+    mock_ipc.send.assert_called_once_with({"command": "snapshot", "path": str(path), "reset": True})
+    mock_ipc.flush.assert_called_once()
+    mock_ipc.receive.assert_called_once()
+
+
+def test_parent_receiver_snapshot_not_started():
+    """snapshot() raises RuntimeError when receiver is not started."""
+    from aitune.utils.monitoring.hardware_metrics.parent_receiver import ParentReceiver
+
+    queue = Queue()
+    receiver = ParentReceiver(queue)
+
+    with pytest.raises(RuntimeError, match="Receiver is not started."):
+        receiver.snapshot(Path("/some/path.csv"))
 
 
 def test_parent_receiver_flow(receiver_and_queue):

@@ -6,6 +6,7 @@ import atexit
 import logging
 import multiprocessing as mp
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 from pynvml import NVMLError
@@ -24,45 +25,135 @@ from aitune.utils.monitoring.hardware_metrics.metrics import (
 from aitune.utils.monitoring.hardware_metrics.parent_receiver import ParentReceiver
 from aitune.utils.monitoring.parse_metrics import format_backend_label_for_display, get_metrics_summary
 
-_DEFAULT_COLLECTOR: NoOpHardwareMetricsCollector | None = None
-_DEFAULT_RECEIVER: ParentReceiver | None = None
+
+class HardwareMetricsSession:
+    """Manages the lifecycle of hardware metrics collection.
+
+    Encapsulates the collector, receiver subprocess, runtime enable/disable state,
+    and atexit registration.
+    """
+
+    def __init__(self):
+        """Initializes the session in a disabled state."""
+        self._collector: HardwareMetricsCollector | None = None
+        self._receiver: ParentReceiver | None = None
+        self._runtime_enabled: bool | None = None  # None defers to HARDWARE_METRICS_ENABLED
+        self._noop_collector = NoOpHardwareMetricsCollector()
+        self._atexit_handler = None
+
+    def _should_collect(self) -> bool:
+        return self._runtime_enabled if self._runtime_enabled is not None else HARDWARE_METRICS_ENABLED
+
+    def _ensure_initialized(self) -> None:
+        if self._collector is not None:
+            return
+
+        queue = mp.Queue()
+        metric_providers = [HostMetricProvider(), TorchMetricProvider()]
+        try:
+            metric_providers.append(NvmlMetricProvider())
+        except NVMLError:
+            logging.warning("NVML not available, skipping GPU metrics")
+        self._collector = HardwareMetricsCollector(metric_providers, queue, interval=0.1)
+        self._receiver = ParentReceiver(queue=queue)
+        self._receiver.start()
+
+        def _dump_and_stop():
+            if self._receiver is not None:
+                metrics = self._receiver.get_metrics()
+                dump_metrics(metrics)
+                self._receiver.stop()
+
+        self._atexit_handler = _dump_and_stop
+        atexit.register(_dump_and_stop)
+
+    # ── public interface ──────────────────────────────────────────────────────
+
+    def get_collector(self) -> NoOpHardwareMetricsCollector:
+        """Return the active collector, or a no-op when collection is disabled."""
+        if not self._should_collect():
+            return self._noop_collector
+        self._ensure_initialized()
+        return self._collector  # type: ignore[return-value]
+
+    def enable(self) -> None:
+        """Enable collection at runtime, overriding the env var."""
+        self._runtime_enabled = True
+
+    def disable(self) -> None:
+        """Disable collection at runtime, gracefully stopping any active session."""
+        self._runtime_enabled = False
+        if self._receiver is not None:
+            if self._atexit_handler is not None:
+                atexit.unregister(self._atexit_handler)
+                self._atexit_handler = None
+            metrics = self._receiver.get_metrics()
+            dump_metrics(metrics)
+            self._receiver.stop()
+            self._receiver = None
+            self._collector = None
+
+    def snapshot(self, path: Path, reset_metrics: bool = True) -> None:
+        """Dump currently collected metrics to a CSV file.
+
+        Args:
+            path: Path to write the CSV file.
+            reset_metrics: If True, clears the accumulated metrics after writing.
+        """
+        if self._receiver is None:
+            logging.warning("Hardware metrics collection is not active; snapshot skipped.")
+            return
+        self._receiver.snapshot(path, reset_metrics)
+        logging.info("Hardware metrics snapshot written to %s", path)
+
+    def get_metrics(self) -> pd.DataFrame | None:
+        """Return accumulated metrics, or None if collection was never started."""
+        if self._receiver is not None:
+            return self._receiver.get_metrics()
+        return None
+
+
+_DEFAULT_SESSION: HardwareMetricsSession = HardwareMetricsSession()
 
 
 def get_default_collector() -> NoOpHardwareMetricsCollector:
     """Get the default hardware metrics collector."""
-    global _DEFAULT_COLLECTOR, _DEFAULT_RECEIVER
+    return _DEFAULT_SESSION.get_collector()
 
-    if _DEFAULT_COLLECTOR is None:
-        if HARDWARE_METRICS_ENABLED:
-            queue = mp.Queue()
-            metric_providers = [HostMetricProvider(), TorchMetricProvider()]
-            try:
-                metric_providers.append(NvmlMetricProvider())
-            except NVMLError:
-                logging.warning("NVML not available, skipping GPU metrics")
-            _DEFAULT_COLLECTOR = HardwareMetricsCollector(metric_providers, queue, interval=0.1)
-            _DEFAULT_RECEIVER = ParentReceiver(queue=queue)
-            _DEFAULT_RECEIVER.start()
 
-            def dump_metrics_and_stop_receiver():
-                """Dumps metrics and stops the receiver process."""
-                if _DEFAULT_RECEIVER is not None:
-                    metrics = _DEFAULT_RECEIVER.get_metrics()
-                    dump_metrics(metrics)
-                    _DEFAULT_RECEIVER.stop()
+def enable_hardware_metrics() -> None:
+    """Enable hardware metrics collection at runtime.
 
-            atexit.register(dump_metrics_and_stop_receiver)
-        else:
-            _DEFAULT_COLLECTOR = NoOpHardwareMetricsCollector()
+    Overrides the AITUNE_HARDWARE_METRICS environment variable.
+    The collector and receiver subprocess are started lazily on the first use.
+    """
+    _DEFAULT_SESSION.enable()
 
-    return _DEFAULT_COLLECTOR
+
+def disable_hardware_metrics() -> None:
+    """Disable hardware metrics collection at runtime.
+
+    Overrides the AITUNE_HARDWARE_METRICS environment variable.
+    If collection was active, gracefully stops the receiver (dumping any
+    accumulated metrics) and resets state so that a future enable_hardware_metrics()
+    call starts a fresh collection session.
+    """
+    _DEFAULT_SESSION.disable()
+
+
+def snapshot(path: Path, reset_metrics: bool = True) -> None:
+    """Dump currently collected hardware metrics to a CSV file.
+
+    Args:
+        path: Path to write the CSV file.
+        reset_metrics: If True, clears the accumulated metrics after writing.
+    """
+    _DEFAULT_SESSION.snapshot(path, reset_metrics)
 
 
 def get_hardware_metrics() -> pd.DataFrame | None:
     """Get metrics from the receiver."""
-    if _DEFAULT_RECEIVER is not None:
-        return _DEFAULT_RECEIVER.get_metrics()
-    return None
+    return _DEFAULT_SESSION.get_metrics()
 
 
 def _split_for_logging(flat: pd.DataFrame, n_index_cols: int) -> list[pd.DataFrame]:

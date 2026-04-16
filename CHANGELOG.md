@@ -12,6 +12,7 @@ SPDX-License-Identifier: Apache-2.0
 - feat: New hardware metrics collection via subprocess-based hardware monitor
 - feat: Hardware metrics output path can be configured via AITUNE_HARDWARE_METRICS_PATH environment variable
 - feat: Locator now traverses `collections.UserDict` subclasses (e.g. `transformers.BatchEncoding`) like plain `dict`, restoring tensor shape tracking for sentence-transformers 5.4.0
+- feat: Add hardware metrics snapshot and enable/disable them at runtime
 - chore: Split hardware metrics table if there is a multi-gpu system
 - chore: Renamed TorchInductorBackend to TorchInductorJitBackend - breaking change
 - breaking change: NVTX_ENABLE environment variable renamed to AITUNE_NVTX_EVENTS

@@ -4,6 +4,7 @@
 
 import multiprocessing.queues
 import threading
+from pathlib import Path
 from queue import Empty, Queue
 
 import pandas as pd
@@ -62,6 +63,23 @@ class ParentReceiver:
             self.ipc.send("quit")
             self.ipc.flush()
         self.ipc = None
+
+    def snapshot(self, path: Path, reset_metrics: bool = True) -> None:
+        """Dumps currently collected metrics to a file.
+
+        Args:
+            path: Path to write the CSV file.
+            reset_metrics: If True, clears the accumulated metrics after writing.
+
+        Raises:
+            RuntimeError: If the receiver is not started.
+        """
+        with self.lock:
+            if self.ipc is None:
+                raise RuntimeError("Receiver is not started.")
+            self.ipc.send({"command": "snapshot", "path": str(path), "reset": reset_metrics})
+            self.ipc.flush()
+            self.ipc.receive()  # wait for acknowledgment
 
     def get_metrics(self) -> pd.DataFrame:
         """Gets the metrics.

@@ -76,6 +76,36 @@ To write to a fixed path instead, set `AITUNE_HARDWARE_METRICS_PATH`:
 export AITUNE_HARDWARE_METRICS_PATH=hardware_metrics.csv
 ```
 
+### Runtime Control
+
+Collection can also be toggled at runtime from Python, independent of the environment variable:
+
+```python
+from aitune.utils.monitoring import enable_hardware_metrics, disable_hardware_metrics
+
+enable_hardware_metrics()   # start collecting
+# ... run workload ...
+disable_hardware_metrics()  # stop collecting, dump accumulated metrics to CSV
+```
+
+`disable_hardware_metrics()` performs a graceful shutdown: it dumps the currently accumulated metrics (same CSV output as at program exit) and stops the background collection process. Calling `enable_hardware_metrics()` afterwards starts a fresh session.
+
+### Mid-run Snapshots
+
+`snapshot()` writes the currently accumulated metrics to a file without stopping collection:
+
+```python
+from pathlib import Path
+from aitune.utils.monitoring import snapshot
+
+snapshot(Path("phase1_metrics.csv"))                          # dump + reset accumulator (default)
+snapshot(Path("phase1_metrics.csv"), reset_metrics=False)     # dump without resetting
+```
+
+By default (`reset_metrics=True`) the accumulator is cleared after writing, so the next snapshot contains only metrics from that point forward. Set `reset_metrics=False` to capture a cumulative view.
+
+`snapshot()` is a no-op (with a warning) when collection is not active.
+
 ## Annotating Ahead-of-time Inference Functions
 
 For **Just-in-time tuning**, inference is already annotated automatically.
