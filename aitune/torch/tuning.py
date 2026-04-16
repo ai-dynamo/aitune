@@ -13,11 +13,12 @@ from aitune.global_context import BATCH_SIZE_KEY, MODULE_CONTEXT_KEY, global_con
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
-from aitune.torch.config import DEFAULT_DEVICE, aitune_cache_dir
+from aitune.torch.config import DEFAULT_DEVICE, AITuneMode, aitune_cache_dir
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
 from aitune.torch.module.tensor_spec import InfoLevel
 from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
+from aitune.torch.tune_data.reporting import report_tune_run
 from aitune.torch.utils.cuda_utils import synchronize as cuda_synchronize
 from aitune.torch.utils.device import get_device
 from aitune.utils.logging import libraries_logging, setup_logging
@@ -59,54 +60,55 @@ def tune(
     Note:
         Max batch size is limited by specified batch_size.
     """
-    # Setup logging
-    setup_logging(format_string=LOG_FORMAT)
+    with report_tune_run(AITuneMode.DECLARATIVE):
+        # Setup logging
+        setup_logging(format_string=LOG_FORMAT)
 
-    if clear_cache:
-        _clear_cache()
+        if clear_cache:
+            _clear_cache()
 
-    with libraries_logging(disable_external_logging):
-        # Convert device to torch.device
-        if device is not None:
-            device = get_device(device)
+        with libraries_logging(disable_external_logging):
+            # Convert device to torch.device
+            if device is not None:
+                device = get_device(device)
 
-        # Validate batch sizes
-        batch_sizes = _validate_and_normalize_batch_sizes(batch_sizes)
+            # Validate batch sizes
+            batch_sizes = _validate_and_normalize_batch_sizes(batch_sizes)
 
-        for batch_size, args, kwargs in samples_generator(dataset, batch_sizes, max_num_batches_per_batch_size):
-            with global_context:
-                global_context.set(BATCH_SIZE_KEY, batch_size)
-                with torch.no_grad():
-                    func(*args, **kwargs)
-
-        for module in MODULE_REGISTRY.modules.values():
-            # Before tuning, deactivate backends in other modules
-            # If any backend is activated by AITune or by the user it will affect available memory during tuning
-            for other_module in MODULE_REGISTRY.modules.values():
-                if other_module != module:
-                    other_module.deactivate()
-
-            logger.info("════════════════════════════════════════════════════════════════")
-            logger.info("🎯 Tuning module: `%s` (all graphs)", module.name)
-            try:
+            for batch_size, args, kwargs in samples_generator(dataset, batch_sizes, max_num_batches_per_batch_size):
                 with global_context:
-                    global_context.set(MODULE_CONTEXT_KEY, module.name)
-                    module.tune(device=device, dry_run=dry_run)
-            except Exception:
-                # If ignore_failing_modules is False, we will raise the error and stop tuning.
-                if not ignore_failing_modules:
-                    raise
+                    global_context.set(BATCH_SIZE_KEY, batch_size)
+                    with torch.no_grad():
+                        func(*args, **kwargs)
 
-                # If ignore_failing_modules is True, we use original forward for this module and continue tuning the next module.
-                logger.info("⚠️ Tuning module: `%s` failed", module.name)
-                module.enable_passthrough()
-                continue
+            for module in MODULE_REGISTRY.modules.values():
+                # Before tuning, deactivate backends in other modules
+                # If any backend is activated by AITune or by the user it will affect available memory during tuning
+                for other_module in MODULE_REGISTRY.modules.values():
+                    if other_module != module:
+                        other_module.deactivate()
 
-            logger.info("✅ Tuning module: `%s` (all graphs) completed.", module.name)
+                logger.info("════════════════════════════════════════════════════════════════")
+                logger.info("🎯 Tuning module: `%s` (all graphs)", module.name)
+                try:
+                    with global_context:
+                        global_context.set(MODULE_CONTEXT_KEY, module.name)
+                        module.tune(device=device, dry_run=dry_run)
+                except Exception:
+                    # If ignore_failing_modules is False, we will raise the error and stop tuning.
+                    if not ignore_failing_modules:
+                        raise
 
-        # Activate the backends after tuning for inference
-        if not dry_run:
-            _activate_tuned_modules()
+                    # If ignore_failing_modules is True, we use original forward for this module and continue tuning the next module.
+                    logger.info("⚠️ Tuning module: `%s` failed", module.name)
+                    module.enable_passthrough()
+                    continue
+
+                logger.info("✅ Tuning module: `%s` (all graphs) completed.", module.name)
+
+            # Activate the backends after tuning for inference
+            if not dry_run:
+                _activate_tuned_modules()
 
 
 def save(

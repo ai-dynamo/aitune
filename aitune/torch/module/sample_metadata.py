@@ -15,6 +15,7 @@ from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch.config import config
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
+from aitune.utils.serialization import json_serialize
 
 
 class SampleMetadata:
@@ -291,6 +292,29 @@ class SampleMetadata:
             "strict": self._strict,
             "llm_phase": self._llm_phase,
         }
+
+    def to_json_dict(self) -> dict:
+        """Convert sample metadata to a JSON-serializable dictionary.
+
+        Returns:
+            A dictionary representation safe for ``json.dumps``.
+        """
+        tensor_data = []
+        for _, ts in self._tensor_data:
+            tensor_data.append({
+                "name": ts.name,
+                "shape": ts.shape,
+                "min_shape": ts.min_shape,
+                "max_shape": ts.max_shape,
+                "dtype": ts.dtype,
+            })
+        other_data = {name: value for _, name, value in self._other_data}
+        return json_serialize({
+            "tensor_data": tensor_data,
+            "other_data": other_data,
+            "strict": self._strict,
+            "llm_phase": self._llm_phase,
+        })
 
     def describe(self, info_level: InfoLevel = InfoLevel.FULL) -> str:
         """Get information describing sample metadata."""

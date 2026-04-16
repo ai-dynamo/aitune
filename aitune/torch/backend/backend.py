@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Backend interface."""
 
+import contextlib
 import gc
 import json
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, fields, is_dataclass
+from collections.abc import Generator
+from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar
@@ -16,8 +18,10 @@ import torch.nn as nn
 
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
+from aitune.torch.tune_data.reporting import report_backend_build
 from aitune.utils.hashing import hash_string
 from aitune.utils.monitoring import annotate, with_backend_context
+from aitune.utils.serialization import json_serialize
 
 
 class BackendState(Enum):
@@ -88,8 +92,7 @@ class BackendConfig:
 
     def key(self) -> str:
         """Returns the keys of the backend configuration."""
-        config_dict = self.to_dict()
-        config_dict = self._to_json(config_dict)
+        config_dict = json_serialize(self.to_dict())
         config_dict_str = json.dumps(config_dict)
         key = hash_string(config_dict_str)
         return key
@@ -116,47 +119,9 @@ class BackendConfig:
 
     def to_json(self, path: Path):
         """Saves the backend configuration to a file."""
-        config_dict = self.to_dict()
-        config_dict = self._to_json(config_dict)
+        config_dict = json_serialize(self.to_dict())
         with open(path, "w") as f:
             json.dump(config_dict, f, indent=2)
-
-    def _to_json(self, obj: Any) -> Any:
-        """Convert object to JSON-serializable format.
-
-        Handles the following types:
-        - JSON primitives: int, float, str, bool, None
-        - Collections: dict, list, tuple, set
-        - Dataclasses: converted to dict
-        - Enums: converted to their values
-        - Other objects: converted to string representation
-        """
-        # Handle None explicitly
-        if obj is None:
-            return None
-
-        # Handle dataclasses
-        if is_dataclass(obj):
-            obj = asdict(obj)
-
-        # Handle dictionaries
-        if isinstance(obj, dict):
-            return {k: self._to_json(v) for k, v in obj.items()}
-
-        # Handle sequences (list, tuple, set)
-        if isinstance(obj, list | tuple | set):
-            return [self._to_json(item) for item in obj]
-
-        # Handle Enums
-        if isinstance(obj, Enum):
-            return obj.value
-
-        # Handle JSON primitives (these are already JSON-serializable)
-        if isinstance(obj, int | float | str | bool):
-            return obj
-
-        # Handle other types by converting to string
-        return str(obj)
 
     def _default_describe_fields(self) -> list[str]:
         """Returns the default fields to describe."""
@@ -193,6 +158,26 @@ class Backend(ABC):
         """Initialize the backend."""
         self.state = BackendState.INIT
         self._device = None
+        self._config: BackendConfig | None = None
+        self._build_results = []
+
+    @contextlib.contextmanager
+    def _track_build_step(self, step: str) -> Generator[dict[str, Any], None, None]:
+        """Context manager that records a build step result.
+
+        Yields a mutable dict so callers can add metadata (e.g. file sizes)
+        after the step body succeeds. On exception the step is recorded as
+        failed and the exception re-raised.
+        """
+        result: dict[str, Any] = {"step": step}
+        try:
+            yield result
+            result["success"] = True
+        except Exception:
+            result["success"] = False
+            raise
+        finally:
+            self._build_results.append(result)
 
     @annotate(color="orange")
     def build(
@@ -211,7 +196,10 @@ class Backend(ABC):
 
         After building, the backend should be activated.
         """
-        if self.state == BackendState.INIT:
+        if self.state != BackendState.INIT:
+            raise RuntimeError(f"Backend {self.name} build should be called only once")
+
+        with report_backend_build(self):
             try:
                 self._assert_device(device)
                 self._set_device(device)
@@ -221,8 +209,6 @@ class Backend(ABC):
             except Exception as e:
                 self._logger.error("Failed to build backend(%s): %s", self.__class__.__name__, e, exc_info=True)
                 raise e
-        else:
-            raise RuntimeError(f"Backend {self.name} build should be called only once")
 
     @annotate(color="cyan")
     def activate(self):

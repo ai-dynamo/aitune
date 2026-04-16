@@ -12,9 +12,11 @@ from typing import TypeVar
 
 import torch
 
+from aitune.torch.config import AITuneMode
 from aitune.torch.jit.config import config
 from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import PatchedModule
+from aitune.torch.tune_data.reporting import report_tune_run_start
 
 T = TypeVar("T")
 
@@ -60,6 +62,9 @@ class Patcher:
             # this will be called only once
             cls._original_module_init = torch.nn.Module.__init__
             atexit.register(InspectModule.on_python_exit if config.inspect_mode else PatchedModule.on_python_exit)
+
+            if not config.inspect_mode:
+                report_tune_run_start(AITuneMode.JIT)
 
         def _patched_init(module, *args, **kwargs):
             cls._original_module_init(module, *args, **kwargs)

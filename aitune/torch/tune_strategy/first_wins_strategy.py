@@ -3,6 +3,7 @@
 """First Wins tune strategy."""
 
 from pathlib import Path
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -68,3 +69,7 @@ class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
             "backends:",
             *[f"  {backend.describe()}" for backend in self._backends],
         ]
+
+    def to_json_dict(self) -> dict[str, Any]:
+        """Returns config dict for first wins strategy."""
+        return {"backends": [backend.describe() for backend in self._backends]}

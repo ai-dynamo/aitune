@@ -27,6 +27,7 @@ from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.utils.hashing import hash_string
+from aitune.utils.serialization import json_serialize
 
 logger = getLogger(__name__)
 
@@ -63,7 +64,7 @@ class TorchAOBackendConfig(BackendConfig):
         config_dict = {
             "quantization_config": self.quantization_config,
         }
-        config_dict = self._to_json(config_dict)
+        config_dict = json_serialize(config_dict)
         config_dict_str = json.dumps(config_dict)
         key = hash_string(config_dict_str)
         return key

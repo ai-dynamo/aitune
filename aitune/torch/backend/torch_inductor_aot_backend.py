@@ -4,6 +4,7 @@
 
 from copy import deepcopy
 from dataclasses import dataclass
+from enum import Enum
 from logging import getLogger
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,13 @@ from aitune.torch.utils.shapes import (
 )
 
 logger = getLogger(__name__)
+
+
+class TorchInductorAotBuildStep(str, Enum):
+    """Identifiers for discrete sub-steps of a TorchInductorAot backend build."""
+
+    TORCH_EXPORT = "torch_export"
+    AOT_COMPILE = "aot_compile"
 
 
 @dataclass
@@ -101,22 +109,25 @@ class TorchInductorAotBackend(Backend):
         if dynamic_shapes is not None:
             print_dynamic_shapes(dynamic_shapes)
 
-        logger.info("Exporting model with torch.export.export.")
-        with torch.no_grad():
-            exported = torch.export.export(
-                module,
-                args,
-                kwargs=kwargs if kwargs else None,
-                dynamic_shapes=dynamic_shapes,
-            )
+        with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
+            logger.info("Exporting model with torch.export.export.")
+            with torch.no_grad():
+                exported = torch.export.export(
+                    module,
+                    args,
+                    kwargs=kwargs if kwargs else None,
+                    dynamic_shapes=dynamic_shapes,
+                )
 
-        self._compiled_model_path = cache_dir / "model.pt2"
-        logger.info("Compiling model with AOT Inductor to %s.", self._compiled_model_path)
-        torch._inductor.aoti_compile_and_package(
-            exported,
-            package_path=str(self._compiled_model_path),
-            inductor_configs=self._config.inductor_configs or {},
-        )
+        with self._track_build_step(TorchInductorAotBuildStep.AOT_COMPILE) as result:
+            self._compiled_model_path = cache_dir / "model.pt2"
+            logger.info("Compiling model with AOT Inductor to %s.", self._compiled_model_path)
+            torch._inductor.aoti_compile_and_package(
+                exported,
+                package_path=str(self._compiled_model_path),
+                inductor_configs=self._config.inductor_configs or {},
+            )
+            result["compiled_model_size_bytes"] = self._compiled_model_path.stat().st_size
         logger.info("AOT Inductor compilation complete with package path %s.", self._compiled_model_path)
 
         # The compiled artifact is self-contained; offload the original module to CPU

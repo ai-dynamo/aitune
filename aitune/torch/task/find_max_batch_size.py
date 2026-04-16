@@ -65,7 +65,7 @@ def find_max_throughput_for_backend(
     data: list[Sample],
     profiling_config: ProfilingConfig,
 ) -> tuple[int, float, ProfilingResults]:
-    """Calculates maximum throughput for a backend.
+    """Profiles a backend to find the batch size that achieves maximum throughput.
 
     Args:
         module: Model to calculate maximum throughput for.

@@ -163,7 +163,10 @@ def test_tune_dry_run(module, torch_device):
 
 
 def test_tune(module, torch_device):
+    mock_backend = Mock()
+    mock_backend.describe.return_value = "mock backend description"
     strategy = Mock()
+    strategy.tune.return_value = mock_backend
     global_config.strict_mode = True
 
     with pytest.raises(ValueError, match="Module: 'demo-identity' has not recorded any samples. Cannot tune it."):
@@ -174,7 +177,7 @@ def test_tune(module, torch_device):
     module(2, b=2)
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
 
-    strategy.tune.assert_has_calls([
+    assert strategy.tune.call_args_list == [
         call(
             module,
             TEST_MODULE_NAME,
@@ -199,7 +202,7 @@ def test_tune(module, torch_device):
             torch_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,
         ),
-    ])
+    ]
 
     assert module.state == ModuleState.TUNED
 

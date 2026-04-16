@@ -124,17 +124,16 @@ class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
         # we can assume that max batch size is included in the graph spec.
         max_batch_size = graph_spec.get_max_batch_size()
 
-        best_backend = None
-        best_throughput = float("-inf")
-        best_batch_size = 1
+        max_throughput_backend = None
+        max_throughput = 0
+        max_throughput_batch_size = 1
 
         # Run all backends with given max batch size.
         for backend in self._backends:
-            backend_cache_dir = cache_dir / backend.key()
-            log_file = self._log_file(backend_cache_dir, "build.log")
+            log_file = self._log_file(cache_dir / backend.key(), "build.log")
 
+            # _build_and_validate_backend appends to self.strategy_results
             built = self._build_and_validate_backend(backend, module, name, graph_spec, data, device, cache_dir)
-
             if built is None:
                 continue
 
@@ -148,6 +147,7 @@ class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                     )
                 )
                 measurements += results.entries
+                self.backend_results[-1].update(throughput=throughput, max_batch_size=batch_size)
                 log(
                     "✅ backend profiled - throughput: %.2f samples/s, batch size: %s",
                     throughput,
@@ -156,7 +156,7 @@ class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                     sink=self._sink,
                 )
 
-                if best_backend is None or throughput > best_throughput:
+                if max_throughput_backend is None or throughput > max_throughput:
                     log(
                         "🎯 new best throughput for %s is %.2f samples/s, batch size: %s",
                         built.describe(),
@@ -165,19 +165,19 @@ class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                         depth=2,
                         sink=self._sink,
                     )
-                    best_backend = built
-                    best_throughput = throughput
-                    best_batch_size = batch_size
+                    max_throughput_backend = built
+                    max_throughput = throughput
+                    max_throughput_batch_size = batch_size
 
             except Exception:
                 if built.is_active:
                     built.deactivate()
                 log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
 
-        if best_backend is None:
+        if max_throughput_backend is None:
             log(
                 "ℹ️ No correct backend found with throughput %f > 0. Backends considered: %s",
-                best_throughput,
+                max_throughput,
                 ", ".join([backend.describe() for backend in self._backends]),
                 sink=self._sink,
             )
@@ -190,18 +190,18 @@ class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
                 measurements=measurements,
             )
         )
-        best_backend.activate()
+        max_throughput_backend.activate()
         log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)
         log(
             "✅ Selected %s for module %s and graph spec %s.",
-            best_backend.describe(),
+            max_throughput_backend.describe(),
             name,
             graph_spec,
             sink=self._sink,
         )
-        log("   Batch size: %s, throughput: %.2f samples/s", best_batch_size, best_throughput, sink=self._sink)
+        log("   Batch size: %s, throughput: %.2f samples/s", max_throughput_batch_size, max_throughput, sink=self._sink)
 
-        return best_backend
+        return max_throughput_backend
 
     def _get_profiling_config(self, batching: bool, max_batch_size: int) -> ProfilingConfig:
         """Gets profiling configuration."""
@@ -235,3 +235,11 @@ class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
             "backends:",
             *[f"  {backend.describe()}" for backend in self._backends],
         ]
+
+    def to_json_dict(self) -> dict[str, Any]:
+        """Returns config dict for max throughput strategy."""
+        return {
+            "backends": [b.describe() for b in self._backends],
+            "measurement_stop_strategy": self._measurement_stop_strategy.__class__.__name__,
+            "profiling_stop_strategy": self._profiling_stop_strategy.__class__.__name__,
+        }

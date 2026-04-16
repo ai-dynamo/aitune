@@ -20,6 +20,12 @@ from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
 
+def _mock_graph_spec():
+    m = Mock(spec=GraphSpec)
+    m.name = "test"
+    return m
+
+
 @dataclass
 class TorchTensorRTTestConfig:
     enabled_precisions: set[torch.dtype] = field(default_factory=lambda: {torch.float16})
@@ -61,7 +67,7 @@ def backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, 
     torch_mod.compile = mocker.MagicMock(return_value=model)
 
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=Mock(spec=GraphSpec), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
     )
     backend = cast(TorchTensorRTJitBackend, backend)
     return torch_mod, backend
@@ -102,7 +108,7 @@ def test_mock_build(torch_tensorrt_jit_backend, model, sample_data, torch_device
     torch_mod.compile = mocker.MagicMock(return_value=model)
 
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=Mock(spec=GraphSpec), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
     )
 
     assert backend is torch_tensorrt_jit_backend
@@ -151,7 +157,7 @@ def test_torch_compile_backend_infer_not_activated(
     torch_mod_backend.cuda.empty_cache = mocker.MagicMock()
 
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=Mock(spec=GraphSpec), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
     )
     backend = cast(TorchTensorRTJitBackend, backend)
 
@@ -177,7 +183,7 @@ def test_torch_compile_backend_deactivate(
 
     # Build, activate, and deactivate
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=Mock(spec=GraphSpec), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
     )
     backend.activate()
     backend.deactivate()
@@ -198,7 +204,7 @@ def test_torch_compile_backend_init(torch_tensorrt_jit_backend_config):
 @requires_cuda
 def test_torch_compile_backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path):
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=Mock(spec=GraphSpec), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
     )
     assert backend is torch_tensorrt_jit_backend
     assert backend._orig_module is model
@@ -209,7 +215,7 @@ def test_torch_compile_backend_build(torch_tensorrt_jit_backend, model, sample_d
 def test_torch_compile_backend_compile(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path):
     args, kwargs = sample_data[0]
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=Mock(spec=GraphSpec), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
     )
     backend.infer(*args, **kwargs)
 

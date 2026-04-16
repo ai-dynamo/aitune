@@ -10,8 +10,8 @@ from torchao.utils import is_sm_at_least_89
 
 from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendConfig
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
+from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.module.sample_metadata import SampleMetadata
 from tests.toy_models.torch_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -36,10 +36,11 @@ def move_to_dtype(sample_data, dtype):
 
 
 def build_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
-    metadata = Mock(SampleMetadata)
+    mock_graph_spec = Mock(spec=GraphSpec)
+    mock_graph_spec.name = "test"
     sample_data = move_to_dtype(sample_data, dtype)
     model.to(dtype)
-    return backend.build(model, metadata, sample_data, device=torch_device, cache_dir=tmp_path)
+    return backend.build(model, mock_graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
 
 def test_torchao_config_key():

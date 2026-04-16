@@ -3,6 +3,7 @@
 """TorchTensorRT backend with AOT compilation and intermediate model save."""
 
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, Literal
@@ -34,6 +35,13 @@ except (ImportError, RuntimeError, OSError):
 logger = getLogger(__name__)
 
 IRType = Literal["dynamo", "ts", "fx"]
+
+
+class TorchTensorRTAotBuildStep(str, Enum):
+    """Identifiers for discrete sub-steps of a TorchTensorRTAot backend build."""
+
+    COMPILE = "compile"
+    SAVE = "save"
 
 
 def assert_torch_tensorrt():
@@ -193,22 +201,25 @@ class TorchTensorRTAotBackend(Backend):
             else:
                 kwarg_inputs[key] = value
 
-        logger.info("Compile model with Torch-TensorRT.")
-        trt_model_compiled = torch_tensorrt.compile(
-            model,
-            ir=self._config.ir,
-            inputs=input_signature,
-            kwarg_inputs=kwarg_inputs,
-            **asdict(self._config.compile_config),
-        )
+        with self._track_build_step(TorchTensorRTAotBuildStep.COMPILE):
+            logger.info("Compile model with Torch-TensorRT.")
+            trt_model_compiled = torch_tensorrt.compile(
+                model,
+                ir=self._config.ir,
+                inputs=input_signature,
+                kwarg_inputs=kwarg_inputs,
+                **asdict(self._config.compile_config),
+            )
 
-        self._exported_model_path = self._create_exported_model_path(cache_dir)
-        torch_tensorrt.save(
-            trt_model_compiled,
-            self._exported_model_path.as_posix(),
-            retrace=False,
-            pickle_protocol=self._config.pickle_protocol,
-        )
+        with self._track_build_step(TorchTensorRTAotBuildStep.SAVE) as result:
+            self._exported_model_path = self._create_exported_model_path(cache_dir)
+            torch_tensorrt.save(
+                trt_model_compiled,
+                self._exported_model_path.as_posix(),
+                retrace=False,
+                pickle_protocol=self._config.pickle_protocol,
+            )
+            result["compiled_model_size_bytes"] = self._exported_model_path.stat().st_size
 
         logger.info("Module has been compiled and saved with TensorRT.")
         self._opt_module = trt_model_compiled

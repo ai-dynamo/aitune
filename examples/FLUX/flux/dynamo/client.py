@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """FLUX test client — calls the standard Dynamo OpenAI-compatible frontend."""
 
-from __future__ import annotations
-
 import argparse
 import base64
 import pathlib

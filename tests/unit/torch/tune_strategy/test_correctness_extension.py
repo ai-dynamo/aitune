@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -33,6 +34,9 @@ class TuneStrategyTestCorrectness(TuneStrategy):
 
     def _describe_parts(self) -> list[str]:
         return ["TuneStrategyTestCorrectness"]
+
+    def to_json_dict(self) -> dict[str, Any]:
+        return {}
 
 
 def test_correctness_extension_torch_eager_backend(torch_device, tmp_path):

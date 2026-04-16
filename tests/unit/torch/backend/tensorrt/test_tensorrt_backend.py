@@ -30,6 +30,12 @@ def mock_tensorrt_components(mocker, tmp_path):
     mock_builder = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBuilder")
     mock_runtime = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTRuntime")
 
+    # Create dummy build artifacts so .stat().st_size works after mocked builds
+    (tmp_path / "onnx").mkdir()
+    (tmp_path / "onnx" / "model.onnx").write_bytes(b"fake")
+    (tmp_path / "tensorrt").mkdir()
+    (tmp_path / "tensorrt" / "model.plan").write_bytes(b"fake")
+
     mock_exporter_instance = mocker.MagicMock()
     mock_exporter_instance.export.return_value = tmp_path / "mock_model.onnx"
     mock_exporter.return_value = mock_exporter_instance
@@ -427,6 +433,10 @@ def test_build_with_dynamic_shapes(tmp_path, mocker):
     mock_builder_class.return_value = mock_builder
     mock_runtime_class.return_value = mock_runtime
 
+    # Create dummy engine file so .stat().st_size works after mocked build
+    (tmp_path / "tensorrt").mkdir()
+    (tmp_path / "tensorrt" / "model.plan").write_bytes(b"fake")
+
     # Create backend with dynamic shapes
     backend = TensorRTBackend()
 
@@ -497,6 +507,10 @@ def test_build_without_dynamic_shapes(tmp_path, mocker):
 
     mock_builder_class.return_value = mock_builder
     mock_runtime_class.return_value = mock_runtime
+
+    # Create dummy engine file so .stat().st_size works after mocked build
+    (tmp_path / "tensorrt").mkdir()
+    (tmp_path / "tensorrt" / "model.plan").write_bytes(b"fake")
 
     # Create backend without setting any dynamic shapes
     backend = TensorRTBackend()

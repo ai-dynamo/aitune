@@ -44,7 +44,9 @@ def backend_build(backend, dtype, model, sample_data, tmp_path, device="cuda"):
     device = torch.device(device)
     model = model.to(device, dtype=dtype)
     data = move_to_dtype(sample_data, dtype)
-    backend = backend.build(model, graph_spec=Mock(spec=GraphSpec), data=data, device=device, cache_dir=tmp_path)
+    mock_graph_spec = Mock(spec=GraphSpec)
+    mock_graph_spec.name = "test"
+    backend = backend.build(model, graph_spec=mock_graph_spec, data=data, device=device, cache_dir=tmp_path)
     return backend
 
 

@@ -23,6 +23,7 @@ from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule, Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
+from aitune.torch.tune_data.reporting import report_graph_tune, report_module_tune, report_tune_run_end
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
@@ -142,29 +143,34 @@ class PatchedModule:
             strategy = FirstWinsStrategy(backends=config.backends)
             strategy.enable_find_max_batch_size(False)
             try:
-                for graph_spec in recording.graph_specs:
-                    cache_dir = self._create_graph_cache_dir(graph_spec.name)
-                    data = recording.samples_for_graph_spec(graph_spec)
-                    if config.dry_run:
-                        self._simulate_dry_run(strategy, current, graph_spec, data, device, cache_dir)
+                with report_module_tune(
+                    module_name=current.__wrapped__.__class__.__name__,
+                    num_parameters=count_parameters(current.__wrapped__),
+                ):
+                    for graph_spec in recording.graph_specs:
+                        cache_dir = self._create_graph_cache_dir(graph_spec.name)
+                        data = recording.samples_for_graph_spec(graph_spec)
+                        if config.dry_run:
+                            self._simulate_dry_run(strategy, current, graph_spec, data, device, cache_dir)
+                        else:
+                            with global_context:
+                                global_context.set(MODULE_CONTEXT_KEY, current.fq_name)
+                                backend = self._tune(strategy, current, graph_spec, data, device, cache_dir)
+                            backends[graph_spec.input_spec] = backend
+                    if backends:
+                        current._wrapper = TunedModule(backends, module_name=current.fq_name)
+                        current._extra_state_info = ", ".join([b.name for b in backends.values()])
                     else:
-                        with global_context:
-                            global_context.set(MODULE_CONTEXT_KEY, current.fq_name)
-                            backend = self._tune(strategy, current, graph_spec, data, device, cache_dir)
-                        backends[graph_spec.input_spec] = backend
-                if backends:
-                    current._wrapper = TunedModule(backends, module_name=current.fq_name)
-                    current._extra_state_info = ", ".join([b.name for b in backends.values()])
-                else:
-                    current._wrapper = PassthroughModule(current.__wrapped__, device=device)
-                    current._extra_state_info = "dry-run tuning success"
+                        current._wrapper = PassthroughModule(current.__wrapped__, device=device)
+                        current._extra_state_info = "dry-run tuning success"
 
-                # tuning success, we can revert forward for current module, unpatch child modules
-                current._update_state(ModuleState.TUNED)
-                current._patch_device_attribute(device)
-                current._unpatch_hierarchy(include_self=False)
-                _to_hist(f"Model tuned: {str(current)}")
-                self._offload(backends)
+                    # tuning success, we can revert forward for current module, unpatch child modules
+                    current._update_state(ModuleState.TUNED)
+                    current._patch_device_attribute(device)
+                    current._unpatch_hierarchy(include_self=False)
+                    _to_hist(f"Model tuned: {str(current)}")
+                    self._offload(backends)
+
             except Exception as e:
                 current.__wrapped__.to(device)  # failed backend leaves module on cpu, move it back
                 current._unpatch()
@@ -209,14 +215,19 @@ class PatchedModule:
         cache_dir: Path,
     ):
         """Tune the module with optional graph break detection and timing."""
-        if config.detect_graph_breaks:
-            self._throw_if_has_graph_break(module, data)
+        with report_graph_tune(graph_spec, strategy) as graph_result:
+            try:
+                if config.detect_graph_breaks:
+                    self._throw_if_has_graph_break(module, data)
 
-        start = perf_counter()
-        backend = strategy.tune(module.__wrapped__, module._name, graph_spec, data, device, cache_dir)
-        duration = perf_counter() - start
-        _to_hist(f"Tuning {module._name} took {duration:.2f}s")
-        return backend
+                start = perf_counter()
+                backend = strategy.tune(module.__wrapped__, module._name, graph_spec, data, device, cache_dir)
+                duration = perf_counter() - start
+                _to_hist(f"Tuning {module._name} took {duration:.2f}s")
+                graph_result["selected_backend"] = backend.describe()
+                return backend
+            finally:
+                graph_result["strategy_results"] = strategy.backend_results
 
     def _should_be_skipped(self):
         """Check if the module should be skipped.
@@ -566,6 +577,8 @@ class PatchedModule:
     @staticmethod
     def on_python_exit():
         """Give suggestions if tuning was not attempted."""
+        report_tune_run_end()
+
         if len(PatchedModule.heads) == 0:
             logging.error("JIT tuning has been enabled but no modules were found.")
         elif not PatchedModule.attempted_tuning:

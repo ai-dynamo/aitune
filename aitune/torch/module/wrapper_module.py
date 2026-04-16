@@ -21,12 +21,13 @@ from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module_registry import MODULE_REGISTRY
+from aitune.torch.tune_data.reporting import report_graph_tune, report_module_tune
 from aitune.torch.tune_strategy import FirstWinsStrategy
 from aitune.torch.tune_strategy.tune_strategy import (
     DummyTuneStrategy,
     TuneStrategy,
 )
-from aitune.torch.utils.module import get_module_device, offload
+from aitune.torch.utils.module import count_parameters, get_module_device, offload
 from aitune.utils.monitoring import annotate
 
 logger = getLogger(__name__)
@@ -278,32 +279,39 @@ class Module(wrapt.CallableObjectProxy):
         elif self._self_state == ModuleState.INIT or self._self_state == ModuleState.PASSTHROUGH:
             raise ValueError(f"Module: '{self._self_name}' has not recorded any samples. Cannot tune it.")
 
-        device = device or self._self_device
+        with report_module_tune(
+            module_name=self._self_name,
+            num_parameters=count_parameters(self.__wrapped__),
+        ):
+            device = device or self._self_device
 
-        recording = cast(RecordingModule, self._self_wrapper)
-        backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
-        strategies = self._get_strategies_for_graph_specs(strategy, recording.graph_specs, dry_run)
+            recording = cast(RecordingModule, self._self_wrapper)
+            backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
+            strategies = self._get_strategies_for_graph_specs(strategy, recording.graph_specs, dry_run)
 
-        for strategy, graph_spec in zip(strategies, recording.graph_specs, strict=True):
-            cache_dir = self._create_graph_cache_dir(graph_spec)
+            for strategy, graph_spec in zip(strategies, recording.graph_specs, strict=True):
+                cache_dir = self._create_graph_cache_dir(graph_spec)
+                data = recording.samples_for_graph_spec(graph_spec)
 
-            data = recording.samples_for_graph_spec(graph_spec)
-            if dry_run:
-                strategy.tune_dry_run(self.__wrapped__, self._self_name, graph_spec, data, device, cache_dir)
-            else:
-                try:
-                    self._restore_original_forward()
-                    backends[graph_spec.input_spec] = strategy.tune(
-                        self.__wrapped__, self._self_name, graph_spec, data, device, cache_dir
-                    )
-                finally:
-                    self._proxy_forward()
+                if dry_run:
+                    strategy.tune_dry_run(self.__wrapped__, self._self_name, graph_spec, data, device, cache_dir)
+                    continue
 
-        if not dry_run:
-            self._self_prev_recording = recording
-            self._self_state = ModuleState.TUNED
-            self._self_wrapper = TunedModule(backends, module_name=self._self_name)
-            self._offload(backends)
+                with report_graph_tune(graph_spec, strategy) as graph_result:
+                    try:
+                        self._restore_original_forward()
+                        backend = strategy.tune(self.__wrapped__, self._self_name, graph_spec, data, device, cache_dir)
+                        backends[graph_spec.input_spec] = backend
+                        graph_result["selected_backend"] = backend.describe()
+                    finally:
+                        self._proxy_forward()
+                        graph_result["strategy_results"] = strategy.backend_results
+
+            if not dry_run:
+                self._self_prev_recording = recording
+                self._self_state = ModuleState.TUNED
+                self._self_wrapper = TunedModule(backends, module_name=self._self_name)
+                self._offload(backends)
 
     def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:
         """Create a cache directory for the graph."""

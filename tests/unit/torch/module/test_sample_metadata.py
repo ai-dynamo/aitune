@@ -373,3 +373,47 @@ def test_detected_dynamic_axis():
     # Manually modify tensor spec to have batch axis
     metadata3.tensor_specs[0].shape[0] = "batch0"
     assert metadata3.detected_dynamic_axis()
+
+
+def test_to_json_dict_non_strict():
+    args = (torch.randn(2, 3),)
+    kwargs = {"x": torch.randn(4, 5)}
+    metadata = SampleMetadata.from_inputs(args, kwargs, strict=False)
+
+    result = metadata.to_json_dict()
+
+    assert result["strict"] is False
+    assert result["llm_phase"] is None
+    assert result["other_data"] == {}
+    assert len(result["tensor_data"]) == 2
+
+    # Check tensor entries are JSON-safe dicts
+    for entry in result["tensor_data"]:
+        assert isinstance(entry["name"], str)
+        assert isinstance(entry["shape"], list)
+        assert isinstance(entry["min_shape"], list)
+        assert isinstance(entry["max_shape"], list)
+        assert isinstance(entry["dtype"], str)
+
+
+def test_to_json_dict_strict():
+    args = (1, torch.randn(2, 3))
+    kwargs = {}
+    metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+
+    result = metadata.to_json_dict()
+
+    assert result["strict"] is True
+    assert len(result["tensor_data"]) == 1
+    assert result["other_data"] == {"args_0": 1}
+
+
+def test_to_json_dict_is_json_serializable():
+    import json
+
+    args = (torch.randn(2, 3), torch.randn(4, 5))
+    metadata = SampleMetadata.from_inputs(args, kwargs={})
+
+    result = metadata.to_json_dict()
+    serialized = json.dumps(result)  # should not raise
+    assert isinstance(serialized, str)

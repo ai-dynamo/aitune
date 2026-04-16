@@ -97,7 +97,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
                 with control_output(log_file=build_log_file):
                     backend.build(module, graph_spec, deepcopy(data), device, find_max_batch_size_cache_dir)
 
-                max_batch_size, best_throughput, _ = find_max_throughput_for_backend(
+                max_batch_size, max_throughput, _ = find_max_throughput_for_backend(
                     backend,
                     name,
                     graph_spec,
@@ -108,7 +108,7 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
                     "✅ Max batch size for %s is %d with throughput %.2f samples/s",
                     name,
                     max_batch_size,
-                    best_throughput,
+                    max_throughput,
                 )
                 graph_spec.input_spec.update_max_batch_size(data[0], max_batch_size)
             except Exception:

@@ -3,6 +3,7 @@
 """Simple tune strategy."""
 
 from pathlib import Path
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -63,3 +64,7 @@ class OneBackendStrategy(TuneStrategyFindMaxBatchSizeExtension):
             "description: Use only one backend",
             f"backend: {self._backend.describe()}",
         ]
+
+    def to_json_dict(self) -> dict[str, Any]:
+        """Returns config dict for one backend strategy."""
+        return {"backend": self._backend.describe()}

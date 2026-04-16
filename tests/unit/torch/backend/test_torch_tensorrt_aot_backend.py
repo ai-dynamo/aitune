@@ -76,11 +76,15 @@ def backend(mocker) -> TorchTensorRTAotBackend:
     return TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
 
 
+def _fake_torch_tensorrt_save(model, path, **kwargs):
+    Path(path).write_bytes(b"fake")
+
+
 @pytest.fixture
 def mock_torch_tensorrt(mocker, model: SimpleModel):
     mock_torch_tensorrt = mocker.Mock()
     mock_torch_tensorrt.compile = mocker.Mock(return_value=model)
-    mock_torch_tensorrt.save = mocker.Mock()
+    mock_torch_tensorrt.save = mocker.Mock(side_effect=_fake_torch_tensorrt_save)
 
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
     return mock_torch_tensorrt
@@ -149,6 +153,10 @@ def test_mock_infer(
     mocker.patch("torch.export.export")
     mocker.patch("torch.export.save")
     load = mocker.patch("torch.export.load", return_value=model)
+    mocker.patch(
+        "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.save",
+        side_effect=_fake_torch_tensorrt_save,
+    )
 
     backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 

@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -33,6 +34,7 @@ class TuneStrategy(ABC):
         """
         self._sink = sink or self._logger.info
         self._enable_correctness_check = True
+        self.backend_results = None
 
     def tune_dry_run(
         self,
@@ -60,6 +62,7 @@ class TuneStrategy(ABC):
         cache_dir: Path,
     ) -> Backend:
         """Tunes given torch module with provided graph_spec and data."""
+        self.backend_results = []
         self._describe(module, name, graph_spec, data, device, cache_dir)
         with Timer(name=f"Tune `{self.__class__.__name__}`", sink=self._sink):
             self._pre_tune(module, name, graph_spec, data, device, cache_dir)
@@ -109,6 +112,16 @@ class TuneStrategy(ABC):
         """Clones the tune strategy."""
         return deepcopy(self)
 
+    @abstractmethod
+    def to_json_dict(self) -> dict[str, Any]:
+        """Returns a serializable dict describing this strategy's configuration.
+
+        Each concrete strategy includes whichever settings are relevant
+        (e.g. backend list, profiling parameters).  The dict must be
+        JSON-serializable so it can be stored on tune-data events.
+        """
+        ...
+
     def _build_and_validate_backend(
         self,
         backend: Backend,
@@ -139,12 +152,13 @@ class TuneStrategy(ABC):
         Returns:
             The built and validated backend, or None on failure.
         """
+        description = backend.describe()
         backend_cache_dir = cache_dir / backend.key()
         log_file = self._log_file(backend_cache_dir, "build.log")
 
         with Timer(sink=self._sink, depth=2):
             try:
-                log("🤖 backend: %s", backend.describe(), sink=self._sink)
+                log("🤖 backend: %s", description, sink=self._sink)
                 log("🔄 in progress...please wait", depth=2, sink=self._sink)
 
                 with control_output(log_file=log_file):
@@ -155,10 +169,12 @@ class TuneStrategy(ABC):
                 self.check_correctness(backend, name, graph_spec, data)
                 log("✅ backend validated", depth=2, sink=self._sink)
 
+                self.backend_results.append({"backend": description, "success": True})
                 return backend
 
             except Exception:
                 log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
+                self.backend_results.append({"backend": description, "success": False})
                 if raise_on_failure:
                     raise
                 if backend.is_active:
@@ -279,6 +295,10 @@ class DummyTuneStrategy(TuneStrategy):
     def _describe_parts(self):
         """Describes what strategy is doing."""
         return ["Dummy strategy which does nothing."]
+
+    def to_json_dict(self) -> dict[str, Any]:
+        """Returns config dict for dummy strategy."""
+        return {}
 
     def _tune(
         self,

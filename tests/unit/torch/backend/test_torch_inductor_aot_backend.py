@@ -53,11 +53,15 @@ def backend() -> TorchInductorAotBackend:
     return TorchInductorAotBackend()
 
 
+def _fake_aoti_compile(*args, **kwargs):
+    Path(kwargs["package_path"]).write_bytes(b"fake")
+
+
 @pytest.fixture
 def mock_aoti(mocker, model):
     """Mock all three external torch AOT calls; runner forwards to the original model."""
     mocker.patch("torch.export.export", return_value=Mock())
-    mocker.patch.object(torch._inductor, "aoti_compile_and_package")
+    mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
 
     def _fake_runner(*args, **kwargs):
         with torch.no_grad():
@@ -495,7 +499,7 @@ def test_build_calls_export_and_compile(
     mock_aoti, mocker, backend, model, graph_spec, sample_data, torch_device, tmp_path
 ):
     export_mock = mocker.patch("torch.export.export", return_value=Mock())
-    compile_mock = mocker.patch.object(torch._inductor, "aoti_compile_and_package")
+    compile_mock = mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
 
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
@@ -510,7 +514,7 @@ def test_build_passes_dynamic_shapes_when_batch_detected(
     mock_aoti, mocker, model, graph_spec, sample_data, torch_device, tmp_path
 ):
     export_mock = mocker.patch("torch.export.export", return_value=Mock())
-    mocker.patch.object(torch._inductor, "aoti_compile_and_package")
+    mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
 
     TorchInductorAotBackend().build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
@@ -526,7 +530,7 @@ def test_build_static_graph_no_dynamic_shapes(mocker, model, torch_device, tmp_p
     samples = toy.samples(batch_sizes=[2], device=torch_device)
 
     export_mock = mocker.patch("torch.export.export", return_value=Mock())
-    mocker.patch.object(torch._inductor, "aoti_compile_and_package")
+    mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
     mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
 
     TorchInductorAotBackend().build(model, gs, samples, device=torch_device, cache_dir=tmp_path)
