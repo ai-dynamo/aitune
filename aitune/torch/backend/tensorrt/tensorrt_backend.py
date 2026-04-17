@@ -17,7 +17,7 @@ import torch.nn as nn
 from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCast, ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig, ONNXQuantizer
 from aitune.torch.backend.tensorrt.tensorrt_builder import TensorRTBuilder
@@ -44,14 +44,14 @@ ONNX_FILE_EXTENSION = ".onnx"
 logger = logging.getLogger(__name__)
 
 
-class TensorRTBuildStep(str, Enum):
+class TensorRTBuildStep(BackendBuildStep):
     """Identifiers for discrete sub-steps of a TensorRT backend build."""
 
-    ONNX_EXPORT = "onnx_export"
-    TENSORRT_ENGINE_BUILD = "tensorrt_engine_build"
-    MODELOPT_TORCH_QUANTIZATION = "modelopt_torch_quantization"
-    MODELOPT_ONNX_QUANTIZATION = "modelopt_onnx_quantization"
-    ONNX_AUTOCAST = "onnx_autocast"
+    ONNX_EXPORT = "ONNX export"
+    TENSORRT_ENGINE_BUILD = "TensorRT engine build"
+    MODELOPT_TORCH_QUANTIZATION = "ModelOpt Torch quantization"
+    MODELOPT_ONNX_QUANTIZATION = "ModelOpt ONNX quantization"
+    ONNX_AUTOCAST = "ONNX autocast"
 
 
 class TensorRTRunner:
@@ -358,49 +358,49 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         """
         try:
-            with self._track_build_step(TensorRTBuildStep.MODELOPT_TORCH_QUANTIZATION):
-                with annotate("build: ModelOpt Torch quantization"):
-                    torch_quantizer = TorchQuantizer()
-                    module = torch_quantizer.quantize(
-                        module=module,
-                        sample=data[0],
-                        config=self._config.quantization_config,
-                    )
+            step = TensorRTBuildStep.MODELOPT_TORCH_QUANTIZATION
+            with annotate(step.annotation), self._track_build_step(step):
+                torch_quantizer = TorchQuantizer()
+                module = torch_quantizer.quantize(
+                    module=module,
+                    sample=data[0],
+                    config=self._config.quantization_config,
+                )
 
-            with self._track_build_step(TensorRTBuildStep.ONNX_EXPORT) as result:
-                with annotate("build: ONNX export"):
-                    onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
+            step = TensorRTBuildStep.ONNX_EXPORT
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
 
-                    onnx_exporter = ONNXExporter(
-                        use_dynamo=self._config.use_dynamo,
-                        opset_version=self._config.opset_version,
-                        output_path=onnx_path_quantized,
-                    )
-                    onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
-                    result["onnx_size_bytes"] = onnx_path_quantized.stat().st_size
+                onnx_exporter = ONNXExporter(
+                    use_dynamo=self._config.use_dynamo,
+                    opset_version=self._config.opset_version,
+                    output_path=onnx_path_quantized,
+                )
+                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
+                result["onnx_size_bytes"] = onnx_path_quantized.stat().st_size
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
 
-            with self._track_build_step(TensorRTBuildStep.TENSORRT_ENGINE_BUILD) as result:
-                with annotate("build: TensorRT engine build"):
-                    # Initialize TensorRT builder
-                    logger.info("Initializing TensorRT builder")
-                    engine_path = self._prepare_trt_engine_path(cache_dir)
-                    self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
+            step = TensorRTBuildStep.TENSORRT_ENGINE_BUILD
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                # Initialize TensorRT builder
+                logger.info("Initializing TensorRT builder")
+                engine_path = self._prepare_trt_engine_path(cache_dir)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
 
-                    trt_builder = TensorRTBuilder(
-                        input_onnx_path=onnx_path_quantized,
-                        output_path=engine_path,
-                        workspace_size=self._config.workspace_size,
-                        optimization_level=self._config.optimization_level,
-                        compatibility_level=self._config.compatibility_level,
-                        timing_cache=self._config.timing_cache,
-                        profiles=self._trt_optimization_profiles,
-                        enable_tf32=self._config.enable_tf32,
-                    )
+                trt_builder = TensorRTBuilder(
+                    input_onnx_path=onnx_path_quantized,
+                    output_path=engine_path,
+                    workspace_size=self._config.workspace_size,
+                    optimization_level=self._config.optimization_level,
+                    compatibility_level=self._config.compatibility_level,
+                    timing_cache=self._config.timing_cache,
+                    profiles=self._trt_optimization_profiles,
+                    enable_tf32=self._config.enable_tf32,
+                )
 
-                    trt_builder.build()
+                trt_builder.build()
                 result["engine_size_bytes"] = engine_path.stat().st_size
                 result["num_optimization_profiles"] = len(self._trt_optimization_profiles)
 
@@ -425,59 +425,59 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            with self._track_build_step(TensorRTBuildStep.ONNX_EXPORT) as result:
-                with annotate("build: ONNX export"):
-                    logger.info("Initializing ONNX exporter")
+            step = TensorRTBuildStep.ONNX_EXPORT
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                logger.info("Initializing ONNX exporter")
 
-                    onnx_path = self._prepare_onnx_model_path(cache_dir)
-                    onnx_exporter = ONNXExporter(
-                        use_dynamo=self._config.use_dynamo,
-                        opset_version=self._config.opset_version,
-                        output_path=onnx_path,
-                    )
+                onnx_path = self._prepare_onnx_model_path(cache_dir)
+                onnx_exporter = ONNXExporter(
+                    use_dynamo=self._config.use_dynamo,
+                    opset_version=self._config.opset_version,
+                    output_path=onnx_path,
+                )
 
-                    onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
-                    result["onnx_size_bytes"] = onnx_path.stat().st_size
+                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
+                result["onnx_size_bytes"] = onnx_path.stat().st_size
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
 
-            with self._track_build_step(TensorRTBuildStep.MODELOPT_ONNX_QUANTIZATION) as result:
-                with annotate("build: ONNX quantization"):
-                    logger.info("Initializing ONNX quantizer")
-                    onnx_quantizer = ONNXQuantizer()
+            step = TensorRTBuildStep.MODELOPT_ONNX_QUANTIZATION
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                logger.info("Initializing ONNX quantizer")
+                onnx_quantizer = ONNXQuantizer()
 
-                    onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
+                onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
 
-                    # Quantize the ONNX model
-                    onnx_path_quantized = onnx_quantizer.quantize(
-                        input_onnx_path=onnx_path,
-                        output_path=onnx_path_quantized,
-                        config=self._config.quantization_config,
-                        samples=data,
-                        graph_spec=graph_spec,
-                    )
+                # Quantize the ONNX model
+                onnx_path_quantized = onnx_quantizer.quantize(
+                    input_onnx_path=onnx_path,
+                    output_path=onnx_path_quantized,
+                    config=self._config.quantization_config,
+                    samples=data,
+                    graph_spec=graph_spec,
+                )
                 result["onnx_size_bytes"] = onnx_path_quantized.stat().st_size
 
-            with self._track_build_step(TensorRTBuildStep.TENSORRT_ENGINE_BUILD) as result:
-                with annotate("build: TensorRT engine build"):
-                    # Initialize TensorRT builder
-                    logger.info("Initializing TensorRT builder")
-                    engine_path = self._prepare_trt_engine_path(cache_dir)
-                    self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
+            step = TensorRTBuildStep.TENSORRT_ENGINE_BUILD
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                # Initialize TensorRT builder
+                logger.info("Initializing TensorRT builder")
+                engine_path = self._prepare_trt_engine_path(cache_dir)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
 
-                    trt_builder = TensorRTBuilder(
-                        input_onnx_path=onnx_path_quantized,
-                        output_path=engine_path,
-                        workspace_size=self._config.workspace_size,
-                        optimization_level=self._config.optimization_level,
-                        compatibility_level=self._config.compatibility_level,
-                        timing_cache=self._config.timing_cache,
-                        profiles=self._trt_optimization_profiles,
-                        enable_tf32=self._config.enable_tf32,
-                    )
+                trt_builder = TensorRTBuilder(
+                    input_onnx_path=onnx_path_quantized,
+                    output_path=engine_path,
+                    workspace_size=self._config.workspace_size,
+                    optimization_level=self._config.optimization_level,
+                    compatibility_level=self._config.compatibility_level,
+                    timing_cache=self._config.timing_cache,
+                    profiles=self._trt_optimization_profiles,
+                    enable_tf32=self._config.enable_tf32,
+                )
 
-                    trt_builder.build()
+                trt_builder.build()
                 result["engine_size_bytes"] = engine_path.stat().st_size
                 result["num_optimization_profiles"] = len(self._trt_optimization_profiles)
 
@@ -502,58 +502,58 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            with self._track_build_step(TensorRTBuildStep.ONNX_EXPORT) as result:
-                with annotate("build: ONNX export"):
-                    logger.info("Initializing ONNX exporter")
+            step = TensorRTBuildStep.ONNX_EXPORT
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                logger.info("Initializing ONNX exporter")
 
-                    onnx_path = self._prepare_onnx_model_path(cache_dir)
-                    onnx_exporter = ONNXExporter(
-                        use_dynamo=self._config.use_dynamo,
-                        opset_version=self._config.opset_version,
-                        output_path=onnx_path,
-                    )
+                onnx_path = self._prepare_onnx_model_path(cache_dir)
+                onnx_exporter = ONNXExporter(
+                    use_dynamo=self._config.use_dynamo,
+                    opset_version=self._config.opset_version,
+                    output_path=onnx_path,
+                )
 
-                    onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
-                    result["onnx_size_bytes"] = onnx_path.stat().st_size
+                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
+                result["onnx_size_bytes"] = onnx_path.stat().st_size
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
 
-            with self._track_build_step(TensorRTBuildStep.ONNX_AUTOCAST) as result:
-                with annotate("build: ONNX autocast"):
-                    logger.info("Initializing ONNX autocast")
-                    onnx_autocast = ONNXAutoCast()
+            step = TensorRTBuildStep.ONNX_AUTOCAST
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                logger.info("Initializing ONNX autocast")
+                onnx_autocast = ONNXAutoCast()
 
-                    onnx_path_autocasted = self._prepare_onnx_model_path(cache_dir, suffix="autocast")
+                onnx_path_autocasted = self._prepare_onnx_model_path(cache_dir, suffix="autocast")
 
-                    onnx_path_autocasted = onnx_autocast.autocast(
-                        input_onnx_path=onnx_path,
-                        output_path=onnx_path_autocasted,
-                        config=self._config.quantization_config,
-                        samples=data,
-                        graph_spec=graph_spec,
-                    )
+                onnx_path_autocasted = onnx_autocast.autocast(
+                    input_onnx_path=onnx_path,
+                    output_path=onnx_path_autocasted,
+                    config=self._config.quantization_config,
+                    samples=data,
+                    graph_spec=graph_spec,
+                )
                 result["onnx_size_bytes"] = onnx_path_autocasted.stat().st_size
 
-            with self._track_build_step(TensorRTBuildStep.TENSORRT_ENGINE_BUILD) as result:
-                with annotate("build: TensorRT engine build"):
-                    # Initialize TensorRT builder
-                    logger.info("Initializing TensorRT builder")
-                    engine_path = self._prepare_trt_engine_path(cache_dir)
-                    self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
+            step = TensorRTBuildStep.TENSORRT_ENGINE_BUILD
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                # Initialize TensorRT builder
+                logger.info("Initializing TensorRT builder")
+                engine_path = self._prepare_trt_engine_path(cache_dir)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
 
-                    trt_builder = TensorRTBuilder(
-                        input_onnx_path=onnx_path_autocasted,
-                        output_path=engine_path,
-                        workspace_size=self._config.workspace_size,
-                        optimization_level=self._config.optimization_level,
-                        compatibility_level=self._config.compatibility_level,
-                        timing_cache=self._config.timing_cache,
-                        profiles=self._trt_optimization_profiles,
-                        enable_tf32=self._config.enable_tf32,
-                    )
+                trt_builder = TensorRTBuilder(
+                    input_onnx_path=onnx_path_autocasted,
+                    output_path=engine_path,
+                    workspace_size=self._config.workspace_size,
+                    optimization_level=self._config.optimization_level,
+                    compatibility_level=self._config.compatibility_level,
+                    timing_cache=self._config.timing_cache,
+                    profiles=self._trt_optimization_profiles,
+                    enable_tf32=self._config.enable_tf32,
+                )
 
-                    trt_builder.build()
+                trt_builder.build()
                 result["engine_size_bytes"] = engine_path.stat().st_size
                 result["num_optimization_profiles"] = len(self._trt_optimization_profiles)
 
@@ -576,42 +576,42 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            with self._track_build_step(TensorRTBuildStep.ONNX_EXPORT) as result:
-                with annotate("build: ONNX export"):
-                    logger.info("Initializing ONNX exporter")
+            step = TensorRTBuildStep.ONNX_EXPORT
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                logger.info("Initializing ONNX exporter")
 
-                    onnx_path = self._prepare_onnx_model_path(cache_dir)
-                    onnx_exporter = ONNXExporter(
-                        use_dynamo=self._config.use_dynamo,
-                        opset_version=self._config.opset_version,
-                        output_path=onnx_path,
-                    )
+                onnx_path = self._prepare_onnx_model_path(cache_dir)
+                onnx_exporter = ONNXExporter(
+                    use_dynamo=self._config.use_dynamo,
+                    opset_version=self._config.opset_version,
+                    output_path=onnx_path,
+                )
 
-                    onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
-                    result["onnx_size_bytes"] = onnx_path.stat().st_size
+                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
+                result["onnx_size_bytes"] = onnx_path.stat().st_size
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
 
-            with self._track_build_step(TensorRTBuildStep.TENSORRT_ENGINE_BUILD) as result:
-                with annotate("build: TensorRT engine build"):
-                    # Initialize TensorRT builder
-                    logger.info("Initializing TensorRT builder")
-                    engine_path = self._prepare_trt_engine_path(cache_dir)
-                    self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
+            step = TensorRTBuildStep.TENSORRT_ENGINE_BUILD
+            with annotate(step.annotation), self._track_build_step(step) as result:
+                # Initialize TensorRT builder
+                logger.info("Initializing TensorRT builder")
+                engine_path = self._prepare_trt_engine_path(cache_dir)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
 
-                    trt_builder = TensorRTBuilder(
-                        input_onnx_path=onnx_path,
-                        output_path=engine_path,
-                        workspace_size=self._config.workspace_size,
-                        optimization_level=self._config.optimization_level,
-                        compatibility_level=self._config.compatibility_level,
-                        timing_cache=self._config.timing_cache,
-                        profiles=self._trt_optimization_profiles,
-                        enable_tf32=self._config.enable_tf32,
-                    )
+                trt_builder = TensorRTBuilder(
+                    input_onnx_path=onnx_path,
+                    output_path=engine_path,
+                    workspace_size=self._config.workspace_size,
+                    optimization_level=self._config.optimization_level,
+                    compatibility_level=self._config.compatibility_level,
+                    timing_cache=self._config.timing_cache,
+                    profiles=self._trt_optimization_profiles,
+                    enable_tf32=self._config.enable_tf32,
+                )
 
-                    trt_builder.build()
+                trt_builder.build()
                 result["engine_size_bytes"] = engine_path.stat().st_size
                 result["num_optimization_profiles"] = len(self._trt_optimization_profiles)
 

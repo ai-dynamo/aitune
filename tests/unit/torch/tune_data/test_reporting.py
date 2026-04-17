@@ -10,7 +10,6 @@ import pytest
 from aitune.torch.config import AITuneMode
 from aitune.torch.tune_data.report_models import ExceptionInfo
 from aitune.torch.tune_data.reporting import (
-    REPORT_FILENAME,
     _active_graph,
     _active_module,
     _active_report,
@@ -39,12 +38,13 @@ def _reset_contextvars():
 
 @pytest.fixture()
 def enable_reporting(mocker, tmp_path):
-    """Enable tuning data collection with a temporary output dir."""
+    """Enable tuning data collection with a temporary output path."""
+    report_path = tmp_path / "report.json"
     mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
     mock_config.enable_tuning_data_collection = True
-    mock_config.tuning_data_output_dir = tmp_path
+    mock_config.tuning_data_output_path = report_path
     mocker.patch("aitune.torch.tune_data.reporting.snapshot_config", return_value={"mocked": True})
-    return tmp_path
+    return report_path
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ def test_tune_run_builds_and_flushes_report(enable_reporting):
         assert _active_report.get() is not None
 
     # then
-    report = json.loads((enable_reporting / REPORT_FILENAME).read_text())
+    report = json.loads(enable_reporting.read_text())
     assert report["mode"] == "JIT"
     assert report["aitune_config"] == {"mocked": True}
     assert report["duration_s"] is not None
@@ -150,7 +150,7 @@ def test_tune_run_captures_exception(enable_reporting):
             raise RuntimeError("boom")
 
     # then
-    report = json.loads((enable_reporting / REPORT_FILENAME).read_text())
+    report = json.loads(enable_reporting.read_text())
     assert report["exception"]["type"] == "RuntimeError"
     assert report["exception"]["message"] == "boom"
 
@@ -180,7 +180,7 @@ def test_start_end_tune_run(enable_reporting):
     report_tune_run_end()
 
     # then
-    report = json.loads((enable_reporting / REPORT_FILENAME).read_text())
+    report = json.loads(enable_reporting.read_text())
     assert report["mode"] == "JIT"
     assert _active_report.get() is None
 
@@ -191,7 +191,7 @@ def test_end_tune_run_with_exception(enable_reporting):
     report_tune_run_end(exception=ValueError("bad"))
 
     # then
-    report = json.loads((enable_reporting / REPORT_FILENAME).read_text())
+    report = json.loads(enable_reporting.read_text())
     assert report["exception"]["type"] == "ValueError"
 
 
@@ -237,7 +237,7 @@ def test_full_hierarchy_produces_nested_report(enable_reporting):
                 gt["strategy_results"] = [{"backend": "TRT", "success": True}]
 
     # then
-    report = json.loads((enable_reporting / REPORT_FILENAME).read_text())
+    report = json.loads(enable_reporting.read_text())
     assert report["duration_s"] is not None
     assert report["exception"] is None
 
@@ -275,7 +275,7 @@ def test_module_level_exception(enable_reporting):
                 raise ValueError("bad module")
 
     # then
-    report = json.loads((enable_reporting / REPORT_FILENAME).read_text())
+    report = json.loads(enable_reporting.read_text())
     module = report["modules"][0]
     assert module["exception"]["type"] == "ValueError"
     assert report["exception"] is None
@@ -290,7 +290,7 @@ def test_graph_level_exception(enable_reporting):
                     raise TypeError("bad graph")
 
     # then
-    graph = json.loads((enable_reporting / REPORT_FILENAME).read_text())["modules"][0]["graphs"][0]
+    graph = json.loads(enable_reporting.read_text())["modules"][0]["graphs"][0]
     assert graph["exception"]["type"] == "TypeError"
 
 
@@ -304,7 +304,7 @@ def test_build_level_exception(enable_reporting):
                         raise OSError("build failed")
 
     # then
-    build = json.loads((enable_reporting / REPORT_FILENAME).read_text())["modules"][0]["graphs"][0]["backend_builds"][0]
+    build = json.loads(enable_reporting.read_text())["modules"][0]["graphs"][0]["backend_builds"][0]
     assert build["success"] is False
     assert build["exception"]["type"] == "OSError"
 
@@ -324,7 +324,7 @@ def test_multiple_modules_and_graphs_preserve_order(enable_reporting):
                         pass
 
     # then
-    report = json.loads((enable_reporting / REPORT_FILENAME).read_text())
+    report = json.loads(enable_reporting.read_text())
     assert [m["module_name"] for m in report["modules"]] == ["mod_a", "mod_b"]
     assert [g["graph_name"] for g in report["modules"][0]["graphs"]] == ["g0", "g1"]
     assert [g["graph_name"] for g in report["modules"][1]["graphs"]] == ["g0", "g1"]
@@ -343,7 +343,7 @@ def test_multiple_backend_builds_per_graph(enable_reporting):
                 gt["selected_backend"] = "TRT"
 
     # then
-    builds = json.loads((enable_reporting / REPORT_FILENAME).read_text())["modules"][0]["graphs"][0]["backend_builds"]
+    builds = json.loads(enable_reporting.read_text())["modules"][0]["graphs"][0]["backend_builds"]
     assert len(builds) == 2
     assert builds[0]["backend"] == "TRT"
     assert builds[0]["success"] is True
@@ -362,7 +362,7 @@ def test_duration_computed(enable_reporting):
         pass
 
     # then
-    report = json.loads((enable_reporting / REPORT_FILENAME).read_text())
+    report = json.loads(enable_reporting.read_text())
     assert report["duration_s"] >= 0
 
 
@@ -404,5 +404,5 @@ def test_second_run_overwrites_report(enable_reporting):
         pass
 
     # then — only the second run is in the file
-    report = json.loads((enable_reporting / REPORT_FILENAME).read_text())
+    report = json.loads(enable_reporting.read_text())
     assert report["mode"] == "DECLARATIVE"

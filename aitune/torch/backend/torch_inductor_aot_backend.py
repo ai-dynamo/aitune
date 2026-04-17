@@ -4,7 +4,6 @@
 
 from copy import deepcopy
 from dataclasses import dataclass
-from enum import Enum
 from logging import getLogger
 from pathlib import Path
 from typing import Any
@@ -13,7 +12,7 @@ import nvtx
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.module import get_forward_arguments_names, offload
@@ -27,11 +26,11 @@ from aitune.torch.utils.shapes import (
 logger = getLogger(__name__)
 
 
-class TorchInductorAotBuildStep(str, Enum):
+class TorchInductorAotBuildStep(BackendBuildStep):
     """Identifiers for discrete sub-steps of a TorchInductorAot backend build."""
 
-    TORCH_EXPORT = "torch_export"
-    AOT_COMPILE = "aot_compile"
+    TORCH_EXPORT = "Torch export"
+    AOT_COMPILE = "AOT compile"
 
 
 @dataclass

@@ -3,7 +3,6 @@
 """TorchTensorRT backend with AOT compilation and intermediate model save."""
 
 from dataclasses import asdict, dataclass, field
-from enum import Enum
 from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, Literal
@@ -11,7 +10,7 @@ from typing import Any, ClassVar, Literal
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.config import DEFAULT_PICKLE_PROTOCOL
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
@@ -37,11 +36,11 @@ logger = getLogger(__name__)
 IRType = Literal["dynamo", "ts", "fx"]
 
 
-class TorchTensorRTAotBuildStep(str, Enum):
+class TorchTensorRTAotBuildStep(BackendBuildStep):
     """Identifiers for discrete sub-steps of a TorchTensorRTAot backend build."""
 
-    COMPILE = "compile"
-    SAVE = "save"
+    TORCHTRT_COMPILE = "Torch-TensorRT compile"
+    COMPILED_MODEL_SAVE = "Compiled model save"
 
 
 def assert_torch_tensorrt():
@@ -201,7 +200,7 @@ class TorchTensorRTAotBackend(Backend):
             else:
                 kwarg_inputs[key] = value
 
-        with self._track_build_step(TorchTensorRTAotBuildStep.COMPILE):
+        with self._track_build_step(TorchTensorRTAotBuildStep.TORCHTRT_COMPILE):
             logger.info("Compile model with Torch-TensorRT.")
             trt_model_compiled = torch_tensorrt.compile(
                 model,
@@ -211,7 +210,7 @@ class TorchTensorRTAotBackend(Backend):
                 **asdict(self._config.compile_config),
             )
 
-        with self._track_build_step(TorchTensorRTAotBuildStep.SAVE) as result:
+        with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_path = self._create_exported_model_path(cache_dir)
             torch_tensorrt.save(
                 trt_model_compiled,

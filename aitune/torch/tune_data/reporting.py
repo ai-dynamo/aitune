@@ -31,8 +31,6 @@ from aitune.torch.tune_data.report_models import (
 
 _logger = logging.getLogger(__name__)
 
-REPORT_FILENAME = "report.json"
-
 _active_report: ContextVar[TuneRunReport | None] = ContextVar("aitune_report", default=None)
 _active_module: ContextVar[ModuleTuneReport | None] = ContextVar("aitune_module", default=None)
 _active_graph: ContextVar[GraphTuneReport | None] = ContextVar("aitune_graph", default=None)
@@ -45,7 +43,7 @@ def _flush_active_report() -> None:
     if report is None:
         return
     try:
-        path = config.tuning_data_output_dir / REPORT_FILENAME
+        path = config.tuning_data_output_path
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = json_serialize(asdict(report))
         with path.open("w", encoding="utf-8") as f:

@@ -24,6 +24,15 @@ from aitune.utils.monitoring import annotate, with_backend_context
 from aitune.utils.serialization import json_serialize
 
 
+class BackendBuildStep(str, Enum):
+    """Base class for backend build step enums."""
+
+    @property
+    def annotation(self) -> str:
+        """Label used for NVTX annotation."""
+        return f"build: {self.value}"
+
+
 class BackendState(Enum):
     """Enum representing the state of a backend.
 
@@ -162,13 +171,8 @@ class Backend(ABC):
         self._build_results = []
 
     @contextlib.contextmanager
-    def _track_build_step(self, step: str) -> Generator[dict[str, Any], None, None]:
-        """Context manager that records a build step result.
-
-        Yields a mutable dict so callers can add metadata (e.g. file sizes)
-        after the step body succeeds. On exception the step is recorded as
-        failed and the exception re-raised.
-        """
+    def _track_build_step(self, step: BackendBuildStep) -> Generator[dict[str, Any], None, None]:
+        """Record a build step result."""
         result: dict[str, Any] = {"step": step}
         try:
             yield result
