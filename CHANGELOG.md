@@ -15,6 +15,8 @@ SPDX-License-Identifier: Apache-2.0
 - feat: Add hardware metrics snapshot and enable/disable them at runtime
 - feat: Tuning data collection emits a JSON report covering run, module, graph, and backend build stages - controlled via AITUNE_TUNING_DATA_COLLECTION environment variable
 - feat: Tuning data output path can be configured via AITUNE_TUNING_DATA_PATH environment variable
+- fix: preserve externally-registered forward hooks (e.g. `capture_outputs` from transformers≥ 5) across the AOT and JIT save/restore cycle — hooks registered after AITune wraps a module are no longer lost on the first forward pass
+- fix: remove `transformers<5` restriction — AITune now supports transformers 5.x
 - chore: Split hardware metrics table if there is a multi-gpu system
 - chore: Renamed TorchInductorBackend to TorchInductorJitBackend - breaking change
 - breaking change: NVTX_ENABLE environment variable renamed to AITUNE_NVTX_EVENTS

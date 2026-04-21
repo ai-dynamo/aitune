@@ -90,8 +90,8 @@ class Module(wrapt.CallableObjectProxy):
         super().__init__(module)
         self._self_name = sanitize_model_name(name) or get_object_name(module)
         self._self_orig_forward = module.forward
-        self._original_forward_pre_hooks = module._forward_pre_hooks
-        self._original_forward_hooks = module._forward_hooks
+        self._current_forward_pre_hooks = module._forward_pre_hooks
+        self._current_forward_hooks = module._forward_hooks
         self._self_proxy_forward = wrapt.decorator(self._forward)(module.forward)
         module.forward = self._self_proxy_forward
         self._setup_strategies(strategy, strategies)
@@ -379,15 +379,17 @@ class Module(wrapt.CallableObjectProxy):
 
         We need to re-enable hooks, so that they will be called before and after proxied forward.
         """
-        self.__wrapped__._forward_pre_hooks = self._original_forward_pre_hooks
+        self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
         self.__wrapped__.forward = self._self_proxy_forward
-        self.__wrapped__._forward_hooks = self._original_forward_hooks
+        self.__wrapped__._forward_hooks = self._current_forward_hooks
 
     def _restore_original_forward(self):
         """Restore the original forward and hooks.
 
         We need to disable hooks, otherwise they will be called twice.
         """
+        self._current_forward_pre_hooks = OrderedDict(self.__wrapped__._forward_pre_hooks)
+        self._current_forward_hooks = OrderedDict(self.__wrapped__._forward_hooks)
         self.__wrapped__._forward_pre_hooks = OrderedDict()
         self.__wrapped__.forward = self._self_orig_forward
         self.__wrapped__._forward_hooks = OrderedDict()

@@ -360,3 +360,5 @@ tuning/
 docs/superpowers/
 .claude/agent-memory-local/
 .worktrees/
+.claude/plans
+.claude/specs

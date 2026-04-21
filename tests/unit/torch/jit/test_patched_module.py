@@ -287,6 +287,75 @@ def test_jit_tuning_no_modules(mock_trt_backend, torch_device):
     assert PRINT_HIERARCHY_NO_MODULES_HEADER in sink.output[0]
 
 
+# ── capture_outputs hook preservation ────────────────────────────────────────
+
+
+class _SimpleJitModule(torch.nn.Module):
+    """Minimal module used in JIT hook-preservation tests."""
+
+    def forward(self, x):
+        return x * 2
+
+
+def test_jit_external_hook_preserved_in_forward_hooks_after_restore_proxy_cycle():
+    """A forward hook registered after wrapping must survive _restore_original_forward/_proxy_forward."""
+    inner = _SimpleJitModule()
+    patched = PatchedModule(inner)
+
+    hook_calls = []
+    inner.register_forward_hook(lambda mod, inp, out: hook_calls.append(out))
+
+    assert len(inner._forward_hooks) == 1
+
+    patched._restore_original_forward()
+    assert len(inner._forward_hooks) == 0  # cleared during restore — expected
+
+    patched._proxy_forward()
+    assert len(inner._forward_hooks) == 1  # must be restored
+
+
+def test_jit_external_hook_fires_exactly_once_after_restore_proxy_cycle():
+    """After the cycle the hook fires exactly once per forward call — no double-firing."""
+    inner = _SimpleJitModule()
+    patched = PatchedModule(inner)
+
+    hook_calls = []
+    inner.register_forward_hook(lambda mod, inp, out: hook_calls.append(out))
+
+    patched._restore_original_forward()
+    patched._proxy_forward()
+
+    x = torch.ones(1)
+    inner(x)
+    assert len(hook_calls) == 1
+
+
+def test_jit_external_pre_hook_preserved_after_restore_proxy_cycle():
+    """A forward_pre_hook registered after wrapping must also survive the cycle."""
+    inner = _SimpleJitModule()
+    patched = PatchedModule(inner)
+
+    pre_calls = []
+    inner.register_forward_pre_hook(lambda mod, inp: pre_calls.append(inp))
+
+    assert len(inner._forward_pre_hooks) == 1
+
+    patched._restore_original_forward()
+    assert len(inner._forward_pre_hooks) == 0
+
+    patched._proxy_forward()
+    assert len(inner._forward_pre_hooks) == 1
+
+
+def test_jit_first_proxy_forward_without_prior_restore_does_not_crash():
+    """_proxy_forward before any _restore_original_forward must not raise and uses init-time hooks."""
+    inner = _SimpleJitModule()
+    patched = PatchedModule(inner)
+
+    patched._proxy_forward()  # must not raise
+    assert inner._forward_hooks == patched._current_forward_hooks
+
+
 @requires_cuda
 def test_forward_method_should_have_same_signature(mock_trt_backend, torch_device):
     config.dry_run = False

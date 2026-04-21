@@ -200,7 +200,7 @@ that module is left unchanged and AITune tries to tune its children. This proces
 First, install the required third-party dependencies:
 
 ```bash
-pip install "transformers<5" diffusers torch
+pip install transformers diffusers torch
 ```
 
 Prepare the example script for tuning `my_script.py`:

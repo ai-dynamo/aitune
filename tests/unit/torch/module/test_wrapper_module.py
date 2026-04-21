@@ -398,3 +398,72 @@ def test_forward_method_should_have_same_signature():
     model.tune(device=torch.device("cpu"), strategy=strategy)
     assert model.state == ModuleState.TUNED
     assert set(inspect.signature(original_model.forward).parameters.keys()) == expected_keys
+
+
+# ── capture_outputs hook preservation ────────────────────────────────────────
+
+
+class _SimpleHookModule(torch.nn.Module):
+    """Minimal module used in hook-preservation tests."""
+
+    def forward(self, x):
+        return x * 2
+
+
+def test_external_hook_preserved_in_forward_hooks_after_restore_proxy_cycle():
+    """A forward hook registered after wrapping must survive _restore_original_forward/_proxy_forward."""
+    inner = _SimpleHookModule()
+    wrapper = Module(inner, "hook-test-aot", strategy=DummyTuneStrategy())
+
+    hook_calls = []
+    inner.register_forward_hook(lambda mod, inp, out: hook_calls.append(out))
+
+    assert len(inner._forward_hooks) == 1
+
+    wrapper._restore_original_forward()
+    assert len(inner._forward_hooks) == 0  # cleared during restore — expected
+
+    wrapper._proxy_forward()
+    assert len(inner._forward_hooks) == 1  # must be restored
+
+
+def test_external_hook_fires_exactly_once_after_restore_proxy_cycle():
+    """After the cycle the hook fires exactly once per forward call — no double-firing."""
+    inner = _SimpleHookModule()
+    wrapper = Module(inner, "hook-fire-aot", strategy=DummyTuneStrategy())
+
+    hook_calls = []
+    inner.register_forward_hook(lambda mod, inp, out: hook_calls.append(out))
+
+    wrapper._restore_original_forward()
+    wrapper._proxy_forward()
+
+    x = torch.ones(1)
+    wrapper(x)  # triggers recording; inner.__call__ fires post-hooks once
+    assert len(hook_calls) == 1
+
+
+def test_external_pre_hook_preserved_after_restore_proxy_cycle():
+    """A forward_pre_hook registered after wrapping must also survive the cycle."""
+    inner = _SimpleHookModule()
+    wrapper = Module(inner, "pre-hook-test-aot", strategy=DummyTuneStrategy())
+
+    pre_calls = []
+    inner.register_forward_pre_hook(lambda mod, inp: pre_calls.append(inp))
+
+    assert len(inner._forward_pre_hooks) == 1
+
+    wrapper._restore_original_forward()
+    assert len(inner._forward_pre_hooks) == 0
+
+    wrapper._proxy_forward()
+    assert len(inner._forward_pre_hooks) == 1
+
+
+def test_first_proxy_forward_without_prior_restore_does_not_crash():
+    """_proxy_forward before any _restore_original_forward must not raise and uses init-time hooks."""
+    inner = _SimpleHookModule()
+    wrapper = Module(inner, "no-restore-aot", strategy=DummyTuneStrategy())
+
+    wrapper._proxy_forward()  # must not raise
+    assert inner._forward_hooks == wrapper._current_forward_hooks

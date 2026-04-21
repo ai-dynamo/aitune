@@ -3,7 +3,7 @@
 """Test JIT tuning with patch decorator on Wan2.2-T2V-A14B-Diffusers."""
 
 # /// script
-# dependencies = ["diffusers>0.35","transformers<5","accelerate","ftfy"]
+# dependencies = ["diffusers>0.35","transformers","accelerate","ftfy"]
 # scope = "nightly"
 # allow_failure = false
 # additional_tags = ["mem/80g"]

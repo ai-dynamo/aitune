@@ -88,8 +88,8 @@ class PatchedModule:
         self.__wrapped__ = module
         # proxy forward, hooks
         self._original_forward = module.forward
-        self._original_forward_pre_hooks = module._forward_pre_hooks
-        self._original_forward_hooks = module._forward_hooks
+        self._current_forward_pre_hooks = module._forward_pre_hooks
+        self._current_forward_hooks = module._forward_hooks
         # basic attributes
         self._name = module.__class__.__name__
         self._id = PatchedModule.module_counter
@@ -259,7 +259,7 @@ class PatchedModule:
         params = count_parameters(self.__wrapped__)
         if int(params) <= config.min_parameters:
             self._unpatch()
-            return self.__wrapped__(*args, **kwargs)
+            return self._original_forward(*args, **kwargs)
 
         formatted_params = format_num_parameters(params)
         self._name += f" 📊{formatted_params}"
@@ -274,7 +274,7 @@ class PatchedModule:
             else:
                 # too deep, skip the module
                 self._unpatch()
-                return self.__wrapped__(*args, **kwargs)
+                return self._original_forward(*args, **kwargs)
         else:
             self._parent = None
             self._level = 0
@@ -323,7 +323,7 @@ class PatchedModule:
             self._update_state(ModuleState.SKIPPED)
             _to_hist(f"Module on skip list: {str(self)}")
             self._unpatch_hierarchy(include_self=True)
-            return self.__wrapped__(*args, **kwargs)
+            return self._original_forward(*args, **kwargs)
 
         self._restore_original_forward()
         result = self._wrapper(*args, **kwargs)
@@ -425,15 +425,17 @@ class PatchedModule:
 
         We re-enable hooks so that they are called before and after the proxied forward.
         """
-        self.__wrapped__._forward_pre_hooks = self._original_forward_pre_hooks
+        self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
         self.__wrapped__.forward = wrapt.decorator(self._forward_router)(self._original_forward)
-        self.__wrapped__._forward_hooks = self._original_forward_hooks
+        self.__wrapped__._forward_hooks = self._current_forward_hooks
 
     def _restore_original_forward(self):
         """Restore the original forward and hooks.
 
         We need to disable hooks, otherwise they will be called twice.
         """
+        self._current_forward_pre_hooks = OrderedDict(self.__wrapped__._forward_pre_hooks)
+        self._current_forward_hooks = OrderedDict(self.__wrapped__._forward_hooks)
         self.__wrapped__._forward_pre_hooks = OrderedDict()
         self.__wrapped__.forward = self._original_forward
         self.__wrapped__._forward_hooks = OrderedDict()
@@ -500,6 +502,8 @@ class PatchedModule:
         """
         self._allowed_to_tune = False
         self._restore_original_forward()
+        self.__wrapped__._forward_hooks = self._current_forward_hooks
+        self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
 
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 
@@ -531,8 +535,6 @@ class PatchedModule:
         self._state = state
         if state in self._forward_routing:
             self._proxy_forward()
-        else:
-            self._restore_original_forward()
 
     @staticmethod
     def print_hierarchy(sink=print):

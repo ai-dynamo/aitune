@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # /// script
-# dependencies = ["transformers<5", "diffusers"]
+# dependencies = ["transformers", "diffusers"]
 #
 # # Optional, default "always", determines how often test is generated, always, nightly, weekly, monthly
 # scope = "always"

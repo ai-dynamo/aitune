@@ -234,7 +234,7 @@ First, install the required third-party dependencies:
 
 .. code-block:: bash
 
-    pip install "transformers<5" diffusers torch
+    pip install "transformers" diffusers torch
 
 Prepare the example script for tuning ``my_script.py``:
 
