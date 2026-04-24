@@ -191,6 +191,7 @@ class Backend(ABC):
         data: list[Sample],
         device: torch.device,
         cache_dir: Path,
+        log_file: Path | None = None,
     ) -> "Backend":
         """Build the model with the given arguments.
 
@@ -203,7 +204,7 @@ class Backend(ABC):
         if self.state != BackendState.INIT:
             raise RuntimeError(f"Backend {self.name} build should be called only once")
 
-        with report_backend_build(self):
+        with report_backend_build(self, log_file=log_file):
             try:
                 self._assert_device(device)
                 self._set_device(device)

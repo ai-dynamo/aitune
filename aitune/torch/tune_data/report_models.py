@@ -43,6 +43,7 @@ class BackendBuildReport:
     duration_s: float | None = None
     success: bool | None = None
     build_results: list[dict[str, Any]] | None = None
+    log_file: str | None = None
     exception: ExceptionInfo | None = None
 
 

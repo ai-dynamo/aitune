@@ -20,6 +20,7 @@ from aitune.torch.tune_data.reporting import (
     report_tune_run_end,
     report_tune_run_start,
     snapshot_config,
+    snapshot_tuning_data,
 )
 from aitune.utils.serialization import json_serialize
 
@@ -38,10 +39,9 @@ def _reset_contextvars():
 
 @pytest.fixture()
 def enable_reporting(mocker, tmp_path):
-    """Enable tuning data collection with a temporary output path."""
+    """Patch config with a temporary output path."""
     report_path = tmp_path / "report.json"
     mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
-    mock_config.enable_tuning_data_collection = True
     mock_config.tuning_data_output_path = report_path
     mocker.patch("aitune.torch.tune_data.reporting.snapshot_config", return_value={"mocked": True})
     return report_path
@@ -172,19 +172,6 @@ def test_tune_run_captures_exception(enable_reporting):
     report = json.loads(enable_reporting.read_text())
     assert report["exception"]["type"] == "RuntimeError"
     assert report["exception"]["message"] == "boom"
-
-
-def test_tune_run_noop_when_disabled(mocker):
-    # given
-    mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
-    mock_config.enable_tuning_data_collection = False
-
-    # when
-    with report_tune_run(AITuneMode.JIT):
-        pass
-
-    # then
-    assert _active_report.get() is None
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +315,33 @@ def test_build_level_exception(enable_reporting):
     assert build["exception"]["type"] == "OSError"
 
 
+def test_build_log_file_stored_in_report(enable_reporting, tmp_path):
+    # when
+    log_file = tmp_path / "trt" / "build.log"
+    with report_tune_run(AITuneMode.JIT):
+        with report_module_tune(module_name="enc", num_parameters=100):
+            with report_graph_tune(_make_graph_spec(), _make_strategy()):
+                with report_backend_build(_make_backend(), log_file=log_file):
+                    pass
+
+    # then
+    build = json.loads(enable_reporting.read_text())["modules"][0]["graphs"][0]["backend_builds"][0]
+    assert build["log_file"] == str(log_file)
+
+
+def test_build_log_file_none_when_not_provided(enable_reporting):
+    # when
+    with report_tune_run(AITuneMode.JIT):
+        with report_module_tune(module_name="enc", num_parameters=100):
+            with report_graph_tune(_make_graph_spec(), _make_strategy()):
+                with report_backend_build(_make_backend()):
+                    pass
+
+    # then
+    build = json.loads(enable_reporting.read_text())["modules"][0]["graphs"][0]["backend_builds"][0]
+    assert build["log_file"] is None
+
+
 # ---------------------------------------------------------------------------
 # Multiple modules / graphs / backends
 # ---------------------------------------------------------------------------
@@ -413,6 +427,52 @@ def test_backend_build_noop_without_active_graph():
         pass
 
     # then — no crash
+
+
+# ---------------------------------------------------------------------------
+# snapshot_tuning_data
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_tuning_data_flushes_mid_run(enable_reporting):
+    # given
+    report_tune_run_start(AITuneMode.JIT)
+
+    # when — flush before the run ends
+    result = snapshot_tuning_data()
+
+    # then — partial report written to disk, path returned
+    assert result == enable_reporting
+    report = json.loads(enable_reporting.read_text())
+    assert report["mode"] == "JIT"
+    assert report["duration_s"] is None
+
+    report_tune_run_end()
+
+
+def test_snapshot_tuning_data_custom_path(tmp_path):
+    # given
+    custom_path = tmp_path / "custom" / "report.json"
+    report_tune_run_start(AITuneMode.JIT)
+
+    # when
+    result = snapshot_tuning_data(custom_path)
+
+    # then — written to the caller-supplied path, returned path matches
+    assert result == custom_path
+    assert custom_path.exists()
+    report = json.loads(custom_path.read_text())
+    assert report["mode"] == "JIT"
+
+    report_tune_run_end()
+
+
+def test_snapshot_tuning_data_noop_without_active_run():
+    # when — no run active
+    result = snapshot_tuning_data()
+
+    # then — returns None
+    assert result is None
 
 
 def test_second_run_overwrites_report(enable_reporting):

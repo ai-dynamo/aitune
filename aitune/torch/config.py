@@ -9,7 +9,7 @@ from typing import Any
 import nvtx.nvtx as nvtx
 
 from aitune.utils.env_vars import AITUNE_CACHE_DIR as _AITUNE_CACHE_DIR
-from aitune.utils.env_vars import TUNING_DATA_COLLECTION_ENABLE, TUNING_DATA_PATH
+from aitune.utils.env_vars import TUNING_DATA_PATH
 
 DEFAULT_MIN_NUM_SAMPLES = 100
 DEFAULT_MAX_NUM_SAMPLES_STORED = 1  # you can set infinity if you want to store/use all samples
@@ -58,7 +58,6 @@ class AITuneConfig:
         self._min_num_samples: int = DEFAULT_MIN_NUM_SAMPLES
         self.max_num_samples_stored: int | float = DEFAULT_MAX_NUM_SAMPLES_STORED
         self.device_after_tuning: str = DEFAULT_DEVICE_AFTER_TUNING
-        self.enable_tuning_data_collection: bool = TUNING_DATA_COLLECTION_ENABLE
         self._tuning_data_output_path: Path = (
             Path(TUNING_DATA_PATH) if TUNING_DATA_PATH is not None else DEFAULT_TUNING_DATA_OUTPUT_PATH
         )

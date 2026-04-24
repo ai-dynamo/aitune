@@ -26,7 +26,6 @@ CONSOLE_OUTPUT_ENABLE = get_bool_env_variable("AITUNE_CONSOLE_OUTPUT", False)
 HARDWARE_METRICS_ENABLED = get_bool_env_variable("AITUNE_HARDWARE_METRICS", False)
 HARDWARE_METRICS_PATH: str | None = os.environ.get("AITUNE_HARDWARE_METRICS_PATH")
 AITUNE_NVTX_EVENTS = get_bool_env_variable("AITUNE_NVTX_EVENTS", False)
-TUNING_DATA_COLLECTION_ENABLE = get_bool_env_variable("AITUNE_TUNING_DATA_COLLECTION", False)
 TUNING_DATA_PATH: str | None = os.environ.get("AITUNE_TUNING_DATA_PATH")
 
 _CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))

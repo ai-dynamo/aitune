@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import asdict, fields
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aitune.utils.serialization import json_serialize
@@ -37,20 +38,37 @@ _active_graph: ContextVar[GraphTuneReport | None] = ContextVar("aitune_graph", d
 _run_start_ts: ContextVar[float | None] = ContextVar("aitune_run_start_ts", default=None)
 
 
-def _flush_active_report() -> None:
-    """Write the current report snapshot to disk."""
+def _flush_active_report(path: Path | None = None) -> Path | None:
+    """Write the current report snapshot to disk, returning the path written or None."""
     report = _active_report.get()
     if report is None:
-        return
+        return None
     try:
-        path = config.tuning_data_output_path
-        path.parent.mkdir(parents=True, exist_ok=True)
+        out = path if path is not None else config.tuning_data_output_path
+        out.parent.mkdir(parents=True, exist_ok=True)
         payload = json_serialize(asdict(report))
-        with path.open("w", encoding="utf-8") as f:
+        with out.open("w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
             f.write("\n")
+        _logger.debug("Tuning report snapshot written to %s", out)
+        return out
     except Exception:
         _logger.debug("Failed to write tuning report", exc_info=True)
+        return None
+
+
+def snapshot_tuning_data(path: Path | None = None) -> Path | None:
+    """Flush the current in-progress tuning report to disk immediately.
+
+    Args:
+        path: Destination file. Falls back to ``config.tuning_data_output_path``
+            (or ``AITUNE_TUNING_DATA_PATH`` env var) when not provided.
+
+    Returns:
+        Path the report was written to, or ``None`` if no run is active or the
+        write failed.
+    """
+    return _flush_active_report(path)
 
 
 def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
@@ -68,8 +86,6 @@ def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
 
 def report_tune_run_start(mode: AITuneMode) -> None:
     """Begin a tuning run. Call :func:`report_tune_run_end` when finished."""
-    if not config.enable_tuning_data_collection:
-        return
     report = TuneRunReport(
         mode=mode,
         started_at=datetime.now(tz=timezone.utc),
@@ -167,7 +183,7 @@ def report_graph_tune(graph_spec: GraphSpec, strategy: TuneStrategy):
 
 
 @contextmanager
-def report_backend_build(backend: Backend):
+def report_backend_build(backend: Backend, log_file: Path | None = None):
     """Context manager that records a backend-build span in the report."""
     graph = _active_graph.get()
     if graph is None:
@@ -178,6 +194,7 @@ def report_backend_build(backend: Backend):
     build = BackendBuildReport(
         backend=backend.describe(),
         backend_config=backend_config,
+        log_file=str(log_file) if log_file is not None else None,
     )
     graph.backend_builds.append(build)
     _flush_active_report()
