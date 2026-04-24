@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Configuration for JIT module."""
 
+import enum
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
@@ -15,13 +16,21 @@ from aitune.torch.utils.device import get_device
 from aitune.utils.env_vars import AITUNE_JIT_CACHE_DIR as _AITUNE_JIT_CACHE_DIR
 
 
+class JITMode(enum.Enum):
+    """Mode for JIT execution."""
+
+    INSPECT = "inspect"  # inspect mode, only for inspection of model execution
+    TUNE_EAGER = "tune_eager"  # tune mode, eager tuning after defined number of samples / inference calls
+    TUNE_DEFERRED = "tune_deferred"  # tune mode, deferred tuning with explicit call in the code
+
+
 @dataclass
 class Config:
     """Configuration for JIT module."""
 
+    mode: JITMode = JITMode.TUNE_EAGER
     dry_run: bool = False  # whether to perform dry-run tuning
     dry_run_failure_probability: float = 0.2  # probability of failure in dry-run mode to imitate tuning failure
-    inspect_mode: bool = False  # whether to perform inspect mode
     device: str | torch.device | None = (
         DEFAULT_DEVICE  # device to perform tuning on, if None, the device will use module device
     )

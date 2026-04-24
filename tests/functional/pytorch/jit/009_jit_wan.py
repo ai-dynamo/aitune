@@ -7,6 +7,8 @@
 # scope = "nightly"
 # allow_failure = false
 # additional_tags = ["mem/80g"]
+# [environment]
+# AITUNE_CONSOLE_OUTPUT=0
 # ///
 import re
 from logging import INFO, basicConfig, getLogger
@@ -15,9 +17,11 @@ from time import perf_counter
 import torch
 from diffusers import WanPipeline
 
-from aitune.torch.jit.config import config
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorJitBackend
+from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
 from aitune.torch.jit.patcher import patch_for_jit_tuning
+from aitune.torch.jit.tune import deferred as tune_deferred
 
 logger = getLogger(__name__)
 
@@ -51,13 +55,25 @@ def test_jit_wan():
     disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards"""
 
     config.dry_run = False
-    config.min_samples = 68
-    config.batch_axis_required = False
     config.max_depth_level = 1
-    config.detect_graph_breaks = True
+    config.detect_graph_breaks = False
 
+    # Note: using deferred mode as 2 x transformer blocks have different number of executions
+    config.mode = JITMode.TUNE_DEFERRED
+
+    # Note: remove modules with less than 1M parameters
+    config.min_parameters = 1e6
+
+    # Note: enable TorchInductor backend along TensorRT backends
+    config.backends = [
+        TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
+        TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
+        TorchInductorJitBackend(),
+    ]
     with torch.no_grad():
-        pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=50)
+        pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=10, height=16, width=32, num_frames=21)
+
+    tune_deferred()
 
     # Capture the print_hierarchy output
     history = []
@@ -65,21 +81,22 @@ def test_jit_wan():
     print("\n".join(history))
     # Assert the expected output
     assert PRINT_HIERARCHY_HEADER in history[0]
-    assert re.match(r".*UMT5EncoderModel.*state=recording", history[1])
-    assert re.match(r".*WanTransformer3DModel.*state=recording", history[2])
-    assert re.match(r".*WanTransformer3DModel.*state=tuned.*TensorRTBackend", history[3]) or re.match(
-        r".*WanTransformer3DModel.*state=tuned.*TorchInductorJitBackend", history[3]
-    )
-    assert re.match(r".*WanCausalConv3d.*state=recording", history[4])
-    assert re.match(r".*WanDecoder3d.*state=recording", history[5])
-    assert re.match(r".*WanCausalConv3d.*state=recording", history[6])
-    assert re.match(r".*WanCausalConv3d.*state=recording", history[7])
+    assert re.match(r".*UMT5EncoderModel.*state=tuned.*", history[1])
+    assert re.match(r".*WanTransformer3DModel.*state=tuned.*", history[2])
+    assert re.match(r".*WanTransformer3DModel.*state=tuned.*", history[3])
+    assert re.match(r".*WanDecoder3d.*state=tuned.*", history[4])
+
+    logger.info("Inference warmup with batch_size=1")
+    start = perf_counter()
+    pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=10, height=16, width=32, num_frames=21)
+    end = perf_counter()
+    logger.info("Batch_size=1, res=16x32, steps=10, frames=21, inference duration: %.2f seconds", end - start)
 
     logger.info("Testing inference with batch_size=1")
     start = perf_counter()
-    pipe(prompt, negative_prompt=negative_prompt)
+    pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=10, height=16, width=32, num_frames=21)
     end = perf_counter()
-    logger.info("Batch_size=1, res=256, steps=50, inference duration: %.2f seconds", end - start)
+    logger.info("Batch_size=1, res=16x32, steps=10, frames=21, inference duration: %.2f seconds", end - start)
 
 
 if __name__ == "__main__":

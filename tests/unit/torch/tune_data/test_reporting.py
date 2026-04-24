@@ -91,6 +91,7 @@ def test_snapshot_config_jit_mode(mocker):
     result = snapshot_config(AITuneMode.JIT)
 
     # then — every dataclass field appears, including ones previously dropped
+    assert result["mode"] == "tune_eager"
     assert result["min_samples"] == 10
     assert result["max_depth_level"] == 3
     assert result["min_parameters"] == 1000
@@ -98,7 +99,6 @@ def test_snapshot_config_jit_mode(mocker):
     assert result["backends"] == []
     # previously excluded fields are now captured
     assert "dry_run" in result
-    assert "inspect_mode" in result
     assert "device" in result
 
 

@@ -18,10 +18,11 @@ Choose the mode based on user requirements — these are parallel paths, not seq
 
 | Mode | When to Use | Guide |
 |---|---|---|
-| **JIT** | Zero code changes, quick experiments, unknown batch sizes | `how-to-jit-tune.md` |
+| **JIT (eager)** | Zero code changes, quick experiments, unknown batch sizes | `how-to-jit-tune.md` |
+| **JIT (deferred)** | Image/video generation pipelines where modules are called variable times per step — trigger tuning explicitly after a full pass | `how-to-jit-tune.md` |
 | **AOT** | Production, benchmarking, checkpoint persistence, explicit shape control | `how-to-aot-tune.md` |
 
-The workflow below (Phases 1–5) is the **AOT path**. For JIT, load `how-to-jit-tune.md` instead.
+The workflow below (Phases 1–5) is the **AOT path**. For JIT (eager or deferred), load `how-to-jit-tune.md` instead.
 
 # Backends
 

@@ -34,7 +34,6 @@ def test_jit_resnet():
     config.dry_run = False
     config.detect_graph_breaks = False
     config.batch_axis_required = False
-    config.min_parameters = 0
 
     def pre_hook(module, input):  # noqa: A002
         # this actually inject data into the model

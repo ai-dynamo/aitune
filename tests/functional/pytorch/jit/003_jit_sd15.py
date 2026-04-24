@@ -17,7 +17,7 @@ from time import perf_counter
 import torch
 from diffusers import StableDiffusionPipeline
 
-from aitune.torch.jit.config import config
+from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
 from aitune.torch.jit.patcher import patch_for_jit_tuning
 
@@ -42,6 +42,7 @@ def test_jit_sd15():
     config.min_samples = 4
     config.max_depth_level = 1
     config.detect_graph_breaks = True
+    config.mode = JITMode.TUNE_EAGER
 
     def batch():
         for size in [256, 512]:

@@ -134,11 +134,11 @@ class TorchTensorRTJitBackend(Backend):
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Build the model with Torch compile."""
         self._save_config(cache_dir)
-
         module = module.eval()
         self._orig_module = module
         self._data = data
         self._compile()
+
         return self
 
     def _activate(self):

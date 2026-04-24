@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 import torch
 
-from aitune.torch.jit.config import config
+from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patched_module import (
     PRINT_HIERARCHY_HEADER,
     PRINT_HIERARCHY_NO_MODULES_HEADER,
@@ -51,8 +51,8 @@ def mock_trt_backend():
 @requires_cuda
 def test_jit_dry_run_success(mock_trt_backend, torch_device):
     config.dry_run = True
-    config.inspect_mode = False
     config.dry_run_failure_probability = 0.0
+    config.mode = JITMode.TUNE_EAGER
 
     with prepare_for_jit_tuning():
         pipeline = ToyComplexPipeline().to(torch_device)
@@ -73,8 +73,8 @@ def test_jit_dry_run_success(mock_trt_backend, torch_device):
 @requires_cuda
 def test_jit_dry_run_failure(mock_trt_backend, torch_device):
     config.dry_run = True
-    config.inspect_mode = False
     config.dry_run_failure_probability = 1.0
+    config.mode = JITMode.TUNE_EAGER
 
     with prepare_for_jit_tuning():
         pipeline = ToyComplexPipeline().to(torch_device)
@@ -96,8 +96,8 @@ def test_jit_dry_run_failure(mock_trt_backend, torch_device):
 @pytest.mark.parametrize("scenario", ["success", "correctness_error", "backend_build_error"])
 def test_jit_tuning_success(mock_trt_backend, torch_device, scenario):
     config.dry_run = False
-    config.inspect_mode = False
     config.detect_graph_breaks = False
+    config.mode = JITMode.TUNE_EAGER
 
     with prepare_for_jit_tuning():
         pipeline = ToyComplexPipeline().to(torch_device)
@@ -131,8 +131,8 @@ def test_jit_tuning_success(mock_trt_backend, torch_device, scenario):
 def test_jit_tuning_with_module_hooks(mock_trt_backend, torch_device, mocker):
     config.min_samples = 2
     config.dry_run = False
-    config.inspect_mode = False
     config.detect_graph_breaks = False
+    config.mode = JITMode.TUNE_EAGER
 
     mock_trt_backend.infer.return_value = torch.randn(OUTPUT_SIZE)
 
@@ -181,8 +181,8 @@ def test_jit_tuning_with_module_hooks(mock_trt_backend, torch_device, mocker):
 def test_jit_tuning_graph_break(mock_trt_backend, torch_device, mocker):
     config.max_depth_level = 2
     config.dry_run = False
-    config.inspect_mode = False
     config.detect_graph_breaks = True
+    config.mode = JITMode.TUNE_EAGER
 
     with prepare_for_jit_tuning():
         pipeline = ToyComplexPipeline().to(torch_device)
@@ -207,8 +207,9 @@ def test_jit_tuning_graph_break(mock_trt_backend, torch_device, mocker):
 def test_jit_tuning_skip_module(mock_trt_backend, torch_device, mocker):
     config.max_depth_level = 2
     config.dry_run = False
-    config.inspect_mode = False
     config.detect_graph_breaks = False
+    config.mode = JITMode.TUNE_EAGER
+
     config.skip_modules = ["ToyTorchModel"]
 
     with prepare_for_jit_tuning():
@@ -235,8 +236,9 @@ def test_jit_tuning_skip_module(mock_trt_backend, torch_device, mocker):
 def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend, torch_device):
     config.max_depth_level = 2
     config.dry_run = False
-    config.inspect_mode = False
     config.detect_graph_breaks = False
+    config.mode = JITMode.TUNE_EAGER
+
     config.skip_modules = ["Linear"]
 
     with prepare_for_jit_tuning():
@@ -263,8 +265,8 @@ def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend, torch_d
 @requires_cuda
 def test_jit_tuning_no_modules(mock_trt_backend, torch_device):
     config.dry_run = False
-    config.inspect_mode = False
     config.detect_graph_breaks = False
+    config.mode = JITMode.TUNE_EAGER
 
     # the following class has not parameters and should be skipped
     class IdentityModule(torch.nn.Module):
@@ -359,7 +361,7 @@ def test_jit_first_proxy_forward_without_prior_restore_does_not_crash():
 @requires_cuda
 def test_forward_method_should_have_same_signature(mock_trt_backend, torch_device):
     config.dry_run = False
-    config.inspect_mode = False
+    config.mode = JITMode.TUNE_EAGER
 
     class TestNet(torch.nn.Module):
         def __init__(self):
@@ -427,7 +429,7 @@ def test_get_fully_qualified_name():
 def test_each_module_has_unique_cache_dir():
     config.min_samples = 2
     config.dry_run = False
-    config.inspect_mode = False
+    config.mode = JITMode.TUNE_EAGER
 
     with prepare_for_jit_tuning():
         # 10 identical modules - same parameters, same name
@@ -446,8 +448,8 @@ def test_each_module_has_unique_cache_dir():
 @requires_cuda
 def test_jit_tuning_skip_module_when_not_match_min_parameters(mock_trt_backend, torch_device):
     config.dry_run = False
-    config.inspect_mode = False
     config.detect_graph_breaks = False
+    config.mode = JITMode.TUNE_EAGER
     config.min_parameters = 1e10
     config.skip_modules = ["ToyTorchModel"]
 

@@ -13,7 +13,7 @@ from typing import TypeVar
 import torch
 
 from aitune.torch.config import AITuneMode
-from aitune.torch.jit.config import config
+from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.tune_data.reporting import report_tune_run_start
@@ -61,19 +61,40 @@ class Patcher:
         if cls._original_module_init is None:
             # this will be called only once
             cls._original_module_init = torch.nn.Module.__init__
-            atexit.register(InspectModule.on_python_exit if config.inspect_mode else PatchedModule.on_python_exit)
+            atexit.register(
+                InspectModule.on_python_exit if config.mode == JITMode.INSPECT else PatchedModule.on_python_exit
+            )
 
-            if not config.inspect_mode:
+            if config.mode != JITMode.INSPECT:
                 report_tune_run_start(AITuneMode.JIT)
 
         def _patched_init(module, *args, **kwargs):
             cls._original_module_init(module, *args, **kwargs)
             if cls._is_allowed_to_tune(module):
                 cls._intercepted_classes.add(module.__class__)
-                pm = InspectModule(module) if config.inspect_mode else PatchedModule(module)
+                pm = InspectModule(module) if config.mode == JITMode.INSPECT else PatchedModule(module)
                 cls._patched_modules.append(pm)
 
         torch.nn.Module.__init__ = _patched_init
+
+    @classmethod
+    def tune_deferred(cls):
+        """Trigger tuning for all recorded modules in deferred mode.
+
+        Call this after running at least one full forward pass through the pipeline so that every
+        module has collected the samples it needs.  Intended for pipelines where modules are called
+        a variable number of times per step (e.g. text-to-image or text-to-video), making it
+        difficult to know when enough samples have been recorded inside the forward hook itself.
+        """
+        for module in cls._patched_modules:
+            if not isinstance(module, PatchedModule):
+                logger.warning("Module %s is not a PatchedModule, skipping", module.__class__.__name__)
+                continue
+
+            try:
+                module.tune_deferred()
+            except Exception as e:
+                logger.error("Failed to tune module %s: %s", module.__class__.__name__, e)
 
     @classmethod
     def unpatch_module(cls, module: PatchedModule | InspectModule):
@@ -172,4 +193,4 @@ def jit_reset():
     Patcher.unpatch_torch(unpatch_modules=True)
     atexit.unregister(PatchedModule.on_python_exit)
     atexit.unregister(InspectModule.on_python_exit)
-    InspectModule.reset() if config.inspect_mode else PatchedModule.reset()
+    InspectModule.reset() if config.mode == JITMode.INSPECT else PatchedModule.reset()

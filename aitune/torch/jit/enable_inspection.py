@@ -16,10 +16,10 @@ Example:
 
 from pathlib import Path
 
-from aitune.torch.jit.config import config
+from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patcher import Patcher
 
-config.inspect_mode = True
+config.mode = JITMode.INSPECT
 config.max_depth_level = 7
 Patcher.patch_torch()
 

@@ -168,8 +168,8 @@ ait.tune(wrapped_model, data)
 
 # JIT Tuning + JIT Backend
 # Automatic tuning with runtime compilation
-from aitune.torch.jit.config import config
-config.backends = [TorchTensorRTJitBackend()]
+from aitune.torch import jit_config
+jit_config.backends = [TorchTensorRTJitBackend()]
 ```
 
 ```bash
@@ -180,8 +180,8 @@ export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
 ```python
 # JIT Tuning + AOT Backend
 # Automatic tuning with ahead-of-time compilation
-from aitune.torch.jit.config import config
-config.backends = [TorchTensorRTAotBackend()]
+from aitune.torch import jit_config
+jit_config.backends = [TorchTensorRTAotBackend()]
 ```
 
 ```bash

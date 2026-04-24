@@ -121,7 +121,7 @@ that module is left unchanged and AITune tries to tune its children. This proces
 First, install the required third-party dependencies:
 
 ```bash
-pip install "transformers" diffusers torch
+pip install transformers diffusers torch
 ```
 
 Prepare the script with the model for tuning `my_script.py`:
@@ -156,13 +156,42 @@ python my_script.py
 If there is a need to adjust just-in-time options, you can do it but currently this requires modifying code to import the JIT config:
 
 ```python
-from aitune.torch.jit.config import config
+from aitune.torch import jit_config
 from aitune.torch.backend import TensorRTBackend
 
-config.max_depth_level = 1 # change the default maximum depth level for nested modules to be tuned
-config.detect_graph_breaks = False # turn off graph break detection
-config.backends = [TensorRTBackend()] # change the backends
+jit_config.max_depth_level = 2 # change the default maximum depth level for nested modules to be tuned
+jit_config.detect_graph_breaks = True # turn on graph break detection
+jit_config.backends = [TensorRTBackend()] # change the backends
 ```
+
+### Deferred mode
+
+By default JIT tuning uses **eager mode** — each module is tuned automatically as soon as enough samples have been collected.  For pipelines where different modules are called a variable number of times per step (e.g. text-to-image or text-to-video diffusion models), use **deferred mode** instead.  In deferred mode, AITune only records samples during forward passes; tuning is triggered explicitly after a full pipeline step has completed.
+
+```python
+import aitune.torch.jit.enable
+
+from aitune.torch import jit_config
+from aitune.torch.jit.config import JITMode
+from aitune.torch.jit.tune import deferred as jit_deferred
+from diffusers import DiffusionPipeline
+
+jit_config.mode = JITMode.TUNE_DEFERRED
+
+pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers")
+pipe.to("cuda")
+
+# First full step — records samples for all modules
+pipe("A beautiful landscape")
+
+# Trigger tuning explicitly after the complete pass
+jit_deferred()
+
+# Subsequent calls run on the tuned pipeline
+pipe("A snowy mountain at sunset")
+```
+
+See [JIT Tuning Guide](../guides/jit_tuning.md#tuning-modes) for a detailed comparison of the two modes.
 
 ## Comparison between ahead-of-time and just-in-time tuning
 

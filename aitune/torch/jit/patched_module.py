@@ -17,7 +17,7 @@ import wrapt
 from aitune.global_context import MODULE_CONTEXT_KEY, global_context
 from aitune.torch.backend.backend import Backend
 from aitune.torch.config import config as global_config
-from aitune.torch.jit.config import config
+from aitune.torch.jit.config import JITMode, config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule, Sample
@@ -121,6 +121,29 @@ class PatchedModule:
         return self._fq_name
 
     @annotate(name="tune", color="yellow")
+    def tune_deferred(self):
+        """Tune the module if it is ready, called explicitly after recording is complete.
+
+        Use this when the pipeline has a variable number of forward calls per step (e.g.
+        text-to-image or text-to-video).  The caller drives the decision of when enough
+        samples have been collected; tuning is triggered only if at least one forward pass
+        has been recorded and the module is allowed to tune.
+        """
+        if self._should_be_tuned():
+            self.tune()
+
+    @annotate(name="tune", color="yellow")
+    def tune_eager(self):
+        """Tune the module automatically after each forward pass once the sample threshold is met.
+
+        Use this for pipelines with a fixed, predictable call pattern.  After every forward
+        call, AITune checks whether the required number of samples has been collected and
+        dynamic axes have been detected (if required), and tunes immediately without waiting
+        for an explicit trigger.
+        """
+        if self._should_be_tuned():
+            self.tune()
+
     def tune(
         self,
     ):
@@ -299,6 +322,10 @@ class PatchedModule:
 
     def _tune_on_init(self):
         """Tune the module on init."""
+        # deferred mode never auto-tunes; tuning is triggered explicitly by the caller
+        if config.mode == JITMode.TUNE_DEFERRED:
+            return
+
         # if min_samples is greater than 1, we don't need to tune on init
         if config.min_samples > 1:
             return
@@ -310,8 +337,7 @@ class PatchedModule:
             self._unpatch_hierarchy(include_self=True)
             return
 
-        if self._should_be_tuned():
-            self.tune()
+        self.tune_eager()
 
     def _forward_recording(self, wrapped, instance, args, kwargs):
         """Forward call for the recording state.
@@ -330,8 +356,8 @@ class PatchedModule:
         self._proxy_forward()
         self._call_count += 1
 
-        if self._should_be_tuned():
-            self.tune()
+        if config.mode == JITMode.TUNE_EAGER:
+            self.tune_eager()
         return result
 
     @annotate(name="inference", color="green")
@@ -447,6 +473,15 @@ class PatchedModule:
             current = todo.pop()
             current._restore_original_forward()
             todo.extend(current._children)
+
+    def _should_be_tuned(self):
+        """Check if the module should be tuned."""
+        if config.mode == JITMode.TUNE_EAGER:
+            return self._should_be_tuned()
+        elif config.mode == JITMode.TUNE_DEFERRED:
+            return self._should_be_tuned()
+        else:
+            raise ValueError(f"Invalid JIT mode: {config.mode}")
 
     def _should_be_tuned(self):
         """Check if the module should be tuned."""

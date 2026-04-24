@@ -48,7 +48,7 @@ def test_jit_wan_inspect():
     pipe = get_wan_pipeline()
 
     with torch.no_grad():
-        pipe(prompt, negative_prompt=negative_prompt)
+        pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=10, height=64, width=128, num_frames=21)
 
     output_dir = Path(os.environ.get("AITUNE_OUTPUT_DIR", "output"))
     output_dir.mkdir(parents=True, exist_ok=True)

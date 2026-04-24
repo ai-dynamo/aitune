@@ -123,6 +123,50 @@ class DynamicModule(torch.nn.Module):
 
 When AITune detects a graph break, it skips tuning that module and attempts to tune this module's children.
 
+## Tuning Modes
+
+JIT tuning supports two modes that control *when* tuning is triggered.
+
+### Eager Mode (default)
+
+In eager mode, AITune tunes a module automatically after each forward pass as soon as the required number of samples has been collected.  This works well for pipelines where every module is called a predictable number of times per step (e.g. a simple classifier or a fixed-step inference loop).
+
+```python
+from aitune.torch import jit_config
+from aitune.torch.jit.config import JITMode
+
+jit_config.mode = JITMode.TUNE_EAGER  # default, explicit assignment not required
+```
+
+### Deferred Mode
+
+In deferred mode, AITune records samples during forward passes but does **not** tune automatically.  Tuning is triggered explicitly by calling `aitune.torch.jit.tune.deferred()` after the pipeline has completed at least one full step.
+
+This mode is intended for pipelines where different modules are called a **variable number of times per step** — for example, iterative denoising loops in text-to-image (Stable Diffusion, FLUX) or text-to-video models.  In such cases, eager mode may attempt to tune a module before all modules in the pipeline have been recorded; deferred mode lets you choose a safe synchronisation point after a full pass.
+
+```python
+import aitune.torch.jit.enable  # or set AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
+
+from aitune.torch import jit_config
+from aitune.torch.jit.config import JITMode
+from aitune.torch.jit.tune import deferred as jit_deferred
+from diffusers import DiffusionPipeline
+
+jit_config.mode = JITMode.TUNE_DEFERRED
+
+pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-3-medium-diffusers")
+pipe.to("cuda")
+
+# First full pipeline step — records samples for every module encountered
+pipe("A beautiful landscape")
+
+# Explicitly trigger tuning after the complete pass
+jit_deferred()
+
+# All subsequent calls use the tuned pipeline
+pipe("A snowy mountain at sunset")
+```
+
 ## Configuration
 
 The main configuration of the tuning process is in the `config` object - this is the common configuration between ahead-of-time and just-in-time mode. On top of that, there are settings particular for the just-in-time mode in `jit_config`.
@@ -193,6 +237,21 @@ jit_config.backends = [
 ```
 
 ### Configuration Options
+
+#### mode
+
+Tuning mode — controls when tuning is triggered.
+
+```python
+from aitune.torch.jit.config import JITMode
+jit_config.mode = JITMode.TUNE_EAGER  # Default
+```
+
+Available values:
+
+- `JITMode.TUNE_EAGER` — tunes automatically after each forward pass once the sample threshold is reached.
+- `JITMode.TUNE_DEFERRED` — collects samples but does not tune until `aitune.torch.jit.tune.deferred()` is called explicitly.
+- `JITMode.INSPECT` — inspect-only mode; no tuning is performed (see [JIT Inspect](jit_inspect.md)).
 
 #### min_samples
 

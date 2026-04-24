@@ -6,7 +6,7 @@ import re
 
 import torch
 
-from aitune.torch.jit.config import config
+from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import (
     PRINT_HIERARCHY_HEADER,
@@ -33,7 +33,7 @@ class TestNet(torch.nn.Module):
 
 @requires_cuda
 def test_jit_inspect_module_hooks(torch_device):
-    config.inspect_mode = True
+    config.mode = JITMode.INSPECT
     config.detect_graph_breaks = False
 
     with prepare_for_jit_tuning():
