@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from aitune.torch.config import AITuneMode
+from aitune.torch.config import AITuneConfig, AITuneMode
 from aitune.torch.tune_data.report_models import ExceptionInfo
 from aitune.torch.tune_data.reporting import (
     _active_graph,
@@ -53,52 +53,71 @@ def enable_reporting(mocker, tmp_path):
 
 
 def test_snapshot_config_declarative_mode(mocker):
-    # given
-    mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
-    mock_config.min_num_samples = 100
-    mock_config.max_num_samples_stored = 1
-    mock_config.device_after_tuning = "meta"
-    mock_config.strict_mode = True
-    mock_config.enable_hf_integrations = False
+    # given — real AITuneConfig so to_dict() works
+    real_config = AITuneConfig()
+    real_config.min_num_samples = 50
+    real_config.max_num_samples_stored = 2
+    real_config.strict_mode = False
+    mocker.patch("aitune.torch.tune_data.reporting.config", real_config)
 
     # when
     result = snapshot_config(AITuneMode.DECLARATIVE)
 
-    # then
-    assert result == {
-        "min_num_samples": 100,
-        "max_num_samples_stored": 1,
-        "device_after_tuning": "meta",
-        "strict_mode": True,
-        "enable_hf_integrations": False,
-    }
+    # then — every public attribute of AITuneConfig appears, under its public name
+    assert result["min_num_samples"] == 50
+    assert result["max_num_samples_stored"] == 2
+    assert result["strict_mode"] is False
+    assert result["enable_hf_integrations"] is True
+    assert result["device_after_tuning"] == "meta"
+    assert "cache_dir" in result
+    assert "tuning_data_output_path" in result
+    assert not any(k.startswith("_") for k in result)
 
 
 def test_snapshot_config_jit_mode(mocker):
-    # given
+    # given — real JIT Config so dataclasses.fields() works
+    from aitune.torch.jit.config import Config as JitConfig
+
+    jit_config = JitConfig()
+    jit_config.min_samples = 10
+    jit_config.max_depth_level = 3
+    jit_config.min_parameters = 1000
+    jit_config.skip_modules = ["Foo", "Bar"]
+    jit_config.backends = []
     mocker.patch("aitune.torch.tune_data.reporting.config")
-    mock_jit_config = mocker.patch("aitune.torch.jit.config.config")
-    mock_jit_config.min_samples = 10
-    mock_jit_config.batch_axis_required = True
-    mock_jit_config.max_depth_level = 3
-    mock_jit_config.min_parameters = 1000
-    mock_jit_config.detect_graph_breaks = False
-    mock_jit_config.skip_modules = []
-    mock_jit_config.backends = []
+    mocker.patch("aitune.torch.jit.config.config", jit_config)
 
     # when
     result = snapshot_config(AITuneMode.JIT)
 
-    # then
-    assert result == {
-        "min_samples": 10,
-        "batch_axis_required": True,
-        "max_depth_level": 3,
-        "min_parameters": 1000,
-        "detect_graph_breaks": False,
-        "skip_modules": [],
-        "backends": [],
-    }
+    # then — every dataclass field appears, including ones previously dropped
+    assert result["min_samples"] == 10
+    assert result["max_depth_level"] == 3
+    assert result["min_parameters"] == 1000
+    assert result["skip_modules"] == ["Foo", "Bar"]
+    assert result["backends"] == []
+    # previously excluded fields are now captured
+    assert "dry_run" in result
+    assert "inspect_mode" in result
+    assert "device" in result
+
+
+def test_snapshot_config_jit_mode_describes_backends(mocker):
+    # given
+    from aitune.torch.jit.config import Config as JitConfig
+
+    backend = MagicMock()
+    backend.describe.return_value = "TensorRT(dynamo=True)"
+    jit_config = JitConfig()
+    jit_config.backends = [backend]
+    mocker.patch("aitune.torch.tune_data.reporting.config")
+    mocker.patch("aitune.torch.jit.config.config", jit_config)
+
+    # when
+    result = snapshot_config(AITuneMode.JIT)
+
+    # then — backends are serialized via describe(), not by raw object dump
+    assert result["backends"] == ["TensorRT(dynamo=True)"]
 
 
 def test_snapshot_config_invalid_mode_raises():

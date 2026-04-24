@@ -9,7 +9,7 @@ import logging
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -54,28 +54,16 @@ def _flush_active_report() -> None:
 
 
 def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
-    """Capture relevant config attributes based on tuning mode."""
+    """Capture all config attributes for the given tuning mode."""
     if mode == AITuneMode.DECLARATIVE:
-        return {
-            "min_num_samples": config.min_num_samples,
-            "max_num_samples_stored": config.max_num_samples_stored,
-            "device_after_tuning": config.device_after_tuning,
-            "strict_mode": config.strict_mode,
-            "enable_hf_integrations": config.enable_hf_integrations,
-        }
+        return json_serialize(config.to_dict())
     elif mode == AITuneMode.JIT:
         from aitune.torch.jit.config import config as jit_config
 
-        return {
-            "min_samples": jit_config.min_samples,
-            "batch_axis_required": jit_config.batch_axis_required,
-            "max_depth_level": jit_config.max_depth_level,
-            "min_parameters": jit_config.min_parameters,
-            "detect_graph_breaks": jit_config.detect_graph_breaks,
-            "skip_modules": jit_config.skip_modules,
-            "backends": [backend.describe() for backend in jit_config.backends],
-        }
-    raise ValueError(f"Invalid tuning mode: {mode}")
+        snapshot = {f.name: getattr(jit_config, f.name) for f in fields(jit_config)}
+        snapshot["backends"] = [backend.describe() for backend in jit_config.backends]
+        return json_serialize(snapshot)
+    raise ValueError(f"Invalid tuning mode: {mode}")  # pyright: ignore[reportUnreachable]
 
 
 def report_tune_run_start(mode: AITuneMode) -> None:

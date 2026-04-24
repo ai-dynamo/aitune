@@ -4,6 +4,7 @@
 
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import nvtx.nvtx as nvtx
 
@@ -95,6 +96,10 @@ class AITuneConfig:
     def tuning_data_output_path(self, output_path: str | Path) -> None:
         """Set the output path for tuning data."""
         self._tuning_data_output_path = Path(output_path)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return all configuration attributes keyed by their public name."""
+        return {k.lstrip("_"): v for k, v in vars(self).items()}
 
 
 config = AITuneConfig()
