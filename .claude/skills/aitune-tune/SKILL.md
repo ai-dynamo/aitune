@@ -32,8 +32,10 @@ The workflow below (Phases 1–5) is the **AOT path**. For JIT (eager or deferre
 | `TorchTensorRTAotBackend` | AOT via `torch_tensorrt.compile` | Good graph break tolerance |
 | `TorchTensorRTJitBackend` | JIT via `torch.compile` | Most PyTorch-compatible |
 | `TorchAOBackend` | PyTorch-native optimization | No config needed |
-| `TorchInductorBackend` | PyTorch compiler optimization | No config needed |
-| `Vanilla PyTorch` | Baseline / fallback | No optimization |
+| `TorchInductorAotBackend` | PyTorch Inductor AOT compilation | No config needed |
+| `TorchInductorJitBackend` | PyTorch Inductor JIT compilation | No config needed |
+| `ONNXRuntimeBackend` | ONNX Runtime inference | Supports CUDA and TensorRT EP |
+| `TorchEagerBackend` | Baseline / fallback | No optimization |
 
 ## TensorRT Backend Configuration
 
@@ -124,7 +126,7 @@ Below, there are all backends configurations for the all optimization steps.
 from aitune.torch.backend import (
     TensorRTBackend, TensorRTBackendConfig,
     TorchTensorRTJitBackend, TorchTensorRTAotBackend,
-    TorchAOBackend, TorchInductorBackend,
+    TorchAOBackend, TorchInductorJitBackend, TorchInductorAotBackend,
 )
 from aitune.torch.tune_strategy import OneBackendStrategy, MaxThroughputStrategy
 
@@ -143,7 +145,7 @@ strategy = OneBackendStrategy(TorchTensorRTAotBackend())
 strategy = OneBackendStrategy(TorchTensorRTJitBackend())
 
 # TorchAO
-strategy = OneBackendStrategy(TorchAOBackend()
+strategy = OneBackendStrategy(TorchAOBackend())
 
 # Torch Inductors JIT and AOT
 strategy = OneBackendStrategy(TorchInductorAotBackend())
@@ -197,8 +199,8 @@ When no specific requirements are given, try in this order and stop at the first
 4. `TorchTensorRTJitBackend` — torch.compile path, most PyTorch-compatible
 5. `TorchAOBackend` — PyTorch-native, no TRT required
 6. `TorchInductorAotBackend` — Torch Inductor AOT backend
-6. `TorchInductorJitBackend` — Torch Inductor JIT backend
-7. Vanilla PyTorch - Fallback baseline path
+7. `TorchInductorJitBackend` — Torch Inductor JIT backend
+8. `TorchEagerBackend` — fallback baseline, no compilation
 
 
 If TRT correctness fails with `use_dynamo=True`, retry with `use_dynamo=False` before moving to the next backend.
