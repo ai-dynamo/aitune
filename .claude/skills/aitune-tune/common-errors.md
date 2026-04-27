@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 | Error | Likely Cause | Fix |
 |---|---|---|
 | `ImportError: tensorrt` | TensorRT not installed | Install from `https://pypi.nvidia.com` |
-| `Graph break detected` | Data-dependent control flow | Try `TorchTRT-JIT` or `TorchAO` instead |
+| `Graph break detected` | Data-dependent control flow | Try `TorchTensorRTJitBackend` or `TorchAOBackend` instead |
 | `CUDA out of memory` | Model too large for GPU | Reduce batch size or try fp16 |
 | `Unsupported op: ...` | Op not supported by backend | Advance to next backend in trial order |
 | `RuntimeError: CUDA error` | GPU driver/CUDA mismatch | Check `nvidia-smi` and CUDA toolkit version |

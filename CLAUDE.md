@@ -98,7 +98,7 @@ Located in `aitune/torch/backend/`:
 
 Each backend has a paired `*Config` dataclass. All backends are imported and re-exported from `aitune/torch/backend/__init__.py`.
 
-Backends have their own state machine (`BackendState`): `INIT → ACTIVE` on successful `_build()`, `ACTIVE → DEPLOYED` after `finalize()` (prevents re-compilation), and `CHECKPOINT_LOADED` when restored from disk.
+Backends have their own state machine (`BackendState`): `INIT → ACTIVE` on successful `_build()`, `ACTIVE → DEPLOYED` after `deploy()` (prevents re-compilation), and `CHECKPOINT_LOADED` when restored from disk.
 
 ### Module State Machine
 

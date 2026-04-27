@@ -64,7 +64,7 @@ Write and execute a tuning script for the current (i.e. TensorRTBackend-fp16) ba
 
 ```python
 import json, time, aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, ONNXAutoCastConfig
 from aitune.torch.tune_strategy import OneBackendStrategy
 
 # configure backend (varies per trial)
