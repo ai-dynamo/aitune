@@ -48,9 +48,9 @@ dependencies = [
     "psutil",
     "tabulate>=0.9.0",
     "tensorrt>=10.5",
-    "torch>=2.7",
-    "torchao>=0.13",
-    "torch-tensorrt>2",
+    "torch>=2.7,<2.11",
+    "torchao>=0.13,<0.17",
+    "torch-tensorrt>2,<2.11",
     "wrapt~=2.0"
 ]
 
