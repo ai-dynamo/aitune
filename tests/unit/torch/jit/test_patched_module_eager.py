@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Test the patched module."""
 
+import errno
 import inspect
 import re
 from unittest.mock import Mock
@@ -17,6 +18,7 @@ from aitune.torch.jit.patched_module import (
     PatchedModule,
 )
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
+from aitune.utils.disk_space import DiskSpaceError
 from tests.toy_models.torch_models import OUTPUT_SIZE, ToyComplexPipeline
 from tests.utilities.helpers import TestSink, requires_cuda
 
@@ -260,6 +262,35 @@ def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend, torch_d
     assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=1", sink.output[1])
     assert re.match(r".*Linear.*state=skipped.*call_count=1", sink.output[2])
     assert re.match(r".*Linear.*state=skipped.*call_count=1", sink.output[3])
+
+
+@requires_cuda
+def test_jit_tune_raises_disk_space_error_on_enospc(mock_trt_backend, torch_device, mocker):
+    """ENOSPC during a cache-write step must halt the JIT tune, not fall back to eager.
+
+    Before the fix, the broad ``except Exception`` in :meth:`PatchedModule.tune`
+    caught ``OSError(ENOSPC)`` and marked the module ``state=eager`` with
+    ``tuning error`` — giving no indication that the cache disk was full.
+    """
+    config.dry_run = False
+    config.inspect_mode = False
+    config.detect_graph_breaks = False
+
+    mock_trt_backend.infer.return_value = torch.randn(1, OUTPUT_SIZE)
+
+    # Force the cache-write path inside the tune try-block to hit ENOSPC.
+    mocker.patch.object(
+        PatchedModule,
+        "_create_graph_cache_dir",
+        side_effect=OSError(errno.ENOSPC, "No space left on device"),
+    )
+
+    with prepare_for_jit_tuning():
+        pipeline = ToyComplexPipeline().to(torch_device)
+
+    with pytest.raises(DiskSpaceError), torch.no_grad():
+        for x in pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device):
+            pipeline(x)
 
 
 @requires_cuda

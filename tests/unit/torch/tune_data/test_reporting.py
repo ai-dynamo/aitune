@@ -485,3 +485,64 @@ def test_second_run_overwrites_report(enable_reporting):
     # then — only the second run is in the file
     report = json.loads(enable_reporting.read_text())
     assert report["mode"] == "DECLARATIVE"
+
+
+def test_flush_reraises_disk_space_error_on_enospc(enable_reporting, mocker):
+    """Report flush must surface ENOSPC as DiskSpaceError instead of swallowing it at DEBUG."""
+    import errno
+
+    from aitune.utils.disk_space import DiskSpaceError
+
+    report_tune_run_start(AITuneMode.JIT)
+
+    # Force the JSON dump inside _flush_active_report to hit ENOSPC.
+    mocker.patch(
+        "aitune.torch.tune_data.reporting.json.dump",
+        side_effect=OSError(errno.ENOSPC, "No space left on device"),
+    )
+
+    with pytest.raises(DiskSpaceError):
+        report_tune_run_end()
+
+
+def test_tune_run_start_checks_disk_space(mocker):
+    """Starting a tune run runs a pre-flight disk-space check on the cache dir."""
+    from aitune.torch.config import config as global_config
+
+    check_mock = mocker.patch("aitune.torch.tune_data.reporting.check_disk_space")
+
+    report_tune_run_start(AITuneMode.JIT)
+
+    check_mock.assert_called_once_with(global_config.cache_dir)
+
+
+def test_tune_run_start_checks_disk_space_even_without_reporting(mocker):
+    """The pre-flight disk-space check runs even when tuning-data collection is disabled."""
+    mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
+    mock_config.enable_tuning_data_collection = False
+    mock_config.cache_dir = "/some/cache"
+
+    check_mock = mocker.patch("aitune.torch.tune_data.reporting.check_disk_space")
+
+    report_tune_run_start(AITuneMode.JIT)
+
+    check_mock.assert_called_once_with("/some/cache")
+
+
+def test_flush_still_swallows_unrelated_errors(enable_reporting, mocker, caplog):
+    """Non-ENOSPC report-flush failures remain best-effort (logged at DEBUG, not raised)."""
+    import errno
+    import logging
+
+    report_tune_run_start(AITuneMode.JIT)
+
+    mocker.patch(
+        "aitune.torch.tune_data.reporting.json.dump",
+        side_effect=OSError(errno.EACCES, "Permission denied"),
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="aitune.torch.tune_data.reporting"):
+        # Should NOT raise — reporting stays best-effort for unrelated errors.
+        report_tune_run_end()
+
+    assert any("Failed to write tuning report" in r.message for r in caplog.records)

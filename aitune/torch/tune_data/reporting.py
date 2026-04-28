@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from aitune.utils.disk_space import check_disk_space, raise_if_out_of_space
 from aitune.utils.serialization import json_serialize
 
 if TYPE_CHECKING:
@@ -43,18 +44,22 @@ def _flush_active_report(path: Path | None = None) -> Path | None:
     report = _active_report.get()
     if report is None:
         return None
+    out = path if path is not None else config.tuning_data_output_path
     try:
-        out = path if path is not None else config.tuning_data_output_path
         out.parent.mkdir(parents=True, exist_ok=True)
         payload = json_serialize(asdict(report))
         with out.open("w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
             f.write("\n")
-        _logger.debug("Tuning report snapshot written to %s", out)
-        return out
-    except Exception:
+    except Exception as e:
+        # Reporting stays best-effort for unrelated errors, but ENOSPC must surface —
+        # otherwise an out-of-disk cache run looks like "tuning just didn't produce a report".
+        raise_if_out_of_space(e, path=out)
         _logger.debug("Failed to write tuning report", exc_info=True)
         return None
+    else:
+        _logger.debug("Tuning report snapshot written to %s", out)
+        return out
 
 
 def snapshot_tuning_data(path: Path | None = None) -> Path | None:
@@ -86,6 +91,9 @@ def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
 
 def report_tune_run_start(mode: AITuneMode) -> None:
     """Begin a tuning run. Call :func:`report_tune_run_end` when finished."""
+    # Pre-flight: warn if the cache device is low on space. Runs regardless of whether
+    # tuning-data collection is enabled, since the real cache writes happen either way.
+    check_disk_space(config.cache_dir)
     report = TuneRunReport(
         mode=mode,
         started_at=datetime.now(tz=timezone.utc),
@@ -105,7 +113,8 @@ def report_tune_run_end(exception: BaseException | None = None) -> None:
         if exception is not None:
             report.exception = ExceptionInfo.from_exception(exception)
         _flush_active_report()
-    except Exception:
+    except Exception as e:
+        raise_if_out_of_space(e, path=config.tuning_data_output_path)
         _logger.debug("Failed to finalise tuning report", exc_info=True)
     finally:
         _run_start_ts.set(None)

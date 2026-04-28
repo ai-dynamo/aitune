@@ -28,6 +28,7 @@ from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
 from aitune.torch.utils.module import count_parameters, format_num_parameters, get_module_device, offload
+from aitune.utils.disk_space import raise_if_out_of_space
 from aitune.utils.monitoring import annotate
 
 PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
@@ -195,6 +196,9 @@ class PatchedModule:
                     self._offload(backends)
 
             except Exception as e:
+                # Out-of-space errors must halt the process — the cache disk is full
+                # and silently falling back to eager would mask the real cause.
+                raise_if_out_of_space(e, path=global_config.cache_dir)
                 current.__wrapped__.to(device)  # failed backend leaves module on cpu, move it back
                 current._unpatch()
                 current._update_state(ModuleState.EAGER)
