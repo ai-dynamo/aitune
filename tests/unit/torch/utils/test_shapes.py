@@ -10,7 +10,6 @@ from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.utils.shapes import (
     _create_nested_structure,
     _raise_on_locator_user_type,
-    create_dynamic_shapes_from_tensor_spec,
     create_inputs_mapping,
     create_ordered_dynamic_shapes,
     war_for_positional_arguments,
@@ -91,79 +90,6 @@ def test_raise_on_locator_user_type_raises_for_dataclass():
 def test_raise_on_locator_user_type_ok_for_dict_and_sequence():
     locator = Locator((("x", ObjectType.DICT), (0, ObjectType.SEQUENCE)))
     _raise_on_locator_user_type(locator)  # must not raise
-
-
-# ---------------------------------------------------------------------------
-# create_dynamic_shapes_from_tensor_spec
-# ---------------------------------------------------------------------------
-
-
-def test_create_dynamic_shapes_static_dims():
-    """All dims equal → empty dict per spec, no Dims created."""
-    result = create_dynamic_shapes_from_tensor_spec([_ts("x", (2, 32), (2, 32))])
-    assert result == {"x": {}}
-
-
-def test_create_dynamic_shapes_single_dynamic_dim():
-    """One differing dim → Dim at that axis with correct min/max."""
-    result = create_dynamic_shapes_from_tensor_spec([_ts("x", (1, 32), (4, 32))])
-    assert 0 in result["x"]
-    assert 1 not in result["x"]
-    dim = result["x"][0]
-    assert dim.min == 1
-    assert dim.max == 4
-
-
-def test_create_dynamic_shapes_multiple_dynamic_dims():
-    """Multiple differing dims → a Dim per dynamic axis."""
-    result = create_dynamic_shapes_from_tensor_spec([_ts("x", (1, 8), (4, 64))])
-    assert set(result["x"].keys()) == {0, 1}
-
-
-def test_create_dynamic_shapes_dim_name_encodes_spec_and_axis():
-    """Dim name contains the tensor spec name and the axis index."""
-    result = create_dynamic_shapes_from_tensor_spec([_ts("hidden", (1, 32), (4, 32))])
-    dim_name = str(result["hidden"][0])
-    assert "hidden" in dim_name
-    assert "0" in dim_name
-
-
-def test_create_dynamic_shapes_multiple_specs():
-    """Each spec gets its own entry; static specs have empty dicts."""
-    result = create_dynamic_shapes_from_tensor_spec([_ts("x", (1, 32), (4, 32)), _ts("y", (16,), (16,))])
-    assert 0 in result["x"]
-    assert result["y"] == {}
-
-
-def test_create_dynamic_shapes_fill_missing_dims():
-    """_fill_missing_dims=True populates static axes with the given fill value."""
-    result = create_dynamic_shapes_from_tensor_spec(
-        [_ts("x", (2, 32), (4, 32))], _fill_missing_dims=True, _fill_missing_dims_with=None
-    )
-    assert 0 in result["x"]  # dynamic
-    assert 1 in result["x"]  # static, filled
-    assert result["x"][1] is None
-
-
-def test_create_dynamic_shapes_cached_dims_reuses_same_object():
-    """_use_cached_dims=True: identical (min, max) ranges share the same Dim instance."""
-    ts1 = _ts("x", (1, 4), (1, 4))
-    ts2 = _ts("y", (1, 4), (1, 4))
-    # make both have a dynamic dim at axis 0
-    ts1.min_shape = [1, 32]
-    ts1.max_shape = [4, 32]
-    ts2.min_shape = [1, 32]
-    ts2.max_shape = [4, 32]
-    result = create_dynamic_shapes_from_tensor_spec([ts1, ts2], _use_cached_dims=True)
-    assert result["x"][0] is result["y"][0]
-
-
-def test_create_dynamic_shapes_no_cache_produces_distinct_dims():
-    """Without caching, identical ranges produce separate Dim instances."""
-    ts1 = _ts("x", (1, 32), (4, 32))
-    ts2 = _ts("y", (1, 32), (4, 32))
-    result = create_dynamic_shapes_from_tensor_spec([ts1, ts2], _use_cached_dims=False)
-    assert result["x"][0] is not result["y"][0]
 
 
 # ---------------------------------------------------------------------------

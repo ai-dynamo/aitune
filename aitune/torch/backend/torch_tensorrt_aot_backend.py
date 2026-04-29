@@ -16,6 +16,8 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
+from aitune.torch.utils.module import get_forward_arguments_names
+from aitune.torch.utils.shapes import build_dynamic_shapes, prepare_export_sample, print_dynamic_shapes
 
 try:
     import torch_tensorrt
@@ -39,6 +41,7 @@ IRType = Literal["dynamo", "ts", "fx"]
 class TorchTensorRTAotBuildStep(BackendBuildStep):
     """Identifiers for discrete sub-steps of a TorchTensorRTAot backend build."""
 
+    TORCH_EXPORT = "Torch export"
     TORCHTRT_COMPILE = "Torch-TensorRT compile"
     COMPILED_MODEL_SAVE = "Compiled model save"
 
@@ -50,14 +53,7 @@ def assert_torch_tensorrt():
 
 
 def _is_primitive(value: Any) -> bool:
-    """Check if a value is a primitive type (int, float, str, bool, None).
-
-    Args:
-        value: The value to check
-
-    Returns:
-        True if the value is a primitive type, False otherwise
-    """
+    """Check if a value is a primitive type (int, float, str, bool)."""
     return isinstance(value, int | float | str | bool)
 
 
@@ -154,7 +150,19 @@ class TorchTensorRTAotBackend(Backend):
         data: list[Sample],
         cache_dir: Path,
     ) -> Backend:
-        """Build the model with TensorRT."""
+        """Build the model with TensorRT.
+
+        Exports the module via ``torch.export.export`` with shared ``Dim`` instances
+        across inputs, then hands the resulting ``ExportedProgram`` to
+        ``torch_tensorrt.dynamo.compile``. This replaces the previous flow that called
+        ``torch_tensorrt.compile`` and let it run its own export, which built one
+        independent ``Dim`` per ``Input`` and raised ``ConstraintViolationError``
+        whenever two inputs had to share a runtime axis (e.g. HF encoders' shared
+        batch on ``input_ids`` and ``attention_mask``).
+
+        Workaround pending a ``dynamic_shapes`` passthrough on ``torch_tensorrt.compile``;
+        revert to ``torch_tensorrt.compile(...)`` once that lands upstream.
+        """
         logger.info("Start compiling torch module with TensorRT.")
 
         model = module.eval()
@@ -165,16 +173,32 @@ class TorchTensorRTAotBackend(Backend):
         # Set the device for the TensorRT backend compilation
         self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
 
-        # Note: torch export requires batch size to be greater then 1
-        args, kwargs = data[0]
+        args, kwargs = prepare_export_sample(data[0], graph_spec)
+        args = tuple(a.to(self._device) if isinstance(a, torch.Tensor) else a for a in args)
+        kwargs = {k: v.to(self._device) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
 
-        if graph_spec.input_spec.has_batch_axis():
-            max_batch_size = graph_spec.get_max_batch_size()
-            batch_size = min(max_batch_size, 2)
-            args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=batch_size)
+        forward_args = get_forward_arguments_names(model.forward)
+        dynamic_shapes = build_dynamic_shapes(kwargs, graph_spec, forward_args)
+        # All entries empty/None → fully static graph; pass None to torch.export.export
+        # so it short-circuits the dynamic-shape resolution path.
+        if not any(dynamic_shapes.values()):
+            dynamic_shapes = None
 
-        # Create input signature for dynamic shapes
-        logger.info("Preparing input signature for dynamic shapes.")
+        if dynamic_shapes is not None:
+            print_dynamic_shapes(dynamic_shapes)
+
+        with self._track_build_step(TorchTensorRTAotBuildStep.TORCH_EXPORT):
+            logger.info("Exporting model with torch.export.export.")
+            with torch.no_grad():
+                exported = torch.export.export(
+                    model,
+                    args,
+                    kwargs=kwargs if kwargs else None,
+                    dynamic_shapes=dynamic_shapes,
+                    strict=False,
+                )
+
+        # Optimization-profile inputs for TRT engine building.
         input_signature = []
         for tensor_spec in graph_spec.input_spec.tensor_specs:
             input_i = torch_tensorrt.Input(
@@ -186,15 +210,13 @@ class TorchTensorRTAotBackend(Backend):
             )
             input_signature.append(input_i)
 
-        # Extract non-tensor kwargs to pass as kwarg_inputs
+        # Pass non-tensor kwargs through; tensors are already captured by the ExportedProgram.
         kwarg_inputs = {}
         for key, value in kwargs.items():
             if value is None:
                 continue
-            # Skip tensors - they should be in input_signature
             if isinstance(value, torch.Tensor):
                 continue
-            # Pass primitives and other types (lists, dicts, etc.) as kwarg_inputs
             if _is_primitive(value):
                 kwarg_inputs[key] = [value]
             else:
@@ -202,9 +224,8 @@ class TorchTensorRTAotBackend(Backend):
 
         with self._track_build_step(TorchTensorRTAotBuildStep.TORCHTRT_COMPILE):
             logger.info("Compile model with Torch-TensorRT.")
-            trt_model_compiled = torch_tensorrt.compile(
-                model,
-                ir=self._config.ir,
+            trt_model_compiled = torch_tensorrt.dynamo.compile(
+                exported,
                 inputs=input_signature,
                 kwarg_inputs=kwarg_inputs,
                 **asdict(self._config.compile_config),

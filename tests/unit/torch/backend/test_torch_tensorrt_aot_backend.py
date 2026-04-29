@@ -83,7 +83,7 @@ def _fake_torch_tensorrt_save(model, path, **kwargs):
 @pytest.fixture
 def mock_torch_tensorrt(mocker, model: SimpleModel):
     mock_torch_tensorrt = mocker.Mock()
-    mock_torch_tensorrt.compile = mocker.Mock(return_value=model)
+    mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
     mock_torch_tensorrt.save = mocker.Mock(side_effect=_fake_torch_tensorrt_save)
 
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
@@ -121,6 +121,7 @@ def test_torch_tensorrt_aot_backend_config_describe():
 
 @requires_cuda
 def test_mock_build(
+    mocker,
     mock_torch_tensorrt,
     backend: TorchTensorRTAotBackend,
     model: SimpleModel,
@@ -129,6 +130,9 @@ def test_mock_build(
     torch_device: torch.device,
     tmp_path: Path,
 ):
+    sentinel_exported = mocker.Mock(name="ExportedProgram")
+    export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
+
     active_backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
     assert active_backend is backend
@@ -137,7 +141,11 @@ def test_mock_build(
     assert active_backend._device == torch_device
     assert active_backend.is_active
 
-    mock_torch_tensorrt.compile.assert_called_once()
+    export_mock.assert_called_once()
+    mock_torch_tensorrt.dynamo.compile.assert_called_once()
+    # Pin the pipeline shape: the ExportedProgram from torch.export.export must be
+    # forwarded as the first positional arg to torch_tensorrt.dynamo.compile.
+    assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is sentinel_exported
 
 
 @requires_cuda
@@ -156,6 +164,14 @@ def test_mock_infer(
     mocker.patch(
         "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.save",
         side_effect=_fake_torch_tensorrt_save,
+    )
+    # torch.export.export is mocked above (returns Mock); torch_tensorrt.dynamo.compile
+    # would reject a Mock at its isinstance(_, ExportedProgram) check, so mock it too
+    # and return the original model — _opt_module then bypasses real TRT compilation
+    # while infer() still produces a real (1, 2) output via the underlying nn.Linear.
+    mocker.patch(
+        "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.dynamo.compile",
+        return_value=model,
     )
 
     backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
@@ -195,8 +211,8 @@ def test_build_with_custom_precisions(
     backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
     assert backend is not None
 
-    mock_torch_tensorrt.compile.assert_called_once()
-    assert mock_torch_tensorrt.compile.call_args[1]["workspace_size"] == 1
+    mock_torch_tensorrt.dynamo.compile.assert_called_once()
+    assert mock_torch_tensorrt.dynamo.compile.call_args[1]["workspace_size"] == 1
 
 
 @requires_cuda

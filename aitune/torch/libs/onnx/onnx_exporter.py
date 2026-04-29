@@ -15,13 +15,7 @@ import torch.nn as nn
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.module import get_forward_arguments_names
-from aitune.torch.utils.shapes import (
-    create_dynamic_shapes_from_tensor_spec,
-    create_inputs_mapping,
-    create_ordered_dynamic_shapes,
-    print_dynamic_shapes,
-    war_for_positional_arguments,
-)
+from aitune.torch.utils.shapes import build_dynamic_shapes, print_dynamic_shapes
 
 # torch.onnx.export(dynamo=True, fallback=...) was removed in 2.11 (and some nightlies before).
 # Inspect the signature directly rather than relying on version string parsing.
@@ -211,32 +205,27 @@ class ONNXExporter:
     ) -> dict[str, Any]:
         """Using graph spec and forward arguments to infer how does dynamic shapes look like.
 
-        NOTE: Dynamic shapes are ordered by forward arguments and kwargs.
-        See: https://docs.pytorch.org/docs/2.7/export.html#torch.export.export:~:text=If%20you%20are%20specifying%20dynamism%20on%20keyword%20args%2C%20you%20will%20need%20to%20pass%20them%20in%20the%20order%20that%20is%20defined%20in%20the%20original%20function%20signature.
-        NOTE: We use dict[str, dict[int, torch.export.Dim]] structure to store dynamic shapes.
-        NOTE: We support single level nested tensors, tensor in dict.
-        NOTE: Missing dimensions are not filled by default - assuming missing is a static dimension.
-
-        See docs: https://docs.pytorch.org/tutorials/intermediate/torch_export_tutorial.html
+        Delegates to ``aitune.torch.backend.dynamic_shapes.build_dynamic_shapes``,
+        passing ``kwargs={}`` because the caller in ``_export_dynamo`` runs its own
+        WAR for missing kwargs after this returns.
 
         Args:
-            graph_spec (GraphSpec): Input graph spec
-            forward_arguments: Tuple of forward arguments and kwargs
-            use_auto: When True (default) use ``Dim.AUTO`` for all varying axes so that
-                torch.export infers divisibility constraints automatically.  Pass False to
-                get explicit ``Dim(min, max)`` objects instead.
+            graph_spec: Input graph spec.
+            forward_arguments: Tuple of forward arguments and kwargs from the model's
+                forward signature.
+            use_auto: When ``True`` (default), use ``Dim.AUTO`` for non-batch varying
+                axes so torch.export infers divisibility constraints automatically.
+                Pass ``False`` to get explicit ``Dim(name, min, max)`` instances —
+                required for downstream tooling that needs concrete ranges (e.g.
+                ONNXRuntime quantization shape inference).
 
         Returns:
-            dynamic shapes
+            Dict of dynamic shapes keyed by forward parameter name. Recorded forward
+            args with no dynamic axes get an empty inner dict so the downstream
+            ``list(result.values())`` ordering matches the model signature.
         """
         logger.debug("Extracting dynamic shapes")
-        forward_args, forward_kwargs = forward_arguments
-        dynamic_shapes = create_dynamic_shapes_from_tensor_spec(
-            graph_spec.input_spec.tensor_specs, use_auto=use_auto, _use_cached_dims=True
-        )
-        input_args, input_kwargs = create_inputs_mapping(graph_spec.input_spec)
-        war_for_positional_arguments(input_args, forward_args, forward_kwargs)
-        return create_ordered_dynamic_shapes(forward_args, forward_kwargs, input_args, input_kwargs, dynamic_shapes)
+        return build_dynamic_shapes({}, graph_spec, forward_arguments, use_auto=use_auto)
 
     def _create_dynamic_axes(self, graph_spec: GraphSpec) -> dict:
         """Create dynamic axes for the ONNX trace model.
