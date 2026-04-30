@@ -76,6 +76,11 @@ def snapshot_tuning_data(path: Path | None = None) -> Path | None:
     return _flush_active_report(path)
 
 
+def _describe_strategy(strategy: TuneStrategy) -> dict[str, Any]:
+    """Render a TuneStrategy as a JSON-friendly summary, mirroring GraphTuneReport."""
+    return {"name": strategy.__class__.__name__, "config": strategy.to_json_dict()}
+
+
 def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
     """Capture all config attributes for the given tuning mode."""
     if mode == AITuneMode.DECLARATIVE:
@@ -84,7 +89,10 @@ def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
         from aitune.torch.jit.config import config as jit_config
 
         snapshot = {f.name: getattr(jit_config, f.name) for f in fields(jit_config)}
-        snapshot["backends"] = [backend.describe() for backend in jit_config.backends]
+        # Resolve `strategy` to the actual strategy that will run (the default when unset),
+        # so the snapshot reflects reality rather than a sentinel. The strategy's own
+        # `to_json_dict()` already exposes its backends list, so no separate `backends` key.
+        snapshot["strategy"] = _describe_strategy(jit_config.resolve_strategy())
         return json_serialize(snapshot)
     raise ValueError(f"Invalid tuning mode: {mode}")  # pyright: ignore[reportUnreachable]
 

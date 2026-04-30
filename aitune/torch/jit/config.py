@@ -5,15 +5,16 @@
 import enum
 from dataclasses import dataclass, field, fields
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
-from aitune.torch.backend.backend import Backend
-from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTBackendConfig
-from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import DEFAULT_DEVICE
 from aitune.torch.utils.device import get_device
 from aitune.utils.env_vars import AITUNE_JIT_CACHE_DIR as _AITUNE_JIT_CACHE_DIR
+
+if TYPE_CHECKING:
+    from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
 
 class JITMode(enum.Enum):
@@ -43,17 +44,36 @@ class Config:
     skip_modules: list[str] = field(default_factory=list)  # list of modules (class names) to skip
 
     cache_dir: Path = field(default_factory=lambda: _AITUNE_JIT_CACHE_DIR)
-    backends: list[Backend] = field(
-        default_factory=lambda: [
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorJitBackend(),
-        ]
-    )  # backends to use for JIT tuning
+    strategy: "TuneStrategy | None" = None  # explicit override; when None, `resolve_strategy()` builds the default
 
     def __post_init__(self):
         """Post init."""
         self.device = get_device(self.device)
+
+    def resolve_strategy(self) -> "TuneStrategy":
+        """Return the tune strategy to use for JIT tuning.
+
+        When ``strategy`` is set explicitly it is returned as-is. Otherwise the default is a
+        ``FirstWinsStrategy`` covering TensorRT (with and without dynamo) and TorchInductorJit —
+        kept here so the contract is visible on the config and tune-data snapshots can reflect
+        what will actually run.
+
+        Strategy and backend modules are imported lazily to keep the JIT config a thin data
+        layer that doesn't pull runtime modules at import time.
+        """
+        if self.strategy is not None:
+            return self.strategy
+        from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTBackendConfig
+        from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
+        from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
+
+        return FirstWinsStrategy(
+            backends=[
+                TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
+                TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
+                TorchInductorJitBackend(),
+            ]
+        )
 
     def reset_to_defaults(self) -> None:
         """Reset all options to their default values (e.g. for test isolation)."""

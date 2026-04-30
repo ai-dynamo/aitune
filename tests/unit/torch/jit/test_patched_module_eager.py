@@ -18,6 +18,7 @@ from aitune.torch.jit.patched_module import (
     PatchedModule,
 )
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
+from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.utils.disk_space import DiskSpaceError
 from tests.toy_models.torch_models import OUTPUT_SIZE, ToyComplexPipeline
 from tests.utilities.helpers import TestSink, requires_cuda
@@ -44,7 +45,7 @@ def mock_trt_backend():
 
     mock_backend.build.return_value = mock_backend
 
-    config.backends = [mock_backend]
+    config.strategy = FirstWinsStrategy(backends=[mock_backend])
     # in case strategy does a deepcopy, return self
     mock_backend.__deepcopy__ = lambda _: mock_backend
     return mock_backend

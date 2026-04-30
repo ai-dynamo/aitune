@@ -169,7 +169,8 @@ ait.tune(wrapped_model, data)
 # JIT Tuning + JIT Backend
 # Automatic tuning with runtime compilation
 from aitune.torch import jit_config
-jit_config.backends = [TorchTensorRTJitBackend()]
+from aitune.torch.tune_strategy import FirstWinsStrategy
+jit_config.strategy = FirstWinsStrategy(backends=[TorchTensorRTJitBackend()])
 ```
 
 ```bash
@@ -181,7 +182,8 @@ export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
 # JIT Tuning + AOT Backend
 # Automatic tuning with ahead-of-time compilation
 from aitune.torch import jit_config
-jit_config.backends = [TorchTensorRTAotBackend()]
+from aitune.torch.tune_strategy import FirstWinsStrategy
+jit_config.strategy = FirstWinsStrategy(backends=[TorchTensorRTAotBackend()])
 ```
 
 ```bash

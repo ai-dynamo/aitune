@@ -229,11 +229,12 @@ jit_config.device = "cuda"
 # Enable dry run mode
 jit_config.dry_run = False
 
-# Configure backends
+# Configure tune strategy (which backends to try and how)
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
-jit_config.backends = [
-    TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
-]
+from aitune.torch.tune_strategy import FirstWinsStrategy
+jit_config.strategy = FirstWinsStrategy(
+    backends=[TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True))],
+)
 ```
 
 ### Configuration Options
@@ -318,9 +319,9 @@ jit_config.cache_dir = Path("/path/to/cache")
 
 **Note**: Currently, just-in-time mode does not support persistent caching across runs.
 
-#### backends
+#### strategy
 
-List of backends to try during tuning.
+Tune strategy to use during tuning. Decides which backends to try and how to choose between them.
 
 ```python
 from aitune.torch.backend import (
@@ -328,12 +329,17 @@ from aitune.torch.backend import (
     TensorRTBackendConfig,
     TorchInductorJitBackend,
 )
+from aitune.torch.tune_strategy import FirstWinsStrategy
 
-jit_config.backends = [
-    TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
-    TorchInductorJitBackend(),
-]
+jit_config.strategy = FirstWinsStrategy(
+    backends=[
+        TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
+        TorchInductorJitBackend(),
+    ],
+)
 ```
+
+Accepts any `TuneStrategy` (e.g. `FirstWinsStrategy`, `MaxThroughputStrategy`, `OneBackendStrategy`). Leave it as `None` (default) to use a `FirstWinsStrategy` over TensorRT (with and without dynamo) and `TorchInductorJitBackend`.
 
 This setting is common for all tuned modules.
 

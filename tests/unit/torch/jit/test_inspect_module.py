@@ -35,6 +35,7 @@ class TestNet(torch.nn.Module):
 def test_jit_inspect_module_hooks(torch_device):
     config.mode = JITMode.INSPECT
     config.detect_graph_breaks = False
+    config.max_depth_level = 2  # the test exercises the TestNet → Linear hierarchy; default 1 filters the children out
 
     with prepare_for_jit_tuning():
         pipeline = TestNet().to(torch_device)

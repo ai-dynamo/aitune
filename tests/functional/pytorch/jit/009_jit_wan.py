@@ -22,6 +22,7 @@ from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
 from aitune.torch.jit.patcher import patch_for_jit_tuning
 from aitune.torch.jit.tune import deferred as tune_deferred
+from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 
 logger = getLogger(__name__)
 
@@ -65,11 +66,13 @@ def test_jit_wan():
     config.min_parameters = 1e6
 
     # Note: enable TorchInductor backend along TensorRT backends
-    config.backends = [
-        TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
-        TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-        TorchInductorJitBackend(),
-    ]
+    config.strategy = FirstWinsStrategy(
+        backends=[
+            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
+            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
+            TorchInductorJitBackend(),
+        ]
+    )
     with torch.no_grad():
         pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=10, height=16, width=32, num_frames=21)
 

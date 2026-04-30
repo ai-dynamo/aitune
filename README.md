@@ -239,10 +239,11 @@ If there is a need to adjust just-in-time options, you can do it but currently t
 ```python
 from aitune.torch.jit.config import config
 from aitune.torch.backend import TensorRTBackend
+from aitune.torch.tune_strategy import FirstWinsStrategy
 
 config.max_depth_level = 1  # change the default maximum depth level for nested modules to be tuned
 config.detect_graph_breaks = False  # turn off graph break detection
-config.backends = [TensorRTBackend()]  # change the backends
+config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()])  # change the tune strategy
 ```
 
 ## Comparison between ahead-of-time and just-in-time tuning

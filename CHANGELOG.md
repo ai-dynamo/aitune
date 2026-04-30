@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 # Changelog
 
 ## 0.4.0 (unreleased)
+- feat: JIT tuning supports tune strategy selection via `aitune.torch.jit_config.strategy` (e.g. `MaxThroughputStrategy`); default remains `FirstWinsStrategy`
 - feat: Deferred mode for Just-in-Time (JIT) tuning - explicit tuning trigger post whole pipeline or model pass, useful for image and video generation pipelines
 - feat: Torch Inductor Ahead-of-Time (AoT) backend support added
 - feat: ONNXRuntime backend support - CUDA and TensorRT execution providers
@@ -24,6 +25,7 @@ SPDX-License-Identifier: Apache-2.0
 - breaking change: Removed SystemMonitor class from public API; use new hardware metrics collection instead
 - breaking change: Removed system_resource_monitor function from public API
 - breaking change: Removed enable_gpu_memory_logging function from public API
+- breaking change: Removed `aitune.torch.jit_config.backends` — set `config.strategy = FirstWinsStrategy(backends=[...])` to customize backends
 
 
 ## 0.3.0

@@ -24,7 +24,7 @@ from aitune.torch.module.recording_module import RecordingModule, Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_data.reporting import report_graph_tune, report_module_tune, report_tune_run_end
-from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
+from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
 from aitune.torch.utils.module import count_parameters, format_num_parameters, get_module_device, offload
@@ -164,8 +164,7 @@ class PatchedModule:
             current = todo.pop()
             recording = cast(RecordingModule, current._wrapper)
             backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
-            strategy = FirstWinsStrategy(backends=config.backends)
-            strategy.enable_find_max_batch_size(False)
+            strategy = _build_strategy()
             try:
                 with report_module_tune(
                     module_name=current.__wrapped__.__class__.__name__,
@@ -646,3 +645,21 @@ or provide two different batch sizes when calling the model.
 def _to_hist(entry: str):
     """Updates history with new entry."""
     PatchedModule.history.append(entry)
+
+
+def _build_strategy() -> TuneStrategy:
+    """Build the per-module tune strategy.
+
+    Resolves the strategy via ``config.resolve_strategy()`` and clones it so each module gets
+    a fresh instance — strategies hold per-tune state (``backend_results`` etc.) that must
+    not leak across modules.
+
+    Find-max-batch-size profiling is disabled because in JIT we cannot run the original
+    module separately; the strategy must work from the recorded samples alone.
+    """
+    strategy = config.resolve_strategy().clone()
+
+    if isinstance(strategy, TuneStrategyFindMaxBatchSizeExtension):
+        strategy.enable_find_max_batch_size(False)
+
+    return strategy

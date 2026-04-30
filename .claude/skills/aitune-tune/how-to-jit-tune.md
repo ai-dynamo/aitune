@@ -69,8 +69,11 @@ pipe(prompt="a photo of a dog", ...)
 ```python
 from aitune.torch.jit.config import config
 from aitune.torch.backend import TensorRTBackend
+from aitune.torch.tune_strategy import FirstWinsStrategy
 
 config.max_depth_level = 1
 config.detect_graph_breaks = False
-config.backends = [TensorRTBackend()]
+config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()])
 ```
+
+`config.strategy` accepts any `TuneStrategy` (e.g. `FirstWinsStrategy`, `MaxThroughputStrategy`). Default (`None`) uses `FirstWinsStrategy` over TensorRT and TorchInductorJit.

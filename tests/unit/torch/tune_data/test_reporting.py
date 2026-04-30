@@ -83,7 +83,6 @@ def test_snapshot_config_jit_mode(mocker):
     jit_config.max_depth_level = 3
     jit_config.min_parameters = 1000
     jit_config.skip_modules = ["Foo", "Bar"]
-    jit_config.backends = []
     mocker.patch("aitune.torch.tune_data.reporting.config")
     mocker.patch("aitune.torch.jit.config.config", jit_config)
 
@@ -96,28 +95,42 @@ def test_snapshot_config_jit_mode(mocker):
     assert result["max_depth_level"] == 3
     assert result["min_parameters"] == 1000
     assert result["skip_modules"] == ["Foo", "Bar"]
-    assert result["backends"] == []
     # previously excluded fields are now captured
     assert "dry_run" in result
     assert "device" in result
 
 
-def test_snapshot_config_jit_mode_describes_backends(mocker):
-    # given
+def test_snapshot_config_jit_mode_strategy_resolves_default_when_unset(mocker):
+    # given — default JIT config has no explicit strategy set
     from aitune.torch.jit.config import Config as JitConfig
 
-    backend = MagicMock()
-    backend.describe.return_value = "TensorRT(dynamo=True)"
     jit_config = JitConfig()
-    jit_config.backends = [backend]
     mocker.patch("aitune.torch.tune_data.reporting.config")
     mocker.patch("aitune.torch.jit.config.config", jit_config)
 
     # when
     result = snapshot_config(AITuneMode.JIT)
 
-    # then — backends are serialized via describe(), not by raw object dump
-    assert result["backends"] == ["TensorRT(dynamo=True)"]
+    # then — snapshot reflects the resolved default (FirstWinsStrategy), not the sentinel
+    assert result["strategy"]["name"] == "FirstWinsStrategy"
+    assert "backends" in result["strategy"]["config"]
+
+
+def test_snapshot_config_jit_mode_describes_strategy(mocker):
+    # given
+    from aitune.torch.jit.config import Config as JitConfig
+    from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
+
+    jit_config = JitConfig()
+    jit_config.strategy = DummyTuneStrategy()
+    mocker.patch("aitune.torch.tune_data.reporting.config")
+    mocker.patch("aitune.torch.jit.config.config", jit_config)
+
+    # when
+    result = snapshot_config(AITuneMode.JIT)
+
+    # then — strategy serialized via class name + to_json_dict, not raw repr
+    assert result["strategy"] == {"name": "DummyTuneStrategy", "config": {}}
 
 
 def test_snapshot_config_invalid_mode_raises():
