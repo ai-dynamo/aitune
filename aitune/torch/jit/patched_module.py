@@ -479,15 +479,6 @@ class PatchedModule:
 
     def _should_be_tuned(self):
         """Check if the module should be tuned."""
-        if config.mode == JITMode.TUNE_EAGER:
-            return self._should_be_tuned()
-        elif config.mode == JITMode.TUNE_DEFERRED:
-            return self._should_be_tuned()
-        else:
-            raise ValueError(f"Invalid JIT mode: {config.mode}")
-
-    def _should_be_tuned(self):
-        """Check if the module should be tuned."""
         if config.min_samples == 1:
             return self._allowed_to_tune
 
