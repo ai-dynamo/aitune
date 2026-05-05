@@ -24,7 +24,7 @@ import torch
 
 # Configure backend
 config = TorchTensorRTJitBackendConfig(
-    compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}),
+    compile_config=TorchTensorRTConfig(),
 )
 backend = TorchTensorRTJitBackend(config)
 
@@ -58,16 +58,27 @@ from torch_tensorrt.dynamo import CompilationSettings
 
 config = TorchTensorRTJitBackendConfig(
     compile_config=CompilationSettings(
-        enabled_precisions={torch.float16},
         workspace_size=1 << 30,  # 1GB
+    )
+)
+```
+
+By default, the engine matches the model's loaded dtype. To request FP16 kernels via the legacy weak-typing path (deprecated in TensorRT 10.12), pair `enabled_precisions` with `use_explicit_typing=False`:
+
+```python
+config = TorchTensorRTJitBackendConfig(
+    compile_config=CompilationSettings(
+        enabled_precisions={torch.float16},
+        use_explicit_typing=False,
     )
 )
 ```
 
 **Common options**:
 
-- `enabled_precisions`: Set of precisions to use (`{torch.float32}`, `{torch.float16}`, etc.)
 - `workspace_size`: Maximum workspace memory in bytes
+- `enabled_precisions`: Kernel dtype precisions TRT may pick (requires `use_explicit_typing=False`; legacy weak typing)
+- `use_explicit_typing`: Respect graph dtypes (default `True`); set `False` to enable legacy weak typing
 
 ### fullgraph
 

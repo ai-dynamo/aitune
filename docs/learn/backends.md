@@ -40,7 +40,7 @@ The Torch-TensorRT JIT backend integrates TensorRT tuning directly into PyTorch,
 import torch
 from aitune.torch.backend import TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig, TorchTensorRTConfig
 
-config = TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}))
+config = TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTConfig())
 backend = TorchTensorRTJitBackend(config)
 ```
 
@@ -52,7 +52,7 @@ The Torch-TensorRT backend integrates TensorRT tuning directly into PyTorch, pro
 import torch
 from aitune.torch.backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig, TorchTensorRTConfig
 
-config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}))
+config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTConfig())
 backend = TorchTensorRTAotBackend(config)
 ```
 

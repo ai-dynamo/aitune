@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -23,7 +23,6 @@ from tests.utilities.helpers import requires_cuda
 
 @dataclass
 class TorchTensorRTTestConfig:
-    enabled_precisions: set[torch.dtype] = field(default_factory=lambda: {torch.float16})
     workspace_size: int = 0
 
 
@@ -106,17 +105,17 @@ def test_torch_tensorrt_aot_backend_config_describe():
     config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig())
     describe = config.describe()
 
-    assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16})"
+    assert describe == "compile_config=TorchTensorRTConfig()"
 
     config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig(workspace_size=1))
     describe = config.describe()
 
-    assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16},workspace_size=1)"
+    assert describe == "compile_config=TorchTensorRTConfig(workspace_size=1)"
 
     config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig(), pickle_protocol=1)
     describe = config.describe()
 
-    assert describe == "compile_config=TorchTensorRTConfig(enabled_precisions={torch.float16}),pickle_protocol=1"
+    assert describe == "compile_config=TorchTensorRTConfig(),pickle_protocol=1"
 
 
 @requires_cuda
@@ -198,12 +197,7 @@ def test_build_with_custom_precisions(
 ):
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
 
-    config = TorchTensorRTAotBackendConfig(
-        compile_config=TorchTensorRTTestConfig(
-            enabled_precisions={torch.float16},
-            workspace_size=1,
-        )
-    )
+    config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig(workspace_size=1))
     backend = TorchTensorRTAotBackend(
         config=config,
     )
@@ -327,7 +321,7 @@ def test_tensorrt_aot_config_from_dict_defaults():
 def test_tensorrt_aot_config_from_dict_nested_compile_config_dict():
     import aitune.torch.backend.torch_tensorrt_aot_backend as _mod
 
-    data = {"compile_config": {"enabled_precisions": {torch.float16}, "workspace_size": 2048}}
+    data = {"compile_config": {"workspace_size": 2048}}
     config = TorchTensorRTAotBackendConfig.from_dict(data)
     assert isinstance(config.compile_config, _mod.TorchTensorRTConfig)
     assert config.compile_config.workspace_size == 2048

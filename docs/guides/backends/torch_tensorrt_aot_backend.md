@@ -25,7 +25,7 @@ import aitune.torch as ait
 # Configure backend
 config = TorchTensorRTAotBackendConfig(
     ir="dynamo",
-    compile_config=CompilationSettings(enabled_precisions={torch.float16}),
+    compile_config=CompilationSettings(),
 )
 backend = TorchTensorRTAotBackend(config)
 
@@ -85,8 +85,18 @@ from torch_tensorrt.dynamo import CompilationSettings
 
 config = TorchTensorRTAotBackendConfig(
     compile_config=CompilationSettings(
-        enabled_precisions={torch.float16},
         workspace_size=1 << 30,
+    )
+)
+```
+
+By default, the engine matches the model's loaded dtype. To request FP16 kernels via the legacy weak-typing path (deprecated in TensorRT 10.12), pair `enabled_precisions` with `use_explicit_typing=False`:
+
+```python
+config = TorchTensorRTAotBackendConfig(
+    compile_config=CompilationSettings(
+        enabled_precisions={torch.float16},
+        use_explicit_typing=False,
     )
 )
 ```

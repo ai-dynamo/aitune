@@ -6,6 +6,9 @@
 # use_gated_hf_token = true
 # [environment]
 # DYN_DISCOVERY_BACKEND = "file"
+# DYN_EVENT_PLANE = "zmq"
+# DYN_REQUEST_PLANE = "tcp"
+# DYN_ROUTER_USE_KV_EVENTS = "false"
 # AUTOWRAPT_BOOTSTRAP = "aitune_enable_jit_tuning"
 # AITUNE_CONSOLE_OUTPUT=1
 # ///

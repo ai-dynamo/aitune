@@ -27,7 +27,8 @@ except (ImportError, RuntimeError, OSError):
     class TorchTensorRTConfig:
         """Allows testing when torch_tensorrt is not installed."""
 
-        enabled_precisions: set[torch.dtype] = field(default_factory=lambda: {torch.float16})
+        enabled_precisions: set[torch.dtype] | None = None
+        use_explicit_typing: bool = True
         workspace_size: int = 0
 
 
@@ -45,7 +46,7 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
     """Configuration for torch.compile(backend="torch_tensorrt")."""
 
     compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
-        default_factory=lambda: TorchTensorRTConfig(enabled_precisions={torch.float16})
+        default_factory=TorchTensorRTConfig
     )
     fullgraph: bool = False
     dynamic_shapes: bool | None = None

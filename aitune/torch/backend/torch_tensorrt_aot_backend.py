@@ -29,7 +29,8 @@ except (ImportError, RuntimeError, OSError):
     class TorchTensorRTConfig:
         """Allows testing when torch_tensorrt is not installed."""
 
-        enabled_precisions: set[torch.dtype] = field(default_factory=lambda: {torch.float16})
+        enabled_precisions: set[torch.dtype] | None = None
+        use_explicit_typing: bool = True
         workspace_size: int = 0
 
 
@@ -66,7 +67,7 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
 
     ir: IRType = "dynamo"
     compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
-        default_factory=lambda: TorchTensorRTConfig(enabled_precisions={torch.float16})
+        default_factory=TorchTensorRTConfig
     )
     pickle_protocol: int = DEFAULT_PICKLE_PROTOCOL
 
