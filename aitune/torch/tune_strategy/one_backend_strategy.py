@@ -11,11 +11,11 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
+from aitune.torch.tune_strategy.mixin import PerformanceValidationMixin
 from aitune.utils.logging import log
 
 
-class OneBackendStrategy(TuneStrategyFindMaxBatchSizeExtension):
+class OneBackendStrategy(PerformanceValidationMixin):
     """Strategy which uses just one provided backend."""
 
     def __init__(self, backend: Backend, **kwargs):
@@ -41,7 +41,7 @@ class OneBackendStrategy(TuneStrategyFindMaxBatchSizeExtension):
             sink=self._sink,
         )
 
-        built = self._build_and_validate_backend(
+        built = self._build_validate_and_check_perf(
             self._backend,
             module,
             name,
@@ -51,7 +51,19 @@ class OneBackendStrategy(TuneStrategyFindMaxBatchSizeExtension):
             cache_dir,
             raise_on_failure=True,
         )
-        assert built is not None
+
+        if built is None:
+            log(
+                "⚠️ Backend %s failed performance gate, falling back to TorchEager",
+                self._backend.describe(),
+                sink=self._sink,
+            )
+            if self._baseline_backend is None:
+                raise RuntimeError(
+                    f"Backend '{self._backend.describe()}' failed the performance gate "
+                    "but no TorchEager baseline is available to fall back to."
+                )
+            return self._baseline_backend
 
         log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)
         log("✅ Selected backend: %s", built.describe(), sink=self._sink)

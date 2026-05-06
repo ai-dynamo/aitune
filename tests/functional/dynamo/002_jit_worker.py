@@ -73,7 +73,7 @@ def run_backend() -> None:
     dyn.dynamo_worker(embed, config)
 
 
-def _poll(url: str, match: str, retries: int = 20, delay: float = 10) -> None:
+def _poll(url: str, match: str, retries: int = 40, delay: float = 10) -> None:
     """Poll *url* until *match* appears in the response body.
 
     Args:

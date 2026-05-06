@@ -10,7 +10,13 @@ import torch
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
 from aitune.torch import FirstWinsStrategy, TuneStrategy, inspect, save, tune, wrap
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorJitBackend
+from aitune.torch.backend import (
+    TensorRTBackend,
+    TensorRTBackendConfig,
+    TorchEagerBackend,
+    TorchInductorAotBackend,
+    TorchInductorJitBackend,
+)
 from parakeet_ctc.cmd_args import parse_args
 from parakeet_ctc.model import get_model
 
@@ -79,6 +85,7 @@ def main():
         backends=[
             TensorRTBackend(),
             TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
+            TorchInductorAotBackend(),
             TorchInductorJitBackend(),
             TorchEagerBackend(),
         ]

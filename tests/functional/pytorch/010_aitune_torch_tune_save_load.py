@@ -74,7 +74,7 @@ def tune_save_load_whole_model(model_factory, samples, output_dir, backend_facto
     """Test tuning, saving and loading a whole model wrapped in a single Module."""
 
     def wrap_whole_model(model):
-        strategy = OneBackendStrategy(backend_factory())
+        strategy = OneBackendStrategy(backend_factory(), validate_against_baseline=False)
         strategy.enable_find_max_batch_size(enable=False)
         return Module(model, "demo-simple", strategy=strategy)
 
@@ -85,7 +85,7 @@ def tune_save_load_part_of_model(model_factory, samples, output_dir, backend_fac
     """Test tuning, saving and loading a model with individual layers wrapped in Modules."""
 
     def wrap_partial_model(model):
-        strategy = OneBackendStrategy(backend_factory())
+        strategy = OneBackendStrategy(backend_factory(), validate_against_baseline=False)
         strategy.enable_find_max_batch_size(enable=False)
         model.layer1 = Module(model.layer1, "demo-simple1", strategy=strategy)
         model.layer2 = Module(model.layer2, "demo-simple2", strategy=strategy)

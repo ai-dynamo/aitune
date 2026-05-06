@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 0.4.0 (unreleased)
 - feat: JIT tuning supports tune strategy selection via `aitune.torch.jit_config.strategy` (e.g. `MaxThroughputStrategy`); default remains `FirstWinsStrategy`
+- feat: Add performance validation to tuning strategies. Backends with a >5% slowdown relative to TorchEagerBackend are skipped
 - feat: Deferred mode for Just-in-Time (JIT) tuning - explicit tuning trigger post whole pipeline or model pass, useful for image and video generation pipelines
 - feat: Torch Inductor Ahead-of-Time (AoT) backend support added
 - feat: ONNXRuntime backend support - CUDA and TensorRT execution providers
@@ -17,9 +18,9 @@ SPDX-License-Identifier: Apache-2.0
 - feat: Add hardware metrics snapshot and enable/disable them at runtime
 - feat: Tuning data collection emits a JSON report covering run, module, graph, and backend build stages - controlled via AITUNE_TUNING_DATA_COLLECTION environment variable
 - feat: Tuning data output path can be configured via AITUNE_TUNING_DATA_PATH environment variable
-- fix: preserve externally-registered forward hooks (e.g. `capture_outputs` from transformers≥ 5) across the AOT and JIT save/restore cycle — hooks registered after AITune wraps a module are no longer lost on the first forward pass
-- fix: remove `transformers<5` restriction — AITune now supports transformers 5.x
-- fix: drop `enabled_precisions={float16}` default from Torch-TensorRT AOT and JIT backends; engine now matches the model's loaded dtype
+- fix: Preserve externally-registered forward hooks (e.g. `capture_outputs` from transformers≥ 5) across the AOT and JIT save/restore cycle — hooks registered after AITune wraps a module are no longer lost on the first forward pass
+- fix: Remove `transformers<5` restriction — AITune now supports transformers 5.x
+- fix: Drop `enabled_precisions={float16}` default from Torch-TensorRT AOT and JIT backends; engine now matches the model's loaded dtype
 - chore: Split hardware metrics table if there is a multi-gpu system
 - chore: Renamed TorchInductorBackend to TorchInductorJitBackend - breaking change
 - breaking change: NVTX_ENABLE environment variable renamed to AITUNE_NVTX_EVENTS

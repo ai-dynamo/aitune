@@ -24,7 +24,7 @@ from aitune.torch.module.recording_module import RecordingModule, Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_data.reporting import report_graph_tune, report_module_tune, report_tune_run_end
-from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
+from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
 from aitune.torch.utils.module import count_parameters, format_num_parameters, get_module_device, offload
@@ -650,7 +650,7 @@ def _build_strategy() -> TuneStrategy:
     """
     strategy = config.resolve_strategy().clone()
 
-    if isinstance(strategy, TuneStrategyFindMaxBatchSizeExtension):
+    if isinstance(strategy, FindMaxBatchSizeMixin):
         strategy.enable_find_max_batch_size(False)
 
     return strategy

@@ -42,7 +42,7 @@ def test_custom_module_with_cuda_graphs():
     module = Module(
         model,
         "functional-custom-module-cuda-graphs",
-        strategy=OneBackendStrategy(backend).enable_find_max_batch_size(False),
+        strategy=OneBackendStrategy(backend, validate_against_baseline=False).enable_find_max_batch_size(False),
     )
 
     # Verify recording works

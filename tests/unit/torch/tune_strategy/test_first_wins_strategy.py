@@ -66,18 +66,19 @@ def test_tune_success_first_backend(mock_backend, mock_module, mock_graph_spec, 
     first_backend = MagicMock(spec=Backend)
     first_backend.name = "first_backend"
     first_backend.describe.return_value = "mock_backend"
-    first_backend.__deepcopy__ = lambda _: first_backend
+    first_backend.__deepcopy__ = lambda _, memo=None: first_backend
     first_backend.build.return_value = mock_backend
 
     second_backend = MagicMock(spec=Backend)
     second_backend.name = "second_backend"
     second_backend.describe.return_value = "mock_backend"
-    second_backend.__deepcopy__ = lambda _: second_backend
+    second_backend.__deepcopy__ = lambda _, memo=None: second_backend
     second_backend.build.return_value = mock_backend
 
     backends = [first_backend, second_backend]
     strategy = FirstWinsStrategy(backends)
     strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
 
@@ -96,18 +97,19 @@ def test_tune_success_second_backend(mock_backend, mock_module, mock_graph_spec,
     first_backend = MagicMock(spec=Backend)
     first_backend.name = "first_backend"
     first_backend.describe.return_value = "mock_backend"
-    first_backend.__deepcopy__ = lambda _: first_backend
+    first_backend.__deepcopy__ = lambda _, memo=None: first_backend
     first_backend.build.side_effect = Exception("First backend failed")
 
     second_backend = MagicMock(spec=Backend)
     second_backend.name = "second_backend"
     second_backend.describe.return_value = "mock_backend"
-    second_backend.__deepcopy__ = lambda _: second_backend
+    second_backend.__deepcopy__ = lambda _, memo=None: second_backend
     second_backend.build.return_value = mock_backend
 
     backends = [first_backend, second_backend]
     strategy = FirstWinsStrategy(backends)
     strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
 
@@ -141,6 +143,7 @@ def test_tune_all_backends_fail(mock_module, mock_graph_spec, mock_sample, torch
 
     strategy = FirstWinsStrategy(backends)
     strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
 
@@ -207,3 +210,81 @@ def test_first_wins_strategy_build_fails(torch_device, tmp_path):
     log_file = log_files[0]
 
     assert "TestOutOfMemoryException" in log_file.read_text()
+
+
+def test_first_wins_skips_slow_backend(mock_backend, mock_module, mock_graph_spec, mock_sample, torch_device, tmp_path):
+    """A backend slower than TorchEager baseline by >threshold is skipped."""
+    from unittest.mock import patch
+
+    slow_backend = MagicMock(spec=Backend)
+    slow_backend.describe.return_value = "slow_backend"
+    slow_backend.key.return_value = "slow_backend"
+    slow_backend.__deepcopy__ = lambda _, memo=None: slow_backend
+    slow_backend.build.return_value = slow_backend
+
+    fast_backend = MagicMock(spec=Backend)
+    fast_backend.describe.return_value = "fast_backend"
+    fast_backend.key.return_value = "fast_backend"
+    fast_backend.__deepcopy__ = lambda _, memo=None: fast_backend
+    fast_backend.build.return_value = fast_backend
+
+    strategy = FirstWinsStrategy([slow_backend, fast_backend])
+    strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
+    strategy.enable_find_max_batch_size(False)
+    strategy.enable_correctness_check(False)
+    strategy._baseline_throughput = 1.0  # baseline: 1 sample/s
+    strategy._resolved_batch_size = 4
+
+    baseline_eager = MagicMock(spec=Backend)
+    baseline_eager.describe.return_value = "TorchEager"
+    strategy._baseline_backend = baseline_eager
+
+    # slow_backend: 0.5 samples/s (speedup 0.5, fails), fast_backend: 2.0 samples/s (speedup 2.0, passes)
+    with patch(
+        "aitune.torch.tune_strategy.mixin.performance_validation_mixin.find_max_throughput_for_backend",
+        side_effect=[(4, 0.5, MagicMock()), (4, 2.0, MagicMock())],
+    ):
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+
+    assert result is fast_backend
+    slow_backend.build.assert_called_once()
+    fast_backend.build.assert_called_once()
+
+    assert len(strategy.perf_validation_results) == 2
+    assert strategy.perf_validation_results[0].passed is False  # slow
+    assert strategy.perf_validation_results[1].passed is True  # fast
+
+
+def test_first_wins_accepts_slow_backend_when_gate_disabled(
+    mock_backend, mock_module, mock_graph_spec, mock_sample, torch_device, tmp_path
+):
+    """When validate_against_baseline=False, the first backend is returned even if slow."""
+    from unittest.mock import patch
+
+    slow_backend = MagicMock(spec=Backend)
+    slow_backend.describe.return_value = "slow_backend"
+    slow_backend.key.return_value = "slow_backend"
+    slow_backend.__deepcopy__ = lambda _, memo=None: slow_backend
+    slow_backend.build.return_value = slow_backend
+
+    strategy = FirstWinsStrategy([slow_backend], validate_against_baseline=False)
+    strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
+    strategy.enable_find_max_batch_size(False)
+    strategy.enable_correctness_check(False)
+    strategy._baseline_throughput = 2.0
+    strategy._resolved_batch_size = 4
+
+    baseline_eager = MagicMock(spec=Backend)
+    strategy._baseline_backend = baseline_eager
+
+    # slower backend but gate is disabled
+    with patch(
+        "aitune.torch.tune_strategy.mixin.performance_validation_mixin.find_max_throughput_for_backend",
+        return_value=(4, 1.0, MagicMock()),
+    ):
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+
+    assert result is slow_backend
+    assert strategy.perf_validation_results[0].passed is False  # recorded but not gated

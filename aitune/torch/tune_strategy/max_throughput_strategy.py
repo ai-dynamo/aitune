@@ -45,7 +45,7 @@ from aitune.torch.task.profiling import (
     StableWindowMeasuringStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
-from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
+from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from aitune.utils.logging import log
 
 
@@ -67,7 +67,7 @@ class MaxThroughputStrategyResult:
     measurements: list[ProfilingResultEvent] = field(default_factory=list)
 
 
-class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
+class MaxThroughputStrategy(FindMaxBatchSizeMixin):
     """Searches and selects the backend with max throughput."""
 
     def __init__(
@@ -75,6 +75,7 @@ class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
         backends: list[Backend] | None = None,
         measurement_stop_strategy: MeasuringStopStrategy | None = None,
         profiling_stop_strategy: ProfilingStopStrategy | None = None,
+        validate_against_baseline: bool = True,
         **kwargs: Any,
     ):
         """Initializes strategy.
@@ -83,10 +84,15 @@ class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
             backends: List of backends to tune.
             measurement_stop_strategy: Measurement stop strategy.
             profiling_stop_strategy: Profiling stop strategy.
+            validate_against_baseline: When True (default), TorchEagerBackend is automatically
+                prepended to the backends list if not already present, ensuring it always competes
+                as the baseline. Set to False to use only the explicitly provided backends.
             kwargs: Additional arguments for the parent class
         """
         super().__init__(**kwargs)
         self._backends = backends or self._default_backends()
+        if validate_against_baseline and not any(isinstance(b, TorchEagerBackend) for b in self._backends):
+            self._backends = [TorchEagerBackend(), *self._backends]
         self._measurement_stop_strategy = measurement_stop_strategy or StableWindowMeasuringStopStrategy(
             window_size=DEFAULT_WINDOW_SIZE,
             stability_percentage=DEFAULT_STABILITY_PERCENTAGE,
@@ -120,7 +126,7 @@ class MaxThroughputStrategy(TuneStrategyFindMaxBatchSizeExtension):
         # Verify if model has batching
         batching = graph_spec.input_spec.has_batch_axis() and graph_spec.get_max_batch_size() > 1
 
-        # Note: As this strategy is extended with FindMaxBatchSizeTuneStrategyExtension,
+        # Note: As this strategy is extended with FindMaxBatchSizeMixin,
         # we can assume that max batch size is included in the graph spec.
         max_batch_size = graph_spec.get_max_batch_size()
 

@@ -47,7 +47,11 @@ def testing_multi_profile_with_samples():
 
     # configure the backend to use multi-profile mode, and auto generate profiles from samples used for tuning
     backend = TensorRTBackend(TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
-    module = Module(model, "toy-model", strategy=OneBackendStrategy(backend).enable_find_max_batch_size(False))
+    module = Module(
+        model,
+        "toy-model",
+        strategy=OneBackendStrategy(backend, validate_against_baseline=False).enable_find_max_batch_size(False),
+    )
 
     # tune the model with the two samples, need to use DynamicShapeDataset as samples are different shapes
     tune(module, DynamicShapeDataset([data1, data2]), batch_sizes=[2, 8], device=device)

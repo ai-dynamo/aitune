@@ -12,11 +12,11 @@ from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchIn
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.tune_strategy.extension import TuneStrategyFindMaxBatchSizeExtension
+from aitune.torch.tune_strategy.mixin import PerformanceValidationMixin
 from aitune.utils.logging import log
 
 
-class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
+class FirstWinsStrategy(PerformanceValidationMixin):
     """Strategy which runs backends until it gets first working backend."""
 
     def __init__(self, backends: list[Backend] | None = None, **kwargs):
@@ -33,7 +33,7 @@ class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
         device: torch.device,
         cache_dir: Path,
     ) -> Backend:
-        """Tunes given torch module with provided graph_spec and data."""
+        """Tunes given torch module witzh provided graph_spec and data."""
         log(
             "⏳ Executing strategy `%s` on module `%s` (graph: %s)",
             self.__class__.__name__,
@@ -42,9 +42,8 @@ class FirstWinsStrategy(TuneStrategyFindMaxBatchSizeExtension):
             sink=self._sink,
         )
 
-        # Run backend by backend until first working backend is found
         for backend in self._backends:
-            built = self._build_and_validate_backend(backend, module, name, graph_spec, data, device, cache_dir)
+            built = self._build_validate_and_check_perf(backend, module, name, graph_spec, data, device, cache_dir)
 
             if built is not None:
                 log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)

@@ -3,7 +3,7 @@
 
 """Unit tests for OneBackendStrategy."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch.nn as nn
@@ -12,6 +12,10 @@ from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
+
+_PATCH_FIND_MAX_THROUGHPUT = (
+    "aitune.torch.tune_strategy.mixin.performance_validation_mixin.find_max_throughput_for_backend"
+)
 
 
 @pytest.fixture
@@ -56,9 +60,10 @@ def test_tune_success(mock_backend, mock_module, mock_graph_spec, torch_device, 
     # Setup
     strategy = OneBackendStrategy(mock_backend)
     strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
-    mock_backend.__deepcopy__ = lambda _: mock_backend
+    mock_backend.__deepcopy__ = lambda _, memo=None: mock_backend
     mock_backend.build.return_value = mock_backend
 
     # Execute
@@ -74,9 +79,10 @@ def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_de
     # Setup
     strategy = OneBackendStrategy(mock_backend)
     strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
-    mock_backend.__deepcopy__ = lambda _: mock_backend
+    mock_backend.__deepcopy__ = lambda _, memo=None: mock_backend
     mock_backend.build.side_effect = Exception("Backend failed")
 
     # Execute and verify
@@ -85,3 +91,80 @@ def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_de
 
     assert str(exc_info.value) == "Backend failed"
     mock_backend.build.assert_called_once()
+
+
+def test_one_backend_falls_back_to_torch_eager_on_perf_failure(
+    mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path
+):
+    """When backend fails performance gate, falls back to the TorchEager baseline."""
+    strategy = OneBackendStrategy(mock_backend)
+    strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
+    strategy.enable_find_max_batch_size(False)
+    strategy.enable_correctness_check(False)
+    mock_backend.__deepcopy__ = lambda _, memo=None: mock_backend
+    mock_backend.build.return_value = mock_backend
+
+    eager_fallback = MagicMock(spec=Backend)
+    eager_fallback.describe.return_value = "TorchEagerBackend"
+    strategy._baseline_throughput = 3.0  # baseline: 3 samples/s
+    strategy._resolved_batch_size = 4
+    strategy._baseline_backend = eager_fallback
+
+    # candidate is 3× slower → speedup 0.33 → fails gate
+    with patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 1.0, MagicMock())):
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+
+    assert result is eager_fallback
+    assert len(strategy.perf_validation_results) == 1
+    assert strategy.perf_validation_results[0].passed is False
+
+
+def test_one_backend_returns_backend_when_perf_passes(
+    mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path
+):
+    """When backend passes performance gate, returns the built backend."""
+    strategy = OneBackendStrategy(mock_backend)
+    strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
+    strategy.enable_find_max_batch_size(False)
+    strategy.enable_correctness_check(False)
+    mock_backend.__deepcopy__ = lambda _, memo=None: mock_backend
+    mock_backend.build.return_value = mock_backend
+
+    eager_fallback = MagicMock(spec=Backend)
+    strategy._baseline_throughput = 1.0  # baseline: 1 sample/s
+    strategy._resolved_batch_size = 4
+    strategy._baseline_backend = eager_fallback
+
+    # candidate is 2× faster → speedup 2.0 → passes gate
+    with patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 2.0, MagicMock())):
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+
+    assert result is mock_backend
+    assert strategy.perf_validation_results[0].passed is True
+
+
+def test_one_backend_returns_slow_backend_when_gate_disabled(
+    mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path
+):
+    """When validate_against_baseline=False, slow backend is returned directly (not TorchEager)."""
+    strategy = OneBackendStrategy(mock_backend, validate_against_baseline=False)
+    strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
+    strategy.enable_find_max_batch_size(False)
+    strategy.enable_correctness_check(False)
+    mock_backend.__deepcopy__ = lambda _, memo=None: mock_backend
+    mock_backend.build.return_value = mock_backend
+
+    eager_fallback = MagicMock(spec=Backend)
+    strategy._baseline_throughput = 3.0
+    strategy._resolved_batch_size = 4
+    strategy._baseline_backend = eager_fallback
+
+    # 3× slower but gate is disabled
+    with patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 1.0, MagicMock())):
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+
+    assert result is mock_backend  # gate disabled → slow backend returned directly
+    assert strategy.perf_validation_results[0].passed is False  # result still recorded

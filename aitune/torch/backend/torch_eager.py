@@ -123,7 +123,7 @@ class TorchEagerBackend(Backend):
 
     def _deploy(self):
         """Deploys the backend."""
-        pass
+        self._orig_module.to(self._device)
 
     def _save_config(self, cache_dir: Path):
         """Store the backend configuration to a file."""

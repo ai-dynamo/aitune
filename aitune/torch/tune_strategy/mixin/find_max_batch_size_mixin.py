@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Find max batch size extension for tune strategy.
+"""Find max batch size mixin for tune strategy.
 
 Looks for best batch size for the module using Torch Eager backend.
 """
@@ -36,15 +36,15 @@ DEFAULT_MAX_BATCH_SIZE = 2**20
 
 
 @dataclass
-class FindMaxBatchSizeExtensionConfig:
-    """Configuration for find max batch size extension."""
+class FindMaxBatchSizeMixinConfig:
+    """Configuration for find max batch size mixin."""
 
     enable_find_max_batch_size: bool = True
     profiling_config: ProfilingConfig | None = None
     default_backend_class: type[Backend] = TorchEagerBackend
 
 
-class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
+class FindMaxBatchSizeMixin(TuneStrategy):
     """Wrapper for tune strategy that finds max batch size."""
 
     def __init__(
@@ -56,24 +56,22 @@ class TuneStrategyFindMaxBatchSizeExtension(TuneStrategy):
         """Initializes wrapper."""
         super().__init__(*args, sink=sink, **kwargs)
 
-        self.find_config = FindMaxBatchSizeExtensionConfig()
+        self.find_config = FindMaxBatchSizeMixinConfig()
         self.find_config.profiling_config = self.default_profiling_config()
 
-    def enable_find_max_batch_size(self, enable: bool = True) -> "TuneStrategyFindMaxBatchSizeExtension":
+    def enable_find_max_batch_size(self, enable: bool = True) -> "FindMaxBatchSizeMixin":
         """Enables or disables find max batch size."""
         self.find_config.enable_find_max_batch_size = enable
         return self
 
-    def set_find_max_batch_size_profiling_config(
-        self, profiling_config: ProfilingConfig
-    ) -> "TuneStrategyFindMaxBatchSizeExtension":
+    def set_find_max_batch_size_profiling_config(self, profiling_config: ProfilingConfig) -> "FindMaxBatchSizeMixin":
         """Sets profiling config for find max batch size."""
         self.find_config.profiling_config = profiling_config
         return self
 
     def set_find_max_batch_size_default_backend_class(
         self, default_backend_class: type[Backend]
-    ) -> "TuneStrategyFindMaxBatchSizeExtension":
+    ) -> "FindMaxBatchSizeMixin":
         """Sets default backend class for find max batch size."""
         self.find_config.default_backend_class = default_backend_class
         return self
