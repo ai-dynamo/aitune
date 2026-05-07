@@ -56,6 +56,7 @@ def test_jit_wan():
     disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards"""
 
     config.dry_run = False
+    config.min_samples = 2
     config.max_depth_level = 1
     config.detect_graph_breaks = False
 
@@ -75,6 +76,7 @@ def test_jit_wan():
     )
     with torch.no_grad():
         pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=10, height=16, width=32, num_frames=21)
+        pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=10, height=32, width=64, num_frames=21)
 
     tune_deferred()
 

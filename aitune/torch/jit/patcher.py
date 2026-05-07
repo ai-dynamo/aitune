@@ -86,13 +86,9 @@ class Patcher:
         a variable number of times per step (e.g. text-to-image or text-to-video), making it
         difficult to know when enough samples have been recorded inside the forward hook itself.
         """
-        for module in cls._patched_modules:
-            if not isinstance(module, PatchedModule):
-                logger.warning("Module %s is not a PatchedModule, skipping", module.__class__.__name__)
-                continue
-
+        for module in list(PatchedModule.heads):
             try:
-                module.tune_deferred()
+                module.try_tune()
             except Exception as e:
                 logger.error("Failed to tune module %s: %s", module.__class__.__name__, e)
 

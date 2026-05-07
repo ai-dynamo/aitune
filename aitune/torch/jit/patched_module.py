@@ -121,30 +121,16 @@ class PatchedModule:
             raise ValueError("Fully qualified name is not available before first forward call.")
         return self._fq_name
 
-    @annotate(name="tune", color="yellow")
-    def tune_deferred(self):
-        """Tune the module if it is ready, called explicitly after recording is complete.
+    def try_tune(self):
+        """Tune the module if readiness conditions for the active JIT mode are met.
 
-        Use this when the pipeline has a variable number of forward calls per step (e.g.
-        text-to-image or text-to-video).  The caller drives the decision of when enough
-        samples have been collected; tuning is triggered only if at least one forward pass
-        has been recorded and the module is allowed to tune.
+        Delegates the readiness check to _should_be_tuned(), which dispatches to the
+        mode-specific implementation (eager or deferred).
         """
         if self._should_be_tuned():
             self.tune()
 
     @annotate(name="tune", color="yellow")
-    def tune_eager(self):
-        """Tune the module automatically after each forward pass once the sample threshold is met.
-
-        Use this for pipelines with a fixed, predictable call pattern.  After every forward
-        call, AITune checks whether the required number of samples has been collected and
-        dynamic axes have been detected (if required), and tunes immediately without waiting
-        for an explicit trigger.
-        """
-        if self._should_be_tuned():
-            self.tune()
-
     def tune(
         self,
     ):
@@ -340,7 +326,7 @@ class PatchedModule:
             self._unpatch_hierarchy(include_self=True)
             return
 
-        self.tune_eager()
+        self.try_tune()
 
     def _forward_recording(self, wrapped, instance, args, kwargs):
         """Forward call for the recording state.
@@ -360,7 +346,7 @@ class PatchedModule:
         self._call_count += 1
 
         if config.mode == JITMode.TUNE_EAGER:
-            self.tune_eager()
+            self.try_tune()
         return result
 
     @annotate(name="inference", color="green")
@@ -477,12 +463,29 @@ class PatchedModule:
             current._restore_original_forward()
             todo.extend(current._children)
 
-    def _should_be_tuned(self):
-        """Check if the module should be tuned."""
+    def _should_be_tuned(self) -> bool:
+        """Check if the module should be tuned, dispatching based on the active JIT mode."""
+        if config.mode == JITMode.TUNE_DEFERRED:
+            return self._should_be_tuned_deferred()
+        elif config.mode == JITMode.TUNE_EAGER:
+            return self._should_be_tuned_eager()
+        else:
+            raise ValueError(f"Unsupported mode: {config.mode}")
+
+    def _should_be_tuned_eager(self) -> bool:
+        """Check if the module should be tuned in eager mode.
+
+        Requires a minimum number of forward passes and, when dynamic shapes are expected,
+        at least one sample with a detected dynamic axis.
+        """
         if config.min_samples == 1:
             return self._allowed_to_tune
 
-        min_samples_check = self._call_count >= config.min_samples
+        if not self._allowed_to_tune:
+            return False
+
+        if self._call_count < config.min_samples:
+            return False
 
         dynamic_axes_check = False
         if config.batch_axis_required:
@@ -494,7 +497,15 @@ class PatchedModule:
         else:
             dynamic_axes_check = True
 
-        return min_samples_check and self._allowed_to_tune and dynamic_axes_check
+        return dynamic_axes_check
+
+    def _should_be_tuned_deferred(self) -> bool:
+        """Check if the module should be tuned in deferred mode.
+
+        The explicit tune.deferred() call signals that recording is complete, so only
+        a minimum of one recorded forward pass and tuning eligibility are required.
+        """
+        return self._allowed_to_tune and self._call_count >= 1
 
     def _throw_if_has_graph_break(self, module: "PatchedModule", data: list[Sample]):
         """Throw if graph break is detected.
