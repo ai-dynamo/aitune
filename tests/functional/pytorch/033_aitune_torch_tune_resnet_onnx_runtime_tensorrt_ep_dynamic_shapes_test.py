@@ -56,7 +56,9 @@ def test_tune_resnet_onnx_runtime_tensorrt_ep_dynamic_shapes():
     try:
         strategy = OneBackendStrategy(
             ONNXRuntimeBackend(config=ONNXRuntimeBackendConfig(execution_provider=ONNXExecutionProvider.TENSORRT))
-        ).enable_find_max_batch_size(False)
+        )
+        strategy.enable_validate_against_baseline(False)
+        strategy.enable_find_max_batch_size(False)
         module = Module(model, "functional-resnet18-onnx-trt-ep-dynamic", strategy=strategy)
 
         # batch_sizes=[1] prevents cross-sample stacking so both spatial sizes

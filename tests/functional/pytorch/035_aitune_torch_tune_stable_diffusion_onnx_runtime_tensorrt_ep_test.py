@@ -79,6 +79,7 @@ def test_stable_diffusion_dynamic_batch_onnx_runtime_tensorrt_ep():
             strategy = OneBackendStrategy(
                 ONNXRuntimeBackend(config=ONNXRuntimeBackendConfig(execution_provider=ONNXExecutionProvider.TENSORRT))
             )
+            strategy.enable_validate_against_baseline(False)
             strategy.enable_find_max_batch_size(enable=False)
             pipeline = wrap(pipeline, modules, strategy=strategy)
 

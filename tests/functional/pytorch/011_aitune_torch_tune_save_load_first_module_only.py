@@ -47,10 +47,12 @@ def _get_pipeline(model_name: str = "stable-diffusion-v1-5/stable-diffusion-v1-5
 def _tune_and_save(save_path: pathlib.Path, device: str = "cuda"):
     pipeline = _get_pipeline(device=device)
 
+    strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchTensorRTAotBackend(), TorchInductorJitBackend()])
+    strategy.enable_validate_against_baseline(False)
     pipeline.text_encoder = Module(
         pipeline.text_encoder,
         "text_encoder",
-        strategy=FirstWinsStrategy(backends=[TensorRTBackend(), TorchTensorRTAotBackend(), TorchInductorJitBackend()]),
+        strategy=strategy,
     )
 
     tune(

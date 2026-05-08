@@ -179,19 +179,25 @@ def test_resolved_batch_size_uses_graph_spec_get_max_batch_size(
     assert ext._resolved_batch_size == 16
 
 
-def test_pre_tune_skips_baseline_profiling_when_validate_against_baseline_false(
-    mock_module, mock_graph_spec, mock_data, torch_device, tmp_path
+def test_pre_tune_always_profiles_baseline_regardless_of_validate_flag(
+    mock_module, mock_graph_spec, mock_data, mock_eager_backend, torch_device, tmp_path
 ):
-    """_pre_tune does not build TorchEager or profile when validate_against_baseline=False."""
-    ext = _ConcreteExtension(validate_against_baseline=False)
+    """_pre_tune always profiles TorchEager baseline even when validate_against_baseline=False."""
+    ext = _ConcreteExtension()
+    ext.enable_validate_against_baseline(False)
     ext.enable_find_max_batch_size(False)
 
-    with patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile:
+    with (
+        patch(
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            return_value=mock_eager_backend,
+        ),
+        patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 80.0, MagicMock())) as mock_profile,
+    ):
         ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
 
-    mock_profile.assert_not_called()
-    assert ext._baseline_throughput is None
-    assert ext._baseline_backend is None
+    mock_profile.assert_called_once()
+    assert ext._baseline_throughput == 80.0
     assert ext._resolved_batch_size == mock_graph_spec.get_max_batch_size.return_value
 
 
@@ -244,7 +250,7 @@ def test_check_perf_appends_result_and_returns_none_when_gate_rejects(
     mock_module, mock_graph_spec, mock_data, mock_backend, torch_device, tmp_path
 ):
     """Returns None and records passed=False when speedup < threshold (gate enabled)."""
-    ext = _ConcreteExtension(validate_against_baseline=True)
+    ext = _ConcreteExtension()
     ext._baseline_throughput = 2.0  # baseline: 2 samples/s
     ext._resolved_batch_size = 4
 
@@ -265,7 +271,8 @@ def test_check_perf_returns_backend_when_gate_disabled_but_slow(
     mock_module, mock_graph_spec, mock_data, mock_backend, torch_device, tmp_path
 ):
     """When validate_against_baseline=False, slow backend is still returned."""
-    ext = _ConcreteExtension(validate_against_baseline=False)
+    ext = _ConcreteExtension()
+    ext.enable_validate_against_baseline(False)
     ext._baseline_throughput = 2.0
     ext._resolved_batch_size = 4
 
@@ -285,7 +292,7 @@ def test_check_perf_returns_backend_when_no_baseline(
     mock_module, mock_graph_spec, mock_data, mock_backend, torch_device, tmp_path
 ):
     """When _baseline_throughput is None (baseline failed), gate never applies."""
-    ext = _ConcreteExtension(validate_against_baseline=True)
+    ext = _ConcreteExtension()
     ext._baseline_throughput = None  # simulates baseline build failure
     ext._resolved_batch_size = 4
 
@@ -302,7 +309,7 @@ def test_check_perf_returns_backend_when_profiling_fails(
     mock_module, mock_graph_spec, mock_data, mock_backend, torch_device, tmp_path
 ):
     """When candidate profiling raises, backend is accepted and no result recorded."""
-    ext = _ConcreteExtension(validate_against_baseline=True)
+    ext = _ConcreteExtension()
     ext._baseline_throughput = 1.0
     ext._resolved_batch_size = 4
 
@@ -322,9 +329,9 @@ def test_check_perf_returns_backend_when_profiling_fails(
 
 
 def test_perf_validation_config_defaults():
-    """Default config uses 5% threshold and no explicit profiling config."""
+    """Default config uses 1% threshold and no explicit profiling config."""
     config = PerformanceValidationMixinConfig()
-    assert config.min_speedup_threshold == 0.05
+    assert config.min_speedup_threshold == 0.01
     assert config.profiling_config is None
 
 
@@ -357,6 +364,111 @@ def test_profiling_config_for_batch_size_user_override_replaces_batch_sizes():
     result = config.profiling_config_for_batch_size(16)
 
     assert result.batch_sizes == [16]
+
+
+# ── _post_tune ────────────────────────────────────────────────────────────
+
+
+def test_post_tune_emits_warning_when_logger_below_info(mock_backend, mock_graph_spec, mock_data):
+    """At WARNING level (not INFO-enabled), emits full format via logger.warning."""
+    from unittest.mock import patch
+
+    ext = _ConcreteExtension()
+    ext.perf_validation_results = [
+        _make_result(mock_backend.describe(), throughput=200.0, baseline=100.0, speedup=2.0),
+    ]
+
+    with (
+        patch.object(ext._logger, "isEnabledFor", return_value=False),
+        patch.object(ext._logger, "warning") as mock_warn,
+    ):
+        ext._post_tune(mock_backend, "my_module", mock_graph_spec, mock_data)
+
+    mock_warn.assert_called_once()
+    msg = mock_warn.call_args[0][0]
+    assert "speedup: 2.00x" in msg
+    assert "100.00 → 200.00 samples/s" in msg
+    assert "my_module" in msg
+    assert mock_backend.describe() in msg
+
+
+def test_post_tune_emits_short_format_via_sink_when_info_enabled(mock_backend, mock_graph_spec, mock_data):
+    """At INFO level, emits short format via _sink (no module/backend fields)."""
+    from unittest.mock import MagicMock, patch
+
+    sink = MagicMock()
+    ext = _ConcreteExtension(sink=sink)
+    ext.perf_validation_results = [
+        _make_result(mock_backend.describe(), throughput=200.0, baseline=100.0, speedup=2.0),
+    ]
+
+    with patch.object(ext._logger, "isEnabledFor", return_value=True):
+        ext._post_tune(mock_backend, "my_module", mock_graph_spec, mock_data)
+
+    sink.assert_called_once()
+    msg = sink.call_args[0][0]
+    assert "⚡ speedup: 2.00x" in msg
+    assert "100.00 → 200.00 samples/s" in msg
+    assert "my_module" not in msg
+
+
+def test_post_tune_silent_when_backend_is_none(mock_graph_spec, mock_data):
+    """No output when backend is None (tuning failed)."""
+    from unittest.mock import patch
+
+    ext = _ConcreteExtension()
+    with patch.object(ext._logger, "warning") as mock_warn:
+        ext._post_tune(None, "my_module", mock_graph_spec, mock_data)
+
+    mock_warn.assert_not_called()
+
+
+def test_post_tune_silent_when_backend_not_in_results(mock_backend, mock_graph_spec, mock_data):
+    """No output when selected backend has no profiling result (e.g. OneBackendStrategy fallback)."""
+    from unittest.mock import patch
+
+    ext = _ConcreteExtension()
+    ext.perf_validation_results = []  # empty — no match
+
+    with (
+        patch.object(ext._logger, "warning") as mock_warn,
+        patch.object(ext._logger, "isEnabledFor", return_value=False),
+    ):
+        ext._post_tune(mock_backend, "my_module", mock_graph_spec, mock_data)
+
+    mock_warn.assert_not_called()
+
+
+def test_post_tune_emitted_when_validate_against_baseline_false(mock_backend, mock_graph_spec, mock_data):
+    """Summary is emitted even when validate_against_baseline=False (profiling is unconditional)."""
+    from unittest.mock import patch
+
+    ext = _ConcreteExtension()
+    ext.enable_validate_against_baseline(False)
+    ext.perf_validation_results = [
+        _make_result(mock_backend.describe(), throughput=150.0, baseline=100.0, speedup=1.5),
+    ]
+
+    with (
+        patch.object(ext._logger, "isEnabledFor", return_value=False),
+        patch.object(ext._logger, "warning") as mock_warn,
+    ):
+        ext._post_tune(mock_backend, "mod", mock_graph_spec, mock_data)
+
+    mock_warn.assert_called_once()
+    assert "speedup: 1.50x" in mock_warn.call_args[0][0]
+
+
+def _make_result(description, *, throughput, baseline, speedup):
+    from aitune.torch.tune_strategy.mixin.performance_validation_mixin import PerformanceValidationMixinResult
+
+    return PerformanceValidationMixinResult(
+        backend_description=description,
+        throughput=throughput,
+        baseline_throughput=baseline,
+        speedup=speedup,
+        passed=speedup >= 1.05,
+    )
 
 
 def test_extension_classes_exported_from_package():

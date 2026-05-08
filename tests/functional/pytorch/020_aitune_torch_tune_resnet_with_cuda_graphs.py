@@ -44,10 +44,13 @@ def test_resnet50_with_cuda_graphs_invalidation():
     backend = TensorRTBackend(config=config)
 
     # when - create module and tune with CUDA graphs enabled
+    strategy = OneBackendStrategy(backend)
+    strategy.enable_validate_against_baseline(False)
+    strategy.enable_find_max_batch_size(False)
     module = Module(
         model,
         "functional-resnet50-cuda-graphs-shapes",
-        strategy=OneBackendStrategy(backend).enable_find_max_batch_size(False),
+        strategy=strategy,
     )
 
     tune(module, [data_bs2[0]], batch_sizes=[1, 2, 4, 8, 16, 32, 64], dry_run=False, device=device)

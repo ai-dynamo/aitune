@@ -3,12 +3,17 @@
 """Max throughput tune strategy.
 
 1. Finds max batch size for Torch Eager as a baseline.
-2. Runs all backends with given max batch size.
-3. Finds the maximum throughput for each backend.
-4. Returns the backend with max throughput.
+2. Profiles TorchEager at that batch size sweep as a throughput baseline.
+3. Runs all user-provided backends with the same sweep.
+4. Returns the backend with max throughput; falls back to TorchEager when
+   validate_against_baseline is enabled and no user backend beats the baseline.
 """
 
-from dataclasses import dataclass, field
+import logging
+import shutil
+import traceback
+from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -40,42 +45,41 @@ from aitune.torch.task.profiling import (
     MeasuringStopStrategy,
     ModelExecutionTimeMeasuringStrategy,
     ProfilingConfig,
-    ProfilingResultEvent,
     ProfilingStopStrategy,
     StableWindowMeasuringStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
+from aitune.torch.tune_data.reporting import report_backend_throughput, report_graph_baseline_throughput
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
+from aitune.torch.tune_strategy.mixin.performance_validation_mixin import (
+    PerformanceValidationMixinResult,
+    fmt_speedup_msg,
+)
 from aitune.utils.logging import log
 
 
 @dataclass
-class MaxThroughputResult:
-    """Result of max throughput strategy."""
-
-    max_batch_size: int
+class _TuneCandidate:
+    backend: Backend
     throughput: float
-    backend_details: str
-
-
-@dataclass
-class MaxThroughputStrategyResult:
-    """Result of max throughput strategy."""
-
-    graph_spec_name: str
-    max_throughput_results: list[MaxThroughputResult] = field(default_factory=list)
-    measurements: list[ProfilingResultEvent] = field(default_factory=list)
+    batch_size: int
 
 
 class MaxThroughputStrategy(FindMaxBatchSizeMixin):
-    """Searches and selects the backend with max throughput."""
+    """Searches and selects the backend with max throughput.
+
+    TorchEager is profiled in _pre_tune as a throughput baseline (not injected into
+    the backends list). When validate_against_baseline is enabled (default), the strategy
+    falls back to TorchEager when no user-provided backend beats it. When disabled,
+    the best user-provided backend wins regardless of speed, and the strategy raises
+    if all user backends fail.
+    """
 
     def __init__(
         self,
         backends: list[Backend] | None = None,
         measurement_stop_strategy: MeasuringStopStrategy | None = None,
         profiling_stop_strategy: ProfilingStopStrategy | None = None,
-        validate_against_baseline: bool = True,
         **kwargs: Any,
     ):
         """Initializes strategy.
@@ -84,15 +88,11 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
             backends: List of backends to tune.
             measurement_stop_strategy: Measurement stop strategy.
             profiling_stop_strategy: Profiling stop strategy.
-            validate_against_baseline: When True (default), TorchEagerBackend is automatically
-                prepended to the backends list if not already present, ensuring it always competes
-                as the baseline. Set to False to use only the explicitly provided backends.
             kwargs: Additional arguments for the parent class
         """
         super().__init__(**kwargs)
         self._backends = backends or self._default_backends()
-        if validate_against_baseline and not any(isinstance(b, TorchEagerBackend) for b in self._backends):
-            self._backends = [TorchEagerBackend(), *self._backends]
+        self._validate_against_baseline: bool = True
         self._measurement_stop_strategy = measurement_stop_strategy or StableWindowMeasuringStopStrategy(
             window_size=DEFAULT_WINDOW_SIZE,
             stability_percentage=DEFAULT_STABILITY_PERCENTAGE,
@@ -101,7 +101,57 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
             throughput_cutoff_threshold=DEFAULT_THROUGHPUT_CUTOFF_THRESHOLD,
             throughput_backoff_limit=DEFAULT_THROUGHPUT_BACKOFF_LIMIT,
         )
-        self.results: list[MaxThroughputStrategyResult] = []
+
+        self.perf_validation_results: list[PerformanceValidationMixinResult] = []
+        self._baseline_throughput: float | None = None
+        self._baseline_backend: Backend | None = None
+        self._baseline_batch_size: int | None = None
+
+    def enable_validate_against_baseline(self, enable: bool = True) -> "MaxThroughputStrategy":
+        """Enables or disables baseline validation."""
+        self._validate_against_baseline = enable
+        return self
+
+    def _pre_tune(
+        self,
+        module: nn.Module,
+        name: str,
+        graph_spec: GraphSpec,
+        data: list[Sample],
+        device: torch.device,
+        cache_dir: Path,
+    ):
+        """Calls super()._pre_tune() (finds max batch size) then profiles TorchEager as baseline."""
+        super()._pre_tune(module, name, graph_spec, data, device, cache_dir)
+        self.perf_validation_results = []
+        self._baseline_throughput = None
+        self._baseline_backend = None
+        self._baseline_batch_size = None
+
+        batching = graph_spec.input_spec.has_batch_axis() and graph_spec.get_max_batch_size() > 1
+        max_batch_size = graph_spec.get_max_batch_size()
+        profiling_cfg = self._get_profiling_config(batching, max_batch_size)
+
+        baseline_cache_dir = cache_dir / "baseline"
+        shutil.rmtree(baseline_cache_dir, ignore_errors=True)
+        baseline_cache_dir.mkdir(parents=True)
+        try:
+            backend = TorchEagerBackend()
+            backend = backend.build(module, graph_spec, deepcopy(data), device, baseline_cache_dir)
+            batch_size, throughput, _ = find_max_throughput_for_backend(backend, name, graph_spec, data, profiling_cfg)
+            self._baseline_throughput = throughput
+            self._baseline_backend = backend
+            self._baseline_batch_size = batch_size
+            report_graph_baseline_throughput(throughput)
+            log("📊 TorchEager baseline: %.2f samples/s", throughput, sink=self._sink)
+        except Exception:
+            error_log = self._log_file(baseline_cache_dir, "error.log")
+            error_log.write_text(traceback.format_exc())
+            log(
+                "⚠️ TorchEager baseline failed (log: %s), performance check skipped",
+                error_log,
+                sink=self._sink,
+            )
 
     def _tune(
         self,
@@ -120,40 +170,48 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
             graph_spec.name,
             sink=self._sink,
         )
-        measurements = []
-        max_throughput_results = []
-
-        # Verify if model has batching
         batching = graph_spec.input_spec.has_batch_axis() and graph_spec.get_max_batch_size() > 1
-
-        # Note: As this strategy is extended with FindMaxBatchSizeMixin,
-        # we can assume that max batch size is included in the graph spec.
         max_batch_size = graph_spec.get_max_batch_size()
 
-        max_throughput_backend = None
-        max_throughput = 0
-        max_throughput_batch_size = 1
+        best = self._run_backends(module, name, graph_spec, data, device, cache_dir, batching, max_batch_size)
+        winner = self._resolve_winner(best)
+        winner.backend.activate()
+        log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)
+        log(
+            "✅ Selected %s for module %s and graph spec %s.",
+            winner.backend.describe(),
+            name,
+            graph_spec,
+            sink=self._sink,
+        )
+        log("   Batch size: %s, throughput: %.2f samples/s", winner.batch_size, winner.throughput, sink=self._sink)
+        return winner.backend
 
-        # Run all backends with given max batch size.
+    def _run_backends(
+        self,
+        module: nn.Module,
+        name: str,
+        graph_spec: GraphSpec,
+        data: list[Sample],
+        device: torch.device,
+        cache_dir: Path,
+        batching: bool,
+        max_batch_size: int,
+    ) -> _TuneCandidate | None:
+        """Builds, validates, and profiles each backend; returns the best candidate."""
+        best: _TuneCandidate | None = None
+
         for backend in self._backends:
             log_file = self._log_file(cache_dir / backend.key(), "build.log")
-
-            # _build_and_validate_backend appends to self.strategy_results
             built = self._build_and_validate_backend(backend, module, name, graph_spec, data, device, cache_dir)
             if built is None:
                 continue
-
             try:
-                batch_size, throughput, results = find_max_throughput_for_backend(
+                batch_size, throughput, _ = find_max_throughput_for_backend(
                     built, name, graph_spec, data, self._get_profiling_config(batching, max_batch_size)
                 )
-                max_throughput_results.append(
-                    MaxThroughputResult(
-                        max_batch_size=batch_size, throughput=throughput, backend_details=built.describe()
-                    )
-                )
-                measurements += results.entries
                 self.backend_results[-1].update(throughput=throughput, max_batch_size=batch_size)
+                report_backend_throughput(built.describe(), throughput)
                 log(
                     "✅ backend profiled - throughput: %.2f samples/s, batch size: %s",
                     throughput,
@@ -161,8 +219,8 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
                     depth=2,
                     sink=self._sink,
                 )
-
-                if max_throughput_backend is None or throughput > max_throughput:
+                self._record_perf_result(built, throughput)
+                if best is None or throughput > best.throughput:
                     log(
                         "🎯 new best throughput for %s is %.2f samples/s, batch size: %s",
                         built.describe(),
@@ -171,43 +229,80 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
                         depth=2,
                         sink=self._sink,
                     )
-                    max_throughput_backend = built
-                    max_throughput = throughput
-                    max_throughput_batch_size = batch_size
-
+                    best = _TuneCandidate(backend=built, throughput=throughput, batch_size=batch_size)
             except Exception:
                 if built.is_active:
                     built.deactivate()
                 log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
 
-        if max_throughput_backend is None:
+        return best
+
+    def _record_perf_result(self, backend: Backend, throughput: float) -> None:
+        """Appends a PerformanceValidationMixinResult for the given backend if a baseline is available."""
+        if self._baseline_throughput is None or self._baseline_throughput <= 0:
+            return
+        speedup = throughput / self._baseline_throughput
+        self.perf_validation_results.append(
+            PerformanceValidationMixinResult(
+                backend_description=backend.describe(),
+                throughput=throughput,
+                baseline_throughput=self._baseline_throughput,
+                speedup=speedup,
+                passed=speedup >= 1.0,
+            )
+        )
+
+    def _resolve_winner(self, best: _TuneCandidate | None) -> _TuneCandidate:
+        """Returns the winning candidate, falling back to the TorchEager baseline when appropriate."""
+        use_baseline = (
+            self._validate_against_baseline
+            and self._baseline_backend is not None
+            and self._baseline_throughput is not None
+            and (best is None or best.throughput < self._baseline_throughput)
+        )
+        if use_baseline:
+            reason = (
+                "no user backend succeeded"
+                if best is None
+                else f"best user backend ({best.throughput:.2f} samples/s) slower than baseline"
+            )
             log(
-                "ℹ️ No correct backend found with throughput %f > 0. Backends considered: %s",
-                max_throughput,
-                ", ".join([backend.describe() for backend in self._backends]),
+                "ℹ️ Falling back to TorchEager baseline (%.2f samples/s): %s",
+                self._baseline_throughput,
+                reason,
+                sink=self._sink,
+            )
+            return _TuneCandidate(
+                backend=self._baseline_backend,
+                throughput=self._baseline_throughput,
+                batch_size=self._baseline_batch_size or 1,
+            )
+        if best is None:
+            log(
+                "ℹ️ No correct backend found with throughput > 0. Backends considered: %s",
+                ", ".join([b.describe() for b in self._backends]),
                 sink=self._sink,
             )
             raise RuntimeError("No correct backend found with throughput > 0")
+        return best
 
-        self.results.append(
-            MaxThroughputStrategyResult(
-                graph_spec_name=graph_spec.name,
-                max_throughput_results=max_throughput_results,
-                measurements=measurements,
-            )
+    def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, data: list[Sample]):
+        """Emits a speedup line after tuning completes."""
+        if backend is None:
+            return
+        result = next(
+            (r for r in self.perf_validation_results if r.backend_description == backend.describe()),
+            None,
         )
-        max_throughput_backend.activate()
-        log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)
-        log(
-            "✅ Selected %s for module %s and graph spec %s.",
-            max_throughput_backend.describe(),
-            name,
-            graph_spec,
-            sink=self._sink,
-        )
-        log("   Batch size: %s, throughput: %.2f samples/s", max_throughput_batch_size, max_throughput, sink=self._sink)
-
-        return max_throughput_backend
+        if result is None:
+            return
+        detail = f"{result.baseline_throughput:.2f} → {result.throughput:.2f} samples/s"
+        msg_short = fmt_speedup_msg(result.speedup, detail, name, backend.describe())
+        if self._logger.isEnabledFor(logging.INFO):
+            log(msg_short, sink=self._sink)
+        else:
+            msg_full = f"[AITune] {msg_short}"
+            log(msg_full, sink=self._logger.warning)
 
     def _get_profiling_config(self, batching: bool, max_batch_size: int) -> ProfilingConfig:
         """Gets profiling configuration."""
@@ -230,7 +325,6 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
             TorchTensorRTAotBackend(),
             ONNXRuntimeBackend(),
             ONNXRuntimeBackend(config=ONNXRuntimeBackendConfig(use_dynamo=False)),
-            TorchEagerBackend(),
         ]
 
     def _describe_parts(self) -> list[str]:

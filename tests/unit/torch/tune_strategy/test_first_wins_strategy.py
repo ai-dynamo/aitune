@@ -268,7 +268,8 @@ def test_first_wins_accepts_slow_backend_when_gate_disabled(
     slow_backend.__deepcopy__ = lambda _, memo=None: slow_backend
     slow_backend.build.return_value = slow_backend
 
-    strategy = FirstWinsStrategy([slow_backend], validate_against_baseline=False)
+    strategy = FirstWinsStrategy([slow_backend])
+    strategy.enable_validate_against_baseline(False)
     strategy._describe = MagicMock()
     strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)

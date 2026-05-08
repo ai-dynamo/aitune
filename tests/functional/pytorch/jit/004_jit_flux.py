@@ -9,7 +9,7 @@
 # use_gated_hf_token = true
 # ///
 import re
-from logging import INFO, basicConfig, getLogger
+from logging import getLogger
 from time import perf_counter
 
 import torch
@@ -81,5 +81,5 @@ def test_jit_flux():
 
 
 if __name__ == "__main__":
-    basicConfig(level=INFO, force=True)
+    # basicConfig(level=INFO, force=True)
     test_jit_flux()

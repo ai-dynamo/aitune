@@ -45,7 +45,8 @@ def test_max_throughput_strategy_to_json_dict():
     backend_b = MagicMock(spec=Backend)
     backend_b.describe.return_value = "BackendB"
 
-    strategy = MaxThroughputStrategy(backends=[backend_a, backend_b], validate_against_baseline=False)
+    strategy = MaxThroughputStrategy(backends=[backend_a, backend_b])
+    strategy.enable_validate_against_baseline(False)
     result = strategy.to_json_dict()
 
     assert result == {

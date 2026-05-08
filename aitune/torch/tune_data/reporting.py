@@ -199,6 +199,23 @@ def report_graph_tune(graph_spec: GraphSpec, strategy: TuneStrategy):
         _flush_active_report()
 
 
+def report_graph_baseline_throughput(throughput: float) -> None:
+    """Record the TorchEager baseline throughput on the active graph report."""
+    graph = _active_graph.get()
+    if graph is not None:
+        graph.baseline_throughput = throughput
+
+
+def report_backend_throughput(backend_description: str, throughput: float) -> None:
+    """Record profiled throughput on the matching backend build report in the active graph."""
+    graph = _active_graph.get()
+    if graph is None:
+        return
+    build = next((b for b in graph.backend_builds if b.backend == backend_description), None)
+    if build is not None:
+        build.throughput = throughput
+
+
 @contextmanager
 def report_backend_build(backend: Backend, log_file: Path | None = None):
     """Context manager that records a backend-build span in the report."""

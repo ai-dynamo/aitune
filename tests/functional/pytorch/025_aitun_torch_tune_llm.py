@@ -71,12 +71,15 @@ def tune_model(model, tokenizer, cache="static"):
             ),  # just one strategy, there is no prefill/decode distinction
         )
     elif cache == "static":
+        _decode_strategy = OneBackendStrategy(TorchInductorJitBackend())
+        _decode_strategy.enable_validate_against_baseline(False)
+        _decode_strategy.enable_find_max_batch_size(False)
         model = Module(
             model,
             model.__class__.__name__,
             strategies=[
                 OneBackendStrategy(TorchEagerBackend()).enable_find_max_batch_size(False),  # for prefill phase
-                OneBackendStrategy(TorchInductorJitBackend()).enable_find_max_batch_size(False),  # for decode phase
+                _decode_strategy,  # for decode phase
             ],
         )
 

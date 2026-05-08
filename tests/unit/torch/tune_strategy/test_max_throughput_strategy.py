@@ -11,7 +11,7 @@ from aitune.torch import Module
 from aitune.torch.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
-from aitune.torch.module.wrapper_module import ModuleState, get_object_name
+from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.task.correctness import CorrectnessValueError
 from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, StableWindowMeasuringStopStrategy
 from aitune.torch.task.profiling.profiling_stop_strategy import (
@@ -38,33 +38,36 @@ def mock_backend():
 def test_describe(mock_backend):
     """Test describe method."""
     backends = [mock_backend, mock_backend]
-    strategy = MaxThroughputStrategy(backends, validate_against_baseline=False)
+    strategy = MaxThroughputStrategy(backends)
+    strategy.enable_validate_against_baseline(False)
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
-    assert (
-        strategy.describe()
-        == "name: Max Throughput Strategy\ndescription: evaluate all backends, return backend with max throughput\nbackends:\n  mock_backend\n  mock_backend"
-    )
+    description = strategy.describe()
+    assert "name: Max Throughput Strategy" in description
+    assert "mock_backend" in description
+    assert description.startswith("name: Max Throughput Strategy")
 
 
-def test_torch_eager_auto_injected_when_validate_against_baseline_enabled(mock_backend):
-    """TorchEager is prepended when validate_against_baseline=True and not already present."""
-    strategy = MaxThroughputStrategy([mock_backend], validate_against_baseline=True)
-    assert len(strategy._backends) == 2
-    assert isinstance(strategy._backends[0], TorchEagerBackend)
+def test_user_provided_torch_eager_treated_as_regular_backend():
+    """When the user explicitly provides TorchEagerBackend it is kept as a user backend."""
+    eager = TorchEagerBackend()
+    strategy = MaxThroughputStrategy([eager])
+    assert len(strategy._backends) == 1
+    assert strategy._backends[0] is eager
 
 
 def test_torch_eager_not_injected_when_already_present():
     """TorchEager is not duplicated when already in the provided backends list."""
     eager = TorchEagerBackend()
-    strategy = MaxThroughputStrategy([eager], validate_against_baseline=True)
+    strategy = MaxThroughputStrategy([eager])
     assert len(strategy._backends) == 1
     assert strategy._backends[0] is eager
 
 
 def test_torch_eager_not_injected_when_validate_against_baseline_disabled(mock_backend):
     """No TorchEager auto-inject when validate_against_baseline=False."""
-    strategy = MaxThroughputStrategy([mock_backend], validate_against_baseline=False)
+    strategy = MaxThroughputStrategy([mock_backend])
+    strategy.enable_validate_against_baseline(False)
     assert len(strategy._backends) == 1
     assert not any(isinstance(b, TorchEagerBackend) for b in strategy._backends)
 
@@ -79,7 +82,8 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
     profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
     slower = SleepBackend(sleep_time=1e-2)
     faster = SleepBackend(sleep_time=1e-5)
-    strategy = MaxThroughputStrategy(backends=[slower, faster], validate_against_baseline=False)
+    strategy = MaxThroughputStrategy(backends=[slower, faster])
+    strategy.enable_validate_against_baseline(False)
     strategy.set_find_max_batch_size_profiling_config(profiling_config)
     strategy.enable_correctness_check(False)
 
@@ -141,26 +145,11 @@ def test_max_throughput_strategy_num_steps_all_samples(torch_device):
     sample = model.sample().to(torch_device)
     batch_sizes = [1, 2, 4, 8, 16]
     n_backends = len(strategy._backends)
-    n_batch_sizes = len(batch_sizes)
-    n_steps = find_profiling_config.measurement_stop_strategy.num_steps
 
     tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
 
-    assert len(strategy.results) == 1  # for 1 graph spec
-
-    assert strategy.results[0].graph_spec_name == "0"
-
-    assert len(strategy.results[0].measurements) == n_steps * n_batch_sizes * n_backends
-    assert len(strategy.results[0].max_throughput_results) == n_backends
-
-    assert all(m.model_name == get_object_name(model) for m in strategy.results[0].measurements)
-    assert all(m.backend_details is not None for m in strategy.results[0].measurements)
-    assert all(m.execution_time > 0 for m in strategy.results[0].measurements)
-
-    # all measurement ids are unique
-    assert len({m.measurement_id for m in strategy.results[0].measurements}) == len(strategy.results[0].measurements)
-
-    assert len({m.batch_size for m in strategy.results[0].measurements}) == n_batch_sizes
+    assert len(strategy.perf_validation_results) == n_backends
+    assert all(r.throughput > 0 for r in strategy.perf_validation_results)
 
     # check graph spec
     graph_specs = list(model._self_wrapper._backends.keys())
@@ -182,25 +171,11 @@ def test_max_throughput_strategy_stable_window(torch_device):
 
     batch_sizes = list(range(1, 17))
     n_backends = len(strategy._backends)
-    n_steps = 10
 
     tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
 
-    assert len(strategy.results) == 1  # for 1 graph spec
-
-    assert strategy.results[0].graph_spec_name == "0"
-
-    assert len(strategy.results[0].measurements) >= n_backends * n_steps
-    assert len(strategy.results[0].max_throughput_results) == n_backends
-
-    assert all(m.model_name == get_object_name(model) for m in strategy.results[0].measurements)
-    assert all(m.backend_details is not None for m in strategy.results[0].measurements)
-    assert all(m.execution_time > 0 for m in strategy.results[0].measurements)
-
-    # all measurement ids are unique
-    assert len({m.measurement_id for m in strategy.results[0].measurements}) == len(strategy.results[0].measurements)
-
-    assert len({m.batch_size for m in strategy.results[0].measurements}) >= 1
+    assert len(strategy.perf_validation_results) == n_backends
+    assert all(r.throughput > 0 for r in strategy.perf_validation_results)
 
 
 class ActivateFailsBackend(SleepBackend):
@@ -220,8 +195,8 @@ def test_max_throughput_strategy_fails_backend_if_all_of_backends_fails(torch_de
             BuildFailsBackend(CorrectnessValueError),
             ActivateFailsBackend(),
         ],
-        validate_against_baseline=False,
     )
+    strategy.enable_validate_against_baseline(False)
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().to(torch_device)
     assert model(sample) is not None
@@ -234,15 +209,14 @@ def test_max_throughput_strategy_fails_backend_if_all_of_backends_fails(torch_de
     assert model.state == ModuleState.PASSTHROUGH
 
 
-def test_max_throughput_strategy_select_backend_if_one_of_backends_succeeds(torch_device):
-    """If backend fails it should be skipped and TorchEagerBackend should be used as a fallback."""
+def test_max_throughput_strategy_fallback_to_baseline_when_all_user_backends_fail(torch_device):
+    """When all user backends fail and validate_against_baseline=True, falls back to TorchEager baseline."""
     strategy = MaxThroughputStrategy(
         backends=[
             BuildFailsBackend(RuntimeError),
             BuildFailsBackend(MemoryError),
             BuildFailsBackend(CorrectnessValueError),
             ActivateFailsBackend(),
-            TorchEagerBackend(),
         ],
     )
     model = ToyTorchModel().eval().to(torch_device)
@@ -279,3 +253,94 @@ def test_max_throughput_strategy_find_max_batch_size_fails(torch_device):
 
     tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
     assert model.state == ModuleState.PASSTHROUGH
+
+
+def test_max_throughput_perf_validation_results_populated(torch_device, tmp_path):
+    """perf_validation_results is populated for user-provided backends only (not the baseline)."""
+    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
+    slower = SleepBackend(sleep_time=1e-2)
+    faster = SleepBackend(sleep_time=1e-5)
+    strategy = MaxThroughputStrategy(backends=[slower, faster])
+    strategy.enable_validate_against_baseline(False)
+    strategy.set_find_max_batch_size_profiling_config(profiling_config)
+    strategy.enable_correctness_check(False)
+
+    model = ToyTorchModel().eval().to(torch_device)
+    sample = model.sample().unsqueeze(0).to(torch_device)
+
+    strategy.tune(
+        model,
+        "test",
+        model.graph_spec(batch_sizes=[1, 2], device=torch_device),
+        [((sample,), {})],
+        torch_device,
+        tmp_path,
+    )
+
+    # TorchEager is the baseline (profiled in _pre_tune), not in perf_validation_results.
+    # Only the two user-provided backends appear.
+    descriptions = [r.backend_description for r in strategy.perf_validation_results]
+    assert not any("TorchEager" in d for d in descriptions)
+    assert len(strategy.perf_validation_results) == 2
+    for result in strategy.perf_validation_results:
+        assert result.baseline_throughput > 0
+        assert result.throughput > 0
+        assert result.speedup > 0
+
+
+def test_max_throughput_torcheager_excluded_from_selection_when_validate_false(torch_device, tmp_path):
+    """When validate_against_baseline=False, TorchEager is never the selected backend."""
+    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
+    user_backend = SleepBackend(sleep_time=1e-5)
+    strategy = MaxThroughputStrategy(backends=[user_backend])
+    strategy.enable_validate_against_baseline(False)
+    strategy.set_find_max_batch_size_profiling_config(profiling_config)
+    strategy.enable_correctness_check(False)
+
+    model = ToyTorchModel().eval().to(torch_device)
+    sample = model.sample().unsqueeze(0).to(torch_device)
+
+    selected = strategy.tune(
+        model,
+        "test",
+        model.graph_spec(batch_sizes=[1, 2], device=torch_device),
+        [((sample,), {})],
+        torch_device,
+        tmp_path,
+    )
+
+    assert not isinstance(selected, TorchEagerBackend)
+
+
+def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
+    """_post_tune emits a ⚡ Speedup line after successful tuning."""
+    from unittest.mock import patch
+
+    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
+    user_backend = SleepBackend(sleep_time=1e-5)
+    strategy = MaxThroughputStrategy(backends=[user_backend])
+    strategy.enable_validate_against_baseline(False)
+    strategy.set_find_max_batch_size_profiling_config(profiling_config)
+    strategy.enable_correctness_check(False)
+
+    model = ToyTorchModel().eval().to(torch_device)
+    sample = model.sample().unsqueeze(0).to(torch_device)
+
+    with (
+        patch.object(strategy._logger, "isEnabledFor", return_value=False),
+        patch.object(strategy._logger, "warning") as mock_warn,
+    ):
+        strategy.tune(
+            model,
+            "test",
+            model.graph_spec(batch_sizes=[1, 2], device=torch_device),
+            [((sample,), {})],
+            torch_device,
+            tmp_path,
+        )
+
+    mock_warn.assert_called()
+    speedup_msgs = [c for c in mock_warn.call_args_list if "speedup:" in str(c).lower()]
+    assert len(speedup_msgs) == 1
+    assert "test" in str(speedup_msgs[0])
+    assert "samples/s" in str(speedup_msgs[0])

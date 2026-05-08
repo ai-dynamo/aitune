@@ -149,7 +149,8 @@ def test_one_backend_returns_slow_backend_when_gate_disabled(
     mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path
 ):
     """When validate_against_baseline=False, slow backend is returned directly (not TorchEager)."""
-    strategy = OneBackendStrategy(mock_backend, validate_against_baseline=False)
+    strategy = OneBackendStrategy(mock_backend)
+    strategy.enable_validate_against_baseline(False)
     strategy._describe = MagicMock()
     strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)

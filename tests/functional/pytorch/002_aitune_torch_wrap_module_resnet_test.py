@@ -40,6 +40,7 @@ def test_resnet50():
 
     # then - verify tuning
     strategy = OneBackendStrategy(TorchInductorJitBackend())
+    strategy.enable_validate_against_baseline(False)
     module.tune(device=device, strategy=strategy, dry_run=False)
     out = module(data)
     actual_probs = torch.nn.functional.softmax(out[0], dim=0)

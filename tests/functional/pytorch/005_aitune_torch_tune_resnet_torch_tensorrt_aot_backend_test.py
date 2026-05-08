@@ -39,9 +39,10 @@ def do_test(backend: TorchTensorRTAotBackend, dtype: torch.dtype, device: str):
 
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 
-    module = Module(
-        model, "functional-resnet18", strategy=OneBackendStrategy(backend).enable_find_max_batch_size(False)
-    )
+    strategy = OneBackendStrategy(backend)
+    strategy.enable_validate_against_baseline(False)
+    strategy.enable_find_max_batch_size(False)
+    module = Module(model, "functional-resnet18", strategy=strategy)
 
     # when
     tune(module, [data], batch_sizes=[1, 2, 4, 8], dry_run=False, device=device, disable_external_logging=False)

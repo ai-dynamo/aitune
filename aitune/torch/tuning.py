@@ -133,7 +133,9 @@ def save(
         >>> doctest.ELLIPSIS_MARKER = "***" # using *** instead of ... to avoid doctest failure
         >>> import aitune.torch as ait
         >>> from torch.nn import Linear
-        >>> model = ait.Module(Linear(10, 10), "model", strategy=ait.FirstWinsStrategy([ait.backend.TorchEagerBackend()], validate_against_baseline=False))
+        >>> strategy = ait.FirstWinsStrategy([ait.backend.TorchEagerBackend()])
+        >>> _ = strategy.enable_validate_against_baseline(False)
+        >>> model = ait.Module(Linear(10, 10), "model", strategy=strategy)
         >>> dataset = torch.randn(10, 10)
         >>> ait.tune(model, dataset, batch_sizes=[1, 2], device="cpu") # doctest: +ELLIPSIS
         ***🎯 Tuning module: `model` (all graphs)***

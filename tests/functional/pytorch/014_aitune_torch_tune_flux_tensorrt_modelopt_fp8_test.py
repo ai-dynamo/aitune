@@ -117,6 +117,8 @@ def test_flux_tensorrt_modelopt_fp8():
                     TorchEagerBackend(),
                 ]
             )
+            # Disable validation against baseline (TorchEager)
+            strategy.enable_validate_against_baseline(False)
             # Disable automatic batch size finding for more predictable behavior
             strategy.enable_find_max_batch_size(enable=False)
 

@@ -45,6 +45,7 @@ class BackendBuildReport:
     build_results: list[dict[str, Any]] | None = None
     log_file: str | None = None
     exception: ExceptionInfo | None = None
+    throughput: float | None = None
 
 
 @dataclass(kw_only=True)
@@ -61,6 +62,7 @@ class GraphTuneReport:
     strategy_results: list[dict[str, Any]] | None = None
     exception: ExceptionInfo | None = None
     backend_builds: list[BackendBuildReport] = field(default_factory=list)
+    baseline_throughput: float | None = None
 
 
 @dataclass(kw_only=True)

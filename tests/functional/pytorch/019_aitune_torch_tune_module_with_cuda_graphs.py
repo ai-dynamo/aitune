@@ -39,10 +39,13 @@ def test_custom_module_with_cuda_graphs():
     backend = TensorRTBackend(config=config)
 
     # when - create module and tune with CUDA graphs enabled
+    strategy = OneBackendStrategy(backend)
+    strategy.enable_validate_against_baseline(False)
+    strategy.enable_find_max_batch_size(False)
     module = Module(
         model,
         "functional-custom-module-cuda-graphs",
-        strategy=OneBackendStrategy(backend, validate_against_baseline=False).enable_find_max_batch_size(False),
+        strategy=strategy,
     )
 
     # Verify recording works

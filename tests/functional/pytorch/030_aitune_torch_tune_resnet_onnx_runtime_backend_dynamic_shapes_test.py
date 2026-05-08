@@ -54,7 +54,9 @@ def test_tune_resnet_onnx_runtime_dynamic_shapes():
         expected_256 = torch.nn.functional.softmax(model(data_256.unsqueeze(0))[0], dim=0)
 
     try:
-        strategy = OneBackendStrategy(ONNXRuntimeBackend()).enable_find_max_batch_size(False)
+        strategy = OneBackendStrategy(ONNXRuntimeBackend())
+        strategy.enable_validate_against_baseline(False)
+        strategy.enable_find_max_batch_size(False)
         module = Module(model, "functional-resnet18-onnx-dynamic", strategy=strategy)
 
         # batch_sizes=[1] prevents cross-sample stacking so the two spatial sizes

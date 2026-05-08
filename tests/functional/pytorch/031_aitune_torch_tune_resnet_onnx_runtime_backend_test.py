@@ -37,9 +37,9 @@ def do_test(backend: ONNXRuntimeBackend):
         out = model(data.unsqueeze(0))
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 
-    module = Module(
-        model, "functional-resnet18-onnx", strategy=OneBackendStrategy(backend, validate_against_baseline=False)
-    )
+    strategy = OneBackendStrategy(backend)
+    strategy.enable_validate_against_baseline(False)
+    module = Module(model, "functional-resnet18-onnx", strategy=strategy)
     tune(
         module,
         data,

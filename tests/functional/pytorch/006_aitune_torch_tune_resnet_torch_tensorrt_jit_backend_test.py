@@ -39,7 +39,9 @@ def do_test(backend: TorchTensorRTJitBackend, dtype: torch.dtype):
         out = model(sample)
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 
-    module = Module(model, "functional-resnet18", strategy=OneBackendStrategy(backend))
+    strategy = OneBackendStrategy(backend)
+    strategy.enable_validate_against_baseline(False)
+    module = Module(model, "functional-resnet18", strategy=strategy)
     # when
     tune(module, data, batch_sizes=[2, 1], dry_run=False, disable_external_logging=False)
     # then - verify tuning
