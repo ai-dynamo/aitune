@@ -238,7 +238,7 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
             indicator = "▲ faster" if passed else "▼ slower"
 
         log(
-            "📊 %s: throughput=%.2f samples/s, speedup=%.2f (%s)",
+            "📊 %s: throughput=%.2f samples/s, speedup=%.2fx (%s)",
             description,
             throughput,
             speedup,
