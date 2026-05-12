@@ -13,7 +13,6 @@ from aitune.torch import MaxThroughputStrategy, TuneStrategy, inspect, save, tun
 from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchEagerBackend,
     TorchInductorJitBackend,
     TorchInductorJitBackendConfig,
 )
@@ -49,7 +48,6 @@ def tune_model(
             TensorRTBackend(),
             TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
             TorchInductorJitBackend(TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)),
-            TorchEagerBackend(),
         ]
     ).enable_find_max_batch_size(False)
 

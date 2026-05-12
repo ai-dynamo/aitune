@@ -8,7 +8,13 @@ import torch.nn as nn
 from torchao.quantization import Int8WeightOnlyConfig
 from torchao.utils import is_sm_at_least_89
 
-from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendConfig
+from aitune.torch.backend.torchao_backend import (
+    MX_FORMATS_AVAILABLE,
+    MXFP8DQ_BLOCK_SIZE_DIVISIBILITY,
+    NVFP4DQ_BLOCK_SIZE_DIVISIBILITY,
+    TorchAOBackend,
+    TorchAOBackendConfig,
+)
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
@@ -75,6 +81,24 @@ def test_torchao_config_initialization():
         TorchAOBackendConfig()
 
 
+def skip_if_unsupported(quantization, model=None):
+    if quantization in ["fp8wo", "fp8dq"] and not is_sm_at_least_89():
+        pytest.skip("fp8wo and fp8dq are not supported on this device")
+    if quantization in ["mxfp8dq", "nvfp4dq"] and not MX_FORMATS_AVAILABLE:
+        pytest.skip("mxfp8dq and nvfp4dq require torchao MX formats and sm100+ (Blackwell) GPU")
+    if quantization == "mxfp8dq" and model is not None:
+        for name, param in model.named_parameters():
+            if param.ndim >= 2 and param.shape[-1] % MXFP8DQ_BLOCK_SIZE_DIVISIBILITY != 0:
+                pytest.skip(
+                    f"mxfp8dq requires weight last dim divisible by block_size 32: {name} has shape {param.shape}"
+                )
+    if quantization == "nvfp4dq" and model is not None:
+        block = NVFP4DQ_BLOCK_SIZE_DIVISIBILITY
+        for name, param in model.named_parameters():
+            if param.ndim >= 2 and (param.shape[-1] % block != 0 or param.shape[-2] % block != 0):
+                pytest.skip(f"nvfp4dq requires last 2 weight dims divisible by {block}: {name} has shape {param.shape}")
+
+
 def do_test_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
     """Helper function to test backend with given dtype data.
 
@@ -102,8 +126,11 @@ def do_test_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
     ids=["bfloat16", "float16", "float32"],
 )
 def test_torchao_backend_build(quantization, dtype, model, sample_data, torch_device, tmp_path):
-    if quantization in ["fp8wo", "fp8dq"] and not is_sm_at_least_89():
-        pytest.skip("fp8wo and fp8dq are not supported on this device")
+    skip_if_unsupported(quantization, model)
+    if quantization == "mxfp8dq" and dtype != torch.bfloat16:
+        pytest.skip("mxfp8dq only supports bfloat16")
+    if quantization == "nvfp4dq" and dtype != torch.bfloat16:
+        pytest.skip("nvfp4dq only supports bfloat16")
 
     config = TorchAOBackendConfig(quantization=quantization)
     backend = TorchAOBackend(config=config)
@@ -130,9 +157,8 @@ def test_invalid_quantization_type():
 @requires_cuda
 @pytest.mark.parametrize("quantization", TorchAOBackendConfig._QUANTIZATION_CONFIGS.keys())
 def test_serialization(quantization, tmp_path, model, sample_data, torch_device):
-    dtype = torch.float16
-    if quantization in ["fp8wo", "fp8dq"] and not is_sm_at_least_89():
-        pytest.skip("fp8wo and fp8dq are not supported on this device")
+    skip_if_unsupported(quantization, model)
+    dtype = torch.bfloat16 if quantization in ("mxfp8dq", "nvfp4dq") else torch.float16
 
     if quantization == "fp8dq" and torch.cuda.get_device_capability() == (9, 0):
         pytest.skip("fp8dq is unstable on H100")

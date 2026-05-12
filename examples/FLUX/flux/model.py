@@ -18,6 +18,6 @@ def get_pipeline(model_name: str = MODEL_NAME, device: str = "cuda"):
     Returns:
         FluxPipeline: The loaded Flux pipeline
     """
-    pipe = FluxPipeline.from_pretrained(model_name, torch_dtype=torch.float16).to(device, dtype=torch.float16)
+    pipe = FluxPipeline.from_pretrained(model_name, torch_dtype=torch.bfloat16).to(device)
     torch.cuda.empty_cache()
     return pipe

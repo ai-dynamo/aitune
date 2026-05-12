@@ -6,7 +6,7 @@ import logging
 import os
 
 from aitune.torch import FirstWinsStrategy, inspect, save, tune, wrap
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorJitBackend
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorJitBackend
 from stable_diffusion.cmd_args import parse_args
 from stable_diffusion.model import get_pipeline
 
@@ -39,7 +39,6 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
                 TensorRTBackend(),
                 TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
                 TorchInductorJitBackend(),
-                TorchEagerBackend(),
             ]
         )
         strategy.enable_find_max_batch_size(enable=False)

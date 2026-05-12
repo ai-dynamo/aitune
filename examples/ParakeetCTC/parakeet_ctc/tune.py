@@ -13,7 +13,6 @@ from aitune.torch import FirstWinsStrategy, TuneStrategy, inspect, save, tune, w
 from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchEagerBackend,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
 )
@@ -87,7 +86,6 @@ def main():
             TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
             TorchInductorAotBackend(),
             TorchInductorJitBackend(),
-            TorchEagerBackend(),
         ]
     )
     strategy.enable_find_max_batch_size(enable=False)

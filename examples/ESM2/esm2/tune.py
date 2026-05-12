@@ -8,7 +8,7 @@ import torch
 from transformers import AutoTokenizer, EsmForMaskedLM
 
 import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchEagerBackend, TorchInductorJitBackend
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorJitBackend
 
 DEVICE = torch.device("cuda")
 MODEL_NAME = "facebook/esm2_t33_650M_UR50D"
@@ -60,7 +60,6 @@ def tune(
                 TensorRTBackend(),
                 TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
                 TorchInductorJitBackend(),
-                TorchEagerBackend(),
             ]
         )
         strategy.enable_find_max_batch_size(enable=False)

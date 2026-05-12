@@ -11,7 +11,8 @@ import aitune.torch as ait
 from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchEagerBackend,
+    TorchAOBackend,
+    TorchAOBackendConfig,
     TorchInductorJitBackend,
     TorchQuantizationConfig,
 )
@@ -19,6 +20,28 @@ from flux.cmd_args import parse_args
 from flux.model import get_pipeline
 
 logger = getLogger(__name__)
+
+
+def filter_fn(mod, fqn):
+    """Filter function for Flux.
+
+    Adapter from:
+    - Source code: https://github.com/sayakpaul/diffusers-blackwell-quants/blob/9fefb0744ca6eef03d558728f4ee74304978da76/benchmark.py#L194
+    - Blog post: https://pytorch.org/blog/faster-diffusion-on-blackwell-mxfp8-and-nvfp4-with-diffusers-and-torchao/
+    """
+    import torch
+
+    if not isinstance(mod, torch.nn.Linear):
+        return False
+    elif "embed" in fqn:
+        return False
+    elif fqn == "norm_out.linear":
+        return False
+    elif fqn == "proj_out":
+        return False
+    elif mod.in_features < 1024 or mod.out_features < 1024:
+        return False
+    return True
 
 
 def tune_model(
@@ -30,7 +53,6 @@ def tune_model(
     max_sequence_length,
     tuned_model_path,
     batch_sizes=None,
-    strategy=None,
 ):
     """Tune the Flux model.
 
@@ -43,7 +65,6 @@ def tune_model(
         max_sequence_length: Maximum sequence length
         tuned_model_path: Path to save the tuned model
         batch_sizes: List of batch sizes to tune
-        strategy: AITune strategy to use
     """
     pipe = get_pipeline(model_name=model_name)
 
@@ -53,29 +74,69 @@ def tune_model(
     modules_info = ait.inspect(pipe, input_data, number_of_iterations=1, warmup_iterations=2)
 
     # Define strategy if not provided
-    if strategy is None:
-        strategy = ait.FirstWinsStrategy(
-            backends=[
-                TensorRTBackend(
-                    TensorRTBackendConfig(
-                        quantization_config=TorchQuantizationConfig(
-                            quantization_config="FP8_DEFAULT_CFG",
-                            device="cuda",
-                        ),
-                        use_dynamo=False,
-                    )
-                ),
-                # TensorRTBackend(TensorRTBackendConfig(use_dynamo=True)),
-                TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
-                TorchInductorJitBackend(),
-                TorchEagerBackend(),
-            ]
-        )
-    strategy.enable_find_max_batch_size(enable=False)
 
-    # Wrap all modules with AITune Module
-    modules = modules_info.get_modules()
-    pipe = ait.wrap(pipe, modules, strategy=strategy)
+    strategy_nvfp4 = ait.FirstWinsStrategy(
+        backends=[
+            TorchAOBackend(TorchAOBackendConfig(quantization="nvfp4dq", filter_fn=filter_fn)),
+            TensorRTBackend(
+                TensorRTBackendConfig(
+                    quantization_config=TorchQuantizationConfig(
+                        quantization_config="FP8_DEFAULT_CFG",
+                        device="cuda",
+                    ),
+                )
+            ),
+            TensorRTBackend(
+                TensorRTBackendConfig(
+                    quantization_config=TorchQuantizationConfig(
+                        quantization_config="FP8_DEFAULT_CFG",
+                        device="cuda",
+                    ),
+                    use_dynamo=False,
+                )
+            ),
+            TorchAOBackend(TorchAOBackendConfig(quantization="fp8dq")),
+            TensorRTBackend(TensorRTBackendConfig(use_dynamo=True)),
+            TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
+            TorchInductorJitBackend(),
+        ]
+    )
+    strategy_fp8 = ait.FirstWinsStrategy(
+        backends=[
+            TensorRTBackend(
+                TensorRTBackendConfig(
+                    quantization_config=TorchQuantizationConfig(
+                        quantization_config="FP8_DEFAULT_CFG",
+                        device="cuda",
+                    ),
+                )
+            ),
+            TensorRTBackend(
+                TensorRTBackendConfig(
+                    quantization_config=TorchQuantizationConfig(
+                        quantization_config="FP8_DEFAULT_CFG",
+                        device="cuda",
+                    ),
+                    use_dynamo=False,
+                )
+            ),
+            TorchAOBackend(TorchAOBackendConfig(quantization="fp8dq")),
+            TensorRTBackend(TensorRTBackendConfig(use_dynamo=True)),
+            TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
+            TorchInductorJitBackend(),
+        ]
+    )
+
+    # Disable max batch size search
+    strategy_nvfp4.enable_find_max_batch_size(enable=False)
+    strategy_fp8.enable_find_max_batch_size(enable=False)
+
+    # Wrap all modules except transformer with fp8 strategy
+    modules = [m for m in modules_info.get_modules() if m.name != "transformer"]
+    pipe = ait.wrap(pipe, modules, strategy=strategy_fp8)
+
+    # Wrap transformer separately with nvfp4 strategy
+    pipe.transformer = ait.module.Module(pipe.transformer, name="transformer", strategy=strategy_nvfp4)
 
     def call_wrapper(*args, **kwargs):
         for height, width in sizes:

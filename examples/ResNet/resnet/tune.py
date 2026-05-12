@@ -16,7 +16,6 @@ from aitune.torch.backend import (
     TensorRTBackendConfig,
     TorchAOBackend,
     TorchAOBackendConfig,
-    TorchEagerBackend,
     TorchInductorJitBackend,
     TorchInductorJitBackendConfig,
 )
@@ -84,7 +83,6 @@ def tune_model(
                 TorchInductorJitBackend(
                     config=TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)
                 ),
-                TorchEagerBackend(),
             ]
         ).enable_find_max_batch_size(False),
     )

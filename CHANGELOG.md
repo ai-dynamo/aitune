@@ -11,6 +11,7 @@ SPDX-License-Identifier: Apache-2.0
 - feat: Deferred mode for Just-in-Time (JIT) tuning - explicit tuning trigger post whole pipeline or model pass, useful for image and video generation pipelines
 - feat: Torch Inductor Ahead-of-Time (AoT) backend support added
 - feat: ONNXRuntime backend support - CUDA and TensorRT execution providers
+- feat: Extend TorchAO backend for NVFP4DQ and MXFP8DQ dynamic quantization support
 - feat: Dynamo worker support - serve AITune-tuned models as Dynamo endpoints
 - feat: New hardware metrics collection via subprocess-based hardware monitor
 - feat: Hardware metrics output path can be configured via AITUNE_HARDWARE_METRICS_PATH environment variable
