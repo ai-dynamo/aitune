@@ -34,16 +34,17 @@ class Patcher:
     _intercepted_classes: set[type[torch.nn.Module]] = set()  # for tracking purposes
     _original_module_init: Callable | None = None
 
-    # Packages that should not be patched to avoid conflicts with JIT compilation
-    _exclude_packages = {
+    # Package prefixes that should not be patched (matched via ``startswith``).
+    # ``torch_tensorrt`` is excluded because the wrapt-decorated ``forward`` it
+    # would receive ends up in the compiled gm and breaks ``torch_tensorrt.save``.
+    _exclude_packages = (
         "torch.jit",
         "torch._inductor",
         "torch._dynamo",
         "torch.fx",
         "torch.export",
-        "torch.export._trace",
-        "torch.export._export",
-    }
+        "torch_tensorrt",
+    )
 
     # Container modules that should not be patched - they're organizational only, no computation
     # and can be created dynamically during forward passes via slicing
@@ -129,8 +130,10 @@ class Patcher:
             return False
 
         module_info = inspect.getmodule(module.__class__)
-        if module_info is not None and module_info.__package__ in cls._exclude_packages:
-            return False
+        if module_info is not None and module_info.__package__ is not None:
+            pkg = module_info.__package__
+            if any(pkg == p or pkg.startswith(p + ".") for p in cls._exclude_packages):
+                return False
         return True
 
     @classmethod

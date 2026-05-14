@@ -55,6 +55,31 @@ def test_is_allowed_to_tune():
     assert not Patcher._is_allowed_to_tune(Mock(spec=torch._dynamo.eval_frame.OptimizedModule))
 
 
+def test_is_allowed_to_tune_excludes_subpackage_classes(mocker):
+    """Exclusions are by prefix — classes nested under an excluded package are also rejected.
+
+    Regression for the wrapt-in-gm save crash: torch_tensorrt builds
+    ``torch_tensorrt.dynamo.runtime._TorchTensorRTModule.TorchTensorRTModule``
+    instances during compile and inserts them into the compiled gm. Wrapping
+    their ``forward`` with wrapt makes the subsequent ``torch_tensorrt.save``
+    deepcopy raise. The exclude check must therefore match by package prefix.
+    """
+    module = torch.nn.Module()
+    fake_module_info = Mock(__package__="torch_tensorrt.dynamo.runtime._TorchTensorRTModule")
+    mocker.patch("aitune.torch.jit.patcher.inspect.getmodule", return_value=fake_module_info)
+
+    assert not Patcher._is_allowed_to_tune(module)
+
+
+def test_is_allowed_to_tune_allows_unrelated_subpackage(mocker):
+    """A class whose package prefix is *not* in the exclude list stays tunable."""
+    module = torch.nn.Module()
+    fake_module_info = Mock(__package__="some.other.library")
+    mocker.patch("aitune.torch.jit.patcher.inspect.getmodule", return_value=fake_module_info)
+
+    assert Patcher._is_allowed_to_tune(module)
+
+
 def test_intercepted_classes():
     """Test intercepted_classes function."""
 
