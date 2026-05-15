@@ -94,6 +94,18 @@ class Patcher:
                 logger.error("Failed to tune module %s: %s", module.__class__.__name__, e)
 
     @classmethod
+    def patched_modules_under(cls, root: torch.nn.Module) -> list[PatchedModule | InspectModule]:
+        """Return patched modules registered under a root module's ownership tree.
+
+        AITune's PatchedModule children model the observed call hierarchy, which can miss
+        registered submodules that are not executed for the recorded samples. Backend build
+        paths still receive and may copy/export the full nn.Module ownership tree, so cleanup
+        at backend boundaries must operate on root.modules() instead of only observed children.
+        """
+        module_ids = {id(module) for module in root.modules()}
+        return [module for module in cls._patched_modules if id(module.__wrapped__) in module_ids]
+
+    @classmethod
     def unpatch_module(cls, module: PatchedModule | InspectModule):
         """Unpatch a module.
 
