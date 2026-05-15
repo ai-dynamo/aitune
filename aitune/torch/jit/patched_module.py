@@ -456,12 +456,18 @@ class PatchedModule:
         self.__wrapped__._forward_hooks = OrderedDict()
 
     def _set_original_forward_for_hierarchy(self):
-        """Set the original forward method for the module and its children."""
-        todo = [self]
-        while todo:
-            current = todo.pop()
+        """Set original forwards for all patched descendants in the module tree.
+
+        The PatchedModule child hierarchy tracks modules observed during execution. It does
+        not include registered submodules that were never called for the recorded samples
+        (for example eval-only Identity drop-path modules). Backends receive the full
+        nn.Module ownership tree, and some of them deepcopy/export that tree, so restore
+        every patched descendant before handing the module to a backend.
+        """
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        for current in Patcher.patched_modules_under(self.__wrapped__):
             current._restore_original_forward()
-            todo.extend(current._children)
 
     def _should_be_tuned(self) -> bool:
         """Check if the module should be tuned, dispatching based on the active JIT mode."""
