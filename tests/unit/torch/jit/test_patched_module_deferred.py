@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Test the patched module."""
 
+import copy
 import inspect
 import re
 from unittest.mock import Mock
@@ -45,6 +46,40 @@ def mock_trt_backend():
     # in case strategy does a deepcopy, return self
     mock_backend.__deepcopy__ = lambda _: mock_backend
     return mock_backend
+
+
+def test_set_original_forward_restores_unobserved_submodules():
+    """Backend-boundary cleanup restores patched modules outside the observed call tree."""
+
+    class ModelWithUnusedChild(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.used = torch.nn.Linear(2, 2)
+            self.unused = torch.nn.Identity()
+
+        def forward(self, x):
+            return self.used(x)
+
+    def is_wrapt_forward(forward):
+        return type(forward).__name__ == "FunctionWrapper"
+
+    config.mode = JITMode.TUNE_DEFERRED
+    with prepare_for_jit_tuning():
+        model = ModelWithUnusedChild()
+
+    model(torch.randn(1, 2))
+
+    assert len(PatchedModule.heads) == 1
+    assert is_wrapt_forward(model.unused.forward)
+    assert not any(child.__wrapped__ is model.unused for child in PatchedModule.heads[0]._children)
+
+    with pytest.raises(NotImplementedError, match="object proxy must define __deepcopy__"):
+        copy.deepcopy(model)
+
+    PatchedModule.heads[0]._set_original_forward_for_hierarchy()
+
+    assert not is_wrapt_forward(model.unused.forward)
+    copy.deepcopy(model)
 
 
 @requires_cuda
