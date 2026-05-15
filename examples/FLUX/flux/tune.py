@@ -6,6 +6,7 @@ import os
 from logging import basicConfig, getLogger
 
 import torch
+from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 
 import aitune.torch as ait
 from aitune.torch.backend import (
@@ -159,6 +160,8 @@ def tune_model(
 
     ait.save(pipe, tuned_model_path)
     logger.info("Model saved to %s", tuned_model_path)
+    relocated_path = copy_checkpoint_to_tmp(tuned_model_path)
+    logger.info("Checkpoint copied to %s", relocated_path)
 
 
 def main():

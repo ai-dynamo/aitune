@@ -41,11 +41,12 @@ class LoadTask(ABC):
     """Base class to load state dict."""
 
     @abstractmethod
-    def load(self, path: Path) -> dict:
+    def load(self, path: Path, state_dict: dict | None = None) -> dict:
         """Load a state dictionary from the specified path.
 
         Args:
             path: The path from where the state dictionary should be loaded.
+            state_dict: Accumulated state dictionary loaded by previous tasks.
 
         Returns:
             dict: The loaded state dictionary.
@@ -73,7 +74,7 @@ class TorchSaveTask(SaveTask):
 class TorchLoadTask(LoadTask):
     """Task to load a state dictionary using torch.load."""
 
-    def load(self, path: Path) -> dict:
+    def load(self, path: Path, state_dict: dict | None = None) -> dict:
         """Load a state dictionary from the specified path."""
         file_path = path / STATE_DICT_FILE
         if not file_path.exists():
@@ -117,6 +118,20 @@ class RemoveFolderTask(SaveTask):
             shutil.rmtree(path)
 
 
+def _iter_backend_data_dicts(state_dict: dict):
+    """Yield backend state dictionaries that may contain checkpoint artifacts."""
+    dicts_to_check = deque([state_dict])
+
+    while dicts_to_check:
+        current_dict = dicts_to_check.pop()
+        for property_name, value in current_dict.items():
+            if isinstance(value, dict):
+                dicts_to_check.append(value)
+            elif property_name == TunedModule.BACKENDS_KEY:
+                for _, backend_data in value:
+                    yield backend_data
+
+
 class CopyBackendArtifactsTask(SaveTask):
     """Task to copy backend artifacts."""
 
@@ -132,34 +147,25 @@ class CopyBackendArtifactsTask(SaveTask):
             target_path: The path where the backend artifacts should be copied.
             state_dict: The state dictionary to traverse.
         """
-        dicts_to_check = deque([state_dict])
         counter = count(1)
 
-        while dicts_to_check:
-            current_dict = dicts_to_check.pop()
-            for property_name, value in current_dict.items():
-                if isinstance(value, dict):
-                    # allow traversal through nested dictionaries which can contain backend artifacts
-                    dicts_to_check.append(value)
-                elif property_name == TunedModule.BACKENDS_KEY:
-                    # value is a backends_data (see TunedModule.to_dict())
-                    for _, backend_data in value:
-                        # Each backend gets its own numbered subdirectory so that artifacts with
-                        # identical filenames from different backends do not collide, and each
-                        # artifact is stored under its original name (required e.g. by ONNX
-                        # Runtime which resolves external-data paths from the name embedded in
-                        # the .onnx protobuf).
-                        backend_dir = target_path / str(next(counter))
-                        backend_dir.mkdir()
-                        for backend_property_name, backend_value in backend_data.items():
-                            # look for Path objects
-                            if isinstance(backend_value, Path):
-                                new_path = backend_dir / backend_value.name
-                                if backend_value.is_dir():
-                                    shutil.copytree(backend_value, new_path)
-                                else:
-                                    shutil.copy(backend_value, new_path)
-                                backend_data[backend_property_name] = new_path  # overwrite with new path
+        for backend_data in _iter_backend_data_dicts(state_dict):
+            # Each backend gets its own numbered subdirectory so that artifacts with
+            # identical filenames from different backends do not collide, and each
+            # artifact is stored under its original name (required e.g. by ONNX
+            # Runtime which resolves external-data paths from the name embedded in
+            # the .onnx protobuf).
+            backend_dir = target_path / str(next(counter))
+            backend_dir.mkdir()
+            for backend_property_name, backend_value in backend_data.items():
+                # look for Path objects
+                if isinstance(backend_value, Path):
+                    new_path = backend_dir / backend_value.name
+                    if backend_value.is_dir():
+                        shutil.copytree(backend_value, new_path)
+                    else:
+                        shutil.copy(backend_value, new_path)
+                    backend_data[backend_property_name] = new_path.relative_to(target_path)
 
 
 class ShaSumsSaveTask(SaveTask):
@@ -187,7 +193,7 @@ class ShaSumsSaveTask(SaveTask):
             if file_path.is_file():
                 # Calculate SHA hash of the file
                 sha_hash = calculate_file_sha_hash(file_path, self.sha_type)
-                sha_hashes.append((str(file_path), sha_hash))
+                sha_hashes.append((file_path.relative_to(path).as_posix(), sha_hash))
 
         # Write SHA hashes to file
         sha_file_path = get_sha_sums_path(path, self.sha_type)
@@ -234,6 +240,38 @@ class ZipSaveTask(SaveTask):
                 break
 
 
+class RelocateBackendArtifactsTask(LoadTask):
+    """Rebase saved backend artifact paths onto the extracted checkpoint.
+
+    Save stores copied backend artifacts as paths relative to the checkpoint root
+    so a .ait archive can be copied or moved. After TorchLoadTask restores those
+    Path objects, this task mutates the loaded state_dict in place and turns
+    relative artifact paths into absolute paths for backend loaders. Absolute
+    legacy paths are left unchanged because they already point at a concrete
+    filesystem location.
+    """
+
+    def load(self, path: Path, state_dict: dict | None = None) -> dict:
+        """Resolve relative backend artifact paths and return no additional state updates."""
+        if state_dict is None:
+            raise ValueError("RelocateBackendArtifactsTask requires loaded state_dict")
+
+        checkpoint_root = path.resolve()
+        for backend_data in _iter_backend_data_dicts(state_dict):
+            for backend_property_name, backend_value in backend_data.items():
+                if isinstance(backend_value, Path) and not backend_value.is_absolute():
+                    artifact_path = (checkpoint_root / backend_value).resolve()
+                    try:
+                        artifact_path.relative_to(checkpoint_root)
+                    except ValueError as e:
+                        raise ValueError(f"Backend artifact path resolves outside checkpoint: {backend_value}") from e
+                    if not artifact_path.exists():
+                        raise FileNotFoundError(f"Backend artifact not found: {artifact_path}")
+                    backend_data[backend_property_name] = artifact_path
+
+        return {}
+
+
 class ShaSumsLoadTask(LoadTask):
     """Task to load and verify SHA hashes of files."""
 
@@ -245,11 +283,12 @@ class ShaSumsLoadTask(LoadTask):
         """
         self.sha_type = sha_type
 
-    def load(self, path: Path) -> dict:
+    def load(self, path: Path, state_dict: dict | None = None) -> dict:
         """Load and verify SHA hashes of files in the specified path.
 
         Args:
             path: The path containing files to verify.
+            state_dict: Unused accumulated state from prior load tasks.
 
         Raises:
             FileNotFoundError: If sha_hashes.txt file is not found.
@@ -258,8 +297,24 @@ class ShaSumsLoadTask(LoadTask):
         sha_file_path = get_sha_sums_path(path, self.sha_type)
 
         if not sha_file_path.exists():
-            raise FileNotFoundError(f"SHA hash file not found: {sha_file_path}")
+            candidates = sorted(path.glob(f"*_sha{self.sha_type}_sums.txt"))
+            if len(candidates) == 1:
+                sha_file_path = candidates[0]
+            elif len(candidates) > 1:
+                raise ValueError(f"Ambiguous SHA hash files for checkpoint {path}: {candidates}")
+            else:
+                raise FileNotFoundError(f"SHA hash file not found: {sha_file_path}")
 
+        stored_hashes = self._load_stored_hashes(sha_file_path)
+        failed_files = self._get_failed_files(path, stored_hashes)
+
+        if failed_files:
+            raise ValueError(f"Failed to verify SHA hashes for files: {failed_files}")
+
+        return {}
+
+    def _load_stored_hashes(self, sha_file_path: Path) -> dict[str, str]:
+        """Load stored hash values from a SHA sums file."""
         stored_hashes = {}
         try:
             with open(sha_file_path, encoding="utf-8") as f:
@@ -273,27 +328,35 @@ class ShaSumsLoadTask(LoadTask):
                         stored_hashes[file_path] = hash_value
         except Exception as e:
             raise ValueError("Error reading SHA hash file") from e
+        return stored_hashes
 
+    def _get_failed_files(self, path: Path, stored_hashes: dict[str, str]) -> list[str]:
+        """Return stored paths whose current file hashes do not match."""
         failed_files = []
-        for file_path, hash_value in stored_hashes.items():
+        checkpoint_root = path.resolve()
+        for stored_path_str, hash_value in stored_hashes.items():
+            file_path = Path(stored_path_str)
+            if not file_path.is_absolute():
+                file_path = (checkpoint_root / file_path).resolve()
+                try:
+                    file_path.relative_to(checkpoint_root)
+                except ValueError as e:
+                    raise ValueError(f"Checkpoint file path resolves outside checkpoint: {stored_path_str}") from e
             current_hash = calculate_file_sha_hash(file_path, self.sha_type)
             if current_hash != hash_value:
-                failed_files.append(file_path)
-
-        if failed_files:
-            raise ValueError(f"Failed to verify SHA hashes for files: {failed_files}")
-
-        return {}
+                failed_files.append(stored_path_str)
+        return failed_files
 
 
 class UnzipLoadTask(LoadTask):
     """Task to load a state dictionary from a zip file."""
 
-    def load(self, path: Path) -> dict:
+    def load(self, path: Path, state_dict: dict | None = None) -> dict:
         """Extract the zip file at the given path to a folder with the same name.
 
         Args:
             path: The path to the zip file that should be extracted.
+            state_dict: Unused accumulated state from prior load tasks.
 
         Returns:
             dict: An empty dictionary (following the pattern of other load tasks).

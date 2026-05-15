@@ -10,6 +10,7 @@ requires-python = ">=3.10, <3.13"
 
 dependencies = [
     "aitune",
+    "aitune-examples-common",
     "megatron-core",
     "nemo-toolkit[asr]",
 ]

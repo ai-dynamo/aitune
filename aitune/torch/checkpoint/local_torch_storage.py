@@ -9,6 +9,7 @@ from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.checkpoint.storage_tasks import (
     CopyBackendArtifactsTask,
     MakeFolderTask,
+    RelocateBackendArtifactsTask,
     RemoveFolderTask,
     ShaSumsLoadTask,
     ShaSumsSaveTask,
@@ -55,6 +56,7 @@ class LocalTorchStorage(Storage):
                 UnzipLoadTask() if compress_checkpoint else None,
                 ShaSumsLoadTask(sha_type=sha_type) if compress_checkpoint else None,
                 TorchLoadTask(),
+                RelocateBackendArtifactsTask(),
             ],
         )
         self.base_folder = Path(base_folder)

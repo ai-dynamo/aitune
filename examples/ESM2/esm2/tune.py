@@ -5,6 +5,7 @@
 import logging
 
 import torch
+from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp, relocated_checkpoint_path
 from transformers import AutoTokenizer, EsmForMaskedLM
 
 import aitune.torch as ait
@@ -14,6 +15,8 @@ DEVICE = torch.device("cuda")
 MODEL_NAME = "facebook/esm2_t33_650M_UR50D"
 LOG_LEVEL = "INFO"
 SAMPLE_SEQUENCE = "MQIFVKTLTGKTITLEVEPS<mask>TIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG"
+LOCAL_MODEL_PATH = "esm2_tuned.ait"
+DEFAULT_MODEL_PATH = str(relocated_checkpoint_path(LOCAL_MODEL_PATH))
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,7 @@ def prepare_sample(device=DEVICE):
 
 
 def tune(
-    model_path: str = "esm2_tuned",
+    model_path: str = LOCAL_MODEL_PATH,
     model_name: str = MODEL_NAME,
     device: torch.device = DEVICE,
     batch_sizes: list[int] | None = None,
@@ -72,6 +75,8 @@ def tune(
 
         logger.info("Saving model...")
         ait.save(model, model_path)
+        relocated_path = copy_checkpoint_to_tmp(model_path)
+        logger.info("Checkpoint copied to %s", relocated_path)
 
 
 if __name__ == "__main__":

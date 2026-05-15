@@ -8,6 +8,7 @@ from logging import basicConfig, getLogger
 from pathlib import Path
 
 import torch
+from aitune_examples_common.checkpoint import relocated_checkpoint_path
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
 from aitune.torch import load
@@ -60,7 +61,7 @@ def main():
     do_inference(
         model_name=args.model_name,
         audio_path=args.audio_path,
-        tuned_model_path=args.tuned_model_path,
+        tuned_model_path=relocated_checkpoint_path(args.tuned_model_path),
     )
 
 

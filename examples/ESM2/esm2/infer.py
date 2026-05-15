@@ -9,12 +9,12 @@ import torch
 from transformers import AutoTokenizer
 
 import aitune.torch as ait
-from esm2.tune import DEVICE, LOG_LEVEL, MODEL_NAME, SAMPLE_SEQUENCE, get_model
+from esm2.tune import DEFAULT_MODEL_PATH, DEVICE, LOG_LEVEL, MODEL_NAME, SAMPLE_SEQUENCE, get_model
 
 logger = logging.getLogger(__name__)
 
 
-def infer(model_path: str = "esm2_tuned"):
+def infer(model_path: str = DEFAULT_MODEL_PATH):
     sample_sequence = os.environ.get("ESM2_SEQUENCE", SAMPLE_SEQUENCE)
 
     logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", force=True)

@@ -3,22 +3,27 @@
 """Tests for model state storage functionality."""
 
 import shutil
+from pathlib import Path
 
 import pytest
 
 from aitune.torch.checkpoint.storage_tasks import (
     AIT_EXTENSION,
+    CopyBackendArtifactsTask,
     MakeFolderTask,
+    RelocateBackendArtifactsTask,
     ShaSumsLoadTask,
     ShaSumsSaveTask,
     TorchLoadTask,
     TorchSaveTask,
     UnzipLoadTask,
     ZipSaveTask,
+    calculate_file_sha_hash,
     check_checkpoint_valid,
     get_sha_sums_path,
 )
 from tests.toy_models.torch_models import ToyTorchModel
+from tests.unit.torch.checkpoint.helpers import _backend_state_with_paths, _only_backend_data
 
 
 def test_save_load_torch_task(tmp_path):
@@ -103,6 +108,184 @@ def test_sha_sums_save_task(tmp_path, sha_type):
 
     with pytest.raises(FileNotFoundError, match="SHA hash file not found"):
         sha_sums_load_task.load(tmp_path)
+
+
+def test_copy_backend_artifacts_stores_relative_file_paths(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    artifact = tmp_path / "source.plan"
+    artifact.write_bytes(b"engine")
+    state_dict = _backend_state_with_paths(engine_path=artifact)
+
+    CopyBackendArtifactsTask().save(checkpoint_path, state_dict)
+
+    backend_data = _only_backend_data(state_dict)
+    assert backend_data["engine_path"] == Path("1/source.plan")
+    assert not backend_data["engine_path"].is_absolute()
+    assert (checkpoint_path / "1" / "source.plan").read_bytes() == b"engine"
+
+
+def test_copy_backend_artifacts_stores_relative_directory_paths(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    artifact_dir = tmp_path / "compiled_model"
+    artifact_dir.mkdir()
+    (artifact_dir / "model.bin").write_bytes(b"compiled")
+    state_dict = _backend_state_with_paths(compiled_model_path=artifact_dir)
+
+    CopyBackendArtifactsTask().save(checkpoint_path, state_dict)
+
+    backend_data = _only_backend_data(state_dict)
+    assert backend_data["compiled_model_path"] == Path("1/compiled_model")
+    assert not backend_data["compiled_model_path"].is_absolute()
+    assert (checkpoint_path / "1" / "compiled_model" / "model.bin").read_bytes() == b"compiled"
+
+
+def test_relocate_backend_artifacts_resolves_relative_paths(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    artifact_path = checkpoint_path / "1" / "model.plan"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_bytes(b"engine")
+    state_dict = _backend_state_with_paths(engine_path=Path("1/model.plan"))
+
+    update = RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+    assert update == {}
+    backend_data = _only_backend_data(state_dict)
+    assert backend_data["engine_path"] == artifact_path.resolve()
+
+
+def test_relocate_backend_artifacts_rejects_relative_path_escape(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    state_dict = _backend_state_with_paths(engine_path=Path("../model.plan"))
+
+    with pytest.raises(ValueError, match="outside checkpoint"):
+        RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+
+def test_relocate_backend_artifacts_requires_existing_relative_path(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    state_dict = _backend_state_with_paths(engine_path=Path("1/missing.plan"))
+
+    with pytest.raises(FileNotFoundError, match="Backend artifact not found"):
+        RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+
+def test_relocate_backend_artifacts_keeps_existing_absolute_paths(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    artifact_path = checkpoint_path / "existing.plan"
+    artifact_path.write_bytes(b"engine")
+    state_dict = _backend_state_with_paths(engine_path=artifact_path)
+
+    update = RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+    assert update == {}
+    backend_data = _only_backend_data(state_dict)
+    assert backend_data["engine_path"] == artifact_path
+
+
+def test_relocate_backend_artifacts_keeps_absolute_paths_when_checkpoint_has_same_basename(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    artifact_path = checkpoint_path / "1" / "model.plan"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_bytes(b"engine")
+    old_absolute_path = tmp_path / "old_build" / "model.plan"
+    old_absolute_path.parent.mkdir()
+    old_absolute_path.write_bytes(b"stale source")
+    state_dict = _backend_state_with_paths(engine_path=old_absolute_path)
+
+    update = RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+    assert update == {}
+    backend_data = _only_backend_data(state_dict)
+    assert backend_data["engine_path"] == old_absolute_path
+    assert backend_data["engine_path"].read_bytes() == b"stale source"
+
+
+def test_relocate_backend_artifacts_requires_loaded_state_dict(tmp_path):
+    with pytest.raises(ValueError, match="requires loaded state_dict"):
+        RelocateBackendArtifactsTask().load(tmp_path, None)
+
+
+def test_sha_sums_use_relative_paths_after_checkpoint_move(tmp_path):
+    source_path = tmp_path / "source_checkpoint"
+    source_path.mkdir()
+    (source_path / "state_dict.pt").write_bytes(b"state")
+    artifact_dir = source_path / "1"
+    artifact_dir.mkdir()
+    (artifact_dir / "model.plan").write_bytes(b"engine")
+
+    ShaSumsSaveTask().save(source_path, {})
+    sha_sums_file = get_sha_sums_path(source_path)
+    sha_sums_text = sha_sums_file.read_text(encoding="utf-8")
+    assert str(source_path) not in sha_sums_text
+    assert "  state_dict.pt\n" in sha_sums_text
+    assert "  1/model.plan\n" in sha_sums_text
+
+    moved_path = tmp_path / "moved_checkpoint"
+    shutil.copytree(source_path, moved_path)
+    shutil.rmtree(source_path)
+
+    assert ShaSumsLoadTask().load(moved_path) == {}
+
+
+def test_sha_sums_load_uses_existing_absolute_entries_as_is(tmp_path):
+    old_path = tmp_path / "old_checkpoint"
+    old_path.mkdir()
+    old_state_dict = old_path / "state_dict.pt"
+    old_state_dict.write_bytes(b"state")
+    old_hash = calculate_file_sha_hash(old_state_dict)
+
+    moved_path = tmp_path / "moved_checkpoint"
+    moved_path.mkdir()
+    moved_state_dict = moved_path / "state_dict.pt"
+    moved_state_dict.write_bytes(b"different checkpoint state")
+    get_sha_sums_path(moved_path).write_text(f"{old_hash}  {old_state_dict}\n", encoding="utf-8")
+
+    assert ShaSumsLoadTask().load(moved_path) == {}
+
+
+def test_sha_sums_load_fails_missing_absolute_entries(tmp_path):
+    old_path = tmp_path / "old_checkpoint"
+    old_state_dict = old_path / "state_dict.pt"
+
+    moved_path = tmp_path / "moved_checkpoint"
+    moved_path.mkdir()
+    get_sha_sums_path(moved_path).write_text(f"0  {old_state_dict}\n", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError):
+        ShaSumsLoadTask().load(moved_path)
+
+
+def test_sha_sums_load_fails_mismatched_absolute_entries(tmp_path):
+    old_path = tmp_path / "old_checkpoint"
+    old_path.mkdir()
+    old_state_dict = old_path / "state_dict.pt"
+    old_state_dict.write_bytes(b"state")
+    old_hash = calculate_file_sha_hash(old_state_dict)
+    old_state_dict.write_bytes(b"changed")
+
+    moved_path = tmp_path / "moved_checkpoint"
+    moved_path.mkdir()
+    get_sha_sums_path(moved_path).write_text(f"{old_hash}  {old_state_dict}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Failed to verify SHA hashes"):
+        ShaSumsLoadTask().load(moved_path)
+
+
+def test_sha_sums_load_rejects_relative_path_escape(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    outside_file = tmp_path / "outside.bin"
+    outside_file.write_bytes(b"outside")
+    outside_hash = calculate_file_sha_hash(outside_file)
+    get_sha_sums_path(checkpoint_path).write_text(f"{outside_hash}  ../outside.bin\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="outside checkpoint"):
+        ShaSumsLoadTask().load(checkpoint_path)
 
 
 @pytest.mark.parametrize("checkpoint", ["valid", "invalid", "missing"])

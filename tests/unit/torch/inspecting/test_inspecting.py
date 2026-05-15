@@ -341,17 +341,42 @@ def test_get_modules_after_inspection(custom_object, sample_dataset):
         assert executed_modules[idx].execution_count == TEST_NUMBER_OF_ITERATIONS
 
 
-def test_get_modules_after_inspection_with_min_execution_percentage(custom_object, sample_dataset):
+def test_get_modules_with_min_execution_percentage():
     """Test getting executed modules with a minimum execution percentage."""
-    # When inspecting custom object with various attributes
-    modules_info = inspect(custom_object, sample_dataset, number_of_iterations=TEST_NUMBER_OF_ITERATIONS)
+    modules_info = InspectedModulesInfo(total_execution_time=1.0, number_of_batches=1)
+    modules_info.add_module(
+        ModuleInfo(
+            module=nn.Linear(10, 10),
+            name="linear1",
+            execution_count=TEST_NUMBER_OF_ITERATIONS * 4,
+            total_execution_time=0.3,
+            object_path="linear1",
+        )
+    )
+    modules_info.add_module(
+        ModuleInfo(
+            module=nn.ReLU(),
+            name="relu",
+            execution_count=TEST_NUMBER_OF_ITERATIONS,
+            total_execution_time=0.2,
+            object_path="relu",
+        )
+    )
+    modules_info.add_module(
+        ModuleInfo(
+            module=nn.Linear(10, 10),
+            name="linear2",
+            execution_count=TEST_NUMBER_OF_ITERATIONS,
+            total_execution_time=0.1,
+            object_path="linear2",
+        )
+    )
 
-    # Then verify the results
     executed_modules = modules_info.get_modules(min_execution_percentage=0.25)
 
     assert len(executed_modules) == 1
     assert executed_modules[0].name == "linear1"
-    assert executed_modules[0].execution_count == TEST_NUMBER_OF_ITERATIONS * custom_object.num_iterations
+    assert executed_modules[0].execution_count == TEST_NUMBER_OF_ITERATIONS * 4
 
 
 def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset):

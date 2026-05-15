@@ -5,6 +5,8 @@
 import logging
 import os
 
+from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
+
 from aitune.torch import FirstWinsStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorJitBackend
 from stable_diffusion.cmd_args import parse_args
@@ -64,6 +66,8 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
 
     save(pipeline, tuned_model_path)
     logger.info("Model saved to %s", tuned_model_path)
+    relocated_path = copy_checkpoint_to_tmp(tuned_model_path)
+    logger.info("Checkpoint copied to %s", relocated_path)
 
 
 def main():

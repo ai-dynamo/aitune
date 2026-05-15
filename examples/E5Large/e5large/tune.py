@@ -11,6 +11,7 @@ from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch import MaxThroughputStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorAotBackend
 from aitune.torch.config import config as global_config
+from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 
 from .cmd_args import get_parser
 from .model import get_model
@@ -115,6 +116,8 @@ def tune_model(
     torch.testing.assert_close(results, embeddings, rtol=1e-3, atol=1e-3)
 
     save(model, output_path)
+    relocated_path = copy_checkpoint_to_tmp(output_path)
+    logger.info("Checkpoint copied to %s", relocated_path)
 
 
 if __name__ == "__main__":

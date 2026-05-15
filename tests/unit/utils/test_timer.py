@@ -377,23 +377,24 @@ def test_timer_manual_start_without_logging(caplog):
     assert elapsed >= 0.01
 
 
-def test_timer_manual_start_multiple_times():
+def test_timer_manual_start_multiple_times(monkeypatch):
     """Test restarting timer with start() method."""
+    times = iter([1.0, 1.01, 2.0, 2.02])
+    monkeypatch.setattr(time, "perf_counter", lambda: next(times))
     timer = Timer("operation", silent=True)
 
     # First timing
     timer.start()
-    time.sleep(0.01)
     elapsed1 = timer.stop()
 
     # Restart timing
     timer.start()
-    time.sleep(0.02)
     elapsed2 = timer.stop()
 
     # Second run should be longer
     assert elapsed2 > elapsed1
-    assert elapsed2 >= 0.02
+    assert elapsed1 == pytest.approx(0.01)
+    assert elapsed2 == pytest.approx(0.02)
 
 
 def test_timer_manual_stop_before_start(caplog):

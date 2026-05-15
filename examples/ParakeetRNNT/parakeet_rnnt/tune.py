@@ -7,6 +7,7 @@ from logging import basicConfig, getLogger
 from pathlib import Path
 
 import torch
+from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
 from aitune.torch import MaxThroughputStrategy, TuneStrategy, inspect, save, tune, wrap
@@ -84,6 +85,8 @@ def tune_model(
 
     save(pipeline, tuned_model_path)
     logger.info("Model saved to %s", tuned_model_path)
+    relocated_path = copy_checkpoint_to_tmp(tuned_model_path)
+    logger.info("Checkpoint copied to %s", relocated_path)
 
     logger.info("Running inference on the tuned model...")
     results = call_wrapper(audio=str(audio_path))

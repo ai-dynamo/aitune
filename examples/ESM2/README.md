@@ -39,11 +39,15 @@ To tune the ESM2 model, run:
 tune
 ```
 
+The example saves the tuned checkpoint under `checkpoints/esm2_tuned.ait` and then copies the archive plus SHA sidecar to `/tmp/esm2_tuned.ait`.
+
 After tuning, run inference
 
 ```bash
 inference
 ```
+
+`inference` loads the relocated checkpoint from `/tmp/esm2_tuned.ait`.
 
 ### AI Dynamo ESM2 Deployment
 

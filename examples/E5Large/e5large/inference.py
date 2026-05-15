@@ -8,6 +8,7 @@ import torch
 from aitune.torch import load
 from aitune.torch.config import config as global_config
 from aitune.utils.monitoring import annotate
+from aitune_examples_common.checkpoint import relocated_checkpoint_path
 
 from .cmd_args import get_parser
 from .model import get_model
@@ -36,7 +37,7 @@ def main():
     global_config.device_after_tuning = "cpu"
 
     logger.info("Loading tuned model...")
-    model = load(model, args.tuned_model_path)
+    model = load(model, relocated_checkpoint_path(args.tuned_model_path))
 
     # XXX: Override .to method to do nothing.
     #      If we leave it as is and without specifying device in encode method, tensors will be moved to meta device, breaking the inference.

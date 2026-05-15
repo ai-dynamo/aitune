@@ -23,6 +23,7 @@ SPDX-License-Identifier: Apache-2.0
 - fix: Preserve externally-registered forward hooks (e.g. `capture_outputs` from transformers≥ 5) across the AOT and JIT save/restore cycle — hooks registered after AITune wraps a module are no longer lost on the first forward pass
 - fix: Remove `transformers<5` restriction — AITune now supports transformers 5.x
 - fix: Drop `enabled_precisions={float16}` default from Torch-TensorRT AOT and JIT backends; engine now matches the model's loaded dtype
+- fix: Store checkpoint backend artifacts and SHA entries with relative paths so `.ait` archives remain portable after copy or move
 - chore: Split hardware metrics table if there is a multi-gpu system
 - chore: Renamed TorchInductorBackend to TorchInductorJitBackend - breaking change
 - breaking change: NVTX_ENABLE environment variable renamed to AITUNE_NVTX_EVENTS

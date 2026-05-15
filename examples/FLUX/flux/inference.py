@@ -8,6 +8,7 @@ from logging import basicConfig, getLogger
 from pathlib import Path
 
 import torch
+from aitune_examples_common.checkpoint import relocated_checkpoint_path
 
 import aitune.torch as ait
 from aitune.utils.monitoring import annotate
@@ -92,7 +93,7 @@ def main():
         steps=args.steps,
         guidance_scale=args.guidance_scale,
         max_sequence_length=args.max_sequence_length,
-        tuned_model_path=args.tuned_model_path,
+        tuned_model_path=relocated_checkpoint_path(args.tuned_model_path),
         output_dir=os.environ.get("AITUNE_OUTPUT_DIR", "output"),
     )
 

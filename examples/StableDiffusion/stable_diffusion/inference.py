@@ -6,6 +6,8 @@ import os
 from logging import basicConfig, getLogger
 from pathlib import Path
 
+from aitune_examples_common.checkpoint import relocated_checkpoint_path
+
 from aitune.torch import load
 from aitune.utils.monitoring import annotate
 from stable_diffusion.cmd_args import parse_args
@@ -66,7 +68,7 @@ def main():
         prompt=args.prompt,
         sizes=args.sizes,
         steps=args.steps,
-        tuned_model_path=args.tuned_model_path,
+        tuned_model_path=relocated_checkpoint_path(args.tuned_model_path),
         output_dir=os.environ.get("AITUNE_OUTPUT_DIR", "output"),
     )
 

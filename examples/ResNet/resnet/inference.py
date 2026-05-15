@@ -5,6 +5,7 @@
 from logging import basicConfig, getLogger
 
 import torch
+from aitune_examples_common.checkpoint import relocated_checkpoint_path
 from PIL import Image
 
 from aitune.torch import load
@@ -63,7 +64,7 @@ def main():
     do_inference(
         model_name=args.model_name,
         image_path=args.image_path,
-        tuned_model_path=args.tuned_model_path,
+        tuned_model_path=relocated_checkpoint_path(args.tuned_model_path),
         expected_class_id=args.expected_class_id,
     )
 

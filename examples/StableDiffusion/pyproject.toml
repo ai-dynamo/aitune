@@ -11,6 +11,7 @@ requires-python = ">=3.10, <3.13"
 
 dependencies = [
     "aitune",
+    "aitune-examples-common",
     "diffusers>=0.25.0,<0.35",
     "torch>=2.0.0",
     "transformers<5",
@@ -32,6 +33,7 @@ dynamo = [
 
 [tool.uv.sources]
 aitune = { path = "../../", editable = true }
+aitune-examples-common = { path = "../../examples/common" }
 
 [project.scripts]
 tune = "stable_diffusion.tune:main"

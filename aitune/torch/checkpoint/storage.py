@@ -45,7 +45,7 @@ class Storage:
 
         state_dict = {}
         for task in self.load_tasks:
-            state_dict.update(task.load(path))
+            state_dict.update(task.load(path, state_dict))
         return state_dict
 
     def _get_target_folder_path(self, path: str | Path) -> Path:

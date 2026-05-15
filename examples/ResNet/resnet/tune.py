@@ -6,6 +6,7 @@ import os
 from logging import basicConfig, getLogger
 
 import torch
+from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 from PIL import Image
 
 from aitune.torch import LocalTorchStorage, MaxThroughputStrategy, Module, save, tune
@@ -93,6 +94,8 @@ def tune_model(
 
     save(module, tuned_model_path, storage=LocalTorchStorage(remove_checkpoint_after_tune=True))
     logger.info("Model saved to %s", tuned_model_path)
+    relocated_path = copy_checkpoint_to_tmp(tuned_model_path)
+    logger.info("Checkpoint copied to %s", relocated_path)
 
 
 def main():
