@@ -223,6 +223,13 @@ jit_config.detect_graph_breaks = True
 # Skip specific module types
 jit_config.skip_modules = ["BatchNorm2d", "LayerNorm"]
 
+# Add extra package prefixes the JIT patcher must never intercept (on top of the built-in defaults)
+jit_config.extra_patch_exclude_packages = ("my_third_party_pkg",)
+
+# Add extra module classes the JIT patcher must never intercept (on top of the built-in defaults)
+import torch
+jit_config.extra_patch_exclude_modules = (torch.nn.Identity,)
+
 # Set device for tuning
 jit_config.device = "cuda"
 
@@ -307,6 +314,40 @@ jit_config.skip_modules = ["BatchNorm2d", "LayerNorm", "Dropout"]
 ```
 
 **Why it matters**: Some modules (like normalization layers) typically don't benefit from tuning.
+
+#### extra_patch_exclude_packages
+
+Extra package prefixes the JIT patcher must never intercept (matched via `startswith`), on top of the built-in defaults.
+
+```python
+jit_config.extra_patch_exclude_packages = ("my_third_party_pkg",)
+```
+
+Built-in defaults — always applied — cover internal torch packages (`torch.jit`, `torch._inductor`, `torch._dynamo`, `torch.fx`, `torch.export`) and `torch_tensorrt`. The user-supplied tuple is additive; clearing it does not remove the defaults. Use it to keep AITune away from libraries whose internals must not be wrapped.
+
+#### extra_patch_exclude_modules
+
+Extra module classes the JIT patcher must never intercept (matched via `isinstance`), on top of the built-in defaults.
+
+```python
+import torch
+jit_config.extra_patch_exclude_modules = (torch.nn.Identity,)
+```
+
+Built-in defaults — always applied — cover PyTorch container modules (`ModuleList`, `ModuleDict`, `Sequential`, `ParameterList`, `ParameterDict`); they hold no computation and can be created dynamically during forward passes via slicing. The user-supplied tuple is additive; clearing it does not remove the defaults.
+
+##### `extra_patch_exclude_modules` vs `skip_modules`
+
+Both filters drop modules out of tuning, but at different stages:
+
+| | `extra_patch_exclude_modules` | `skip_modules` |
+|---|---|---|
+| **Stage** | Patch time — module is never wrapped at all | Tune time — module is wrapped and tracked, but tuning is short-circuited |
+| **Match** | `isinstance` against actual classes (subclasses included) | Exact class-name string match |
+| **Imports** | Class must be importable when you configure it | Name-only; no import needed |
+| **Visibility** | Module is invisible to AITune | Appears in `PatchedModule.print_hierarchy()` as `state=skipped 🚫` |
+
+Use `extra_patch_exclude_modules` when the wrapt proxy itself is the problem (its presence breaks compilation, serialization, etc. — this is exactly why `torch_tensorrt` is in the built-in package exclusions). Use `skip_modules` when you just don't want a class tuned but still want it tracked in inspect output.
 
 #### cache_dir
 

@@ -8,6 +8,7 @@ import os
 import pytest
 import torch
 
+from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patcher import jit_reset
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
@@ -53,12 +54,14 @@ def torch_device():
 
 @pytest.fixture(autouse=True)
 def jit_cleanup():
-    """Reset patcher state before and after each test."""
+    """Reset patcher state and jit_config before and after each test."""
     jit_reset()
+    jit_config.reset_to_defaults()
     try:
         yield
     finally:
         jit_reset()
+        jit_config.reset_to_defaults()
 
 
 @pytest.fixture(autouse=True)

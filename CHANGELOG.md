@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 # Changelog
 
 ## 0.4.0 (unreleased)
+- feat: JIT patcher exclusions (`extra_patch_exclude_packages`, `extra_patch_exclude_modules`) are now configurable on `jit_config`
 - feat: JIT tuning supports tune strategy selection via `aitune.torch.jit_config.strategy` (e.g. `MaxThroughputStrategy`); default remains `FirstWinsStrategy`
 - feat: Add performance validation to tuning strategies. Backends with no speedup relative to TorchEagerBackend are skipped.
 - feat: Deferred mode for Just-in-Time (JIT) tuning - explicit tuning trigger post whole pipeline or model pass, useful for image and video generation pipelines

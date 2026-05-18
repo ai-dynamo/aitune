@@ -43,6 +43,15 @@ class Config:
     detect_graph_breaks: bool = False  # if True, graph break detection is enabled before tuning
     skip_modules: list[str] = field(default_factory=list)  # list of modules (class names) to skip
 
+    # Extra package prefixes the JIT patcher must not intercept (matched via ``startswith``),
+    # on top of ``_DEFAULT_PATCH_EXCLUDE_PACKAGES``. The built-in defaults always apply —
+    # use this to add libraries whose internals must not be wrapped.
+    extra_patch_exclude_packages: tuple[str, ...] = ()
+
+    # Extra module classes the JIT patcher must not intercept (matched via ``isinstance``),
+    # on top of ``_DEFAULT_PATCH_EXCLUDE_MODULES``. The built-in defaults always apply.
+    extra_patch_exclude_modules: tuple[type[torch.nn.Module], ...] = ()
+
     cache_dir: Path = field(default_factory=lambda: _AITUNE_JIT_CACHE_DIR)
     strategy: "TuneStrategy | None" = None  # explicit override; when None, `resolve_strategy()` builds the default
 

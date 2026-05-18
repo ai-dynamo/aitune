@@ -6,6 +6,7 @@ from unittest.mock import Mock
 
 import torch
 
+from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patcher import Patcher, jit_reset, patch_for_jit_tuning, prepare_for_jit_tuning
 
 
@@ -78,6 +79,32 @@ def test_is_allowed_to_tune_allows_unrelated_subpackage(mocker):
     mocker.patch("aitune.torch.jit.patcher.inspect.getmodule", return_value=fake_module_info)
 
     assert Patcher._is_allowed_to_tune(module)
+
+
+def test_is_allowed_to_tune_extends_extra_patch_exclude_packages_with_user_entries(mocker):
+    """User-supplied extra_patch_exclude_packages add to the built-in defaults."""
+    jit_config.extra_patch_exclude_packages = ("my_blocked_pkg",)
+    module = torch.nn.Module()
+    fake_module_info = Mock(__package__="my_blocked_pkg.submodule")
+    mocker.patch("aitune.torch.jit.patcher.inspect.getmodule", return_value=fake_module_info)
+
+    assert not Patcher._is_allowed_to_tune(module)
+
+
+def test_is_allowed_to_tune_extends_extra_patch_exclude_modules_with_user_entries():
+    """User-supplied extra_patch_exclude_modules add to the built-in defaults."""
+    jit_config.extra_patch_exclude_modules = (torch.nn.Linear,)
+
+    assert not Patcher._is_allowed_to_tune(torch.nn.Linear(10, 5))
+    # Built-in defaults still apply alongside user-supplied entries.
+    assert not Patcher._is_allowed_to_tune(torch.nn.ModuleList())
+
+
+def test_is_allowed_to_tune_user_cannot_remove_default_exclusions():
+    """Clearing the user-config tuple does not disable the built-in defaults."""
+    jit_config.extra_patch_exclude_modules = ()
+
+    assert not Patcher._is_allowed_to_tune(torch.nn.ModuleList())
 
 
 def test_intercepted_classes():
