@@ -236,7 +236,7 @@ class SampleMetadata:
                     tensor_data.append((locator, TensorSpec.from_tensor(name, value, batch_size)))
                 elif strict:
                     other_data.append((locator, name, value))
-                if config.enable_hf_integrations:
+                if config.enable_transformers_integration:
                     if locator.root_name == "cache_position":
                         cache_position = value
 

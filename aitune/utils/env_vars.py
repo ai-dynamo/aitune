@@ -31,3 +31,6 @@ TUNING_DATA_PATH: str | None = os.environ.get("AITUNE_TUNING_DATA_PATH")
 _CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
 AITUNE_CACHE_DIR = Path(os.environ.get("AITUNE_CACHE_DIR", _CACHE_DIR / "aitune"))
 AITUNE_JIT_CACHE_DIR = Path(os.environ.get("AITUNE_JIT_CACHE_DIR", _CACHE_DIR / "aitune.jit"))
+
+AITUNE_TRANSFORMERS_INTEGRATION = get_bool_env_variable("AITUNE_TRANSFORMERS_INTEGRATION", True)
+AITUNE_DIFFUSERS_INTEGRATION = get_bool_env_variable("AITUNE_DIFFUSERS_INTEGRATION", True)

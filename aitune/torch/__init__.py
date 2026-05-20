@@ -37,5 +37,8 @@ __all__ = [
     "patch_for_jit_tuning",
 ]
 
-if config.enable_hf_integrations:
-    import aitune.torch.integrations.hugging_face  # noqa: F401
+if config.enable_diffusers_integration:
+    import aitune.torch.integrations.diffusers  # noqa: F401
+
+if config.enable_transformers_integration:
+    import aitune.torch.integrations.transformers  # noqa: F401
