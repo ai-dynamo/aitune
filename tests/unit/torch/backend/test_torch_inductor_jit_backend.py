@@ -46,8 +46,36 @@ def backend_build(backend, dtype, model, sample_data, tmp_path, device="cuda"):
     data = move_to_dtype(sample_data, dtype)
     mock_graph_spec = Mock(spec=GraphSpec)
     mock_graph_spec.name = "test"
+    mock_graph_spec.input_spec = Mock()
+    mock_graph_spec.input_spec.detected_dynamic_axis.return_value = False
     backend = backend.build(model, graph_spec=mock_graph_spec, data=data, device=device, cache_dir=tmp_path)
     return backend
+
+
+def test_torch_inductor_build_enables_dynamic_for_dynamic_graph_spec(mocker, tmp_path):
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1, 2])
+    sample_data = toy.samples(batch_sizes=[1])
+    compile_mock = mocker.patch("aitune.torch.backend.torch_inductor_jit_backend.torch.compile", return_value=toy)
+    backend = TorchInductorJitBackend(TorchInductorJitBackendConfig(dynamic=None))
+
+    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    assert backend._config.dynamic is True
+    assert compile_mock.call_args.kwargs["dynamic"] is True
+
+
+def test_torch_inductor_build_preserves_explicit_dynamic_false(mocker, tmp_path):
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1, 2])
+    sample_data = toy.samples(batch_sizes=[1])
+    compile_mock = mocker.patch("aitune.torch.backend.torch_inductor_jit_backend.torch.compile", return_value=toy)
+    backend = TorchInductorJitBackend(TorchInductorJitBackendConfig(dynamic=False))
+
+    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    assert backend._config.dynamic is False
+    assert compile_mock.call_args.kwargs["dynamic"] is False
 
 
 def do_test_backend(backend, dtype, model, sample_data, tmp_path):

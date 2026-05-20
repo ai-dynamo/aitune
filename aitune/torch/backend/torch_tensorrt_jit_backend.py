@@ -49,7 +49,7 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         default_factory=TorchTensorRTConfig
     )
     fullgraph: bool = False
-    dynamic_shapes: bool | None = None
+    dynamic: bool | None = None
     autocast_enabled: bool = False
     autocast_dtype: torch.dtype | None = None
 
@@ -134,6 +134,8 @@ class TorchTensorRTJitBackend(Backend):
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Build the model with Torch compile."""
+        if self._config.dynamic is None and graph_spec.input_spec.detected_dynamic_axis():
+            self._config.dynamic = True
         self._save_config(cache_dir)
         module = module.eval()
         self._orig_module = module
@@ -158,7 +160,7 @@ class TorchTensorRTJitBackend(Backend):
             backend="torch_tensorrt",
             options=asdict(self._config.compile_config),
             fullgraph=self._config.fullgraph,
-            dynamic=self._config.dynamic_shapes,
+            dynamic=self._config.dynamic,
         )
 
         for args, kwargs in self._data:

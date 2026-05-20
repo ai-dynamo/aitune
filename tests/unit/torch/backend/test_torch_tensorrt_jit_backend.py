@@ -23,6 +23,8 @@ from tests.utilities.helpers import requires_cuda
 def _mock_graph_spec():
     m = Mock(spec=GraphSpec)
     m.name = "test"
+    m.input_spec = Mock()
+    m.input_spec.detected_dynamic_axis.return_value = False
     return m
 
 
@@ -45,7 +47,7 @@ def sample_data(model, torch_device) -> list[Sample]:
 def torch_tensorrt_jit_backend_config() -> TorchTensorRTJitBackendConfig:
     return TorchTensorRTJitBackendConfig(
         compile_config=TorchTensorRTTestConfig(workspace_size=1),
-        dynamic_shapes=False,
+        dynamic=False,
     )
 
 
@@ -67,6 +69,48 @@ def backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, 
     )
     backend = cast(TorchTensorRTJitBackend, backend)
     return torch_mod, backend
+
+
+def test_torch_tensorrt_build_enables_dynamic_for_dynamic_graph_spec(mocker, tmp_path):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
+    mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
+
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1, 2])
+    sample_data = toy.samples(batch_sizes=[1])
+    compile_mock = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile", return_value=toy)
+    config = TorchTensorRTJitBackendConfig(
+        compile_config=TorchTensorRTTestConfig(workspace_size=1),
+        dynamic=None,
+    )
+    backend = TorchTensorRTJitBackend(config)
+
+    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    assert backend._config.dynamic is True
+    assert compile_mock.call_args.kwargs["dynamic"] is True
+
+
+def test_torch_tensorrt_build_preserves_explicit_dynamic_false(mocker, tmp_path):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
+    mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
+
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1, 2])
+    sample_data = toy.samples(batch_sizes=[1])
+    compile_mock = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile", return_value=toy)
+    config = TorchTensorRTJitBackendConfig(
+        compile_config=TorchTensorRTTestConfig(workspace_size=1),
+        dynamic=False,
+    )
+    backend = TorchTensorRTJitBackend(config)
+
+    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    assert backend._config.dynamic is False
+    assert compile_mock.call_args.kwargs["dynamic"] is False
 
 
 @requires_cuda
@@ -132,7 +176,7 @@ def test_mock_infer(torch_tensorrt_jit_backend, model, sample_data, torch_device
     #     mocker.ANY,
     #     backend=
     #     options=asdict(torch_tensorrt_jit_backend_config.compile_config),
-    #     dynamic=torch_tensorrt_jit_backend_config.dynamic_shapes,
+    #     dynamic=torch_tensorrt_jit_backend_config.dynamic,
     # )
 
     # Reset for cleanup
@@ -236,7 +280,7 @@ def test_tensorrt_jit_config_from_dict_defaults():
     config = TorchTensorRTJitBackendConfig.from_dict({})
     default = TorchTensorRTJitBackendConfig()
     assert config.fullgraph == default.fullgraph
-    assert config.dynamic_shapes == default.dynamic_shapes
+    assert config.dynamic == default.dynamic
     assert config.autocast_enabled == default.autocast_enabled
     assert config.autocast_dtype == default.autocast_dtype
 

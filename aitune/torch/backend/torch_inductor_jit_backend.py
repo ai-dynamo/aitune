@@ -142,6 +142,8 @@ class TorchInductorJitBackend(Backend):
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Builds the model with torch.compile."""
+        if self._config.dynamic is None and graph_spec.input_spec.detected_dynamic_axis():
+            self._config.dynamic = True
         self._save_config(cache_dir)
 
         module.to(self._device)
