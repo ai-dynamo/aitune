@@ -6,7 +6,6 @@ title: "Changelog"
 # Changelog
 
 ## 0.4.0 (unreleased)
-- feat: JIT patcher exclusions (`extra_patch_exclude_packages`, `extra_patch_exclude_modules`) are now configurable on `jit_config`
 - feat: JIT tuning supports tune strategy selection via `aitune.torch.jit_config.strategy` (e.g. `MaxThroughputStrategy`); default remains `FirstWinsStrategy`
 - feat: Add performance validation to tuning strategies. Backends with no speedup relative to TorchEagerBackend are skipped.
 - feat: Deferred mode for Just-in-Time (JIT) tuning - explicit tuning trigger post whole pipeline or model pass, useful for image and video generation pipelines
@@ -17,6 +16,7 @@ title: "Changelog"
 - feat: New hardware metrics collection via subprocess-based hardware monitor
 - feat: Hardware metrics output path can be configured via AITUNE_HARDWARE_METRICS_PATH environment variable
 - feat: Locator now traverses `collections.UserDict` subclasses (e.g. `transformers.BatchEncoding`) like plain `dict`, restoring tensor shape tracking for sentence-transformers 5.4.0
+- feat: JIT tuning can exclude packages or module classes from automatic tuning via `aitune.torch.jit_config.patch_exclude`
 - feat: Add hardware metrics snapshot and enable/disable them at runtime
 - feat: Tuning data collection emits a JSON report covering run, module, graph, and backend build stages - controlled via AITUNE_TUNING_DATA_COLLECTION environment variable
 - feat: Tuning data output path can be configured via AITUNE_TUNING_DATA_PATH environment variable

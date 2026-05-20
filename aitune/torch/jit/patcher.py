@@ -3,7 +3,6 @@
 """Module for inspecting PyTorch models and tracking their execution."""
 
 import atexit
-import inspect
 import logging
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -24,25 +23,22 @@ T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
-# Built-in exclusions the JIT patcher always applies. User-supplied entries on ``jit_config``
-# (``extra_patch_exclude_packages`` / ``extra_patch_exclude_modules``) add to these — they cannot be
-# removed via config to avoid breaking tuning by accident (e.g. dropping ``torch_tensorrt``
-# leads to wrapt-decorated forwards in the compiled gm and crashes ``torch_tensorrt.save``).
-_DEFAULT_PATCH_EXCLUDE_PACKAGES: tuple[str, ...] = (
+# Built-in exclusions the JIT patcher always applies. User-supplied entries on
+# ``jit_config.patch_exclude`` add to these — they cannot be removed via config to
+# avoid breaking tuning by accident (e.g. dropping ``torch_tensorrt`` leads to
+# wrapt-decorated forwards in the compiled gm and crashes ``torch_tensorrt.save``).
+_DEFAULT_PATCH_EXCLUDE: tuple[str, ...] = (
     "torch.jit",
     "torch._inductor",
     "torch._dynamo",
     "torch.fx",
     "torch.export",
     "torch_tensorrt",
-)
-
-_DEFAULT_PATCH_EXCLUDE_MODULES: tuple[type[torch.nn.Module], ...] = (
-    torch.nn.ModuleList,
-    torch.nn.ModuleDict,
-    torch.nn.Sequential,
-    torch.nn.ParameterList,
-    torch.nn.ParameterDict,
+    "torch.nn.modules.container.ModuleList",
+    "torch.nn.modules.container.ModuleDict",
+    "torch.nn.modules.container.Sequential",
+    "torch.nn.modules.container.ParameterList",
+    "torch.nn.modules.container.ParameterDict",
 )
 
 
@@ -137,20 +133,17 @@ class Patcher:
         If automatic patching is used, all modules, even those for internal torch use, will be intercepted.
         Those have to be rejected, otherwise JIT compilation will fail.
 
-        Built-in defaults (``_DEFAULT_PATCH_EXCLUDE_MODULES``, ``_DEFAULT_PATCH_EXCLUDE_PACKAGES``)
-        always apply; user-supplied ``jit_config.extra_patch_exclude_modules`` and
-        ``extra_patch_exclude_packages`` are additive.
+        Built-in defaults (``_DEFAULT_PATCH_EXCLUDE``) always apply;
+        user-supplied ``jit_config.patch_exclude`` entries are additive.
         """
-        exclude_modules = _DEFAULT_PATCH_EXCLUDE_MODULES + config.extra_patch_exclude_modules
-        if isinstance(module, exclude_modules):
+        patch_exclude = _DEFAULT_PATCH_EXCLUDE + config.patch_exclude
+        module_cls = module.__class__
+        if f"{module_cls.__module__}.{module_cls.__qualname__}" in patch_exclude:
             return False
 
-        module_info = inspect.getmodule(module.__class__)
-        if module_info is not None and module_info.__package__ is not None:
-            pkg = module_info.__package__
-            exclude_packages = _DEFAULT_PATCH_EXCLUDE_PACKAGES + config.extra_patch_exclude_packages
-            if any(pkg == p or pkg.startswith(p + ".") for p in exclude_packages):
-                return False
+        module_name = module_cls.__module__
+        if any(module_name == p or module_name.startswith(p + ".") for p in patch_exclude):
+            return False
         return True
 
     @classmethod

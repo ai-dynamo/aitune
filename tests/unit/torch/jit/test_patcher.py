@@ -10,6 +10,11 @@ from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patcher import Patcher, jit_reset, patch_for_jit_tuning, prepare_for_jit_tuning
 
 
+def _module_with_module_name(module_name: str) -> torch.nn.Module:
+    module_cls = type("SyntheticModule", (torch.nn.Module,), {"__module__": module_name})
+    return module_cls()
+
+
 def test_jit_reset():
     """Test jit_reset function."""
     Patcher.patch_torch()
@@ -56,53 +61,69 @@ def test_is_allowed_to_tune():
     assert not Patcher._is_allowed_to_tune(Mock(spec=torch._dynamo.eval_frame.OptimizedModule))
 
 
-def test_is_allowed_to_tune_excludes_subpackage_classes(mocker):
-    """Exclusions are by prefix — classes nested under an excluded package are also rejected.
+def test_is_allowed_to_tune_excludes_submodule_classes():
+    """Exclusions are by prefix — classes nested under an excluded module are also rejected.
 
     Regression for the wrapt-in-gm save crash: torch_tensorrt builds
     ``torch_tensorrt.dynamo.runtime._TorchTensorRTModule.TorchTensorRTModule``
     instances during compile and inserts them into the compiled gm. Wrapping
     their ``forward`` with wrapt makes the subsequent ``torch_tensorrt.save``
-    deepcopy raise. The exclude check must therefore match by package prefix.
+    deepcopy raise. The exclude check must therefore match by module prefix.
     """
-    module = torch.nn.Module()
-    fake_module_info = Mock(__package__="torch_tensorrt.dynamo.runtime._TorchTensorRTModule")
-    mocker.patch("aitune.torch.jit.patcher.inspect.getmodule", return_value=fake_module_info)
+    module = _module_with_module_name("torch_tensorrt.dynamo.runtime._TorchTensorRTModule")
 
     assert not Patcher._is_allowed_to_tune(module)
 
 
-def test_is_allowed_to_tune_allows_unrelated_subpackage(mocker):
-    """A class whose package prefix is *not* in the exclude list stays tunable."""
-    module = torch.nn.Module()
-    fake_module_info = Mock(__package__="some.other.library")
-    mocker.patch("aitune.torch.jit.patcher.inspect.getmodule", return_value=fake_module_info)
+def test_is_allowed_to_tune_allows_unrelated_submodule():
+    """A class whose module prefix is *not* in the exclude list stays tunable."""
+    module = _module_with_module_name("some.other.library")
 
     assert Patcher._is_allowed_to_tune(module)
 
 
-def test_is_allowed_to_tune_extends_extra_patch_exclude_packages_with_user_entries(mocker):
-    """User-supplied extra_patch_exclude_packages add to the built-in defaults."""
-    jit_config.extra_patch_exclude_packages = ("my_blocked_pkg",)
-    module = torch.nn.Module()
-    fake_module_info = Mock(__package__="my_blocked_pkg.submodule")
-    mocker.patch("aitune.torch.jit.patcher.inspect.getmodule", return_value=fake_module_info)
+def test_is_allowed_to_tune_extends_patch_exclude_with_user_module_prefix_entries(monkeypatch):
+    """User-supplied patch_exclude module prefixes add to the built-in defaults."""
+    monkeypatch.setattr(jit_config, "patch_exclude", ("my_blocked_pkg",))
+    module = _module_with_module_name("my_blocked_pkg.submodule")
 
     assert not Patcher._is_allowed_to_tune(module)
 
 
-def test_is_allowed_to_tune_extends_extra_patch_exclude_modules_with_user_entries():
-    """User-supplied extra_patch_exclude_modules add to the built-in defaults."""
-    jit_config.extra_patch_exclude_modules = (torch.nn.Linear,)
+def test_is_allowed_to_tune_extends_patch_exclude_with_user_exact_module_entries(monkeypatch):
+    """User-supplied patch_exclude module prefixes can match the exact module name."""
+    monkeypatch.setattr(jit_config, "patch_exclude", ("foo.bar",))
+    module = _module_with_module_name("foo.bar")
+
+    assert not Patcher._is_allowed_to_tune(module)
+
+
+def test_is_allowed_to_tune_extends_patch_exclude_with_user_class_entries(monkeypatch):
+    """User-supplied patch_exclude module class FQNs add to the built-in defaults."""
+    monkeypatch.setattr(jit_config, "patch_exclude", ("torch.nn.modules.linear.Linear",))
 
     assert not Patcher._is_allowed_to_tune(torch.nn.Linear(10, 5))
     # Built-in defaults still apply alongside user-supplied entries.
     assert not Patcher._is_allowed_to_tune(torch.nn.ModuleList())
 
 
-def test_is_allowed_to_tune_user_cannot_remove_default_exclusions():
+def test_is_allowed_to_tune_rejects_bare_class_name_entries(monkeypatch):
+    """Bare class-name patch_exclude entries are not treated as class FQNs."""
+    monkeypatch.setattr(jit_config, "patch_exclude", ("Linear",))
+
+    assert Patcher._is_allowed_to_tune(torch.nn.Linear(10, 5))
+
+
+def test_is_allowed_to_tune_rejects_torch_nn_alias_entries(monkeypatch):
+    """torch.nn alias patch_exclude entries are not treated as class FQNs."""
+    monkeypatch.setattr(jit_config, "patch_exclude", ("torch.nn.Linear",))
+
+    assert Patcher._is_allowed_to_tune(torch.nn.Linear(10, 5))
+
+
+def test_is_allowed_to_tune_user_cannot_remove_default_exclusions(monkeypatch):
     """Clearing the user-config tuple does not disable the built-in defaults."""
-    jit_config.extra_patch_exclude_modules = ()
+    monkeypatch.setattr(jit_config, "patch_exclude", ())
 
     assert not Patcher._is_allowed_to_tune(torch.nn.ModuleList())
 
