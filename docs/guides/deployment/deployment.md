@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Deployment Guide
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Deployment Guide"
+---
 
 This guide covers the full deployment story for AITune-tuned models: saving a tuned model to a checkpoint, loading it in production, and optionally serving it as an OpenAI-compatible HTTP endpoint via [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo).
 
@@ -210,5 +209,5 @@ See the [E5Large example](../../../examples/E5Large/README.md) for a complete wo
 - [AOT Tuning Guide](../aot_tuning.md) — tuning a model before saving
 - [Tune Strategies](../tune_strategies/tune_strategies.md) — selecting the right optimization strategy
 - [Backend Guides](../backends/tensorrt_backend.md) — backend-specific deployment notes
-- [E5Large example](../../../examples/E5Large/) — end-to-end embedding worker
-- [FLUX example](../../../examples/FLUX/) — end-to-end image generation worker
+- [E5Large example](../../../examples/E5Large/README.md) — end-to-end embedding worker
+- [FLUX example](../../../examples/FLUX/README.md) — end-to-end image generation worker

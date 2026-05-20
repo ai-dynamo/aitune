@@ -1,12 +1,10 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: aitune-benchmark
 description: Use when measuring inference performance of a PyTorch model before and after AITune optimization — capturing baseline, compilation time, tuned throughput, and speedup.
 license: Apache-2.0
 ---
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
 
 # Benchmark workflow
 
@@ -21,6 +19,7 @@ Baseline benchmark must be run before any backend tuning, and should be done onc
 ```python
 import json, time, torch, numpy as np
 from pathlib import Path
+
 
 def benchmark(model, input_data, warmup=5, runs=50):
 
@@ -50,6 +49,7 @@ def benchmark(model, input_data, warmup=5, runs=50):
         "throughput_rps": 1000.0 / float(latencies.mean()),
         "gpu_memory_mb": float(mem),
     }
+
 
 # model must be in eager mode here
 results = {"baseline": benchmark(model, input_data)}
@@ -85,12 +85,14 @@ except Exception as e:
     compile_error = str(e)
 compile_time_s = time.perf_counter() - t0
 
-print(json.dumps({
-    "backend": "TensorRTBackend-fp16",
-    "compile_ok": compile_ok,
-    "compile_time_s": compile_time_s,
-    "compile_error": compile_error,
-}))
+print(
+    json.dumps({
+        "backend": "TensorRTBackend-fp16",
+        "compile_ok": compile_ok,
+        "compile_time_s": compile_time_s,
+        "compile_error": compile_error,
+    })
+)
 ```
 
 If `compile_ok` is false: log the error, advance to the next backend. Do not attempt benchmark or correctness check.

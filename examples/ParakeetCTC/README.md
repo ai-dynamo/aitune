@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Nemo ASR Parakeet CTC 0.6B Pipeline Tuning with NVIDIA AITune
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Nemo ASR Parakeet CTC 0.6B Pipeline Tuning"
+---
 
 This example demonstrates how to use NVIDIA AITune to tune the Nemo ASR with Parakeet-CTC-0.6B model.
 

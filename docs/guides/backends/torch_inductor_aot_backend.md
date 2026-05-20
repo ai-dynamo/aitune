@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Torch Inductor AOT Backend Guide
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Torch Inductor AOT Backend Guide"
+---
 
 The Torch Inductor AOT backend compiles models Ahead-of-Time using PyTorch's AOT Inductor
 (`torch._inductor.aoti_compile_and_package`). The result is a self-contained `.pt2` artifact
@@ -105,10 +104,11 @@ data_256 = torch.randn(3, 256, 256, device="cuda")
 ait.tune(module, [data_224, data_256], batch_sizes=[1])
 ```
 
-!!! note
-    When input samples have different spatial sizes, use `batch_sizes=[1]` to prevent the
-    data loader from stacking tensors of mismatched shapes.
+<Note>
+When input samples have different spatial sizes, use `batch_sizes=[1]` to prevent the
+data loader from stacking tensors of mismatched shapes.
 
+</Note>
 The backend uses `torch.export.Dim.AUTO` for spatial / sequence axes, letting PyTorch infer
 valid ranges and divisibility constraints from the model automatically.
 

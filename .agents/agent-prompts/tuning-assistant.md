@@ -1,7 +1,7 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+---
 
 # Performance Benchmarker Agent Personality
 
@@ -49,6 +49,7 @@ Do not go deeper than depth=1.
 Before starting the backend loop, check the GPU SM version once:
 ```python
 import torch
+
 sm = torch.cuda.get_device_capability()  # e.g. (8, 9) for Ada, (9, 0) for Hopper
 ```
 Use this to gate backends:

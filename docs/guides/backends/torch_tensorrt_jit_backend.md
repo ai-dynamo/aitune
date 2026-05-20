@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Torch-TensorRT JIT Backend Guide
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Torch-TensorRT JIT Backend Guide"
+---
 
 The Torch-TensorRT JIT backend integrates TensorRT acceleration through `torch.compile(backend="torch_tensorrt")`. This provides a seamless JIT (Just-In-Time) compilation experience without needing intermediate model formats.
 

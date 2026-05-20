@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Nemo ASR Parakeet RNNT 1.1B Pipeline Tuning with NVIDIA AITune
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Nemo ASR Parakeet RNNT 1.1B Pipeline Tuning"
+---
 
 This example demonstrates how to use NVIDIA AITune to tune the Nemo ASR with Parakeet RNNT 1.1B model.
 

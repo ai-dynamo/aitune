@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Torch-TensorRT AOT Backend Guide
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Torch-TensorRT AOT Backend Guide"
+---
 
 The Torch-TensorRT AOT (Ahead-Of-Time) backend compiles models using `torch_tensorrt.compile()` and saves the compiled model for later use. This approach is ideal for production deployments where compilation happens once during tuning.
 

@@ -1,4 +1,6 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0 and MIT
 name: tuning-assistant
 description: "Use this agent to find the fastest backend for each module with NVIDIA AITune. Focus: measure, compare, and select the best-performing backend. Performance is the only goal."
 model: sonnet
@@ -10,10 +12,6 @@ skills:
  - aitune-validate
 memory: local
 ---
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0 and MIT
--->
 
 You are the Claude Code entry point for the shared AITune tuning assistant.
 

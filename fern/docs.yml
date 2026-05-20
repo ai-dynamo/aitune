@@ -1,0 +1,93 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# yaml-language-server: $schema=https://schema.buildwithfern.dev/docs-yml.json
+
+title: NVIDIA AITune Documentation
+
+instances:
+  - url: aitune.docs.buildwithfern.com
+    custom-domain: docs.nvidia.com/aitune
+
+agents:
+  page-directive: "For clean Markdown content of this page, append .md to this URL."
+
+products:
+  - display-name: AITune
+    slug: /
+    path: ../docs/index.yml
+    versions:
+      - display-name: dev
+        slug: dev
+        path: ../docs/index.yml
+
+redirects:
+  - source: "/aitune/index.html"
+    destination: "/aitune/"
+  - source: "/aitune/dev/index.html"
+    destination: "/aitune/dev/"
+
+navbar-links:
+  - type: github
+    value: https://github.com/ai-dynamo/aitune
+
+footer: ./components/CustomFooter.tsx
+
+layout:
+  searchbar-placement: header
+  page-width: 1376px
+  sidebar-width: 248px
+  content-width: 812px
+  tabs-placement: header
+  hide-feedback: true
+
+metadata:
+  canonical-host: "docs.nvidia.com/aitune"
+
+experimental:
+  mdx-components:
+    - ./components
+  basepath-aware: true
+
+libraries:
+  aitune:
+    input:
+      git: https://github.com/ai-dynamo/aitune
+      subpath: aitune
+    output:
+      path: ../docs/api
+    lang: python
+
+
+colors:
+  accentPrimary:
+    dark: "#76B900"
+    light: "#005020"
+  background:
+    light: "#FFFFFF"
+    dark: "#000000"
+
+typography:
+  bodyFont:
+    name: NVIDIA
+    paths:
+      - path: ../docs/assets/fonts/NVIDIASans.woff2
+        style: normal
+      - path: ../docs/assets/fonts/NVIDIASans_Italic.woff2
+        style: italic
+  codeFont:
+    name: RobotoMono
+    paths:
+      - path: ../docs/assets/fonts/RobotoMono.woff2
+
+logo:
+  dark: ../docs/assets/NVIDIA_dark.svg
+  light: ../docs/assets/NVIDIA_light.svg
+  height: 20
+  href: /
+  right-text: Documentation
+
+favicon: ../docs/assets/NVIDIA_symbol.svg
+
+css:
+  - ./main.css

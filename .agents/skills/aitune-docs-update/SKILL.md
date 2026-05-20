@@ -1,13 +1,11 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: aitune-docs-update
 description: Run full documentation sync (not limited to recent git changes)
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 license: Apache-2.0
 ---
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
 
 Run the docs-auditor agent in **full mode** to perform a comprehensive documentation audit across the entire project.
 

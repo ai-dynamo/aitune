@@ -1,12 +1,11 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: aitune-commit
 description: Use when creating a git commit to ensure the message follows the Conventional Commits specification
 license: Apache-2.0
 ---
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
+
 # Conventional Commit
 
 ## Workflow

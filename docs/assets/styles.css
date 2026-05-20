@@ -1,7 +1,0 @@
-/*
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
-*/
-.md-header__button.md-logo :is(img,svg)  {
-    height: 1.8rem; !important;
-}

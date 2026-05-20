@@ -1,9 +1,11 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "JIT Tuning Example"
+---
 
-# Aim
+
+## Aim
 
 This example demonstrates how to use NVIDIA AITune to do JIT tuning without any code changes required i.e. there is no additional import to the user's code.
 

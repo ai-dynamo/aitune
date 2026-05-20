@@ -234,7 +234,7 @@ First, install the required third-party dependencies:
 
 .. code-block:: bash
 
-    pip install transformers diffusers torch
+    pip install "transformers" diffusers torch
 
 Prepare the example script for tuning ``my_script.py``:
 
@@ -272,13 +272,12 @@ If there is a need to adjust just-in-time options, you can do it but currently t
 
 .. code-block:: python
 
-    from aitune.torch import jit_config
+    from aitune.torch.jit.config import config
     from aitune.torch.backend import TensorRTBackend
-    from aitune.torch.tune_strategy import FirstWinsStrategy
 
-    jit_config.max_depth_level = 2 # change the default maximum depth level for nested modules to be tuned
-    jit_config.detect_graph_breaks = True # turn on graph break detection
-    jit_config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()]) # change the tune strategy
+    config.max_depth_level = 1 # change the default maximum depth level for nested modules to be tuned
+    config.detect_graph_breaks = False # turn off graph break detection
+    config.backends = [TensorRTBackend()] # change the backends
 
 .. _comparison-aot-jit:
 

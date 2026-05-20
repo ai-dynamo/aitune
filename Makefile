@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-.PHONY: clean clean-build clean-pyc clean-docs clean-test clean-notebooks docs lint test coverage release dist install install-dev install-dev-deps help
+.PHONY: clean clean-build clean-pyc clean-docs clean-test clean-notebooks docs docs-serve lint test coverage release dist install install-dev install-dev-deps help
 .DEFAULT_GOAL := help
 
 define BROWSER_PYSCRIPT
@@ -44,9 +44,6 @@ clean-pyc: ## remove Python file artifacts
 	find . -name '*~' -not -path "./.cache/*" -exec rm -f {} +
 	find . -name '__pycache__' -not -path "./.cache/*" -exec rm -fr {} +
 
-clean-docs: ## remove test and coverage artifacts
-	rm -rf site
-
 clean-test: ## remove test and coverage artifacts
 	rm -fr .tox/
 	rm -f .coverage
@@ -60,23 +57,22 @@ clean-notebooks: ## remove Jupyter notebook output cells
 	@echo "Cleaning notebook outputs..."
 	find . -name '*.ipynb' -not -path "./.cache/*" -exec jupyter nbconvert --clear-output --inplace {} \;
 
-docs: # TBD: uncomment after vdr clean-docs ## generate site
-	cp CHANGELOG.md docs
-	cp CONTRIBUTING.md docs
-	cp LICENSE docs/LICENSE.md
-	@mkdir -p docs/examples
-	cp examples/README.md docs/examples/examples.md
-	# Copy example subdirectory READMEs with directory structure
-	@find examples -maxdepth 2 -mindepth 2 -name 'README.md' -type f | while read -r file; do \
-		subdir=$$(dirname "$$file" | sed 's|^examples/||'); \
-		mkdir -p "docs/examples/$$subdir"; \
-		cp "$$file" "docs/examples/$$subdir/README.md"; \
-	done
+fern-setup: ## setup Fern docs
+	npm install -g fern-api
+	fern --version
+	fern login
 
-	mkdocs build --clean
+docs: ## generate and validate Fern docs
+	fern docs md generate
+	fern check --warnings
+	fern docs broken-links
 
-docs-serve: docs
-	mkdocs serve
+fern-push-dev:
+	fern generate --docs dev --preview
+
+FERN_PORT ?= 3000
+docs-serve: docs ## serve Fern docs locally
+	fern docs dev --port $(FERN_PORT) --broken-links
 
 
 lint: ## check style with pre-commit and pytype
@@ -110,4 +106,6 @@ install-dev: clean-build clean-pyc clean-test
 	$(PIP_INSTALL) --upgrade pip
 	$(PIP_INSTALL) -e ".[dev]"
 
--include *.mk
+uv-locks-update:
+	uv lock
+	for ex in `find examples/ -name pyproject.toml`; do (cd `dirname $$ex` && uv lock); done

@@ -1,8 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-# Observability: logs and monitoring
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Observability: logs and monitoring"
+---
 
 Observability is key to getting clearer, more verbose output during the tuning process. This page covers the logging level and the `AITUNE_CONSOLE_OUTPUT` environment variable (with hardware monitoring to come).
 
@@ -69,4 +69,3 @@ logging.basicConfig(level=logging.INFO, force=True)
 ```
 
 See also `aitune.utils.setup_logging` / `control_output` in the API.
-

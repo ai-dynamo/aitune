@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Tuning Workflow
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Tuning Workflow"
+---
 
 This guide provides an in-depth look at AITune's tuning process, explaining how samples are gathered, how modules are tuned, and how strategies and backends work together to optimize your models.
 
@@ -68,9 +67,9 @@ As samples are collected, wrapped modules detect unique computational graphs:
 
 ```python
 # Example: Different input structures create different graphs
-module(torch.randn(1, 10))              # Graph 0
-module(torch.randn(1, 10), mask=True)   # Graph 1 (different kwargs)
-module(torch.randn(1, 10, 5))           # Graph 2 (different tensor rank)
+module(torch.randn(1, 10))  # Graph 0
+module(torch.randn(1, 10), mask=True)  # Graph 1 (different kwargs)
+module(torch.randn(1, 10, 5))  # Graph 2 (different tensor rank)
 ```
 
 **Graph Identity Rules**:
@@ -85,14 +84,16 @@ Note:
 
 ```python
 import aitune.torch as ait
-ait.config.strict_mode=False # by default this is turned on.
+
+ait.config.strict_mode = False  # by default this is turned on.
 ```
 
 - For a particular graph, there is only a limited number of samples collected to limit memory usage. This threshold can be set with:
 
 ```python
 import aitune.torch as ait
-ait.config.max_num_samples_stored=10
+
+ait.config.max_num_samples_stored = 10
 ```
 
 Each unique graph is represented by a `GraphSpec` containing:

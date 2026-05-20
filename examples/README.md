@@ -1,8 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-# NVIDIA AITune Examples
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "NVIDIA AITune Examples"
+---
 
 This directory contains practical examples demonstrating how to use NVIDIA AITune to tune different types of AI models for inference performance.
 
@@ -20,7 +20,7 @@ Shows how to tune ResNet models for image classification tasks. This example dem
   - Image classification inference
   - Performance comparison before/after tuning
 - **More Info**:
-  - <https://huggingface.co/microsoft/resnet-50>
+  - https://huggingface.co/microsoft/resnet-50
 
 ## StableDiffusion
 
@@ -36,7 +36,7 @@ Demonstrates tuning of Stable Diffusion models for text-to-image generation. Thi
   - Customizable image generation parameters
   - Text prompt-based image synthesis
 - **More Info**:
-  - <https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers>
+  - https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers
 
 ## FLUX
 
@@ -52,7 +52,7 @@ Shows tuning of the FLUX text-to-image model, demonstrating advanced diffusion m
   - High-quality image generation
   - Efficient inference pipeline tuning
 - **More Info**:
-  - <https://huggingface.co/black-forest-labs/FLUX.1-dev>
+  - https://huggingface.co/black-forest-labs/FLUX.1-dev
 
 ## ParakeetCTC
 
@@ -68,8 +68,8 @@ Demonstrates tuning of ASR (Automatic Speech Recognition) models using NVIDIA's 
   - Audio-to-text transcription
   - NVIDIA NeMo framework integration
 - **More Info**:
-  - <https://huggingface.co/nvidia/parakeet-ctc-0.6b>
-  - <https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/asr/models.html>
+  - https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  - https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/asr/models.html
 
 ## ParakeetRNNT
 
@@ -85,8 +85,8 @@ Demonstrates tuning of ASR (Automatic Speech Recognition) models using NVIDIA's 
   - Audio-to-text transcription
   - NVIDIA NeMo framework integration
 - **More Info**:
-  - <https://huggingface.co/nvidia/parakeet-rnnt-1.1b>
-  - <https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/asr/models.html>
+  - https://huggingface.co/nvidia/parakeet-rnnt-1.1b
+  - https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/asr/models.html
 
 ## ESM2
 
@@ -102,7 +102,7 @@ Demonstrates tuning of ESM2 model for text embedding tasks.
   - Text embedding inference
   - HuggingFace integration
 - **More Info**:
-  - <https://huggingface.co/esm/esm2-t12-100M-UR50S>
+  - https://huggingface.co/esm/esm2-t12-100M-UR50S
 
 ## E5Large
 
@@ -118,7 +118,7 @@ Demonstrates tuning of E5Large model for text embedding tasks.
   - Text embedding inference
   - HuggingFace integration
 - **More Info**:
-  - <https://huggingface.co/intfloat/e5-large-v2>
+  - https://huggingface.co/intfloat/e5-large-v2
 
 ## LLM
 
@@ -135,7 +135,7 @@ Demonstrates tuning of Large Language Models for text generation tasks. This exa
   - Prefill and decode phase optimization
   - HuggingFace integration
 - **More Info**:
-  - <https://huggingface.co/microsoft/Phi-3-mini-4k-instruct>
+  - https://huggingface.co/microsoft/Phi-3-mini-4k-instruct
 
 ## JIT Tuning
 
@@ -152,9 +152,9 @@ Demonstrates how to use NVIDIA AITune with JIT (Just-In-Time) tuning that requir
   - Support for multiple model types (ResNet, diffusion models)
   - Simple enable/disable through `AUTOWRAPT_BOOTSTRAP` variable
 - **More Info**:
-  - <https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers>
-  - <https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0>
-  - <https://huggingface.co/black-forest-labs/FLUX.1-dev>
+  - https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers
+  - https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
+  - https://huggingface.co/black-forest-labs/FLUX.1-dev
 
 ---
 

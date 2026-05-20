@@ -1,8 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-# Tuning Assistant Agent
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Tuning Assistant Agent"
+---
 
 The `tuning-assistant` subagent finds the fastest backend for a PyTorch model or pipeline using NVIDIA AITune. It runs the full AOT tuning loop — inspect, wrap, tune, validate, benchmark — and returns a deployment recommendation with a saved `.ait` checkpoint.
 

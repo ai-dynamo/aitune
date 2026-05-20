@@ -1,12 +1,11 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: aitune-tune
 description: Use when a user asks to tune, optimize, accelerate, or deploy a PyTorch model or inference pipeline for GPU performance.
 license: Apache-2.0
 ---
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
+
 # AITune Model Tuning (Agent Skill)
 
 Tuning is the process of finding the best backend for a model/pipeline. It iterates backends from highest to lowest performance, stopping at the first that compiles correctly and meets the speedup threshold.

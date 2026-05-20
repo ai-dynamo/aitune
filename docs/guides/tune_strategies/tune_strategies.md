@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Tune Strategies Guide
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Tune Strategies Guide"
+---
 
 Tune strategies determine how AITune selects and configures backends during the tuning process. They provide flexibility in balancing performance, reliability, and tuning time.
 
@@ -40,9 +39,10 @@ Use the table below as a quick decision guide. If you already know a backend is 
 
 Uses exactly one backend, failing immediately with the original error if it cannot build. Use this when you have already validated that a backend works and want deterministic, reproducible behavior in production.
 
-!!! note
-    `OneBackendStrategy` may look equivalent to `FirstWinsStrategy` with a single backend, but the key difference is error handling: `OneBackendStrategy` raises the backend's original exception on failure, while `FirstWinsStrategy` catches errors and tries the next candidate.
+<Note>
+`OneBackendStrategy` may look equivalent to `FirstWinsStrategy` with a single backend, but the key difference is error handling: `OneBackendStrategy` raises the backend's original exception on failure, while `FirstWinsStrategy` catches errors and tries the next candidate.
 
+</Note>
 ### Usage
 
 ```python

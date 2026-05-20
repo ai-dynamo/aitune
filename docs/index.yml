@@ -1,0 +1,135 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+navigation:
+  - section: Learn
+    contents:
+      - page: Overview
+        path: ../docs/learn/overview.md
+      - page: Install
+        path: ../docs/learn/install.md
+      - page: Quick Start
+        path: ../docs/learn/quick_start.md
+      - page: Core Functionalities
+        path: ../docs/learn/core_functionalities.md
+      - page: Backends
+        path: ../docs/learn/backends.md
+      - page: Observability
+        path: ../docs/learn/observability.md
+  - section: Guides
+    contents:
+      - page: Ahead-of-time Tuning
+        path: ../docs/guides/aot_tuning.md
+      - page: Ahead-of-time Inspect
+        path: ../docs/guides/aot_inspect.md
+      - page: Just-in-time Tuning
+        path: ../docs/guides/jit_tuning.md
+      - page: Just-in-time Inspect
+        path: ../docs/guides/jit_inspect.md
+      - section: Backends
+        contents:
+          - page: TensorRT Backend
+            path: ../docs/guides/backends/tensorrt_backend.md
+          - page: TensorRT Optimization Profiles
+            path: ../docs/guides/backends/tensorrt_optimization_profiles.md
+          - page: Torch-TensorRT Backend (JIT)
+            path: ../docs/guides/backends/torch_tensorrt_jit_backend.md
+          - page: Torch-TensorRT Backend (AOT)
+            path: ../docs/guides/backends/torch_tensorrt_aot_backend.md
+          - page: TorchAO Backend
+            path: ../docs/guides/backends/torchao_backend.md
+          - page: Torch Inductor JIT Backend
+            path: ../docs/guides/backends/torch_inductor_jit_backend.md
+          - page: Torch Inductor AOT Backend
+            path: ../docs/guides/backends/torch_inductor_aot_backend.md
+      - page: Tune Strategies
+        path: ../docs/guides/tune_strategies/tune_strategies.md
+      - page: Deployment
+        path: ../docs/guides/deployment/deployment.md
+      - section: Advanced
+        contents:
+          - page: Tuning Workflow
+            path: ../docs/guides/advanced/tuning_workflow.md
+          - page: Execution Graphs
+            path: ../docs/guides/advanced/execution_graphs.md
+          - page: Profiling and Hardware Metrics
+            path: ../docs/guides/advanced/profiling_and_hardware_metrics.md
+      - section: AI Agents
+        contents:
+          - page: Tuning Assistant
+            path: ../docs/guides/tuning-assistant.md
+  - section: Examples
+    contents:
+      - page: Overview
+        path: ../examples/README.md
+      - page: E5Large
+        path: ../examples/E5Large/README.md
+      - page: ESM2
+        path: ../examples/ESM2/README.md
+      - page: FLUX
+        path: ../examples/FLUX/README.md
+      - page: JitTuning
+        path: ../examples/JitTuning/README.md
+      - page: LLM
+        path: ../examples/LLM/README.md
+      - page: ParakeetCTC
+        path: ../examples/ParakeetCTC/README.md
+      - page: ParakeetRNNT
+        path: ../examples/ParakeetRNNT/README.md
+      - page: ResNet
+        path: ../examples/ResNet/README.md
+      - page: StableDiffusion
+        path: ../examples/StableDiffusion/README.md
+  - section: API Reference
+    contents:
+      - section: Ahead-of-time Tuning API
+        contents:
+          - page: Module
+            path: ../docs/api/aitune/aitune/torch/module.mdx
+          - page: Tuning
+            path: ../docs/api/aitune/aitune/torch/tuning.mdx
+          - page: Config
+            path: ../docs/api/aitune/aitune/torch/config.mdx
+          - page: Backend
+            path: ../docs/api/aitune/aitune/torch/backend.mdx
+          - page: Inspect
+            path: ../docs/api/aitune/aitune/torch/inspecting.mdx
+      - section: Just-in-time Tuning API
+        contents:
+          - page: Config
+            path: ../docs/api/aitune/aitune/torch/jit/config.mdx
+      - section: Backends API
+        contents:
+          - page: TensorRT Backend
+            path: ../docs/api/aitune/aitune/torch/backend/tensorrt/tensorrt_backend.mdx
+          - page: Torch-TensorRT Backend (JIT)
+            path: ../docs/api/aitune/aitune/torch/backend/torch_tensorrt_jit_backend.mdx
+          - page: Torch-TensorRT Backend (AOT)
+            path: ../docs/api/aitune/aitune/torch/backend/torch_tensorrt_aot_backend.mdx
+          - page: TorchAO Backend
+            path: ../docs/api/aitune/aitune/torch/backend/torchao_backend.mdx
+          - page: Torch Inductor JIT Backend
+            path: ../docs/api/aitune/aitune/torch/backend/torch_inductor_backend.mdx
+          - page: Torch Inductor AOT Backend
+            path: ../docs/api/aitune/aitune/torch/backend/torch_inductor_backend.mdx
+      - section: Tuning Strategies API
+        contents:
+          - page: FirstWinsStrategy
+            path: ../docs/api/aitune/aitune/torch/tune_strategy/first_wins_strategy.mdx
+          - page: OneBackendStrategy
+            path: ../docs/api/aitune/aitune/torch/tune_strategy/one_backend_strategy.mdx
+          - page: MaxThroughputStrategy
+            path: ../docs/api/aitune/aitune/torch/tune_strategy/highest_throughput_strategy.mdx
+      - section: Other APIs
+        contents:
+          - folder: ../docs/api/aitune/aitune
+  - section: Resources
+    contents:
+      - page: Changelog
+        path: ../CHANGELOG.md
+      - page: Known Issues
+        path: ../docs/known_issues.md
+      - page: Contributing
+        path: ../CONTRIBUTING.md
+      - page: License
+        path: ../LICENSE

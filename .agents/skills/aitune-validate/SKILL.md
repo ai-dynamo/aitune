@@ -1,12 +1,11 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: aitune-validate
 description: Use when verifying that a tuned model's outputs match the baseline eager model within numerical tolerance — run after each backend compilation before accepting it as a deployment candidate.
 license: Apache-2.0
 ---
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
+
 # Correctness Validation
 
 Write and execute a correctness script using a held-out sample (different from tuning input):
@@ -25,12 +24,14 @@ rel_error = ((baseline_out - tuned_out).abs() / baseline_out.abs().clamp(min=1e-
 atol = 1e-2  # adjust per precision
 correctness_pass = max_diff <= atol
 
-print(json.dumps({
-    "max_abs_diff": max_diff,
-    "max_rel_error": rel_error,
-    "atol_threshold": atol,
-    "correctness_pass": correctness_pass,
-}))
+print(
+    json.dumps({
+        "max_abs_diff": max_diff,
+        "max_rel_error": rel_error,
+        "atol_threshold": atol,
+        "correctness_pass": correctness_pass,
+    })
+)
 ```
 
 If `correctness_pass` is false: log as "correctness failure", advance to next backend.

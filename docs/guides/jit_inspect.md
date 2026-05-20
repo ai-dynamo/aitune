@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Just-in-Time Inspect Guide
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Just-in-Time Inspect Guide"
+---
 
 Just-in-time inspection captures module hierarchy and input/output signatures during real model execution, without tuning or compilation. Use it to understand what JIT tuning would see before you commit to a tuning strategy.
 

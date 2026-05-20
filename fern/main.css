@@ -1,0 +1,191 @@
+/*
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+*/
+
+:root {
+    --aitune-green: #76B900;
+    --aitune-black: #000000;
+    --aitune-white: #FFFFFF;
+    --aitune-light-grey: #F7F7F7;
+    --aitune-dark-grey: #1A1A1A;
+    --aitune-border-radius: 999px;
+}
+
+h1 {
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+h2 {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+h3 {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.fern-mdx-link {
+    color: var(--tw-prose-body);
+    text-decoration-color: var(--accent);
+}
+
+#fern-sidebar {
+    border-right: 1px solid var(--border, var(--grayscale-a5)) !important;
+}
+
+.fern-sidebar-link {
+    border-radius: 0 !important;
+    padding: 0.5rem 1rem !important;
+}
+
+.fern-sidebar-link:not(:hover) {
+    background-color: transparent !important;
+}
+
+.fern-sidebar-link[data-state="active"] {
+    color: unset !important;
+}
+
+#fern-header {
+    border-color: var(--border, var(--grayscale-a5)) !important;
+}
+
+.fern-header-logo-container .font-heading {
+    border-inline: 1px solid var(--border, var(--grayscale-a5));
+    color: var(--grayscale-a12) !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
+    margin: -20px 0.5rem;
+    padding: 15px 1rem;
+}
+
+@media (max-width: 1024px) {
+    .fern-header-logo-container .font-heading {
+        display: none !important;
+    }
+}
+
+#fern-search-button,
+.fern-button,
+.fern-footer-nav,
+.fern-version-selector .version-dropdown-trigger {
+    border-radius: var(--aitune-border-radius);
+}
+
+#fern-search-button:hover,
+.fern-version-selector .version-dropdown-trigger:hover,
+.fern-card:hover {
+    box-shadow: 0 0 0 1px var(--aitune-green) !important;
+}
+
+.fern-button {
+    font-weight: bold;
+}
+
+.fern-button.filled.primary {
+    color: var(--aitune-black);
+}
+
+.dark .fern-button.filled.primary {
+    background-color: var(--aitune-white);
+}
+
+.fern-docs-badge {
+    border-radius: var(--aitune-border-radius);
+}
+
+.code-block-line-gutter {
+    display: none !important;
+}
+
+.bd-footer {
+    border-top: 1px solid var(--border, var(--grayscale-a5)) !important;
+    font-size: 0.875rem;
+    padding: 2rem 0;
+    width: 100%;
+}
+
+.bd-footer__inner {
+    padding: 0 2rem;
+}
+
+.footer-items__start {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.footer-logos-container {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.footer-brand {
+    color: var(--grayscale-a12);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.footer-brand:hover {
+    color: var(--aitune-green);
+}
+
+.footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0;
+}
+
+.footer-links a,
+.pipe-separator,
+.copyright {
+    color: var(--grayscale-a11);
+}
+
+.footer-links a {
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.footer-links a:hover {
+    color: var(--aitune-green);
+}
+
+.copyright {
+    font-size: 0.875rem;
+    line-height: 1.65;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .bd-footer {
+        padding: 1.5rem 0;
+    }
+
+    .bd-footer__inner {
+        padding: 0 1.5rem;
+    }
+
+    .footer-links a {
+        white-space: normal;
+        word-break: break-word;
+    }
+}
+
+p img[src*="img.shields.io"] {
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: middle;
+}

@@ -1,7 +1,7 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
+---
+#SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#SPDX-License-Identifier: Apache-2.0
+---
 # AGENTS.md
 
 This file provides guidance to AI coding agents when working with code in this repository.
@@ -45,11 +45,11 @@ AITune wraps PyTorch `nn.Module` subgraphs and compiles them with an optimized b
 The user explicitly calls the API:
 
 ```python
-modules_info = aitune.torch.inspect(model, dataset)   # find tunable submodules
+modules_info = aitune.torch.inspect(model, dataset)  # find tunable submodules
 model = aitune.torch.wrap(model, modules_info.get_modules())  # wrap selected modules
 aitune.torch.tune(model, dataset, batch_sizes=[1, 2])  # compile with chosen backends
-aitune.torch.save(model, "model.ait")                  # persist compiled engines
-model = aitune.torch.load(model, "model.ait")          # restore in production
+aitune.torch.save(model, "model.ait")  # persist compiled engines
+model = aitune.torch.load(model, "model.ait")  # restore in production
 ```
 
 ### Just-In-Time (JIT) Mode
@@ -57,7 +57,7 @@ model = aitune.torch.load(model, "model.ait")          # restore in production
 No code changes required. The module is monkey-patched at import time:
 
 ```python
-import aitune.torch.jit.enable   # must be the first import
+import aitune.torch.jit.enable  # must be the first import
 # or via env: AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning python script.py
 ```
 

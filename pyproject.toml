@@ -110,13 +110,7 @@ torch210 = [
 ]
 
 doc = [
-    "GitPython >= 3.1.30",
-    "mike >= 2.0",
-    "mkdocs-htmlproofer-plugin >= 0.8.0",
-    "mkdocs-material >= 8.5.6",
-    "mkdocs-redirects >= 1.2.2",
-    "mkdocstrings[python] >= 0.24.0",
-    "mkdocstrings-python >= 1.7.0"
+    "PyYAML >= 6.0",
 ]
 
 [build-system]

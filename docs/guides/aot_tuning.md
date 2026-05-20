@@ -1,9 +1,8 @@
-<!--
-SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-SPDX-License-Identifier: Apache-2.0
--->
-
-# Ahead-of-Time Tuning Guide
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Ahead-of-Time Tuning Guide"
+---
 
 Ahead-of-time tuning is a mode where you explicitly control which modules to tune. This method provides precise control over the tuning process and is recommended for production environments.
 
