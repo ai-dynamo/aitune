@@ -11,9 +11,9 @@ license: Apache-2.0
 ## Workflow
 
 1. Run `git diff HEAD`, `git log --oneline`, `git status` to understand the changes
-2. Compose **one** commit message covering all staged changes
-3. Present it to the user for confirmation — do NOT commit yet
-4. After confirmation, run `git commit -m "..."`
+2. Compose **one** commit message covering the current task changes
+3. Stage only the files that belong to the current task
+4. Run `git commit -m "..."`, unless the user explicitly asks for sign-off; then run `git commit --signoff -m "..."`
 5. After the commit succeeds, suggest one MR title that summarises the branch's overall purpose (derived from `git log origin/main..HEAD --oneline`). Rules:
    - Follow Conventional Commits format: `type(scope): description`
    - Pick the **dominant** type (most impactful: feat > fix > refactor > chore/docs/test)
@@ -21,7 +21,10 @@ license: Apache-2.0
    - If commits span unrelated areas, omit scope and describe the branch goal abstractly
    - Present as: `**MR title suggestion:** <title>`
 
+**Never ask the user to confirm the commit message.** Commit directly once the message is selected.
 **Never offer multiple commit options or ask whether to split.** Always produce a single message.
+**Never add sign-off unless the user explicitly asks for it.** Organization members are exempt from DCO sign-off; non-members should request sign-off explicitly.
+**Never run `git push`.** Pushing is a manual step for the user.
 
 ## Format
 
@@ -52,7 +55,7 @@ license: Apache-2.0
 - **type** and **description** are required
 - **scope** is optional — use the affected module/area (e.g. `feat(auth):`)
 - Description is lowercase, imperative mood, no period at end
-- **Single line only** — no body, no footer
+- **Single message line only** — do not manually add a body or footer; when the user requests sign-off, let `git commit --signoff` add the footer
 - Keep it short and informative — aim for 50–72 chars, hard limit 120
 - Breaking changes: add `!` after type/scope (`feat!:`)
 - Exception: `BREAKING CHANGE:` footer only if `!` alone is insufficient

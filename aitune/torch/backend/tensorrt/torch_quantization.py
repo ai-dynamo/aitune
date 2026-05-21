@@ -19,7 +19,12 @@ from aitune.utils.monitoring import annotate
 logger = logging.getLogger(__name__)
 
 QuantizationConfig = Literal[
-    "NVFP4_DEFAULT_CFG", "FP8_DEFAULT_CFG", "INT8_DEFAULT_CFG", "INT8_SMOOTHQUANT_CFG", "INT4_AWQ_CFG"
+    "NVFP4_DEFAULT_CFG",
+    "NVFP4_FP8_MHA_CONFIG",
+    "FP8_DEFAULT_CFG",
+    "INT8_DEFAULT_CFG",
+    "INT8_SMOOTHQUANT_CFG",
+    "INT4_AWQ_CFG",
 ]
 
 
@@ -29,8 +34,6 @@ class TorchQuantizationConfig:
 
     Args:
         quantization_config: ModelOpt quantization configuration name.
-            Available options: "NVFP4_DEFAULT_CFG", "FP8_DEFAULT_CFG",
-            "INT8_DEFAULT_CFG", "INT8_SMOOTHQUANT_CFG", "INT4_AWQ_CFG"
         device: Target device for quantization (default: "cuda")
         verbose: Enable verbose logging
     """
@@ -133,7 +136,7 @@ class TorchQuantizer:
                         # Handle Sample tuple format (args, kwargs)
                         args, kwargs = cal_sample
                         model(*args, **kwargs)
-                    elif isinstance(cal_sample, (list, tuple)):
+                    elif isinstance(cal_sample, list | tuple):
                         model(*cal_sample)
                     elif isinstance(cal_sample, dict):
                         model(**cal_sample)
@@ -186,6 +189,7 @@ class TorchQuantizer:
         """
         config_mapping = {
             "NVFP4_DEFAULT_CFG": mtq.NVFP4_DEFAULT_CFG,
+            "NVFP4_FP8_MHA_CONFIG": mtq.NVFP4_FP8_MHA_CONFIG,
             "FP8_DEFAULT_CFG": mtq.FP8_DEFAULT_CFG,
             "INT8_DEFAULT_CFG": mtq.INT8_DEFAULT_CFG,
             "INT8_SMOOTHQUANT_CFG": mtq.INT8_SMOOTHQUANT_CFG,
@@ -213,7 +217,7 @@ class TorchQuantizer:
         logger.info("Configuring quantizers for ONNX export")
 
         for name, module in model.named_modules():
-            if isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)):
+            if isinstance(module, torch.nn.Linear | torch.nn.Conv2d):
                 if hasattr(module, "input_quantizer") and module.input_quantizer is not None:
                     logger.info("Setting quantizer attributes for %s.input_quantizer", name)
                     module.input_quantizer._onnx_quantizer_type = "dynamic"

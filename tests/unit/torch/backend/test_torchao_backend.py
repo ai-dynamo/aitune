@@ -8,6 +8,7 @@ import torch.nn as nn
 from torchao.quantization import Int8WeightOnlyConfig
 from torchao.utils import is_sm_at_least_89
 
+from aitune.torch.backend.backend import BackendState
 from aitune.torch.backend.torchao_backend import (
     MX_FORMATS_AVAILABLE,
     MXFP8DQ_BLOCK_SIZE_DIVISIBILITY,
@@ -44,6 +45,8 @@ def move_to_dtype(sample_data, dtype):
 def build_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
     mock_graph_spec = Mock(spec=GraphSpec)
     mock_graph_spec.name = "test"
+    mock_graph_spec.input_spec = Mock()
+    mock_graph_spec.input_spec.detected_dynamic_axis.return_value = False
     sample_data = move_to_dtype(sample_data, dtype)
     model.to(dtype)
     return backend.build(model, mock_graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
@@ -55,6 +58,15 @@ def test_torchao_config_key():
     key2 = config.key()
 
     assert key1 == key2
+
+
+def test_torchao_config_key_includes_compile_options():
+    default = TorchAOBackendConfig(quantization="int8wo")
+    dynamic = TorchAOBackendConfig(quantization="int8wo", dynamic=True)
+    fullgraph = TorchAOBackendConfig(quantization="int8wo", fullgraph=True)
+    mode = TorchAOBackendConfig(quantization="int8wo", mode="reduce-overhead")
+
+    assert len({default.key(), dynamic.key(), fullgraph.key(), mode.key()}) == 4
 
 
 def test_torchao_config_describe():
@@ -154,6 +166,81 @@ def test_invalid_quantization_type():
         TorchAOBackendConfig(quantization="invalid_type")  # type: ignore
 
 
+def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
+    model = ToyTorchModel().eval()
+    graph_spec = model.graph_spec(batch_sizes=[1, 2])
+    sample_data = model.samples(batch_sizes=[1])
+    config = TorchAOBackendConfig(quantization="int8wo", dynamic=None)
+    backend = TorchAOBackend(config=config)
+    original_key = backend.key()
+    compile_mock = mocker.patch("aitune.torch.backend.torchao_backend.torch.compile", return_value=model)
+    mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
+
+    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    assert config.dynamic is None
+    assert backend.key() == original_key
+    assert compile_mock.call_args.kwargs["dynamic"] is True
+
+
+def test_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
+    model = ToyTorchModel().eval()
+    graph_spec = model.graph_spec(batch_sizes=[1, 2])
+    sample_data = model.samples(batch_sizes=[1])
+    config = TorchAOBackendConfig(quantization="int8wo", dynamic=None)
+    backend = TorchAOBackend(config=config)
+    compile_mock = mocker.patch("aitune.torch.backend.torchao_backend.torch.compile", return_value=model)
+    mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
+
+    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    state_dict = backend.to_dict()
+    loaded_backend = TorchAOBackend.from_dict(model, state_dict)
+
+    assert state_dict[TorchAOBackend.STATE_CONFIG]["dynamic"] is None
+    assert state_dict[TorchAOBackend.STATE_COMPILE_DYNAMIC] is True
+
+    compile_mock.reset_mock()
+    loaded_backend.activate()
+
+    assert compile_mock.call_args.kwargs["dynamic"] is True
+
+
+def test_activate_runs_compatibility_preflight(mocker):
+    model = ToyTorchModel().eval()
+    config = TorchAOBackendConfig(quantization="nvfp4dq")
+    backend = TorchAOBackend(config=config)
+    backend._orig_module = model
+    backend._data = []
+    backend._device = torch.device("cpu")
+    backend.state = BackendState.CHECKPOINT_LOADED
+    quantize_mock = mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
+    mocker.patch("aitune.torch.backend.torchao_backend.MX_FORMATS_AVAILABLE", False)
+
+    with pytest.raises(RuntimeError):
+        backend.activate()
+
+    quantize_mock.assert_not_called()
+
+
+def test_filter_fn_is_honored_by_nvfp4dq_compatibility_check():
+    if not MX_FORMATS_AVAILABLE:
+        pytest.skip("nvfp4dq compatibility checks require torchao MX formats and sm100+ (Blackwell) GPU")
+
+    model = ToyTorchModel().eval().to(torch.bfloat16)
+
+    unfiltered_backend = TorchAOBackend(config=TorchAOBackendConfig(quantization="nvfp4dq"))
+    with pytest.raises(RuntimeError, match=r"linear2\.weight"):
+        unfiltered_backend._check_hardware_compatibility(model)
+
+    filtered_config = TorchAOBackendConfig(
+        quantization="nvfp4dq",
+        filter_fn=lambda _module, name: name == "linear1",
+    )
+    backend = TorchAOBackend(config=filtered_config)
+
+    backend._check_hardware_compatibility(model)
+
+
 @requires_cuda
 @pytest.mark.parametrize("quantization", TorchAOBackendConfig._QUANTIZATION_CONFIGS.keys())
 def test_serialization(quantization, tmp_path, model, sample_data, torch_device):
@@ -218,6 +305,9 @@ def test_torchao_config_from_dict_checkpoint_path_bytes():
 
 
 def test_torchao_config_from_dict_round_trip():
-    original = TorchAOBackendConfig(quantization="int8wo")
+    original = TorchAOBackendConfig(quantization="int8wo", fullgraph=True, dynamic=True, mode="reduce-overhead")
     restored = TorchAOBackendConfig.from_dict(original.to_dict())
     assert isinstance(restored.quantization_config, type(original.quantization_config))
+    assert restored.fullgraph is True
+    assert restored.dynamic is True
+    assert restored.mode == "reduce-overhead"

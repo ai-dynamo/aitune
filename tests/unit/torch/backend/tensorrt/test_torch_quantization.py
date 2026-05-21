@@ -50,6 +50,7 @@ def test_get_quantization_config():
     """Test the retrieval of quantization configuration."""
     quantizer = TorchQuantizer()
     assert quantizer._get_quantization_config("NVFP4_DEFAULT_CFG") == mtq.NVFP4_DEFAULT_CFG
+    assert quantizer._get_quantization_config("NVFP4_FP8_MHA_CONFIG") == mtq.NVFP4_FP8_MHA_CONFIG
     assert quantizer._get_quantization_config("FP8_DEFAULT_CFG") == mtq.FP8_DEFAULT_CFG
     assert quantizer._get_quantization_config("INT8_DEFAULT_CFG") == mtq.INT8_DEFAULT_CFG
     assert quantizer._get_quantization_config("INT8_SMOOTHQUANT_CFG") == mtq.INT8_SMOOTHQUANT_CFG

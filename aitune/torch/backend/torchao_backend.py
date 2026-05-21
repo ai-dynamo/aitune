@@ -37,6 +37,7 @@ except ImportError:
 
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.utils.hashing import hash_string
@@ -46,6 +47,8 @@ logger = getLogger(__name__)
 
 QuantizationType = Literal["int8wo", "int8dq", "fp8wo", "fp8dq", "mxfp8dq", "nvfp4dq"]
 DEFAULT_QUANTIZATION = "fp8wo"
+
+_HW_DEPENDENT_QUANTIZATIONS = frozenset({"nvfp4dq", "mxfp8dq"})
 
 MXFP8DQ_BLOCK_SIZE_DIVISIBILITY = 32
 NVFP4DQ_BLOCK_SIZE_DIVISIBILITY = 16
@@ -70,8 +73,24 @@ if MX_FORMATS_AVAILABLE:
 
 @dataclass
 class TorchAOBackendConfig(BackendConfig):
-    """Configuration for TorchAOBackend."""
+    """Configuration for TorchAOBackend.
 
+    Args:
+        fullgraph: Passed to ``torch.compile`` to require a single graph.
+        dynamic: Passed to ``torch.compile``. When ``None``, TorchAOBackend enables dynamic compilation only for
+            graph specs with detected dynamic axes, without mutating this config.
+        mode: Passed through to ``torch.compile(mode=...)``. Valid presets are ``"default"``,
+            ``"reduce-overhead"``, ``"max-autotune"``, and ``"max-autotune-no-cudagraphs"``.
+        quantization: Name of a built-in TorchAO quantization preset.
+        quantization_config: Custom TorchAO quantization config. Use this instead of ``quantization`` for advanced
+            TorchAO options.
+        filter_fn: Optional TorchAO quantization predicate. It receives ``(module, fqn)`` and should return ``True``
+            for modules that should be quantized. Compatibility preflight checks use the same predicate.
+    """
+
+    fullgraph: bool = False
+    dynamic: bool | None = None
+    mode: TorchCompileMode | None = "max-autotune"
     quantization: QuantizationType | None = None
     quantization_config: AOBaseConfig | None = None
     filter_fn: Callable[[nn.Module, str], bool] | None = None
@@ -86,21 +105,37 @@ class TorchAOBackendConfig(BackendConfig):
             raise ValueError("Either quantization or quantization_config should be provided.")
 
         if not self.quantization_config:
+            if not MX_FORMATS_AVAILABLE and self.quantization in _HW_DEPENDENT_QUANTIZATIONS:
+                logger.debug(
+                    "Hardware unavailable for %s — defer validation to _build(); _check_hardware_compatibility will raise",
+                    self.quantization,
+                )
+                return
+
             self.quantization_config = self._get_quantization_config(self.quantization)
 
     def key(self) -> str:
         """Returns the key of the backend configuration."""
         config_dict = {
-            "quantization_config": self.quantization_config,
+            "fullgraph": self.fullgraph,
+            "dynamic": self.dynamic,
+            "mode": self.mode,
         }
+        if self.quantization_config is None:
+            config_dict["quantization"] = self.quantization
+        else:
+            config_dict["quantization_config"] = self.quantization_config
+        if self.filter_fn is not None:
+            # The predicate is executable code, so hash its dill payload to include it in the cache key.
+            config_dict["filter_fn"] = hash_string(dumps(self.filter_fn).hex())
         config_dict = json_serialize(config_dict)
         config_dict_str = json.dumps(config_dict)
-        if self.filter_fn is not None:
-            config_dict_str += hash_string(dumps(self.filter_fn).hex())
         return hash_string(config_dict_str)
 
     def describe(self) -> str:
         """Returns the description of the backend."""
+        if self.quantization_config is None:
+            return f"quantization={self.quantization}"
         kwargs = {}
         for f in fields(self.quantization_config.__class__):
             if f.default is MISSING and f.default_factory is MISSING:
@@ -116,6 +151,9 @@ class TorchAOBackendConfig(BackendConfig):
     def to_dict(self):
         """Convert TorchAOBackendConfig to dict."""
         return {
+            "fullgraph": self.fullgraph,
+            "dynamic": self.dynamic,
+            "mode": self.mode,
             "quantization_config": dumps(self.quantization_config),
             "filter_fn": dumps(self.filter_fn) if self.filter_fn is not None else None,
         }
@@ -148,14 +186,6 @@ class TorchAOBackendConfig(BackendConfig):
 class TorchAOBackend(Backend):
     """Backend that does torch quantization.
 
-    Supported quantizations:
-        - int8wo
-        - int8dq
-        - fp8wo
-        - fp8dq
-        - mxfp8dq
-        - nvfp4dq
-
     If you would like to use customize quantization, you can pass in a quantization config.
     """
 
@@ -167,6 +197,7 @@ class TorchAOBackend(Backend):
     STATE_ORIG_MODULE = "orig_module"
     STATE_DATA = "data"
     STATE_DEVICE = "device"
+    STATE_COMPILE_DYNAMIC = "compile_dynamic"
 
     def __init__(
         self,
@@ -185,6 +216,7 @@ class TorchAOBackend(Backend):
         self._quant_module = None
         self._orig_module = None
         self._data = None
+        self._compile_dynamic = self._config.dynamic
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -196,7 +228,8 @@ class TorchAOBackend(Backend):
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Builds the model with torchao quantization and torch.compile."""
-        self._check_hardware_compatibility(module)
+        self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
+
         self._save_config(cache_dir)
 
         self._orig_module = module
@@ -245,6 +278,7 @@ class TorchAOBackend(Backend):
             self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
             self.STATE_DATA: self._data,
             self.STATE_DEVICE: self._device,
+            self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
         }
 
     @classmethod
@@ -261,6 +295,7 @@ class TorchAOBackend(Backend):
         backend = cls(config=config)
         backend._data = state_dict[cls.STATE_DATA]
         backend._device = state_dict[cls.STATE_DEVICE]
+        backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module
         module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)
         backend.state = BackendState.CHECKPOINT_LOADED
@@ -269,11 +304,23 @@ class TorchAOBackend(Backend):
 
     def _do_torchao_quantization(self):
         """Apply TorchAO quantization and warm up the compiled model."""
+        if self._orig_module is None:
+            raise RuntimeError("Backend has not been properly initialized. Please call build() first.")
+        if self._data is None:
+            raise RuntimeError("Backend has no warmup data. Please call build() first.")
+
+        self._check_hardware_compatibility(self._orig_module)
+
         model = copy.deepcopy(self._orig_module)
         self._orig_module.to("cpu")
 
         quantize_(model, config=self._config.quantization_config, device=self._device, filter_fn=self._config.filter_fn)
-        self._quant_module = torch.compile(model=model, mode="max-autotune")
+        self._quant_module = torch.compile(
+            model=model,
+            fullgraph=self._config.fullgraph,
+            dynamic=self._compile_dynamic,
+            mode=self._config.mode,
+        )
         with torch.no_grad():
             for args, kwargs in self._data:
                 self._quant_module(*args, **kwargs)
@@ -290,6 +337,21 @@ class TorchAOBackend(Backend):
         self._check_nvfp4dq_compatibility(module)
         self._check_mxfp8dq_compatibility(module)
 
+    def _iter_quantized_parameters(self, module: nn.Module):
+        """Iterate parameters from modules selected by the TorchAO filter function.
+
+        TorchAO applies ``filter_fn`` at the module level and skips modules where it returns ``False``. The
+        compatibility preflight must mirror that behavior, otherwise it can reject parameters in layers that TorchAO
+        would not quantize anyway, such as embeddings, output projections, or small ``Linear`` layers excluded by a
+        model-specific predicate.
+        """
+        for module_name, submodule in module.named_modules():
+            if self._config.filter_fn is not None and not self._config.filter_fn(submodule, module_name):
+                continue
+            for parameter_name, parameter in submodule.named_parameters(recurse=False):
+                name = f"{module_name}.{parameter_name}" if module_name else parameter_name
+                yield name, parameter
+
     def _check_nvfp4dq_compatibility(self, module: nn.Module) -> None:
         """Validate sm100+ GPU, bfloat16 dtype, and weight shape alignment for nvfp4dq.
 
@@ -297,25 +359,29 @@ class TorchAOBackend(Backend):
         ``torchao.prototype.mx_formats.inference_workflow._nvfp4_inference_linear_transform``
         (``is_sm_at_least_100()`` assert, bfloat16 assert, and ``weight.shape[-2] % 16`` check).
         The sm100+ and library requirement is captured by the module-level ``MX_FORMATS_AVAILABLE``
-        flag (evaluated at import time); no-op when the flag is False.
+        flag (evaluated at import time).
 
         Args:
             module: The PyTorch module to validate.
 
         Raises:
-            RuntimeError: If the model dtype is unsupported or any weight's last two dimensions
-                are not divisible by the block size.
+            RuntimeError: If sm100+ GPU is unavailable, the model dtype is unsupported,
+                or any weight's last two dimensions are not divisible by the block size.
         """
-        if not MX_FORMATS_AVAILABLE:
-            return
-
-        is_nvfp4dq = self._config.quantization == "nvfp4dq" or isinstance(
-            self._config.quantization_config, NVFP4DynamicActivationNVFP4WeightConfig
+        is_nvfp4dq = self._config.quantization == "nvfp4dq" or (
+            MX_FORMATS_AVAILABLE
+            and isinstance(self._config.quantization_config, NVFP4DynamicActivationNVFP4WeightConfig)
         )
         if not is_nvfp4dq:
             return
 
-        for name, param in module.named_parameters():
+        if not MX_FORMATS_AVAILABLE:
+            raise RuntimeError(
+                "nvfp4dq quantization requires sm100+ (Blackwell) GPU and TorchAO MX format support, "
+                "which are not available on this hardware."
+            )
+
+        for name, param in self._iter_quantized_parameters(module):
             if param.dtype != torch.bfloat16:
                 raise RuntimeError(f"nvfp4dq requires model dtype to be bfloat16; found {param.dtype}.")
             if param.ndim >= 2 and (
@@ -334,26 +400,29 @@ class TorchAOBackend(Backend):
         ``torchao.prototype.mx_formats.inference_workflow._mx_inference_linear_transform``
         and the ``block_size=32`` field of ``MXDynamicActivationMXWeightConfig``.
         The sm100+ and library requirement is captured by the module-level ``MX_FORMATS_AVAILABLE``
-        flag (evaluated at import time); no-op when the flag is False. Dtype is bfloat16-only —
+        flag (evaluated at import time). Dtype is bfloat16-only —
         torchao asserts this explicitly; float32 is not accepted despite what older comments suggested.
 
         Args:
             module: The PyTorch module to validate.
 
         Raises:
-            RuntimeError: If any parameter is not bfloat16 or a weight's last dimension
-                is not divisible by MXFP8DQ_BLOCK_SIZE_DIVISIBILITY.
+            RuntimeError: If sm100+ GPU is unavailable, any parameter is not bfloat16,
+                or a weight's last dimension is not divisible by MXFP8DQ_BLOCK_SIZE_DIVISIBILITY.
         """
-        if not MX_FORMATS_AVAILABLE:
-            return
-
-        is_mxfp8dq = self._config.quantization == "mxfp8dq" or isinstance(
-            self._config.quantization_config, MXDynamicActivationMXWeightConfig
+        is_mxfp8dq = self._config.quantization == "mxfp8dq" or (
+            MX_FORMATS_AVAILABLE and isinstance(self._config.quantization_config, MXDynamicActivationMXWeightConfig)
         )
         if not is_mxfp8dq:
             return
 
-        for name, param in module.named_parameters():
+        if not MX_FORMATS_AVAILABLE:
+            raise RuntimeError(
+                "mxfp8dq quantization requires sm100+ (Blackwell) GPU and TorchAO MX format support, "
+                "which are not available on this hardware."
+            )
+
+        for name, param in self._iter_quantized_parameters(module):
             if param.dtype != torch.bfloat16:
                 raise RuntimeError(f"mxfp8dq requires model dtype to be bfloat16; found {param.dtype}.")
             if param.ndim >= 2 and param.shape[-1] % MXFP8DQ_BLOCK_SIZE_DIVISIBILITY != 0:

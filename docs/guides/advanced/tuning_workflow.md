@@ -148,6 +148,7 @@ For each module, each graph is tuned separately, i.e., a strategy is called for 
 
 - Strategy tries to build a backend or backends and select the best one
 - Each backend is validated against outputs, i.e., tensor shapes, values, NaNs (not a number)
+- Strategies also profile a Torch eager baseline and reject or fall back from correct backends that do not beat the baseline unless baseline validation is disabled.
 
 ### 4. Strategy Execution
 
@@ -155,7 +156,7 @@ The tuning strategy determines which backend(s) to try and how to select the bes
 
 #### FirstWinsStrategy
 
-Tries backends in priority order and returns the first one that builds and validates successfully. Not every backend can handle every model (e.g., TensorRT may fail during ONNX export, Torch Inductor may hit graph breaks), so this strategy provides automatic fallback instead of aborting.
+Tries backends in priority order and returns the first one that builds, validates correctness, and meets the performance threshold against the Torch eager baseline. Not every backend can handle every model (e.g., TensorRT may fail during ONNX export, Torch Inductor may hit graph breaks), so this strategy provides automatic fallback instead of aborting.
 
 ```python
 strategy = ait.FirstWinsStrategy([
@@ -169,8 +170,8 @@ strategy = ait.FirstWinsStrategy([
 1. Try each backend in order
 2. Build the backend with the module and graph spec
 3. Validate correctness by comparing outputs
-4. Return first successful backend
-5. Skip profiling for speed
+4. Profile against the Torch eager baseline
+5. Return the first backend that passes the performance threshold
 
 **Use Case**: Fast tuning with automatic fallback, especially for models you haven't validated against every backend.
 
@@ -186,7 +187,8 @@ strategy = ait.OneBackendStrategy(ait.backend.TorchInductorJitBackend())
 
 1. Build the specified backend
 2. Validate correctness
-3. Return the backend
+3. Profile against the Torch eager baseline
+4. Return the backend when it passes the performance threshold
 
 **Use Case**: Production with a validated backend where you want deterministic behavior.
 
@@ -208,7 +210,7 @@ strategy = ait.MaxThroughputStrategy([
 2. Try each backend in order
 3. Build and validate each working backend
 4. Profile throughput for each backend given `max_batch_size`
-5. Return backend with the maximum throughput
+5. Return the fastest user backend when it beats the Torch eager baseline, otherwise fall back to eager
 
 **Use Case**: When performance is critical and you want the absolute fastest backend.
 

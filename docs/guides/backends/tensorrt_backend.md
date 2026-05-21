@@ -240,7 +240,7 @@ config = TensorRTBackendConfig(
 )
 ```
 
-For a detailed information take a look at Model Optimizer [documentation](https://github.com/NVIDIA/Model-Optimizer).
+For current ModelOpt preset names and version-specific support, use the Model Optimizer [documentation](https://github.com/NVIDIA/Model-Optimizer) for the installed version instead of copying preset lists into AITune docs.
 
 ### enable_tf32
 

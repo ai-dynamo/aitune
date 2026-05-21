@@ -4,12 +4,46 @@
 title: "Profiling and Hardware Metrics"
 ---
 
-NVIDIA AITune provides two complementary observability features:
+NVIDIA AITune provides complementary observability features:
 
+- **Tuning telemetry** — JSON reports for runs, graphs, backend attempts, baseline throughput, and selected backends
 - **NVTX annotations** — mark key operations as colored regions visible in NVIDIA Nsight Systems
 - **Hardware metrics** — continuously sample GPU/CPU utilization, memory, and power per module and backend
 
-Both are disabled by default to avoid overhead in production.
+NVTX and hardware metrics are disabled by default to avoid overhead in production. Tuning telemetry is always collected.
+
+## Tuning Telemetry
+
+AITune records structured tuning telemetry during every run. The report captures graph-level baseline throughput, backend build results, backend throughput, selected backends, and failure details.
+
+By default, the report is written to:
+
+```text
+~/.cache/aitune/tuning_data/report.json
+```
+
+Set a fixed output path with `AITUNE_TUNING_DATA_PATH`:
+
+```bash
+export AITUNE_TUNING_DATA_PATH=/tmp/aitune-report.json
+python your_script.py
+```
+
+or configure it in Python:
+
+```python
+import aitune.torch as ait
+
+ait.config.tuning_data_output_path = "/tmp/aitune-report.json"
+```
+
+For long-running processes, snapshot the current report without waiting for process exit:
+
+```python
+from aitune.torch import snapshot_tuning_data
+
+snapshot_tuning_data()
+```
 
 ## NVTX Profiling
 

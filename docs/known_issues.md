@@ -5,4 +5,4 @@ title: "Known Issues and Limitations"
 ---
 
 - **Multi-GPU support.** AITune currently only supports single-GPU configurations.
-- ONNXRuntime support CUDA 12.x in official release, CUDA 13 support is currently available in nightly builds. More: https://onnxruntime.ai/docs/install/#install-onnx-runtime-gpu-cuda-or-tensorrt
+- **ONNX Runtime GPU wheels.** Use an ONNX Runtime GPU package that matches your CUDA, cuDNN, and TensorRT environment. The default PyPI `onnxruntime-gpu` package targets CUDA 12.x; CUDA 13.x currently uses ONNX Runtime nightly wheels. See the official install matrix: https://onnxruntime.ai/docs/install/#install-onnx-runtime-gpu-cuda-or-tensorrt

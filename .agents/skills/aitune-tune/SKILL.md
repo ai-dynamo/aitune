@@ -30,7 +30,7 @@ The workflow below (Phases 1–5) is the **AOT path**. For JIT (eager or deferre
 | `TensorRTBackend` | Production, highest performance | fp16/fp8/int8, CUDA Graphs |
 | `TorchTensorRTAotBackend` | AOT via `torch_tensorrt.compile` | Good graph break tolerance |
 | `TorchTensorRTJitBackend` | JIT via `torch.compile` | Most PyTorch-compatible |
-| `TorchAOBackend` | PyTorch-native optimization | No config needed |
+| `TorchAOBackend` | PyTorch-native optimization | int8/fp8/MX presets; use `filter_fn` for selected-layer quantization |
 | `TorchInductorAotBackend` | PyTorch Inductor AOT compilation | No config needed |
 | `TorchInductorJitBackend` | PyTorch Inductor JIT compilation | No config needed |
 | `ONNXRuntimeBackend` | ONNX Runtime inference | Supports CUDA and TensorRT EP |
@@ -63,7 +63,7 @@ backend = TensorRTBackend(config)
 | Batch size variation | Can extrapolate via dynamic axes | Limited to observed batch sizes |
 | TRT static engine for variable-length inputs | Provide input_data with multiple samples of different sequence lengths so TRT builds min/opt/max profiles; a single-length sample produces a static engine that fails at inference time on other lengths | N/A |
 | TorchTRT-JIT + int64 embedding indices | N/A (not a JIT path) | TRT requires int32 for embedding indices; models using int64 token IDs (all HuggingFace transformers) will fall back to eager — skip TorchTRT-JIT for pure embedding/encoder models |
-| TorchAO fp8 on non-Hopper GPU | fp8e4nv requires SM ≥ 90 (H100+); skip TorchAO when `torch.cuda.get_device_capability()[0] < 9` | Same |
+| TorchAO fp8/MX on unsupported GPU | `fp8wo`/`fp8dq` require an FP8-capable GPU (SM 8.9+); `mxfp8dq`/`nvfp4dq` require torchao MX format support and SM 10.0+ Blackwell. Use `filter_fn` when only selected modules satisfy dtype and block-size constraints. | Same |
 | TorchInductorBackend with read-only triton cache | Set `TRITON_CACHE_DIR` env var to a writable path before running; treat this as an environment fix, not a backend failure — retry the same backend after fixing | Same |
 
 
@@ -106,6 +106,7 @@ python -c "import aitune.torch as ait; print('ok')"
 
 # TensorRT importable (for TRT backends)
 python -c "import tensorrt; print(tensorrt.__version__)"
+```
 
 If any other check fails, stop and report the blocker before attempting tuning.
 
@@ -123,9 +124,9 @@ Below, there are all backends configurations for the all optimization steps.
 
 ```python
 from aitune.torch.backend import (
-    TensorRTBackend, TensorRTBackendConfig,
+    TensorRTBackend, TensorRTBackendConfig, ONNXAutoCastConfig,
     TorchTensorRTJitBackend, TorchTensorRTAotBackend,
-    TorchAOBackend, TorchInductorJitBackend, TorchInductorAotBackend,
+    TorchAOBackend, TorchAOBackendConfig, TorchInductorJitBackend, TorchInductorAotBackend,
 )
 from aitune.torch.tune_strategy import OneBackendStrategy, MaxThroughputStrategy
 
@@ -144,9 +145,9 @@ strategy = OneBackendStrategy(TorchTensorRTAotBackend())
 strategy = OneBackendStrategy(TorchTensorRTJitBackend())
 
 # TorchAO
-strategy = OneBackendStrategy(TorchAOBackend())
+strategy = OneBackendStrategy(TorchAOBackend(TorchAOBackendConfig(quantization="int8wo")))
 
-# Torch Inductors JIT and AOT
+# Torch Inductor JIT and AOT
 strategy = OneBackendStrategy(TorchInductorAotBackend())
 strategy = OneBackendStrategy(TorchInductorJitBackend())
 

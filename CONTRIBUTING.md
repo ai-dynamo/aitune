@@ -148,7 +148,16 @@ Before you submit a pull request, check that it meets these guidelines:
    your new functionality into a function with a docstring, and add the
    feature to the list in README.md.
 
+## Agent-assisted Development
+
+Claude Code, Codex, and other coding agents are welcome for repository work, but agent output is treated like any other contribution: review the diff, run the relevant checks, and keep changes scoped to the task.
+
+Agents should read `AGENTS.md` before making changes and follow the repository commands, architecture notes, and source-of-truth rules documented there. Repository-specific agent skills live under `.agents/skills/`; when a matching skill exists, use it instead of improvising a parallel workflow.
+
+Use `$aitune-docs-update` for full documentation refreshes so docs changes follow the repository audit workflow. Use `$aitune-commit` before creating commits so commit messages follow the repository's Conventional Commits convention.
+
 ## Documentation
 
 Add/update docstrings as defined in the [Google Style Guide](https://github.com/google/styleguide/blob/gh-pages/pyguide.md#38-comments-and-docstrings).
 
+Keep each documentation topic in one source location. Backend guides live under `docs/guides/backends/`, and runnable example documentation lives in `examples/*/README.md` with `examples/README.md` as the catalog. Do not hand-maintain duplicate copies under `docs/examples/`.

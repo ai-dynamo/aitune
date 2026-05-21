@@ -201,7 +201,7 @@ The ahead-of-time tuning gives you the most control over the tuning process:
 * it detects the batch axis and dynamic axes (axes that change shape independently of batch size, e.g., sequence length in LLMs)
 * allows picking modules to tune
 * you can pick a tuning strategy (e.g., best throughput) for the whole process or per-module
-* you can pick tuning backends (e.g., TensorRT, TorchInductor, TorchAO) which will be used by the strategy
+* you can pick tuning backends (e.g., TensorRT, TorchInductor, TorchAO, ONNXRuntime) which will be used by the strategy
 * you can mix different backends in the same model/pipeline
 * you can manually verify the tuning process (note: AITune performs basic checks for NaNs and errors)
 * you can save the resulting artifact and later read it from disk

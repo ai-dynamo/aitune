@@ -32,6 +32,8 @@ navigation:
             path: ../docs/guides/backends/tensorrt_backend.md
           - page: TensorRT Optimization Profiles
             path: ../docs/guides/backends/tensorrt_optimization_profiles.md
+          - page: ONNXRuntime Backend
+            path: ../docs/guides/backends/onnx_runtime_backend.md
           - page: Torch-TensorRT Backend (JIT)
             path: ../docs/guides/backends/torch_tensorrt_jit_backend.md
           - page: Torch-TensorRT Backend (AOT)

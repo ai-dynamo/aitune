@@ -53,7 +53,8 @@ import torch
 sm = torch.cuda.get_device_capability()  # e.g. (8, 9) for Ada, (9, 0) for Hopper
 ```
 Use this to gate backends:
-- **TorchAO fp8** (`fp8e4nv`): requires SM ≥ 90 (H100/Hopper+). Skip on SM < 90.
+- **TorchAO fp8** (`fp8wo`, `fp8dq`): requires an FP8-capable GPU (SM 8.9+). Skip these presets on older GPUs.
+- **TorchAO MX formats** (`mxfp8dq`, `nvfp4dq`): require torchao MX format support and an SM 10.0+ Blackwell GPU. Use `filter_fn` when only selected modules satisfy the required dtype and block-size constraints.
 - All other backends: no architecture restriction.
 
 ### Model Type Hints
@@ -72,7 +73,7 @@ For each module scope, attempt backends in this order using `OneBackendStrategy`
 | 2 | `TensorRTBackend` fp32 + dynamo | If fp16 correctness fails; retry with `use_dynamo=False` if needed |
 | 3 | `TorchTensorRTAotBackend` | Better graph break tolerance |
 | 4 | `TorchTensorRTJitBackend` | torch.compile path; **skip for embedding models with int64 indices** |
-| 5 | `TorchAOBackend` | PyTorch-native; **skip fp8 on SM < 90** |
+| 5 | `TorchAOBackend` | PyTorch-native; gate FP8/MX presets by GPU support and use `filter_fn` for selected-layer quantization |
 | 6 | `TorchInductorAotBackend` | Torch Inductor AOT backend; requires writable triton cache — fix env, then retry |
 | 7 | `TorchInductorJitBackend` | Torch Inductor JIT backend; requires writable triton cache — fix env, then retry |
 | 8 | baseline vanilla PyTorch | Last resort |
@@ -120,5 +121,5 @@ After completing all attempts:
 - Depth=1 is the maximum — do not recurse further
 - If environment is broken (no GPU, import errors), stop and report the blocker
 - Distinguish **environment failures** (triton cache read-only, missing `TRITON_CACHE_DIR`) from **backend failures** — fix the environment and retry the same backend; do not advance to the next backend for fixable env issues
-- Check GPU SM version before attempting fp8/TorchAO; skip incompatible configs silently rather than burning time on a predictable failure
+- Check GPU SM version before attempting FP8 or MX-format TorchAO presets; skip incompatible configs silently rather than burning time on a predictable failure
 - For NLP/embedding models, provide input samples at **multiple sequence lengths** to ensure TRT builds dynamic profiles, not static engines

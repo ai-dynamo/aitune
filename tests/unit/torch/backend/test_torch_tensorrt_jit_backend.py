@@ -71,7 +71,30 @@ def backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, 
     return torch_mod, backend
 
 
-def test_torch_tensorrt_build_enables_dynamic_for_dynamic_graph_spec(mocker, tmp_path):
+def test_torch_tensorrt_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
+    mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
+
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1, 2])
+    sample_data = toy.samples(batch_sizes=[1])
+    compile_mock = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile", return_value=toy)
+    config = TorchTensorRTJitBackendConfig(
+        compile_config=TorchTensorRTTestConfig(workspace_size=1),
+        dynamic=None,
+    )
+    backend = TorchTensorRTJitBackend(config)
+    original_key = backend.key()
+
+    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    assert backend._config.dynamic is None
+    assert backend.key() == original_key
+    assert compile_mock.call_args.kwargs["dynamic"] is True
+
+
+def test_torch_tensorrt_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
     mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
     mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
     mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
@@ -87,8 +110,15 @@ def test_torch_tensorrt_build_enables_dynamic_for_dynamic_graph_spec(mocker, tmp
     backend = TorchTensorRTJitBackend(config)
 
     backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    state_dict = backend.to_dict()
+    loaded_backend = TorchTensorRTJitBackend.from_dict(toy, state_dict)
 
-    assert backend._config.dynamic is True
+    assert state_dict[TorchTensorRTJitBackend.STATE_CONFIG]["dynamic"] is None
+    assert state_dict[TorchTensorRTJitBackend.STATE_COMPILE_DYNAMIC] is True
+
+    compile_mock.reset_mock()
+    loaded_backend.activate()
+
     assert compile_mock.call_args.kwargs["dynamic"] is True
 
 

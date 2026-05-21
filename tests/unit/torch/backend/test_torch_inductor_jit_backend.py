@@ -10,6 +10,7 @@ import torch.nn as nn
 
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.checkpoint.storage_tasks import TorchLoadTask, TorchSaveTask
+from aitune.torch.libs.torch_compile import TorchCompileMode
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from tests.toy_models import ToyTorchModel
@@ -52,7 +53,22 @@ def backend_build(backend, dtype, model, sample_data, tmp_path, device="cuda"):
     return backend
 
 
-def test_torch_inductor_build_enables_dynamic_for_dynamic_graph_spec(mocker, tmp_path):
+def test_torch_inductor_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1, 2])
+    sample_data = toy.samples(batch_sizes=[1])
+    compile_mock = mocker.patch("aitune.torch.backend.torch_inductor_jit_backend.torch.compile", return_value=toy)
+    backend = TorchInductorJitBackend(TorchInductorJitBackendConfig(dynamic=None))
+    original_key = backend.key()
+
+    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    assert backend._config.dynamic is None
+    assert backend.key() == original_key
+    assert compile_mock.call_args.kwargs["dynamic"] is True
+
+
+def test_torch_inductor_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
     toy = ToyTorchModel().eval()
     graph_spec = toy.graph_spec(batch_sizes=[1, 2])
     sample_data = toy.samples(batch_sizes=[1])
@@ -60,8 +76,15 @@ def test_torch_inductor_build_enables_dynamic_for_dynamic_graph_spec(mocker, tmp
     backend = TorchInductorJitBackend(TorchInductorJitBackendConfig(dynamic=None))
 
     backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    state_dict = backend.to_dict()
+    loaded_backend = TorchInductorJitBackend.from_dict(toy, state_dict)
 
-    assert backend._config.dynamic is True
+    assert state_dict[TorchInductorJitBackend.STATE_CONFIG]["dynamic"] is None
+    assert state_dict[TorchInductorJitBackend.STATE_COMPILE_DYNAMIC] is True
+
+    compile_mock.reset_mock()
+    loaded_backend.activate()
+
     assert compile_mock.call_args.kwargs["dynamic"] is True
 
 
@@ -115,7 +138,7 @@ def do_test_backend(backend, dtype, model, sample_data, tmp_path):
     [torch.float16, torch.bfloat16, torch.float32],
     ids=["float16", "bfloat16", "float32"],
 )
-def test_torch_inductor_backend_build(mode, dtype, model, sample_data, tmp_path):
+def test_torch_inductor_backend_build(mode: TorchCompileMode, dtype, model, sample_data, tmp_path):
     """Test backend build with different modes and dtypes."""
     config = TorchInductorJitBackendConfig(mode=mode)
     backend = TorchInductorJitBackend(config=config)

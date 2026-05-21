@@ -13,6 +13,7 @@ import torch.nn as nn
 
 from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
@@ -99,6 +100,7 @@ class TorchTensorRTJitBackend(Backend):
     STATE_ORIG_MODULE = "orig_module"
     STATE_DATA = "data"
     STATE_DEVICE = "device"
+    STATE_COMPILE_DYNAMIC = "compile_dynamic"
 
     # Supported devices
     _devices: ClassVar[list[str]] = ["cuda"]
@@ -123,6 +125,7 @@ class TorchTensorRTJitBackend(Backend):
         self._compiled_module = None
         self._orig_module = None
         self._data = None
+        self._compile_dynamic = self._config.dynamic
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -134,8 +137,7 @@ class TorchTensorRTJitBackend(Backend):
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Build the model with Torch compile."""
-        if self._config.dynamic is None and graph_spec.input_spec.detected_dynamic_axis():
-            self._config.dynamic = True
+        self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
         self._save_config(cache_dir)
         module = module.eval()
         self._orig_module = module
@@ -160,7 +162,7 @@ class TorchTensorRTJitBackend(Backend):
             backend="torch_tensorrt",
             options=asdict(self._config.compile_config),
             fullgraph=self._config.fullgraph,
-            dynamic=self._config.dynamic,
+            dynamic=self._compile_dynamic,
         )
 
         for args, kwargs in self._data:
@@ -217,6 +219,7 @@ class TorchTensorRTJitBackend(Backend):
             self.STATE_DATA: self._data,
             self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
             self.STATE_DEVICE: self._device,
+            self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
         }
 
     @classmethod
@@ -233,6 +236,7 @@ class TorchTensorRTJitBackend(Backend):
         backend = cls(config=config)
         backend._data = state_dict[cls.STATE_DATA]
         backend._device = state_dict[cls.STATE_DEVICE]
+        backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module
         module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)
         backend.state = BackendState.CHECKPOINT_LOADED

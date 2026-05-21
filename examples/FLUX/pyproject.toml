@@ -54,5 +54,5 @@ include = ["flux"]
 flux = ["**/*"]
 
 [tool.aitune]
-additional_tags = ["mem/80g"]
+additional_tags = ["gpu/sm/120"]
 use_gated_hf_token = true

@@ -15,6 +15,7 @@ import torch
 
 from aitune.torch import tune
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
+from aitune.torch.libs.torch_compile import TorchCompileMode
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
@@ -48,7 +49,7 @@ def do_test(backend: TorchInductorJitBackend):
 
 def test_tune_resnet_torch_inductor():
     errors = []
-    modes = ["reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"]
+    modes: list[TorchCompileMode] = ["reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"]
 
     for mode in modes:
         try:

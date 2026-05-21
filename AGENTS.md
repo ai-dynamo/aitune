@@ -22,6 +22,8 @@ pytest --no-header -rN tests/unit/ -x                  # fail fast
 
 Test paths are `aitune/` and `tests/unit/` (doctests are enabled across production code). Functional tests under `tests/functional/` require GPU + real backends.
 
+Documentation source of truth: backend guides live under `docs/guides/backends/`, and example docs live in `examples/*/README.md` with `examples/README.md` as the catalog. Do not hand-maintain duplicate copies under `docs/examples/`.
+
 **Environment variables — runtime:**
 - `AITUNE_CACHE_DIR` — AOT cache directory (default: `~/.cache/aitune`)
 - `AITUNE_JIT_CACHE_DIR` — JIT cache directory (default: `~/.cache/aitune.jit`)

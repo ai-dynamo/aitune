@@ -25,6 +25,18 @@ Not every backend can successfully tune every model. Each backend relies on a di
 
 Because of these differences, a backend that fails on one model may succeed on another, and vice versa. This is the core motivation behind strategies like `FirstWinsStrategy`: by trying multiple backends in priority order, you get automatic fallback when your preferred backend cannot handle a particular model.
 
+## Performance Validation
+
+Strategies validate both correctness and performance before accepting a tuned backend. AITune profiles a `TorchEagerBackend` baseline at the resolved batch size, then profiles each correctness-passing backend against that baseline.
+
+For `OneBackendStrategy` and `FirstWinsStrategy`, baseline validation is enabled by default. A backend is rejected when its throughput is below `1 + min_speedup_threshold` relative to Torch eager; the default threshold is 1%, so a backend must be at least 1.01x faster to pass. Disable this only when you deliberately want to keep a backend that is correct but not faster:
+
+```python
+strategy.enable_validate_against_baseline(False)
+```
+
+`MaxThroughputStrategy` also profiles Torch eager as a baseline. With baseline validation enabled, it falls back to Torch eager if no user-provided backend beats the baseline. When disabled, the fastest successful user backend wins even if it is slower than eager.
+
 ## Choosing a Strategy
 
 Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. If you want a safer default with minimal tuning time, `FirstWinsStrategy` balances reliability and speed. When absolute throughput matters and you can afford longer tuning, choose `MaxThroughputStrategy`.
@@ -78,7 +90,7 @@ ait.tune(model, input_data)
 
 ## FirstWinsStrategy
 
-Tries backends in priority order and returns the first one that successfully builds and validates. If a backend fails, the strategy moves on to the next candidate instead of aborting. If all backends fail, the error is caught and the original model is used as-is. List backends from fastest to most compatible — for example, TensorRT first, then Torch Inductor.
+Tries backends in priority order and returns the first one that successfully builds, passes correctness checks, and meets the performance threshold. If a backend fails or is slower than the Torch eager baseline, the strategy moves on to the next candidate instead of aborting. If all backends fail, the error is caught and the original model is used as-is. List backends from fastest to most compatible — for example, TensorRT first, then Torch Inductor.
 
 ### Usage
 
@@ -108,7 +120,7 @@ ait.tune(model, input_data)
 
 1. Tries first backend (e.g., TensorRT)
 2. If successful → uses it, done
-3. If fails (e.g., unsupported op, export error, memory limit) → tries next backend
+3. If fails or is slower than the Torch eager baseline → tries next backend
 4. Repeats until a backend succeeds or all fail
 
 ### When to Use
@@ -134,7 +146,7 @@ ait.tune(model, input_data)
 
 ## MaxThroughputStrategy
 
-Tries all backends, profiles their performance, and selects the fastest.
+Tries all backends, profiles their performance, and selects the fastest backend that beats the Torch eager baseline.
 
 ### Usage
 
@@ -173,8 +185,8 @@ ait.tune(model, input_data)
    - Runs warmup iterations
    - Measures throughput over N iterations
    - Records performance metrics
-3. Selects backend with maximum throughput
-4. Returns best performing backend
+3. Compares throughput with the Torch eager baseline
+4. Selects the fastest user backend when it beats the baseline, otherwise falls back to Torch eager
 
 ### When to Use
 
@@ -201,6 +213,6 @@ ait.tune(model, input_data)
 
 ## Next Steps
 
-- Learn about specific backends: [TensorRT](../backends/tensorrt_backend.md), [Torch-TensorRT](../backends/torch_tensorrt_jit_backend.md), [TorchAO](../backends/torchao_backend.md), [Inductor](../backends/torch_inductor_jit_backend.md)
+- Learn about specific backends: [TensorRT](../backends/tensorrt_backend.md), [ONNXRuntime](../backends/onnx_runtime_backend.md), [Torch-TensorRT](../backends/torch_tensorrt_jit_backend.md), [TorchAO](../backends/torchao_backend.md), [Inductor](../backends/torch_inductor_jit_backend.md)
 - Explore [Deployment Guide](../deployment/deployment.md)
 - Review [AOT Tuning](../aot_tuning.md) for strategy usage

@@ -66,12 +66,33 @@ from aitune.torch.backend import TorchAOBackend
 backend = TorchAOBackend()
 ```
 
-## Torch Inductor Backend
+## Torch Inductor Backend (JIT)
 
-The Torch Inductor backend uses PyTorch's Inductor compiler for model tuning.
+The Torch Inductor JIT backend uses PyTorch's Inductor compiler through `torch.compile` for model tuning.
 
 ```python
 from aitune.torch.backend import TorchInductorJitBackend
 
 backend = TorchInductorJitBackend()
+```
+
+## Torch Inductor Backend (AOT)
+
+The Torch Inductor AOT backend uses PyTorch's AOT Inductor compiler to produce a compiled artifact that can be saved and loaded with AITune checkpoints.
+
+```python
+from aitune.torch.backend import TorchInductorAotBackend
+
+backend = TorchInductorAotBackend()
+```
+
+## ONNXRuntime Backend
+
+The ONNXRuntime backend exports the selected module to ONNX and runs inference through ONNX Runtime with CUDA or TensorRT execution providers.
+
+```python
+from aitune.torch.backend import ONNXRuntimeBackend, ONNXRuntimeBackendConfig, ONNXExecutionProvider
+
+config = ONNXRuntimeBackendConfig(execution_provider=ONNXExecutionProvider.CUDA)
+backend = ONNXRuntimeBackend(config)
 ```

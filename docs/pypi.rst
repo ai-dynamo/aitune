@@ -9,7 +9,7 @@ NVIDIA AITune
 
 **NVIDIA AITune** is an inference toolkit designed for tuning and deploying Deep Learning models with a focus on NVIDIA GPUs. It provides model tuning capabilities through compilation and conversion paths that can significantly improve inference speed and efficiency across various AI workloads including Computer Vision, Natural Language Processing, Speech Recognition, and Generative AI.
 
-The toolkit enables seamless tuning of PyTorch models and pipelines using various backends such as TensorRT, Torch-TensorRT, TorchAO, and Torch Inductor through a single Python API. The resulting tuned models are ready for deployment in production environments.
+The toolkit enables seamless tuning of PyTorch models and pipelines using various backends such as TensorRT, Torch-TensorRT, TorchAO, Torch Inductor, and ONNX Runtime through a single Python API. The resulting tuned models are ready for deployment in production environments.
 
 NVIDIA AITune works with your environment — relying first on your software versions — and selects the best-performing backend for your software and hardware setup, guiding you to supported technologies.
 
@@ -36,7 +36,7 @@ The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 |                        | code                                                                             |
 +------------------------+----------------------------------------------------------------------------------+
 | Wide Backend Support   | Compatible with various tuning backends including TensorRT, Torch-TensorRT,      |
-|                        | TorchAO, and Torch Inductor                                                      |
+|                        | TorchAO, Torch Inductor, and ONNX Runtime                                        |
 +------------------------+----------------------------------------------------------------------------------+
 | Model Tuning           | Enhance the performance of models such as ResNET and BERT for efficient          |
 |                        | inference deployment                                                             |
@@ -45,7 +45,7 @@ The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 |                        | using seamless model wrapping and tuning                                         |
 +------------------------+----------------------------------------------------------------------------------+
 | Model Export and       | Automate the process of exporting and converting models between various formats  |
-| Conversion             | with focus on TensorRT and Torch-TensorRT                                        |
+| Conversion             | with focus on TensorRT, Torch-TensorRT, Torch Inductor, and ONNX Runtime         |
 +------------------------+----------------------------------------------------------------------------------+
 | Correctness Testing    | Ensures tuned models produce correct outputs by validating on provided data      |
 |                        | samples                                                                          |
@@ -289,7 +289,7 @@ The ahead-of-time tuning gives you the most control over the tuning process:
 * it detects the batch axis and dynamic axes (axes that change shape independently of batch size, e.g., sequence length in LLMs)
 * allows picking modules to tune
 * you can pick a tuning strategy (e.g., best throughput) for the whole process or per-module
-* you can pick tuning backends (e.g., TensorRT, TorchInductor, TorchAO) which will be used by the strategy
+* you can pick tuning backends (e.g., TensorRT, TorchInductor, TorchAO, ONNXRuntime) which will be used by the strategy
 * you can mix different backends in the same model/pipeline
 * you can manually verify the tuning process (note: AITune performs basic checks for NaNs and errors)
 * you can save the resulting artifact and later read it from disk
@@ -512,16 +512,39 @@ TorchAO backend leverages PyTorch's AO (Accelerated Optimization) framework for 
 
     backend = TorchAOBackend()
 
-Torch Inductor Backend
-~~~~~~~~~~~~~~~~~~~~~~
+Torch Inductor Backend (JIT)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Torch Inductor backend uses PyTorch's Inductor compiler for model tuning.
+Torch Inductor JIT backend uses PyTorch's Inductor compiler through ``torch.compile`` for model tuning.
 
 .. code-block:: python
 
     from aitune.torch.backend import TorchInductorJitBackend
 
     backend = TorchInductorJitBackend()
+
+Torch Inductor Backend (AOT)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Torch Inductor AOT backend uses PyTorch's AOT Inductor compiler to produce a compiled artifact that can be saved and loaded with AITune checkpoints.
+
+.. code-block:: python
+
+    from aitune.torch.backend import TorchInductorAotBackend
+
+    backend = TorchInductorAotBackend()
+
+ONNXRuntime Backend
+~~~~~~~~~~~~~~~~~~~
+
+ONNXRuntime backend exports the selected PyTorch module to ONNX and runs inference through ONNX Runtime with CUDA or TensorRT execution providers.
+
+.. code-block:: python
+
+    from aitune.torch.backend import ONNXRuntimeBackend, ONNXRuntimeBackendConfig, ONNXExecutionProvider
+
+    config = ONNXRuntimeBackendConfig(execution_provider=ONNXExecutionProvider.CUDA)
+    backend = ONNXRuntimeBackend(config)
 
 Tune Strategies
 ---------------
@@ -535,7 +558,8 @@ Strategies control how AITune handles this.
 FirstWinsStrategy
 ~~~~~~~~~~~~~~~~~
 
-Tries backends in priority order and returns the first one that succeeds. If a backend fails, the strategy
+Tries backends in priority order and returns the first one that builds, validates correctness, and beats the
+Torch eager baseline by the configured threshold. If a backend fails or is slower than baseline, the strategy
 moves on to the next candidate instead of aborting.
 
 .. code-block:: python
@@ -560,8 +584,9 @@ a single backend, ``OneBackendStrategy`` surfaces the original exception rather 
 MaxThroughputStrategy
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Profiles all compatible backends and selects the fastest. Use this when maximum throughput matters and you
-can afford longer tuning time.
+Profiles all compatible backends and selects the fastest one that beats the Torch eager baseline, falling back
+to eager when no user backend is faster. Use this when maximum throughput matters and you can afford longer
+tuning time.
 
 .. code-block:: python
 
@@ -606,7 +631,7 @@ Examples
 
 We offer comprehensive examples that showcase the utilization of NVIDIA AITune's diverse features. These examples are designed to elucidate the processes of tuning, profiling, testing, and deployment of models.
 
-For detailed examples and step-by-step guides, please visit our `Examples Catalog <examples/examples.md>`_. The catalog includes practical implementations for various AI workloads including computer vision, natural language processing, speech recognition, and generative AI models.
+For detailed examples and step-by-step guides, please visit our `Examples Catalog <https://github.com/ai-dynamo/aitune/blob/main/examples/README.md>`_. The catalog includes practical implementations for various AI workloads including computer vision, natural language processing, speech recognition, and generative AI models.
 
 Useful Links
 ------------
