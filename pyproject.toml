@@ -96,6 +96,7 @@ dev = [
     "pytype",
     "tox",
     "uv>=0.9.0",
+    "nbconvert>=7.17.0",
 ]
 functional-test = [
     "fire",

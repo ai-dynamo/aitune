@@ -55,7 +55,6 @@ clean-test: ## remove test and coverage artifacts
 
 clean-notebooks: ## remove Jupyter notebook output cells
 	@echo "Cleaning notebook outputs..."
-	uv pip install "nbconvert>=7.17.0"
 	find . -name '*.ipynb' -not -path "./.cache/*" -exec jupyter nbconvert --clear-output --inplace {} \;
 
 fern-setup: ## setup Fern docs
