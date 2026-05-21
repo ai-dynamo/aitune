@@ -59,7 +59,7 @@ dependencies = [
 "Repository" = "https://github.com/ai-dynamo/aitune.git"
 "Tracker" = "https://github.com/ai-dynamo/aitune/issues"
 
-[project.optional-dependencies]
+[dependency-groups]
 test = [
     "pytest>=9.0.0",
     "pytest-mock",
@@ -67,13 +67,11 @@ test = [
     "pytest-xdist",
     "pillow",
     "datasets>=3.3.2",
-    "transformers",
+    "transformers>=4.54,<5",
     "setuptools",
     "importlib-metadata; python_version < '3.10'",
 ]
 dev = [
-    "aitune[test]",
-    "aitune[doc]",
     "build >= 0.8",
     "ipython >= 7.16",
     "pdbpp >= 0.10",
@@ -85,7 +83,6 @@ dev = [
     "pytype",
     "tox",
     "uv>=0.9.0",
-    "nbconvert>=7.17.0",
 ]
 functional-test = [
     "fire",
@@ -96,12 +93,13 @@ functional-test = [
     "sentencepiece>=0.2.0",
     "urllib3>=2.6.3", # sec
 ]
-
+doc = [
+    "PyYAML >= 6.0",
+]
 dynamo = [
     "ai-dynamo-runtime>=0.1",
     "uvloop",
 ]
-
 torch210 = [
     "torch==2.10",
     "torch-tensorrt>=2.10",
@@ -109,9 +107,7 @@ torch210 = [
     "nvidia-cuda-runtime-cu13==0.0.0a0"
 ]
 
-doc = [
-    "PyYAML >= 6.0",
-]
+
 
 [build-system]
 requires = ["setuptools>=65.3.0", "setuptools_scm[toml]>=8.3", "wheel>=0.37.1"]
