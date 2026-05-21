@@ -179,7 +179,7 @@ class TorchTensorRTAotBackend(Backend):
         kwargs = {k: v.to(self._device) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
 
         forward_args = get_forward_arguments_names(model.forward)
-        dynamic_shapes = build_dynamic_shapes(kwargs, graph_spec, forward_args)
+        dynamic_shapes = build_dynamic_shapes(kwargs, graph_spec, forward_args, use_auto=False)
         # All entries empty/None → fully static graph; pass None to torch.export.export
         # so it short-circuits the dynamic-shape resolution path.
         if not any(dynamic_shapes.values()):
@@ -210,6 +210,14 @@ class TorchTensorRTAotBackend(Backend):
                 name=tensor_spec.name,
             )
             input_signature.append(input_i)
+            logger.info(
+                "Torch-TensorRT input profile %s: min=%s opt=%s max=%s dtype=%s",
+                tensor_spec.name,
+                tensor_spec.min_shape,
+                tensor_spec.max_shape,
+                tensor_spec.max_shape,
+                tensor_spec.dtype,
+            )
 
         # Pass non-tensor kwargs through; tensors are already captured by the ExportedProgram.
         kwarg_inputs = {}

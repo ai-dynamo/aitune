@@ -89,6 +89,18 @@ def mock_torch_tensorrt(mocker, model: SimpleModel):
     return mock_torch_tensorrt
 
 
+def _graph_spec_from_samples(model: nn.Module, samples: list[Sample]) -> GraphSpec:
+    args, kwargs = samples[0]
+    output = model(*args, **kwargs)
+    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    output_metadata = SampleMetadata.from_outputs(output)
+    for args, kwargs in samples[1:]:
+        output = model(*args, **kwargs)
+        input_metadata.update_shapes_seen(SampleMetadata.from_inputs(args, kwargs, strict=True))
+        output_metadata.update_shapes_seen(SampleMetadata.from_outputs(output))
+    return GraphSpec("0", input_metadata, output_metadata)
+
+
 @requires_cuda
 def test_torch_tensorrt_aot_backend_config_key():
     """Test backend config with cache_dir."""
@@ -145,6 +157,38 @@ def test_mock_build(
     # Pin the pipeline shape: the ExportedProgram from torch.export.export must be
     # forwarded as the first positional arg to torch_tensorrt.dynamo.compile.
     assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is sentinel_exported
+
+
+def test_mock_build_exports_bounded_dynamic_shapes(
+    mocker,
+    tmp_path: Path,
+):
+    model = SimpleModel().eval()
+    sample_data = [
+        ((torch.randn(1, 10),), {}),
+        ((torch.randn(4, 10),), {}),
+        ((torch.randn(2, 10),), {}),
+    ]
+    graph_spec = _graph_spec_from_samples(model, sample_data)
+    mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
+    mock_torch_tensorrt.save = mocker.Mock(side_effect=_fake_torch_tensorrt_save)
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.get_cuda_device", return_value=0)
+    mocker.patch.object(TorchTensorRTAotBackend, "_devices", ["cpu", "cuda"])
+
+    backend = TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
+    sentinel_exported = mocker.Mock(name="ExportedProgram")
+    export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
+
+    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    dynamic_shapes = export_mock.call_args.kwargs["dynamic_shapes"]
+    dim = dynamic_shapes["x"][0]
+    assert dim is not torch.export.Dim.AUTO
+    assert dim.min == 1
+    assert dim.max == 4
 
 
 @requires_cuda
