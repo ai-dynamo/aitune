@@ -54,6 +54,19 @@ dependencies = [
     "wrapt~=2.0"
 ]
 
+[project.optional-dependencies]
+dynamo = [
+    "ai-dynamo-runtime>=0.1",
+    "uvloop",
+]
+torch210 = [
+    "torch==2.10",
+    "torch-tensorrt>=2.10",
+    "torchao>=0.16",
+    "nvidia-cuda-runtime-cu13==0.0.0a0"
+]
+
+
 [project.urls]
 "Documentation" = "https://ai-dynamo.github.io/aitune"
 "Repository" = "https://github.com/ai-dynamo/aitune.git"
@@ -96,17 +109,6 @@ functional-test = [
 doc = [
     "PyYAML >= 6.0",
 ]
-dynamo = [
-    "ai-dynamo-runtime>=0.1",
-    "uvloop",
-]
-torch210 = [
-    "torch==2.10",
-    "torch-tensorrt>=2.10",
-    "torchao>=0.16",
-    "nvidia-cuda-runtime-cu13==0.0.0a0"
-]
-
 
 
 [build-system]

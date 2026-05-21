@@ -150,6 +150,18 @@ dependencies = [
     { name = "wrapt" },
 ]
 
+[package.optional-dependencies]
+dynamo = [
+    { name = "ai-dynamo-runtime" },
+    { name = "uvloop" },
+]
+torch210 = [
+    { name = "nvidia-cuda-runtime-cu13" },
+    { name = "torch" },
+    { name = "torch-tensorrt" },
+    { name = "torchao" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "build" },
@@ -167,10 +179,6 @@ dev = [
 ]
 doc = [
     { name = "pyyaml" },
-]
-dynamo = [
-    { name = "ai-dynamo-runtime" },
-    { name = "uvloop" },
 ]
 functional-test = [
     { name = "datasets" },
@@ -191,18 +199,14 @@ test = [
     { name = "setuptools" },
     { name = "transformers" },
 ]
-torch210 = [
-    { name = "nvidia-cuda-runtime-cu13" },
-    { name = "torch" },
-    { name = "torch-tensorrt" },
-    { name = "torchao" },
-]
 
 [package.metadata]
 requires-dist = [
+    { name = "ai-dynamo-runtime", marker = "extra == 'dynamo'", specifier = ">=0.1" },
     { name = "autowrapt", specifier = ">=1.0" },
     { name = "dill", specifier = ">=0.3.8" },
     { name = "numpy", specifier = ">=2.0.0" },
+    { name = "nvidia-cuda-runtime-cu13", marker = "extra == 'torch210'", specifier = "==0.0.0a0" },
     { name = "nvidia-ml-py" },
     { name = "nvidia-modelopt", extras = ["onnx"], specifier = ">=0.40.0" },
     { name = "nvtx" },
@@ -213,10 +217,15 @@ requires-dist = [
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "tensorrt", specifier = ">=10.5" },
     { name = "torch", specifier = ">=2.7,<2.11" },
+    { name = "torch", marker = "extra == 'torch210'", specifier = "==2.10" },
     { name = "torch-tensorrt", specifier = ">2,<2.11" },
+    { name = "torch-tensorrt", marker = "extra == 'torch210'", specifier = ">=2.10" },
     { name = "torchao", specifier = ">=0.13,<0.17" },
+    { name = "torchao", marker = "extra == 'torch210'", specifier = ">=0.16" },
+    { name = "uvloop", marker = "extra == 'dynamo'" },
     { name = "wrapt", specifier = "~=2.0" },
 ]
+provides-extras = ["dynamo", "torch210"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -233,10 +242,6 @@ dev = [
     { name = "uv", specifier = ">=0.9.0" },
 ]
 doc = [{ name = "pyyaml", specifier = ">=6.0" }]
-dynamo = [
-    { name = "ai-dynamo-runtime", specifier = ">=0.1" },
-    { name = "uvloop" },
-]
 functional-test = [
     { name = "datasets", specifier = ">=3.3.2" },
     { name = "diffusers", specifier = "<=0.34.0" },
@@ -256,12 +261,6 @@ test = [
     { name = "pytest-xdist" },
     { name = "setuptools" },
     { name = "transformers", specifier = ">=4.54,<5" },
-]
-torch210 = [
-    { name = "nvidia-cuda-runtime-cu13", specifier = "==0.0.0a0" },
-    { name = "torch", specifier = "==2.10" },
-    { name = "torch-tensorrt", specifier = ">=2.10" },
-    { name = "torchao", specifier = ">=0.16" },
 ]
 
 [[package]]
