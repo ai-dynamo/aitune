@@ -67,7 +67,7 @@ def test_snapshot_config_declarative_mode(mocker):
     assert result["min_num_samples"] == 50
     assert result["max_num_samples_stored"] == 2
     assert result["strict_mode"] is False
-    assert result["enable_diffusers_integration"] is True
+    assert result["enable_diffusers_integration"] is False
     assert result["enable_transformers_integration"] is True
     assert result["device_after_tuning"] == "meta"
     assert "cache_dir" in result
