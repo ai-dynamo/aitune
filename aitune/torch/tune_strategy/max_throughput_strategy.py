@@ -295,6 +295,8 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
             None,
         )
         if result is None:
+            if backend is self._baseline_backend:
+                self._log_baseline_selected(backend)
             return
         detail = f"{result.baseline_throughput:.2f} → {result.throughput:.2f} samples/s"
         msg_short = fmt_speedup_msg(result.speedup, detail, name, backend.describe())
@@ -303,6 +305,14 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
         else:
             msg_full = f"[AITune] {msg_short}"
             log(msg_full, sink=self._logger.warning)
+
+    def _log_baseline_selected(self, backend: Backend) -> None:
+        """Emit an explicit message when the TorchEager baseline is the selected backend."""
+        throughput = f" ({self._baseline_throughput:.2f} samples/s)" if self._baseline_throughput is not None else ""
+        msg = f"ℹ️ Baseline was selected: {backend.describe()}{throughput}"
+        if not self._logger.isEnabledFor(logging.INFO):
+            return
+        log(msg, sink=self._sink)
 
     def _get_profiling_config(self, batching: bool, max_batch_size: int) -> ProfilingConfig:
         """Gets profiling configuration."""

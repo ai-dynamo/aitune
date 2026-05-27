@@ -423,19 +423,47 @@ def test_post_tune_silent_when_backend_is_none(mock_graph_spec, mock_data):
     mock_warn.assert_not_called()
 
 
-def test_post_tune_silent_when_backend_not_in_results(mock_backend, mock_graph_spec, mock_data):
-    """No output when selected backend has no profiling result (e.g. OneBackendStrategy fallback)."""
+def test_post_tune_emits_baseline_selected_when_info_enabled(mock_graph_spec, mock_data):
+    """When fallback selects TorchEager baseline, tuning explicitly reports it."""
     from unittest.mock import patch
 
-    ext = _ConcreteExtension()
-    ext.perf_validation_results = []  # empty — no match
+    sink = MagicMock()
+    ext = _ConcreteExtension(sink=sink)
+    baseline = MagicMock(spec=Backend)
+    baseline.describe.return_value = "TorchEagerBackend()"
+    ext.perf_validation_results = []
+    ext._baseline_backend = baseline
+    ext._baseline_throughput = 123.0
+
+    with patch.object(ext._logger, "isEnabledFor", return_value=True):
+        ext._post_tune(baseline, "my_module", mock_graph_spec, mock_data)
+
+    sink.assert_called_once()
+    msg = sink.call_args[0][0]
+    assert "Baseline was selected" in msg
+    assert "TorchEagerBackend()" in msg
+    assert "123.00 samples/s" in msg
+
+
+def test_post_tune_silent_for_baseline_selected_when_info_disabled(mock_graph_spec, mock_data):
+    """Baseline selection remains silent when INFO logging is disabled."""
+    from unittest.mock import patch
+
+    sink = MagicMock()
+    ext = _ConcreteExtension(sink=sink)
+    baseline = MagicMock(spec=Backend)
+    baseline.describe.return_value = "TorchEagerBackend()"
+    ext.perf_validation_results = []
+    ext._baseline_backend = baseline
+    ext._baseline_throughput = 123.0
 
     with (
         patch.object(ext._logger, "warning") as mock_warn,
         patch.object(ext._logger, "isEnabledFor", return_value=False),
     ):
-        ext._post_tune(mock_backend, "my_module", mock_graph_spec, mock_data)
+        ext._post_tune(baseline, "my_module", mock_graph_spec, mock_data)
 
+    sink.assert_not_called()
     mock_warn.assert_not_called()
 
 

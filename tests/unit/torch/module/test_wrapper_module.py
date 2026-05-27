@@ -354,6 +354,36 @@ def test_to_dict_raises_error_when_not_tuned():
         module.to_dict()
 
 
+def test_state_dict_for_passthrough_module_preserves_wrapped_module_state():
+    """Passthrough wrappers serialize the original torch module state."""
+    inner = Identity()
+    expected_state_dict = {name: value.detach().clone() for name, value in inner.state_dict(prefix="wrapped.").items()}
+    module = Module(inner, TEST_MODULE_NAME)
+    module.enable_passthrough()
+
+    state_dict = module.state_dict(prefix="wrapped.")
+
+    assert list(state_dict.keys()) == list(expected_state_dict.keys())
+    for name, value in state_dict.items():
+        torch.testing.assert_close(value, expected_state_dict[name])
+
+
+def test_parent_state_dict_preserves_passthrough_child_module_state():
+    """PyTorch recursive state_dict can save a passthrough AITune child wrapper."""
+
+    class Parent(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.child = Module(Identity(), "child")
+            self.child.enable_passthrough()
+
+    parent = Parent()
+
+    state_dict = parent.state_dict()
+
+    assert list(state_dict.keys()) == ["child.linear.weight", "child.linear.bias"]
+
+
 def test_from_dict_raises_error_for_invalid_state_dict(torch_device):
     """Test that from_dict raises error for invalid state dict."""
     with pytest.raises(ValueError, match=f"Invalid dictionary format for {Module.__class__.__name__}"):

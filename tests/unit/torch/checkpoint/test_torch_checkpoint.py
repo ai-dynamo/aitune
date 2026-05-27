@@ -396,6 +396,27 @@ def test_load_state_dict_for_pipeline(pipeline_factory):
     assert len(state_dict) == 1
 
 
+def test_state_dict_from_pipeline_preserves_direct_passthrough_wrapper_state():
+    """Pipeline save treats direct passthrough wrappers as original modules."""
+
+    class Pipeline:
+        pass
+
+    pipeline = Pipeline()
+    pipeline.failed = Module(torch.nn.Linear(2, 2), "failed")
+    expected_state_dict = {
+        name: value.detach().clone() for name, value in pipeline.failed.__wrapped__.state_dict().items()
+    }
+    pipeline.failed.enable_passthrough()
+
+    state_dict = TorchCheckpoint.state_dict_from_pipeline(pipeline)
+
+    assert list(state_dict.keys()) == ["failed"]
+    assert list(state_dict["failed"].keys()) == ["weight", "bias"]
+    for name, value in state_dict["failed"].items():
+        torch.testing.assert_close(value, expected_state_dict[name])
+
+
 @requires_cuda
 def test_state_dict_from_pipeline_no_tuned_modules(pipeline_factory):
     """Test that ValueError is raised when trying to get state dict from a pipeline with no tuned modules."""

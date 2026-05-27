@@ -125,6 +125,7 @@ class FindMaxBatchSizeMixin(TuneStrategy):
         cache_dir: Path,
     ):
         """Extends tune method to find max batch size."""
+        super()._pre_tune(module, name, graph_spec, data, device, cache_dir)
         self.find_max_batch_size(module, name, graph_spec, data, device, cache_dir)
 
     @staticmethod

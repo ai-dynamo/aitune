@@ -97,7 +97,9 @@ def test_one_backend_falls_back_to_torch_eager_on_perf_failure(
     mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path
 ):
     """When backend fails performance gate, falls back to the TorchEager baseline."""
+    sink = MagicMock()
     strategy = OneBackendStrategy(mock_backend)
+    strategy._sink = sink
     strategy._describe = MagicMock()
     strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)
@@ -118,6 +120,7 @@ def test_one_backend_falls_back_to_torch_eager_on_perf_failure(
     assert result is eager_fallback
     assert len(strategy.perf_validation_results) == 1
     assert strategy.perf_validation_results[0].passed is False
+    assert any("Baseline was selected" in str(call) for call in sink.call_args_list)
 
 
 def test_one_backend_returns_backend_when_perf_passes(

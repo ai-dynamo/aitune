@@ -344,3 +344,47 @@ def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
     assert len(speedup_msgs) == 1
     assert "test" in str(speedup_msgs[0])
     assert "samples/s" in str(speedup_msgs[0])
+
+
+def test_max_throughput_post_tune_emits_baseline_selected_when_baseline_wins(mock_backend):
+    """When TorchEager baseline wins, tuning explicitly reports baseline selection."""
+    from unittest.mock import patch
+
+    sink = MagicMock()
+    strategy = MaxThroughputStrategy(backends=[mock_backend], sink=sink)
+    baseline = MagicMock(spec=Backend)
+    baseline.describe.return_value = "TorchEagerBackend()"
+    strategy._baseline_backend = baseline
+    strategy._baseline_throughput = 42.0
+    strategy.perf_validation_results = []
+
+    with patch.object(strategy._logger, "isEnabledFor", return_value=True):
+        strategy._post_tune(baseline, "test", MagicMock(), [])
+
+    sink.assert_called_once()
+    msg = sink.call_args[0][0]
+    assert "Baseline was selected" in msg
+    assert "TorchEagerBackend()" in msg
+    assert "42.00 samples/s" in msg
+
+
+def test_max_throughput_post_tune_silent_for_baseline_selected_when_info_disabled(mock_backend):
+    """Baseline selection remains silent when INFO logging is disabled."""
+    from unittest.mock import patch
+
+    sink = MagicMock()
+    strategy = MaxThroughputStrategy(backends=[mock_backend], sink=sink)
+    baseline = MagicMock(spec=Backend)
+    baseline.describe.return_value = "TorchEagerBackend()"
+    strategy._baseline_backend = baseline
+    strategy._baseline_throughput = 42.0
+    strategy.perf_validation_results = []
+
+    with (
+        patch.object(strategy._logger, "isEnabledFor", return_value=False),
+        patch.object(strategy._logger, "warning") as mock_warn,
+    ):
+        strategy._post_tune(baseline, "test", MagicMock(), [])
+
+    sink.assert_not_called()
+    mock_warn.assert_not_called()

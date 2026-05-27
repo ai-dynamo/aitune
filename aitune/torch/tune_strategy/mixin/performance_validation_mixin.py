@@ -253,14 +253,21 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
 
     def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, data: list[Sample]):
         """Emits a speedup line after tuning completes."""
+        super()._post_tune(backend, name, graph_spec, data)
+
         if backend is None:
             return
+
         result = next(
             (r for r in self.perf_validation_results if r.backend_description == backend.describe()),
             None,
         )
+
         if result is None:
+            if backend is self._baseline_backend:
+                self._log_baseline_selected(backend)
             return
+
         detail = f"{result.baseline_throughput:.2f} → {result.throughput:.2f} samples/s"
         if self._logger.isEnabledFor(logging.INFO):
             log(fmt_speedup_msg_short(result.speedup, detail), sink=self._sink)
@@ -269,3 +276,11 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
                 f"[AITune] {fmt_speedup_msg(result.speedup, detail, name, backend.describe())}",
                 sink=self._logger.warning,
             )
+
+    def _log_baseline_selected(self, backend: Backend) -> None:
+        """Emit an explicit message when the TorchEager baseline is the selected backend."""
+        throughput = f" ({self._baseline_throughput:.2f} samples/s)" if self._baseline_throughput is not None else ""
+        msg = f"ℹ️ Baseline was selected: {backend.describe()}{throughput}"
+        if not self._logger.isEnabledFor(logging.INFO):
+            return
+        log(msg, sink=self._sink)

@@ -245,8 +245,11 @@ class Module(wrapt.CallableObjectProxy):
         The name of the function follows aitune convention of from/to dict. Special alias is created to match torch
         convention i.e. state_dict.
         """
-        if self._self_state != ModuleState.TUNED:
+        if self._self_state in (ModuleState.INIT, ModuleState.RECORDING):
             raise RuntimeError("Module is not tuned. Cannot save state_dict.")
+        if self._self_state == ModuleState.PASSTHROUGH:
+            return self.__wrapped__.state_dict(*args, destination=destination, prefix=prefix, keep_vars=keep_vars)
+
         destination = OrderedDict() if destination is None else destination
 
         destination[prefix] = {
