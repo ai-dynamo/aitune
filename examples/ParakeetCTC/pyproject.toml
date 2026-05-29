@@ -6,13 +6,13 @@ name = "aitune-parakeet-ctc-example"
 version = "0.1.0"
 description = "NVIDIA AITune Parakeet CTC Example"
 readme = "README.md"
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.12, <3.13"
 
 dependencies = [
     "aitune",
     "aitune-examples-common",
-    "megatron-core",
-    "nemo-toolkit[asr]",
+    "megatron-core==0.17.0",
+    "nemo-toolkit[asr]==2.7.3",
 ]
 
 [project.optional-dependencies]
