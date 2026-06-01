@@ -6,7 +6,10 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 
+import torch
+
 from aitune.torch.task.profiling.events import ProfilingResultEvent
+from aitune.torch.utils.cuda_utils import synchronize as cuda_synchronize
 
 
 class MeasuringStrategy(ABC):
@@ -44,8 +47,11 @@ class ModelExecutionTimeMeasuringStrategy(MeasuringStrategy):
         """Do the measurement and create a ProfilingResultEvent(s) for the model."""
         args, kwargs = sample
 
+        cuda_synchronize()
         start = time.monotonic_ns()
-        model(*args, **kwargs)
+        with torch.no_grad():
+            model(*args, **kwargs)
+        cuda_synchronize()
         end = time.monotonic_ns()
 
         ModelExecutionTimeMeasuringStrategy.counter += 1

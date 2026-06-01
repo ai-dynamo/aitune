@@ -146,27 +146,32 @@ def test_measurement_stop_strategy_num_steps():
 
 def test_measurement_stop_strategy_stable_window():
     strategy = StableWindowMeasuringStopStrategy(window_size=10, stability_percentage=90)
-    assert not strategy.should_stop([new_event(1, 100e6)])
-    for i in range(8):
+
+    for i in range(9):
         assert not strategy.should_stop([new_event(1, 100e6, measurement_id=i)])
     assert len(strategy._window) == 9
-    assert strategy.should_stop([new_event(1, 100e6)])
-    assert strategy.should_stop([new_event(1, 100e6)])
+    assert not strategy.should_stop([new_event(1, 100e6, measurement_id=9)])
+
+    for i in range(10, 19):
+        assert not strategy.should_stop([new_event(1, 100e6, measurement_id=i)])
+
+    assert strategy.should_stop([new_event(1, 100e6, measurement_id=19)])
+    assert len(strategy._window) == 10
+    assert strategy.should_stop([new_event(1, 100e6, measurement_id=20)])
 
 
 def test_measurement_stop_strategy_stable_window_unstable():
     strategy = StableWindowMeasuringStopStrategy(window_size=10, stability_percentage=90)
-    assert not strategy.should_stop([new_event(1, 0)])
 
-    # unstable measurement
-    for i in range(8):
+    # unstable warmup measurements should not affect the measured stability window
+    for i in range(10):
         assert not strategy.should_stop([new_event(1, i, measurement_id=i)])
 
     # stable measurement
-    for i in range(8, 17):
+    for i in range(10, 19):
         assert not strategy.should_stop([new_event(1, 1, measurement_id=i)])
 
-    assert strategy.should_stop([new_event(1, 1, measurement_id=17)])
+    assert strategy.should_stop([new_event(1, 1, measurement_id=19)])
 
 
 @pytest.mark.parametrize(
@@ -185,7 +190,10 @@ def test_measurement_stop_strategy_stable_window_stability(window_size: int, sta
     for i in range(1, window_size):
         assert not strategy.should_stop([new_event(1, 100e6, measurement_id=i)])
 
-    assert strategy.should_stop([new_event(1, 100e6, measurement_id=window_size)])
+    for i in range(window_size, (2 * window_size) - 1):
+        assert not strategy.should_stop([new_event(1, 100e6, measurement_id=i)])
+
+    assert strategy.should_stop([new_event(1, 100e6, measurement_id=(2 * window_size) - 1)])
 
 
 def test_profile_toy_model():

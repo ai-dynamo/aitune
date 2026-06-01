@@ -60,12 +60,15 @@ class StableWindowMeasuringStopStrategy(MeasuringStopStrategy):
         self.window_size = window_size
         self.stability_percentage = stability_percentage
         self._window: list[ProfilingResultEvent] = []
+        self._samples_seen = 0
+        self._warmup_samples = window_size
 
     def should_stop(self, results: list[ProfilingResultEvent]) -> bool:
         """Check if the measurement should be stopped."""
         self._window += results
+        self._samples_seen += len(results)
 
-        if len(self._window) < self.window_size:
+        if self._samples_seen < self._warmup_samples + self.window_size:
             return False
 
         self._window = self._window[-self.window_size :]
