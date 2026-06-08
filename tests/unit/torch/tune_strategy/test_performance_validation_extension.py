@@ -162,7 +162,7 @@ def test_pre_tune_baseline_build_failure_leaves_baseline_none(
 def test_resolved_batch_size_uses_graph_spec_get_max_batch_size(
     mock_module, mock_graph_spec, mock_data, mock_eager_backend, torch_device, tmp_path
 ):
-    """_resolved_batch_size is taken from graph_spec.get_max_batch_size() after super()._pre_tune()."""
+    """_resolved_batch_size is taken from graph_spec.get_max_batch_size()."""
     mock_graph_spec.get_max_batch_size.return_value = 16
     ext = _ConcreteExtension()
     ext.enable_find_max_batch_size(False)
@@ -177,6 +177,7 @@ def test_resolved_batch_size_uses_graph_spec_get_max_batch_size(
         ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
 
     assert ext._resolved_batch_size == 16
+    mock_graph_spec.get_max_batch_size.assert_called_once_with(normalized=True)
 
 
 def test_pre_tune_always_profiles_baseline_regardless_of_validate_flag(
