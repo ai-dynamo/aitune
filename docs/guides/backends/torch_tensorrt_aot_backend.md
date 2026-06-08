@@ -4,7 +4,7 @@
 title: "Torch-TensorRT AOT Backend Guide"
 ---
 
-The Torch-TensorRT AOT (Ahead-Of-Time) backend compiles models using `torch_tensorrt.compile()` and saves the compiled model for later use. This approach is ideal for production deployments where compilation happens once during tuning.
+The Torch-TensorRT AOT (Ahead-Of-Time) backend exports models with `torch.export.export()`, compiles the exported program with `torch_tensorrt.dynamo.compile()`, and saves the compiled model for later use. This approach is ideal for production deployments where compilation happens once during tuning.
 
 ## Overview
 
@@ -12,7 +12,7 @@ The Torch-TensorRT AOT (Ahead-Of-Time) backend compiles models using `torch_tens
 - **Model Persistence**: Compiled model is saved and loaded
 - **Fast Startup**: No compilation overhead at inference time
 - **Production Ready**: Deterministic performance
-- **Multiple IR Support**: dynamo, torchscript, or fx
+- **Dynamo Export Path**: Uses `torch.export` and the Torch-TensorRT Dynamo frontend
 
 ## Quick Start
 
@@ -23,7 +23,6 @@ import aitune.torch as ait
 
 # Configure backend
 config = TorchTensorRTAotBackendConfig(
-    ir="dynamo",
     compile_config=CompilationSettings(),
 )
 backend = TorchTensorRTAotBackend(config)
@@ -49,31 +48,9 @@ ait.load(model, "model.ait")
 ```python
 @dataclass
 class TorchTensorRTAotBackendConfig(BackendConfig):
-    ir: IRType = "dynamo"
     compile_config: TorchTensorRTConfig
-    pickle_protocol: int = DEFAULT_PICKLE_PROTOCOL
+    pickle_protocol: int = 5
 ```
-
-### ir
-
-Intermediate representation to use:
-
-```python
-# Dynamo (recommended)
-config = TorchTensorRTAotBackendConfig(ir="dynamo")
-
-# TorchScript
-config = TorchTensorRTAotBackendConfig(ir="ts")
-
-# FX
-config = TorchTensorRTAotBackendConfig(ir="fx")
-```
-
-**Options**:
-
-- `"dynamo"` (default): Modern, best compatibility
-- `"ts"`: TorchScript, legacy models
-- `"fx"`: FX graph, experimental
 
 ### compile_config
 
@@ -106,7 +83,7 @@ Protocol for saving compiled model:
 
 ```python
 config = TorchTensorRTAotBackendConfig(
-    pickle_protocol=4,  # Default
+    pickle_protocol=5,  # Default
 )
 ```
 
@@ -116,11 +93,10 @@ For a detailed explanation of JIT vs AOT backends, see the [JIT vs AOT Torch-Ten
 
 ## Best Practices
 
-1. **Use Dynamo IR**: Most compatible with modern PyTorch
-2. **Calibration Data**: Use representative data during tuning
-3. **Verify After Load**: Test loaded model before deployment
-4. **Version Control**: Track both source code and .ait files
-5. **GPU Compatibility**: Compile on the same or a compatible GPU as deployment
+1. **Use Representative Data**: Tune with inputs that match production shapes and dtypes
+2. **Verify After Load**: Test loaded model before deployment
+3. **Version Control**: Track both source code and .ait files
+4. **GPU Compatibility**: Compile on the same or a compatible GPU as deployment
 
 ## Troubleshooting
 

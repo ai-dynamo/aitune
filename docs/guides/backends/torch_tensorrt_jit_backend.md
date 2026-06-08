@@ -154,7 +154,7 @@ It's important to distinguish between two uses of "JIT" and "AOT" in AITune:
   - Does not save compiled artifacts separately
   - Recompiles automatically on shape changes
 
-- **TorchTensorRTAotBackend**: Uses `torch_tensorrt.compile()`
+- **TorchTensorRTAotBackend**: Uses `torch.export.export()` and `torch_tensorrt.dynamo.compile()`
   - Compiles during the `tune()` call
   - Saves compiled model to disk
   - Fixed compilation (no automatic recompilation)
