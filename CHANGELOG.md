@@ -8,6 +8,7 @@ title: "Changelog"
 ## 0.4.1 (unreleased)
 - fix: use the global recorded batch size for profiling against baseline
 - fix: align Torch-TensorRT defaults and JIT inspection CUDA synchronization
+- fix: memory spike during measuring performance baseline
 
 ## 0.4.0
 - feat: JIT tuning supports tune strategy selection via `aitune.torch.jit_config.strategy` (e.g. `MaxThroughputStrategy`); default remains `FirstWinsStrategy`

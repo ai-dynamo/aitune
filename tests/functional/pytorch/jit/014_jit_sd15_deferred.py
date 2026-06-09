@@ -58,8 +58,9 @@ def test_jit_sd15():
     assert PRINT_HIERARCHY_HEADER in history[0]
     assert re.match(r".*CLIPTextModel.*state=tuned.*TensorRTBackend", history[1])
     assert re.match(r".*UNet2DConditionModel.*state=tuned.*TensorRTBackend", history[2])
+    # Conv2d and Decoder are small modules and can be slower than torch eager thus resulting in tune error
     assert re.match(r".*Conv2d.*", history[3])
-    assert re.match(r".*Decoder.*state=tuned.*TorchInductorJitBackend", history[4])
+    assert re.match(r".*Decoder.*", history[4])
     assert re.match(r".*StableDiffusionSafetyChecker.*state=tuned.*TorchInductorJitBackend", history[5])
 
     logger.info("Testing inference with batch_size=1")
