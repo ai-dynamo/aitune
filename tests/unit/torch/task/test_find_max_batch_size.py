@@ -11,6 +11,7 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
 )
 from aitune.torch.task.profiling.events import ProfilingResultEvent
+from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from tests.toy_models.torch_models import ToyTorchModel
 
 
@@ -18,7 +19,7 @@ from tests.toy_models.torch_models import ToyTorchModel
 def mock_profiling_config():
     return ProfilingConfig(
         measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
-        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1),
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1, warmup_samples=1),
         profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
         batch_sizes=[1, 2, 4],
     )
@@ -33,9 +34,25 @@ def test_max_throughput_strategy_find_max_batch_size(mock_profiling_config, torc
     assert throughput > 0
 
 
+def test_default_profiling_config_uses_num_steps():
+    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
+
+    assert isinstance(profiling_config.measurement_stop_strategy, NumStepsMeasuringStopStrategy)
+    assert profiling_config.measurement_stop_strategy.num_steps == 20
+    assert profiling_config.measurement_stop_strategy.warmup_samples == 10
+
+
 def test_get_throughput_per_batch_size(mock_profiling_config):
     # Create mock profiling events with different batch sizes and timings
     events = [
+        ProfilingResultEvent(
+            timestamp=0,
+            execution_time=10e9,
+            batch_size=1,
+            phase="inference",
+            model_name="test",
+            backend_details="test",
+        ),
         ProfilingResultEvent(
             timestamp=1,
             execution_time=1e9,
@@ -45,9 +62,25 @@ def test_get_throughput_per_batch_size(mock_profiling_config):
             backend_details="test",
         ),
         ProfilingResultEvent(
+            timestamp=1,
+            execution_time=10e9,
+            batch_size=2,
+            phase="inference",
+            model_name="test",
+            backend_details="test",
+        ),
+        ProfilingResultEvent(
             timestamp=2,
             execution_time=1.5e9,
             batch_size=2,
+            phase="inference",
+            model_name="test",
+            backend_details="test",
+        ),
+        ProfilingResultEvent(
+            timestamp=2,
+            execution_time=10e9,
+            batch_size=4,
             phase="inference",
             model_name="test",
             backend_details="test",

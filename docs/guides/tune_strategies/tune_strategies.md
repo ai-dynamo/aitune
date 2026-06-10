@@ -29,7 +29,7 @@ Because of these differences, a backend that fails on one model may succeed on a
 
 Strategies validate both correctness and performance before accepting a tuned backend. AITune profiles a `TorchEagerBackend` baseline at the resolved batch size, then profiles each correctness-passing backend against that baseline.
 
-For `OneBackendStrategy` and `FirstWinsStrategy`, baseline validation is enabled by default. A backend is rejected when its throughput is below `1 + min_speedup_threshold` relative to Torch eager; the default threshold is 1%, so a backend must be at least 1.01x faster to pass. Disable this only when you deliberately want to keep a backend that is correct but not faster:
+For `OneBackendStrategy` and `FirstWinsStrategy`, baseline validation is enabled by default. A backend is rejected when its throughput is below `1 + min_speedup_ratio` relative to Torch eager; the default threshold is 1%, so a backend must be at least 1.01x faster to pass. Disable this only when you deliberately want to keep a backend that is correct but not faster:
 
 ```python
 strategy.enable_validate_against_baseline(False)

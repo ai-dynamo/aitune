@@ -194,7 +194,7 @@ modules = modules_info.get_modules()
 
 You can place additional criteria:
 
-- **min_execution_percentage** - minimum percentage of total execution count e.g. .9
+- **min_execution_ratio** - minimum ratio of total execution time e.g. .9
 - **limit** - maximum number of modules to return, e.g., 5
 
 If those criteria are not sufficient, you can manually filter modules:

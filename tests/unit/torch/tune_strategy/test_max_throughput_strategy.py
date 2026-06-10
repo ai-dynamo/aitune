@@ -78,14 +78,32 @@ def test_sanity_batch_sizes_generator():
     assert 2**20 in batch_sizes
 
 
+def _fast_profiling_config(max_batch_size: int = 8):
+    """Use fixed-step profiling with a small sample budget for unit tests."""
+    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=max_batch_size)
+    profiling_config.batch_sizes = [2**n for n in range(max_batch_size.bit_length())]
+    profiling_config.measurement_stop_strategy = NumStepsMeasuringStopStrategy(num_steps=3, warmup_samples=1)
+    profiling_config.profiling_stop_strategy = AllSamplesProfilingStopStrategy()
+    return profiling_config
+
+
+def _fast_max_throughput_strategy(backends: list[Backend], max_batch_size: int = 8):
+    """Build a max-throughput strategy that exercises profiling without long sample runs."""
+    strategy = MaxThroughputStrategy(
+        backends=backends,
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=3, warmup_samples=1),
+        profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
+    )
+    strategy.enable_validate_against_baseline(False)
+    strategy.set_find_max_batch_size_profiling_config(_fast_profiling_config(max_batch_size=max_batch_size))
+    strategy.enable_correctness_check(False)
+    return strategy
+
+
 def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_path):
-    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
     slower = SleepBackend(sleep_time=1e-2)
     faster = SleepBackend(sleep_time=1e-5)
-    strategy = MaxThroughputStrategy(backends=[slower, faster])
-    strategy.enable_validate_against_baseline(False)
-    strategy.set_find_max_batch_size_profiling_config(profiling_config)
-    strategy.enable_correctness_check(False)
+    strategy = _fast_max_throughput_strategy([slower, faster])
 
     model = ToyTorchModel()
     sample = model.sample().unsqueeze(0)  # as dataloader make batches, we need to unsqueeze the sample
@@ -105,10 +123,7 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
 
 
 def test_max_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_path):
-    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
-    strategy = MaxThroughputStrategy(backends=[SleepBackend(sleep_time=1e-5)])
-    strategy.set_find_max_batch_size_profiling_config(profiling_config)
-    strategy.enable_correctness_check(False)
+    strategy = _fast_max_throughput_strategy([SleepBackend(sleep_time=1e-5)])
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().unsqueeze(0).to(torch_device)  # as dataloader make batches, we need to unsqueeze the sample
     graph_spec = model.graph_spec(batch_sizes=[1, 2, 4, 8], device=torch_device)
@@ -128,14 +143,14 @@ def test_max_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_
 @requires_cuda
 def test_max_throughput_strategy_num_steps_all_samples(torch_device):
     find_profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=16)
-    find_profiling_config.measurement_stop_strategy = NumStepsMeasuringStopStrategy(num_steps=10)
+    find_profiling_config.measurement_stop_strategy = NumStepsMeasuringStopStrategy(num_steps=10, warmup_samples=1)
 
     strategy = MaxThroughputStrategy(
         backends=[
             TorchInductorJitBackend(),
             TorchEagerBackend(),
         ],
-        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=10),
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=10, warmup_samples=1),
         profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
     )
     strategy.set_find_max_batch_size_profiling_config(find_profiling_config)
@@ -163,8 +178,8 @@ def test_max_throughput_strategy_stable_window(torch_device):
         backends=[
             TorchInductorJitBackend(),
         ],
-        measurement_stop_strategy=StableWindowMeasuringStopStrategy(window_size=10, stability_percentage=90),
-        profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(throughput_cutoff_threshold=0.99),
+        measurement_stop_strategy=StableWindowMeasuringStopStrategy(window_size=10, max_cv_ratio=0.90),
+        profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(min_throughput_gain_ratio=0.99),
     ).enable_find_max_batch_size(False)
     model = Module(ToyTorchModel().eval().to(torch_device), strategy=strategy)
     sample = model.sample().to(torch_device)
@@ -257,13 +272,9 @@ def test_max_throughput_strategy_find_max_batch_size_fails(torch_device):
 
 def test_max_throughput_perf_validation_results_populated(torch_device, tmp_path):
     """perf_validation_results is populated for user-provided backends only (not the baseline)."""
-    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
     slower = SleepBackend(sleep_time=1e-2)
     faster = SleepBackend(sleep_time=1e-5)
-    strategy = MaxThroughputStrategy(backends=[slower, faster])
-    strategy.enable_validate_against_baseline(False)
-    strategy.set_find_max_batch_size_profiling_config(profiling_config)
-    strategy.enable_correctness_check(False)
+    strategy = _fast_max_throughput_strategy([slower, faster])
 
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().unsqueeze(0).to(torch_device)
@@ -290,12 +301,8 @@ def test_max_throughput_perf_validation_results_populated(torch_device, tmp_path
 
 def test_max_throughput_torcheager_excluded_from_selection_when_validate_false(torch_device, tmp_path):
     """When validate_against_baseline=False, TorchEager is never the selected backend."""
-    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
     user_backend = SleepBackend(sleep_time=1e-5)
-    strategy = MaxThroughputStrategy(backends=[user_backend])
-    strategy.enable_validate_against_baseline(False)
-    strategy.set_find_max_batch_size_profiling_config(profiling_config)
-    strategy.enable_correctness_check(False)
+    strategy = _fast_max_throughput_strategy([user_backend])
 
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().unsqueeze(0).to(torch_device)
@@ -313,15 +320,11 @@ def test_max_throughput_torcheager_excluded_from_selection_when_validate_false(t
 
 
 def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
-    """_post_tune emits a ⚡ Speedup line after successful tuning."""
+    """_post_tune emits a speedup line after successful tuning."""
     from unittest.mock import patch
 
-    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
     user_backend = SleepBackend(sleep_time=1e-5)
-    strategy = MaxThroughputStrategy(backends=[user_backend])
-    strategy.enable_validate_against_baseline(False)
-    strategy.set_find_max_batch_size_profiling_config(profiling_config)
-    strategy.enable_correctness_check(False)
+    strategy = _fast_max_throughput_strategy([user_backend])
 
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().unsqueeze(0).to(torch_device)

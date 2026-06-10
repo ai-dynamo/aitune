@@ -32,21 +32,15 @@ from aitune.torch.backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTJitBackend,
 )
-from aitune.torch.config import (
-    DEFAULT_STABILITY_PERCENTAGE,
-    DEFAULT_THROUGHPUT_BACKOFF_LIMIT,
-    DEFAULT_THROUGHPUT_CUTOFF_THRESHOLD,
-    DEFAULT_WINDOW_SIZE,
-)
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import (
     MeasuringStopStrategy,
     ModelExecutionTimeMeasuringStrategy,
+    NumStepsMeasuringStopStrategy,
     ProfilingConfig,
     ProfilingStopStrategy,
-    StableWindowMeasuringStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
 from aitune.torch.tune_data.reporting import report_backend_throughput, report_graph_baseline_throughput
@@ -93,14 +87,8 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
         super().__init__(**kwargs)
         self._backends = backends or self._default_backends()
         self._validate_against_baseline: bool = True
-        self._measurement_stop_strategy = measurement_stop_strategy or StableWindowMeasuringStopStrategy(
-            window_size=DEFAULT_WINDOW_SIZE,
-            stability_percentage=DEFAULT_STABILITY_PERCENTAGE,
-        )
-        self._profiling_stop_strategy = profiling_stop_strategy or ThroughputSaturatedProfilingStopStrategy(
-            throughput_cutoff_threshold=DEFAULT_THROUGHPUT_CUTOFF_THRESHOLD,
-            throughput_backoff_limit=DEFAULT_THROUGHPUT_BACKOFF_LIMIT,
-        )
+        self._measurement_stop_strategy = measurement_stop_strategy or NumStepsMeasuringStopStrategy()
+        self._profiling_stop_strategy = profiling_stop_strategy or ThroughputSaturatedProfilingStopStrategy()
 
         self.perf_validation_results: list[PerformanceValidationMixinResult] = []
         self._baseline_throughput: float | None = None

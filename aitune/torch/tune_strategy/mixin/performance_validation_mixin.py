@@ -16,23 +16,17 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
-from aitune.torch.config import (
-    DEFAULT_MIN_SPEEDUP_THRESHOLD,
-    DEFAULT_STABILITY_PERCENTAGE,
-    DEFAULT_THROUGHPUT_BACKOFF_LIMIT,
-    DEFAULT_THROUGHPUT_CUTOFF_THRESHOLD,
-    DEFAULT_WINDOW_SIZE,
-)
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import (
+    NumStepsMeasuringStopStrategy,
     ProfilingConfig,
-    StableWindowMeasuringStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
 from aitune.torch.tune_data.reporting import report_backend_throughput, report_graph_baseline_throughput
 from aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin import FindMaxBatchSizeMixin
+from aitune.utils import validation
 from aitune.utils.logging import log
 
 
@@ -66,12 +60,17 @@ def fmt_speedup_msg(speedup: float, detail: str, name: str, backend_desc: str) -
 class PerformanceValidationMixinConfig:
     """Configuration for performance validation.
 
-    profiling_config is an optional user override. When None, a default
-    ProfilingConfig is built at runtime for the resolved batch size.
+    Attributes:
+        min_speedup_ratio: Minimum speedup ratio required over Torch eager.
+        profiling_config: Optional profiling config override.
     """
 
-    min_speedup_threshold: float = DEFAULT_MIN_SPEEDUP_THRESHOLD
+    min_speedup_ratio: float = 0.01
     profiling_config: ProfilingConfig | None = None
+
+    def __post_init__(self):
+        """Validate ratio configuration."""
+        validation.ratio(self.min_speedup_ratio)
 
     def profiling_config_for_batch_size(self, batch_size: int) -> ProfilingConfig:
         """Returns profiling config with batch_sizes set to [batch_size]."""
@@ -80,14 +79,8 @@ class PerformanceValidationMixinConfig:
         return ProfilingConfig(
             batch_sizes=[batch_size],
             batching=True,
-            measurement_stop_strategy=StableWindowMeasuringStopStrategy(
-                window_size=DEFAULT_WINDOW_SIZE,
-                stability_percentage=DEFAULT_STABILITY_PERCENTAGE,
-            ),
-            profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(
-                throughput_cutoff_threshold=DEFAULT_THROUGHPUT_CUTOFF_THRESHOLD,
-                throughput_backoff_limit=DEFAULT_THROUGHPUT_BACKOFF_LIMIT,
-            ),
+            measurement_stop_strategy=NumStepsMeasuringStopStrategy(),
+            profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(),
         )
 
 
@@ -108,7 +101,7 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
     Profiles TorchEager during _pre_tune at the resolved batch size
     to establish a baseline. For every candidate backend, profiles at the resolved batch size and appends a
     PerformanceValidationMixinResult. When validate_against_baseline=True (default),
-    backends with speedup < 1 + min_speedup_threshold are rejected (return None or
+    backends with speedup < 1 + min_speedup_ratio are rejected (return None or
     fall back). Profiling and result recording always occur regardless of the flag.
     """
 
@@ -159,7 +152,7 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
             backend = TorchEagerBackend()
             backend = backend.build(module, graph_spec, deepcopy(data), device, baseline_cache_dir)
 
-            batch_size, throughput, _ = find_max_throughput_for_backend(backend, name, graph_spec, data, profiling_cfg)
+            _, throughput, _ = find_max_throughput_for_backend(backend, name, graph_spec, data, profiling_cfg)
 
             self._baseline_throughput = throughput
             self._baseline_backend = backend
@@ -210,7 +203,7 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
         profiling_cfg = self.perf_validation_config.profiling_config_for_batch_size(self._resolved_batch_size)
 
         try:
-            batch_size, throughput, _ = find_max_throughput_for_backend(built, name, graph_spec, data, profiling_cfg)
+            _, throughput, _ = find_max_throughput_for_backend(built, name, graph_spec, data, profiling_cfg)
         except Exception:
             log("⚠️ Performance profiling failed for %s, performance check skipped", description, sink=self._sink)
             return built
@@ -220,7 +213,7 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
             return built
 
         speedup = throughput / self._baseline_throughput
-        passed = speedup >= (1.0 + self.perf_validation_config.min_speedup_threshold)
+        passed = speedup >= (1.0 + self.perf_validation_config.min_speedup_ratio)
 
         report_backend_throughput(description, throughput)
         self.perf_validation_results.append(

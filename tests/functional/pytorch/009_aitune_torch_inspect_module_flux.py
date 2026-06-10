@@ -42,7 +42,7 @@ def test_inspect_flux():
     for module in modules:
         assert module.name in expected_module_names
 
-    top_modules = modules_info.get_modules(min_execution_percentage=0.50)
+    top_modules = modules_info.get_modules(min_execution_ratio=0.50)
     assert len(top_modules) == 1
     assert top_modules[0].name == "transformer"
     assert top_modules[0].execution_count == 28 * number_of_iterations

@@ -7,6 +7,8 @@ from typing import Any, Optional
 
 import torch
 
+from aitune.utils import validation
+
 
 @dataclass
 class ModuleInfo:
@@ -111,26 +113,27 @@ class InspectedModulesInfo:
             raise ValueError(f"Module `{module.name}` in `{module.object_path}` already exists")
         self._modules[module.object_path] = module
 
-    def get_modules(
-        self, min_execution_percentage: float | None = None, limit: int | None = None
-    ) -> list["ModuleInfo"]:
+    def get_modules(self, min_execution_ratio: float | None = None, limit: int | None = None) -> list["ModuleInfo"]:
         """Get the list of modules.
 
         Args:
-            min_execution_percentage: Minimum execution percentage to include a module.
+            min_execution_ratio: Minimum execution ratio to include a module.
             limit: Maximum number of modules to return.
 
         Returns:
             List of ModuleInfo objects.
         """
+        if min_execution_ratio is not None:
+            validation.ratio(min_execution_ratio)
+
         modules = []
         sorted_modules = sorted(
             self._modules.values(),
             key=lambda x: (-x.total_execution_time, x.name or ""),  # Negative for reverse=True, empty string for None
         )
         for module in sorted_modules:
-            if min_execution_percentage is None or (
-                module.total_execution_time / self._total_execution_time >= min_execution_percentage
+            if min_execution_ratio is None or (
+                module.total_execution_time / self._total_execution_time >= min_execution_ratio
             ):
                 modules.append(module)
 

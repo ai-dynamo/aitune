@@ -19,9 +19,12 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
+from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, ProfilingConfig
+from aitune.torch.task.profiling.profiling_stop_strategy import AllSamplesProfilingStopStrategy
 from aitune.torch.tune_strategy import (
     OneBackendStrategy,
 )
+from aitune.torch.tune_strategy.mixin import PerformanceValidationMixinConfig
 from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
 
 
@@ -41,6 +44,26 @@ class Identity(torch.nn.Module):
 
 
 TEST_MODULE_NAME = "demo-identity"
+
+
+def _fast_perf_validation_config() -> PerformanceValidationMixinConfig:
+    return PerformanceValidationMixinConfig(
+        profiling_config=ProfilingConfig(
+            batch_sizes=[1],
+            measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=3, warmup_samples=1),
+            profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
+        )
+    )
+
+
+def _torch_inductor_strategy_for_wrapper_tests() -> OneBackendStrategy:
+    strategy = OneBackendStrategy(
+        backend=TorchInductorJitBackend(),
+        perf_validation_config=_fast_perf_validation_config(),
+    )
+    strategy.enable_validate_against_baseline(False)
+    strategy.enable_find_max_batch_size(False)
+    return strategy
 
 
 @pytest.fixture
@@ -279,7 +302,7 @@ def test_tune_with_torch_compile_backend_direct_call(module, torch_device):
     module(torch.tensor(1))
     assert len(module.graph_specs) == 1
 
-    strategy = OneBackendStrategy(backend=TorchInductorJitBackend())
+    strategy = _torch_inductor_strategy_for_wrapper_tests()
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
     assert module.state == ModuleState.TUNED
 
@@ -294,7 +317,7 @@ def test_tune_with_torch_compile_backend_simulate_redirection(module, torch_devi
     module.simulate_redirection(torch.tensor(1))
     assert len(module.graph_specs) == 1
 
-    strategy = OneBackendStrategy(backend=TorchInductorJitBackend())
+    strategy = _torch_inductor_strategy_for_wrapper_tests()
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
     assert module.state == ModuleState.TUNED
 
@@ -309,7 +332,7 @@ def test_tune_with_torch_compile_backend_simulate_prefill_decode(module, torch_d
     module.simulate_prefill_decode(torch.tensor(1))
     assert len(module.graph_specs) == 2
 
-    strategy = OneBackendStrategy(backend=TorchInductorJitBackend()).enable_find_max_batch_size(False)
+    strategy = _torch_inductor_strategy_for_wrapper_tests()
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
     assert module.state == ModuleState.TUNED
 
@@ -327,7 +350,7 @@ def test_serialization(torch_device):
 
     # Record samples and tune the module
     module(torch.tensor(1))
-    strategy = OneBackendStrategy(backend=TorchInductorJitBackend())
+    strategy = _torch_inductor_strategy_for_wrapper_tests()
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
     assert module.state == ModuleState.TUNED
 

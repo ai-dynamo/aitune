@@ -341,8 +341,8 @@ def test_get_modules_after_inspection(custom_object, sample_dataset):
         assert executed_modules[idx].execution_count == TEST_NUMBER_OF_ITERATIONS
 
 
-def test_get_modules_with_min_execution_percentage():
-    """Test getting executed modules with a minimum execution percentage."""
+def test_get_modules_with_min_execution_ratio():
+    """Test getting executed modules with a minimum execution ratio."""
     modules_info = InspectedModulesInfo(total_execution_time=1.0, number_of_batches=1)
     modules_info.add_module(
         ModuleInfo(
@@ -372,11 +372,20 @@ def test_get_modules_with_min_execution_percentage():
         )
     )
 
-    executed_modules = modules_info.get_modules(min_execution_percentage=0.25)
+    executed_modules = modules_info.get_modules(min_execution_ratio=0.25)
 
     assert len(executed_modules) == 1
     assert executed_modules[0].name == "linear1"
     assert executed_modules[0].execution_count == TEST_NUMBER_OF_ITERATIONS * 4
+
+
+@pytest.mark.parametrize("min_execution_ratio", [-0.01, 1.01])
+def test_get_modules_rejects_invalid_min_execution_ratio(min_execution_ratio: float):
+    """Test rejecting invalid minimum execution ratios."""
+    modules_info = InspectedModulesInfo(total_execution_time=1.0, number_of_batches=1)
+
+    with pytest.raises(ValueError, match="value must be between 0 and 1"):
+        modules_info.get_modules(min_execution_ratio=min_execution_ratio)
 
 
 def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset):

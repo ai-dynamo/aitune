@@ -332,28 +332,33 @@ def test_check_perf_returns_backend_when_profiling_fails(
 def test_perf_validation_config_defaults():
     """Default config uses 1% threshold and no explicit profiling config."""
     config = PerformanceValidationMixinConfig()
-    assert config.min_speedup_threshold == 0.01
+    assert config.min_speedup_ratio == 0.01
     assert config.profiling_config is None
 
 
 def test_perf_validation_config_custom_threshold():
-    config = PerformanceValidationMixinConfig(min_speedup_threshold=0.10)
-    assert config.min_speedup_threshold == 0.10
+    config = PerformanceValidationMixinConfig(min_speedup_ratio=0.10)
+    assert config.min_speedup_ratio == 0.10
 
 
-def test_profiling_config_for_batch_size_default_uses_stable_window():
-    """Default profiling config uses StableWindowMeasuringStopStrategy with global defaults."""
-    from aitune.torch.config import DEFAULT_STABILITY_PERCENTAGE, DEFAULT_WINDOW_SIZE
-    from aitune.torch.task.profiling import StableWindowMeasuringStopStrategy
+@pytest.mark.parametrize("min_speedup_ratio", [-0.01, 1.01])
+def test_perf_validation_config_rejects_invalid_min_speedup_ratio(min_speedup_ratio: float):
+    with pytest.raises(ValueError, match="value must be between 0 and 1"):
+        PerformanceValidationMixinConfig(min_speedup_ratio=min_speedup_ratio)
+
+
+def test_profiling_config_for_batch_size_default_uses_num_steps():
+    """Default profiling config uses NumStepsMeasuringStopStrategy with global defaults."""
+    from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy
 
     config = PerformanceValidationMixinConfig()
     profiling_cfg = config.profiling_config_for_batch_size(8)
 
     assert profiling_cfg.batch_sizes == [8]
     assert profiling_cfg.batching is True
-    assert isinstance(profiling_cfg.measurement_stop_strategy, StableWindowMeasuringStopStrategy)
-    assert profiling_cfg.measurement_stop_strategy.window_size == DEFAULT_WINDOW_SIZE
-    assert profiling_cfg.measurement_stop_strategy.stability_percentage == DEFAULT_STABILITY_PERCENTAGE
+    assert isinstance(profiling_cfg.measurement_stop_strategy, NumStepsMeasuringStopStrategy)
+    assert profiling_cfg.measurement_stop_strategy.num_steps == 20
+    assert profiling_cfg.measurement_stop_strategy.warmup_samples == 10
 
 
 def test_profiling_config_for_batch_size_user_override_replaces_batch_sizes():
