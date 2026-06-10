@@ -256,10 +256,10 @@ def test_first_wins_skips_slow_backend(mock_backend, mock_module, mock_graph_spe
     assert strategy.perf_validation_results[1].passed is True  # fast
 
 
-def test_first_wins_accepts_slow_backend_when_gate_disabled(
+def test_first_wins_skips_perf_profiling_when_validation_disabled(
     mock_backend, mock_module, mock_graph_spec, mock_sample, torch_device, tmp_path
 ):
-    """When validate_against_baseline=False, the first backend is returned even if slow."""
+    """When performance validation is disabled, the first correct backend is returned without profiling."""
     from unittest.mock import patch
 
     slow_backend = MagicMock(spec=Backend)
@@ -269,7 +269,7 @@ def test_first_wins_accepts_slow_backend_when_gate_disabled(
     slow_backend.build.return_value = slow_backend
 
     strategy = FirstWinsStrategy([slow_backend])
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     strategy._describe = MagicMock()
     strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)
@@ -280,12 +280,11 @@ def test_first_wins_accepts_slow_backend_when_gate_disabled(
     baseline_eager = MagicMock(spec=Backend)
     strategy._baseline_backend = baseline_eager
 
-    # slower backend but gate is disabled
     with patch(
         "aitune.torch.tune_strategy.mixin.performance_validation_mixin.find_max_throughput_for_backend",
-        return_value=(4, 1.0, MagicMock()),
-    ):
+    ) as mock_profile:
         result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
 
     assert result is slow_backend
-    assert strategy.perf_validation_results[0].passed is False  # recorded but not gated
+    mock_profile.assert_not_called()
+    assert strategy.perf_validation_results == []

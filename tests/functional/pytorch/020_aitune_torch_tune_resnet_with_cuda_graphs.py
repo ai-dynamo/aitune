@@ -45,7 +45,7 @@ def test_resnet50_with_cuda_graphs_invalidation():
 
     # when - create module and tune with CUDA graphs enabled
     strategy = OneBackendStrategy(backend)
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
     module = Module(
         model,

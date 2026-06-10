@@ -69,7 +69,7 @@ def test_stable_diffusion_dynamic_batch_torch_inductor_aot():
             # Step 3: Wrap with TorchInductorAotBackend
             logger.info("Wrapping with TorchInductorAotBackend")
             strategy = OneBackendStrategy(TorchInductorAotBackend())
-            strategy.enable_validate_against_baseline(False)
+            strategy.enable_performance_validation(False)
             strategy.enable_find_max_batch_size(enable=False)
             pipeline = wrap(pipeline, modules, strategy=strategy)
 

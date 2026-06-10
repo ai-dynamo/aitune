@@ -79,7 +79,7 @@ def test_stable_diffusion_dynamic_batch_tensorrt_dynamo():
             # Step 4: Wrap the UNet module with TensorRT backend
             logger.info("Wrapping all modules with TensorRT backend")
             strategy = OneBackendStrategy(tensorrt_backend)
-            strategy.enable_validate_against_baseline(False)
+            strategy.enable_performance_validation(False)
             strategy.enable_find_max_batch_size(enable=False)  # WAR: Disabled to avoid OOM
             pipeline = wrap(pipeline, modules, strategy=strategy)
 

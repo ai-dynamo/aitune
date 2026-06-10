@@ -61,7 +61,7 @@ def _torch_inductor_strategy_for_wrapper_tests() -> OneBackendStrategy:
         backend=TorchInductorJitBackend(),
         perf_validation_config=_fast_perf_validation_config(),
     )
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
     return strategy
 

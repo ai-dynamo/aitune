@@ -6,7 +6,7 @@ title: "Profiling and Hardware Metrics"
 
 NVIDIA AITune provides complementary observability features:
 
-- **Tuning telemetry** — JSON reports for runs, graphs, backend attempts, baseline throughput, and selected backends
+- **Tuning telemetry** — JSON reports for runs, graphs, backend attempts, selected backends, and validation throughput when enabled
 - **NVTX annotations** — mark key operations as colored regions visible in NVIDIA Nsight Systems
 - **Hardware metrics** — continuously sample GPU/CPU utilization, memory, and power per module and backend
 
@@ -14,7 +14,7 @@ NVTX and hardware metrics are disabled by default to avoid overhead in productio
 
 ## Tuning Telemetry
 
-AITune records structured tuning telemetry during every run. The report captures graph-level baseline throughput, backend build results, backend throughput, selected backends, and failure details.
+AITune records structured tuning telemetry during every run. The report captures backend build results, selected backends, and failure details. When performance validation is enabled, it also captures graph-level baseline throughput and backend throughput.
 
 By default, the report is written to:
 

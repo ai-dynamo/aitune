@@ -72,7 +72,7 @@ def tune_model(model, tokenizer, cache="static"):
         )
     elif cache == "static":
         _decode_strategy = OneBackendStrategy(TorchInductorJitBackend())
-        _decode_strategy.enable_validate_against_baseline(False)
+        _decode_strategy.enable_performance_validation(False)
         _decode_strategy.enable_find_max_batch_size(False)
         model = Module(
             model,

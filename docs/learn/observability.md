@@ -50,7 +50,7 @@ So:
 
 ## Tuning telemetry
 
-AITune always collects tuning telemetry for each run, graph, and backend attempt. The report includes backend build status, throughput measurements, baseline throughput, selected backends, and failure information.
+AITune always collects tuning telemetry for each run, graph, and backend attempt. The report includes backend build status, selected backends, and failure information. When performance validation is enabled, it also includes throughput measurements and baseline throughput.
 
 By default, telemetry is written to:
 

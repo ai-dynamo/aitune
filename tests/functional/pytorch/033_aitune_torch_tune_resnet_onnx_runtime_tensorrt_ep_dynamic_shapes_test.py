@@ -57,7 +57,7 @@ def test_tune_resnet_onnx_runtime_tensorrt_ep_dynamic_shapes():
         strategy = OneBackendStrategy(
             ONNXRuntimeBackend(config=ONNXRuntimeBackendConfig(execution_provider=ONNXExecutionProvider.TENSORRT))
         )
-        strategy.enable_validate_against_baseline(False)
+        strategy.enable_performance_validation(False)
         strategy.enable_find_max_batch_size(False)
         module = Module(model, "functional-resnet18-onnx-trt-ep-dynamic", strategy=strategy)
 

@@ -109,7 +109,7 @@ NVIDIA AITune provides different strategies for selecting the optimal backend co
 
 Not every backend can tune every model — each relies on different compilation technology with its own limitations (e.g., ONNX export for TensorRT, graph breaks in Torch Inductor, unsupported layers in TorchAO). Strategies control how AITune handles this.
 
-Strategies also validate performance against a Torch eager baseline. Correct backends that do not beat eager by the configured threshold are rejected by `OneBackendStrategy` and `FirstWinsStrategy`; `MaxThroughputStrategy` falls back to eager when no user backend is faster. Disable baseline validation with `strategy.enable_validate_against_baseline(False)` only when you want to keep a correct backend regardless of speed.
+Strategies also validate performance against a Torch eager baseline. Correct backends that do not beat eager by the configured threshold are rejected by `OneBackendStrategy` and `FirstWinsStrategy`; `MaxThroughputStrategy` falls back to eager when no user backend is faster. Use `strategy.enable_performance_validation(False)` to skip Torch eager baseline profiling, performance checks, and speedup reporting.
 
 ## FirstWinsStrategy
 

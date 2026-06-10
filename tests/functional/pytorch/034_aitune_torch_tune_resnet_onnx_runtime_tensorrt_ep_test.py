@@ -42,7 +42,7 @@ def do_test(backend: ONNXRuntimeBackend):
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 
     strategy = OneBackendStrategy(backend)
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     module = Module(
         model,
         "functional-resnet18-onnx-trt-ep",

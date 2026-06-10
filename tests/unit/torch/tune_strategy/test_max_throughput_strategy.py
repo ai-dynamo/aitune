@@ -19,7 +19,7 @@ from aitune.torch.task.profiling.profiling_stop_strategy import (
     ThroughputSaturatedProfilingStopStrategy,
 )
 from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
-from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
+from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin, PerformanceValidationMixinResult
 from aitune.torch.tuning import tune
 from tests.toy_backends import BuildFailsBackend, SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
@@ -39,7 +39,7 @@ def test_describe(mock_backend):
     """Test describe method."""
     backends = [mock_backend, mock_backend]
     strategy = MaxThroughputStrategy(backends)
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
     strategy.enable_correctness_check(False)
     description = strategy.describe()
@@ -64,10 +64,11 @@ def test_torch_eager_not_injected_when_already_present():
     assert strategy._backends[0] is eager
 
 
-def test_torch_eager_not_injected_when_validate_against_baseline_disabled(mock_backend):
-    """No TorchEager auto-inject when validate_against_baseline=False."""
+def test_performance_validation_toggle_returns_self_and_sets_flag(mock_backend):
+    """Performance validation can be disabled with the common toggle."""
     strategy = MaxThroughputStrategy([mock_backend])
-    strategy.enable_validate_against_baseline(False)
+    assert strategy.enable_performance_validation(False) is strategy
+    assert strategy._performance_validation_enabled is False
     assert len(strategy._backends) == 1
     assert not any(isinstance(b, TorchEagerBackend) for b in strategy._backends)
 
@@ -87,14 +88,16 @@ def _fast_profiling_config(max_batch_size: int = 8):
     return profiling_config
 
 
-def _fast_max_throughput_strategy(backends: list[Backend], max_batch_size: int = 8):
+def _fast_max_throughput_strategy(
+    backends: list[Backend], max_batch_size: int = 8, *, enable_performance_validation: bool = False
+):
     """Build a max-throughput strategy that exercises profiling without long sample runs."""
     strategy = MaxThroughputStrategy(
         backends=backends,
         measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=3, warmup_samples=1),
         profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
     )
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(enable_performance_validation)
     strategy.set_find_max_batch_size_profiling_config(_fast_profiling_config(max_batch_size=max_batch_size))
     strategy.enable_correctness_check(False)
     return strategy
@@ -211,7 +214,7 @@ def test_max_throughput_strategy_fails_backend_if_all_of_backends_fails(torch_de
             ActivateFailsBackend(),
         ],
     )
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().to(torch_device)
     assert model(sample) is not None
@@ -225,7 +228,7 @@ def test_max_throughput_strategy_fails_backend_if_all_of_backends_fails(torch_de
 
 
 def test_max_throughput_strategy_fallback_to_baseline_when_all_user_backends_fail(torch_device):
-    """When all user backends fail and validate_against_baseline=True, falls back to TorchEager baseline."""
+    """When all user backends fail and validation is enabled, falls back to TorchEager baseline."""
     strategy = MaxThroughputStrategy(
         backends=[
             BuildFailsBackend(RuntimeError),
@@ -274,7 +277,7 @@ def test_max_throughput_perf_validation_results_populated(torch_device, tmp_path
     """perf_validation_results is populated for user-provided backends only (not the baseline)."""
     slower = SleepBackend(sleep_time=1e-2)
     faster = SleepBackend(sleep_time=1e-5)
-    strategy = _fast_max_throughput_strategy([slower, faster])
+    strategy = _fast_max_throughput_strategy([slower, faster], enable_performance_validation=True)
 
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().unsqueeze(0).to(torch_device)
@@ -317,6 +320,8 @@ def test_max_throughput_torcheager_excluded_from_selection_when_validate_false(t
     )
 
     assert not isinstance(selected, TorchEagerBackend)
+    assert strategy._baseline_backend is None
+    assert strategy.perf_validation_results == []
 
 
 def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
@@ -325,22 +330,21 @@ def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
 
     user_backend = SleepBackend(sleep_time=1e-5)
     strategy = _fast_max_throughput_strategy([user_backend])
-
-    model = ToyTorchModel().eval().to(torch_device)
-    sample = model.sample().unsqueeze(0).to(torch_device)
+    strategy.perf_validation_results = [
+        PerformanceValidationMixinResult(
+            backend_description=user_backend.describe(),
+            throughput=200.0,
+            baseline_throughput=100.0,
+            speedup=2.0,
+            passed=True,
+        )
+    ]
 
     with (
         patch.object(strategy._logger, "isEnabledFor", return_value=False),
         patch.object(strategy._logger, "warning") as mock_warn,
     ):
-        strategy.tune(
-            model,
-            "test",
-            model.graph_spec(batch_sizes=[1, 2], device=torch_device),
-            [((sample,), {})],
-            torch_device,
-            tmp_path,
-        )
+        strategy._post_tune(user_backend, "test", MagicMock(), [])
 
     mock_warn.assert_called()
     speedup_msgs = [c for c in mock_warn.call_args_list if "speedup:" in str(c).lower()]

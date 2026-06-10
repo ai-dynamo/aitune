@@ -15,7 +15,7 @@ title: "Changelog"
 - fix: relax the default stable-window CV threshold to 10%
 - fix: validate ratio and positive profiling configuration values
 - breaking change: rename profiling and inspection threshold arguments to ratio-based names
-
+- breaking change: replace `enable_validate_against_baseline(False)` with `enable_performance_validation(False)` as the single performance validation toggle
 
 ## 0.4.0
 - feat: JIT tuning supports tune strategy selection via `aitune.torch.jit_config.strategy` (e.g. `MaxThroughputStrategy`); default remains `FirstWinsStrategy`

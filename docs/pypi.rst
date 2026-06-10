@@ -555,6 +555,10 @@ Not every backend can tune every model — each relies on different compilation 
 limitations (e.g., ONNX export for TensorRT, graph breaks in Torch Inductor, unsupported layers in TorchAO).
 Strategies control how AITune handles this.
 
+Strategies also validate performance against a Torch eager baseline. Use
+``strategy.enable_performance_validation(False)`` to skip Torch eager baseline profiling, performance checks,
+and speedup reporting.
+
 FirstWinsStrategy
 ~~~~~~~~~~~~~~~~~
 

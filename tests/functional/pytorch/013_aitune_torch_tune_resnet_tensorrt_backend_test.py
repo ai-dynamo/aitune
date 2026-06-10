@@ -44,7 +44,7 @@ def do_test(backend: TensorRTBackend, dtype: torch.dtype, device: str, batch_siz
     expected_probs = torch.nn.functional.softmax(out[0], dim=0)
 
     strategy = OneBackendStrategy(backend)
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
     module = Module(
         model,

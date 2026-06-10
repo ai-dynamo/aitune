@@ -96,13 +96,10 @@ class PerformanceValidationMixinResult:
 
 
 class PerformanceValidationMixin(FindMaxBatchSizeMixin):
-    """Mixin that validates each correctness-passing backend against a TorchEager throughput baseline.
+    """Mixin that validates backend throughput against a TorchEager baseline.
 
-    Profiles TorchEager during _pre_tune at the resolved batch size
-    to establish a baseline. For every candidate backend, profiles at the resolved batch size and appends a
-    PerformanceValidationMixinResult. When validate_against_baseline=True (default),
-    backends with speedup < 1 + min_speedup_ratio are rejected (return None or
-    fall back). Profiling and result recording always occur regardless of the flag.
+    Performance validation is enabled by default. Use enable_performance_validation(False) to skip baseline
+    profiling, candidate performance checks, and speedup reporting.
     """
 
     def __init__(
@@ -115,15 +112,15 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
         """Initializes the mixin."""
         super().__init__(*args, sink=sink, **kwargs)
         self.perf_validation_config = perf_validation_config or PerformanceValidationMixinConfig()
-        self.validate_against_baseline: bool = True
+        self._performance_validation_enabled: bool = True
         self.perf_validation_results: list[PerformanceValidationMixinResult] = []
         self._baseline_throughput: float | None = None
         self._baseline_backend: Backend | None = None
         self._resolved_batch_size: int | None = None
 
-    def enable_validate_against_baseline(self, enable: bool = True) -> "PerformanceValidationMixin":
-        """Enables or disables baseline validation."""
-        self.validate_against_baseline = enable
+    def enable_performance_validation(self, enable: bool = True) -> "PerformanceValidationMixin":
+        """Enables or disables TorchEager baseline profiling and candidate performance checks."""
+        self._performance_validation_enabled = enable
         return self
 
     def _pre_tune(
@@ -135,11 +132,18 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
         device: torch.device,
         cache_dir: Path,
     ):
-        """Calls super()._pre_tune() then profiles TorchEager at the resolved batch size."""
+        """Runs pre-tune setup and profiles TorchEager when performance validation is enabled."""
         super()._pre_tune(module, name, graph_spec, data, device, cache_dir)
         self.perf_validation_results = []
         self._baseline_throughput = None
         self._baseline_backend = None
+        self._resolved_batch_size = None
+
+        if not self._performance_validation_enabled:
+            log("⚠️ Performance validation against eager baseline is disabled.", sink=self._sink)
+            return
+
+        log("🔄 Profiling eager baseline...please wait", sink=self._sink)
 
         self._resolved_batch_size = graph_spec.get_max_batch_size(normalized=True)
 
@@ -151,15 +155,14 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
         try:
             backend = TorchEagerBackend()
             backend = backend.build(module, graph_spec, deepcopy(data), device, baseline_cache_dir)
-
-            _, throughput, _ = find_max_throughput_for_backend(backend, name, graph_spec, data, profiling_cfg)
+            batch_size, throughput, _ = find_max_throughput_for_backend(backend, name, graph_spec, data, profiling_cfg)
 
             self._baseline_throughput = throughput
             self._baseline_backend = backend
             report_graph_baseline_throughput(throughput)
             log(
-                "📊 TorchEager baseline at bs=%d: %.2f samples/s",
-                self._resolved_batch_size,
+                "📊 Eager baseline: batch size=%s, throughput=%.2f samples/s",
+                batch_size,
                 throughput,
                 sink=self._sink,
             )
@@ -188,7 +191,7 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
 
         Returns the built backend, or None when correctness fails
         (raise_on_failure=False) or performance check rejects it
-        (validate_against_baseline=True and speedup below threshold).
+        (speedup below threshold).
         """
         built = self._build_and_validate_backend(
             backend, module, name, graph_spec, data, device, cache_dir, raise_on_failure=raise_on_failure
@@ -196,14 +199,18 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
         if built is None:
             return None
 
-        if self._baseline_throughput is None or self._resolved_batch_size is None:
+        if (
+            not self._performance_validation_enabled
+            or self._baseline_throughput is None
+            or self._resolved_batch_size is None
+        ):
             return built
 
         description = backend.describe()
         profiling_cfg = self.perf_validation_config.profiling_config_for_batch_size(self._resolved_batch_size)
 
         try:
-            _, throughput, _ = find_max_throughput_for_backend(built, name, graph_spec, data, profiling_cfg)
+            batch_size, throughput, _ = find_max_throughput_for_backend(built, name, graph_spec, data, profiling_cfg)
         except Exception:
             log("⚠️ Performance profiling failed for %s, performance check skipped", description, sink=self._sink)
             return built
@@ -234,14 +241,14 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
         log(
             "📊 %s: batch size=%s, throughput=%.2f samples/s, speedup=%.2fx (%s)",
             description,
-            self._resolved_batch_size,
+            batch_size,
             throughput,
             speedup,
             indicator,
             sink=self._sink,
         )
 
-        if not passed and self.validate_against_baseline:
+        if not passed:
             return None
 
         return built

@@ -148,12 +148,12 @@ def test_one_backend_returns_backend_when_perf_passes(
     assert strategy.perf_validation_results[0].passed is True
 
 
-def test_one_backend_returns_slow_backend_when_gate_disabled(
+def test_one_backend_skips_perf_profiling_when_validation_disabled(
     mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path
 ):
-    """When validate_against_baseline=False, slow backend is returned directly (not TorchEager)."""
+    """When performance validation is disabled, no backend throughput check runs."""
     strategy = OneBackendStrategy(mock_backend)
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     strategy._describe = MagicMock()
     strategy._pre_tune = MagicMock()
     strategy.enable_find_max_batch_size(False)
@@ -166,9 +166,9 @@ def test_one_backend_returns_slow_backend_when_gate_disabled(
     strategy._resolved_batch_size = 4
     strategy._baseline_backend = eager_fallback
 
-    # 3× slower but gate is disabled
-    with patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 1.0, MagicMock())):
+    with patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile:
         result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
 
-    assert result is mock_backend  # gate disabled → slow backend returned directly
-    assert strategy.perf_validation_results[0].passed is False  # result still recorded
+    assert result is mock_backend
+    mock_profile.assert_not_called()
+    assert strategy.perf_validation_results == []
