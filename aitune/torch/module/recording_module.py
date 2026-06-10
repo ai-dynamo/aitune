@@ -142,6 +142,6 @@ class RecordingModule:
         except RuntimeError as e:
             # raise helpful error message
             raise RuntimeError(
-                "Cannot copy model inputs. Model is not in inference mode. "
+                "Cannot copy model inputs. Model is not in no_grad mode. "
                 "Tip: you can use \n---\nwith torch.no_grad():\n    model()\n---\ncontext manager to fix this."
             ) from e

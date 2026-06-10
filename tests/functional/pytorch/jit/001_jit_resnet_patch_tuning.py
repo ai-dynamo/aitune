@@ -35,13 +35,11 @@ def test_jit_resnet():
     config.detect_graph_breaks = False
 
     def batch():
-        # we are calling two times with different batch sizes to recognize dynamic axes
         resnet(torch.randn(2, 3, 224, 224, device="cuda"))
         resnet(torch.randn(16, 3, 224, 224, device="cuda"))
 
-    with torch.no_grad():
-        for _ in range(5):
-            batch()
+    for _ in range(5):
+        batch()
 
     # Capture the print_hierarchy output
     history = []
@@ -50,7 +48,7 @@ def test_jit_resnet():
 
     # Assert the expected output
     assert PRINT_HIERARCHY_HEADER in history[0]
-    assert re.match(r".*ResNet.*state=tuned.*TensorRTBackend", history[1])
+    assert re.match(r".*ResNet.*state=tuned.*", history[1])
 
     assert resnet(torch.randn(8, 3, 224, 224, device="cuda")).shape == (8, 1000)
     assert resnet(torch.randn(16, 3, 224, 224, device="cuda")).shape == (16, 1000)

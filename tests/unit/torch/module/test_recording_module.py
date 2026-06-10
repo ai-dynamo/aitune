@@ -133,13 +133,13 @@ def test_recording_stores_original_args_and_kwargs():
     assert kwargs["cache"] == []
 
 
-def test_recording_raises_error_if_model_is_not_in_inference_mode():
-    """Test that recording raises an error if the model is not in inference mode."""
+def test_recording_raises_error_if_model_is_not_in_no_grad_mode():
+    """Test that recording raises an error if the model is not in no_grad mode."""
     rec_module = recording_module(strict_mode=True)
 
     normal_input = torch.tensor(1.0)
     rec_module(normal_input)  # no exception
 
     requires_grad_input = torch.tensor(1.0, requires_grad=True) + 1  # +1 fills grad buffer
-    with pytest.raises(RuntimeError, match=r"Cannot copy model inputs\. Model is not in inference mode\."):
+    with pytest.raises(RuntimeError, match=r"Cannot copy model inputs\. Model is not in no_grad mode\."):
         rec_module(requires_grad_input)

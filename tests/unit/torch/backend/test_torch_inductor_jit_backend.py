@@ -126,6 +126,13 @@ def do_test_backend(backend, dtype, model, sample_data, tmp_path):
     # Test deactivation
     backend.deactivate()
 
+    # Test serialization and deployment
+    state_dict = backend.to_dict()
+    loaded_backend = TorchInductorJitBackend.from_dict(model, state_dict)
+    loaded_backend.deploy(torch.device("cuda"))
+    loaded_output = loaded_backend.infer(*args, **kwargs)
+    assert output.dtype == loaded_output.dtype
+
 
 @requires_cuda
 @pytest.mark.parametrize(

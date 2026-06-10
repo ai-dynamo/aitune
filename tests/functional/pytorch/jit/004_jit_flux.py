@@ -49,10 +49,9 @@ def test_jit_flux():
     config.detect_graph_breaks = True
 
     def batch():
-        with torch.no_grad():
-            for size in [256, 512]:
-                pipe([prompt] * 1, num_inference_steps=1, height=size, width=size)
-                pipe([prompt] * 2, num_inference_steps=1, height=size, width=size)
+        for size in [256, 512]:
+            pipe([prompt] * 1, num_inference_steps=1, height=size, width=size)
+            pipe([prompt] * 2, num_inference_steps=1, height=size, width=size)
 
     for _ in range(5):
         batch()

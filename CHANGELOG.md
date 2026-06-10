@@ -8,7 +8,8 @@ title: "Changelog"
 ## 0.4.1 (unreleased)
 - fix: use the recorded global batch size for baseline performance profiling
 - fix: align Torch-TensorRT defaults and JIT inspection CUDA synchronization
-- fix: memory spike during measuring performance baseline
+- fix: remove memory spike during measuring performance baseline
+- fix: remove memory spike for torch inductor jit backend with autocast
 - fix: default profiling measurements to fixed-step sampling after warmup
 - fix: compute profiling throughput from mean latency
 - fix: stabilize optional CV-window profiling with warmup exclusion, max-sample bounds, and clearer failure errors

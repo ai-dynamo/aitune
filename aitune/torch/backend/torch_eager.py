@@ -30,7 +30,12 @@ class TorchEagerBackendConfig(BackendConfig):
 
 
 class TorchEagerBackend(Backend):
-    """Backend that runs the model in eager mode without any optimizations."""
+    """Backend that runs the model in eager mode with/without autocast.
+
+    Note: inference is done with torch.no_grad() context. The torch.inference_mode() context must not be used
+    as it would require outputs from a model to be used with same inference mode - this would be confusing to a user
+    and required code changes from the user.
+    """
 
     # State dictionary keys
     STATE_TYPE = "type"
@@ -72,7 +77,7 @@ class TorchEagerBackend(Backend):
         Returns:
             torch.dtype: The required casting dtype. Returns None if no casting is required.
         """
-        with torch.inference_mode():
+        with torch.no_grad():
             with torch.autocast(
                 device_type=str(self._device),
                 dtype=self._config.autocast_dtype,
@@ -119,7 +124,7 @@ class TorchEagerBackend(Backend):
         Returns:
             Any: The result of the inference.
         """
-        with torch.inference_mode():
+        with torch.no_grad():
             with torch.autocast(
                 device_type=str(self._device),
                 dtype=self._config.autocast_dtype,
@@ -143,7 +148,7 @@ class TorchEagerBackend(Backend):
         Returns:
             Any: The result of the inference.
         """
-        with torch.inference_mode():
+        with torch.no_grad():
             return self._orig_module(*args, **kwargs)
 
     def _deactivate(self):
