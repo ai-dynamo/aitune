@@ -9,6 +9,7 @@ from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.inspecting import inspect, wrap
 from aitune.torch.module import Module
+from aitune.torch.performance import PerformanceProfile, profile
 from aitune.torch.tune_strategy import FirstWinsStrategy, MaxThroughputStrategy, OneBackendStrategy, TuneStrategy
 from aitune.torch.tune_data.reporting import snapshot_tuning_data
 from aitune.torch.tuning import load, save, tune
@@ -26,6 +27,8 @@ __all__ = [
     "load",
     "save",
     "snapshot_tuning_data",
+    "PerformanceProfile",
+    "profile",
     "Module",
     "PatchedModule",
     "TuneStrategy",

@@ -88,6 +88,28 @@ Hardware metrics are written to a timestamped CSV file by default. Set `AITUNE_H
 
 See [Profiling and Hardware Metrics](../guides/advanced/profiling_and_hardware_metrics.md) for the full workflow.
 
+## Runtime attribution
+
+After tuning, `aitune.torch.profile(...)` produces a structured per-run report that measures wall time per run and attributes CPU and device time across both AITune-managed regions and untuned module regions (including method-style entry points like `vae.decode`), with an explicit residual covering time spent outside any region. The profile combines PyTorch Profiler data with AITune wrapper annotations and returns in-memory data plus a Markdown renderer. A raw Chrome trace is written only when you pass an explicit `trace_file`.
+
+```python
+import json
+from pathlib import Path
+
+import aitune.torch as ait
+
+profile = ait.profile(
+    obj=model,
+    input_data=inputs,
+    trace_file="trace.json",
+)
+
+Path("profile.json").write_text(json.dumps(profile.data, indent=2) + "\n")
+Path("profile.md").write_text(profile.markdown())
+```
+
+See [Performance Profile](../guides/advanced/performance_profile.md) for the full workflow.
+
 ## Maximum verbosity
 
 For the most visible tuning process:

@@ -56,6 +56,8 @@ navigation:
             path: ../docs/guides/advanced/execution_graphs.md
           - page: Profiling and Hardware Metrics
             path: ../docs/guides/advanced/profiling_and_hardware_metrics.md
+          - page: Performance Profile
+            path: ../docs/guides/advanced/performance_profile.md
       - section: AI Agents
         contents:
           - page: Tuning Assistant
