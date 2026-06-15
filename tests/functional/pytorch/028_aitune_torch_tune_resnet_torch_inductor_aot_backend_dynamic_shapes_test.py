@@ -57,7 +57,7 @@ def test_tune_resnet_torch_inductor_aot_dynamic_shapes():
 
     try:
         strategy = OneBackendStrategy(TorchInductorAotBackend())
-        strategy.enable_validate_against_baseline(False)
+        strategy.enable_performance_validation(False)
         strategy.enable_find_max_batch_size(False)
         module = Module(model, "functional-resnet18-dynamic", strategy=strategy)
 

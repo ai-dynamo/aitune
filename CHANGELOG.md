@@ -5,6 +5,19 @@ title: "Changelog"
 ---
 # Changelog
 
+## 0.4.1
+- fix: use the recorded global batch size for baseline performance profiling
+- fix: align Torch-TensorRT defaults and JIT inspection CUDA synchronization
+- fix: remove memory spike during measuring performance baseline
+- fix: remove memory spike for torch inductor jit backend with autocast
+- fix: default profiling measurements to fixed-step sampling after warmup
+- fix: compute profiling throughput from mean latency
+- fix: stabilize optional CV-window profiling with warmup exclusion, max-sample bounds, and clearer failure errors
+- fix: relax the default stable-window CV threshold to 10%
+- fix: validate ratio and positive profiling configuration values
+- breaking change: rename profiling and inspection threshold arguments to ratio-based names
+- breaking change: replace `enable_validate_against_baseline(False)` with `enable_performance_validation(False)` as the single performance validation toggle
+
 ## 0.4.0
 - feat: JIT tuning supports tune strategy selection via `aitune.torch.jit_config.strategy` (e.g. `MaxThroughputStrategy`); default remains `FirstWinsStrategy`
 - feat: Add performance validation to tuning strategies. Backends with no speedup relative to TorchEagerBackend are skipped.

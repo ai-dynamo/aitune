@@ -44,7 +44,7 @@ def test_jit_torchao_unused_child():
         backend=TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo")),
     )
     strategy.enable_find_max_batch_size(False)
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
 
     config.strategy = strategy
     config.mode = JITMode.TUNE_DEFERRED

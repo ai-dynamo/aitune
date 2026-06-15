@@ -88,7 +88,7 @@ def tune_model(
     #       We need to move modules to cpu device after tuning to work with SentenceTransformer.
     global_config.device_after_tuning = "cpu"
 
-    modules = inspected_modules_info.get_modules(min_execution_percentage=0.1)
+    modules = inspected_modules_info.get_modules(min_execution_ratio=0.1)
     model = wrap(
         model,
         modules,

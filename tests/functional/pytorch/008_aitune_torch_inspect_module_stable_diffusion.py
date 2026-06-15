@@ -47,7 +47,7 @@ def test_inspect_stable_diffusion():
     names = {module.name for module in modules}
     assert names == expected_module_names, f"Expected {expected_module_names} but got {names}"
 
-    top_modules = modules_info.get_modules(min_execution_percentage=0.6)
+    top_modules = modules_info.get_modules(min_execution_ratio=0.6)
     assert len(top_modules) == 1
     assert top_modules[0].name == "unet"
     assert top_modules[0].execution_count == num_inference_steps * number_of_iterations + 1

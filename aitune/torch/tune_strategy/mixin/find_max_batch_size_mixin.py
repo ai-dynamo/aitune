@@ -16,23 +16,15 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
-from aitune.torch.config import (
-    DEFAULT_STABILITY_PERCENTAGE,
-    DEFAULT_THROUGHPUT_BACKOFF_LIMIT,
-    DEFAULT_THROUGHPUT_CUTOFF_THRESHOLD,
-    DEFAULT_WINDOW_SIZE,
-)
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling.config import ProfilingConfig
-from aitune.torch.task.profiling.measuring_stop_strategy import StableWindowMeasuringStopStrategy
+from aitune.torch.task.profiling.measuring_stop_strategy import NumStepsMeasuringStopStrategy
 from aitune.torch.task.profiling.measuring_strategy import ModelExecutionTimeMeasuringStrategy
 from aitune.torch.task.profiling.profiling_stop_strategy import ThroughputSaturatedProfilingStopStrategy
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.utils.logging import control_output
-
-DEFAULT_MAX_BATCH_SIZE = 2**20
 
 
 @dataclass
@@ -131,38 +123,21 @@ class FindMaxBatchSizeMixin(TuneStrategy):
     @staticmethod
     def default_profiling_config(
         batching: bool = True,
-        max_batch_size: int = DEFAULT_MAX_BATCH_SIZE,
-        window_size: int = DEFAULT_WINDOW_SIZE,
-        stability_percentage: float = DEFAULT_STABILITY_PERCENTAGE,
-        throughput_cutoff_threshold: float = DEFAULT_THROUGHPUT_CUTOFF_THRESHOLD,
-        throughput_backoff_limit: int = DEFAULT_THROUGHPUT_BACKOFF_LIMIT,
+        max_batch_size: int = 2**20,
     ) -> ProfilingConfig:
         """Get profiling config for finding max batch size.
 
         Args:
             batching: Whether to profile with batching.
-            max_batch_size: Max batch size to find used to construct batch sizes, the batch sizes will be 2^n for n in range(max_batch_size.bit_length()).
-            window_size: Window size for measuring stop strategy.
-            stability_percentage: Stability percentage for measuring stop strategy.
-            throughput_cutoff_threshold: Throughput cutoff threshold for profiling stop strategy.
-            throughput_backoff_limit: Throughput backoff limit for profiling stop strategy.
+            max_batch_size: Max batch size to find used to construct batch sizes.
 
         Returns:
             Profiling config for finding max batch size.
-
-        Note:
-            The profiling config will use defaults from max throughput strategy.
         """
         return ProfilingConfig(
             batching=batching,
             batch_sizes=[2**n for n in range(max_batch_size.bit_length())],
             measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
-            measurement_stop_strategy=StableWindowMeasuringStopStrategy(
-                window_size=window_size,
-                stability_percentage=stability_percentage,
-            ),
-            profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(
-                throughput_cutoff_threshold=throughput_cutoff_threshold,
-                throughput_backoff_limit=throughput_backoff_limit,
-            ),
+            measurement_stop_strategy=NumStepsMeasuringStopStrategy(),
+            profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(),
         )

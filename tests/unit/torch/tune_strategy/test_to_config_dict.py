@@ -46,11 +46,11 @@ def test_max_throughput_strategy_to_json_dict():
     backend_b.describe.return_value = "BackendB"
 
     strategy = MaxThroughputStrategy(backends=[backend_a, backend_b])
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     result = strategy.to_json_dict()
 
     assert result == {
         "backends": ["BackendA", "BackendB"],
-        "measurement_stop_strategy": "StableWindowMeasuringStopStrategy",
+        "measurement_stop_strategy": "NumStepsMeasuringStopStrategy",
         "profiling_stop_strategy": "ThroughputSaturatedProfilingStopStrategy",
     }

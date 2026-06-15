@@ -43,7 +43,7 @@ ait.tune(model, input_data)
 class TorchTensorRTJitBackendConfig(BackendConfig):
     compile_config: TorchTensorRTConfig
     fullgraph: bool = False
-    dynamic_shapes: bool | None = None
+    dynamic: bool | None = None
     autocast_enabled: bool = False
     autocast_dtype: torch.dtype | None = None
 ```
@@ -94,13 +94,13 @@ config = TorchTensorRTJitBackendConfig(
 - `False` (default): Allow partial compilation
 - `True`: Ensure complete compilation or fail
 
-### dynamic_shapes
+### dynamic
 
 Enable dynamic shape tracing:
 
 ```python
 config = TorchTensorRTJitBackendConfig(
-    dynamic_shapes=True,  # Enable dynamic shapes
+    dynamic=True,  # Enable dynamic shapes
 )
 ```
 
@@ -154,7 +154,7 @@ It's important to distinguish between two uses of "JIT" and "AOT" in AITune:
   - Does not save compiled artifacts separately
   - Recompiles automatically on shape changes
 
-- **TorchTensorRTAotBackend**: Uses `torch_tensorrt.compile()`
+- **TorchTensorRTAotBackend**: Uses `torch.export.export()` and `torch_tensorrt.dynamo.compile()`
   - Compiles during the `tune()` call
   - Saves compiled model to disk
   - Fixed compilation (no automatic recompilation)

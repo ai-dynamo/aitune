@@ -5,13 +5,12 @@
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar
 
 import torch
 import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
-from aitune.torch.config import DEFAULT_PICKLE_PROTOCOL
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
@@ -27,7 +26,13 @@ except (ImportError, RuntimeError, OSError):
 
     @dataclass
     class TorchTensorRTConfig:
-        """Allows testing when torch_tensorrt is not installed."""
+        """Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
+
+        Attributes:
+            enabled_precisions: Enabled TensorRT precisions. Defaults to None.
+            use_explicit_typing: Whether to use explicit typing. Defaults to True.
+            workspace_size: TensorRT workspace size. Defaults to 0.
+        """
 
         enabled_precisions: set[torch.dtype] | None = None
         use_explicit_typing: bool = True
@@ -35,8 +40,6 @@ except (ImportError, RuntimeError, OSError):
 
 
 logger = getLogger(__name__)
-
-IRType = Literal["dynamo", "ts", "fx"]
 
 
 class TorchTensorRTAotBuildStep(BackendBuildStep):
@@ -63,13 +66,16 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
     """Configuration for TorchTensorRTAotBackend.
 
     See torch_tensorrt/dynamo/_settings.py CompilationSettings for compile_config(TorchTensorRTConfig)
+
+    Attributes:
+        compile_config: Torch-TensorRT compilation settings. Defaults to TorchTensorRTConfig().
+        pickle_protocol: Pickle protocol for saved compiled artifacts. Defaults to 5.
     """
 
-    ir: IRType = "dynamo"
     compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
         default_factory=TorchTensorRTConfig
     )
-    pickle_protocol: int = DEFAULT_PICKLE_PROTOCOL
+    pickle_protocol: int = 5
 
     def describe(self) -> str:
         """Describe the backend configuration. Display only changed fields."""
@@ -98,6 +104,7 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
         reconstructed into a ``TorchTensorRTConfig`` instance automatically.
         """
         data = dict(data)
+        data.pop("ir", None)
         if isinstance(data.get("compile_config"), dict):
             data["compile_config"] = TorchTensorRTConfig(**data["compile_config"])
         return cls(**data)

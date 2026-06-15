@@ -39,20 +39,21 @@ tune --model-name black-forest-labs/FLUX.1-dev --prompt "A futuristic cityscape 
 You can customize the following parameters:
 - `--model-name`: HuggingFace model name or path (default: "black-forest-labs/FLUX.1-dev")
 - `--prompt`: Text prompt for image generation
-- `--negative-prompt`: Negative text prompt (default: "low quality, blurry")
-- `--height`: Height of the generated image (default: 512)
-- `--width`: Width of the generated image (default: 512)
-- `--steps`: Number of inference steps (default: 25)
+- `--sizes`: Space-separated `width,height` image sizes (default: `512,512 1024,1024`)
+- `--steps`: Number of inference steps (default: 28)
+- `--guidance-scale`: Guidance scale (default: 3.5)
+- `--max-sequence-length`: Maximum sequence length (default: 128)
+- `--tuned-model-path`: Path to save or load the tuned model (default: `flux-dev.ait`)
 
 ### Generating images with the tuned model
 
 After tuning, generate images with:
 
 ```bash
-inference --prompt "A beautiful landscape with mountains and a lake" --output-dir output
+AITUNE_OUTPUT_DIR=output inference --prompt "A beautiful landscape with mountains and a lake"
 ```
 
-The generated image will be saved in the specified output directory.
+The generated image will be saved in `AITUNE_OUTPUT_DIR`, or `output` when the environment variable is not set.
 
 ### Logging hardware metrics
 
@@ -97,4 +98,3 @@ The service uses dynamic batching — requests are grouped and processed togethe
 The Flux model is a text-to-image diffusion model that generates high-quality images from text descriptions. The model is trained on a large dataset of images and text, and can generate realistic images across various domains.
 
 For more information, visit the [Flux model page on HuggingFace](https://huggingface.co/black-forest-labs/FLUX.1-dev).
-

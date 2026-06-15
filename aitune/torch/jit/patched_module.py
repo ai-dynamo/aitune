@@ -194,7 +194,7 @@ class PatchedModule:
                 if isinstance(e, GraphBreakException):
                     current._extra_state_info = "graph break"
                 else:
-                    current._extra_state_info = "tuning error"
+                    current._extra_state_info = "no better tuned version"
                 _to_hist(f"Failed to tune module, unpatched: {str(current)}")
 
     def _simulate_dry_run(

@@ -76,9 +76,9 @@ if __name__ == "__main__":
 ### Open the report
 
 ```bash
-firefox output/inspect_sd15.html
+firefox inspect_sd15.html
 # or
-google-chrome output/inspect_sd15.html
+google-chrome inspect_sd15.html
 ```
 
 ## What the report shows

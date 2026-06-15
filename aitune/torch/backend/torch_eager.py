@@ -3,6 +3,7 @@
 
 """Torch eager backend."""
 
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -29,7 +30,12 @@ class TorchEagerBackendConfig(BackendConfig):
 
 
 class TorchEagerBackend(Backend):
-    """Backend that runs the model in eager mode without any optimizations."""
+    """Backend that runs the model in eager mode with/without autocast.
+
+    Note: inference is done with torch.no_grad() context. The torch.inference_mode() context must not be used
+    as it would require outputs from a model to be used with same inference mode - this would be confusing to a user
+    and required code changes from the user.
+    """
 
     # State dictionary keys
     STATE_TYPE = "type"
@@ -44,7 +50,7 @@ class TorchEagerBackend(Backend):
         self._config = config or TorchEagerBackendConfig()
         self._orig_module = None
         self._graph_spec = None
-        self._output_dtype = None
+        self._required_casting_dtype = None
 
     def is_jit(self) -> bool:
         """Returns True if the backend is a JIT backend."""
@@ -58,23 +64,35 @@ class TorchEagerBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    @staticmethod
-    def _get_dtype(module: nn.Module, data: list[Sample]) -> torch.dtype:
-        """Get the output dtype of the module by running a sample inference.
+    def _get_required_casting_dtype(self, module: nn.Module, data: list[Sample]) -> torch.dtype | None:
+        """Get the required casting dtype of the module by running a sample inference with and without autocast.
+
+        If the dtype of the output is different with and without autocast, return the dtype of the output without autocast.
+        Otherwise, return None.
 
         Args:
             module (nn.Module): The module to get the dtype from.
             data (list[Sample]): List of sample inputs to run through the module.
 
         Returns:
-            torch.dtype: The dtype of the module's output tensor. Returns None if output is not a tensor.
+            torch.dtype: The required casting dtype. Returns None if no casting is required.
         """
-        args, kwargs = data[0]
-        res = module(*args, **kwargs)
-        if isinstance(res, torch.Tensor):
-            return res.dtype
-        else:
-            return None
+        with torch.no_grad():
+            with torch.autocast(
+                device_type=str(self._device),
+                dtype=self._config.autocast_dtype,
+                enabled=True,
+            ):
+                args, kwargs = deepcopy(data[0])
+                autocast_result = self._orig_module(*args, **kwargs)
+
+            if isinstance(autocast_result, torch.Tensor):
+                args, kwargs = deepcopy(data[0])
+                orig_result = self._orig_module(*args, **kwargs)
+                if orig_result.dtype != autocast_result.dtype:
+                    return orig_result.dtype
+
+        return None
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
         """Builds the model."""
@@ -83,7 +101,8 @@ class TorchEagerBackend(Backend):
 
         self._orig_module = module
         self._graph_spec = graph_spec
-        self._output_dtype = self._get_dtype(module, data)
+        if self._config.autocast_enabled:
+            self._required_casting_dtype = self._get_required_casting_dtype(module, data)
 
         # must be activated before returning the backend
         self._activate()
@@ -92,9 +111,10 @@ class TorchEagerBackend(Backend):
 
     def _activate(self):
         """Activates runner."""
-        pass
+        if self._config.autocast_enabled:
+            self._infer = self._infer_with_autocast
 
-    def _infer(self, *args: Any, **kwargs: Any) -> Any:
+    def _infer_with_autocast(self, *args: Any, **kwargs: Any) -> Any:
         """Runs inference with the given arguments.
 
         Args:
@@ -108,14 +128,28 @@ class TorchEagerBackend(Backend):
             with torch.autocast(
                 device_type=str(self._device),
                 dtype=self._config.autocast_dtype,
-                enabled=self._config.autocast_enabled,
+                enabled=True,
             ):
                 res = self._orig_module(*args, **kwargs)
-                if isinstance(res, torch.Tensor) and res.dtype != self._output_dtype and self._output_dtype is not None:
+                if self._required_casting_dtype is not None:
                     # autocast changed the dtype of the output, converting back to the original dtype
-                    return res.to(self._output_dtype)
-                else:
-                    return res
+                    return res.to(self._required_casting_dtype)
+        return res
+
+    def _infer(self, *args: Any, **kwargs: Any) -> Any:
+        """Runs inference with the given arguments. Does not use autocast.
+
+        It can be replaced at runtime by _infer_with_autocast.
+
+        Args:
+            *args: inference arguments
+            **kwargs: inference keyword arguments
+
+        Returns:
+            Any: The result of the inference.
+        """
+        with torch.no_grad():
+            return self._orig_module(*args, **kwargs)
 
     def _deactivate(self):
         """Deactivates runner."""
@@ -124,6 +158,8 @@ class TorchEagerBackend(Backend):
     def _deploy(self):
         """Deploys the backend."""
         self._orig_module.to(self._device)
+        if self._config.autocast_enabled:
+            self._infer = self._infer_with_autocast
 
     def _save_config(self, cache_dir: Path):
         """Store the backend configuration to a file."""
@@ -138,7 +174,7 @@ class TorchEagerBackend(Backend):
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
-            self.STATE_OUTPUT_DTYPE: self._output_dtype,
+            self.STATE_OUTPUT_DTYPE: self._required_casting_dtype,
             self.STATE_DEVICE: self.device,
         }
 
@@ -154,7 +190,7 @@ class TorchEagerBackend(Backend):
         config = TorchEagerBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend = cls(config=config)
-        backend._output_dtype = state_dict[cls.STATE_OUTPUT_DTYPE]
+        backend._required_casting_dtype = state_dict[cls.STATE_OUTPUT_DTYPE]
         backend._set_device(state_dict[cls.STATE_DEVICE])
         backend._orig_module = module
         module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)

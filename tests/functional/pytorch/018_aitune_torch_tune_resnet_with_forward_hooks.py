@@ -49,7 +49,7 @@ def test_resnet50():
 
     # then - verify tuning
     strategy = OneBackendStrategy(TorchInductorJitBackend())
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     module.tune(device=device, strategy=strategy, dry_run=False)
     actual_arg_max = module(data)
     torch.testing.assert_close(actual_arg_max, expected_arg_max, rtol=1e-4, atol=1e-5)

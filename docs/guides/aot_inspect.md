@@ -112,6 +112,10 @@ modules_info = ait.inspect(
 )
 ```
 
+If the custom function uses scalar arguments that should also be tuned, use the same function later in
+`ait.tune()` after wrapping the inspected modules. See
+[Inspect and tune with the same workload wrapper](aot_tuning.md#inspect-and-tune-with-the-same-workload-wrapper).
+
 #### number_of_iterations (Default: 10)
 
 Number of iterations for profiling execution time:
@@ -194,7 +198,7 @@ modules = modules_info.get_modules()
 
 You can place additional criteria:
 
-- **min_execution_percentage** - minimum percentage of total execution count e.g. .9
+- **min_execution_ratio** - minimum ratio of total execution time e.g. .9
 - **limit** - maximum number of modules to return, e.g., 5
 
 If those criteria are not sufficient, you can manually filter modules:

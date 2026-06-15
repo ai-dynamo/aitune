@@ -50,7 +50,7 @@ So:
 
 ## Tuning telemetry
 
-AITune always collects tuning telemetry for each run, graph, and backend attempt. The report includes backend build status, throughput measurements, baseline throughput, selected backends, and failure information.
+AITune always collects tuning telemetry for each run, graph, and backend attempt. The report includes backend build status, selected backends, and failure information. When performance validation is enabled, it also includes throughput measurements and baseline throughput.
 
 By default, telemetry is written to:
 
@@ -109,6 +109,24 @@ Path("profile.md").write_text(profile.markdown())
 ```
 
 See [Performance Profile](../guides/advanced/performance_profile.md) for the full workflow.
+
+## Environment variable reference
+
+| Variable | Purpose |
+|----------|---------|
+| `AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning` | Enable JIT tuning without adding an import to the target script |
+| `AITUNE_CACHE_DIR` | AOT cache directory, defaulting to `~/.cache/aitune` |
+| `AITUNE_JIT_CACHE_DIR` | JIT build-artifact and log directory, defaulting to `~/.cache/aitune.jit` |
+| `AITUNE_CACHE_MIN_FREE_BYTES` | Minimum free-space warning threshold for cache writes, defaulting to 50 GiB |
+| `AITUNE_CONSOLE_OUTPUT=1` | Mirror backend build stdout/stderr to the console while still writing build logs |
+| `AITUNE_TUNING_DATA_PATH` | Override the tuning telemetry JSON output path |
+| `AITUNE_NVTX_EVENTS=1` | Enable NVTX profiling annotations |
+| `AITUNE_HARDWARE_METRICS=1` | Collect hardware metrics during annotated regions |
+| `AITUNE_HARDWARE_METRICS_PATH` | Override the hardware metrics CSV output path |
+| `AITUNE_TRANSFORMERS_INTEGRATION` | Enable or disable Transformers integration, defaulting to enabled |
+| `AITUNE_DIFFUSERS_INTEGRATION` | Enable or disable Diffusers integration, defaulting to disabled |
+| `AITUNE_INSPECT_DEBUG=1` | Enable verbose AOT inspect traversal diagnostics |
+| `AITUNE_INSPECT_DEBUG_RAISE=1` | Raise inspect traversal errors instead of ignoring them |
 
 ## Maximum verbosity
 

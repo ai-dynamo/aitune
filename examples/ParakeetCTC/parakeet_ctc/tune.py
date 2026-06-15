@@ -59,7 +59,7 @@ def tune_model(
     inspected_modules_info = inspect(pipeline, input_data, inference_function=call_wrapper, min_depth=1)
     inspected_modules_info.describe()
 
-    modules = inspected_modules_info.get_modules(min_execution_percentage=0.01)
+    modules = inspected_modules_info.get_modules(min_execution_ratio=0.01)
     pipeline = wrap(pipeline, modules, strategy=strategy)
 
     logger.info("Tuning module: %s", model_name)

@@ -5,31 +5,35 @@
 import numpy as np
 
 from aitune.torch.task.profiling.events import ProfilingResultEvent
+from aitune.utils import validation
 
 
 def is_throughput_saturated(
     profiling_result: list[ProfilingResultEvent],
-    throughput_cutoff_threshold: float,
+    min_throughput_gain_ratio: float,
     prev_results: list[ProfilingResultEvent],
 ) -> bool:
     """Validate if throughput saturated between consecutive samples.
 
     Args:
         profiling_result: Current profiling results.
-        throughput_cutoff_threshold: Threshold for throughput saturation.
+        min_throughput_gain_ratio: Minimum relative throughput gain required to continue profiling.
         prev_results: Previous profiling results or previous throughput.
 
     Returns:
-        True when throughput saturated between consecutive samples. False when verification disabled or not yet saturated.
+        True when throughput saturated between consecutive samples.
+        False when verification disabled or not yet saturated.
     """
+    validation.ratio(min_throughput_gain_ratio)
+
     if not prev_results:
         return False
 
     prev_throughput = get_throughput(prev_results)
     new_throughput = get_throughput(profiling_result)
 
-    # new_throughput minus few percent should be less than prev_throughput, then it is saturated
-    return new_throughput * (1 - throughput_cutoff_threshold) < prev_throughput
+    # new_throughput minus required gain should be less than prev_throughput, then it is saturated
+    return new_throughput * (1 - min_throughput_gain_ratio) < prev_throughput
 
 
 def get_batch_size(results: list[ProfilingResultEvent]) -> int:

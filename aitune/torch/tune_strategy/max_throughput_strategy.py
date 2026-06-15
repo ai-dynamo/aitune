@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Max throughput tune strategy.
 
-1. Finds max batch size for Torch Eager as a baseline.
-2. Profiles TorchEager at that batch size sweep as a throughput baseline.
+1. Finds max batch size.
+2. Profiles TorchEager as a throughput baseline when performance validation is enabled.
 3. Runs all user-provided backends with the same sweep.
 4. Returns the backend with max throughput; falls back to TorchEager when
-   validate_against_baseline is enabled and no user backend beats the baseline.
+   performance validation is enabled and no user backend beats the baseline.
 """
 
 import logging
@@ -32,21 +32,15 @@ from aitune.torch.backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTJitBackend,
 )
-from aitune.torch.config import (
-    DEFAULT_STABILITY_PERCENTAGE,
-    DEFAULT_THROUGHPUT_BACKOFF_LIMIT,
-    DEFAULT_THROUGHPUT_CUTOFF_THRESHOLD,
-    DEFAULT_WINDOW_SIZE,
-)
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import (
     MeasuringStopStrategy,
     ModelExecutionTimeMeasuringStrategy,
+    NumStepsMeasuringStopStrategy,
     ProfilingConfig,
     ProfilingStopStrategy,
-    StableWindowMeasuringStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
 from aitune.torch.tune_data.reporting import report_backend_throughput, report_graph_baseline_throughput
@@ -68,11 +62,10 @@ class _TuneCandidate:
 class MaxThroughputStrategy(FindMaxBatchSizeMixin):
     """Searches and selects the backend with max throughput.
 
-    TorchEager is profiled in _pre_tune as a throughput baseline (not injected into
-    the backends list). When validate_against_baseline is enabled (default), the strategy
-    falls back to TorchEager when no user-provided backend beats it. When disabled,
-    the best user-provided backend wins regardless of speed, and the strategy raises
-    if all user backends fail.
+    TorchEager is profiled in _pre_tune as a throughput baseline when validation is enabled
+    (not injected into the backends list). When validation is enabled, the strategy falls
+    back to TorchEager when no user-provided backend beats it. When disabled, the best
+    user-provided backend wins and the strategy raises if all user backends fail.
     """
 
     def __init__(
@@ -92,24 +85,18 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
         """
         super().__init__(**kwargs)
         self._backends = backends or self._default_backends()
-        self._validate_against_baseline: bool = True
-        self._measurement_stop_strategy = measurement_stop_strategy or StableWindowMeasuringStopStrategy(
-            window_size=DEFAULT_WINDOW_SIZE,
-            stability_percentage=DEFAULT_STABILITY_PERCENTAGE,
-        )
-        self._profiling_stop_strategy = profiling_stop_strategy or ThroughputSaturatedProfilingStopStrategy(
-            throughput_cutoff_threshold=DEFAULT_THROUGHPUT_CUTOFF_THRESHOLD,
-            throughput_backoff_limit=DEFAULT_THROUGHPUT_BACKOFF_LIMIT,
-        )
+        self._performance_validation_enabled: bool = True
+        self._measurement_stop_strategy = measurement_stop_strategy or NumStepsMeasuringStopStrategy()
+        self._profiling_stop_strategy = profiling_stop_strategy or ThroughputSaturatedProfilingStopStrategy()
 
         self.perf_validation_results: list[PerformanceValidationMixinResult] = []
         self._baseline_throughput: float | None = None
         self._baseline_backend: Backend | None = None
         self._baseline_batch_size: int | None = None
 
-    def enable_validate_against_baseline(self, enable: bool = True) -> "MaxThroughputStrategy":
-        """Enables or disables baseline validation."""
-        self._validate_against_baseline = enable
+    def enable_performance_validation(self, enable: bool = True) -> "MaxThroughputStrategy":
+        """Enables or disables TorchEager performance validation."""
+        self._performance_validation_enabled = enable
         return self
 
     def _pre_tune(
@@ -121,12 +108,16 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
         device: torch.device,
         cache_dir: Path,
     ):
-        """Calls super()._pre_tune() (finds max batch size) then profiles TorchEager as baseline."""
+        """Runs pre-tune setup and profiles TorchEager when performance validation is enabled."""
         super()._pre_tune(module, name, graph_spec, data, device, cache_dir)
         self.perf_validation_results = []
         self._baseline_throughput = None
         self._baseline_backend = None
         self._baseline_batch_size = None
+
+        if not self._performance_validation_enabled:
+            log("⚠️ Performance validation against TorchEager baseline is disabled.", sink=self._sink)
+            return
 
         batching = graph_spec.input_spec.has_batch_axis() and graph_spec.get_max_batch_size() > 1
         max_batch_size = graph_spec.get_max_batch_size()
@@ -255,7 +246,7 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
     def _resolve_winner(self, best: _TuneCandidate | None) -> _TuneCandidate:
         """Returns the winning candidate, falling back to the TorchEager baseline when appropriate."""
         use_baseline = (
-            self._validate_against_baseline
+            self._performance_validation_enabled
             and self._baseline_backend is not None
             and self._baseline_throughput is not None
             and (best is None or best.throughput < self._baseline_throughput)

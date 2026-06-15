@@ -55,7 +55,7 @@ def test_tune_resnet_onnx_runtime_dynamic_shapes():
 
     try:
         strategy = OneBackendStrategy(ONNXRuntimeBackend())
-        strategy.enable_validate_against_baseline(False)
+        strategy.enable_performance_validation(False)
         strategy.enable_find_max_batch_size(False)
         module = Module(model, "functional-resnet18-onnx-dynamic", strategy=strategy)
 

@@ -31,8 +31,20 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
 
     input_data = [{"prompt": prompt}]
 
+    def call_wrapper(*args, **kwargs):
+        for height, width in sizes:
+            print(f"Generating image with height={height} and width={width}")  # noqa: T201
+            pipeline(
+                *args,
+                height=height,
+                width=width,
+                num_inference_steps=steps,
+                **kwargs,
+            )
+
     # Inspect pipeline to get modules
-    modules_info = inspect(pipeline, input_data)
+    modules_info = inspect(pipeline, input_data, inference_function=call_wrapper)
+    modules_info.describe()
 
     # Define strategy
     if strategy is None:
@@ -46,19 +58,8 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
         strategy.enable_find_max_batch_size(enable=False)
 
     # Wrap all modules with AITune Module
-    modules = modules_info.get_modules(min_execution_percentage=0.05)
+    modules = modules_info.get_modules(min_execution_ratio=0.05)
     pipeline = wrap(pipeline, modules, strategy=strategy)
-
-    def call_wrapper(*args, **kwargs):
-        for height, width in sizes:
-            print(f"Generating image with height={height} and width={width}")  # noqa: T201
-            pipeline(
-                *args,
-                height=height,
-                width=width,
-                num_inference_steps=steps,
-                **kwargs,
-            )
 
     logger.info("Tuning module: %s", model_name)
     tune(call_wrapper, input_data, batch_sizes=batch_sizes)

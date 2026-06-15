@@ -86,7 +86,7 @@ This approach allows you to:
 
 Just-in-time tuning follows this process:
 
-1. **Initial Runs**: The first few inferences are used to detect model architecture and record input/output shapes
+1. **Initial Runs**: The first few inferences are used to detect model architecture and record input/output shapes until `jit_config.min_samples` is met
 2. **Module Discovery**: Identifies all PyTorch modules in the execution path
 3. **Hierarchical Tuning**: Attempts to tune modules starting from the top level:
 
@@ -268,7 +268,7 @@ AITune needs at minimum 1 sample to perform tuning. Multiple samples are require
 Maximum depth of a module in module hierarchy to be considered for tuning.
 
 ```python
-jit_config.max_depth_level = 2  # Default: 2
+jit_config.max_depth_level = 2  # Default: 1
 ```
 
 **Example**:
@@ -292,7 +292,7 @@ jit_config.min_parameters = 1000  # Default: 0
 Enable graph break detection.
 
 ```python
-jit_config.detect_graph_breaks = True  # Default: True
+jit_config.detect_graph_breaks = True  # Default: False
 ```
 
 **Why it matters**: Graph breaks prevent static optimization. When disabled, AITune may attempt to tune modules with dynamic control flow (which will likely fail).
@@ -309,14 +309,14 @@ jit_config.skip_modules = ["BatchNorm2d", "LayerNorm", "Dropout"]
 
 #### cache_dir
 
-Directory for caching tuned modules.
+Directory for per-run build artifacts and logs.
 
 ```python
 from pathlib import Path
 jit_config.cache_dir = Path("/path/to/cache")
 ```
 
-**Note**: Currently, just-in-time mode does not support persistent caching across runs.
+**Note**: JIT mode does not reuse this directory as a tuned checkpoint cache. A new Python process starts tuning from scratch.
 
 #### strategy
 
@@ -344,17 +344,17 @@ This setting is common for all tuned modules.
 
 ## Limitations and Considerations
 
-### 1. No Persistent Caching
+### 1. No Persistent Checkpoint Reuse
 
-Just-in-time tuning does not cache results across runs. Each time you start a new Python interpreter, tuning starts from scratch.
+Just-in-time tuning writes build artifacts and logs to `jit_config.cache_dir`, but it does not reuse tuned results across runs. Each time you start a new Python interpreter, tuning starts from scratch.
 
 ### 2. No Benchmarking
 
 Dynamic axes are detected; however, they cannot be matched against real batch sizes. This is due to missing explicit data source, and hence, AITune cannot control batch size. Without this information, it cannot extrapolate batches to any size, which is required by benchmarking functionality.
 
-### 3. Requires Multiple Samples
+### 3. Dynamic Shape Detection Requires Multiple Samples
 
-At least 2 samples are needed to start tuning. If you need detection of dynamic axes and min/max shape, you should either feed such data into a model or change `min_samples` limits.
+The default `min_samples` is 1, which is enough to attempt tuning. If you need detection of dynamic axes and min/max shape, feed multiple input shapes through the model and raise `min_samples` so AITune records those shapes before tuning.
 
 ## Just-in-Time Tuning vs Ahead-of-Time Tuning
 
@@ -367,12 +367,12 @@ The following table summarizes the difference between those two modes:
 | Benchmarking            | Yes                   | No (no extrapolating batches) |
 | Modules for tuning      | User has full control | Picked automatically          |
 | Selecting tune strategy | Global or per module  | Global                        |
-| Available strategies    | All                   | Limited (no benchmarking)     |
+| Available strategies    | All                   | Global only                   |
 | Tune time               | Slow                  | Quick                         |
 | Saving artifacts        | Yes                   | No                            |
 | Load tuned model time   | Quick                 | Re-tuning required            |
 | Code changes required   | Yes                   | No                            |
-| Caching                 | Yes                   | No                            |
+| Caching                 | Yes                   | Build artifacts only          |
 
 ## Debugging Just-in-Time Tuning
 

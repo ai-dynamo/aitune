@@ -15,6 +15,7 @@ import wrapt
 
 from aitune.torch.jit.config import config
 from aitune.torch.jit.html_generator import HTMLGenerator
+from aitune.torch.utils.cuda_utils import synchronize as cuda_synchronize
 from aitune.torch.utils.module import count_parameters
 
 PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
@@ -126,10 +127,10 @@ class InspectModule:
         self._gather_args_kwargs(args, kwargs)
         self._restore_original_forward()
         try:
-            torch.cuda.synchronize()
+            cuda_synchronize()
             start_time = perf_counter()
             result = self.__wrapped__(*args, **kwargs)
-            torch.cuda.synchronize()
+            cuda_synchronize()
             end_time = perf_counter()
         finally:
             self._proxy_forward()
@@ -150,7 +151,7 @@ class InspectModule:
 
     def _gather_output_types(self, result: Any):
         """Gather output types."""
-        if isinstance(result, (tuple, list)):
+        if isinstance(result, tuple | list):
             self._output_types = []
             for x in result:
                 self._output_types.append(get_type_info(x))

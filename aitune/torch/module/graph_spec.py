@@ -32,12 +32,17 @@ class GraphSpec:
         self.input_spec.update_shapes_seen(inputs_metadata)
         self.output_spec.update_shapes_seen(outputs_metadata)
 
-    def get_max_batch_size(self) -> int:
-        """Get max batch size from input spec."""
+    def get_max_batch_size(self, normalized: bool = False) -> int:
+        """Get max batch size from input spec.
+
+        Args:
+            normalized: Flag to normalize the batch size against the global batch size.
+        """
         max_batch_size = 1
         for tensor_spec in self.input_spec.tensor_specs:
-            for axis in tensor_spec.get_batch_axis_multipliers().keys():
-                max_batch_size = max(max_batch_size, tensor_spec.max_shape[axis])
+            for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
+                multiplier = multiplier if normalized else 1
+                max_batch_size = max(max_batch_size, tensor_spec.max_shape[axis] // multiplier)
         return max_batch_size
 
     def get_min_batch_size(self) -> int | None:

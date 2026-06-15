@@ -23,17 +23,17 @@ NVIDIA AITune works with your environment — relying first on your software ver
 
 The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
 
-| Feature                     | Description                                                                                                               |
-|-----------------------------|---------------------------------------------------------------------------------------------------------------------------|
-| Ease-of-use                 | Single line of code to run all possible tuning paths directly from your source code                                       |
-| Wide Backend Support        | Compatible with various tuning backends including TensorRT, Torch-TensorRT, TorchAO, Torch Inductor, and ONNX Runtime    |
-| Model Tuning                | Enhance the performance of models such as ResNET and BERT for efficient inference deployment                              |
-| Pipeline Tuning             | Streamline Python code pipelines for models such as Stable Diffusion and Flux using seamless model wrapping and tuning    |
-| Model Export and Conversion | Automate the process of exporting and converting models between various formats with focus on TensorRT, Torch-TensorRT, and ONNX Runtime |
-| Correctness Testing         | Ensures tuned models produce correct outputs by validating on provided data samples                                       |
-| Performance Profiling       | Profiles models to select the optimal backend based on performance metrics such as latency and throughput                 |
-| Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                        |
-| JIT tuning                  | Just-in-time tuning of a model or a pipeline without any code changes required                                            |
+| Feature                     | Description                                                                                                                                              |
+|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Ease-of-use                 | Single line of code to run all possible tuning paths directly from your source code                                                                      |
+| Wide Backend Support        | Compatible with various tuning backends including TensorRT, Torch-TensorRT, TorchAO, Torch Inductor, and ONNX Runtime                                    |
+| Model Tuning                | Enhance the performance of models such as ResNET and BERT for efficient inference deployment                                                             |
+| Pipeline Tuning             | Streamline Python code pipelines for models such as Stable Diffusion and Flux using seamless model wrapping and tuning                                   |
+| Model Export and Conversion | Automate the process of exporting and converting models between various formats with focus on TensorRT, Torch-TensorRT, Torch Inductor, and ONNX Runtime |
+| Correctness Testing         | Ensures tuned models produce correct outputs by validating on provided data samples                                                                      |
+| Performance Profiling       | Profiles models to select the optimal backend based on performance metrics such as latency and throughput                                                |
+| Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                                                       |
+| JIT tuning                  | Just-in-time tuning of a model or a pipeline without any code changes required                                                                           |
 
 ## When to Use AITune
 
@@ -63,6 +63,12 @@ NVIDIA AITune can be installed from `pypi.org`.
 
 ```bash
 pip install --extra-index-url https://pypi.nvidia.com aitune
+```
+
+For PyTorch 2.10 with CUDA 13 support, install the `torch210` extra:
+
+```bash
+pip install --extra-index-url https://pypi.nvidia.com --extra-index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
 ```
 
 ### Installing from Source
@@ -146,7 +152,7 @@ def infer(prompt):
     return pipe(prompt, width=1024, height=1024, num_inference_steps=10)
 
 
-# modules_info = ait.inspect(pipe, input_data, inference_function=infer)
+modules_info = ait.inspect(pipe, input_data, inference_function=infer)
 
 # Display modules info
 modules_info.describe()
@@ -190,7 +196,7 @@ ait.load(pipe, "tuned_pipe.ait")
 
 ### Just-in-time tuning
 
-In this mode, there is no need to modify the user's code. At the beginning, AITune uses a few inferences to detect model architecture and hierarchy of a model. Then it tries to tune modules one by one starting from the top. If there is one of the following conditions:
+In this mode, there is no need to modify the user's code. AITune records inference calls until `jit_config.min_samples` is met, then tries to tune modules one by one starting from the top. If there is one of the following conditions:
 
 * a graph break is detected, i.e., torch.nn.Module contains conditional logic on inputs, meaning there is no guarantee of a static, correct graph of computations, or
 * there is an error during tuning
@@ -237,13 +243,13 @@ python my_script.py
 If there is a need to adjust just-in-time options, you can do it but currently this requires modifying code to import the JIT config:
 
 ```python
-from aitune.torch.jit.config import config
+from aitune.torch.jit.config import config as jit_config
 from aitune.torch.backend import TensorRTBackend
 from aitune.torch.tune_strategy import FirstWinsStrategy
 
-config.max_depth_level = 1  # change the default maximum depth level for nested modules to be tuned
-config.detect_graph_breaks = False  # turn off graph break detection
-config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()])  # change the tune strategy
+jit_config.max_depth_level = 1  # change the default maximum depth level for nested modules to be tuned
+jit_config.detect_graph_breaks = False  # turn off graph break detection
+jit_config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()])  # change the tune strategy
 ```
 
 ## Comparison between ahead-of-time and just-in-time tuning
@@ -262,10 +268,10 @@ The big advantage of just-in-time tuning is that you don't need to modify the us
 
 * it cannot deduce batch size nor do benchmarking
 * input/output shapes depend on the data seen, so for example, TRT backend will build a profile only for that data
-* it needs at least two inference calls - first to get model/pipeline hierarchy and second one for actual tuning
+* it needs at least one inference call to record inputs before tuning; later calls use tuned modules where tuning succeeded
 * if you need dynamic axes (e.g., TRT backend), you need to provide two different batch sizes
-* there is limited support of strategies due to unknown batch size
-* you can specify backends for the whole model
+* benchmarking-based strategies are limited because JIT cannot extrapolate to controlled batch sizes
+* you can specify a global tune strategy for the whole model
 
 The following table summarizes the difference between modes:
 
@@ -276,14 +282,14 @@ The following table summarizes the difference between modes:
 | Benchmarking            | Yes                   | No (no extrapolating batches) |
 | Modules for tuning      | User has full control | Picked automatically          |
 | Selecting tune strategy | Global or per module  | Global                        |
-| Available strategies    | All                   | Limited (no benchmarking)     |
+| Available strategies    | All                   | Global only                   |
 | Tune time               | Slow                  | Quick                         |
 | Saving artifacts        | Yes                   | No                            |
 | Load tuned model time   | Quick                 | Re-tuning required            |
 | Code changes required   | Yes                   | No                            |
-| Caching                 | Yes                   | No                            |
+| Caching                 | Yes                   | Build artifacts only; no reuse |
 
-Note: Currently, JIT mode does not support caching results, i.e., every time a new Python interpreter starts, the tuning process starts from scratch.
+Note: JIT mode writes build artifacts and logs under `jit_config.cache_dir` / `AITUNE_JIT_CACHE_DIR`, but it does not reuse them as tuned checkpoints across Python interpreter runs. Every new process starts tuning from scratch.
 
 ## Core Functionalities
 
@@ -493,6 +499,8 @@ NVIDIA AITune provides different strategies for selecting the optimal backend co
 
 Not every backend can tune every model — each relies on different compilation technology with its own limitations (e.g., ONNX export for TensorRT, graph breaks in Torch Inductor, unsupported layers in TorchAO). Strategies control how AITune handles this.
 
+Strategies also validate performance against a Torch eager baseline. Use `strategy.enable_performance_validation(False)` when you want to keep a correct backend regardless of speed and skip baseline profiling, candidate performance checks, and speedup reporting.
+
 ### FirstWinsStrategy
 
 Tries backends in priority order and returns the first one that builds, validates correctness, and beats the Torch eager baseline by the configured threshold. If a backend fails or is slower than baseline, the strategy moves on to the next candidate instead of aborting.
@@ -505,7 +513,7 @@ strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorJitBacken
 
 ### OneBackendStrategy
 
-Uses exactly one backend, failing immediately with the original error if it cannot build. Use this when you have already validated that a backend works and want deterministic behavior. Unlike `FirstWinsStrategy` with a single backend, `OneBackendStrategy` surfaces the original exception rather than catching it.
+Uses exactly one backend, failing immediately with the original error if it cannot build or validate correctness. If the backend is correct but does not beat the eager performance gate, it falls back to `TorchEagerBackend`. Unlike `FirstWinsStrategy` with a single backend, `OneBackendStrategy` surfaces build and correctness exceptions rather than catching them.
 
 ```python
 from aitune.torch.tune_strategy import OneBackendStrategy

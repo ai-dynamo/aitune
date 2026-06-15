@@ -109,13 +109,14 @@ NVIDIA AITune provides different strategies for selecting the optimal backend co
 
 Not every backend can tune every model — each relies on different compilation technology with its own limitations (e.g., ONNX export for TensorRT, graph breaks in Torch Inductor, unsupported layers in TorchAO). Strategies control how AITune handles this.
 
-Strategies also validate performance against a Torch eager baseline. Correct backends that do not beat eager by the configured threshold are rejected by `OneBackendStrategy` and `FirstWinsStrategy`; `MaxThroughputStrategy` falls back to eager when no user backend is faster. Disable baseline validation with `strategy.enable_validate_against_baseline(False)` only when you want to keep a correct backend regardless of speed.
+Strategies also validate performance against a Torch eager baseline. Correct backends that do not beat eager by the configured threshold are rejected by `OneBackendStrategy` and `FirstWinsStrategy`; `MaxThroughputStrategy` falls back to eager when no user backend is faster. Use `strategy.enable_performance_validation(False)` to skip Torch eager baseline profiling, performance checks, and speedup reporting.
 
 ## FirstWinsStrategy
 
 Tries backends in priority order and returns the first one that builds, validates correctness, and beats the Torch eager baseline by the configured threshold. If a backend fails or is slower than baseline, the strategy moves on to the next candidate instead of aborting.
 
 ```python
+from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend
 from aitune.torch.tune_strategy import FirstWinsStrategy
 
 strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend()])
@@ -126,6 +127,7 @@ strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorJitBacken
 Uses exactly one backend, failing immediately with the original error if it cannot build. Use this when you have already validated that a backend works and want deterministic behavior. Unlike `FirstWinsStrategy` with a single backend, `OneBackendStrategy` surfaces the original exception rather than catching it.
 
 ```python
+from aitune.torch.backend import TensorRTBackend
 from aitune.torch.tune_strategy import OneBackendStrategy
 
 strategy = OneBackendStrategy(backend=TensorRTBackend())
@@ -136,6 +138,7 @@ strategy = OneBackendStrategy(backend=TensorRTBackend())
 Profiles all compatible backends and selects the fastest one that beats the Torch eager baseline, falling back to eager when no user backend is faster. Use this when maximum throughput matters and you can afford longer tuning time.
 
 ```python
+from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend, TorchEagerBackend
 from aitune.torch.tune_strategy import MaxThroughputStrategy
 
 strategy = MaxThroughputStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend(), TorchEagerBackend()])

@@ -70,7 +70,7 @@ def test_stable_diffusion_dynamic_batch_onnx_runtime():
             # Step 3: Wrap with ONNXRuntimeBackend
             logger.info("Wrapping with ONNXRuntimeBackend")
             strategy = OneBackendStrategy(ONNXRuntimeBackend(config=ONNXRuntimeBackendConfig()))
-            strategy.enable_validate_against_baseline(False)
+            strategy.enable_performance_validation(False)
             strategy.enable_find_max_batch_size(enable=False)
             pipeline = wrap(pipeline, modules, strategy=strategy)
 

@@ -134,7 +134,7 @@ def save(
         >>> import aitune.torch as ait
         >>> from torch.nn import Linear
         >>> strategy = ait.FirstWinsStrategy([ait.backend.TorchEagerBackend()])
-        >>> _ = strategy.enable_validate_against_baseline(False)
+        >>> _ = strategy.enable_performance_validation(False)
         >>> model = ait.Module(Linear(10, 10), "model", strategy=strategy)
         >>> dataset = torch.randn(10, 10)
         >>> ait.tune(model, dataset, batch_sizes=[1, 2], device="cpu") # doctest: +ELLIPSIS

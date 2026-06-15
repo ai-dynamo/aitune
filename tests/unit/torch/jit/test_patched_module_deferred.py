@@ -165,7 +165,7 @@ def test_jit_dry_run_failure(mock_trt_backend, torch_device):
     sink = TestSink()
     PatchedModule.print_hierarchy(sink=sink.write)
     assert PRINT_HIERARCHY_HEADER in sink.output[0]
-    assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=3", sink.output[1])
+    assert re.match(r".*ToyTorchModel.*state=eager.*(no better tuned version).*call_count=3", sink.output[1])
 
 
 @requires_cuda
@@ -202,9 +202,9 @@ def test_jit_tuning_success(mock_trt_backend, torch_device, scenario):
     if scenario == "success":
         assert re.match(r".*ToyTorchModel.*state=tuned.*(MockTensorRTBackend).*call_count=3", sink.output[1])
     elif scenario == "correctness_error":
-        assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=3", sink.output[1])
+        assert re.match(r".*ToyTorchModel.*state=eager.*(no better tuned version).*call_count=3", sink.output[1])
     elif scenario == "backend_build_error":
-        assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=3", sink.output[1])
+        assert re.match(r".*ToyTorchModel.*state=eager.*(no better tuned version).*call_count=3", sink.output[1])
 
 
 @requires_cuda
@@ -352,7 +352,7 @@ def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend, torch_d
 
     mock_trt_backend.build.assert_called()
     assert PRINT_HIERARCHY_HEADER in sink.output[0]
-    assert re.match(r".*ToyTorchModel.*state=eager.*(tuning error).*call_count=3", sink.output[1])
+    assert re.match(r".*ToyTorchModel.*state=eager.*(no better tuned version).*call_count=3", sink.output[1])
     assert re.match(r".*Linear.*state=skipped.*call_count=1", sink.output[2])
     assert re.match(r".*Linear.*state=skipped.*call_count=1", sink.output[3])
 

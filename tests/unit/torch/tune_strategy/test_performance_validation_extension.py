@@ -6,15 +6,26 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+import torch
 import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.wrapper_module import Module
+from aitune.torch.module_registry import MODULE_REGISTRY
+from aitune.torch.task.profiling import (
+    AllSamplesProfilingStopStrategy,
+    NumStepsMeasuringStopStrategy,
+    ProfilingConfig,
+)
 from aitune.torch.tune_strategy.mixin.performance_validation_mixin import (
     PerformanceValidationMixin,
     PerformanceValidationMixinConfig,
 )
+from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
+from aitune.torch.tuning import tune
 
 _PATCH_FIND_MAX_THROUGHPUT = (
     "aitune.torch.tune_strategy.mixin.performance_validation_mixin.find_max_throughput_for_backend"
@@ -32,6 +43,17 @@ class _ConcreteExtension(PerformanceValidationMixin):
 
     def to_json_dict(self) -> dict[str, Any]:
         return {}
+
+
+class TinyModel(torch.nn.Module):
+    """Small model for performance validation tests."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = torch.nn.Linear(4, 4)
+
+    def forward(self, x):
+        return self.linear(x)
 
 
 @pytest.fixture
@@ -63,6 +85,55 @@ def mock_backend():
     b.__deepcopy__ = lambda _, memo=None: b
     b.build.return_value = b
     return b
+
+
+def _recording_sink(messages: list[str]):
+    def sink(message: str, *args):
+        messages.append(message % args if args else message)
+
+    return sink
+
+
+def _fast_profile_config() -> ProfilingConfig:
+    return ProfilingConfig(
+        batch_sizes=[1],
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1),
+        profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
+    )
+
+
+def _strategy(messages: list[str]) -> OneBackendStrategy:
+    strategy = OneBackendStrategy(
+        TorchEagerBackend(),
+        perf_validation_config=PerformanceValidationMixinConfig(profiling_config=_fast_profile_config()),
+        sink=_recording_sink(messages),
+    )
+    strategy.enable_find_max_batch_size(False)
+    return strategy
+
+
+def _tune_tiny_model(strategy: OneBackendStrategy, torch_device):
+    model = TinyModel().to(torch_device).eval()
+    data = torch.randn(4, device=torch_device)
+
+    with torch.no_grad():
+        expected = model(data.unsqueeze(0))
+
+    module = Module(model, "performance-validation-toggle", strategy=strategy)
+    try:
+        tune(
+            module,
+            data,
+            batch_sizes=[1, 2],
+            dry_run=False,
+            device=torch_device,
+            disable_external_logging=False,
+            ignore_failing_modules=False,
+        )
+        actual = module(data.unsqueeze(0))
+        torch.testing.assert_close(actual, expected)
+    finally:
+        MODULE_REGISTRY.clear()
 
 
 @pytest.fixture
@@ -123,6 +194,7 @@ def test_pre_tune_resets_results_on_each_call(
     ext = _ConcreteExtension()
     ext.enable_find_max_batch_size(False)
     ext.perf_validation_results = [MagicMock()]  # pre-populate to confirm reset
+    ext._resolved_batch_size = 99
 
     with (
         patch(
@@ -134,6 +206,7 @@ def test_pre_tune_resets_results_on_each_call(
         ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
 
     assert ext.perf_validation_results == []
+    assert ext._resolved_batch_size == mock_graph_spec.get_max_batch_size.return_value
 
 
 def test_pre_tune_baseline_build_failure_leaves_baseline_none(
@@ -156,13 +229,61 @@ def test_pre_tune_baseline_build_failure_leaves_baseline_none(
     assert ext._baseline_backend is None
 
 
+def test_pre_tune_skips_baseline_when_performance_validation_disabled(
+    mock_module, mock_graph_spec, mock_data, mock_eager_backend, torch_device, tmp_path
+):
+    """_pre_tune skips TorchEager baseline profiling when performance validation is disabled."""
+    sink = MagicMock()
+    ext = _ConcreteExtension(sink=sink)
+    ext.enable_performance_validation(False)
+    ext.enable_find_max_batch_size(False)
+    ext._resolved_batch_size = 99
+
+    with (
+        patch(
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            return_value=mock_eager_backend,
+        ) as mock_eager_cls,
+        patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile,
+    ):
+        ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
+
+    mock_eager_cls.assert_not_called()
+    mock_profile.assert_not_called()
+    mock_graph_spec.get_max_batch_size.assert_not_called()
+    assert ext._baseline_throughput is None
+    assert ext._baseline_backend is None
+    assert ext._resolved_batch_size is None
+    assert any("Performance validation against eager baseline is disabled" in str(call) for call in sink.call_args_list)
+
+
+def test_performance_validation_enabled_by_default():
+    """Performance validation is enabled by default for backwards-compatible behavior."""
+    ext = _ConcreteExtension()
+
+    assert ext._performance_validation_enabled is True
+    assert not hasattr(ext, "validate_against_baseline")
+    assert not hasattr(ext, "enable_validate_against_baseline")
+
+
+def test_enable_performance_validation_returns_self_and_sets_flag():
+    """enable_performance_validation toggles baseline profiling and performance checks."""
+    ext = _ConcreteExtension()
+
+    assert ext.enable_performance_validation() is ext
+    assert ext._performance_validation_enabled is True
+
+    assert ext.enable_performance_validation(False) is ext
+    assert ext._performance_validation_enabled is False
+
+
 # ── batch size resolution ─────────────────────────────────────────────────
 
 
 def test_resolved_batch_size_uses_graph_spec_get_max_batch_size(
     mock_module, mock_graph_spec, mock_data, mock_eager_backend, torch_device, tmp_path
 ):
-    """_resolved_batch_size is taken from graph_spec.get_max_batch_size() after super()._pre_tune()."""
+    """_resolved_batch_size is taken from graph_spec.get_max_batch_size()."""
     mock_graph_spec.get_max_batch_size.return_value = 16
     ext = _ConcreteExtension()
     ext.enable_find_max_batch_size(False)
@@ -177,14 +298,14 @@ def test_resolved_batch_size_uses_graph_spec_get_max_batch_size(
         ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
 
     assert ext._resolved_batch_size == 16
+    mock_graph_spec.get_max_batch_size.assert_called_once_with(normalized=True)
 
 
-def test_pre_tune_always_profiles_baseline_regardless_of_validate_flag(
+def test_pre_tune_profiles_baseline_when_validation_enabled(
     mock_module, mock_graph_spec, mock_data, mock_eager_backend, torch_device, tmp_path
 ):
-    """_pre_tune always profiles TorchEager baseline even when validate_against_baseline=False."""
+    """_pre_tune profiles TorchEager baseline when validation is enabled."""
     ext = _ConcreteExtension()
-    ext.enable_validate_against_baseline(False)
     ext.enable_find_max_batch_size(False)
 
     with (
@@ -199,6 +320,51 @@ def test_pre_tune_always_profiles_baseline_regardless_of_validate_flag(
     mock_profile.assert_called_once()
     assert ext._baseline_throughput == 80.0
     assert ext._resolved_batch_size == mock_graph_spec.get_max_batch_size.return_value
+
+
+def test_performance_validation_profiles_baseline_by_default(torch_device):
+    messages: list[str] = []
+    strategy = _strategy(messages)
+
+    _tune_tiny_model(strategy, torch_device)
+
+    assert strategy._baseline_throughput is not None
+    assert strategy.perf_validation_results
+    assert any("🔄 Profiling eager baseline...please wait" in message for message in messages)
+    assert any("📊 Eager baseline: batch size=" in message for message in messages)
+
+
+def test_performance_validation_can_skip_baseline_profiling(torch_device):
+    messages: list[str] = []
+    strategy = _strategy(messages)
+    strategy.enable_performance_validation(False)
+
+    _tune_tiny_model(strategy, torch_device)
+
+    assert strategy._baseline_throughput is None
+    assert strategy.perf_validation_results == []
+    assert any("Performance validation against eager baseline is disabled" in message for message in messages)
+    assert not any("🔄 Profiling eager baseline...please wait" in message for message in messages)
+
+
+def test_pre_tune_logs_baseline_profiling_start_when_validation_enabled(
+    mock_module, mock_graph_spec, mock_data, mock_eager_backend, torch_device, tmp_path
+):
+    """_pre_tune emits a visible message before profiling the TorchEager baseline."""
+    sink = MagicMock()
+    ext = _ConcreteExtension(sink=sink)
+    ext.enable_find_max_batch_size(False)
+
+    with (
+        patch(
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            return_value=mock_eager_backend,
+        ),
+        patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 80.0, MagicMock())),
+    ):
+        ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
+
+    assert any("🔄 Profiling eager baseline...please wait" in str(call) for call in sink.call_args_list)
 
 
 # ── _build_validate_and_check_perf ────────────────────────────────────────
@@ -267,25 +433,26 @@ def test_check_perf_appends_result_and_returns_none_when_gate_rejects(
     assert ext.perf_validation_results[0].passed is False
 
 
-def test_check_perf_returns_backend_when_gate_disabled_but_slow(
+def test_check_perf_skips_profiling_when_performance_validation_disabled(
     mock_module, mock_graph_spec, mock_data, mock_backend, torch_device, tmp_path
 ):
-    """When validate_against_baseline=False, slow backend is still returned."""
+    """When performance validation is disabled, candidate performance checks are skipped."""
     ext = _ConcreteExtension()
-    ext.enable_validate_against_baseline(False)
+    ext.enable_performance_validation(False)
     ext._baseline_throughput = 2.0
     ext._resolved_batch_size = 4
 
     with (
         patch.object(ext, "_build_and_validate_backend", return_value=mock_backend),
-        patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 1.0, MagicMock())),  # slow
+        patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile,
     ):
         result = ext._build_validate_and_check_perf(
             mock_backend, mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path
         )
 
     assert result is mock_backend
-    assert ext.perf_validation_results[0].passed is False  # recorded but gate skipped
+    mock_profile.assert_not_called()
+    assert ext.perf_validation_results == []
 
 
 def test_check_perf_returns_backend_when_no_baseline(
@@ -331,28 +498,33 @@ def test_check_perf_returns_backend_when_profiling_fails(
 def test_perf_validation_config_defaults():
     """Default config uses 1% threshold and no explicit profiling config."""
     config = PerformanceValidationMixinConfig()
-    assert config.min_speedup_threshold == 0.01
+    assert config.min_speedup_ratio == 0.01
     assert config.profiling_config is None
 
 
 def test_perf_validation_config_custom_threshold():
-    config = PerformanceValidationMixinConfig(min_speedup_threshold=0.10)
-    assert config.min_speedup_threshold == 0.10
+    config = PerformanceValidationMixinConfig(min_speedup_ratio=0.10)
+    assert config.min_speedup_ratio == 0.10
 
 
-def test_profiling_config_for_batch_size_default_uses_stable_window():
-    """Default profiling config uses StableWindowMeasuringStopStrategy with global defaults."""
-    from aitune.torch.config import DEFAULT_STABILITY_PERCENTAGE, DEFAULT_WINDOW_SIZE
-    from aitune.torch.task.profiling import StableWindowMeasuringStopStrategy
+@pytest.mark.parametrize("min_speedup_ratio", [-0.01, 1.01])
+def test_perf_validation_config_rejects_invalid_min_speedup_ratio(min_speedup_ratio: float):
+    with pytest.raises(ValueError, match="value must be between 0 and 1"):
+        PerformanceValidationMixinConfig(min_speedup_ratio=min_speedup_ratio)
+
+
+def test_profiling_config_for_batch_size_default_uses_num_steps():
+    """Default profiling config uses NumStepsMeasuringStopStrategy with global defaults."""
+    from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy
 
     config = PerformanceValidationMixinConfig()
     profiling_cfg = config.profiling_config_for_batch_size(8)
 
     assert profiling_cfg.batch_sizes == [8]
     assert profiling_cfg.batching is True
-    assert isinstance(profiling_cfg.measurement_stop_strategy, StableWindowMeasuringStopStrategy)
-    assert profiling_cfg.measurement_stop_strategy.window_size == DEFAULT_WINDOW_SIZE
-    assert profiling_cfg.measurement_stop_strategy.stability_percentage == DEFAULT_STABILITY_PERCENTAGE
+    assert isinstance(profiling_cfg.measurement_stop_strategy, NumStepsMeasuringStopStrategy)
+    assert profiling_cfg.measurement_stop_strategy.num_steps == 20
+    assert profiling_cfg.measurement_stop_strategy.warmup_samples == 10
 
 
 def test_profiling_config_for_batch_size_user_override_replaces_batch_sizes():
@@ -467,15 +639,13 @@ def test_post_tune_silent_for_baseline_selected_when_info_disabled(mock_graph_sp
     mock_warn.assert_not_called()
 
 
-def test_post_tune_emitted_when_validate_against_baseline_false(mock_backend, mock_graph_spec, mock_data):
-    """Summary is emitted even when validate_against_baseline=False (profiling is unconditional)."""
+def test_post_tune_silent_when_validation_disabled(mock_backend, mock_graph_spec, mock_data):
+    """No performance summary is emitted when validation is disabled."""
     from unittest.mock import patch
 
     ext = _ConcreteExtension()
-    ext.enable_validate_against_baseline(False)
-    ext.perf_validation_results = [
-        _make_result(mock_backend.describe(), throughput=150.0, baseline=100.0, speedup=1.5),
-    ]
+    ext.enable_performance_validation(False)
+    ext.perf_validation_results = []
 
     with (
         patch.object(ext._logger, "isEnabledFor", return_value=False),
@@ -483,8 +653,7 @@ def test_post_tune_emitted_when_validate_against_baseline_false(mock_backend, mo
     ):
         ext._post_tune(mock_backend, "mod", mock_graph_spec, mock_data)
 
-    mock_warn.assert_called_once()
-    assert "speedup: 1.50x" in mock_warn.call_args[0][0]
+    mock_warn.assert_not_called()
 
 
 def _make_result(description, *, throughput, baseline, speedup):

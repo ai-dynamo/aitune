@@ -39,20 +39,19 @@ tune --model-name stabilityai/stable-diffusion-3-medium-diffusers --prompt "A fu
 You can customize the following parameters:
 - `--model-name`: HuggingFace model name or path (default: "stabilityai/stable-diffusion-3-medium-diffusers")
 - `--prompt`: Text prompt for image generation
-- `--negative-prompt`: Negative text prompt (default: "low quality, blurry")
-- `--height`: Height of the generated image (default: 512)
-- `--width`: Width of the generated image (default: 512)
+- `--sizes`: Space-separated `width,height` image sizes (default: `512,512 1024,1024`)
 - `--steps`: Number of inference steps (default: 50)
+- `--tuned-model-path`: Path to save or load the tuned model (default: `stable_diffusion.ait`)
 
 ### Generating images with the tuned model
 
 After tuning, generate images with:
 
 ```bash
-inference --prompt "A beautiful landscape with mountains and a lake" --output-dir output
+AITUNE_OUTPUT_DIR=output inference --prompt "A beautiful landscape with mountains and a lake"
 ```
 
-The generated image will be saved in the specified output directory.
+The generated image will be saved in `AITUNE_OUTPUT_DIR`, or `output` when the environment variable is not set.
 
 
 ### Logging hardware metrics

@@ -32,6 +32,11 @@ Documentation source of truth: backend guides live under `docs/guides/backends/`
 - `AITUNE_HARDWARE_METRICS=1` — collect GPU hardware metrics during tuning
 - `AITUNE_HARDWARE_METRICS_PATH` — file path for hardware metrics output
 - `AITUNE_TUNING_DATA_PATH` — file path for tuning telemetry output (telemetry is always collected)
+- `AITUNE_TRANSFORMERS_INTEGRATION` — enable/disable Transformers integration (default: enabled)
+- `AITUNE_DIFFUSERS_INTEGRATION` — enable/disable Diffusers integration (default: disabled)
+- `AITUNE_CACHE_MIN_FREE_BYTES` — minimum free-space warning threshold for cache writes (default: 50 GiB)
+- `AITUNE_INSPECT_DEBUG` — enable debug logging during inspection
+- `AITUNE_INSPECT_DEBUG_RAISE` — raise on inspection errors instead of warning
 - `AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning` — enable JIT mode without modifying source
 
 **Environment variables — tests:**

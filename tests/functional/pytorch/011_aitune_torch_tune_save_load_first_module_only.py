@@ -48,7 +48,7 @@ def _tune_and_save(save_path: pathlib.Path, device: str = "cuda"):
     pipeline = _get_pipeline(device=device)
 
     strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchTensorRTAotBackend(), TorchInductorJitBackend()])
-    strategy.enable_validate_against_baseline(False)
+    strategy.enable_performance_validation(False)
     pipeline.text_encoder = Module(
         pipeline.text_encoder,
         "text_encoder",

@@ -94,6 +94,12 @@ Installing from PyPI (Recommended)
 
     pip install --extra-index-url https://pypi.nvidia.com aitune
 
+For PyTorch 2.10 with CUDA 13 support, install the ``torch210`` extra:
+
+.. code-block:: bash
+
+    pip install --extra-index-url https://pypi.nvidia.com --index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
+
 Installing from Source
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -177,9 +183,11 @@ Next, `inspect` the pipeline components and display the summary:
 
 
     # Optional: inference function, if you need more control over execution
-    # def infer(prompt):
-    #     return pipe(prompt, width=1024, height=1024, num_inference_steps=10)
-    # modules_info = ait.inspect(pipe, input_data, inference_function=infer)
+    def infer(prompt):
+        return pipe(prompt, width=1024, height=1024, num_inference_steps=10)
+
+
+    modules_info = ait.inspect(pipe, input_data, inference_function=infer)
 
     # Display modules info
     modules_info.describe()
@@ -223,7 +231,7 @@ And load the tuned pipeline directly:
 Just-in-time tuning
 ~~~~~~~~~~~~~~~~~~~
 
-In this mode, there is no need to modify the user's code. At the beginning, AITune uses a few inferences to detect model architecture and hierarchy of a model. Then it tries to tune modules one by one starting from the top. If there is one of the following conditions:
+In this mode, there is no need to modify the user's code. AITune records inference calls until ``jit_config.min_samples`` is met, then tries to tune modules one by one starting from the top. If there is one of the following conditions:
 
 * a graph break is detected, i.e., ``torch.nn.Module`` contains conditional logic on inputs, meaning there is no guarantee of a static, correct graph of computations, or
 * there is an error during tuning
@@ -234,7 +242,7 @@ First, install the required third-party dependencies:
 
 .. code-block:: bash
 
-    pip install "transformers" diffusers torch
+    pip install transformers diffusers torch
 
 Prepare the example script for tuning ``my_script.py``:
 
@@ -272,12 +280,13 @@ If there is a need to adjust just-in-time options, you can do it but currently t
 
 .. code-block:: python
 
-    from aitune.torch.jit.config import config
+    from aitune.torch.jit.config import config as jit_config
     from aitune.torch.backend import TensorRTBackend
+    from aitune.torch.tune_strategy import FirstWinsStrategy
 
-    config.max_depth_level = 1 # change the default maximum depth level for nested modules to be tuned
-    config.detect_graph_breaks = False # turn off graph break detection
-    config.backends = [TensorRTBackend()] # change the backends
+    jit_config.max_depth_level = 1 # change the default maximum depth level for nested modules to be tuned
+    jit_config.detect_graph_breaks = False # turn off graph break detection
+    jit_config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()]) # change the tune strategy
 
 .. _comparison-aot-jit:
 
@@ -298,10 +307,10 @@ The big advantage of just-in-time tuning is that you don't need to modify the us
 
 * it cannot deduce batch size nor do benchmarking
 * input/output shapes depend on the data seen, so for example, TRT backend will build a profile only for that data
-* it needs at least two inference calls — first to get model/pipeline hierarchy and second one for actual tuning
+* it needs at least one inference call to record inputs before tuning; later calls use tuned modules where tuning succeeded
 * if you need dynamic axes (e.g., TRT backend), you need to provide two different batch sizes
-* there is limited support of strategies due to unknown batch size
-* you can specify backends for the whole model
+* benchmarking-based strategies are limited because JIT cannot extrapolate to controlled batch sizes
+* you can specify a global tune strategy for the whole model
 
 The following table summarizes the difference between modes:
 
@@ -318,7 +327,7 @@ The following table summarizes the difference between modes:
 +------------------------+-----------------------+-------------------------------+
 | Selecting tune strategy| Global or per module  | Global                        |
 +------------------------+-----------------------+-------------------------------+
-| Available strategies   | All                   | Limited (no benchmarking)     |
+| Available strategies   | All                   | Global only                   |
 +------------------------+-----------------------+-------------------------------+
 | Tune time              | Slow                  | Quick                         |
 +------------------------+-----------------------+-------------------------------+
@@ -328,10 +337,10 @@ The following table summarizes the difference between modes:
 +------------------------+-----------------------+-------------------------------+
 | Code changes required  | Yes                   | No                            |
 +------------------------+-----------------------+-------------------------------+
-| Caching                | Yes                   | No                            |
+| Caching                | Yes                   | Build artifacts only; no reuse|
 +------------------------+-----------------------+-------------------------------+
 
-Note: Currently, JIT mode does not support caching results, i.e., every time a new Python interpreter starts, the tuning process starts from scratch.
+Note: JIT mode writes build artifacts and logs under ``jit_config.cache_dir`` / ``AITUNE_JIT_CACHE_DIR``, but it does not reuse them as tuned checkpoints across Python interpreter runs. Every new process starts tuning from scratch.
 
 Core Functionalities
 --------------------
@@ -555,6 +564,10 @@ Not every backend can tune every model — each relies on different compilation 
 limitations (e.g., ONNX export for TensorRT, graph breaks in Torch Inductor, unsupported layers in TorchAO).
 Strategies control how AITune handles this.
 
+Strategies also validate performance against a Torch eager baseline. Use
+``strategy.enable_performance_validation(False)`` when you want to keep a correct backend regardless of speed
+and skip baseline profiling, candidate performance checks, and speedup reporting.
+
 FirstWinsStrategy
 ~~~~~~~~~~~~~~~~~
 
@@ -571,9 +584,10 @@ moves on to the next candidate instead of aborting.
 OneBackendStrategy
 ~~~~~~~~~~~~~~~~~~
 
-Uses exactly one backend, failing immediately with the original error if it cannot build. Use this when you
-have already validated that a backend works and want deterministic behavior. Unlike ``FirstWinsStrategy`` with
-a single backend, ``OneBackendStrategy`` surfaces the original exception rather than catching it.
+Uses exactly one backend, failing immediately with the original error if it cannot build or validate
+correctness. If the backend is correct but does not beat the eager performance gate, it falls back to
+``TorchEagerBackend``. Unlike ``FirstWinsStrategy`` with a single backend, ``OneBackendStrategy`` surfaces build
+and correctness exceptions rather than catching them.
 
 .. code-block:: python
 
@@ -618,13 +632,119 @@ Once enabled, you can profile your application with Nsight Systems:
 
 .. code-block:: bash
 
-    AITUNE_NVTX_EVENTS=1 nsys profile -o output.nsys-rep python your_script.py
+    AITUNE_NVTX_EVENTS=1 nsys profile -o output.nsys-rep -trace=cuda,nvtx,osrt python your_script.py
 
 The NVTX annotations will appear as colored regions in the timeline, helping you identify:
 
 * Backend inference calls (TensorRT, Torch-TensorRT, TorchAO, etc.)
 * Tuning operation
 * Performance bottlenecks
+
+Hardware Metrics
+----------------
+
+NVIDIA AITune can collect hardware metrics during tuning and inference, giving you visibility into resource utilization per module and backend. Metrics are collected in a background process and reported at program exit.
+
+**Note**: Hardware metrics collection is disabled by default to avoid overhead in production environments.
+
+Enabling Hardware Metrics
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Set the environment variable before running your script:
+
+.. code-block:: bash
+
+    export AITUNE_HARDWARE_METRICS=1
+    python your_script.py
+
+Collected Metrics
+~~~~~~~~~~~~~~~~~
+
+The following metrics are sampled continuously (every 100 ms by default) and aggregated per module and backend:
+
++------------------------------------+--------------------------------------------+
+| Category                           | Metrics                                    |
++====================================+============================================+
+| **GPU memory** (per device)        | ``cuda:N`` used memory [GB]                |
++------------------------------------+--------------------------------------------+
+| **GPU utilization** (per device)   | ``cuda:N`` utilization mean / max [%]      |
++------------------------------------+--------------------------------------------+
+| **GPU power** (per device)         | ``cuda:N`` power mean / max [W]            |
++------------------------------------+--------------------------------------------+
+| **Host CPU**                       | CPU utilization [%]                        |
++------------------------------------+--------------------------------------------+
+| **Host memory**                    | Used / free system memory                  |
++------------------------------------+--------------------------------------------+
+| **PyTorch allocator**              | Allocated and reserved CUDA memory         |
++------------------------------------+--------------------------------------------+
+
+GPU metrics require NVML (available when running on a system with NVIDIA drivers). If NVML is unavailable, only host and PyTorch metrics are collected.
+
+Output
+~~~~~~
+
+At program exit, AITune logs a summary table and writes a CSV file to the working directory.
+
+By default a timestamped filename is used:
+
+.. code-block:: text
+
+    hardware_metrics_20260402_153012.csv
+
+To write to a fixed path instead, set ``AITUNE_HARDWARE_METRICS_PATH``:
+
+.. code-block:: bash
+
+    export AITUNE_HARDWARE_METRICS_PATH=hardware_metrics.csv
+
+The log summary looks like:
+
+.. code-block:: text
+
+    INFO Hardware metrics summary:
+    ╒════════════════════════╤══════════════════════════════╤════════════╤════════════╤══════════════╤═════════════╤═════════════╤═════════════╕
+    │ Module                 │ Backend                      │    Host    │   Cuda:0   │    Cuda:0    │   Cuda:0    │  Power [W]  │  Power [W]  │
+    │                        │                              │  Mem [GB]  │  Mem [GB]  │  Util% mean  │  Util% max  │    mean     │     max     │
+    ╞════════════════════════╪══════════════════════════════╪════════════╪════════════╪══════════════╪═════════════╪═════════════╪═════════════╡
+    │ CLIPTextModel          │ TensorRTBackend(             │   15.53    │    1.73    │     1.03     │      7      │    72.33    │   112.26    │
+    │                        │     quantization_config=None │            │            │              │             │             │             │
+    │                        │ )                            │            │            │              │             │             │             │
+    ├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+    │ Decoder                │ TensorRTBackend(             │   15.43    │    1.81    │      12      │     56      │   100.88    │   148.19    │
+    │                        │     quantization_config=None │            │            │              │             │             │             │
+    │                        │ )                            │            │            │              │             │             │             │
+    ├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+    │ Decoder                │ TensorRTBackend(             │   15.46    │    1.8     │    33.38     │     60      │   117.22    │   167.79    │
+    │                        │     use_dynamo=False,        │            │            │              │             │             │             │
+    │                        │     quantization_config=None │            │            │              │             │             │             │
+    │                        │ )                            │            │            │              │             │             │             │
+    ├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+    │ Decoder                │ TorchInductorJitBackend()    │   15.53    │    1.7     │     3.12     │     85      │    85.92    │   179.21    │
+    ├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+    │ FluxTransformer2DModel │ TensorRTBackend(             │   14.36    │    1.79    │      0       │      0      │    67.84    │    71.79    │
+    │                        │     quantization_config=None │            │            │              │             │             │             │
+    │                        │ )                            │            │            │              │             │             │             │
+    ├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+    │ FluxTransformer2DModel │ TensorRTBackend(             │   14.35    │    1.79    │      0       │      0      │    63.46    │    63.46    │
+    │                        │     use_dynamo=False,        │            │            │              │             │             │             │
+    │                        │     quantization_config=None │            │            │              │             │             │             │
+    │                        │ )                            │            │            │              │             │             │             │
+    ├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+    │ FluxTransformer2DModel │ TorchInductorJitBackend()    │   15.53    │    1.79    │     2.44     │     85      │    84.09    │   179.21    │
+    ├────────────────────────┼──────────────────────────────┼────────────┼────────────┼──────────────┼─────────────┼─────────────┼─────────────┤
+    │ T5EncoderModel         │ TensorRTBackend(             │   16.65    │    1.77    │     1.76     │     85      │    70.57    │   179.21    │
+    │                        │     quantization_config=None │            │            │              │             │             │             │
+    │                        │ )                            │            │            │              │             │             │             │
+    ╘════════════════════════╧══════════════════════════════╧════════════╧════════════╧══════════════╧═════════════╧═════════════╧═════════════╛
+
+Combining with NVTX
+~~~~~~~~~~~~~~~~~~~
+
+Hardware metrics and NVTX profiling can be enabled together:
+
+.. code-block:: bash
+
+    AITUNE_HARDWARE_METRICS=1 AITUNE_NVTX_EVENTS=1 nsys profile -o output.nsys-rep -trace=cuda,nvtx,osrt python your_script.py
 
 Examples
 --------

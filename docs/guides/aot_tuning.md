@@ -106,7 +106,8 @@ ait.tune(
     device="cuda",                  # Device for tuning. Defaults to "cuda:0"
     dry_run=False,                  # Set True to test without tuning
     disable_external_logging=False, # Disable third-party logs
-    clear_cache=False               # Clear AITune cache before tuning
+    clear_cache=False,              # Clear AITune cache before tuning
+    ignore_failing_modules=True,    # Keep tuning remaining modules when one fails
 )
 ```
 
@@ -120,6 +121,7 @@ ait.tune(
 - **dry_run**: If True, performs a dry run without actual tuning
 - **disable_external_logging**: Disable logging from external libraries
 - **clear_cache**: Clear AITune cache before tuning
+- **ignore_failing_modules**: If True, modules that fail tuning fall back to eager execution and tuning continues
 
 Tuning time depends on the tuned modules' size, used strategy, and number of backends. Modules are tuned one by one. If a strategy has many backends to pick from, it takes the one that fulfills specific strategy criteria. Each backend is validated against returning proper numeric results (check against NANs and infinity) and output shapes.
 
@@ -169,6 +171,61 @@ modules_info = ait.inspect(
 )
 ```
 
+### Inspect and tune with the same workload wrapper
+
+When scalar arguments change module execution or input shapes, put those options in a workload wrapper and use that
+same wrapper for both `inspect()` and `tune()`. This is common for diffusion pipelines where you want to tune for
+several image sizes, step counts, guidance scales, or sequence-length settings.
+
+The important part is that inspection and tuning must execute the same workload. If you inspect through a wrapper
+that uses multiple scalar arguments but later call `ait.tune(pipe, input_data)` directly, tuning records a
+different execution path and may miss graph variants or shape ranges.
+
+> **Note for FLUX and Stable Diffusion pipelines:** image size, step count, guidance scale, and sequence-length
+> settings are usually scalar keyword arguments on the pipeline call, not tensor samples in the dataset. Put every
+> option you want to tune, such as `height`, `width`, `num_inference_steps`, `guidance_scale`, or
+> `max_sequence_length`, inside the workload wrapper and pass that wrapper to both `ait.inspect()` and `ait.tune()`.
+> Calling `ait.tune(pipe, input_data)` directly after inspecting through a wrapper will not exercise those same
+> variants during tuning.
+
+```python
+pipe = get_pipeline(model_name=model_name)
+
+sizes = [(256,256), (512,512)]
+
+def call_wrapper(*args, **kwargs):
+    for height, width in sizes:
+        pipe(
+            *args,
+            height=height,
+            width=width,
+            num_inference_steps=28,
+            guidance_scale=1.0,
+            max_sequence_length=512,
+            **kwargs,
+        )
+
+
+input_data = [{"prompt": prompt}]
+
+# Inspect the workload you intend to tune.
+modules_info = ait.inspect(
+    pipe,
+    input_data,
+    inference_function=call_wrapper,
+)
+
+# Wrap modules selected from that inspection.
+pipe = ait.wrap(pipe, modules_info.get_modules())
+
+# Tune through the same wrapper so recorded graphs and scalar options match inspection.
+ait.tune(call_wrapper, input_data)
+```
+
+With `config.strict_mode=True` (the default), different non-tensor argument values can create separate graphs. Keep
+scalar arguments fixed when you want one graph, or exercise each option in the wrapper when those variants should be
+tuned.
+
 ## Configuration Options
 
 AITune has configuration for the tuning process, and each backend has its configuration.
@@ -195,8 +252,9 @@ config.device_after_tuning = "cuda"
 # Enable/disable strict mode for input validation
 config.strict_mode = True
 
-# Enable HuggingFace integrations
-config.enable_hf_integrations = True
+# Enable/disable HuggingFace integrations
+config.enable_transformers_integration = True
+config.enable_diffusers_integration = False
 ```
 
 ### Backend-Specific Configuration

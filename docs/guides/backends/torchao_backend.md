@@ -9,7 +9,7 @@ The TorchAO backend leverages PyTorch's torchao library for quantization-based m
 ## Overview
 
 - **Weight-Only Quantization**: INT8, FP8
-- **Dynamic Quantization**: INT8 and FP8 with dynamic activations
+- **Dynamic Quantization**: INT8, FP8, MXFP8, and NVFP4 with dynamic activations
 - **Easy Configuration**: Predefined quantization types
 - **Pure PyTorch**: No external dependencies beyond torchao
 
@@ -50,9 +50,26 @@ config = TorchAOBackendConfig(quantization="int8dq")
 
 # FP8 dynamic (activations + weights)
 config = TorchAOBackendConfig(quantization="fp8dq")
+
+# Blackwell/Hopper-dependent dynamic quantization presets
+config = TorchAOBackendConfig(quantization="mxfp8dq")
+config = TorchAOBackendConfig(quantization="nvfp4dq")
 ```
 
 ## Configuration Options
+
+### TorchAOBackendConfig
+
+```python
+@dataclass
+class TorchAOBackendConfig(BackendConfig):
+    fullgraph: bool = False
+    dynamic: bool | None = None
+    mode: TorchCompileMode | None = "max-autotune"
+    quantization: Literal["int8wo", "int8dq", "fp8wo", "fp8dq", "mxfp8dq", "nvfp4dq"] | None = None
+    quantization_config: AOBaseConfig | None = None
+    filter_fn: Callable[[nn.Module, str], bool] | None = None
+```
 
 ### Using Predefined Types
 
@@ -74,6 +91,41 @@ config = TorchAOBackendConfig(
 )
 ```
 
+Use either `quantization` or `quantization_config`, not both.
+
+### torch.compile Options
+
+TorchAOBackend quantizes the module and then runs it through `torch.compile`.
+
+```python
+config = TorchAOBackendConfig(
+    quantization="fp8wo",
+    fullgraph=True,
+    dynamic=None,  # None lets AITune resolve this from graph metadata
+    mode="max-autotune",
+)
+```
+
+Supported `mode` values follow `torch.compile`: `"default"`, `"reduce-overhead"`, `"max-autotune"`, and `"max-autotune-no-cudagraphs"`.
+
+### Filtering Modules
+
+Use `filter_fn` to restrict quantization to compatible submodules. The predicate receives `(module, fqn)` and should return `True` for modules that TorchAO should quantize.
+
+```python
+import torch
+
+
+def linear_only(module: torch.nn.Module, fqn: str) -> bool:
+    return isinstance(module, torch.nn.Linear) and "embed" not in fqn
+
+
+config = TorchAOBackendConfig(
+    quantization="fp8dq",
+    filter_fn=linear_only,
+)
+```
+
 ## Quantization Comparison
 
 | Type    | Weights | Activations | Memory Reduction | Speed     | Accuracy  |
@@ -82,6 +134,10 @@ config = TorchAOBackendConfig(
 | int8dq  | INT8    | INT8        | ~2x              | Very High | Good      |
 | fp8wo   | FP8     | FP16/FP32   | ~2x              | Very High | Excellent |
 | fp8dq   | FP8     | FP8         | ~2x              | Very High | Excellent |
+| mxfp8dq | MXFP8   | MXFP8       | ~2x              | Very High | Excellent |
+| nvfp4dq | NVFP4   | NVFP4       | ~4x              | Very High | Model-dependent |
+
+`mxfp8dq` and `nvfp4dq` require hardware and torchao support for the corresponding formats. AITune defers that validation until backend build time.
 
 ## Best Practices
 

@@ -26,7 +26,13 @@ except (ImportError, RuntimeError, OSError):
 
     @dataclass
     class TorchTensorRTConfig:
-        """Allows testing when torch_tensorrt is not installed."""
+        """Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
+
+        Attributes:
+            enabled_precisions: Enabled TensorRT precisions. Defaults to None.
+            use_explicit_typing: Whether to use explicit typing. Defaults to True.
+            workspace_size: TensorRT workspace size. Defaults to 0.
+        """
 
         enabled_precisions: set[torch.dtype] | None = None
         use_explicit_typing: bool = True
@@ -44,7 +50,17 @@ def assert_torch_tensorrt():
 
 @dataclass
 class TorchTensorRTJitBackendConfig(BackendConfig):
-    """Configuration for torch.compile(backend="torch_tensorrt")."""
+    """Configuration for torch.compile(backend="torch_tensorrt").
+
+    Defaults preserve torch.compile behavior unless callers opt into stricter compilation options.
+
+    Attributes:
+        compile_config: Torch-TensorRT compilation settings. Defaults to TorchTensorRTConfig().
+        fullgraph: Whether to require full-graph compilation. Defaults to False.
+        dynamic: Dynamic shape compilation setting. Defaults to None, so graph metadata decides.
+        autocast_enabled: Whether to enable autocast during compilation. Defaults to False.
+        autocast_dtype: Autocast dtype to use when autocast is enabled. Defaults to None.
+    """
 
     compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
         default_factory=TorchTensorRTConfig

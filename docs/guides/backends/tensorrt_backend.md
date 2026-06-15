@@ -12,7 +12,7 @@ The TensorRT backend:
 
 - **High Performance**: Maximum inference speed on NVIDIA GPUs
 - **Dynamic Shapes**: Supports optimization profiles for variable input sizes
-- **Quantization**: INT8, FP16, and mixed precision support
+- **Quantization**: INT8, FP8, INT4, FP16/BF16 autocast, and mixed precision support
 - **CUDA Graphs**: Optional CUDA graph capture for reduced CPU overhead
 - **Model Optimizer Integration**: Advanced quantization via TensorRT Model Optimizer
 - **Flexible Export**: Supports both Dynamo and script-based ONNX export
@@ -220,21 +220,24 @@ config = TensorRTBackendConfig(
 
 ### quantization_config
 
-TensorRT backend supports multiple quantization methods through TensorRT Model Optimizer integration.
+TensorRT backend supports multiple quantization methods through TensorRT Model Optimizer integration. Use `ONNXAutoCastConfig` for FP16/BF16 mixed precision, `ONNXQuantizationConfig` for ONNX INT8/FP8/INT4 quantization, and `TorchQuantizationConfig` for ModelOpt PyTorch quantization presets.
 
 ```python
+# FP16/BF16 mixed precision autocast
 config = TensorRTBackendConfig(
     quantization_config=ONNXAutoCastConfig(precision="fp16"),
 )
 
 # or
 
+# ONNX quantization
 config = TensorRTBackendConfig(
-    quantization_config=ONNXQuantizationConfig(precision="fp16"),
+    quantization_config=ONNXQuantizationConfig(precision="int8", calibration_method="max"),
 )
 
 # or
 
+# ModelOpt PyTorch quantization presets
 config = TensorRTBackendConfig(
     quantization_config=TorchQuantizationConfig(quantization_config="FP8_DEFAULT_CFG"),
 )
@@ -297,7 +300,7 @@ config = TensorRTBackendConfig(
 ```
 
 - **Min shape**: Minimum observed across all samples
-- **Opt shape**: Most common shape
+- **Opt shape**: Maximum observed across all samples
 - **Max shape**: Maximum observed across all samples
 
 #### SAMPLES_USED
@@ -419,16 +422,16 @@ config = TensorRTBackendConfig(profiles=profiles)
 **Solution**: Try different quantization algorithms:
 
 ```python
-# Try 'minmax' or 'entropy' instead of 'max'
-quantization_config = QuantizationConfig(
-    algorithm="entropy",
-    quant_format="int8",
+# Try 'entropy' instead of 'max'
+quantization_config = ONNXQuantizationConfig(
+    precision="int8",
+    calibration_method="entropy",
 )
 ```
 
 ## Best Practices
 
-1. **Use FP16**: Enable FP16 precision for best performance without accuracy loss
+1. **Use FP16**: Use `ONNXAutoCastConfig(precision="fp16")` for FP16 mixed precision without a full quantization pass
 2. **Enable TF32**: Keep `enable_tf32=True` on Ampere+ GPUs
 3. **Profile Carefully**: Ensure optimization profiles cover all runtime shapes
 4. **Timing Cache**: Use timing cache during development for faster iteration
