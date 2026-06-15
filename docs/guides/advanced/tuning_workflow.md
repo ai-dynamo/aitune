@@ -177,7 +177,7 @@ strategy = ait.FirstWinsStrategy([
 
 #### OneBackendStrategy
 
-Uses exactly one backend, failing immediately with the original error if it cannot build. Unlike `FirstWinsStrategy` with a single backend, `OneBackendStrategy` surfaces the original exception rather than catching it.
+Uses exactly one backend, failing immediately with the original error if it cannot build or validate correctness. Unlike `FirstWinsStrategy` with a single backend, `OneBackendStrategy` surfaces build and correctness exceptions rather than catching them. If the backend is correct but does not pass the eager performance gate, it falls back to `TorchEagerBackend`.
 
 ```python
 strategy = ait.OneBackendStrategy(ait.backend.TorchInductorJitBackend())
@@ -188,7 +188,7 @@ strategy = ait.OneBackendStrategy(ait.backend.TorchInductorJitBackend())
 1. Build the specified backend
 2. Validate correctness
 3. Profile against the Torch eager baseline
-4. Return the backend when it passes the performance threshold
+4. Return the backend when it passes the performance threshold, or fall back to the eager baseline when it is correct but slower
 
 **Use Case**: Production with a validated backend where you want deterministic behavior.
 

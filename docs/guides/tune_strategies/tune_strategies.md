@@ -29,7 +29,7 @@ Because of these differences, a backend that fails on one model may succeed on a
 
 Strategies validate both correctness and performance before accepting a tuned backend. When performance validation is enabled, AITune profiles a `TorchEagerBackend` baseline at the resolved batch size, then profiles each correctness-passing backend against that baseline.
 
-For `OneBackendStrategy` and `FirstWinsStrategy`, baseline validation is enabled by default. A backend is rejected when its throughput is below `1 + min_speedup_ratio` relative to Torch eager; the default threshold is 1%, so a backend must be at least 1.01x faster to pass. Disable this only when you deliberately want to keep a backend that is correct but not faster:
+For `OneBackendStrategy` and `FirstWinsStrategy`, baseline validation is enabled by default. A backend is rejected when its throughput is below `1 + min_speedup_ratio` relative to Torch eager; the default threshold is 1%, so a backend must be at least 1.01x faster to pass. `FirstWinsStrategy` then tries the next backend. `OneBackendStrategy` falls back to the profiled `TorchEagerBackend` when its single backend is correct but not faster. Disable this only when you deliberately want to keep a backend that is correct but not faster:
 
 ```python
 strategy.enable_performance_validation(False)
@@ -49,10 +49,10 @@ Use the table below as a quick decision guide. If you already know a backend is 
 
 ## OneBackendStrategy
 
-Uses exactly one backend, failing immediately with the original error if it cannot build. Use this when you have already validated that a backend works and want deterministic, reproducible behavior in production.
+Uses exactly one backend, failing immediately with the original error if it cannot build or validate correctness. If the backend is correct but does not pass the eager performance gate, the strategy falls back to `TorchEagerBackend`. Use this when you have already validated that a backend works and want deterministic, reproducible behavior in production.
 
 <Note>
-`OneBackendStrategy` may look equivalent to `FirstWinsStrategy` with a single backend, but the key difference is error handling: `OneBackendStrategy` raises the backend's original exception on failure, while `FirstWinsStrategy` catches errors and tries the next candidate.
+`OneBackendStrategy` may look equivalent to `FirstWinsStrategy` with a single backend, but the key difference is error handling: `OneBackendStrategy` raises the backend's original build and correctness exceptions, while `FirstWinsStrategy` catches errors and tries the next candidate.
 
 </Note>
 ### Usage

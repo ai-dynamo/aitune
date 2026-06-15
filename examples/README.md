@@ -163,6 +163,6 @@ Each example includes:
 - Complete setup instructions
 - Usage examples with CLI commands
 - Model-specific tuning parameters
-- AI Dynamo deployment instructions
+- AI Dynamo deployment instructions where supported
 
 To get started, navigate to any example directory and follow the README instructions for that specific model type.

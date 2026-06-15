@@ -45,37 +45,7 @@ def filter_fn(mod, fqn):
     return True
 
 
-def tune_model(
-    model_name,
-    prompt,
-    sizes,
-    steps,
-    guidance_scale,
-    max_sequence_length,
-    tuned_model_path,
-    batch_sizes=None,
-):
-    """Tune the Flux model.
-
-    Args:
-        model_name: HuggingFace model name or path
-        prompt: Text prompt for image generation
-        sizes: List of (height, width) tuples
-        steps: Number of inference steps
-        guidance_scale: Guidance scale
-        max_sequence_length: Maximum sequence length
-        tuned_model_path: Path to save the tuned model
-        batch_sizes: List of batch sizes to tune
-    """
-    pipe = get_pipeline(model_name=model_name)
-
-    input_data = [{"prompt": prompt}]
-
-    # Inspect pipeline to get modules
-    modules_info = ait.inspect(pipe, input_data, number_of_iterations=1, warmup_iterations=2)
-
-    # Define strategy if not provided
-
+def _nvfp4_strategy():
     strategy_nvfp4 = ait.FirstWinsStrategy(
         backends=[
             TorchAOBackend(TorchAOBackendConfig(quantization="nvfp4dq", filter_fn=filter_fn)),
@@ -102,6 +72,11 @@ def tune_model(
             TorchInductorJitBackend(),
         ]
     )
+
+    return strategy_nvfp4
+
+
+def _fp8_strategy():
     strategy_fp8 = ait.FirstWinsStrategy(
         backends=[
             TensorRTBackend(
@@ -127,17 +102,32 @@ def tune_model(
             TorchInductorJitBackend(),
         ]
     )
+    return strategy_fp8
 
-    # Disable max batch size search
-    strategy_nvfp4.enable_find_max_batch_size(enable=False)
-    strategy_fp8.enable_find_max_batch_size(enable=False)
 
-    # Wrap all modules except transformer with fp8 strategy
-    modules = [m for m in modules_info.get_modules() if m.name != "transformer"]
-    pipe = ait.wrap(pipe, modules, strategy=strategy_fp8)
+def tune_model(
+    model_name,
+    prompt,
+    sizes,
+    steps,
+    guidance_scale,
+    max_sequence_length,
+    tuned_model_path,
+    batch_sizes=None,
+):
+    """Tune the Flux model.
 
-    # Wrap transformer separately with nvfp4 strategy
-    pipe.transformer = ait.module.Module(pipe.transformer, name="transformer", strategy=strategy_nvfp4)
+    Args:
+        model_name: HuggingFace model name or path
+        prompt: Text prompt for image generation
+        sizes: List of (height, width) tuples
+        steps: Number of inference steps
+        guidance_scale: Guidance scale
+        max_sequence_length: Maximum sequence length
+        tuned_model_path: Path to save the tuned model
+        batch_sizes: List of batch sizes to tune
+    """
+    pipe = get_pipeline(model_name=model_name)
 
     def call_wrapper(*args, **kwargs):
         for height, width in sizes:
@@ -152,6 +142,33 @@ def tune_model(
                 generator=torch.Generator("cpu").manual_seed(0),
                 **kwargs,
             )
+
+    input_data = [{"prompt": prompt}]
+
+    # Inspect pipeline to get modules
+    modules_info = ait.inspect(
+        pipe,
+        input_data,
+        inference_function=call_wrapper,
+        number_of_iterations=1,
+        warmup_iterations=2,
+    )
+    modules_info.describe()
+
+    # Define strategy with NVFP4 support
+    strategy_nvfp4 = _nvfp4_strategy()
+    strategy_nvfp4.enable_find_max_batch_size(enable=False)
+
+    # Define strategy with FP8 support
+    strategy_fp8 = _fp8_strategy()
+    strategy_fp8.enable_find_max_batch_size(enable=False)
+
+    # Wrap all modules except transformer with fp8 strategy
+    modules = [m for m in modules_info.get_modules() if m.name != "transformer"]
+    pipe = ait.wrap(pipe, modules, strategy=strategy_fp8)
+
+    # Wrap transformer separately with nvfp4 strategy
+    pipe.transformer = ait.module.Module(pipe.transformer, name="transformer", strategy=strategy_nvfp4)
 
     # First do a dry run for testing
     logger.info("Tuning module: %s", model_name)

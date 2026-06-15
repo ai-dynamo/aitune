@@ -43,7 +43,7 @@ ait.tune(model, input_data)
 class TorchTensorRTJitBackendConfig(BackendConfig):
     compile_config: TorchTensorRTConfig
     fullgraph: bool = False
-    dynamic_shapes: bool | None = None
+    dynamic: bool | None = None
     autocast_enabled: bool = False
     autocast_dtype: torch.dtype | None = None
 ```
@@ -94,13 +94,13 @@ config = TorchTensorRTJitBackendConfig(
 - `False` (default): Allow partial compilation
 - `True`: Ensure complete compilation or fail
 
-### dynamic_shapes
+### dynamic
 
 Enable dynamic shape tracing:
 
 ```python
 config = TorchTensorRTJitBackendConfig(
-    dynamic_shapes=True,  # Enable dynamic shapes
+    dynamic=True,  # Enable dynamic shapes
 )
 ```
 

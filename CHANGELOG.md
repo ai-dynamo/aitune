@@ -5,7 +5,7 @@ title: "Changelog"
 ---
 # Changelog
 
-## 0.4.1 (unreleased)
+## 0.4.1
 - fix: use the recorded global batch size for baseline performance profiling
 - fix: align Torch-TensorRT defaults and JIT inspection CUDA synchronization
 - fix: remove memory spike during measuring performance baseline

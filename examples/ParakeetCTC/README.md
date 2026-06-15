@@ -52,12 +52,6 @@ To infer the ASR model, run:
 inference
 ```
 
-To benchmark the ASR model, run
-
-```bash
-benchmark
-```
-
 
 ### Logging hardware metrics
 

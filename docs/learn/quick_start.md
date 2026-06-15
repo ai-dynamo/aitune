@@ -111,7 +111,7 @@ ait.load(pipe, "tuned_pipe.ait")
 
 ## Just-in-time tuning
 
-In this mode, there is no need to modify the user's code. At the beginning, AITune uses a few inferences to detect model architecture and hierarchy of a model. Then it tries to tune modules one by one starting from the top. If there is one of the following conditions:
+In this mode, there is no need to modify the user's code. AITune records inference calls until `jit_config.min_samples` are collected, then tries to tune modules one by one starting from the top. If there is one of the following conditions:
 
 * a graph break is detected, i.e., torch.nn.Module contains conditional logic on inputs, meaning there is no guarantee of a static, correct graph of computations, or
 * there is an error during tuning
@@ -161,7 +161,7 @@ from aitune.torch.backend import TensorRTBackend
 from aitune.torch.tune_strategy import FirstWinsStrategy
 
 jit_config.max_depth_level = 2 # change the default maximum depth level for nested modules to be tuned
-jit_config.detect_graph_breaks = True # turn on graph break detection
+jit_config.detect_graph_breaks = False # turn off graph break detection
 jit_config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()]) # change the tune strategy
 ```
 
@@ -210,10 +210,10 @@ The big advantage of just-in-time tuning is that you don't need to modify the us
 
 * it cannot deduce batch size nor do benchmarking
 * input/output shapes depend on the data seen, so for example, TRT backend will build a profile only for that data
-* it needs at least two inference calls - first to get model/pipeline hierarchy and second one for actual tuning
+* it needs at least one inference call to record inputs before tuning; later calls use tuned modules where tuning succeeded
 * if you need dynamic axes (e.g., TRT backend), you need to provide two different batch sizes
-* there is limited support of strategies due to unknown batch size
-* you can specify backends for the whole model
+* benchmarking-based strategies are limited because JIT cannot extrapolate to controlled batch sizes
+* you can specify a global tune strategy for the whole model
 
 The following table summarizes the difference between modes:
 
@@ -224,11 +224,11 @@ The following table summarizes the difference between modes:
 | Benchmarking            | Yes                   | No (no extrapolating batches) |
 | Modules for tuning      | User has full control | Picked automatically          |
 | Selecting tune strategy | Global or per module  | Global                        |
-| Available strategies    | All                   | Limited (no benchmarking)     |
+| Available strategies    | All                   | Global only                   |
 | Tune time               | Slow                  | Quick                         |
 | Saving artifacts        | Yes                   | No                            |
 | Load tuned model time   | Quick                 | Re-tuning required            |
 | Code changes required   | Yes                   | No                            |
-| Caching                 | Yes                   | No                            |
+| Caching                 | Yes                   | Build artifacts only          |
 
-Note: Currently, JIT mode does not support caching results, i.e., every time a new Python interpreter starts, the tuning process starts from scratch.
+Note: JIT mode writes build artifacts and logs under `jit_config.cache_dir` / `AITUNE_JIT_CACHE_DIR`, but it does not reuse them as tuned checkpoints across Python interpreter runs. Every new process starts tuning from scratch.

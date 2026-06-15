@@ -116,6 +116,7 @@ Strategies also validate performance against a Torch eager baseline. Correct bac
 Tries backends in priority order and returns the first one that builds, validates correctness, and beats the Torch eager baseline by the configured threshold. If a backend fails or is slower than baseline, the strategy moves on to the next candidate instead of aborting.
 
 ```python
+from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend
 from aitune.torch.tune_strategy import FirstWinsStrategy
 
 strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend()])
@@ -126,6 +127,7 @@ strategy = FirstWinsStrategy(backends=[TensorRTBackend(), TorchInductorJitBacken
 Uses exactly one backend, failing immediately with the original error if it cannot build. Use this when you have already validated that a backend works and want deterministic behavior. Unlike `FirstWinsStrategy` with a single backend, `OneBackendStrategy` surfaces the original exception rather than catching it.
 
 ```python
+from aitune.torch.backend import TensorRTBackend
 from aitune.torch.tune_strategy import OneBackendStrategy
 
 strategy = OneBackendStrategy(backend=TensorRTBackend())
@@ -136,6 +138,7 @@ strategy = OneBackendStrategy(backend=TensorRTBackend())
 Profiles all compatible backends and selects the fastest one that beats the Torch eager baseline, falling back to eager when no user backend is faster. Use this when maximum throughput matters and you can afford longer tuning time.
 
 ```python
+from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend, TorchEagerBackend
 from aitune.torch.tune_strategy import MaxThroughputStrategy
 
 strategy = MaxThroughputStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend(), TorchEagerBackend()])

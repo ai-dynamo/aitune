@@ -28,7 +28,7 @@ export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
 or set it inplace
 
 ```bash
-AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning uv run a_command
+AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning uv run resnet
 ```
 
 If the environment variable is not set, the model will run without any tuning.

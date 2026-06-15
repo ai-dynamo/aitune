@@ -111,9 +111,9 @@ navigation:
           - page: TorchAO Backend
             path: ../docs/api/aitune/aitune/torch/backend/torchao_backend.mdx
           - page: Torch Inductor JIT Backend
-            path: ../docs/api/aitune/aitune/torch/backend/torch_inductor_backend.mdx
+            path: ../docs/api/aitune/aitune/torch/backend/torch_inductor_jit_backend.mdx
           - page: Torch Inductor AOT Backend
-            path: ../docs/api/aitune/aitune/torch/backend/torch_inductor_backend.mdx
+            path: ../docs/api/aitune/aitune/torch/backend/torch_inductor_aot_backend.mdx
       - section: Tuning Strategies API
         contents:
           - page: FirstWinsStrategy
@@ -121,7 +121,7 @@ navigation:
           - page: OneBackendStrategy
             path: ../docs/api/aitune/aitune/torch/tune_strategy/one_backend_strategy.mdx
           - page: MaxThroughputStrategy
-            path: ../docs/api/aitune/aitune/torch/tune_strategy/highest_throughput_strategy.mdx
+            path: ../docs/api/aitune/aitune/torch/tune_strategy/max_throughput_strategy.mdx
       - section: Other APIs
         contents:
           - folder: ../docs/api/aitune/aitune
