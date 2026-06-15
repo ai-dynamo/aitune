@@ -31,7 +31,7 @@ pip install --extra-index-url https://pypi.nvidia.com aitune
 To use PyTorch 2.10 with CUDA 13 support, install the `torch210` optional dependency group:
 
 ```bash
-pip install --extra-index-url https://pypi.nvidia.com --index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
+pip install --extra-index-url https://pypi.nvidia.com --extra-index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
 ```
 
 When using `uv`, add `--torch-backend=cu130` so that uv resolves the CUDA 13 variants of the PyTorch packages:

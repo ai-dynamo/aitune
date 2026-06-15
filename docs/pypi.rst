@@ -98,7 +98,7 @@ For PyTorch 2.10 with CUDA 13 support, install the ``torch210`` extra:
 
 .. code-block:: bash
 
-    pip install --extra-index-url https://pypi.nvidia.com --index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
+    pip install --extra-index-url https://pypi.nvidia.com --extra-index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
 
 Installing from Source
 ~~~~~~~~~~~~~~~~~~~~~~
