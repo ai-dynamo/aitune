@@ -13,8 +13,6 @@ The toolkit enables seamless tuning of PyTorch models and pipelines using variou
 
 NVIDIA AITune works with your environment — relying first on your software versions — and selects the best-performing backend for your software and hardware setup, guiding you to supported technologies.
 
-**Note**: This is the first release. The API may change in future versions.
-
   **NOTICE AND DISCLAIMER: This software automatically retrieves, accesses or interacts with external materials.
   Those retrieved materials are not distributed with this software and are governed solely by separate terms,
   conditions and licenses. You are solely responsible for finding, reviewing and complying with all applicable terms,
