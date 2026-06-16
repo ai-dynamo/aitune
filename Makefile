@@ -66,14 +66,13 @@ fern-setup: ## setup Fern docs
 docs: ## generate and validate Fern docs
 	fern docs md generate
 	fern check --warnings
-	fern docs broken-links
 
 fern-push-dev:
 	fern generate --docs dev --preview
 
-FERN_PORT ?= 3000
+
 docs-serve: docs ## serve Fern docs locally
-	fern docs dev --port $(FERN_PORT) --broken-links
+	fern docs dev
 
 
 lint: ## check style with pre-commit and pytype

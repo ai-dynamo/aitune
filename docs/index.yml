@@ -89,15 +89,15 @@ navigation:
       - section: Ahead-of-time Tuning API
         contents:
           - page: Module
-            path: ../docs/api/aitune/aitune/torch/module.mdx
+            path: ../docs/api/aitune/aitune/torch/module/index.mdx
           - page: Tuning
             path: ../docs/api/aitune/aitune/torch/tuning.mdx
           - page: Config
             path: ../docs/api/aitune/aitune/torch/config.mdx
           - page: Backend
-            path: ../docs/api/aitune/aitune/torch/backend.mdx
+            path: ../docs/api/aitune/aitune/torch/backend/backend.mdx
           - page: Inspect
-            path: ../docs/api/aitune/aitune/torch/inspecting.mdx
+            path: ../docs/api/aitune/aitune/torch/inspecting/inspecting.mdx
       - section: Just-in-time Tuning API
         contents:
           - page: Config
