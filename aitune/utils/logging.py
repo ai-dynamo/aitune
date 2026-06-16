@@ -226,6 +226,22 @@ def log_exception_details(
             raise exception
 
 
+def log_to_file(log_file: str | Path | None, message: str, exception: Exception | None = None) -> None:
+    """Append a message and optional exception details to a log file."""
+    if log_file is None:
+        return
+
+    log_file = Path(log_file)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    with log_file.open("a", encoding="utf-8") as f:
+        f.write(f"\n{message}\n")
+        if exception is None:
+            return
+        f.write(f"Exception type: {type(exception).__name__}\n")
+        f.write(f"Exception details: {exception}\n")
+        f.write(f"Full traceback:\n{''.join(traceback.format_exception(exception))}")
+
+
 class _TeeFile:
     """File-like object that writes to multiple destinations (tee functionality)."""
 

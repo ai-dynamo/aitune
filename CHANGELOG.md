@@ -5,6 +5,9 @@ title: "Changelog"
 ---
 # Changelog
 
+## 0.5.0 (unreleased)
+- feat: model correctness validation check dynamic shape boundaries for min and max shapes
+
 ## 0.4.1
 - fix: use the recorded global batch size for baseline performance profiling
 - fix: align Torch-TensorRT defaults and JIT inspection CUDA synchronization

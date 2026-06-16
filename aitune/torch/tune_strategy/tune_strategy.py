@@ -15,10 +15,12 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend, DummyBackend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.task.correctness import check_output_correctness, check_output_tensor_shapes
+from aitune.torch.task.correctness import (
+    check_dynamic_shape_boundary_inference,
+    check_inference_output_correctness,
+)
 from aitune.torch.utils.module import count_parameters
-from aitune.utils.logging import control_output, log
+from aitune.utils.logging import control_output, log, log_to_file
 from aitune.utils.timer import Timer
 
 
@@ -95,13 +97,23 @@ class TuneStrategy(ABC):
             )
             return
 
+        if not data:
+            raise ValueError(f"Correctness check requires at least one sample for graph spec {graph_spec.name}.")
+
         self._logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
-        with torch.no_grad():
-            for args, kwargs in data:
-                outputs = backend.infer(*deepcopy(args), **deepcopy(kwargs))
-                check_output_correctness(outputs, name=f"{name}.{graph_spec.name}.{backend.describe()}.output")
-                outputs_metadata = SampleMetadata.from_outputs(outputs)
-                check_output_tensor_shapes(graph_spec.output_spec.tensor_specs, outputs_metadata.tensor_specs)
+        check_inference_output_correctness(
+            data,
+            graph_spec.output_spec,
+            infer=backend.infer,
+            name=f"{name}.{graph_spec.name}.{backend.describe()}",
+        )
+        check_dynamic_shape_boundary_inference(
+            data[0],
+            graph_spec.input_spec,
+            graph_spec.output_spec,
+            infer=backend.infer,
+            name=f"{name}.{graph_spec.name}.{backend.describe()}",
+        )
 
     def enable_correctness_check(self, enable: bool = True) -> "TuneStrategy":
         """Enable/disable correctness checking."""
@@ -155,6 +167,7 @@ class TuneStrategy(ABC):
         description = backend.describe()
         backend_cache_dir = cache_dir / backend.key()
         log_file = self._log_file(backend_cache_dir, "build.log")
+        log_to_file(log_file, f"Backend: {description}")
 
         with Timer(sink=self._sink, depth=2):
             try:
@@ -174,8 +187,10 @@ class TuneStrategy(ABC):
                 self.backend_results.append({"backend": description, "success": True})
                 return backend
 
-            except Exception:
+            except Exception as e:
                 log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
+                log_to_file(log_file, "Backend build or validation failed", exception=e)
+
                 self.backend_results.append({"backend": description, "success": False})
                 if raise_on_failure:
                     raise
