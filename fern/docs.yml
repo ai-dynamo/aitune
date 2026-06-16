@@ -8,6 +8,12 @@ title: NVIDIA AITune Documentation
 instances:
   - url: aitune.docs.buildwithfern.com
     custom-domain: docs.nvidia.com/aitune
+    multi-source: true
+
+metadata:
+  canonical-host: "docs.nvidia.com/aitune"
+
+global-theme: nvidia
 
 agents:
   page-directive: "For clean Markdown content of this page, append .md to this URL."
@@ -23,9 +29,9 @@ products:
 
 redirects:
   - source: "/aitune/index.html"
-    destination: "/aitune/"
+    destination: "/aitune"
   - source: "/aitune/dev/index.html"
-    destination: "/aitune/dev/"
+    destination: "/aitune/dev"
 
 navbar-links:
   - type: github
@@ -40,24 +46,6 @@ layout:
   content-width: 812px
   tabs-placement: header
   hide-feedback: true
-
-metadata:
-  canonical-host: "docs.nvidia.com/aitune"
-
-experimental:
-  mdx-components:
-    - ./components
-  basepath-aware: true
-
-libraries:
-  aitune:
-    input:
-      git: https://github.com/ai-dynamo/aitune
-      subpath: aitune
-    output:
-      path: ../docs/api
-    lang: python
-
 
 colors:
   accentPrimary:
@@ -84,10 +72,23 @@ logo:
   dark: ../docs/assets/NVIDIA_dark.svg
   light: ../docs/assets/NVIDIA_light.svg
   height: 20
-  href: /
+  href: /aitune
   right-text: Documentation
 
 favicon: ../docs/assets/NVIDIA_symbol.svg
 
 css:
   - ./main.css
+
+experimental:
+  mdx-components:
+    - ./components
+
+libraries:
+  aitune:
+    input:
+      git: https://github.com/ai-dynamo/aitune
+      subpath: aitune
+    output:
+      path: ../docs/api
+    lang: python
