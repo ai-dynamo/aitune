@@ -34,10 +34,6 @@ The toolkit enables seamless tuning of PyTorch models and pipelines using variou
 
 NVIDIA AITune works with your environment — relying first on your software versions — and selects the best-performing backend for your software and hardware setup, guiding you to supported technologies.
 
-<Note>
-This is the first release. The API may change in future versions.
-</Note>
-
 ## When to Use AITune
 
 AITune provides compute graph optimizations for PyTorch models at the `nn.Module` level. Use AITune when you want automated inference optimization with minimal code changes.
