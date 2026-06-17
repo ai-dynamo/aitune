@@ -8,9 +8,11 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Literal
 
+import modelopt
 import modelopt.torch.quantization as mtq
 import torch
 import torch.nn as nn
+from packaging.version import Version
 
 from aitune.torch.module.recording_module import Sample
 from aitune.utils.monitoring import annotate
@@ -189,12 +191,13 @@ class TorchQuantizer:
         """
         config_mapping = {
             "NVFP4_DEFAULT_CFG": mtq.NVFP4_DEFAULT_CFG,
-            "NVFP4_FP8_MHA_CONFIG": mtq.NVFP4_FP8_MHA_CONFIG,
             "FP8_DEFAULT_CFG": mtq.FP8_DEFAULT_CFG,
             "INT8_DEFAULT_CFG": mtq.INT8_DEFAULT_CFG,
             "INT8_SMOOTHQUANT_CFG": mtq.INT8_SMOOTHQUANT_CFG,
             "INT4_AWQ_CFG": mtq.INT4_AWQ_CFG,
         }
+        if Version(modelopt.__version__) >= Version("0.35.0"):
+            config_mapping["NVFP4_FP8_MHA_CONFIG"] = mtq.NVFP4_FP8_MHA_CONFIG
 
         if config_name not in config_mapping:
             available_configs = list(config_mapping.keys())

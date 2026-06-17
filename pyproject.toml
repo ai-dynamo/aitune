@@ -37,20 +37,26 @@ license = { text = "Apache 2.0" }
 requires-python = ">=3.10,<3.13"
 dependencies = [
     "autowrapt>=1.0",
+    "cppimport",
     "dill>=0.3.8",
+    "ml-dtypes",
     "nvidia-ml-py",
-    "nvidia-modelopt[onnx]>=0.40.0",
-    "numpy>=2.0.0",
-    "pandas>=2.3",
+    "nvidia-modelopt[onnx]>=0.33.0",
+    "numpy>=1.26.4",
+    "onnx>=1.18",
+    "onnx-graphsurgeon>=0.6.1",
+    "onnxruntime-gpu>=1.20",
+    "onnxslim>=0.1.94",
+    "onnxscript>=0.5.4",
+    "onnx-ir>=0.1.11",
+    "pandas>=2.2.3",
     "nvtx",
-    "onnxscript<=0.6.1",
-    "onnx-ir<=0.1.16",
     "psutil",
     "tabulate>=0.9.0",
-    "tensorrt>=10.5",
-    "torch>=2.7,<2.11",
-    "torchao>=0.13,<0.17",
-    "torch-tensorrt>2,<2.11",
+    "tensorrt>=10.3",
+    "torch>=2.8a0",
+    "torchao>=0.12",
+    "torch-tensorrt>=2.8a0",
     "wrapt~=2.0"
 ]
 
@@ -59,11 +65,32 @@ dynamo = [
     "ai-dynamo-runtime>=0.1",
     "uvloop",
 ]
-torch210 = [
-    "torch==2.10",
-    "torch-tensorrt>=2.10",
-    "torchao>=0.16",
-    "nvidia-cuda-runtime-cu13==0.0.0a0"
+
+torch28 = [ # nvcr.io/nvidia/pytorch:25.08-py3 is based on 2.8.0a0+34c6371d24.
+    "torch>=2.8.0a0,<2.9",
+    "torch-tensorrt>=2.8.0a0,<2.9",
+    "torchao>=0.12,<0.13",
+]
+torch29 = [ # nvcr.io/nvidia/pytorch:25.10-py3 is based on 2.9.0a0+145a3a7bda.
+    "torch>=2.9.0a0,<2.10",
+    "torch-tensorrt>=2.9.0a0,<2.10",
+    "torchao>=0.14,<0.15",
+]
+torch210 = [ # nvcr.io/nvidia/pytorch:26.01-py3 is based on 2.10.0a0+a36e1d39eb.
+    "torch>=2.10.0a0,<2.11",
+    "torch-tensorrt>=2.10.0a0,<2.11",
+    "torchao>=0.15,<0.16",
+    "nvidia-cuda-runtime-cu13==0.0.0a0",
+]
+torch211 = [ # nvcr.io/nvidia/pytorch:26.03-py3 is based on 2.11.0a0+a6c236b9fd1.
+    "torch>=2.11.0a0,<2.12",
+    "torch-tensorrt>=2.11.0a0,<2.12",
+    "torchao>=0.16,<0.17",
+]
+torch212 = [ # nvcr.io/nvidia/pytorch:26.05-py3 is based on 2.12.0a0+5aff3928d8
+    "torch>=2.12.0a0,<2.13",
+    "torch-tensorrt>=2.12.0a0,<2.13",
+    "torchao>=0.17,<0.18",
 ]
 
 
@@ -130,6 +157,15 @@ aitune = ["**/*"]
 
 [tool.uv]
 managed = true
+conflicts = [
+    [
+        { extra = "torch28" },
+        { extra = "torch29" },
+        { extra = "torch210" },
+        { extra = "torch211" },
+        { extra = "torch212" },
+    ]
+]
 
 [tool.pytest.ini_options]
 log_cli = true

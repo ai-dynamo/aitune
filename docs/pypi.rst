@@ -70,25 +70,17 @@ If your model is supported by a dedicated serving framework and benefits from ru
 Prerequisites
 -------------
 
-Before proceeding with the installation of NVIDIA AITune, ensure your system meets the following criteria:
+Before installing NVIDIA AITune, make sure your system meets these requirements:
 
 * **Operating System**: Linux (Ubuntu 22.04+ recommended)
 * **Python**: Version ``3.10`` or newer
-* **PyTorch**: Version ``2.7`` or newer
+* **PyTorch**: Version ``2.8`` or newer
 * **TensorRT**: Version ``10.5.0`` or higher (for TensorRT backend)
 * **NVIDIA GPU**: Required for GPU-accelerated tuning
 
-You can use NGC Containers for PyTorch which contain all necessary dependencies:
-
-* `PyTorch NGC Container <https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch>`_
-
-Install
--------
-
-NVIDIA AITune can be installed from ``pypi.org``.
 
 Installing from PyPI (Recommended)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
 .. code-block:: bash
 
@@ -98,10 +90,42 @@ For PyTorch 2.10 with CUDA 13 support, install the ``torch210`` extra:
 
 .. code-block:: bash
 
-    pip install --extra-index-url https://pypi.nvidia.com --index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
+    pip install --extra-index-url https://pypi.nvidia.com --extra-index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
+
+
+NGC container install
+---------------------
+
+You can use NGC PyTorch containers, which include the required NVIDIA dependencies:
+
+* `PyTorch NGC Container <https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch>`_
+
+.. list-table:: NGC PyTorch container
+   :widths: 75 25
+   :header-rows: 1
+
+   * - NGC PyTorch container
+     - Torch version
+   * - `nvcr.io/nvidia/pytorch:25.08-py3`
+     - 2.8a0
+   * - `nvcr.io/nvidia/pytorch:25.10-py3`
+     - 2.9a0
+   * - `nvcr.io/nvidia/pytorch:26.01-py3`
+     - 2.10a0
+   * - `nvcr.io/nvidia/pytorch:26.03-py3`
+     - 2.11a0
+   * - `nvcr.io/nvidia/pytorch:26.05-py3`
+     - 2.12a0
+
+Inside an NGC container, use `pip` and the package name:
+
+.. code-block:: bash
+
+    pip install --extra-index-url https://pypi.nvidia.com aitune
+
 
 Installing from Source
-~~~~~~~~~~~~~~~~~~~~~~
+----------------------
 
 .. code-block:: bash
 
@@ -765,5 +789,5 @@ Useful Links
    :target: https://github.com/ai-dynamo/aitune/blob/main/LICENSE
 .. |Python| image:: https://img.shields.io/badge/python-3.10+-blue.svg
    :target: https://www.python.org/downloads/
-.. |PyTorch| image:: https://img.shields.io/badge/PyTorch-2.7+-red.svg
+.. |PyTorch| image:: https://img.shields.io/badge/PyTorch-2.8+-red.svg
    :target: https://pytorch.org/

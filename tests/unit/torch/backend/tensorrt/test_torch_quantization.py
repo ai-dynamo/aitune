@@ -3,9 +3,11 @@
 
 """Unit tests for TorchQuantizer."""
 
+import modelopt
 import modelopt.torch.quantization as mtq
 import pytest
 import torch
+from packaging.version import Version
 
 from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig, TorchQuantizer
 from tests.toy_models.torch_models import ToyTorchModel
@@ -50,11 +52,13 @@ def test_get_quantization_config():
     """Test the retrieval of quantization configuration."""
     quantizer = TorchQuantizer()
     assert quantizer._get_quantization_config("NVFP4_DEFAULT_CFG") == mtq.NVFP4_DEFAULT_CFG
-    assert quantizer._get_quantization_config("NVFP4_FP8_MHA_CONFIG") == mtq.NVFP4_FP8_MHA_CONFIG
     assert quantizer._get_quantization_config("FP8_DEFAULT_CFG") == mtq.FP8_DEFAULT_CFG
     assert quantizer._get_quantization_config("INT8_DEFAULT_CFG") == mtq.INT8_DEFAULT_CFG
     assert quantizer._get_quantization_config("INT8_SMOOTHQUANT_CFG") == mtq.INT8_SMOOTHQUANT_CFG
     assert quantizer._get_quantization_config("INT4_AWQ_CFG") == mtq.INT4_AWQ_CFG
+
+    if Version(modelopt.__version__) >= Version("0.35.0"):
+        assert quantizer._get_quantization_config("NVFP4_FP8_MHA_CONFIG") == mtq.NVFP4_FP8_MHA_CONFIG
 
 
 def test_get_quantization_config_invalid_config():
