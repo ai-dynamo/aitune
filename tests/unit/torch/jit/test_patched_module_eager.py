@@ -4,12 +4,14 @@
 
 import errno
 import inspect
+import json
 import re
 from unittest.mock import Mock
 
 import pytest
 import torch
 
+from aitune.torch.backend.backend import DummyBackend
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patched_module import (
     PRINT_HIERARCHY_HEADER,
@@ -18,7 +20,9 @@ from aitune.torch.jit.patched_module import (
     PatchedModule,
 )
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
+from aitune.torch.tune_data.reporting import report_tune_run_end
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
+from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy, TuneStrategy
 from aitune.utils.disk_space import DiskSpaceError
 from tests.toy_models.torch_models import OUTPUT_SIZE, ToyComplexPipeline
 from tests.utilities.helpers import TestSink, requires_cuda
@@ -93,6 +97,151 @@ def test_jit_dry_run_failure(mock_trt_backend, torch_device):
     PatchedModule.print_hierarchy(sink=sink.write)
     assert PRINT_HIERARCHY_HEADER in sink.output[0]
     assert re.match(r".*ToyTorchModel.*state=eager.*(no better tuned version).*call_count=1", sink.output[1])
+
+
+def test_jit_eager_records_inspection_details_for_tuned_module_subtree(mocker, tmp_path):
+    """Eager tuning should snapshot the attempted module and its observed children."""
+
+    class ParentWithChild(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.child = torch.nn.Linear(4, 4)
+
+        def forward(self, x):
+            return self.child(x)
+
+    report_path = tmp_path / "report.json"
+    mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
+    mock_config.cache_dir = tmp_path / "cache"
+    mock_config.tuning_data_output_path = report_path
+
+    config.mode = JITMode.TUNE_EAGER
+    config.device = torch.device("cpu")
+    config.dry_run = True
+    config.dry_run_failure_probability = 0.0
+    config.max_depth_level = 2
+    config.strategy = DummyTuneStrategy()
+
+    with prepare_for_jit_tuning():
+        model = ParentWithChild()
+
+    model(torch.randn(2, 4))
+    report_tune_run_end()
+
+    report = json.loads(report_path.read_text())
+    assert len(report["inspection_details"]) == 2
+    module = report["modules"][0]
+    parent = next(detail for detail in report["inspection_details"] if detail["module_id"] == module["module_id"])
+    child = next(detail for detail in report["inspection_details"] if detail["parent_module_id"] == parent["module_id"])
+
+    assert parent["module_class"].endswith("ParentWithChild")
+    assert parent["state"] == "recording"
+    assert parent["dtypes"] == ["torch.float32"]
+    assert parent["child_module_ids"] == [child["module_id"]]
+    assert parent["graphs"][0]["input_spec"]["tensor_data"][0]["dtype"] == "torch.float32"
+    assert child["module_class"] == "torch.nn.modules.linear.Linear"
+    assert child["state"] == "recording"
+    assert child["dtypes"] == ["torch.float32"]
+    assert child["graphs"][0]["input_spec"]["tensor_data"][0]["dtype"] == "torch.float32"
+    assert module["module_name"] == "ParentWithChild"
+
+
+def test_jit_eager_accumulates_inspection_details_for_multiple_top_modules(mocker, tmp_path):
+    """Eager tuning should keep inspection details from every top-level module."""
+
+    class Encoder(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(4, 4)
+
+        def forward(self, x):
+            return self.linear(x)
+
+    class Decoder(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(4, 4)
+
+        def forward(self, x):
+            return self.linear(x)
+
+    report_path = tmp_path / "report.json"
+    mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
+    mock_config.cache_dir = tmp_path / "cache"
+    mock_config.tuning_data_output_path = report_path
+
+    config.mode = JITMode.TUNE_EAGER
+    config.device = torch.device("cpu")
+    config.dry_run = True
+    config.dry_run_failure_probability = 0.0
+    config.max_depth_level = 1
+    config.strategy = DummyTuneStrategy()
+
+    with prepare_for_jit_tuning():
+        encoder = Encoder()
+        decoder = Decoder()
+
+    encoder(torch.randn(2, 4))
+    decoder(torch.randn(2, 4))
+    report_tune_run_end()
+
+    report = json.loads(report_path.read_text())
+    assert [module["module_name"] for module in report["modules"]] == ["Encoder", "Decoder"]
+    assert len(report["inspection_details"]) == 2
+    assert {detail["module_id"] for detail in report["inspection_details"]} == {
+        module["module_id"] for module in report["modules"]
+    }
+    assert {detail["module_name"] for detail in report["inspection_details"]} == {"Encoder", "Decoder"}
+
+
+def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback(mocker, tmp_path):
+    """Fallback tuning should not refresh inspection details from child attempts."""
+
+    class ParentWithChild(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.child = torch.nn.Linear(4, 4)
+
+        def forward(self, x):
+            return self.child(x)
+
+    class ParentFailsStrategy(TuneStrategy):
+        def _describe_parts(self) -> list[str]:
+            return ["Parent fails, child succeeds."]
+
+        def to_json_dict(self) -> dict:
+            return {}
+
+        def _tune(self, module, name, graph_spec, data, device, cache_dir):
+            if module.__class__.__name__ == "ParentWithChild":
+                raise RuntimeError("parent tune failed")
+            return DummyBackend()
+
+    report_path = tmp_path / "report.json"
+    mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
+    mock_config.cache_dir = tmp_path / "cache"
+    mock_config.tuning_data_output_path = report_path
+
+    config.mode = JITMode.TUNE_EAGER
+    config.device = torch.device("cpu")
+    config.detect_graph_breaks = False
+    config.max_depth_level = 2
+    config.strategy = ParentFailsStrategy()
+
+    with prepare_for_jit_tuning():
+        model = ParentWithChild()
+
+    model(torch.randn(2, 4))
+    report_tune_run_end()
+
+    report = json.loads(report_path.read_text())
+    assert len(report["inspection_details"]) == 2
+    parent = next(detail for detail in report["inspection_details"] if detail["parent_module_id"] is None)
+    child = next(detail for detail in report["inspection_details"] if detail["parent_module_id"] == parent["module_id"])
+
+    assert parent["module_class"].endswith("ParentWithChild")
+    assert child["module_class"] == "torch.nn.modules.linear.Linear"
+    assert child["allowed_to_tune"] is False
 
 
 @requires_cuda

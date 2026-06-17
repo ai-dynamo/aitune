@@ -23,7 +23,13 @@ from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule, Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
-from aitune.torch.tune_data.reporting import report_graph_tune, report_module_tune, report_tune_run_end
+from aitune.torch.tune_data.report_models import ModuleInspectionReport
+from aitune.torch.tune_data.reporting import (
+    report_graph_tune,
+    report_inspection_details,
+    report_module_tune,
+    report_tune_run_end,
+)
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
@@ -145,6 +151,9 @@ class PatchedModule:
         PatchedModule.attempted_tuning = True
         self._set_original_forward_for_hierarchy()
         device = config.device or get_module_device(self.__wrapped__)
+        if self._should_report_inspection():
+            report_inspection_details(self.inspection_subtree_reports(), replace=False)
+
         todo = [self]
         while todo:
             current = todo.pop()
@@ -155,6 +164,7 @@ class PatchedModule:
                 with report_module_tune(
                     module_name=current.__wrapped__.__class__.__name__,
                     num_parameters=count_parameters(current.__wrapped__),
+                    module_id=current._id,
                 ):
                     for graph_spec in recording.graph_specs:
                         cache_dir = self._create_graph_cache_dir(graph_spec.name)
@@ -196,6 +206,54 @@ class PatchedModule:
                 else:
                     current._extra_state_info = "no better tuned version"
                 _to_hist(f"Failed to tune module, unpatched: {str(current)}")
+
+    def inspection_report(self) -> ModuleInspectionReport:
+        """Build a report snapshot of the JIT data observed for this module."""
+        return ModuleInspectionReport(
+            module_id=self._id,
+            module_name=self._fq_name,
+            module_class=f"{self.__wrapped__.__class__.__module__}.{self.__wrapped__.__class__.__qualname__}",
+            state=self._state.value,
+            level=self._level,
+            call_count=self._call_count,
+            num_parameters=count_parameters(self.__wrapped__),
+            allowed_to_tune=self._allowed_to_tune,
+            dtypes=self._module_dtypes(),
+            child_module_ids=[child._id for child in self._children],
+            parent_module_id=self._parent._id if self._parent is not None else None,
+            parent_module_name=self._parent._fq_name if self._parent is not None else None,
+            graphs=self._inspection_graphs(),
+        )
+
+    def inspection_subtree_reports(self) -> list[ModuleInspectionReport]:
+        """Build report snapshots for this module and observed child modules."""
+        reports: list[ModuleInspectionReport] = []
+        todo = [self]
+        while todo:
+            current = todo.pop()
+            reports.append(current.inspection_report())
+            todo.extend(reversed(current._children))
+        return reports
+
+    def _module_dtypes(self) -> list[str]:
+        """Return unique parameter and buffer dtypes for this module tree."""
+        dtypes = {str(tensor.dtype) for tensor in self.__wrapped__.parameters()}
+        dtypes.update(str(tensor.dtype) for tensor in self.__wrapped__.buffers())
+        return sorted(dtypes)
+
+    def _inspection_graphs(self) -> list[dict]:
+        """Return JSON-ready graph specs recorded before deferred tuning."""
+        wrapper = getattr(self, "_wrapper", None)
+        if not isinstance(wrapper, RecordingModule):
+            return []
+        return [
+            {
+                "graph_name": graph_spec.name,
+                "input_spec": graph_spec.input_spec.to_json_dict(),
+                "output_spec": graph_spec.output_spec.to_json_dict(),
+            }
+            for graph_spec in wrapper.graph_specs
+        ]
 
     def _simulate_dry_run(
         self,
@@ -504,6 +562,10 @@ class PatchedModule:
             dynamic_axes_check = True
 
         return dynamic_axes_check
+
+    def _should_report_inspection(self) -> bool:
+        """Return whether this tuning path should emit per-module inspection details."""
+        return config.mode == JITMode.TUNE_EAGER and self._parent is None
 
     def _should_be_tuned_deferred(self) -> bool:
         """Check if the module should be tuned in deferred mode.

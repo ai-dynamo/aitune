@@ -11,6 +11,7 @@ import torch
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patcher import jit_reset
 from aitune.torch.module_registry import MODULE_REGISTRY
+from aitune.torch.tune_data.reporting import _active_graph, _active_module, _active_report, _run_start_ts
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
 from aitune.utils.logging import setup_logging
 
@@ -56,11 +57,13 @@ def torch_device():
 def jit_cleanup():
     """Reset patcher state and jit_config before and after each test."""
     jit_reset()
+    _reset_tuning_report_context()
     jit_config.reset_to_defaults()
     try:
         yield
     finally:
         jit_reset()
+        _reset_tuning_report_context()
         jit_config.reset_to_defaults()
 
 
@@ -70,3 +73,11 @@ def aitune_logging_setup():
     setup_logging(level=logging.DEBUG if os.environ.get("AITUNE_TESTS_LOG_LEVEL") == "DEBUG" else logging.INFO)
     yield
     logging.shutdown()
+
+
+def _reset_tuning_report_context():
+    """Clear in-progress tuning report state between tests."""
+    _active_report.set(None)
+    _active_module.set(None)
+    _active_graph.set(None)
+    _run_start_ts.set(None)

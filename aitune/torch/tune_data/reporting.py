@@ -27,6 +27,7 @@ from aitune.torch.tune_data.report_models import (
     BackendBuildReport,
     ExceptionInfo,
     GraphTuneReport,
+    ModuleInspectionReport,
     ModuleTuneReport,
     TuneRunReport,
 )
@@ -46,6 +47,7 @@ def _flush_active_report(path: Path | None = None) -> Path | None:
         return None
     out = path if path is not None else config.tuning_data_output_path
     try:
+        report.aitune_config = snapshot_config(report.mode)
         out.parent.mkdir(parents=True, exist_ok=True)
         payload = json_serialize(asdict(report))
         with out.open("w", encoding="utf-8") as f:
@@ -74,6 +76,11 @@ def snapshot_tuning_data(path: Path | None = None) -> Path | None:
         write failed.
     """
     return _flush_active_report(path)
+
+
+def has_active_report() -> bool:
+    """Return whether a tuning report is currently active."""
+    return _active_report.get() is not None
 
 
 def _describe_strategy(strategy: TuneStrategy) -> dict[str, Any]:
@@ -111,6 +118,20 @@ def report_tune_run_start(mode: AITuneMode) -> None:
     _active_report.set(report)
 
 
+def report_inspection_details(details: list[ModuleInspectionReport], *, replace: bool = True) -> None:
+    """Store JIT inspection details on the active tuning report."""
+    report = _active_report.get()
+    if report is None:
+        return
+    if replace:
+        report.inspection_details = details
+    else:
+        inspection_details_by_id = {detail.module_id: detail for detail in report.inspection_details}
+        for detail in details:
+            inspection_details_by_id[detail.module_id] = detail
+        report.inspection_details = list(inspection_details_by_id.values())
+
+
 def report_tune_run_end(exception: BaseException | None = None) -> None:
     """Finish the active tuning run and flush the report to disk."""
     report = _active_report.get()
@@ -143,14 +164,14 @@ def report_tune_run(mode: AITuneMode):
 
 
 @contextmanager
-def report_module_tune(module_name: str, num_parameters: int):
+def report_module_tune(module_name: str, num_parameters: int, module_id: int | None = None):
     """Context manager that records a module-tuning span in the report."""
     report = _active_report.get()
     if report is None:
         yield
         return
 
-    module = ModuleTuneReport(module_name=module_name, num_parameters=num_parameters)
+    module = ModuleTuneReport(module_name=module_name, num_parameters=num_parameters, module_id=module_id)
     report.modules.append(module)
     token = _active_module.set(module)
     _flush_active_report()

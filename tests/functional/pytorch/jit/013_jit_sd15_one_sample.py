@@ -15,6 +15,7 @@ from logging import INFO, basicConfig, getLogger
 from time import perf_counter
 
 import torch
+from _tuning_data_artifacts import collect_tuning_data
 from diffusers import StableDiffusionPipeline
 
 from aitune.torch.jit.config import config
@@ -33,6 +34,7 @@ def create_model():
     return pipe
 
 
+@collect_tuning_data(__file__)
 def test_jit_sd15():
     pipe = create_model()
 

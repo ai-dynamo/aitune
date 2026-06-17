@@ -13,6 +13,7 @@ from logging import getLogger
 from time import perf_counter
 
 import torch
+from _tuning_data_artifacts import collect_tuning_data
 from diffusers import FluxPipeline
 
 from aitune.torch.jit.config import config
@@ -38,6 +39,7 @@ def get_flux_pipeline(model_name: str = "hf-internal-testing/tiny-flux-pipe", de
     return pipe
 
 
+@collect_tuning_data(__file__)
 def test_jit_flux():
     pipe = get_flux_pipeline()
 

@@ -12,11 +12,13 @@ from logging import INFO, basicConfig
 
 import timm
 import torch
+from _tuning_data_artifacts import collect_tuning_data
 
 from aitune.torch.jit.config import config
 from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
 
 
+@collect_tuning_data(__file__)
 def test_jit_resnet():
     import aitune.torch.jit.enable  # noqa: F401
 

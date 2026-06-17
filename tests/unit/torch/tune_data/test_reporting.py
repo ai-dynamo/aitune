@@ -7,14 +7,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from aitune.__version__ import __version__
 from aitune.torch.config import AITuneConfig, AITuneMode
-from aitune.torch.tune_data.report_models import ExceptionInfo
+from aitune.torch.tune_data.report_models import SCHEMA_VERSION, ExceptionInfo, ModuleInspectionReport
 from aitune.torch.tune_data.reporting import (
     _active_graph,
     _active_module,
     _active_report,
     report_backend_build,
     report_graph_tune,
+    report_inspection_details,
     report_module_tune,
     report_tune_run,
     report_tune_run_end,
@@ -249,7 +251,7 @@ def _make_backend(describe="TensorRT(dynamo=True)", config_dict=None):
 def test_full_hierarchy_produces_nested_report(enable_reporting):
     # when
     with report_tune_run(AITuneMode.JIT):
-        with report_module_tune(module_name="encoder", num_parameters=5000):
+        with report_module_tune(module_name="encoder", num_parameters=5000, module_id=42):
             with report_graph_tune(_make_graph_spec(), _make_strategy()) as gt:
                 with report_backend_build(_make_backend(config_dict={"precision": "fp16"})):
                     pass
@@ -264,6 +266,7 @@ def test_full_hierarchy_produces_nested_report(enable_reporting):
     assert len(report["modules"]) == 1
     module = report["modules"][0]
     assert module["module_name"] == "encoder"
+    assert module["module_id"] == 42
     assert module["num_parameters"] == 5000
     assert module["duration_s"] is not None
 
@@ -280,6 +283,39 @@ def test_full_hierarchy_produces_nested_report(enable_reporting):
     assert build["backend_config"] == {"precision": "fp16"}
     assert build["success"] is True
     assert build["duration_s"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Inspection details
+# ---------------------------------------------------------------------------
+
+
+def test_report_inspection_details_updates_active_report_without_flushing(enable_reporting):
+    # given
+    report_tune_run_start(AITuneMode.JIT)
+    details = [
+        ModuleInspectionReport(
+            module_id=1,
+            module_name="module",
+            module_class="torch.nn.Module",
+            state="recording",
+            level=0,
+            call_count=1,
+            num_parameters=10,
+            allowed_to_tune=True,
+        )
+    ]
+
+    # when
+    report_inspection_details(details)
+
+    # then — active report is updated in memory, but disk flush is explicit
+    report = _active_report.get()
+    assert report is not None
+    assert report.inspection_details == details
+    assert not enable_reporting.exists()
+
+    report_tune_run_end()
 
 
 # ---------------------------------------------------------------------------
@@ -458,8 +494,41 @@ def test_snapshot_tuning_data_flushes_mid_run(enable_reporting):
     # then — partial report written to disk, path returned
     assert result == enable_reporting
     report = json.loads(enable_reporting.read_text())
+    assert report["schema_version"] == SCHEMA_VERSION
+    assert report["aitune_version"] == __version__
     assert report["mode"] == "JIT"
     assert report["duration_s"] is None
+
+    report_tune_run_end()
+
+
+def test_snapshot_tuning_data_refreshes_jit_config_on_flush(mocker, tmp_path):
+    # given
+    from aitune.torch.jit.config import Config as JitConfig
+    from aitune.torch.jit.config import JITMode
+
+    report_path = tmp_path / "report.json"
+    mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
+    mock_config.cache_dir = tmp_path / "cache"
+    mock_config.tuning_data_output_path = report_path
+
+    report_tune_run_start(AITuneMode.JIT)
+
+    jit_config = JitConfig()
+    jit_config.mode = JITMode.TUNE_DEFERRED
+    jit_config.min_samples = 8
+    jit_config.max_depth_level = 4
+    mocker.patch("aitune.torch.jit.config.config", jit_config)
+
+    # when
+    result = snapshot_tuning_data()
+
+    # then
+    assert result == report_path
+    report = json.loads(report_path.read_text())
+    assert report["aitune_config"]["mode"] == "tune_deferred"
+    assert report["aitune_config"]["min_samples"] == 8
+    assert report["aitune_config"]["max_depth_level"] == 4
 
     report_tune_run_end()
 

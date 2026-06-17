@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from aitune.__version__ import __version__
 from aitune.torch.config import AITuneMode
 
 
@@ -31,7 +32,7 @@ class ExceptionInfo:
         )
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(kw_only=True)
@@ -71,9 +72,29 @@ class ModuleTuneReport:
 
     module_name: str
     num_parameters: int
+    module_id: int | None = None
     duration_s: float | None = None
     exception: ExceptionInfo | None = None
     graphs: list[GraphTuneReport] = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class ModuleInspectionReport:
+    """Inspection snapshot for a JIT-intercepted module."""
+
+    module_id: int
+    module_name: str | None
+    module_class: str
+    state: str
+    level: int
+    call_count: int
+    num_parameters: int
+    allowed_to_tune: bool
+    dtypes: list[str] = field(default_factory=list)
+    child_module_ids: list[int] = field(default_factory=list)
+    parent_module_id: int | None = None
+    parent_module_name: str | None = None
+    graphs: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)
@@ -81,9 +102,11 @@ class TuneRunReport:
     """Top-level report for a complete tuning run."""
 
     schema_version: int = SCHEMA_VERSION
+    aitune_version: str = __version__
     mode: AITuneMode
     started_at: datetime
     aitune_config: dict[str, Any]
     duration_s: float | None = None
     exception: ExceptionInfo | None = None
+    inspection_details: list[ModuleInspectionReport] = field(default_factory=list)
     modules: list[ModuleTuneReport] = field(default_factory=list)

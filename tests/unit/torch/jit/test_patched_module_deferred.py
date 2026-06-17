@@ -4,6 +4,7 @@
 
 import copy
 import inspect
+import json
 import re
 from unittest.mock import Mock
 
@@ -19,6 +20,7 @@ from aitune.torch.jit.patched_module import (
     PatchedModule,
 )
 from aitune.torch.jit.patcher import Patcher, prepare_for_jit_tuning
+from aitune.torch.tune_data.reporting import _active_report, report_tune_run_end
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from tests.toy_models.torch_models import OUTPUT_SIZE, ToyComplexPipeline
 from tests.utilities.helpers import TestSink, requires_cuda
@@ -483,3 +485,78 @@ def test_jit_deferred_tune_before_forward_pass_does_not_crash():
     Patcher.tune_deferred()
 
     assert len(PatchedModule.heads) == 0
+
+
+def test_jit_deferred_tuning_records_inspection_details_before_tuning(mocker, tmp_path):
+    """Deferred tuning should snapshot every intercepted module before try_tune mutates state."""
+
+    class ModelWithUnusedChild(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.used = torch.nn.Linear(4, 4)
+            self.unused = torch.nn.Linear(4, 4).to(dtype=torch.float16)
+
+        def forward(self, x):
+            return self.used(x)
+
+    report_path = tmp_path / "report.json"
+    mock_config = mocker.patch("aitune.torch.tune_data.reporting.config")
+    mock_config.cache_dir = tmp_path / "cache"
+    mock_config.tuning_data_output_path = report_path
+
+    config.mode = JITMode.TUNE_DEFERRED
+    config.max_depth_level = 2
+
+    with prepare_for_jit_tuning():
+        model = ModelWithUnusedChild()
+
+    model(torch.randn(2, 4))
+
+    def assert_inspection_details_collected(_module):
+        report = _active_report.get()
+        assert report is not None
+        assert len(report.inspection_details) == 3
+
+    mocker.patch.object(PatchedModule, "try_tune", autospec=True, side_effect=assert_inspection_details_collected)
+
+    Patcher.tune_deferred()
+    report_tune_run_end()
+
+    report = json.loads(report_path.read_text())
+    details = report["inspection_details"]
+    assert len(details) == 3
+
+    class_names = [detail["module_class"] for detail in details]
+    assert class_names.count("torch.nn.modules.linear.Linear") == 2
+
+    root = next(detail for detail in details if detail["module_class"].endswith("ModelWithUnusedChild"))
+    assert isinstance(root["module_id"], int)
+    assert root["parent_module_id"] is None
+    assert set(root["dtypes"]) == {"torch.float16", "torch.float32"}
+
+    unused_linear = next(
+        detail
+        for detail in details
+        if detail["module_class"] == "torch.nn.modules.linear.Linear" and detail["state"] == "init"
+    )
+    assert unused_linear["call_count"] == 0
+    assert unused_linear["module_name"] is None
+    assert isinstance(unused_linear["module_id"], int)
+    assert unused_linear["dtypes"] == ["torch.float16"]
+    assert unused_linear["graphs"] == []
+
+    observed_linear = next(
+        detail
+        for detail in details
+        if detail["module_class"] == "torch.nn.modules.linear.Linear" and detail["state"] == "recording"
+    )
+    assert observed_linear["module_name"].startswith("ModelWithUnusedChild")
+    assert observed_linear["module_name"].endswith("Linear")
+    assert observed_linear["call_count"] == 1
+    assert isinstance(observed_linear["module_id"], int)
+    assert observed_linear["parent_module_id"] == root["module_id"]
+    assert observed_linear["dtypes"] == ["torch.float32"]
+    assert observed_linear["graphs"][0]["input_spec"]["tensor_data"][0]["shape"] == [2, 4]
+    assert observed_linear["graphs"][0]["input_spec"]["tensor_data"][0]["dtype"] == "torch.float32"
+    assert observed_linear["graphs"][0]["output_spec"]["tensor_data"][0]["shape"] == [2, 4]
+    assert observed_linear["graphs"][0]["output_spec"]["tensor_data"][0]["dtype"] == "torch.float32"

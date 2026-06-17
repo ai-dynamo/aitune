@@ -15,6 +15,7 @@ from logging import INFO, basicConfig, getLogger
 from time import perf_counter
 
 import torch
+from _tuning_data_artifacts import collect_tuning_data
 from diffusers import WanPipeline
 
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorJitBackend
@@ -43,6 +44,7 @@ def get_wan_pipeline(model_name: str = "Wan-AI/Wan2.2-T2V-A14B-Diffusers", devic
     return pipe
 
 
+@collect_tuning_data(__file__)
 def test_jit_wan():
     pipe = get_wan_pipeline()
 

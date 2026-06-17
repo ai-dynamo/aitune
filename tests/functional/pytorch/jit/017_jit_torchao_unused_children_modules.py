@@ -10,6 +10,7 @@ import re
 from logging import INFO, basicConfig
 
 import torch
+from _tuning_data_artifacts import collect_tuning_data
 
 from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendConfig
 from aitune.torch.jit.config import JITMode, config
@@ -37,6 +38,7 @@ def create_model():
     return ModelWithUnusedChild().to("cuda", dtype=torch.float16).eval()
 
 
+@collect_tuning_data(__file__)
 def test_jit_torchao_unused_child():
     model = create_model()
 

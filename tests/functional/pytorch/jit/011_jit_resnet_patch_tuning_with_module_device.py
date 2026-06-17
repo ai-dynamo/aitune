@@ -12,6 +12,7 @@ from logging import INFO, basicConfig
 
 import timm
 import torch
+from _tuning_data_artifacts import collect_tuning_data
 
 from aitune.torch.jit.config import config
 from aitune.torch.jit.patched_module import PRINT_HIERARCHY_HEADER, PatchedModule
@@ -27,6 +28,7 @@ def create_resnet():
     return timm.create_model("resnet18", pretrained=False).to("cuda")
 
 
+@collect_tuning_data(__file__)
 def test_jit_resnet():
     resnet = create_resnet()
 

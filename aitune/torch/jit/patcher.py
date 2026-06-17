@@ -15,7 +15,7 @@ from aitune.torch.config import AITuneMode
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import PatchedModule
-from aitune.torch.tune_data.reporting import report_tune_run_start
+from aitune.torch.tune_data.reporting import has_active_report, report_inspection_details, report_tune_run_start
 
 T = TypeVar("T")
 
@@ -62,8 +62,8 @@ class Patcher:
                 InspectModule.on_python_exit if config.mode == JITMode.INSPECT else PatchedModule.on_python_exit
             )
 
-            if config.mode != JITMode.INSPECT:
-                report_tune_run_start(AITuneMode.JIT)
+        if config.mode != JITMode.INSPECT and not has_active_report():
+            report_tune_run_start(AITuneMode.JIT)
 
         def _patched_init(module, *args, **kwargs):
             cls._original_module_init(module, *args, **kwargs)
@@ -83,6 +83,9 @@ class Patcher:
         a variable number of times per step (e.g. text-to-image or text-to-video), making it
         difficult to know when enough samples have been recorded inside the forward hook itself.
         """
+        report_inspection_details([
+            module.inspection_report() for module in cls._patched_modules if isinstance(module, PatchedModule)
+        ])
         for module in list(PatchedModule.heads):
             try:
                 module.try_tune()

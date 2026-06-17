@@ -6,7 +6,8 @@ title: "Changelog"
 # Changelog
 
 ## 0.5.0 (unreleased)
-- feat: model correctness validation check dynamic shape boundaries for min and max shapes
+- feat: validate model correctness at min and max dynamic shape boundaries
+- feat: capture JIT inspection details and config in tuning data reports - full inspection for `deferred` mode and basic for the `eager` mode
 
 ## 0.4.1
 - fix: use the recorded global batch size for baseline performance profiling
