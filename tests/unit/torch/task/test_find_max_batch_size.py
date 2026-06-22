@@ -11,7 +11,6 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
 )
 from aitune.torch.task.profiling.events import ProfilingResultEvent
-from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from tests.toy_models.torch_models import ToyTorchModel
 
 
@@ -32,14 +31,6 @@ def test_max_throughput_strategy_find_max_batch_size(mock_profiling_config, torc
         model, "test", model.graph_spec(), [((sample,), {})], mock_profiling_config, torch_device, tmp_path
     )
     assert throughput > 0
-
-
-def test_default_profiling_config_uses_num_steps():
-    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=8)
-
-    assert isinstance(profiling_config.measurement_stop_strategy, NumStepsMeasuringStopStrategy)
-    assert profiling_config.measurement_stop_strategy.num_steps == 20
-    assert profiling_config.measurement_stop_strategy.warmup_samples == 10
 
 
 def test_get_throughput_per_batch_size(mock_profiling_config):

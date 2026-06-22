@@ -13,13 +13,15 @@ from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.task.correctness import CorrectnessValueError
-from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, StableWindowMeasuringStopStrategy
-from aitune.torch.task.profiling.profiling_stop_strategy import (
-    AllSamplesProfilingStopStrategy,
+from aitune.torch.task.profiling import (
+    ModelExecutionTimeMeasuringStrategy,
+    NumStepsMeasuringStopStrategy,
+    ProfilingConfig,
+    StableWindowMeasuringStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
+from aitune.torch.task.profiling.profiling_stop_strategy import AllSamplesProfilingStopStrategy
 from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
-from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin, PerformanceValidationMixinResult
 from aitune.torch.tuning import tune
 from tests.toy_backends import BuildFailsBackend, SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
@@ -33,6 +35,19 @@ def mock_backend():
     backend.name = "mock_backend"
     backend.describe.return_value = "mock_backend"
     return backend
+
+
+def _profiling_config(
+    max_batch_size: int = 8,
+    measurement_stop_strategy=None,
+    profiling_stop_strategy=None,
+) -> ProfilingConfig:
+    return ProfilingConfig(
+        batch_sizes=[2**n for n in range(max_batch_size.bit_length())],
+        measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
+        measurement_stop_strategy=measurement_stop_strategy or NumStepsMeasuringStopStrategy(num_steps=3),
+        profiling_stop_strategy=profiling_stop_strategy or AllSamplesProfilingStopStrategy(),
+    )
 
 
 def test_describe(mock_backend):
@@ -79,34 +94,35 @@ def test_sanity_batch_sizes_generator():
     assert 2**20 in batch_sizes
 
 
-def _fast_profiling_config(max_batch_size: int = 8):
-    """Use fixed-step profiling with a small sample budget for unit tests."""
-    profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=max_batch_size)
-    profiling_config.batch_sizes = [2**n for n in range(max_batch_size.bit_length())]
-    profiling_config.measurement_stop_strategy = NumStepsMeasuringStopStrategy(num_steps=3, warmup_samples=1)
-    profiling_config.profiling_stop_strategy = AllSamplesProfilingStopStrategy()
-    return profiling_config
-
-
-def _fast_max_throughput_strategy(
-    backends: list[Backend], max_batch_size: int = 8, *, enable_performance_validation: bool = False
-):
-    """Build a max-throughput strategy that exercises profiling without long sample runs."""
-    strategy = MaxThroughputStrategy(
-        backends=backends,
-        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=3, warmup_samples=1),
-        profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
+def test_max_throughput_uses_strategy_profiling_config():
+    """MaxThroughputStrategy derives sweep configs from one strategy-level profiling config."""
+    measurement_stop_strategy = NumStepsMeasuringStopStrategy(num_steps=3)
+    profiling_stop_strategy = AllSamplesProfilingStopStrategy()
+    profiling_config = _profiling_config(
+        max_batch_size=8,
+        measurement_stop_strategy=measurement_stop_strategy,
+        profiling_stop_strategy=profiling_stop_strategy,
     )
-    strategy.enable_performance_validation(enable_performance_validation)
-    strategy.set_find_max_batch_size_profiling_config(_fast_profiling_config(max_batch_size=max_batch_size))
-    strategy.enable_correctness_check(False)
-    return strategy
+
+    backend = MagicMock(spec=Backend)
+    strategy = MaxThroughputStrategy(backends=[backend], profiling_config=profiling_config)
+    result = strategy._get_profiling_config(batching=True, max_batch_size=8)
+
+    assert result.batch_sizes == [1, 2, 4, 8]
+    assert result.batching is True
+    assert result.measurement_stop_strategy is measurement_stop_strategy
+    assert result.profiling_stop_strategy is profiling_stop_strategy
 
 
 def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_path):
     slower = SleepBackend(sleep_time=1e-2)
     faster = SleepBackend(sleep_time=1e-5)
-    strategy = _fast_max_throughput_strategy([slower, faster])
+    strategy = MaxThroughputStrategy(
+        backends=[slower, faster],
+        profiling_config=_profiling_config(),
+    )
+    strategy.enable_performance_validation(False)
+    strategy.enable_correctness_check(False)
 
     model = ToyTorchModel()
     sample = model.sample().unsqueeze(0)  # as dataloader make batches, we need to unsqueeze the sample
@@ -126,7 +142,11 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
 
 
 def test_max_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_path):
-    strategy = _fast_max_throughput_strategy([SleepBackend(sleep_time=1e-5)])
+    strategy = MaxThroughputStrategy(
+        backends=[SleepBackend(sleep_time=1e-5)],
+        profiling_config=_profiling_config(),
+    )
+    strategy.enable_correctness_check(False)
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().unsqueeze(0).to(torch_device)  # as dataloader make batches, we need to unsqueeze the sample
     graph_spec = model.graph_spec(batch_sizes=[1, 2, 4, 8], device=torch_device)
@@ -145,18 +165,17 @@ def test_max_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_
 
 @requires_cuda
 def test_max_throughput_strategy_num_steps_all_samples(torch_device):
-    find_profiling_config = FindMaxBatchSizeMixin.default_profiling_config(max_batch_size=16)
-    find_profiling_config.measurement_stop_strategy = NumStepsMeasuringStopStrategy(num_steps=10, warmup_samples=1)
-
     strategy = MaxThroughputStrategy(
         backends=[
             TorchInductorJitBackend(),
             TorchEagerBackend(),
         ],
-        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=10, warmup_samples=1),
-        profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
+        profiling_config=_profiling_config(
+            max_batch_size=16,
+            measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=10),
+            profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
+        ),
     )
-    strategy.set_find_max_batch_size_profiling_config(find_profiling_config)
     strategy.enable_correctness_check(True)
 
     model = Module(ToyTorchModel().eval().to(torch_device), strategy=strategy)
@@ -181,8 +200,16 @@ def test_max_throughput_strategy_stable_window(torch_device):
         backends=[
             TorchInductorJitBackend(),
         ],
-        measurement_stop_strategy=StableWindowMeasuringStopStrategy(window_size=10, max_cv_ratio=0.90),
-        profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(min_throughput_gain_ratio=0.99),
+        profiling_config=_profiling_config(
+            measurement_stop_strategy=StableWindowMeasuringStopStrategy(
+                window_size=10,
+                max_cv_ratio=0.90,
+            ),
+            profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(
+                min_throughput_gain_ratio=0.99,
+                throughput_backoff_limit=0,
+            ),
+        ),
     ).enable_find_max_batch_size(False)
     model = Module(ToyTorchModel().eval().to(torch_device), strategy=strategy)
     sample = model.sample().to(torch_device)
@@ -202,6 +229,11 @@ class ActivateFailsBackend(SleepBackend):
 
     def _activate(self):
         raise RuntimeError("Activate failed")
+
+
+class RuntimeErrorBuildFailsBackend(BuildFailsBackend):
+    def __init__(self):
+        super().__init__(RuntimeError)
 
 
 def test_max_throughput_strategy_fails_backend_if_all_of_backends_fails(torch_device):
@@ -257,8 +289,7 @@ def test_max_throughput_strategy_find_max_batch_size_fails(torch_device):
         ],
     )
 
-    # failing backend
-    strategy.find_config.default_backend_class = lambda: BuildFailsBackend(RuntimeError)
+    strategy.set_find_max_batch_size_default_backend_class(RuntimeErrorBuildFailsBackend)
     strategy.enable_find_max_batch_size(True)
 
     model = ToyTorchModel().eval().to(torch_device)
@@ -277,7 +308,11 @@ def test_max_throughput_perf_validation_results_populated(torch_device, tmp_path
     """perf_validation_results is populated for user-provided backends only (not the baseline)."""
     slower = SleepBackend(sleep_time=1e-2)
     faster = SleepBackend(sleep_time=1e-5)
-    strategy = _fast_max_throughput_strategy([slower, faster], enable_performance_validation=True)
+    strategy = MaxThroughputStrategy(
+        backends=[slower, faster],
+        profiling_config=_profiling_config(),
+    )
+    strategy.enable_correctness_check(False)
 
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().unsqueeze(0).to(torch_device)
@@ -302,10 +337,15 @@ def test_max_throughput_perf_validation_results_populated(torch_device, tmp_path
         assert result.speedup > 0
 
 
-def test_max_throughput_torcheager_excluded_from_selection_when_validate_false(torch_device, tmp_path):
-    """When validate_against_baseline=False, TorchEager is never the selected backend."""
+def test_max_throughput_torcheager_excluded_from_selection_when_performance_validation_disabled(torch_device, tmp_path):
+    """When performance validation is disabled, TorchEager is never selected as an implicit baseline."""
     user_backend = SleepBackend(sleep_time=1e-5)
-    strategy = _fast_max_throughput_strategy([user_backend])
+    strategy = MaxThroughputStrategy(
+        backends=[user_backend],
+        profiling_config=_profiling_config(),
+    )
+    strategy.enable_performance_validation(False)
+    strategy.enable_correctness_check(False)
 
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().unsqueeze(0).to(torch_device)
@@ -329,16 +369,13 @@ def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
     from unittest.mock import patch
 
     user_backend = SleepBackend(sleep_time=1e-5)
-    strategy = _fast_max_throughput_strategy([user_backend])
-    strategy.perf_validation_results = [
-        PerformanceValidationMixinResult(
-            backend_description=user_backend.describe(),
-            throughput=200.0,
-            baseline_throughput=100.0,
-            speedup=2.0,
-            passed=True,
-        )
-    ]
+    strategy = MaxThroughputStrategy(
+        backends=[user_backend],
+        profiling_config=_profiling_config(),
+    )
+    strategy._baseline_throughput = 1.0
+    strategy._record_perf_result(user_backend, throughput=2.0)
+    strategy.enable_correctness_check(False)
 
     with (
         patch.object(strategy._logger, "isEnabledFor", return_value=False),

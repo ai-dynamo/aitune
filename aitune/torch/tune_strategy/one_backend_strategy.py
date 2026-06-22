@@ -11,11 +11,11 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.tune_strategy.mixin import PerformanceValidationMixin
+from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin, PerformanceValidationMixin
 from aitune.utils.logging import log
 
 
-class OneBackendStrategy(PerformanceValidationMixin):
+class OneBackendStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
     """Strategy which uses just one provided backend."""
 
     def __init__(self, backend: Backend, **kwargs):
@@ -79,4 +79,7 @@ class OneBackendStrategy(PerformanceValidationMixin):
 
     def to_json_dict(self) -> dict[str, Any]:
         """Returns config dict for one backend strategy."""
-        return {"backend": self._backend.describe()}
+        return {
+            "backend": self._backend.describe(),
+            "profiling_config": self._profiling_config_to_json_dict(),
+        }

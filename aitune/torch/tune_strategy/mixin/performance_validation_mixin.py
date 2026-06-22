@@ -6,7 +6,6 @@ import logging
 import shutil
 import sys
 import traceback
-from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -20,13 +19,10 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import (
-    NumStepsMeasuringStopStrategy,
     ProfilingConfig,
-    ThroughputSaturatedProfilingStopStrategy,
 )
 from aitune.torch.tune_data.reporting import report_backend_throughput, report_graph_baseline_throughput
-from aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin import FindMaxBatchSizeMixin
-from aitune.utils import validation
+from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.utils.logging import log
 
 
@@ -57,34 +53,6 @@ def fmt_speedup_msg(speedup: float, detail: str, name: str, backend_desc: str) -
 
 
 @dataclass
-class PerformanceValidationMixinConfig:
-    """Configuration for performance validation.
-
-    Attributes:
-        min_speedup_ratio: Minimum speedup ratio required over Torch eager.
-        profiling_config: Optional profiling config override.
-    """
-
-    min_speedup_ratio: float = 0.01
-    profiling_config: ProfilingConfig | None = None
-
-    def __post_init__(self):
-        """Validate ratio configuration."""
-        validation.ratio(self.min_speedup_ratio)
-
-    def profiling_config_for_batch_size(self, batch_size: int) -> ProfilingConfig:
-        """Returns profiling config with batch_sizes set to [batch_size]."""
-        if self.profiling_config is not None:
-            return replace(self.profiling_config, batch_sizes=[batch_size])
-        return ProfilingConfig(
-            batch_sizes=[batch_size],
-            batching=True,
-            measurement_stop_strategy=NumStepsMeasuringStopStrategy(),
-            profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(),
-        )
-
-
-@dataclass
 class PerformanceValidationMixinResult:
     """Throughput and speedup result for a single backend."""
 
@@ -95,23 +63,35 @@ class PerformanceValidationMixinResult:
     passed: bool
 
 
-class PerformanceValidationMixin(FindMaxBatchSizeMixin):
-    """Mixin that validates backend throughput against a TorchEager baseline.
+class PerformanceValidationMixin(TuneStrategy):
+    """TuneStrategy mixin that validates each backend against a TorchEager throughput baseline.
 
-    Performance validation is enabled by default. Use enable_performance_validation(False) to skip baseline
-    profiling, candidate performance checks, and speedup reporting.
+    When performance validation is enabled, profiles TorchEager during _pre_tune with the strategy profiling
+    config narrowed to the resolved batch size (from graph_spec.get_max_batch_size()) to establish a baseline.
+    For every candidate backend, profiles with the same task-local profiling config and appends a
+    PerformanceValidationMixinResult. Backends with speedup below the configured threshold are rejected.
+
+    Note:
+        min_speedup_threshold_percent defaults to 1.0, requiring a measurable 1% speedup when validation is enforced.
+        Performance validation is enabled by default.
     """
 
     def __init__(
         self,
         *args,
-        perf_validation_config: PerformanceValidationMixinConfig | None = None,
-        sink: Callable | None = None,
+        min_speedup_threshold_percent: float = 1.0,
         **kwargs,
     ):
-        """Initializes the mixin."""
-        super().__init__(*args, sink=sink, **kwargs)
-        self.perf_validation_config = perf_validation_config or PerformanceValidationMixinConfig()
+        """Initialize performance validation defaults.
+
+        Args:
+            *args: Positional arguments forwarded through cooperative multiple inheritance.
+            min_speedup_threshold_percent: Required relative speedup, in percent, when validation is enforced.
+                Defaults to 1.0.
+            **kwargs: Keyword arguments forwarded through cooperative multiple inheritance.
+        """
+        super().__init__(*args, **kwargs)
+        self.min_speedup_threshold_percent = min_speedup_threshold_percent
         self._performance_validation_enabled: bool = True
         self.perf_validation_results: list[PerformanceValidationMixinResult] = []
         self._baseline_throughput: float | None = None
@@ -147,7 +127,7 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
 
         self._resolved_batch_size = graph_spec.get_max_batch_size(normalized=True)
 
-        profiling_cfg = self.perf_validation_config.profiling_config_for_batch_size(self._resolved_batch_size)
+        profiling_cfg = self._profiling_config_for_batch_size(self._resolved_batch_size, batching=True)
 
         baseline_cache_dir = cache_dir / "perf_validation_baseline"
         shutil.rmtree(baseline_cache_dir, ignore_errors=True)
@@ -207,7 +187,7 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
             return built
 
         description = backend.describe()
-        profiling_cfg = self.perf_validation_config.profiling_config_for_batch_size(self._resolved_batch_size)
+        profiling_cfg = self._profiling_config_for_batch_size(self._resolved_batch_size, batching=True)
 
         try:
             batch_size, throughput, _ = find_max_throughput_for_backend(built, name, graph_spec, data, profiling_cfg)
@@ -220,7 +200,7 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
             return built
 
         speedup = throughput / self._baseline_throughput
-        passed = speedup >= (1.0 + self.perf_validation_config.min_speedup_ratio)
+        passed = speedup >= (1.0 + self.min_speedup_threshold_percent / 100.0)
 
         report_backend_throughput(description, throughput)
         self.perf_validation_results.append(
@@ -252,6 +232,14 @@ class PerformanceValidationMixin(FindMaxBatchSizeMixin):
             return None
 
         return built
+
+    def _profiling_config_for_batch_size(self, batch_size: int, *, batching: bool | None = None) -> ProfilingConfig:
+        """Returns the strategy profiling config narrowed to one validation batch size."""
+        return replace(
+            self.profiling_config,
+            batch_sizes=[batch_size],
+            batching=self.profiling_config.batching if batching is None else batching,
+        )
 
     def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, data: list[Sample]):
         """Emits a speedup line after tuning completes."""

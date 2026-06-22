@@ -6,9 +6,7 @@ Looks for best batch size for the module using Torch Eager backend.
 """
 
 import traceback
-from collections.abc import Callable
 from copy import deepcopy
-from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -19,53 +17,33 @@ from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
-from aitune.torch.task.profiling.config import ProfilingConfig
-from aitune.torch.task.profiling.measuring_stop_strategy import NumStepsMeasuringStopStrategy
-from aitune.torch.task.profiling.measuring_strategy import ModelExecutionTimeMeasuringStrategy
-from aitune.torch.task.profiling.profiling_stop_strategy import ThroughputSaturatedProfilingStopStrategy
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.utils.logging import control_output
 
 
-@dataclass
-class FindMaxBatchSizeMixinConfig:
-    """Configuration for find max batch size mixin."""
-
-    enable_find_max_batch_size: bool = True
-    profiling_config: ProfilingConfig | None = None
-    default_backend_class: type[Backend] = TorchEagerBackend
-
-
 class FindMaxBatchSizeMixin(TuneStrategy):
-    """Wrapper for tune strategy that finds max batch size."""
+    """TuneStrategy mixin that finds max batch size.
 
-    def __init__(
-        self,
-        *args,
-        sink: Callable | None = None,
-        **kwargs,
-    ):
-        """Initializes wrapper."""
-        super().__init__(*args, sink=sink, **kwargs)
+    Note:
+        Find-max-batch-size is enabled by default and uses TorchEagerBackend as the neutral profiling backend.
+    """
 
-        self.find_config = FindMaxBatchSizeMixinConfig()
-        self.find_config.profiling_config = self.default_profiling_config()
+    def __init__(self, *args, **kwargs):
+        """Initialize the mixin defaults."""
+        super().__init__(*args, **kwargs)
+        self._enable_find_max_batch_size = True
+        self._find_max_batch_size_backend_class: type[Backend] = TorchEagerBackend
 
     def enable_find_max_batch_size(self, enable: bool = True) -> "FindMaxBatchSizeMixin":
         """Enables or disables find max batch size."""
-        self.find_config.enable_find_max_batch_size = enable
-        return self
-
-    def set_find_max_batch_size_profiling_config(self, profiling_config: ProfilingConfig) -> "FindMaxBatchSizeMixin":
-        """Sets profiling config for find max batch size."""
-        self.find_config.profiling_config = profiling_config
+        self._enable_find_max_batch_size = enable
         return self
 
     def set_find_max_batch_size_default_backend_class(
         self, default_backend_class: type[Backend]
     ) -> "FindMaxBatchSizeMixin":
         """Sets default backend class for find max batch size."""
-        self.find_config.default_backend_class = default_backend_class
+        self._find_max_batch_size_backend_class = default_backend_class
         return self
 
     def find_max_batch_size(
@@ -78,12 +56,12 @@ class FindMaxBatchSizeMixin(TuneStrategy):
         cache_dir: Path,
     ):
         """Finds max batch size for the module."""
-        if self.find_config.enable_find_max_batch_size:
+        if self._enable_find_max_batch_size:
             self._logger.info("🚀 Finding max batch size for %s", name)
             find_max_batch_size_cache_dir = cache_dir / "find_max_batch_size"
             build_log_file = self._log_file(find_max_batch_size_cache_dir, "build.log")
             try:
-                backend = self.find_config.default_backend_class()
+                backend = self._find_max_batch_size_backend_class()
                 with control_output(log_file=build_log_file):
                     backend.build(module, graph_spec, deepcopy(data), device, find_max_batch_size_cache_dir)
 
@@ -92,7 +70,7 @@ class FindMaxBatchSizeMixin(TuneStrategy):
                     name,
                     graph_spec,
                     data,
-                    self.find_config.profiling_config,
+                    self.profiling_config,
                 )
                 self._logger.info(
                     "✅ Max batch size for %s is %d with throughput %.2f samples/s",
@@ -119,25 +97,3 @@ class FindMaxBatchSizeMixin(TuneStrategy):
         """Extends tune method to find max batch size."""
         super()._pre_tune(module, name, graph_spec, data, device, cache_dir)
         self.find_max_batch_size(module, name, graph_spec, data, device, cache_dir)
-
-    @staticmethod
-    def default_profiling_config(
-        batching: bool = True,
-        max_batch_size: int = 2**20,
-    ) -> ProfilingConfig:
-        """Get profiling config for finding max batch size.
-
-        Args:
-            batching: Whether to profile with batching.
-            max_batch_size: Max batch size to find used to construct batch sizes.
-
-        Returns:
-            Profiling config for finding max batch size.
-        """
-        return ProfilingConfig(
-            batching=batching,
-            batch_sizes=[2**n for n in range(max_batch_size.bit_length())],
-            measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
-            measurement_stop_strategy=NumStepsMeasuringStopStrategy(),
-            profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(),
-        )

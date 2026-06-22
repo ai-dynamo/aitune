@@ -11,6 +11,16 @@ from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
 
 
+def _assert_strategy_profiling_defaults(result):
+    profiling_config = result["profiling_config"]
+    assert profiling_config["batching"] is True
+    assert profiling_config["batch_sizes"][0] == 1
+    assert profiling_config["batch_sizes"][-1] == 2**20
+    assert profiling_config["measuring_strategy"] == "ModelExecutionTimeMeasuringStrategy"
+    assert profiling_config["measurement_stop_strategy"] == "NumStepsMeasuringStopStrategy"
+    assert profiling_config["profiling_stop_strategy"] == "ThroughputSaturatedProfilingStopStrategy"
+
+
 def test_dummy_strategy_to_json_dict():
     strategy = DummyTuneStrategy()
     result = strategy.to_json_dict()
@@ -26,7 +36,8 @@ def test_first_wins_strategy_to_json_dict():
     strategy = FirstWinsStrategy(backends=[backend_a, backend_b])
     result = strategy.to_json_dict()
 
-    assert result == {"backends": ["BackendA", "BackendB"]}
+    assert result["backends"] == ["BackendA", "BackendB"]
+    _assert_strategy_profiling_defaults(result)
 
 
 def test_one_backend_strategy_to_json_dict():
@@ -36,7 +47,8 @@ def test_one_backend_strategy_to_json_dict():
     strategy = OneBackendStrategy(backend=backend)
     result = strategy.to_json_dict()
 
-    assert result == {"backend": "SingleBackend"}
+    assert result["backend"] == "SingleBackend"
+    _assert_strategy_profiling_defaults(result)
 
 
 def test_max_throughput_strategy_to_json_dict():
@@ -49,8 +61,5 @@ def test_max_throughput_strategy_to_json_dict():
     strategy.enable_performance_validation(False)
     result = strategy.to_json_dict()
 
-    assert result == {
-        "backends": ["BackendA", "BackendB"],
-        "measurement_stop_strategy": "NumStepsMeasuringStopStrategy",
-        "profiling_stop_strategy": "ThroughputSaturatedProfilingStopStrategy",
-    }
+    assert result["backends"] == ["BackendA", "BackendB"]
+    _assert_strategy_profiling_defaults(result)

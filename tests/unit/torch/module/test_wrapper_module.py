@@ -19,12 +19,15 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
-from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, ProfilingConfig
-from aitune.torch.task.profiling.profiling_stop_strategy import AllSamplesProfilingStopStrategy
+from aitune.torch.task.profiling import (
+    AllSamplesProfilingStopStrategy,
+    ModelExecutionTimeMeasuringStrategy,
+    NumStepsMeasuringStopStrategy,
+    ProfilingConfig,
+)
 from aitune.torch.tune_strategy import (
     OneBackendStrategy,
 )
-from aitune.torch.tune_strategy.mixin import PerformanceValidationMixinConfig
 from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
 
 
@@ -46,20 +49,15 @@ class Identity(torch.nn.Module):
 TEST_MODULE_NAME = "demo-identity"
 
 
-def _fast_perf_validation_config() -> PerformanceValidationMixinConfig:
-    return PerformanceValidationMixinConfig(
-        profiling_config=ProfilingConfig(
-            batch_sizes=[1],
-            measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=3, warmup_samples=1),
-            profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
-        )
-    )
-
-
 def _torch_inductor_strategy_for_wrapper_tests() -> OneBackendStrategy:
     strategy = OneBackendStrategy(
         backend=TorchInductorJitBackend(),
-        perf_validation_config=_fast_perf_validation_config(),
+        profiling_config=ProfilingConfig(
+            batch_sizes=[1],
+            measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
+            measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1),
+            profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
+        ),
     )
     strategy.enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)

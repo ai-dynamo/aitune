@@ -17,22 +17,25 @@ from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.task.profiling import (
     AllSamplesProfilingStopStrategy,
+    ModelExecutionTimeMeasuringStrategy,
     NumStepsMeasuringStopStrategy,
     ProfilingConfig,
 )
+from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from aitune.torch.tune_strategy.mixin.performance_validation_mixin import (
     PerformanceValidationMixin,
-    PerformanceValidationMixinConfig,
 )
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
+from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.tuning import tune
+from tests.toy_backends import SleepBackend
 
 _PATCH_FIND_MAX_THROUGHPUT = (
     "aitune.torch.tune_strategy.mixin.performance_validation_mixin.find_max_throughput_for_backend"
 )
 
 
-class _ConcreteExtension(PerformanceValidationMixin):
+class _ConcreteExtension(PerformanceValidationMixin, FindMaxBatchSizeMixin, TuneStrategy):
     """Minimal concrete subclass for unit testing (TuneStrategy is abstract)."""
 
     def _tune(self, module, name, graph_spec, data, device, cache_dir):
@@ -54,6 +57,15 @@ class TinyModel(torch.nn.Module):
 
     def forward(self, x):
         return self.linear(x)
+
+
+def _profiling_config(num_steps: int = 3) -> ProfilingConfig:
+    return ProfilingConfig(
+        batch_sizes=[1, 2, 4, 8],
+        measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=num_steps),
+        profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
+    )
 
 
 @pytest.fixture
@@ -105,7 +117,7 @@ def _fast_profile_config() -> ProfilingConfig:
 def _strategy(messages: list[str]) -> OneBackendStrategy:
     strategy = OneBackendStrategy(
         TorchEagerBackend(),
-        perf_validation_config=PerformanceValidationMixinConfig(profiling_config=_fast_profile_config()),
+        profiling_config=_fast_profile_config(),
         sink=_recording_sink(messages),
     )
     strategy.enable_find_max_batch_size(False)
@@ -262,8 +274,6 @@ def test_performance_validation_enabled_by_default():
     ext = _ConcreteExtension()
 
     assert ext._performance_validation_enabled is True
-    assert not hasattr(ext, "validate_against_baseline")
-    assert not hasattr(ext, "enable_validate_against_baseline")
 
 
 def test_enable_performance_validation_returns_self_and_sets_flag():
@@ -277,7 +287,27 @@ def test_enable_performance_validation_returns_self_and_sets_flag():
     assert ext._performance_validation_enabled is False
 
 
-# ── batch size resolution ─────────────────────────────────────────────────
+def test_pre_tune_does_not_profile_baseline_when_performance_validation_disabled(
+    mock_module, mock_graph_spec, mock_data, mock_eager_backend, torch_device, tmp_path
+):
+    """_pre_tune skips TorchEager baseline profiling when performance validation is disabled."""
+    ext = _ConcreteExtension()
+    ext.enable_performance_validation(False)
+    ext.enable_find_max_batch_size(False)
+
+    with (
+        patch(
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            return_value=mock_eager_backend,
+        ) as mock_eager_cls,
+        patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile,
+    ):
+        ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
+
+    mock_eager_cls.assert_not_called()
+    mock_profile.assert_not_called()
+    assert ext._baseline_throughput is None
+    assert ext._resolved_batch_size is None
 
 
 def test_resolved_batch_size_uses_graph_spec_get_max_batch_size(
@@ -301,11 +331,14 @@ def test_resolved_batch_size_uses_graph_spec_get_max_batch_size(
     mock_graph_spec.get_max_batch_size.assert_called_once_with(normalized=True)
 
 
-def test_pre_tune_profiles_baseline_when_validation_enabled(
+def test_pre_tune_uses_strategy_profiling_config_for_baseline(
     mock_module, mock_graph_spec, mock_data, mock_eager_backend, torch_device, tmp_path
 ):
     """_pre_tune profiles TorchEager baseline when validation is enabled."""
     ext = _ConcreteExtension()
+    """Baseline profiling derives a task-local batch size from the strategy-level profiling config."""
+    profiling_config = _profiling_config(num_steps=3)
+    ext = _ConcreteExtension(profiling_config=profiling_config)
     ext.enable_find_max_batch_size(False)
 
     with (
@@ -317,9 +350,28 @@ def test_pre_tune_profiles_baseline_when_validation_enabled(
     ):
         ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
 
-    mock_profile.assert_called_once()
-    assert ext._baseline_throughput == 80.0
-    assert ext._resolved_batch_size == mock_graph_spec.get_max_batch_size.return_value
+    baseline_config = mock_profile.call_args.args[4]
+    assert baseline_config is not profiling_config
+    assert baseline_config.batch_sizes == [4]
+    assert baseline_config.measurement_stop_strategy is profiling_config.measurement_stop_strategy
+    assert baseline_config.profiling_stop_strategy is profiling_config.profiling_stop_strategy
+
+
+def test_find_max_batch_size_uses_strategy_profiling_config(
+    mock_module, mock_graph_spec, mock_data, torch_device, tmp_path
+):
+    """Find-max-batch-size receives the same strategy-level profiling config."""
+    profiling_config = _profiling_config(num_steps=3)
+    ext = _ConcreteExtension(profiling_config=profiling_config)
+    ext.set_find_max_batch_size_default_backend_class(SleepBackend)
+
+    with patch(
+        "aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.find_max_throughput_for_backend",
+        return_value=(4, 80.0, MagicMock()),
+    ) as mock_profile:
+        ext.find_max_batch_size(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
+
+    assert mock_profile.call_args.args[4] is profiling_config
 
 
 def test_performance_validation_profiles_baseline_by_default(torch_device):
@@ -392,12 +444,12 @@ def test_check_perf_appends_result_and_returns_backend_when_passing(
 ):
     """Appends PerformanceValidationMixinResult(passed=True) and returns backend when speedup meets threshold."""
     ext = _ConcreteExtension()
-    ext._baseline_throughput = 1.0  # baseline: 1 sample/s
+    ext._baseline_throughput = 100.0
     ext._resolved_batch_size = 4
 
     with (
         patch.object(ext, "_build_and_validate_backend", return_value=mock_backend),
-        patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 2.0, MagicMock())),  # backend: 2 samples/s → speedup 2.0
+        patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 101.5, MagicMock())),
     ):
         result = ext._build_validate_and_check_perf(
             mock_backend, mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path
@@ -406,9 +458,9 @@ def test_check_perf_appends_result_and_returns_backend_when_passing(
     assert result is mock_backend
     assert len(ext.perf_validation_results) == 1
     r = ext.perf_validation_results[0]
-    assert r.throughput == 2.0
-    assert r.baseline_throughput == 1.0
-    assert abs(r.speedup - 2.0) < 0.01
+    assert r.throughput == 101.5
+    assert r.baseline_throughput == 100.0
+    assert abs(r.speedup - 1.015) < 0.01
     assert r.passed is True
 
 
@@ -417,12 +469,12 @@ def test_check_perf_appends_result_and_returns_none_when_gate_rejects(
 ):
     """Returns None and records passed=False when speedup < threshold (gate enabled)."""
     ext = _ConcreteExtension()
-    ext._baseline_throughput = 2.0  # baseline: 2 samples/s
+    ext._baseline_throughput = 100.0
     ext._resolved_batch_size = 4
 
     with (
         patch.object(ext, "_build_and_validate_backend", return_value=mock_backend),
-        patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 1.0, MagicMock())),  # backend: 1 sample/s → speedup 0.5
+        patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 100.5, MagicMock())),
     ):
         result = ext._build_validate_and_check_perf(
             mock_backend, mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path
@@ -453,6 +505,31 @@ def test_check_perf_skips_profiling_when_performance_validation_disabled(
     assert result is mock_backend
     mock_profile.assert_not_called()
     assert ext.perf_validation_results == []
+
+
+def test_check_perf_uses_strategy_profiling_config_for_candidate(
+    mock_module, mock_graph_spec, mock_data, mock_backend, torch_device, tmp_path
+):
+    """Candidate profiling derives a task-local batch size from the strategy-level profiling config."""
+    profiling_config = _profiling_config(num_steps=5)
+    ext = _ConcreteExtension(profiling_config=profiling_config)
+    ext._baseline_throughput = 1.0
+    ext._resolved_batch_size = 4
+
+    with (
+        patch.object(ext, "_build_and_validate_backend", return_value=mock_backend),
+        patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 2.0, MagicMock())) as mock_profile,
+    ):
+        result = ext._build_validate_and_check_perf(
+            mock_backend, mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path
+        )
+
+    candidate_config = mock_profile.call_args.args[4]
+    assert result is mock_backend
+    assert candidate_config is not profiling_config
+    assert candidate_config.batch_sizes == [4]
+    assert candidate_config.measurement_stop_strategy is profiling_config.measurement_stop_strategy
+    assert candidate_config.profiling_stop_strategy is profiling_config.profiling_stop_strategy
 
 
 def test_check_perf_returns_backend_when_no_baseline(
@@ -492,50 +569,18 @@ def test_check_perf_returns_backend_when_profiling_fails(
     assert ext.perf_validation_results == []
 
 
-# ── PerformanceValidationMixinConfig ───────────────────────────────────────────
+# ── Performance validation threshold ───────────────────────────────────────────
 
 
-def test_perf_validation_config_defaults():
-    """Default config uses 1% threshold and no explicit profiling config."""
-    config = PerformanceValidationMixinConfig()
-    assert config.min_speedup_ratio == 0.01
-    assert config.profiling_config is None
+def test_perf_validation_threshold_defaults():
+    """Default validation threshold is 1%."""
+    ext = _ConcreteExtension()
+    assert ext.min_speedup_threshold_percent == 1.0
 
 
-def test_perf_validation_config_custom_threshold():
-    config = PerformanceValidationMixinConfig(min_speedup_ratio=0.10)
-    assert config.min_speedup_ratio == 0.10
-
-
-@pytest.mark.parametrize("min_speedup_ratio", [-0.01, 1.01])
-def test_perf_validation_config_rejects_invalid_min_speedup_ratio(min_speedup_ratio: float):
-    with pytest.raises(ValueError, match="value must be between 0 and 1"):
-        PerformanceValidationMixinConfig(min_speedup_ratio=min_speedup_ratio)
-
-
-def test_profiling_config_for_batch_size_default_uses_num_steps():
-    """Default profiling config uses NumStepsMeasuringStopStrategy with global defaults."""
-    from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy
-
-    config = PerformanceValidationMixinConfig()
-    profiling_cfg = config.profiling_config_for_batch_size(8)
-
-    assert profiling_cfg.batch_sizes == [8]
-    assert profiling_cfg.batching is True
-    assert isinstance(profiling_cfg.measurement_stop_strategy, NumStepsMeasuringStopStrategy)
-    assert profiling_cfg.measurement_stop_strategy.num_steps == 20
-    assert profiling_cfg.measurement_stop_strategy.warmup_samples == 10
-
-
-def test_profiling_config_for_batch_size_user_override_replaces_batch_sizes():
-    """When profiling_config is provided, only batch_sizes is overridden."""
-    from aitune.torch.task.profiling import ProfilingConfig
-
-    user_cfg = ProfilingConfig(batch_sizes=[1, 2, 4])
-    config = PerformanceValidationMixinConfig(profiling_config=user_cfg)
-    result = config.profiling_config_for_batch_size(16)
-
-    assert result.batch_sizes == [16]
+def test_perf_validation_threshold_can_be_overridden():
+    ext = _ConcreteExtension(min_speedup_threshold_percent=10.0)
+    assert ext.min_speedup_threshold_percent == 10.0
 
 
 # ── _post_tune ────────────────────────────────────────────────────────────
@@ -672,10 +717,8 @@ def test_extension_classes_exported_from_package():
     """New classes are accessible from the extension package."""
     from aitune.torch.tune_strategy.mixin import (
         PerformanceValidationMixin,
-        PerformanceValidationMixinConfig,
         PerformanceValidationMixinResult,
     )
 
-    assert PerformanceValidationMixinConfig is not None
     assert PerformanceValidationMixinResult is not None
     assert PerformanceValidationMixin is not None

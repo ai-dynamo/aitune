@@ -19,23 +19,41 @@ from aitune.torch.task.correctness import (
     check_dynamic_shape_boundary_inference,
     check_inference_output_correctness,
 )
+from aitune.torch.task.profiling import (
+    ModelExecutionTimeMeasuringStrategy,
+    NumStepsMeasuringStopStrategy,
+    ProfilingConfig,
+    ThroughputSaturatedProfilingStopStrategy,
+)
 from aitune.torch.utils.module import count_parameters
 from aitune.utils.logging import control_output, log, log_to_file
 from aitune.utils.timer import Timer
 
 
 class TuneStrategy(ABC):
-    """Base class for tune strategy."""
+    """Base class for tune strategy.
 
-    def __init__(self, sink: Callable | None = None):
+    Note:
+        Correctness checking is enabled by default. If profiling_config is None, the strategy uses a default
+        ProfilingConfig.
+    """
+
+    def __init__(self, sink: Callable | None = None, profiling_config: ProfilingConfig | None = None):
         """Initializes strategy.
 
         Args:
             sink: a function where to print status.
-            enable_correctness_check: whether to check correctness of the backend.
+            profiling_config: Profiling configuration shared by strategy profiling tasks.
         """
         self._sink = sink or self._logger.info
         self._enable_correctness_check = True
+        self.profiling_config = profiling_config or ProfilingConfig(
+            batching=True,
+            batch_sizes=[2**n for n in range(21)],
+            measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
+            measurement_stop_strategy=NumStepsMeasuringStopStrategy(),
+            profiling_stop_strategy=ThroughputSaturatedProfilingStopStrategy(),
+        )
         self.backend_results = None
 
     def tune_dry_run(
@@ -262,6 +280,16 @@ class TuneStrategy(ABC):
                 layer_precisions.add(param_dtype)
 
         return layer_precisions
+
+    def _profiling_config_to_json_dict(self) -> dict[str, Any]:
+        """Returns a JSON-serializable summary of the shared profiling config."""
+        return {
+            "batch_sizes": list(self.profiling_config.batch_sizes),
+            "batching": self.profiling_config.batching,
+            "measuring_strategy": self.profiling_config.measuring_strategy.__class__.__name__,
+            "measurement_stop_strategy": self.profiling_config.measurement_stop_strategy.__class__.__name__,
+            "profiling_stop_strategy": self.profiling_config.profiling_stop_strategy.__class__.__name__,
+        }
 
     def _describe(
         self,

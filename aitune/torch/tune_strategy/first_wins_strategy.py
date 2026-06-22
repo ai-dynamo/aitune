@@ -12,11 +12,11 @@ from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchIn
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.tune_strategy.mixin import PerformanceValidationMixin
+from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin, PerformanceValidationMixin
 from aitune.utils.logging import log
 
 
-class FirstWinsStrategy(PerformanceValidationMixin):
+class FirstWinsStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
     """Strategy which runs backends until it gets first working backend."""
 
     def __init__(self, backends: list[Backend] | None = None, **kwargs):
@@ -71,4 +71,7 @@ class FirstWinsStrategy(PerformanceValidationMixin):
 
     def to_json_dict(self) -> dict[str, Any]:
         """Returns config dict for first wins strategy."""
-        return {"backends": [backend.describe() for backend in self._backends]}
+        return {
+            "backends": [backend.describe() for backend in self._backends],
+            "profiling_config": self._profiling_config_to_json_dict(),
+        }

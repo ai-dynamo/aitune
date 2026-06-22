@@ -13,7 +13,7 @@ import logging
 import shutil
 import traceback
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -35,14 +35,7 @@ from aitune.torch.backend import (
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
-from aitune.torch.task.profiling import (
-    MeasuringStopStrategy,
-    ModelExecutionTimeMeasuringStrategy,
-    NumStepsMeasuringStopStrategy,
-    ProfilingConfig,
-    ProfilingStopStrategy,
-    ThroughputSaturatedProfilingStopStrategy,
-)
+from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_throughput, report_graph_baseline_throughput
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from aitune.torch.tune_strategy.mixin.performance_validation_mixin import (
@@ -71,23 +64,19 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
     def __init__(
         self,
         backends: list[Backend] | None = None,
-        measurement_stop_strategy: MeasuringStopStrategy | None = None,
-        profiling_stop_strategy: ProfilingStopStrategy | None = None,
+        profiling_config: ProfilingConfig | None = None,
         **kwargs: Any,
     ):
         """Initializes strategy.
 
         Args:
             backends: List of backends to tune.
-            measurement_stop_strategy: Measurement stop strategy.
-            profiling_stop_strategy: Profiling stop strategy.
+            profiling_config: Profiling configuration shared by strategy profiling tasks.
             kwargs: Additional arguments for the parent class
         """
-        super().__init__(**kwargs)
+        super().__init__(profiling_config=profiling_config, **kwargs)
         self._backends = backends or self._default_backends()
         self._performance_validation_enabled: bool = True
-        self._measurement_stop_strategy = measurement_stop_strategy or NumStepsMeasuringStopStrategy()
-        self._profiling_stop_strategy = profiling_stop_strategy or ThroughputSaturatedProfilingStopStrategy()
 
         self.perf_validation_results: list[PerformanceValidationMixinResult] = []
         self._baseline_throughput: float | None = None
@@ -307,12 +296,13 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
 
     def _get_profiling_config(self, batching: bool, max_batch_size: int) -> ProfilingConfig:
         """Gets profiling configuration."""
-        return ProfilingConfig(
+        batch_sizes = sorted({
+            batch_size for batch_size in self.profiling_config.batch_sizes if batch_size <= max_batch_size
+        })
+        return replace(
+            self.profiling_config,
+            batch_sizes=batch_sizes or [max_batch_size],
             batching=batching,
-            batch_sizes=[2**n for n in range(max_batch_size.bit_length())],
-            measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
-            measurement_stop_strategy=self._measurement_stop_strategy,
-            profiling_stop_strategy=self._profiling_stop_strategy,
         )
 
     def _default_backends(self) -> list[Backend]:
@@ -341,6 +331,5 @@ class MaxThroughputStrategy(FindMaxBatchSizeMixin):
         """Returns config dict for max throughput strategy."""
         return {
             "backends": [b.describe() for b in self._backends],
-            "measurement_stop_strategy": self._measurement_stop_strategy.__class__.__name__,
-            "profiling_stop_strategy": self._profiling_stop_strategy.__class__.__name__,
+            "profiling_config": self._profiling_config_to_json_dict(),
         }

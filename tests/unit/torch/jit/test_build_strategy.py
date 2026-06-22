@@ -26,7 +26,7 @@ def test_build_strategy_default_is_first_wins_with_find_max_batch_size_disabled(
     strategy = _build_strategy()
 
     assert isinstance(strategy, FirstWinsStrategy)
-    assert strategy.find_config.enable_find_max_batch_size is False
+    assert strategy._enable_find_max_batch_size is False
 
 
 def test_build_strategy_uses_configured_strategy():
@@ -36,7 +36,7 @@ def test_build_strategy_uses_configured_strategy():
     strategy = _build_strategy()
 
     assert isinstance(strategy, OneBackendStrategy)
-    assert strategy.find_config.enable_find_max_batch_size is False
+    assert strategy._enable_find_max_batch_size is False
 
 
 def test_build_strategy_clones_per_call_so_state_is_isolated():
@@ -56,7 +56,7 @@ def test_build_strategy_disables_find_max_batch_size_for_max_throughput():
     strategy = _build_strategy()
 
     assert isinstance(strategy, MaxThroughputStrategy)
-    assert strategy.find_config.enable_find_max_batch_size is False
+    assert strategy._enable_find_max_batch_size is False
 
 
 def test_build_strategy_handles_strategy_without_find_max_batch_size_extension():

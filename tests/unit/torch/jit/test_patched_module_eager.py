@@ -49,7 +49,9 @@ def mock_trt_backend():
 
     mock_backend.build.return_value = mock_backend
 
-    config.strategy = FirstWinsStrategy(backends=[mock_backend])
+    strategy = FirstWinsStrategy(backends=[mock_backend])
+    strategy.enable_performance_validation(False)
+    config.strategy = strategy
     # in case strategy does a deepcopy, return self
     mock_backend.__deepcopy__ = lambda _: mock_backend
     return mock_backend
