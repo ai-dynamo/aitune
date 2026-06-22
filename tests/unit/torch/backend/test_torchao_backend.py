@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+from inspect import signature
 from unittest.mock import Mock
 
 import pytest
@@ -7,6 +8,11 @@ import torch
 import torch.nn as nn
 from torchao.quantization import Int8WeightOnlyConfig
 from torchao.utils import is_sm_at_least_89
+
+try:
+    from torchao.quantization import PerGroup
+except ImportError:
+    PerGroup = None
 
 from aitune.torch.backend.backend import BackendState
 from aitune.torch.backend.torchao_backend import (
@@ -19,8 +25,18 @@ from aitune.torch.backend.torchao_backend import (
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from tests.toy_models.torch_models import ToyTorchModel
+from tests.toy_models.torch_models import HIDDEN_SIZE, ToyTorchModel
 from tests.utilities.helpers import requires_cuda
+
+INT8DQ_OUTPUT_SIZE = 8
+
+
+class TorchAOInt8DQModel(ToyTorchModel):
+    """Toy model with int8dq-compatible linear dimensions."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear2 = nn.Linear(HIDDEN_SIZE, INT8DQ_OUTPUT_SIZE)
 
 
 @pytest.fixture
@@ -34,6 +50,20 @@ def sample_data(model, torch_device) -> list[Sample]:
     args = (sample.to(torch_device).unsqueeze(0).repeat(32, 1),)
     kwargs = {}
     return [(args, kwargs)]
+
+
+def sample_data_for_model(model, torch_device) -> list[Sample]:
+    sample = model.sample()
+    args = (sample.to(torch_device).unsqueeze(0).repeat(32, 1),)
+    kwargs = {}
+    return [(args, kwargs)]
+
+
+def use_quantization_test_model(quantization, model, sample_data, torch_device):
+    if quantization == "int8dq":
+        model = TorchAOInt8DQModel().to(torch_device).eval()
+        sample_data = sample_data_for_model(model, torch_device)
+    return model, sample_data
 
 
 def move_to_dtype(sample_data, dtype):
@@ -50,6 +80,12 @@ def build_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
     sample_data = move_to_dtype(sample_data, dtype)
     model.to(dtype)
     return backend.build(model, mock_graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+
+
+def int8_weight_only_per_group_config(group_size: int) -> Int8WeightOnlyConfig:
+    if PerGroup is not None and "granularity" in signature(Int8WeightOnlyConfig).parameters:
+        return Int8WeightOnlyConfig(granularity=PerGroup(group_size))
+    return Int8WeightOnlyConfig(group_size=group_size)
 
 
 def test_torchao_config_key():
@@ -138,6 +174,7 @@ def do_test_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
     ids=["bfloat16", "float16", "float32"],
 )
 def test_torchao_backend_build(quantization, dtype, model, sample_data, torch_device, tmp_path):
+    model, sample_data = use_quantization_test_model(quantization, model, sample_data, torch_device)
     skip_if_unsupported(quantization, model)
     if quantization == "mxfp8dq" and dtype != torch.bfloat16:
         pytest.skip("mxfp8dq only supports bfloat16")
@@ -152,7 +189,7 @@ def test_torchao_backend_build(quantization, dtype, model, sample_data, torch_de
 @requires_cuda
 @pytest.mark.parametrize(
     "quantization_config",
-    [Int8WeightOnlyConfig(group_size=16)],
+    [int8_weight_only_per_group_config(group_size=16)],
     ids=["int8wo with different group size"],
 )
 def test_torchao_backend_build_with_user_config(quantization_config, model, sample_data, torch_device, tmp_path):
@@ -244,6 +281,7 @@ def test_filter_fn_is_honored_by_nvfp4dq_compatibility_check():
 @requires_cuda
 @pytest.mark.parametrize("quantization", TorchAOBackendConfig._QUANTIZATION_CONFIGS.keys())
 def test_serialization(quantization, tmp_path, model, sample_data, torch_device):
+    model, sample_data = use_quantization_test_model(quantization, model, sample_data, torch_device)
     skip_if_unsupported(quantization, model)
     dtype = torch.bfloat16 if quantization in ("mxfp8dq", "nvfp4dq") else torch.float16
 
