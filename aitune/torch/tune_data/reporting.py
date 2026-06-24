@@ -220,21 +220,27 @@ def report_graph_tune(graph_spec: GraphSpec, strategy: TuneStrategy):
         _flush_active_report()
 
 
-def report_graph_baseline_throughput(throughput: float) -> None:
-    """Record the TorchEager baseline throughput on the active graph report."""
-    graph = _active_graph.get()
-    if graph is not None:
-        graph.baseline_throughput = throughput
-
-
-def report_backend_throughput(backend_description: str, throughput: float) -> None:
-    """Record profiled throughput on the matching backend build report in the active graph."""
+def report_graph_baseline_metric(metric: str, value: float) -> None:
+    """Record a TorchEager baseline metric on the active graph report."""
     graph = _active_graph.get()
     if graph is None:
         return
+    field_name = f"baseline_{metric}"
+    if field_name not in GraphTuneReport.__dataclass_fields__:
+        raise ValueError(f"Unsupported graph baseline metric: {metric!r}")
+    setattr(graph, field_name, value)
+
+
+def report_backend_metric(metric: str, backend_description: str, value: float) -> None:
+    """Record a profiled metric on the matching backend build report in the active graph."""
+    graph = _active_graph.get()
+    if graph is None:
+        return
+    if metric not in BackendBuildReport.__dataclass_fields__:
+        raise ValueError(f"Unsupported backend metric: {metric!r}")
     build = next((b for b in graph.backend_builds if b.backend == backend_description), None)
     if build is not None:
-        build.throughput = throughput
+        setattr(build, metric, value)
 
 
 @contextmanager

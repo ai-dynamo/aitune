@@ -8,11 +8,12 @@ Tune strategies determine how AITune selects and configures backends during the 
 
 ## Overview
 
-AITune provides three built-in strategies:
+AITune provides four built-in strategies:
 
 - **OneBackendStrategy**: Uses a single specified backend
 - **FirstWinsStrategy**: Tries backends in order, uses the first that succeeds
-- **MaxThroughputStrategy**: Profiles all backends, selects the fastest
+- **MaxThroughputStrategy**: Profiles all backends, selects the one with the highest throughput
+- **MinLatencyStrategy**: Profiles all backends, selects the one with the lowest latency
 
 ## Why Backends Can Fail
 
@@ -37,15 +38,18 @@ strategy.enable_performance_validation(False)
 
 `MaxThroughputStrategy` also profiles Torch eager as a baseline. With performance validation enabled, it falls back to Torch eager if no user-provided backend beats the baseline. When disabled with `enable_performance_validation(False)`, the Torch eager baseline is skipped and the fastest successful user backend wins.
 
+`MinLatencyStrategy` works the same way but selects by minimum latency instead of maximum throughput. Use `enable_performance_validation(False)` to disable baseline comparison.
+
 ## Choosing a Strategy
 
 Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. If you want a safer default with minimal tuning time, `FirstWinsStrategy` balances reliability and speed. When absolute throughput matters and you can afford longer tuning, choose `MaxThroughputStrategy`.
 
-| Strategy                  | When to Use                     | Tuning Time | Reliability             | Performance        |
-|---------------------------|---------------------------------|-------------|-------------------------|--------------------|
-| OneBackendStrategy        | Known backend works, production | Fast        | High (if backend works) | Depends on backend |
-| FirstWinsStrategy         | Want reliability, quick tuning  | Fast-Medium | Very High               | Good               |
-| MaxThroughputStrategy     | Maximum performance, have time  | Slow        | High                    | Best               |
+| Strategy                  | When to Use                                   | Tuning Time | Reliability             | Performance                     |
+|---------------------------|-----------------------------------------------|-------------|-------------------------|---------------------------------|
+| OneBackendStrategy        | Known backend works, production               | Fast        | High (if backend works) | Depends on backend              |
+| FirstWinsStrategy         | Want reliability, quick tuning                | Fast-Medium | Very High               | Good                            |
+| MaxThroughputStrategy     | Maximum throughput, batch workloads           | Slow        | High                    | Best throughput                 |
+| MinLatencyStrategy        | Minimum latency, fixed batch size workloads   | Slow        | High                    | Best latency at given batch size|
 
 ## OneBackendStrategy
 
@@ -202,6 +206,55 @@ ait.tune(model, input_data)
 - Quick experiments (slow)
 - Development iteration (overkill)
 - Memory-constrained systems (keeps multiple builds)
+
+## MinLatencyStrategy
+
+Tries all backends, profiles their latency at batch size 1, and selects the backend with the lowest latency that beats the Torch eager baseline. Use this instead of `MaxThroughputStrategy` when you care about per-request response time rather than throughput.
+
+### Usage
+
+```python
+from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend
+from aitune.torch.task.profiling import (
+    ModelExecutionTimeMeasuringStrategy,
+    NumStepsMeasuringStopStrategy,
+    ProfilingConfig,
+)
+from aitune.torch.task.profiling.profiling_stop_strategy import AllSamplesProfilingStopStrategy
+import aitune.torch as ait
+
+backends = [
+    TensorRTBackend(),
+    TorchInductorJitBackend(),
+]
+
+strategy = ait.MinLatencyStrategy(
+    backends=backends,
+    profiling_config=ProfilingConfig(
+        batch_sizes=[1],
+        measuring_strategy=ModelExecutionTimeMeasuringStrategy(),
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=50),
+        profiling_stop_strategy=AllSamplesProfilingStopStrategy(),
+    ),
+)
+
+model = ait.Module(model, "my-model", strategy=strategy)
+ait.tune(model, input_data)
+```
+
+`MinLatencyStrategy` always profiles at batch size 1 regardless of `profiling_config.batch_sizes`.
+
+### When to Use
+
+✅ **Good for**:
+
+- Real-time inference at batch size 1
+- Latency-sensitive serving (e.g. per-request inference)
+- Comparing backend options by response time
+
+❌ **Not ideal for**:
+
+- Batch workloads where throughput matters more (use `MaxThroughputStrategy`)
 
 ## Best Practices
 

@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import time
 from typing import cast
 from unittest.mock import MagicMock
 
@@ -127,11 +126,10 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
     model = ToyTorchModel()
     sample = model.sample().unsqueeze(0)  # as dataloader make batches, we need to unsqueeze the sample
 
-    def forward_slow(x):
-        time.sleep(1e-3)
-        return x
+    def mock_measure(backend, name, graph_spec, data, profiling_cfg):
+        return (1, 1.0 / backend.sleep_time)
 
-    model.forward = forward_slow
+    strategy._measure = mock_measure
 
     max_throughput_backend = strategy.tune(
         model, "test", model.graph_spec(batch_sizes=[1, 2]), [((sample,), {})], torch_device, tmp_path
@@ -186,7 +184,7 @@ def test_max_throughput_strategy_num_steps_all_samples(torch_device):
     tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
 
     assert len(strategy.perf_validation_results) == n_backends
-    assert all(r.throughput > 0 for r in strategy.perf_validation_results)
+    assert all(r.metric > 0 for r in strategy.perf_validation_results)
 
     # check graph spec
     graph_specs = list(model._self_wrapper._backends.keys())
@@ -220,7 +218,7 @@ def test_max_throughput_strategy_stable_window(torch_device):
     tune(model, sample, batch_sizes=batch_sizes, device=torch_device, disable_external_logging=False)
 
     assert len(strategy.perf_validation_results) == n_backends
-    assert all(r.throughput > 0 for r in strategy.perf_validation_results)
+    assert all(r.metric > 0 for r in strategy.perf_validation_results)
 
 
 class ActivateFailsBackend(SleepBackend):
@@ -332,8 +330,8 @@ def test_max_throughput_perf_validation_results_populated(torch_device, tmp_path
     assert not any("TorchEager" in d for d in descriptions)
     assert len(strategy.perf_validation_results) == 2
     for result in strategy.perf_validation_results:
-        assert result.baseline_throughput > 0
-        assert result.throughput > 0
+        assert result.baseline_metric > 0
+        assert result.metric > 0
         assert result.speedup > 0
 
 
@@ -373,8 +371,8 @@ def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
         backends=[user_backend],
         profiling_config=_profiling_config(),
     )
-    strategy._baseline_throughput = 1.0
-    strategy._record_perf_result(user_backend, throughput=2.0)
+    strategy._baseline_value = 1.0
+    strategy._record_perf_result(user_backend, 2.0)
     strategy.enable_correctness_check(False)
 
     with (
@@ -399,7 +397,7 @@ def test_max_throughput_post_tune_emits_baseline_selected_when_baseline_wins(moc
     baseline = MagicMock(spec=Backend)
     baseline.describe.return_value = "TorchEagerBackend()"
     strategy._baseline_backend = baseline
-    strategy._baseline_throughput = 42.0
+    strategy._baseline_value = 42.0
     strategy.perf_validation_results = []
 
     with patch.object(strategy._logger, "isEnabledFor", return_value=True):
@@ -421,7 +419,7 @@ def test_max_throughput_post_tune_silent_for_baseline_selected_when_info_disable
     baseline = MagicMock(spec=Backend)
     baseline.describe.return_value = "TorchEagerBackend()"
     strategy._baseline_backend = baseline
-    strategy._baseline_throughput = 42.0
+    strategy._baseline_value = 42.0
     strategy.perf_validation_results = []
 
     with (

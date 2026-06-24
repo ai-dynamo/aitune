@@ -6,6 +6,7 @@ title: "Changelog"
 # Changelog
 
 ## 0.5.0 (unreleased)
+- feat: Add `MinLatencyStrategy` tune strategy that profiles all backends and selects the one with the lowest latency
 - feat: validate model correctness at min and max dynamic shape boundaries
 - feat: capture JIT inspection details and config in tuning data reports - full inspection for `deferred` mode and basic for the `eager` mode
 - breaking change: replace `FindMaxBatchSizeMixinConfig` and `PerformanceValidationMixinConfig` with a single strategy-level `ProfilingConfig`

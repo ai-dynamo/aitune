@@ -4,7 +4,8 @@
 
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
+from aitune.torch.tune_strategy.min_latency_strategy import MinLatencyStrategy
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
-__all__ = ["FirstWinsStrategy", "OneBackendStrategy", "MaxThroughputStrategy", "TuneStrategy"]
+__all__ = ["FirstWinsStrategy", "MaxThroughputStrategy", "MinLatencyStrategy", "OneBackendStrategy", "TuneStrategy"]

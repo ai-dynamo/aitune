@@ -64,6 +64,19 @@ def get_mean_executions_per_second(results: list[ProfilingResultEvent]) -> float
     return 1e9 / mean_execution_time
 
 
+def get_latency(results: list[ProfilingResultEvent]) -> float:
+    """Get mean latency from profiling results.
+
+    Args:
+        results: List of profiling results.
+
+    Returns:
+        Mean latency in milliseconds.
+    """
+    mean_execution_time_ns = np.mean([result.execution_time for result in results])
+    return float(mean_execution_time_ns) / 1e6
+
+
 def get_throughput(results: list[ProfilingResultEvent], batch_size: int | None = None) -> float:
     """Get throughput from profiling results.
 

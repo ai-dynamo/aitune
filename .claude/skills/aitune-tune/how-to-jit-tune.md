@@ -77,4 +77,4 @@ config.detect_graph_breaks = False
 config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()])
 ```
 
-`config.strategy` accepts any `TuneStrategy` (e.g. `FirstWinsStrategy`, `MaxThroughputStrategy`). Default (`None`) uses `FirstWinsStrategy` over TensorRT and TorchInductorJit.
+`config.strategy` accepts any `TuneStrategy` (e.g. `FirstWinsStrategy`, `MaxThroughputStrategy`, `MinLatencyStrategy`). Default (`None`) uses `FirstWinsStrategy` over TensorRT and TorchInductorJit.

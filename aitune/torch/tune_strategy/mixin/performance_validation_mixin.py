@@ -21,7 +21,7 @@ from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backen
 from aitune.torch.task.profiling import (
     ProfilingConfig,
 )
-from aitune.torch.tune_data.reporting import report_backend_throughput, report_graph_baseline_throughput
+from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.utils.logging import log
 
@@ -139,7 +139,7 @@ class PerformanceValidationMixin(TuneStrategy):
 
             self._baseline_throughput = throughput
             self._baseline_backend = backend
-            report_graph_baseline_throughput(throughput)
+            report_graph_baseline_metric("throughput", throughput)
             log(
                 "📊 Eager baseline: batch size=%s, throughput=%.2f samples/s",
                 batch_size,
@@ -202,7 +202,7 @@ class PerformanceValidationMixin(TuneStrategy):
         speedup = throughput / self._baseline_throughput
         passed = speedup >= (1.0 + self.min_speedup_threshold_percent / 100.0)
 
-        report_backend_throughput(description, throughput)
+        report_backend_metric("throughput", description, throughput)
         self.perf_validation_results.append(
             PerformanceValidationMixinResult(
                 backend_description=description,
