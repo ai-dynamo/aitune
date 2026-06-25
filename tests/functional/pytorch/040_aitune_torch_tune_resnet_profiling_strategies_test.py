@@ -5,6 +5,7 @@
 # dependencies = ["timm"]
 # ///
 
+from functools import partial
 from logging import DEBUG, basicConfig, getLogger
 
 import pytest
@@ -15,6 +16,7 @@ from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
+from aitune.torch.tune_strategy.latency_budget_strategy import LatencyBudgetStrategy
 from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
 from aitune.torch.tune_strategy.min_latency_strategy import MinLatencyStrategy
 from aitune.torch.tuning import tune
@@ -37,13 +39,14 @@ def _resnet18():
 
 
 @pytest.mark.parametrize(
-    "strategy_cls,module_name",
+    "strategy_factory,module_name",
     [
         (MaxThroughputStrategy, "functional-resnet18-max-throughput"),
         (MinLatencyStrategy, "functional-resnet18-min-latency"),
+        (partial(LatencyBudgetStrategy, latency_budget_ms=1000.0), "functional-resnet18-latency-budget"),
     ],
 )
-def test_profiling_strategy_resnet18(strategy_cls, module_name):
+def test_profiling_strategy_resnet18(strategy_factory, module_name):
     model = _resnet18()
     data = torch.randn((3, 224, 224), device=_DEVICE)
     sample = data.unsqueeze(0)
@@ -51,7 +54,7 @@ def test_profiling_strategy_resnet18(strategy_cls, module_name):
     with torch.no_grad():
         expected = torch.nn.functional.softmax(model(sample)[0], dim=0)
 
-    strategy = strategy_cls(backends=_get_backends())
+    strategy = strategy_factory(backends=_get_backends())
     module = Module(model, module_name, strategy=strategy)
 
     try:
@@ -69,8 +72,9 @@ def test_profiling_strategy_resnet18(strategy_cls, module_name):
 
 if __name__ == "__main__":
     basicConfig(level=DEBUG, force=True)
-    for cls, name in [
+    for factory, name in [
         (MaxThroughputStrategy, "functional-resnet18-max-throughput"),
         (MinLatencyStrategy, "functional-resnet18-min-latency"),
+        (partial(LatencyBudgetStrategy, latency_budget_ms=1000.0), "functional-resnet18-latency-budget"),
     ]:
-        test_profiling_strategy_resnet18(cls, name)
+        test_profiling_strategy_resnet18(factory, name)

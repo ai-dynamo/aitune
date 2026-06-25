@@ -20,7 +20,7 @@ from aitune.torch.task.profiling import (
     ThroughputSaturatedProfilingStopStrategy,
 )
 from aitune.torch.task.profiling.profiling_stop_strategy import AllSamplesProfilingStopStrategy
-from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
+from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputProfilingResult, MaxThroughputStrategy
 from aitune.torch.tuning import tune
 from tests.toy_backends import BuildFailsBackend, SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
@@ -127,7 +127,7 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
     sample = model.sample().unsqueeze(0)  # as dataloader make batches, we need to unsqueeze the sample
 
     def mock_measure(backend, name, graph_spec, data, profiling_cfg):
-        return (1, 1.0 / backend.sleep_time)
+        return MaxThroughputProfilingResult(throughput=1.0 / backend.sleep_time, selected_batch_size=1)
 
     strategy._measure = mock_measure
 
@@ -371,8 +371,8 @@ def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
         backends=[user_backend],
         profiling_config=_profiling_config(),
     )
-    strategy._baseline_value = 1.0
-    strategy._record_perf_result(user_backend, 2.0)
+    strategy._baseline_result = MaxThroughputProfilingResult(throughput=1.0, selected_batch_size=1)
+    strategy._record_perf_result(user_backend, MaxThroughputProfilingResult(throughput=2.0, selected_batch_size=1))
     strategy.enable_correctness_check(False)
 
     with (
@@ -397,7 +397,7 @@ def test_max_throughput_post_tune_emits_baseline_selected_when_baseline_wins(moc
     baseline = MagicMock(spec=Backend)
     baseline.describe.return_value = "TorchEagerBackend()"
     strategy._baseline_backend = baseline
-    strategy._baseline_value = 42.0
+    strategy._baseline_result = MaxThroughputProfilingResult(throughput=42.0, selected_batch_size=1)
     strategy.perf_validation_results = []
 
     with patch.object(strategy._logger, "isEnabledFor", return_value=True):
@@ -419,7 +419,7 @@ def test_max_throughput_post_tune_silent_for_baseline_selected_when_info_disable
     baseline = MagicMock(spec=Backend)
     baseline.describe.return_value = "TorchEagerBackend()"
     strategy._baseline_backend = baseline
-    strategy._baseline_value = 42.0
+    strategy._baseline_result = MaxThroughputProfilingResult(throughput=42.0, selected_batch_size=1)
     strategy.perf_validation_results = []
 
     with (

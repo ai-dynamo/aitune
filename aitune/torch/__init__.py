@@ -10,7 +10,14 @@ from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.inspecting import inspect, wrap
 from aitune.torch.module import Module
 from aitune.torch.performance import PerformanceProfile, profile
-from aitune.torch.tune_strategy import FirstWinsStrategy, MaxThroughputStrategy, OneBackendStrategy, TuneStrategy
+from aitune.torch.tune_strategy import (
+    FirstWinsStrategy,
+    LatencyBudgetStrategy,
+    MaxThroughputStrategy,
+    MinLatencyStrategy,
+    OneBackendStrategy,
+    TuneStrategy,
+)
 from aitune.torch.tune_data.reporting import snapshot_tuning_data
 from aitune.torch.tuning import load, save, tune
 from aitune.torch.jit.config import config as jit_config
@@ -34,7 +41,9 @@ __all__ = [
     "TuneStrategy",
     "OneBackendStrategy",
     "FirstWinsStrategy",
+    "LatencyBudgetStrategy",
     "MaxThroughputStrategy",
+    "MinLatencyStrategy",
     "LocalTorchStorage",
     "DataLoaderFactory",
     "patch_for_jit_tuning",

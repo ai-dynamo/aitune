@@ -109,7 +109,7 @@ NVIDIA AITune provides different strategies for selecting the optimal backend co
 
 Not every backend can tune every model — each relies on different compilation technology with its own limitations (e.g., ONNX export for TensorRT, graph breaks in Torch Inductor, unsupported layers in TorchAO). Strategies control how AITune handles this.
 
-Strategies also validate performance against a Torch eager baseline. Correct backends that do not beat eager by the configured threshold are rejected by `OneBackendStrategy` and `FirstWinsStrategy`; `MaxThroughputStrategy` falls back to eager when no user backend is faster. Use `strategy.enable_performance_validation(False)` to skip Torch eager baseline profiling, performance checks, and speedup reporting.
+Strategies also validate performance against a Torch eager baseline. Correct backends that do not beat eager by the configured threshold are rejected by `OneBackendStrategy` and `FirstWinsStrategy`; profiling strategies such as `MaxThroughputStrategy`, `MinLatencyStrategy`, and `LatencyBudgetStrategy` can compare candidates against a profiled eager baseline. Use `strategy.enable_performance_validation(False)` to skip Torch eager baseline profiling, performance checks, and speedup reporting.
 
 ## FirstWinsStrategy
 
@@ -142,4 +142,18 @@ from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend, Torch
 from aitune.torch.tune_strategy import MaxThroughputStrategy
 
 strategy = MaxThroughputStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend(), TorchEagerBackend()])
+```
+
+## LatencyBudgetStrategy
+
+Profiles all compatible backends across the configured batch sizes, filters out results whose latency exceeds the budget, and selects the highest-throughput compliant backend. If no user backend satisfies the budget, tuning raises.
+
+```python
+from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend
+from aitune.torch.tune_strategy import LatencyBudgetStrategy
+
+strategy = LatencyBudgetStrategy(
+    latency_budget_ms=50.0,
+    backends=[TensorRTBackend(), TorchInductorJitBackend()],
+)
 ```

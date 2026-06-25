@@ -38,6 +38,7 @@ _active_report: ContextVar[TuneRunReport | None] = ContextVar("aitune_report", d
 _active_module: ContextVar[ModuleTuneReport | None] = ContextVar("aitune_module", default=None)
 _active_graph: ContextVar[GraphTuneReport | None] = ContextVar("aitune_graph", default=None)
 _run_start_ts: ContextVar[float | None] = ContextVar("aitune_run_start_ts", default=None)
+_PERFORMANCE_METRICS = frozenset({"throughput", "latency"})
 
 
 def _flush_active_report(path: Path | None = None) -> Path | None:
@@ -225,9 +226,9 @@ def report_graph_baseline_metric(metric: str, value: float) -> None:
     graph = _active_graph.get()
     if graph is None:
         return
-    field_name = f"baseline_{metric}"
-    if field_name not in GraphTuneReport.__dataclass_fields__:
+    if metric not in _PERFORMANCE_METRICS:
         raise ValueError(f"Unsupported graph baseline metric: {metric!r}")
+    field_name = f"baseline_{metric}"
     setattr(graph, field_name, value)
 
 
@@ -236,7 +237,7 @@ def report_backend_metric(metric: str, backend_description: str, value: float) -
     graph = _active_graph.get()
     if graph is None:
         return
-    if metric not in BackendBuildReport.__dataclass_fields__:
+    if metric not in _PERFORMANCE_METRICS:
         raise ValueError(f"Unsupported backend metric: {metric!r}")
     build = next((b for b in graph.backend_builds if b.backend == backend_description), None)
     if build is not None:

@@ -53,6 +53,7 @@ backend = TensorRTBackend(config)
 | `FirstWinsStrategy` | Use the first backend that compiles successfully |
 | `MaxThroughputStrategy` | Profile all backends, select the fastest |
 | `MinLatencyStrategy` | Profile all backends, select the lowest latency |
+| `LatencyBudgetStrategy` | Profile all backends, select the fastest result within a latency budget |
 
 
 # Common Issues

@@ -9,12 +9,27 @@
    performance validation is enabled and no user backend beats the baseline.
 """
 
+from dataclasses import dataclass
+
 from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import ProfilingConfig
-from aitune.torch.tune_strategy.profiling_tune_strategy import ProfilingTuneStrategy
+from aitune.torch.tune_strategy.profiling_tune_strategy import BackendProfilingResult, ProfilingTuneStrategy
+
+
+@dataclass(kw_only=True)
+class MaxThroughputProfilingResult(BackendProfilingResult):
+    """Profiling result for max-throughput selection."""
+
+    selected_batch_size: int
+    throughput: float
+
+    @property
+    def metric(self) -> float:
+        """Returns throughput as the comparison metric."""
+        return self.throughput
 
 
 class MaxThroughputStrategy(ProfilingTuneStrategy):
@@ -39,13 +54,13 @@ class MaxThroughputStrategy(ProfilingTuneStrategy):
         graph_spec: GraphSpec,
         data: list[Sample],
         profiling_cfg: ProfilingConfig,
-    ) -> tuple[int, float]:
-        """Profiles the backend and returns (batch_size, throughput)."""
+    ) -> MaxThroughputProfilingResult:
+        """Profiles the backend and returns throughput with the selected batch size."""
         batch_size, throughput, _ = find_max_throughput_for_backend(backend, name, graph_spec, data, profiling_cfg)
-        return batch_size, throughput
+        return MaxThroughputProfilingResult(throughput=throughput, selected_batch_size=batch_size)
 
-    def _is_better(self, value: float, other: float) -> bool:
-        return value > other
+    def _is_better(self, result: BackendProfilingResult, other: BackendProfilingResult) -> bool:
+        return result.metric > other.metric
 
-    def _speedup(self, value: float, baseline_value: float) -> float:
-        return value / baseline_value
+    def _speedup(self, result: BackendProfilingResult, baseline_result: BackendProfilingResult) -> float:
+        return result.metric / baseline_result.metric

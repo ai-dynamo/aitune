@@ -17,7 +17,7 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
 )
 from aitune.torch.task.profiling.profiling_stop_strategy import AllSamplesProfilingStopStrategy
-from aitune.torch.tune_strategy.min_latency_strategy import MinLatencyStrategy
+from aitune.torch.tune_strategy.min_latency_strategy import MinLatencyProfilingResult, MinLatencyStrategy
 from aitune.torch.tuning import tune
 from tests.toy_backends import BuildFailsBackend, SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
@@ -81,7 +81,7 @@ def test_min_latency_strategy_selects_faster_backend(torch_device, tmp_path):
     sample = model.sample().unsqueeze(0)
 
     def mock_measure(backend, name, graph_spec, data, profiling_cfg):
-        return (1, backend.sleep_time)
+        return MinLatencyProfilingResult(latency=backend.sleep_time)
 
     strategy._measure = mock_measure
 
@@ -91,6 +91,24 @@ def test_min_latency_strategy_selects_faster_backend(torch_device, tmp_path):
 
     assert isinstance(selected, SleepBackend)
     assert selected.sleep_time == faster.sleep_time
+
+
+def test_min_latency_result_reports_batch_size_one():
+    """MinLatencyProfilingResult exposes the fixed profiling batch size."""
+    result = MinLatencyProfilingResult(latency=5.0)
+
+    assert result.selected_batch_size == 1
+    assert result.to_json_dict("latency") == {"latency": 5.0, "selected_batch_size": 1}
+
+
+def test_min_latency_profiling_config_enforces_batch_size_one():
+    """MinLatencyStrategy profiles with generated batch-size-1 inputs."""
+    strategy = MinLatencyStrategy(backends=[], profiling_config=_profiling_config())
+
+    profiling_config = strategy._get_profiling_config(batching=False, max_batch_size=8)
+
+    assert profiling_config.batch_sizes == [1]
+    assert profiling_config.batching is True
 
 
 @requires_cuda
@@ -209,8 +227,8 @@ def test_min_latency_post_tune_emits_speedup_summary(torch_device, tmp_path):
 
     user_backend = SleepBackend(sleep_time=1e-5)
     strategy = MinLatencyStrategy(backends=[user_backend], profiling_config=_profiling_config())
-    strategy._baseline_value = 10.0
-    strategy._record_perf_result(user_backend, 5.0)
+    strategy._baseline_result = MinLatencyProfilingResult(latency=10.0)
+    strategy._record_perf_result(user_backend, MinLatencyProfilingResult(latency=5.0))
     strategy.enable_correctness_check(False)
 
     with (
@@ -235,7 +253,7 @@ def test_min_latency_post_tune_emits_baseline_selected_when_baseline_wins(mock_b
     baseline = MagicMock(spec=Backend)
     baseline.describe.return_value = "TorchEagerBackend()"
     strategy._baseline_backend = baseline
-    strategy._baseline_value = 5.0
+    strategy._baseline_result = MinLatencyProfilingResult(latency=5.0)
     strategy.perf_validation_results = []
 
     with patch.object(strategy._logger, "isEnabledFor", return_value=True):

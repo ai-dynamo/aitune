@@ -574,6 +574,19 @@ from aitune.torch.tune_strategy import MinLatencyStrategy
 strategy = MinLatencyStrategy(backends=[TensorRTBackend(), TorchInductorJitBackend(), TorchEagerBackend()])
 ```
 
+### LatencyBudgetStrategy
+
+Profiles all compatible backends and selects the highest-throughput result that stays within a latency budget, falling back to eager when the best user backend does not beat the Torch eager baseline. Use this when you have a latency SLO but still want maximum throughput under that budget.
+
+```python
+from aitune.torch.tune_strategy import LatencyBudgetStrategy
+
+strategy = LatencyBudgetStrategy(
+    latency_budget_ms=10.0,
+    backends=[TensorRTBackend(), TorchInductorJitBackend(), TorchEagerBackend()],
+)
+```
+
 ## Profiling with NVTX
 
 NVIDIA AITune includes NVTX (NVIDIA Tools Extension) annotations for profiling and debugging. NVTX marks key operations in the code, making them visible in profiling tools like NVIDIA Nsight Systems.

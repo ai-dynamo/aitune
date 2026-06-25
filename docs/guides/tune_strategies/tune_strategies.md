@@ -8,12 +8,13 @@ Tune strategies determine how AITune selects and configures backends during the 
 
 ## Overview
 
-AITune provides four built-in strategies:
+AITune provides five built-in strategies:
 
 - **OneBackendStrategy**: Uses a single specified backend
 - **FirstWinsStrategy**: Tries backends in order, uses the first that succeeds
 - **MaxThroughputStrategy**: Profiles all backends, selects the one with the highest throughput
 - **MinLatencyStrategy**: Profiles all backends, selects the one with the lowest latency
+- **LatencyBudgetStrategy**: Profiles all backends, selects the highest throughput result that stays within a latency budget
 
 ## Why Backends Can Fail
 
@@ -38,7 +39,7 @@ strategy.enable_performance_validation(False)
 
 `MaxThroughputStrategy` also profiles Torch eager as a baseline. With performance validation enabled, it falls back to Torch eager if no user-provided backend beats the baseline. When disabled with `enable_performance_validation(False)`, the Torch eager baseline is skipped and the fastest successful user backend wins.
 
-`MinLatencyStrategy` works the same way but selects by minimum latency instead of maximum throughput. Use `enable_performance_validation(False)` to disable baseline comparison.
+`MinLatencyStrategy` works the same way but selects by minimum latency instead of maximum throughput. `LatencyBudgetStrategy` selects by maximum throughput after filtering out profiled batch sizes whose latency exceeds the configured budget. Use `enable_performance_validation(False)` to disable baseline comparison.
 
 ## Choosing a Strategy
 
@@ -50,6 +51,7 @@ Use the table below as a quick decision guide. If you already know a backend is 
 | FirstWinsStrategy         | Want reliability, quick tuning                | Fast-Medium | Very High               | Good                            |
 | MaxThroughputStrategy     | Maximum throughput, batch workloads           | Slow        | High                    | Best throughput                 |
 | MinLatencyStrategy        | Minimum latency, fixed batch size workloads   | Slow        | High                    | Best latency at given batch size|
+| LatencyBudgetStrategy     | Maximum throughput with a latency SLO         | Slow        | High                    | Best throughput under budget    |
 
 ## OneBackendStrategy
 
@@ -256,11 +258,46 @@ ait.tune(model, input_data)
 
 - Batch workloads where throughput matters more (use `MaxThroughputStrategy`)
 
+## LatencyBudgetStrategy
+
+Tries all backends, profiles throughput and latency across the configured batch sizes, filters out results above the latency budget, and selects the backend/batch-size pair with the highest remaining throughput. The tuning report records `throughput`, `latency`, and `selected_batch_size` for each successful backend. If no user-provided backend satisfies the budget, tuning raises.
+
+### Usage
+
+```python
+from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend
+import aitune.torch as ait
+
+strategy = ait.LatencyBudgetStrategy(
+    latency_budget_ms=50.0,
+    backends=[
+        TensorRTBackend(),
+        TorchInductorJitBackend(),
+    ],
+)
+
+model = ait.Module(model, "my-model", strategy=strategy)
+ait.tune(model, input_data, batch_sizes=[1, 2, 4, 8, 16])
+```
+
+### When to Use
+
+✅ **Good for**:
+
+- Services with a latency SLO
+- Batch-size tuning where larger batches improve throughput but may exceed latency targets
+- Selecting the fastest compliant backend for online inference
+
+❌ **Not ideal for**:
+
+- Strict minimum-latency workloads (use `MinLatencyStrategy`)
+- Pure offline batch workloads with no latency constraint (use `MaxThroughputStrategy`)
+
 ## Best Practices
 
 1. **Development**: Use `FirstWinsStrategy` with fallback
 2. **Production**: Use `OneBackendStrategy` with validated backend
-3. **Benchmarking**: Use `MaxThroughputStrategy` to find the best option
+3. **Benchmarking**: Use `MaxThroughputStrategy` to find the best option, or `LatencyBudgetStrategy` when you have a latency SLO
 4. **Always Validate**: Test tuned models before deployment
 5. **Cache Results**: Save tuned models to avoid re-tuning
 

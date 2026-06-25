@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
+from aitune.torch.tune_strategy.latency_budget_strategy import LatencyBudgetStrategy
 from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
@@ -62,4 +63,19 @@ def test_max_throughput_strategy_to_json_dict():
     result = strategy.to_json_dict()
 
     assert result["backends"] == ["BackendA", "BackendB"]
+    _assert_strategy_profiling_defaults(result)
+
+
+def test_latency_budget_strategy_to_json_dict():
+    backend_a = MagicMock(spec=Backend)
+    backend_a.describe.return_value = "BackendA"
+    backend_b = MagicMock(spec=Backend)
+    backend_b.describe.return_value = "BackendB"
+
+    strategy = LatencyBudgetStrategy(latency_budget_ms=50.0, backends=[backend_a, backend_b])
+    strategy.enable_performance_validation(False)
+    result = strategy.to_json_dict()
+
+    assert result["backends"] == ["BackendA", "BackendB"]
+    assert result["latency_budget_ms"] == 50.0
     _assert_strategy_profiling_defaults(result)

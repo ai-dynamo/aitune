@@ -124,6 +124,8 @@ navigation:
             path: ../docs/api/aitune/aitune/torch/tune_strategy/one_backend_strategy.mdx
           - page: MaxThroughputStrategy
             path: ../docs/api/aitune/aitune/torch/tune_strategy/max_throughput_strategy.mdx
+          - page: LatencyBudgetStrategy
+            path: ../docs/api/aitune/aitune/torch/tune_strategy/latency_budget_strategy.mdx
           - page: MinLatencyStrategy
             path: ../docs/api/aitune/aitune/torch/tune_strategy/min_latency_strategy.mdx
       - section: Other APIs

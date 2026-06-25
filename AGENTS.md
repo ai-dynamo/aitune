@@ -83,7 +83,7 @@ JIT also supports `detect_graph_breaks` (uses `torch._dynamo.explain()` to skip 
 | `aitune/torch/inspecting/` | `inspect()` / `wrap()` — traverses module hierarchy to find candidates |
 | `aitune/torch/module/` | `Module` wrapper and `ModuleState` FSM (INITIAL → RECORDING → TUNED / PASSTHROUGH) |
 | `aitune/torch/backend/` | One class per backend; all extend `Backend` base class in `backend.py` |
-| `aitune/torch/tune_strategy/` | `OneBackendStrategy`, `FirstWinsStrategy`, `MaxThroughputStrategy`, `MinLatencyStrategy` |
+| `aitune/torch/tune_strategy/` | `OneBackendStrategy`, `FirstWinsStrategy`, `MaxThroughputStrategy`, `MinLatencyStrategy`, `LatencyBudgetStrategy` |
 | `aitune/torch/jit/` | `Patcher`, `PatchedModule`, `enable.py` (autowrapt bootstrap), JIT config |
 | `aitune/torch/checkpoint/` | `TorchCheckpoint` + `LocalTorchStorage` — gzip-compressed save/load, files named by SHA256 hash |
 | `aitune/torch/dataloader.py` | `DataLoaderFactory`, `samples_generator()` — normalises heterogeneous dataset types |
@@ -125,6 +125,7 @@ Strategies decide which backend(s) to use and how:
 - `FirstWinsStrategy` — tries backends in order, uses first that compiles successfully
 - `MaxThroughputStrategy` — profiles all backends via `task/profile.py`, selects highest throughput
 - `MinLatencyStrategy` — profiles all backends via `task/profile.py`, selects lowest latency
+- `LatencyBudgetStrategy` — profiles all backends via `task/profile.py`, selects highest throughput under a latency budget
 
 ## Code Style
 
