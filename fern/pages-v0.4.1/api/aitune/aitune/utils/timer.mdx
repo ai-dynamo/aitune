@@ -1,0 +1,346 @@
+---
+layout: overview
+slug: aitune/aitune/utils/timer
+title: aitune.utils.timer
+---
+
+Timer utilities for measuring and logging operation durations.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`Timer`](#aitune-utils-timer-Timer) | Context manager for timing and logging operations. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_format_duration`](#aitune-utils-timer-_format_duration) | Format duration in a human-readable way. |
+
+### Data
+
+[`_timer_depth`](#aitune-utils-timer-_timer_depth)
+
+[`logger`](#aitune-utils-timer-logger)
+
+### API
+
+<Anchor id="aitune-utils-timer-Timer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.timer.Timer(
+    name: str | None = None,
+    sink: collections.abc.Callable | None = None,
+    silent: bool = False,
+    depth: int = 0,
+    track_depth: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Context manager for timing and logging operations.
+
+Supports nested timers with automatic depth tracking and indentation,
+checkpoints for intermediate timing, and programmatic access to elapsed time.
+
+
+<ParamField path="_depth" type="int = 0">
+</ParamField>
+
+<ParamField path="_depth_token" type="Token | None = None">
+</ParamField>
+
+<ParamField path="_end_time" type="float | None = None">
+</ParamField>
+
+<ParamField path="_last_checkpoint_time" type="float | None = None">
+</ParamField>
+
+<ParamField path="_start_time" type="float | None = None">
+</ParamField>
+
+<ParamField path="elapsed" type="float">
+Get the elapsed time in seconds.
+</ParamField>
+
+<ParamField path="sink" type="= sink or logger.info">
+</ParamField>
+<Anchor id="aitune-utils-timer-Timer-__enter__">
+
+<CodeBlock links={{"aitune.utils.timer.Timer":"#aitune-utils-timer-Timer"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer.Timer.__enter__() -> aitune.utils.timer.Timer
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enter the context and start timing.
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer.Timer.__exit__(
+    exc_type,
+    exc_val,
+    exc_tb
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Exit the context and log the elapsed time.
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-_get_indent">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer.Timer._get_indent() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get indentation string based on current depth plus initial depth.
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-_log">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer.Timer._log(
+    message: str,
+    emoji: str = '⏱️',
+    indent: str | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Helper to log a message, handling the case when name is None.
+
+**Parameters:**
+
+<ParamField path="message" type="str">
+The message to log (e.g., "started", "completed in 1.23s")
+</ParamField>
+
+<ParamField path="emoji" type="str" default="'⏱️'">
+The emoji/prefix for the message (default: "⏱️")
+</ParamField>
+
+<ParamField path="indent" type="str | None" default="None">
+Optional indent string (defaults to self._get_indent())
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-checkpoint">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer.Timer.checkpoint(
+    name: str
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log a checkpoint with intermediate timing.
+
+**Parameters:**
+
+<ParamField path="name" type="str">
+Name of the checkpoint
+</ParamField>
+
+**Returns:** `float`
+
+Elapsed time since last checkpoint (or start if first checkpoint)
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-log_elapsed">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer.Timer.log_elapsed(
+    message: str | None = None,
+    depth: int = 0
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Explicitly log the elapsed time, even in silent mode.
+
+This method allows you to log elapsed time at any point, regardless of
+the silent setting. Useful when you want silent timing but need to log
+at specific checkpoints.
+
+**Parameters:**
+
+<ParamField path="message" type="str | None" default="None">
+Optional message to include in the log. If not provided,
+    uses the timer name.
+</ParamField>
+
+<ParamField path="depth" type="int" default="0">
+Indentation level for the log message (default: 0).
+  Each level adds 2 spaces of indentation.
+</ParamField>
+
+**Returns:** `float`
+
+Current elapsed time in seconds
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-start">
+
+<CodeBlock links={{"aitune.utils.timer.Timer":"#aitune-utils-timer-Timer"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer.Timer.start(
+    log: bool = False
+) -> aitune.utils.timer.Timer
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Explicitly start the timer.
+
+This allows using the timer without a context manager.
+Can be called multiple times to restart timing.
+
+**Parameters:**
+
+<ParamField path="log" type="bool" default="False">
+If True, logs the start message.
+</ParamField>
+
+**Returns:** `Timer`
+
+Self for method chaining
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-stop">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer.Timer.stop() -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Explicitly stop the timer and return elapsed time.
+
+This allows using the timer without a context manager.
+Returns the elapsed time and optionally logs completion.
+
+**Returns:** `float`
+
+Elapsed time in seconds
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-timer-_format_duration">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer._format_duration(
+    seconds: float
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Format duration in a human-readable way.
+
+**Parameters:**
+
+<ParamField path="seconds" type="float">
+Duration in seconds
+</ParamField>
+
+**Returns:** `str`
+
+Formatted string with appropriate unit (ms, s, or min)
+
+
+</Indent>
+
+<Anchor id="aitune-utils-timer-_timer_depth">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer._timer_depth: ContextVar[int] = contextvars.ContextVar('timer_depth', default=0)
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-utils-timer-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.timer.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

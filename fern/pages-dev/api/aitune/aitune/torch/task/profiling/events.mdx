@@ -1,0 +1,91 @@
+---
+layout: overview
+slug: aitune/aitune/torch/task/profiling/events
+title: aitune.torch.task.profiling.events
+---
+
+Profiling result events.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ProfilingResultEvent`](#aitune-torch-task-profiling-events-ProfilingResultEvent) | Profiling result event. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`get_inference_events`](#aitune-torch-task-profiling-events-get_inference_events) | Get inference events. |
+
+### API
+
+<Anchor id="aitune-torch-task-profiling-events-ProfilingResultEvent">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.events.ProfilingResultEvent(
+    timestamp: float,
+    model_name: str,
+    backend_details: str,
+    batch_size: int,
+    phase: str,
+    measurement_id: int = 0,
+    execution_time: float = 0.0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Profiling result event.
+
+
+<ParamField path="backend_details" type="str">
+</ParamField>
+
+<ParamField path="batch_size" type="int">
+</ParamField>
+
+<ParamField path="execution_time" type="float = 0.0">
+</ParamField>
+
+<ParamField path="measurement_id" type="int = 0">
+</ParamField>
+
+<ParamField path="model_name" type="str">
+</ParamField>
+
+<ParamField path="phase" type="str">
+</ParamField>
+
+<ParamField path="timestamp" type="float">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-events-get_inference_events">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.events.get_inference_events(
+    events: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get inference events.
+
+
+</Indent>

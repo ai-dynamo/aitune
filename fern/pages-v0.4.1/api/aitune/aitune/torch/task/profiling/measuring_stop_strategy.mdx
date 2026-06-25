@@ -1,0 +1,219 @@
+---
+layout: overview
+slug: aitune/aitune/torch/task/profiling/measuring_stop_strategy
+title: aitune.torch.task.profiling.measuring_stop_strategy
+---
+
+Measuring stop strategies for profiling.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`MeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy) | Strategy when to stop collecting measurements for given batch size. |
+| [`NumStepsMeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy) | Strategy to stop collecting measurements after a given number of steps. |
+| [`StableWindowMeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy) | Strategy to stop collecting measurements after stable windows of measurements have been collected. |
+
+### API
+
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Strategy when to stop collecting measurements for given batch size.
+
+
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy-get_events">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy.get_events(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Get events to use for measuring stop strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy.should_stop(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Check if the measurement should be stopped.
+
+**Parameters:**
+
+<ParamField path="results" type="list[ProfilingResultEvent]">
+List of profiling results events for a one measurement.
+</ParamField>
+
+**Returns:** `bool`
+
+True if the measurement should be stopped, False otherwise.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.measuring_stop_strategy.NumStepsMeasuringStopStrategy(
+    num_steps: int
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [MeasuringStopStrategy](#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy)
+
+Strategy to stop collecting measurements after a given number of steps.
+
+
+<ParamField path="_steps_counter" type="= 0">
+</ParamField>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy-get_events">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.measuring_stop_strategy.NumStepsMeasuringStopStrategy.get_events(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get events to use for measuring stop strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.measuring_stop_strategy.NumStepsMeasuringStopStrategy.should_stop(
+    _: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the measurement should be stopped.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.measuring_stop_strategy.StableWindowMeasuringStopStrategy(
+    window_size: int,
+    stability_percentage: float
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [MeasuringStopStrategy](#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy)
+
+Strategy to stop collecting measurements after stable windows of measurements have been collected.
+
+
+<ParamField path="_samples_seen" type="= 0">
+</ParamField>
+
+<ParamField path="_window" type="list[ProfilingResultEvent] = []">
+</ParamField>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy-get_events">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.measuring_stop_strategy.StableWindowMeasuringStopStrategy.get_events(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get events to use for measuring stop strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.measuring_stop_strategy.StableWindowMeasuringStopStrategy.should_stop(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the measurement should be stopped.
+
+
+</Indent>
+</Indent>

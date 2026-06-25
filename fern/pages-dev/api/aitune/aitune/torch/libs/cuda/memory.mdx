@@ -1,0 +1,83 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/cuda/memory
+title: aitune.torch.libs.cuda.memory
+---
+
+CUDA memory utilities for GPU-to-GPU transfers.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`memcpy_to_torch`](#aitune-torch-libs-cuda-memory-memcpy_to_torch) | Copy a CUDA device buffer into a new torch tensor via D2D memcpy (no CPU round-trip). |
+
+### Data
+
+[`_ORT_DTYPE_TO_TORCH`](#aitune-torch-libs-cuda-memory-_ORT_DTYPE_TO_TORCH)
+
+### API
+
+<Anchor id="aitune-torch-libs-cuda-memory-memcpy_to_torch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.cuda.memory.memcpy_to_torch(
+    ptr: int,
+    shape: list[int],
+    ort_dtype: str,
+    device: torch.device
+) -> torch.Tensor
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Copy a CUDA device buffer into a new torch tensor via D2D memcpy (no CPU round-trip).
+
+**Parameters:**
+
+<ParamField path="ptr" type="int">
+Raw CUDA pointer to the source buffer (e.g. ``OrtValue.data_ptr()``).
+</ParamField>
+
+<ParamField path="shape" type="list[int]">
+Shape of the buffer.
+</ParamField>
+
+<ParamField path="ort_dtype" type="str">
+ORT data type string (e.g. ``"tensor(float)"``).
+</ParamField>
+
+<ParamField path="device" type="torch.device">
+Target CUDA device for the output tensor.
+</ParamField>
+
+**Returns:** `torch.Tensor`
+
+A new CUDA torch tensor containing a copy of the source buffer.
+
+**Raises:**
+
+- `KeyError`: If ``ort_dtype`` is not a recognised ORT type string.
+- `RuntimeError`: If the CUDA memcpy fails.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-cuda-memory-_ORT_DTYPE_TO_TORCH">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.cuda.memory._ORT_DTYPE_TO_TORCH: dict[str, dtype] = {'tensor(float)': torch.float32, 'tensor(float16)': torch.float16, 'tensor(doubl...
+```
+
+</CodeBlock>
+</Anchor>
+

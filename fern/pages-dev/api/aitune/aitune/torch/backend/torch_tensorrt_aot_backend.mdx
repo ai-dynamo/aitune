@@ -1,0 +1,516 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/torch_tensorrt_aot_backend
+title: aitune.torch.backend.torch_tensorrt_aot_backend
+---
+
+TorchTensorRT backend with AOT compilation and intermediate model save.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TorchTensorRTAotBackend`](#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend) | Backend that compiles model using TensorRT. |
+| [`TorchTensorRTAotBackendConfig`](#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig) | Configuration for TorchTensorRTAotBackend. |
+| [`TorchTensorRTAotBuildStep`](#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBuildStep) | Identifiers for discrete sub-steps of a TorchTensorRTAot backend build. |
+| [`TorchTensorRTConfig`](#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTConfig) | Allows testing when torch_tensorrt is not installed. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_is_primitive`](#aitune-torch-backend-torch_tensorrt_aot_backend-_is_primitive) | Check if a value is a primitive type (int, float, str, bool). |
+| [`assert_torch_tensorrt`](#aitune-torch-backend-torch_tensorrt_aot_backend-assert_torch_tensorrt) | Check if torch_tensorrt is installed. |
+
+### Data
+
+[`IRType`](#aitune-torch-backend-torch_tensorrt_aot_backend-IRType)
+
+[`logger`](#aitune-torch-backend-torch_tensorrt_aot_backend-logger)
+
+### API
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend">
+
+<CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend(
+    config: aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+
+Backend that compiles model using TensorRT.
+
+
+<ParamField path="EXPORTED_MODEL_PATH_KEY" type="= 'exported_model_path'">
+</ParamField>
+
+<ParamField path="STATE_DEVICE" type="= 'device'">
+</ParamField>
+
+<ParamField path="STATE_TYPE" type="= 'type'">
+</ParamField>
+
+<ParamField path="_config" type="= config or TorchTensorRTAotBackendConfig()">
+</ParamField>
+
+<ParamField path="_devices" type="list[str] = ['cuda']">
+</ParamField>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load compiled module.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._build(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    data: list[aitune.torch.module.recording_module.Sample],
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the model with TensorRT.
+
+Exports the module via ``torch.export.export`` with shared ``Dim`` instances
+across inputs, then hands the resulting ``ExportedProgram`` to
+``torch_tensorrt.dynamo.compile``. This replaces the previous flow that called
+``torch_tensorrt.compile`` and let it run its own export, which built one
+independent ``Dim`` per ``Input`` and raised ``ConstraintViolationError``
+whenever two inputs had to share a runtime axis (e.g. HF encoders' shared
+batch on ``input_ids`` and ``attention_mask``).
+
+Workaround pending a ``dynamic_shapes`` passthrough on ``torch_tensorrt.compile``;
+revert to ``torch_tensorrt.compile(...)`` once that lands upstream.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_create_exported_model_path">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._create_exported_model_path(
+    cache_dir: pathlib.Path
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create path to exported model.
+
+In order to avoid name clashes we create a unique path for each model and graph spec.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivate backend and cleanup.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_deploy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._deploy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deploys the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run inference with TensorRT engine.
+
+**Parameters:**
+
+<ParamField path="*args" type="Any" default="()">
+Inference arguments
+</ParamField>
+
+<ParamField path="**kwargs" type="Any" default="&#123;&#125;">
+Inference keyword arguments
+</ParamField>
+
+**Returns:** `Any`
+
+Model outputs
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_save_config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._save_config(
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Store the backend configuration to a file.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the description of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend.from_dict(
+    module: torch.nn.Module | None,
+    state_dict: dict
+) -> aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Creates a backend from a state_dict.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend.key() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the key of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend.to_dict() -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the state_dict of the backend.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig">
+
+<CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.IRType":"#aitune-torch-backend-torch_tensorrt_aot_backend-IRType","aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig(
+    ir: aitune.torch.backend.torch_tensorrt_aot_backend.IRType = 'dynamo',
+    compile_config: aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig = TorchTensorRTConfig(),
+    pickle_protocol: int = DEFAULT_PICKLE_PROTOCOL
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+
+Configuration for TorchTensorRTAotBackend.
+
+See torch_tensorrt/dynamo/_settings.py CompilationSettings for compile_config(TorchTensorRTConfig)
+
+
+<ParamField path="compile_config" type="TorchTensorRTConfig = field(default_factory=TorchTensorRTConfig)">
+</ParamField>
+
+<ParamField path="ir" type="IRType = 'dynamo'">
+</ParamField>
+
+<ParamField path="pickle_protocol" type="int = DEFAULT_PICKLE_PROTOCOL">
+</ParamField>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describe the backend configuration. Display only changed fields.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig-from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig.from_dict(
+    data: dict
+) -> aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Initialise config from a plain dict (e.g. parsed from YAML).
+
+``compile_config`` may be passed as a nested dict and will be
+reconstructed into a ``TorchTensorRTConfig`` instance automatically.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig.to_dict()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Saves the backend configuration to a file.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBuildStep">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBuildStep()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [BackendBuildStep](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendBuildStep)
+
+Identifiers for discrete sub-steps of a TorchTensorRTAot backend build.
+
+
+<ParamField path="COMPILED_MODEL_SAVE" type="= 'Compiled model save'">
+</ParamField>
+
+<ParamField path="TORCHTRT_COMPILE" type="= 'Torch-TensorRT compile'">
+</ParamField>
+
+<ParamField path="TORCH_EXPORT" type="= 'Torch export'">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig(
+    enabled_precisions: set[torch.dtype] | None = None,
+    use_explicit_typing: bool = True,
+    workspace_size: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Allows testing when torch_tensorrt is not installed.
+
+
+<ParamField path="enabled_precisions" type="set[dtype] | None = None">
+</ParamField>
+
+<ParamField path="use_explicit_typing" type="bool = True">
+</ParamField>
+
+<ParamField path="workspace_size" type="int = 0">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-_is_primitive">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend._is_primitive(
+    value: typing.Any
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if a value is a primitive type (int, float, str, bool).
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-assert_torch_tensorrt">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if torch_tensorrt is installed.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-IRType">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.IRType = Literal['dynamo', 'ts', 'fx']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

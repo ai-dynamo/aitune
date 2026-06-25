@@ -1,0 +1,959 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/backend
+title: aitune.torch.backend.backend
+---
+
+Backend interface.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`Backend`](#aitune-torch-backend-backend-Backend) | Backend interface for tuning a module. |
+| [`BackendBuildStep`](#aitune-torch-backend-backend-BackendBuildStep) | Base class for backend build step enums. |
+| [`BackendConfig`](#aitune-torch-backend-backend-BackendConfig) | Configuration for a backend. |
+| [`BackendState`](#aitune-torch-backend-backend-BackendState) | Enum representing the state of a backend. |
+| [`DummyBackend`](#aitune-torch-backend-backend-DummyBackend) | Dummy backend for testing purposes. |
+
+### API
+
+<Anchor id="aitune-torch-backend-backend-Backend">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.backend.Backend()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Backend interface for tuning a module.
+
+
+<ParamField path="_build_results" type="= []">
+</ParamField>
+
+<ParamField path="_config" type="BackendConfig | None = None">
+</ParamField>
+
+<ParamField path="_devices" type="list[str] = ['cpu', 'cuda']">
+</ParamField>
+
+<ParamField path="_logger" type="Logger">
+Get a logger specific to this backend implementation.
+</ParamField>
+
+<ParamField path="device" type="device">
+Get the device of the backend.
+</ParamField>
+
+<ParamField path="is_active" type="bool">
+Returns True if the backend is active.
+</ParamField>
+
+<ParamField path="is_jit" type="bool">
+Returns True if the backend is a JIT backend.
+
+This method ensures that the backend has this property defined.
+</ParamField>
+
+<ParamField path="name" type="str">
+Name of a backend.
+</ParamField>
+
+<ParamField path="state" type="= BackendState.INIT">
+</ParamField>
+<Anchor id="aitune-torch-backend-backend-Backend-_activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend._activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Activates backend.
+
+After activating, the backend should be ready to do inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-_assert_device">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend._assert_device(
+    device: torch.device
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Assert the device of the backend.
+
+**Parameters:**
+
+<ParamField path="device" type="torch.device">
+The device to assert.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-_build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend._build(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    data: list[aitune.torch.module.recording_module.Sample],
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Build the model with the given arguments.
+
+After building, the backend should be activated.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The module to build the backend on.
+</ParamField>
+
+<ParamField path="name">
+The name of the backend.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+The graph specification of the backend.
+</ParamField>
+
+<ParamField path="data" type="list[Sample]">
+The data to build the backend on.
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+The cache directory to store the backend artifacts.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-_clean_memory">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend._clean_memory()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Clean up memory.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-_deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend._deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Deactivates backend.
+
+After deactivating, the backend cannot be used to do inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-_deploy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend._deploy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Deploys the backend.
+
+After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend._infer(
+    args = (),
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Run inference with the given arguments.
+
+**Parameters:**
+
+<ParamField path="*args" default="()">
+Variable length argument list.
+</ParamField>
+
+<ParamField path="**kwargs" default="&#123;&#125;">
+Arbitrary keyword arguments.
+</ParamField>
+
+**Returns:**
+
+The result of the inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-_set_device">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend._set_device(
+    device: torch.device | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set the device of the backend.
+
+**Parameters:**
+
+<ParamField path="device" type="torch.device | None">
+The device to set the backend on.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-_track_build_step">
+
+<CodeBlock links={{"aitune.torch.backend.backend.BackendBuildStep":"#aitune-torch-backend-backend-BackendBuildStep"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend._track_build_step(
+    step: aitune.torch.backend.backend.BackendBuildStep
+) -> collections.abc.Generator[dict[str, typing.Any], None, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Record a build step result.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend.activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Activates backend.
+
+After activating, the backend should be ready to do inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend.build(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    data: list[aitune.torch.module.recording_module.Sample],
+    device: torch.device,
+    cache_dir: pathlib.Path,
+    log_file: pathlib.Path | None = None
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the model with the given arguments.
+
+Building a backend should be idempotent i.e. do not cause side effects. A model is not necessarily pure
+functional and can have an internal state (like kv cache for LLMs). That is why build can call a sample of
+inputs at most once so that subsequent calls have exact same state as the first call for the given sample.
+
+After building, the backend should be activated.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend.deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivates backend.
+
+After deactivating, the backend cannot be used to do inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-deploy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend.deploy(
+    device: torch.device | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deploys the backend.
+
+After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
+
+**Parameters:**
+
+<ParamField path="device" type="torch.device | None">
+The device to deploy the backend on.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Returns the description of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend.from_dict(
+    module: torch.nn.Module | None,
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge> <Badge>abstract</Badge>
+
+Creates a backend from a module and state_dict.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend.infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run inference with the given arguments.
+
+**Parameters:**
+
+<ParamField path="args" type="Any" default="()">
+Variable length argument list.
+</ParamField>
+
+<ParamField path="kwargs" type="Any" default="&#123;&#125;">
+Arbitrary keyword arguments.
+</ParamField>
+
+**Returns:** `Any`
+
+The result of the inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend.key() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Returns the key of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.Backend.to_dict()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Returns the state_dict of the backend.
+
+Note: if there any binary artifacts (files) which should be stored by a backend,
+they must be passed as Python Path object. Such objects will be bundled with a checkpoint.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-backend-BackendBuildStep">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.backend.BackendBuildStep
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Base class for backend build step enums.
+
+<ParamField path="annotation" type="= ">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-backend-BackendConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.backend.BackendConfig()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configuration for a backend.
+
+
+<Anchor id="aitune-torch-backend-backend-BackendConfig-_default_describe_fields">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.BackendConfig._default_describe_fields() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the default fields to describe.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-BackendConfig-_get_changed_fields">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.BackendConfig._get_changed_fields(
+    current,
+    other,
+    exclude: list[str] | None = None,
+    include: list[str] | None = None
+) -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the changed fields of the backend configuration.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-BackendConfig-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.BackendConfig.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describe the backend configuration. Display only changed fields.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-BackendConfig-from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.backend.BackendConfig":"#aitune-torch-backend-backend-BackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.BackendConfig.from_dict(
+    data: dict
+) -> aitune.torch.backend.backend.BackendConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Initialise config from a plain dict (e.g. parsed from YAML).
+
+The default implementation passes all keys as keyword arguments.
+Override in subclasses that need type conversion (e.g. nested dicts,
+enum values, or pickle-serialised objects).
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-BackendConfig-key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.BackendConfig.key() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the keys of the backend configuration.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-BackendConfig-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.BackendConfig.to_dict()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the state_dict of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-BackendConfig-to_json">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.BackendConfig.to_json(
+    path: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Saves the backend configuration to a file.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-backend-BackendState">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.backend.BackendState
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Enum representing the state of a backend.
+
+State transitions:
+<CodeBlock showLineNumbers={false}>
+
+```python
+stateDiagram
+    [*] --> init
+    init --> active: When backend is built successfully
+    active --> inactive: When backend is deactivated
+    inactive --> active: When backend is activated again
+    checkpoint_loaded --> deployed: When backend is deployed from checkpoint
+    checkpoint_loaded --> active: When backend is activated from checkpoint
+    active --> deployed: When backend is deployed after being active
+    deployed --> [*]
+```
+
+</CodeBlock>
+
+Note:
+- Changing state to deployed should be done in `ModuleWrapper` as it does a proxy of `forward` method and reverses
+that in order to deploy/recompile jit backends.
+- After loading a checkpoint you can still do activation when grokking with the code but bare in mind that jit
+backends do recompilation.
+
+<ParamField path="ACTIVE" type="= 'active'">
+</ParamField>
+
+<ParamField path="CHECKPOINT_LOADED" type="= 'checkpoint_loaded'">
+</ParamField>
+
+<ParamField path="DEPLOYED" type="= 'deployed'">
+</ParamField>
+
+<ParamField path="INACTIVE" type="= 'inactive'">
+</ParamField>
+
+<ParamField path="INIT" type="= 'init'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-backend-DummyBackend">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.backend.DummyBackend()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [Backend](#aitune-torch-backend-backend-Backend)
+
+Dummy backend for testing purposes.
+
+
+<ParamField path="_devices" type="= ['cpu', 'cuda']">
+</ParamField>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-_activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend._activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Activate the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-_build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend._build(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    data: list[aitune.torch.module.recording_module.Sample],
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the model with the given arguments.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-_deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend._deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivate the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-_deploy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend._deploy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deploy the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend._infer(
+    args = (),
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run inference with the given arguments.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the description of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend.from_dict(
+    module: torch.nn.Module | None,
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Creates a backend from a module and state_dict.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend.infer(
+    args = (),
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run inference with the given arguments.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend.key() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the key of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-DummyBackend-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.DummyBackend.to_dict()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the state_dict of the backend.
+
+
+</Indent>
+</Indent>

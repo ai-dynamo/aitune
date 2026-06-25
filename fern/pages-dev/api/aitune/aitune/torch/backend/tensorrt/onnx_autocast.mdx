@@ -1,0 +1,178 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/tensorrt/onnx_autocast
+title: aitune.torch.backend.tensorrt.onnx_autocast
+---
+
+NVIDIA ModelOpt ONNX quantization module for TensorRT backend.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ONNXAutoCast`](#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCast) | NVIDIA ModelOpt ONNX autocast for TensorRT backend. |
+| [`ONNXAutoCastConfig`](#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig) | Configuration for mixed precision quantization. |
+
+### Data
+
+[`MixedPrecision`](#aitune-torch-backend-tensorrt-onnx_autocast-MixedPrecision)
+
+[`logger`](#aitune-torch-backend-tensorrt-onnx_autocast-logger)
+
+### API
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCast">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCast()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+NVIDIA ModelOpt ONNX autocast for TensorRT backend.
+
+This class provides functionality to autocast ONNX models using NVIDIA ModelOpt.
+
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCast-autocast">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig":"#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCast.autocast(
+    input_onnx_path: str | pathlib.Path,
+    output_path: str | pathlib.Path,
+    config: aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig,
+    samples: list[aitune.torch.module.recording_module.Sample] | None = None,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec | None = None
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Autocast the ONNX model using NVIDIA ModelOpt.
+
+**Parameters:**
+
+<ParamField path="input_onnx_path" type="str | Path">
+Path to the input ONNX model
+</ParamField>
+
+<ParamField path="output_path" type="str | Path">
+Path to the output ONNX model
+</ParamField>
+
+<ParamField path="config" type="ONNXAutoCastConfig">
+ONNXAutoCastConfig
+</ParamField>
+
+<ParamField path="samples" type="list[Sample] | None" default="None">
+Optional calibration dataset for quantization.
+If None, random data will be used for calibration
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec | None" default="None">
+Graph specification containing input names mapping
+</ParamField>
+
+**Returns:** `Path`
+
+Path to the autocasted ONNX file
+
+**Raises:**
+
+- `ValueError`: If unsupported precision is specified
+- `RuntimeError`: If autocast fails
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_autocast.MixedPrecision":"#aitune-torch-backend-tensorrt-onnx_autocast-MixedPrecision"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig(
+    precision: aitune.torch.backend.tensorrt.onnx_autocast.MixedPrecision = 'fp16',
+    keep_io_types: bool = True
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configuration for mixed precision quantization.
+
+**Parameters:**
+
+<ParamField path="precision" type="MixedPrecision" default="'fp16'">
+Mixed precision quantization precision ("fp16", "bf16")
+</ParamField>
+
+
+<ParamField path="keep_io_types" type="bool = True">
+</ParamField>
+
+<ParamField path="precision" type="MixedPrecision = 'fp16'">
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig.from_dict(
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Convert dict to MixedPrecisionConfig.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-MixedPrecision">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_autocast.MixedPrecision = Literal['fp16', 'bf16']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_autocast.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

@@ -1,0 +1,127 @@
+---
+layout: overview
+slug: aitune/aitune/torch/task/correctness
+title: aitune.torch.task.correctness
+---
+
+Correctness checking utilities.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`CorrectnessTensorShapeError`](#aitune-torch-task-correctness-CorrectnessTensorShapeError) | Error raised when tensor shapes do not match. |
+| [`CorrectnessValueError`](#aitune-torch-task-correctness-CorrectnessValueError) | Error raised when value is not finite i.e. NaN or infinity. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`check_output_correctness`](#aitune-torch-task-correctness-check_output_correctness) | Check if model outputs contain any NaN or infinity values. |
+| [`check_output_tensor_shapes`](#aitune-torch-task-correctness-check_output_tensor_shapes) | Check if the output tensor shapes are the same as the original output tensor shapes. |
+
+### API
+
+<Anchor id="aitune-torch-task-correctness-CorrectnessTensorShapeError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.correctness.CorrectnessTensorShapeError()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `ValueError`
+
+Error raised when tensor shapes do not match.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-CorrectnessValueError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.correctness.CorrectnessValueError()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `ValueError`
+
+Error raised when value is not finite i.e. NaN or infinity.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-check_output_correctness">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness.check_output_correctness(
+    output: typing.Any,
+    name: str = 'output',
+    depth: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if model outputs contain any NaN or infinity values.
+
+**Parameters:**
+
+<ParamField path="output" type="Any">
+Model outputs. Dict, list, tensors or scalars. Strings are ignored.
+</ParamField>
+
+<ParamField path="name" type="str" default="'output'">
+Name of the output. If not provided, the name will be inferred from the output type.
+</ParamField>
+
+<ParamField path="depth" type="int" default="0">
+Depth of the output. Auxiliary variable for recursive calls.
+</ParamField>
+
+**Raises:**
+
+- `CorrectnessCheckError`: If any output contains NaN or infinity values
+- `ValueError`: If output does not contain tensors or scalars
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-check_output_tensor_shapes">
+
+<CodeBlock links={{"aitune.torch.module.tensor_spec.TensorSpec":"/aitune/aitune/torch/module/tensor_spec#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness.check_output_tensor_shapes(
+    expected_tensor_specs: list[aitune.torch.module.tensor_spec.TensorSpec],
+    actual_tensor_specs: list[aitune.torch.module.tensor_spec.TensorSpec]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the output tensor shapes are the same as the original output tensor shapes.
+
+
+</Indent>

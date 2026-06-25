@@ -1,0 +1,223 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/tensorrt/tensorrt_runtime
+title: aitune.torch.backend.tensorrt.tensorrt_runtime
+---
+
+TensorRT Runtime module for running TensorRT engines.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`PythonTRTLogger`](#aitune-torch-backend-tensorrt-tensorrt_runtime-PythonTRTLogger) | TensorRT logger that routes messages through Python's logging system. |
+| [`TensorRTRuntime`](#aitune-torch-backend-tensorrt-tensorrt_runtime-TensorRTRuntime) | Class for running TensorRT engines. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_get_log_level_mapping`](#aitune-torch-backend-tensorrt-tensorrt_runtime-_get_log_level_mapping) | - |
+
+### Data
+
+[`LOGGING_PREFIX`](#aitune-torch-backend-tensorrt-tensorrt_runtime-LOGGING_PREFIX)
+
+[`TRT_ENGINE_FILE_EXTENSION`](#aitune-torch-backend-tensorrt-tensorrt_runtime-TRT_ENGINE_FILE_EXTENSION)
+
+[`logger`](#aitune-torch-backend-tensorrt-tensorrt_runtime-logger)
+
+[`trt`](#aitune-torch-backend-tensorrt-tensorrt_runtime-trt)
+
+### API
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-PythonTRTLogger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.tensorrt_runtime.PythonTRTLogger(
+    severity = trt.Logger.INFO
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `ILogger`
+
+TensorRT logger that routes messages through Python's logging system.
+
+This allows TensorRT C++ output to be captured by Python logging handlers
+and redirected (e.g., to a file) via control_output context manager.
+
+
+<ParamField path="python_logger" type="= logging.getLogger('tensorrt')">
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-PythonTRTLogger-log">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_runtime.PythonTRTLogger.log(
+    severity,
+    msg
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Route TensorRT log messages to Python logging system.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-TensorRTRuntime">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.tensorrt_runtime.TensorRTRuntime(
+    cuda_graph: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Class for running TensorRT engines.
+
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-TensorRTRuntime-create_execution_context">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_engine_info.TensorRTEngineInfo":"/aitune/aitune/torch/backend/tensorrt/tensorrt_engine_info#aitune-torch-backend-tensorrt-tensorrt_engine_info-TensorRTEngineInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_runtime.TensorRTRuntime.create_execution_context(
+    engine_bytes: bytes
+) -> tuple[typing.Any, dict, list, list, aitune.torch.backend.tensorrt.tensorrt_engine_info.TensorRTEngineInfo]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create an execution context from a serialized engine.
+
+**Parameters:**
+
+<ParamField path="engine_bytes" type="bytes">
+Serialized TensorRT engine
+</ParamField>
+
+**Returns:** `tuple[Any, dict, list, list, TensorRTEngineInfo]`
+
+Tuple containing (context, io_tensors, input_names, output_names, engine_info)
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-TensorRTRuntime-load_engine">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_runtime.TensorRTRuntime.load_engine(
+    engine_path: str | pathlib.Path
+) -> bytes
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load the TensorRT engine.
+
+**Parameters:**
+
+<ParamField path="engine_path" type="str | Path">
+Path to the TensorRT engine
+</ParamField>
+
+**Returns:** `bytes`
+
+Serialized TensorRT engine
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-_get_log_level_mapping">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_runtime._get_log_level_mapping()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-LOGGING_PREFIX">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_runtime.LOGGING_PREFIX = '[TRT]'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-TRT_ENGINE_FILE_EXTENSION">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_runtime.TRT_ENGINE_FILE_EXTENSION = '.plan'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_runtime.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_runtime-trt">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_runtime.trt = lazy_import('tensorrt')
+```
+
+</CodeBlock>
+</Anchor>
+

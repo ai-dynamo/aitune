@@ -1,0 +1,88 @@
+title: NVIDIA AITune Documentation
+instances:
+  - url: aitune.docs.buildwithfern.com/aitune
+    custom-domain: docs.nvidia.com/aitune
+    multi-source: true
+metadata:
+  canonical-host: docs.nvidia.com/aitune
+global-theme: nvidia
+agents:
+  page-directive: For clean Markdown content of this page, append .md to this URL.
+products:
+  - display-name: AITune
+    slug: /
+    path: ./versions/v0.4.1.yml
+    versions:
+      - display-name: Latest (v0.4.1)
+        path: ./versions/v0.4.1.yml
+        slug: latest
+        availability: stable
+      - display-name: dev
+        path: ./versions/dev.yml
+        slug: dev
+        availability: beta
+      - display-name: v0.4.1
+        path: ./versions/v0.4.1.yml
+        slug: v0.4.1
+        availability: stable
+redirects:
+  - source: /aitune/index.html
+    destination: /aitune
+  - source: /aitune/dev/index.html
+    destination: /aitune/dev
+navbar-links:
+  - type: github
+    value: https://github.com/ai-dynamo/aitune
+footer: ./components/CustomFooter.tsx
+layout:
+  searchbar-placement: header
+  page-width: 1376px
+  sidebar-width: 248px
+  content-width: 812px
+  tabs-placement: header
+  hide-feedback: true
+colors:
+  accentPrimary:
+    dark: '#76B900'
+    light: '#005020'
+  background:
+    light: '#FFFFFF'
+    dark: '#000000'
+typography:
+  bodyFont:
+    name: NVIDIA
+    paths:
+      - path: ./assets/fonts/NVIDIASans.woff2
+        style: normal
+      - path: ./assets/fonts/NVIDIASans_Italic.woff2
+        style: italic
+  codeFont:
+    name: RobotoMono
+    paths:
+      - path: ./assets/fonts/RobotoMono.woff2
+logo:
+  dark: ./assets/NVIDIA_dark.svg
+  light: ./assets/NVIDIA_light.svg
+  height: 20
+  href: /aitune
+  right-text: Documentation
+favicon: ./assets/NVIDIA_symbol.svg
+css:
+  - ./main.css
+experimental:
+  mdx-components:
+    - ./pages-dev/_components
+    - ./pages-v0.4.1/_components
+libraries:
+  aitune:
+    input:
+      git: https://github.com/ai-dynamo/aitune
+      subpath: aitune
+    output:
+      path: ./pages-dev/api
+    lang: python
+check:
+  rules:
+    broken-links: warn
+    example-validation: error
+    missing-redirects: error

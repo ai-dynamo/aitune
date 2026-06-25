@@ -1,0 +1,276 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/onnx/onnx_exporter
+title: aitune.torch.libs.onnx.onnx_exporter
+---
+
+ONNX Exporter module for TensorRT backend.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ONNXExporter`](#aitune-torch-libs-onnx-onnx_exporter-ONNXExporter) | Class for exporting PyTorch modules to ONNX format. |
+
+### Data
+
+[`ONNX_FILE_EXTENSION`](#aitune-torch-libs-onnx-onnx_exporter-ONNX_FILE_EXTENSION)
+
+[`_ONNX_FALLBACK_SUPPORTED`](#aitune-torch-libs-onnx-onnx_exporter-_ONNX_FALLBACK_SUPPORTED)
+
+[`logger`](#aitune-torch-libs-onnx-onnx_exporter-logger)
+
+### API
+
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.onnx.onnx_exporter.ONNXExporter(
+    output_path: pathlib.Path,
+    use_dynamo: bool = False,
+    opset_version: int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Class for exporting PyTorch modules to ONNX format.
+
+
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_create_dynamic_axes">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._create_dynamic_axes(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create dynamic axes for the ONNX trace model.
+
+Returns:
+    Dict of dynamic axes
+
+**Parameters:**
+
+<ParamField path="graph_spec" type="GraphSpec">
+Input graph spec
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_create_dynamic_shapes">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._create_dynamic_shapes(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    forward_arguments: tuple[list[str], list[str]],
+    use_auto: bool = True
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Using graph spec and forward arguments to infer how does dynamic shapes look like.
+
+Delegates to ``aitune.torch.backend.dynamic_shapes.build_dynamic_shapes``,
+passing ``kwargs=&#123;&#125;`` because the caller in ``_export_dynamo`` runs its own
+WAR for missing kwargs after this returns.
+
+**Parameters:**
+
+<ParamField path="graph_spec" type="GraphSpec">
+Input graph spec.
+</ParamField>
+
+<ParamField path="forward_arguments" type="tuple[list[str], list[str]]">
+Tuple of forward arguments and kwargs from the model's
+forward signature.
+</ParamField>
+
+<ParamField path="use_auto" type="bool" default="True">
+When ``True`` (default), use ``Dim.AUTO`` for non-batch varying
+axes so torch.export infers divisibility constraints automatically.
+Pass ``False`` to get explicit ``Dim(name, min, max)`` instances —
+required for downstream tooling that needs concrete ranges (e.g.
+ONNXRuntime quantization shape inference).
+</ParamField>
+
+**Returns:** `dict[str, Any]`
+
+Dict of dynamic shapes keyed by forward parameter name. Recorded forward
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_export_dynamo">
+
+<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._export_dynamo(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.recording_module.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    onnx_path: pathlib.Path,
+    verbose: bool | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export the module to ONNX using torch.dynamo.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_export_trace">
+
+<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._export_trace(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.recording_module.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    onnx_path: pathlib.Path,
+    verbose: bool | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export the module to ONNX using torch.onnx.trace.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-export">
+
+<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_exporter.ONNXExporter.export(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.recording_module.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    verbose: bool = False
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export the module to ONNX.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+PyTorch module to export
+</ParamField>
+
+<ParamField path="sample" type="Sample">
+Example input for the model
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+GraphSpec object
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+Whether to print verbose output
+</ParamField>
+
+**Returns:** `Path`
+
+Path to the ONNX file
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-verify_model">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_exporter.ONNXExporter.verify_model(
+    onnx_path: str | pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Verify the ONNX model.
+
+**Parameters:**
+
+<ParamField path="onnx_path" type="str | Path">
+Path to the ONNX model
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNX_FILE_EXTENSION">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_exporter.ONNX_FILE_EXTENSION = '.onnx'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-_ONNX_FALLBACK_SUPPORTED">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_exporter._ONNX_FALLBACK_SUPPORTED = 'fallback' in inspect.signature(torch.onnx.export).parameters
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-libs-onnx-onnx_exporter-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_exporter.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

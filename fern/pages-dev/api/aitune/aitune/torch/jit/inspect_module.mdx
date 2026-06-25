@@ -1,0 +1,557 @@
+---
+layout: overview
+slug: aitune/aitune/torch/jit/inspect_module
+title: aitune.torch.jit.inspect_module
+---
+
+Module for inspecting PyTorch models and tracking their execution.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`InspectModule`](#aitune-torch-jit-inspect_module-InspectModule) | Inspect module. |
+| [`ModuleState`](#aitune-torch-jit-inspect_module-ModuleState) | Possible states of the Module class. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_to_hist`](#aitune-torch-jit-inspect_module-_to_hist) | Updates history with new entry. |
+| [`get_type_info`](#aitune-torch-jit-inspect_module-get_type_info) | Get the type information of an object. |
+
+### Data
+
+[`PRINT_HIERARCHY_HEADER`](#aitune-torch-jit-inspect_module-PRINT_HIERARCHY_HEADER)
+
+[`PRINT_HIERARCHY_NO_MODULES_HEADER`](#aitune-torch-jit-inspect_module-PRINT_HIERARCHY_NO_MODULES_HEADER)
+
+[`_emoji_state`](#aitune-torch-jit-inspect_module-_emoji_state)
+
+### API
+
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.jit.inspect_module.InspectModule(
+    module: torch.nn.Module
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect module.
+
+
+<ParamField path="_args" type="list[str] = []">
+</ParamField>
+
+<ParamField path="_call_count" type="= 0">
+</ParamField>
+
+<ParamField path="_children" type="list[InspectModule] = []">
+</ParamField>
+
+<ParamField path="_forward_routing">
+</ParamField>
+
+<ParamField path="_has_graph_breaks" type="bool = False">
+</ParamField>
+
+<ParamField path="_kwargs" type="dict[str, str] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_level" type="= -1">
+</ParamField>
+
+<ParamField path="_name" type="= module.__class__.__name__">
+</ParamField>
+
+<ParamField path="_name_detailed">
+</ParamField>
+
+<ParamField path="_original_forward" type="= module.forward">
+</ParamField>
+
+<ParamField path="_original_forward_hooks" type="= module._forward_hooks">
+</ParamField>
+
+<ParamField path="_original_forward_pre_hooks" type="= module._forward_pre_hooks">
+</ParamField>
+
+<ParamField path="_output_types" type="list[str] | tuple[str] | dict[str, str] | str = None">
+</ParamField>
+
+<ParamField path="_parent" type="InspectModule | None = None">
+</ParamField>
+
+<ParamField path="_total_execution_time" type="float = 0.0">
+</ParamField>
+
+<ParamField path="heads" type="list[InspectModule] = []">
+</ParamField>
+
+<ParamField path="history" type="list[str] = []">
+</ParamField>
+
+<ParamField path="report_saved" type="bool = False">
+</ParamField>
+
+<ParamField path="stack" type="deque[InspectModule] = deque()">
+</ParamField>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule.__repr__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Representation of the module.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-__str__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule.__str__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+String representation of the module.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-_forward_init">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule._forward_init(
+    wrapped,
+    instance,
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Forward call for the first time.
+
+This method is called when the module is first called.
+It initializes the module and sets the state to INSPECT.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-_forward_inspect">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule._forward_inspect(
+    wrapped,
+    instance,
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Forward call for the inspect time.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-_gather_args_kwargs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule._gather_args_kwargs(
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Gather args and kwargs.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-_gather_output_types">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule._gather_output_types(
+    result: typing.Any
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Gather output types.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-_proxy_forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule._proxy_forward()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Proxy the forward calls.
+
+We need to re-enable hooks, so that they will be called before and after proxied forward.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-_restore_original_forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule._restore_original_forward()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Restore the original forward and hooks.
+
+We need to disable hooks, otherwise they will be called twice.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-_should_be_skipped">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule._should_be_skipped()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the module should be skipped.
+
+Name contains parameters, so only class names is relevant.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-_unpatch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule._unpatch()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Unpatch the module.
+
+Removes it also from Patcher object registry.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-_update_state">
+
+<CodeBlock links={{"aitune.torch.jit.inspect_module.ModuleState":"#aitune-torch-jit-inspect_module-ModuleState"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule._update_state(
+    state: aitune.torch.jit.inspect_module.ModuleState
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Update the state of the module and update the forward.
+
+Replaces torch.nn.Module.forward method with a proxy forward according to the object state. The substitution
+is done with a wrapt.decorator so that the replaced function has same docstring, signature and other attributes.
+This is crucial as some HF models perform self inspection for method arguments.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-on_python_exit">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule.on_python_exit()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Print hierarchy and save report if not saved yet when process is exiting.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-print_hierarchy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule.print_hierarchy(
+    sink = print
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Prints the PatchedModule hierarchy starting from the head module.
+
+This method traverses the module tree starting from the head module
+and prints each module with indentation to show the hierarchy levels.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-print_history">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule.print_history(
+    sink = print
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Prints history to the sink.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-reset">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule.reset()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Reset PatchedModule state.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-inspect_module-InspectModule-save_report">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.InspectModule.save_report(
+    path: str | pathlib.Path,
+    model_name: str = 'Model'
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Save module hierarchy to interactive HTML with folding/unfolding capabilities.
+
+Creates a comprehensive HTML page that displays the module hierarchy with:
+- Collapsible sections for each module
+- Full module details including name, args, kwargs, result types, call count
+- Modern styling with animations
+- Interactive JavaScript for folding/unfolding
+- Toggle button for switching between short and detailed type information
+
+**Parameters:**
+
+<ParamField path="path" type="str | Path">
+Path where the HTML file should be saved.
+</ParamField>
+
+<ParamField path="model_name" type="str" default="'Model'">
+The name of the model to display in the HTML subtitle.
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-jit-inspect_module-ModuleState">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.jit.inspect_module.ModuleState
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Possible states of the Module class.
+
+<ParamField path="DETACHED" type="= 'detached'">
+</ParamField>
+
+<ParamField path="INIT" type="= 'init'">
+</ParamField>
+
+<ParamField path="INSPECT" type="= 'inspect'">
+</ParamField>
+
+<ParamField path="SKIPPED" type="= 'skipped'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-inspect_module-_to_hist">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module._to_hist(
+    entry: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Updates history with new entry.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-inspect_module-get_type_info">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.get_type_info(
+    obj: typing.Any
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the type information of an object.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-inspect_module-PRINT_HIERARCHY_HEADER">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.PRINT_HIERARCHY_HEADER = 'JIT Tuning Hierarchy:'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-jit-inspect_module-PRINT_HIERARCHY_NO_MODULES_HEADER">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module.PRINT_HIERARCHY_NO_MODULES_HEADER = 'No modules in hierarchy'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-jit-inspect_module-_emoji_state">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.inspect_module._emoji_state = {ModuleState.INIT: '⏳', ModuleState.INSPECT: '🔍', ModuleState.SKIPPED: '🚫', Mo...
+```
+
+</CodeBlock>
+</Anchor>
+

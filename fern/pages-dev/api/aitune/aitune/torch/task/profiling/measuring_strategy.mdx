@@ -1,0 +1,128 @@
+---
+layout: overview
+slug: aitune/aitune/torch/task/profiling/measuring_strategy
+title: aitune.torch.task.profiling.measuring_strategy
+---
+
+Measuring strategies for profiling.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`MeasuringStrategy`](#aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy) | Strategy how do the measurement and create a ProfilingResultEvent(s). |
+| [`ModelExecutionTimeMeasuringStrategy`](#aitune-torch-task-profiling-measuring_strategy-ModelExecutionTimeMeasuringStrategy) | Strategy to measure execution time. |
+
+### API
+
+<Anchor id="aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.measuring_strategy.MeasuringStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Strategy how do the measurement and create a ProfilingResultEvent(s).
+
+
+<Anchor id="aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy-do_measurement">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.measuring_strategy.MeasuringStrategy.do_measurement(
+    batch_size: int,
+    model: collections.abc.Callable,
+    sample: tuple[list, dict],
+    kwargs = {}
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Do the measurement and create a ProfilingResultEvent(s).
+
+**Parameters:**
+
+<ParamField path="batch_size" type="int">
+Batch size of the measurement.
+</ParamField>
+
+<ParamField path="model" type="Callable">
+Model to measure.
+</ParamField>
+
+<ParamField path="sample" type="tuple[list, dict]">
+Sample to measure.
+</ParamField>
+
+<ParamField path="**kwargs" default="&#123;&#125;">
+Additional keyword arguments.
+</ParamField>
+
+**Returns:** `list[ProfilingResultEvent]`
+
+List of ProfilingResultEvent(s).
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-measuring_strategy-ModelExecutionTimeMeasuringStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.measuring_strategy.ModelExecutionTimeMeasuringStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [MeasuringStrategy](#aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy)
+
+Strategy to measure execution time.
+
+
+<ParamField path="counter" type="int = 0">
+</ParamField>
+<Anchor id="aitune-torch-task-profiling-measuring_strategy-ModelExecutionTimeMeasuringStrategy-do_measurement">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.measuring_strategy.ModelExecutionTimeMeasuringStrategy.do_measurement(
+    batch_size: int,
+    model: collections.abc.Callable,
+    sample: tuple[list, dict],
+    measurement_kwargs = {}
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Do the measurement and create a ProfilingResultEvent(s) for the model.
+
+
+</Indent>
+</Indent>

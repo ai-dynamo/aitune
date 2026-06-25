@@ -1,0 +1,243 @@
+---
+layout: overview
+slug: aitune/aitune/utils/monitoring/hardware_metrics/ipc
+title: aitune.utils.monitoring.hardware_metrics.ipc
+---
+
+Inter-process communication utilities.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ChildIpc`](#aitune-utils-monitoring-hardware_metrics-ipc-ChildIpc) | Simple inter-process communication class to send and receive data between parent and child processes. |
+| [`IpcError`](#aitune-utils-monitoring-hardware_metrics-ipc-IpcError) | Exception for IPC errors. |
+| [`ParentIpc`](#aitune-utils-monitoring-hardware_metrics-ipc-ParentIpc) | Simple inter-process communication class to send and receive data between parent and child processes. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_read_exactly`](#aitune-utils-monitoring-hardware_metrics-ipc-_read_exactly) | Read exactly n bytes from stream, looping until all bytes are received. |
+
+### API
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-ipc-ChildIpc">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.ipc.ChildIpc()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Simple inter-process communication class to send and receive data between parent and child processes.
+
+This is implementation for child process. It uses stdin/stdout pipes to send and receive data which is
+packed using pickle.
+
+
+<ParamField path="stdin_raw" type="= sys.stdin.buffer">
+</ParamField>
+
+<ParamField path="stdout_raw" type="= sys.stdout.buffer">
+</ParamField>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-ipc-ChildIpc-receive">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.ipc.ChildIpc.receive()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Receive data from the parent process.
+
+**Returns:**
+
+The data received from the parent process.
+
+**Raises:**
+
+- `ValueError`: If the parent process closed the pipe.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-ipc-ChildIpc-send">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.ipc.ChildIpc.send(
+    data
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Send data to the parent process.
+
+**Parameters:**
+
+<ParamField path="data">
+The data to send to the parent process.
+</ParamField>
+
+**Returns:**
+
+The number of bytes sent.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-ipc-IpcError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.ipc.IpcError()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Exception</Badge>
+
+**Bases:** `Exception`
+
+Exception for IPC errors.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-ipc-ParentIpc">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.ipc.ParentIpc(
+    child_script,
+    flush_interval = 10
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Simple inter-process communication class to send and receive data between parent and child processes.
+
+This is implementation for parent process. It uses stdin/stdout pipes to send and receive data which is
+packed using pickle.
+
+Note: there is assumption that parent will sent lots of small data, that is why flush_interval is used so that
+underlying operating system can buffer data and send it in larger chunks which improves throughput.
+
+
+<ParamField path="child">
+</ParamField>
+
+<ParamField path="counter" type="= 0">
+</ParamField>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-ipc-ParentIpc-flush">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.ipc.ParentIpc.flush()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Flush the data to the child process.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-ipc-ParentIpc-receive">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.ipc.ParentIpc.receive()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Receive data from the child process.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-ipc-ParentIpc-send">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.ipc.ParentIpc.send(
+    data
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Send data to the child process.
+
+**Parameters:**
+
+<ParamField path="data">
+The data to send to the child process.
+</ParamField>
+
+**Returns:**
+
+The number of bytes sent.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-ipc-_read_exactly">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.ipc._read_exactly(
+    stream,
+    n: int
+) -> bytes
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Read exactly n bytes from stream, looping until all bytes are received.
+
+
+</Indent>

@@ -1,0 +1,92 @@
+---
+layout: overview
+slug: aitune/aitune/torch/inspecting/wrapping
+title: aitune.torch.inspecting.wrapping
+---
+
+Inspecting and patching modules.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`wrap`](#aitune-torch-inspecting-wrapping-wrap) | Wrap provided modules with inspection logic. |
+
+### Data
+
+[`LOG_FORMAT`](#aitune-torch-inspecting-wrapping-LOG_FORMAT)
+
+[`logger`](#aitune-torch-inspecting-wrapping-logger)
+
+### API
+
+<Anchor id="aitune-torch-inspecting-wrapping-wrap">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.wrapper_module.StrategyList":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.wrapping.wrap(
+    obj: object,
+    modules: list[aitune.torch.inspecting.module_info.ModuleInfo],
+    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None,
+    strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None = None
+) -> object
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wrap provided modules with inspection logic.
+
+**Parameters:**
+
+<ParamField path="obj" type="object">
+Callable object to wrap.
+</ParamField>
+
+<ParamField path="modules" type="list[ModuleInfo]">
+Dictionary of module names and their corresponding ModuleInfo objects.
+</ParamField>
+
+<ParamField path="strategy" type="TuneStrategy | None" default="None">
+Strategy to use for patching.
+</ParamField>
+
+<ParamField path="strategies" type="StrategyList | StrategyMap | None" default="None">
+Strategies to use for patching.
+</ParamField>
+
+**Returns:** `object`
+
+Wrapped callable object.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-wrapping-LOG_FORMAT">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.wrapping.LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-inspecting-wrapping-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.wrapping.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

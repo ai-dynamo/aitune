@@ -1,0 +1,84 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/cuda/cudart
+title: aitune.torch.libs.cuda.cudart
+---
+
+CUDA runtime library loader and singleton accessor.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_load_cudart`](#aitune-torch-libs-cuda-cudart-_load_cudart) | Load libcudart, searching LD_LIBRARY_PATH and common CUDA install paths. |
+| [`cudart`](#aitune-torch-libs-cuda-cudart-cudart) | Return the global libcudart handle, loading it on first call. |
+
+### Data
+
+[`_CUDART`](#aitune-torch-libs-cuda-cudart-_CUDART)
+
+[`logger`](#aitune-torch-libs-cuda-cudart-logger)
+
+### API
+
+<Anchor id="aitune-torch-libs-cuda-cudart-_load_cudart">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.cuda.cudart._load_cudart() -> ctypes.CDLL
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load libcudart, searching LD_LIBRARY_PATH and common CUDA install paths.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-cuda-cudart-cudart">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.cuda.cudart.cudart() -> ctypes.CDLL
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the global libcudart handle, loading it on first call.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-cuda-cudart-_CUDART">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.cuda.cudart._CUDART: CDLL | None = None
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-libs-cuda-cudart-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.cuda.cudart.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

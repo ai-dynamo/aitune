@@ -1,0 +1,126 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/tensorrt/tensorrt_engine_info
+title: aitune.torch.backend.tensorrt.tensorrt_engine_info
+---
+
+TensorRT Engine Info module for extracting information from TensorRT engines.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TensorRTEngineInfo`](#aitune-torch-backend-tensorrt-tensorrt_engine_info-TensorRTEngineInfo) | Helper class to extract and store information from a TensorRT engine. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_get_dtype_mapping`](#aitune-torch-backend-tensorrt-tensorrt_engine_info-_get_dtype_mapping) | - |
+
+### Data
+
+[`logger`](#aitune-torch-backend-tensorrt-tensorrt_engine_info-logger)
+
+[`trt`](#aitune-torch-backend-tensorrt-tensorrt_engine_info-trt)
+
+### API
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_engine_info-TensorRTEngineInfo">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.tensorrt_engine_info.TensorRTEngineInfo(
+    engine: typing.Any
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Helper class to extract and store information from a TensorRT engine.
+
+This class takes a deserialized TensorRT engine, extracts needed information,
+and makes it accessible through properties. The class doesn't own the engine
+and doesn't delete it.
+
+All extracted information is accessible as properties.
+
+
+<ParamField path="_input_names">
+</ParamField>
+
+<ParamField path="_output_dtypes">
+</ParamField>
+
+<ParamField path="_output_names">
+</ParamField>
+
+<ParamField path="_output_shapes">
+</ParamField>
+
+<ParamField path="input_names" type="list[str]">
+List of input tensor names.
+</ParamField>
+
+<ParamField path="num_io_tensors" type="int">
+Number of input and output tensors.
+</ParamField>
+
+<ParamField path="output_dtypes" type="dict[str, dtype]">
+List of output tensor dtypes.
+</ParamField>
+
+<ParamField path="output_names" type="list[str]">
+List of output tensor names.
+</ParamField>
+
+<ParamField path="output_shapes" type="dict[str, tuple[int, ...]]">
+List of output tensor shapes.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_engine_info-_get_dtype_mapping">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_engine_info._get_dtype_mapping()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_engine_info-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_engine_info.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_engine_info-trt">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_engine_info.trt = lazy_import('tensorrt')
+```
+
+</CodeBlock>
+</Anchor>
+

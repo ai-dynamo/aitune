@@ -1,0 +1,834 @@
+---
+layout: overview
+slug: aitune/aitune/torch/dataloader
+title: aitune.torch.dataloader
+---
+
+Dataset definition to feed data for tuning.
+
+User should provide a dataset with iterable samples, e.g.
+    - list of tensors,
+    - list of list of tensors,
+    - list of dicts,
+    - torch.utils.data.Dataset
+    - HuggingFace datasets.
+
+Example with a list of tensors:
+
+&gt;&gt;&gt; dataset = [torch.randn(3, 224, 224) for _ in range(4)]  # 4 random images
+&gt;&gt;&gt; for batch_size, args, kwargs in samples_generator(dataset, [4]):
+...     args[0].shape  # First argument is a batch of 2 images
+torch.Size([4, 3, 224, 224])
+
+Example with a list of dictionaries:
+
+&gt;&gt;&gt; dataset = [&#123;"input": torch.randn(3, 224, 224)&#125; for _ in range(4)]
+&gt;&gt;&gt; for batch_size, args, kwargs in samples_generator(dataset, [4]):
+...     kwargs["input"].shape
+torch.Size([4, 3, 224, 224])
+
+
+Example with dynamic shapes use our DataLoaderFactory and MinMaxRandomDataset.
+
+&gt;&gt;&gt; random_dataset = MinMaxRandomDataset(2, [InputConfig((3, 244, 244), (3, 488, 488), kwarg_name="image")])
+&gt;&gt;&gt; dataloader_factory = DataLoaderFactory(random_dataset)
+&gt;&gt;&gt; for batch_size, args, kwargs in samples_generator(dataloader_factory, [4]):
+...     kwargs["image"].shape
+torch.Size([4, 3, 244, 244])
+torch.Size([4, 3, 488, 488])
+
+Samples are collated into a batch with a transformers default collator with additional support for strings.
+
+We are using torch.utils.data.Dataloader internally, we feed tuning with
+different batch sizes of samples.
+
+Non-batchable inputs should be handled by the user on module level.
+
+&gt;&gt;&gt; def my_module(*args, **kwargs):
+...     print(len(kwargs["prompt"]), kwargs["width"], kwargs["height"])
+&gt;&gt;&gt; dataset = [&#123;"prompt": "Hello, world!"&#125; for _ in range(4)]
+&gt;&gt;&gt; for batch_size, args, kwargs in samples_generator(dataset, [4]):
+...     my_module(*args, **kwargs, width=1024, height=758)
+...     my_module(*args, **kwargs, width=2048, height=1536)
+4 1024 758
+4 2048 1536
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`DataLoaderFactory`](#aitune-torch-dataloader-DataLoaderFactory) | Factory for the torch DataLoader. |
+| [`DynamicShapeDataset`](#aitune-torch-dataloader-DynamicShapeDataset) | Each sample of this dataset is of a different shape. |
+| [`InputConfig`](#aitune-torch-dataloader-InputConfig) | Configuration for an input tensor. |
+| [`MinMaxRandomDataset`](#aitune-torch-dataloader-MinMaxRandomDataset) | Dataset that contains `num_samples` samples with random shapes given by the input configs. |
+| [`SingleBatchDatasetWrapper`](#aitune-torch-dataloader-SingleBatchDatasetWrapper) | Makes sure that set has enough samples for batch size by repeating the elements of the dataset. |
+| [`_DynamicShapeDatasetWrapper`](#aitune-torch-dataloader-_DynamicShapeDatasetWrapper) | Samples of different shapes cannot be batched together. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_list_data_collator`](#aitune-torch-dataloader-_list_data_collator) | Default data collator that simply concatenates the inputs. |
+| [`_make_dataloader_factory`](#aitune-torch-dataloader-_make_dataloader_factory) | Create a DataLoaderFactory from dataset or if DataLoaderFactory is given return it. |
+| [`_map_data_collator`](#aitune-torch-dataloader-_map_data_collator) | Transformers default data collector copied from source. |
+| [`default_data_collator`](#aitune-torch-dataloader-default_data_collator) | Default data collator that simply concatenates the inputs. |
+| [`ensure_enough_samples`](#aitune-torch-dataloader-ensure_enough_samples) | Ensures there is enough samples in the dataset to run the model for the given number of iterations. |
+| [`samples_generator`](#aitune-torch-dataloader-samples_generator) | Generate samples from the dataset with the given batch sizes and number of samples. |
+
+### Data
+
+[`DatasetLike`](#aitune-torch-dataloader-DatasetLike)
+
+### API
+
+<Anchor id="aitune-torch-dataloader-DataLoaderFactory">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"#aitune-torch-dataloader-DatasetLike"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.dataloader.DataLoaderFactory(
+    dataset: aitune.torch.dataloader.DatasetLike,
+    collate_fn: collections.abc.Callable | None = None,
+    num_workers: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Factory for the torch DataLoader.
+
+We need samples with required batch sizes thus we create a DataLoader on
+demand during tuning, validation or benchmarking.
+
+If you need custom collate function you can pass it to the constructor.
+By default we use default_data_collator that is based on transformers default
+collator with additional support for strings and lists.
+
+NOTE: A batch of strings is a list. (Tokenization might be done using huggingface datasets and mapping functionality)
+
+More customization can be done by extending DataLoaderFactory and overriding
+create_dataloader method.
+
+
+<ParamField path="collate_fn" type="Callable | None = collate_fn or default_data_collator">
+</ParamField>
+<Anchor id="aitune-torch-dataloader-DataLoaderFactory-create_dataloader">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.DataLoaderFactory.create_dataloader(
+    batch_size: int
+) -> torch.utils.data.DataLoader
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create a DataLoader from the configuration.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-DynamicShapeDataset">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.dataloader.DynamicShapeDataset()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `list`, `Dataset`
+
+Each sample of this dataset is of a different shape.
+
+Example of list of tensors:
+
+&gt;&gt;&gt; dataset = DynamicShapeDataset([torch.randn(10, 10), torch.randn(20, 20)])
+&gt;&gt;&gt; for batch_size, args, _ in samples_generator(dataset, [4, 8]):
+...     print(batch_size, args[0].shape)
+4 torch.Size([4, 10, 10])
+4 torch.Size([4, 20, 20])
+8 torch.Size([8, 10, 10])
+8 torch.Size([8, 20, 20])
+
+Example of list of dicts:
+
+&gt;&gt;&gt; dataset = DynamicShapeDataset([&#123;"input": torch.randn(10, 10)&#125;, &#123;"input": torch.randn(20, 20)&#125;])
+&gt;&gt;&gt; for batch_size, _, kwargs in samples_generator(dataset, [4, 8]):
+...     print(batch_size, kwargs["input"].shape)
+4 torch.Size([4, 10, 10])
+4 torch.Size([4, 20, 20])
+8 torch.Size([8, 10, 10])
+8 torch.Size([8, 20, 20])
+
+
+<Anchor id="aitune-torch-dataloader-DynamicShapeDataset-__getitem__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.DynamicShapeDataset.__getitem__(
+    index
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get an item from the dataset.
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-DynamicShapeDataset-__len__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.DynamicShapeDataset.__len__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the length of the dataset.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-InputConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.dataloader.InputConfig(
+    min_input: torch.Size,
+    max_input: torch.Size | None = None,
+    dtype: torch.dtype = torch.float32,
+    kwarg_name: str | None = None,
+    min_value: int | float = 0,
+    max_value: int | float = 1
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configuration for an input tensor.
+
+Example basic usage:
+
+&gt;&gt;&gt; InputConfig(min_input=(3, 24, 24), max_input=(3, 48, 48), kwarg_name="input")
+InputConfig(min_input=(3, 24, 24), max_input=(3, 48, 48), dtype=torch.float32, kwarg_name='input', min_value=0, max_value=1)
+
+Example with just min_input for both min and max:
+
+&gt;&gt;&gt; InputConfig(min_input=(3, 24, 24), kwarg_name="input2", min_value=0, max_value=3)
+InputConfig(min_input=(3, 24, 24), max_input=(3, 24, 24), dtype=torch.float32, kwarg_name='input2', min_value=0, max_value=3)
+
+
+<ParamField path="dtype" type="dtype = torch.float32">
+</ParamField>
+
+<ParamField path="kwarg_name" type="str | None = None">
+</ParamField>
+
+<ParamField path="max_input" type="Size | None = None">
+</ParamField>
+
+<ParamField path="max_value" type="int | float = 1">
+</ParamField>
+
+<ParamField path="min_input" type="Size">
+</ParamField>
+
+<ParamField path="min_value" type="int | float = 0">
+</ParamField>
+<Anchor id="aitune-torch-dataloader-InputConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.InputConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post-initialization hook.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset">
+
+<CodeBlock links={{"aitune.torch.dataloader.InputConfig":"#aitune-torch-dataloader-InputConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.dataloader.MinMaxRandomDataset(
+    num_samples: int,
+    input_configs: list[aitune.torch.dataloader.InputConfig],
+    include_min_max_shapes: bool = True
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [DynamicShapeDataset](#aitune-torch-dataloader-DynamicShapeDataset)
+
+Dataset that contains `num_samples` samples with random shapes given by the input configs.
+
+
+<ParamField path="is_dict" type="= self._validate_names()">
+</ParamField>
+
+<ParamField path="samples" type="= self._generate_samples()">
+</ParamField>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-__getitem__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset.__getitem__(
+    index
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get a sample from the dataset.
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-__len__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset.__len__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the number of samples in the dataset.
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-_generate_sample_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset._generate_sample_dict(
+    gen_tensor_fn: collections.abc.Callable
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-_generate_sample_list">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset._generate_sample_list(
+    gen_tensor_fn: collections.abc.Callable
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-_generate_samples">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset._generate_samples()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-_get_max_tensor">
+
+<CodeBlock links={{"aitune.torch.dataloader.InputConfig":"#aitune-torch-dataloader-InputConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset._get_max_tensor(
+    cfg: aitune.torch.dataloader.InputConfig
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-_get_min_tensor">
+
+<CodeBlock links={{"aitune.torch.dataloader.InputConfig":"#aitune-torch-dataloader-InputConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset._get_min_tensor(
+    cfg: aitune.torch.dataloader.InputConfig
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-_get_tensor">
+
+<CodeBlock links={{"aitune.torch.dataloader.InputConfig":"#aitune-torch-dataloader-InputConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset._get_tensor(
+    cfg: aitune.torch.dataloader.InputConfig
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-_validate_names">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset._validate_names()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-SingleBatchDatasetWrapper">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"#aitune-torch-dataloader-DatasetLike"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.dataloader.SingleBatchDatasetWrapper(
+    dataset: aitune.torch.dataloader.DatasetLike,
+    batch_size: int
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `Dataset`
+
+Makes sure that set has enough samples for batch size by repeating the elements of the dataset.
+
+
+<Anchor id="aitune-torch-dataloader-SingleBatchDatasetWrapper-__getitem__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.SingleBatchDatasetWrapper.__getitem__(
+    index
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the item at the given index.
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-SingleBatchDatasetWrapper-__len__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.SingleBatchDatasetWrapper.__len__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the length of the dataset which is exactly batch_size.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-_DynamicShapeDatasetWrapper">
+
+<CodeBlock links={{"aitune.torch.dataloader.DynamicShapeDataset":"#aitune-torch-dataloader-DynamicShapeDataset"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.dataloader._DynamicShapeDatasetWrapper(
+    dataset: aitune.torch.dataloader.DynamicShapeDataset,
+    batch_size: int
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `Dataset`
+
+Samples of different shapes cannot be batched together.
+
+This wrapper allows creation of batches by using same sample multiple times.
+
+Returns given dynamic shape samples batch_size times.
+
+NOTE: Increases dataset size by batch_size times.
+
+&gt;&gt;&gt; dataset = [&#123;"input": torch.randn(10, 10)&#125;, &#123;"input": torch.randn(20, 20)&#125;]
+&gt;&gt;&gt; wrapped_dataset = _DynamicShapeDatasetWrapper(dataset, 2)
+&gt;&gt;&gt; len(wrapped_dataset)
+4
+&gt;&gt;&gt; wrapped_dataset[0]["input"].shape
+torch.Size([10, 10])
+&gt;&gt;&gt; wrapped_dataset[1]["input"].shape
+torch.Size([10, 10])
+&gt;&gt;&gt; wrapped_dataset[2]["input"].shape
+torch.Size([20, 20])
+&gt;&gt;&gt; wrapped_dataset[3]["input"].shape
+torch.Size([20, 20])
+
+
+<Anchor id="aitune-torch-dataloader-_DynamicShapeDatasetWrapper-__getitem__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader._DynamicShapeDatasetWrapper.__getitem__(
+    index: int
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the item at the given index.
+
+**Parameters:**
+
+<ParamField path="index" type="int">
+The index of the item to return.
+</ParamField>
+
+**Returns:** `Any`
+
+The item at the given index.
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-_DynamicShapeDatasetWrapper-__len__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader._DynamicShapeDatasetWrapper.__len__() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns larger dataset so that we can create batch of different sample shapes.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-_list_data_collator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader._list_data_collator(
+    features: list[list]
+) -> list
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Default data collator that simply concatenates the inputs.
+
+Example of list of mixed tensors and numpy arrays:
+
+&gt;&gt;&gt; features = [[torch.randn(10, 10), np.zeros((15, 15))], [torch.randn(10, 10), np.zeros((15, 15))]]
+&gt;&gt;&gt; result = _list_data_collator(features)
+&gt;&gt;&gt; result[0].shape, result[1].shape
+(torch.Size([2, 10, 10]), torch.Size([2, 15, 15]))
+
+Example of list of strings:
+
+&gt;&gt;&gt; features = [["Hello World"], ["Hello World"]]
+&gt;&gt;&gt; result = _list_data_collator(features)
+&gt;&gt;&gt; result
+[['Hello World', 'Hello World']]
+
+**Parameters:**
+
+<ParamField path="features" type="list[list]">
+List of lists of samples
+</ParamField>
+
+**Returns:** `list`
+
+List of concatenated tensors.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-_make_dataloader_factory">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"#aitune-torch-dataloader-DataLoaderFactory"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader._make_dataloader_factory(
+    datasetlike: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory
+) -> aitune.torch.dataloader.DataLoaderFactory
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create a DataLoaderFactory from dataset or if DataLoaderFactory is given return it.
+
+Convenience method to deal only with DataLoaderFactory.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-_map_data_collator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader._map_data_collator(
+    features: list
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Transformers default data collector copied from source.
+
+NOTE: This is a copy of the transformers default data collector with additional support for strings.
+https://github.com/huggingface/transformers/blob/8f137b242762eb9295a431ec6eb8cd9ee673daf9/src/transformers/data/data_collator.py#L127
+Transformers are Apache 2.0 licensed.
+
+Copy has been made to add string support and avoid dependency on transformers.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-default_data_collator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.default_data_collator(
+    batch: list
+) -> tuple | list | dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Default data collator that simply concatenates the inputs.
+
+**Returns:** `tuple | list | dict`
+
+List of concatenated tensors or dict of concatenated tensors.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-ensure_enough_samples">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"#aitune-torch-dataloader-DataLoaderFactory"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.ensure_enough_samples(
+    dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
+    number_of_samples: int
+) -> aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Ensures there is enough samples in the dataset to run the model for the given number of iterations.
+
+NOTE: This function trims the dataset to the given number of samples.
+
+**Parameters:**
+
+<ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
+The dataset to make iterable.
+</ParamField>
+
+<ParamField path="number_of_samples" type="int">
+The number of samples to ensure.
+</ParamField>
+
+**Returns:** `DatasetLike | DataLoaderFactory`
+
+The dataset with enough samples.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-samples_generator">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"#aitune-torch-dataloader-DataLoaderFactory"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.samples_generator(
+    dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
+    batch_sizes: list[int] | collections.abc.Generator[int, None, None],
+    max_num_batches_per_batch_size: int | None = None
+) -> collections.abc.Generator[tuple[int, list[typing.Any], dict[str, typing.Any]], None, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Generate samples from the dataset with the given batch sizes and number of samples.
+
+It is convenience utility to iterate over all samples with different batch sizes in one go.
+
+&gt;&gt;&gt; dataset = [&#123;"prompt": "Hello, world!"&#125; for _ in range(10)]
+&gt;&gt;&gt; for batch_size, args, kwargs in samples_generator(dataset, [4, 8], 1):
+...     print(batch_size, len(kwargs["prompt"]))
+4 4
+8 8
+
+&gt;&gt;&gt; for batch_size, args, kwargs in samples_generator(torch.randn(10, 10), [1, 2]):
+...     print(batch_size, args[0].shape)
+1 torch.Size([1, 10, 10])
+2 torch.Size([2, 10, 10])
+
+NOTE: for each batch size we will iterate over all samples in the dataset.
+
+**Parameters:**
+
+<ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
+The dataset to generate samples from. It can be DataLoaderFactory or any dataset/iterable and even torch.Tensor.
+Tensor will be treated as a single sample dataset.
+</ParamField>
+
+<ParamField path="batch_sizes" type="list[int] | Generator[int, None, None]">
+The batch sizes to generate samples with.
+</ParamField>
+
+<ParamField path="max_num_batches_per_batch_size" type="int | None" default="None">
+The maximum number of batches to use for tuning per batch size.
+</ParamField>
+
+**Returns:** `None`
+
+A generator of tuples of batch size, args and kwargs
+
+
+</Indent>
+
+<Anchor id="aitune-torch-dataloader-DatasetLike">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.DatasetLike = Sequence | torch.utils.data.Dataset
+```
+
+</CodeBlock>
+</Anchor>
+

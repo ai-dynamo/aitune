@@ -1,0 +1,335 @@
+---
+layout: overview
+slug: aitune/aitune/torch/jit/patcher
+title: aitune.torch.jit.patcher
+---
+
+Module for inspecting PyTorch models and tracking their execution.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`Patcher`](#aitune-torch-jit-patcher-Patcher) | Patcher class. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`jit_reset`](#aitune-torch-jit-patcher-jit_reset) | Reset the JIT patcher. |
+| [`patch_for_jit_tuning`](#aitune-torch-jit-patcher-patch_for_jit_tuning) | Wrapper that patches torch before function execution and unpatch_torch after. |
+| [`prepare_for_jit_tuning`](#aitune-torch-jit-patcher-prepare_for_jit_tuning) | Context manager which prepares model for tuning. |
+
+### Data
+
+[`T`](#aitune-torch-jit-patcher-T)
+
+[`_DEFAULT_PATCH_EXCLUDE`](#aitune-torch-jit-patcher-_DEFAULT_PATCH_EXCLUDE)
+
+[`logger`](#aitune-torch-jit-patcher-logger)
+
+### API
+
+<Anchor id="aitune-torch-jit-patcher-Patcher">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.jit.patcher.Patcher()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Patcher class.
+
+Allows intercepting creating torch modules to register them with PatchedModule.
+
+
+<ParamField path="_intercepted_classes" type="set[type[Module]] = set()">
+</ParamField>
+
+<ParamField path="_original_module_init" type="Callable | None = None">
+</ParamField>
+
+<ParamField path="_patched_modules" type="list[PatchedModule | InspectModule] = []">
+</ParamField>
+<Anchor id="aitune-torch-jit-patcher-Patcher-_is_allowed_to_tune">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.Patcher._is_allowed_to_tune(
+    module: torch.nn.Module
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Check if the module is allowed to tune.
+
+If automatic patching is used, all modules, even those for internal torch use, will be intercepted.
+Those have to be rejected, otherwise JIT compilation will fail.
+
+Built-in defaults (``_DEFAULT_PATCH_EXCLUDE``) always apply;
+user-supplied ``jit_config.patch_exclude`` entries are additive.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patcher-Patcher-intercepted_classes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.Patcher.intercepted_classes()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Get the intercepted classes.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patcher-Patcher-patch_torch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.Patcher.patch_torch()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Patch torch.nn.Module to track execution.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patcher-Patcher-patched_modules_under">
+
+<CodeBlock links={{"aitune.torch.jit.patched_module.PatchedModule":"/aitune/aitune/torch/jit/patched_module#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.jit.inspect_module.InspectModule":"/aitune/aitune/torch/jit/inspect_module#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.Patcher.patched_modules_under(
+    root: torch.nn.Module
+) -> list[aitune.torch.jit.patched_module.PatchedModule | aitune.torch.jit.inspect_module.InspectModule]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Return patched modules registered under a root module's ownership tree.
+
+AITune's PatchedModule children model the observed call hierarchy, which can miss
+registered submodules that are not executed for the recorded samples. Backend build
+paths still receive and may copy/export the full nn.Module ownership tree, so cleanup
+at backend boundaries must operate on root.modules() instead of only observed children.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patcher-Patcher-tune_deferred">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.Patcher.tune_deferred()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Trigger tuning for all recorded modules in deferred mode.
+
+Call this after running at least one full forward pass through the pipeline so that every
+module has collected the samples it needs.  Intended for pipelines where modules are called
+a variable number of times per step (e.g. text-to-image or text-to-video), making it
+difficult to know when enough samples have been recorded inside the forward hook itself.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patcher-Patcher-unpatch_module">
+
+<CodeBlock links={{"aitune.torch.jit.patched_module.PatchedModule":"/aitune/aitune/torch/jit/patched_module#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.jit.inspect_module.InspectModule":"/aitune/aitune/torch/jit/inspect_module#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.Patcher.unpatch_module(
+    module: aitune.torch.jit.patched_module.PatchedModule | aitune.torch.jit.inspect_module.InspectModule
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Unpatch a module.
+
+**Parameters:**
+
+<ParamField path="module" type="PatchedModule | InspectModule">
+The module to unpatch.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patcher-Patcher-unpatch_torch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.Patcher.unpatch_torch(
+    unpatch_modules: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Unpatch torch.nn.Module.
+
+**Parameters:**
+
+<ParamField path="unpatch_modules" type="bool" default="False">
+if True, unpatch all modules, otherwise only torch.nn.Module
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-jit-patcher-jit_reset">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.jit_reset()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reset the JIT patcher.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-patcher-patch_for_jit_tuning">
+
+<CodeBlock links={{"aitune.torch.jit.patcher.T":"#aitune-torch-jit-patcher-T"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.patch_for_jit_tuning(
+    func: collections.abc.Callable[..., aitune.torch.jit.patcher.T]
+) -> collections.abc.Callable[..., aitune.torch.jit.patcher.T]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wrapper that patches torch before function execution and unpatch_torch after.
+
+**Parameters:**
+
+<ParamField path="func" type="Callable[..., T]">
+The function to wrap with patching.
+</ParamField>
+
+**Returns:** `Callable[..., T]`
+
+Wrapped function that automatically patches/unpatches torch.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-patcher-prepare_for_jit_tuning">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.prepare_for_jit_tuning()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Context manager which prepares model for tuning.
+
+This context manager automatically intercepts creating torch modules and prepares them for tuning.
+The inference can happen outside of the context manager.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-patcher-T">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.T = TypeVar('T')
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-jit-patcher-_DEFAULT_PATCH_EXCLUDE">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher._DEFAULT_PATCH_EXCLUDE: tuple[str, ...] = ('torch.jit', 'torch._inductor', 'torch._dynamo', 'torch.fx', 'torch.export', 't...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-jit-patcher-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patcher.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

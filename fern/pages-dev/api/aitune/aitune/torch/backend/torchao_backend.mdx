@@ -1,0 +1,710 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/torchao_backend
+title: aitune.torch.backend.torchao_backend
+---
+
+Torchao backend.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TorchAOBackend`](#aitune-torch-backend-torchao_backend-TorchAOBackend) | Backend that does torch quantization. |
+| [`TorchAOBackendConfig`](#aitune-torch-backend-torchao_backend-TorchAOBackendConfig) | Configuration for TorchAOBackend. |
+
+### Data
+
+[`DEFAULT_QUANTIZATION`](#aitune-torch-backend-torchao_backend-DEFAULT_QUANTIZATION)
+
+[`MXFP8DQ_BLOCK_SIZE_DIVISIBILITY`](#aitune-torch-backend-torchao_backend-MXFP8DQ_BLOCK_SIZE_DIVISIBILITY)
+
+[`MX_FORMATS_AVAILABLE`](#aitune-torch-backend-torchao_backend-MX_FORMATS_AVAILABLE)
+
+[`NVFP4DQ_BLOCK_SIZE_DIVISIBILITY`](#aitune-torch-backend-torchao_backend-NVFP4DQ_BLOCK_SIZE_DIVISIBILITY)
+
+[`QuantizationType`](#aitune-torch-backend-torchao_backend-QuantizationType)
+
+[`_BASE_QUANTIZATION_CONFIGS`](#aitune-torch-backend-torchao_backend-_BASE_QUANTIZATION_CONFIGS)
+
+[`_HW_DEPENDENT_QUANTIZATIONS`](#aitune-torch-backend-torchao_backend-_HW_DEPENDENT_QUANTIZATIONS)
+
+[`logger`](#aitune-torch-backend-torchao_backend-logger)
+
+### API
+
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend">
+
+<CodeBlock links={{"aitune.torch.backend.torchao_backend.TorchAOBackendConfig":"#aitune-torch-backend-torchao_backend-TorchAOBackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.torchao_backend.TorchAOBackend(
+    config: aitune.torch.backend.torchao_backend.TorchAOBackendConfig | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+
+Backend that does torch quantization.
+
+If you would like to use customize quantization, you can pass in a quantization config.
+
+
+<ParamField path="STATE_COMPILE_DYNAMIC" type="= 'compile_dynamic'">
+</ParamField>
+
+<ParamField path="STATE_CONFIG" type="= 'config'">
+</ParamField>
+
+<ParamField path="STATE_DATA" type="= 'data'">
+</ParamField>
+
+<ParamField path="STATE_DEVICE" type="= 'device'">
+</ParamField>
+
+<ParamField path="STATE_ORIG_MODULE" type="= 'orig_module'">
+</ParamField>
+
+<ParamField path="STATE_TYPE" type="= 'type'">
+</ParamField>
+
+<ParamField path="_compile_dynamic" type="= self._config.dynamic">
+</ParamField>
+
+<ParamField path="_config">
+</ParamField>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Activates backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._build(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    data: list[aitune.torch.module.recording_module.Sample],
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Builds the model with torchao quantization and torch.compile.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_check_hardware_compatibility">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._check_hardware_compatibility(
+    module: torch.nn.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check hardware and model constraints for the selected quantization format.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The PyTorch module to validate.
+</ParamField>
+
+**Raises:**
+
+- `RuntimeError`: If hardware or model constraints are not met.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_check_mxfp8dq_compatibility">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._check_mxfp8dq_compatibility(
+    module: torch.nn.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate sm100+ GPU, bfloat16 dtype, and block-size alignment for mxfp8dq.
+
+Pre-flight mirror of the bfloat16 assertion in
+``torchao.prototype.mx_formats.inference_workflow._mx_inference_linear_transform``
+and the ``block_size=32`` field of ``MXDynamicActivationMXWeightConfig``.
+The sm100+ and library requirement is captured by the module-level ``MX_FORMATS_AVAILABLE``
+flag (evaluated at import time). Dtype is bfloat16-only —
+torchao asserts this explicitly; float32 is not accepted despite what older comments suggested.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The PyTorch module to validate.
+</ParamField>
+
+**Raises:**
+
+- `RuntimeError`: If sm100+ GPU is unavailable, any parameter is not bfloat16,
+or a weight's last dimension is not divisible by MXFP8DQ_BLOCK_SIZE_DIVISIBILITY.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_check_nvfp4dq_compatibility">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._check_nvfp4dq_compatibility(
+    module: torch.nn.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate sm100+ GPU, bfloat16 dtype, and weight shape alignment for nvfp4dq.
+
+Pre-flight mirror of the assertions in
+``torchao.prototype.mx_formats.inference_workflow._nvfp4_inference_linear_transform``
+(``is_sm_at_least_100()`` assert, bfloat16 assert, and ``weight.shape[-2] % 16`` check).
+The sm100+ and library requirement is captured by the module-level ``MX_FORMATS_AVAILABLE``
+flag (evaluated at import time).
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The PyTorch module to validate.
+</ParamField>
+
+**Raises:**
+
+- `RuntimeError`: If sm100+ GPU is unavailable, the model dtype is unsupported,
+or any weight's last two dimensions are not divisible by the block size.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivates backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_deploy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._deploy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deploys the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_do_torchao_quantization">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._do_torchao_quantization()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Apply TorchAO quantization and warm up the compiled model.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Runs inference with the given arguments.
+
+**Parameters:**
+
+<ParamField path="*args" type="Any" default="()">
+inference arguments
+</ParamField>
+
+<ParamField path="**kwargs" type="Any" default="&#123;&#125;">
+inference keyword arguments
+</ParamField>
+
+**Returns:** `Any`
+
+The result of the inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_iter_quantized_parameters">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._iter_quantized_parameters(
+    module: torch.nn.Module
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Iterate parameters from modules selected by the TorchAO filter function.
+
+TorchAO applies ``filter_fn`` at the module level and skips modules where it returns ``False``. The
+compatibility preflight must mirror that behavior, otherwise it can reject parameters in layers that TorchAO
+would not quantize anyway, such as embeddings, output projections, or small ``Linear`` layers excluded by a
+model-specific predicate.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_save_config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend._save_config(
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Store the backend configuration to a file.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the description of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend.from_dict(
+    module: torch.nn.Module | None,
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Creates a backend from a state_dict.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend.key() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the key of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackend.to_dict()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the state_dict of the backend.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig">
+
+<CodeBlock links={{"aitune.torch.libs.torch_compile.TorchCompileMode":"/aitune/aitune/torch/libs/torch_compile#aitune-torch-libs-torch_compile-TorchCompileMode","aitune.torch.backend.torchao_backend.QuantizationType":"#aitune-torch-backend-torchao_backend-QuantizationType"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.torchao_backend.TorchAOBackendConfig(
+    fullgraph: bool = False,
+    dynamic: bool | None = None,
+    mode: aitune.torch.libs.torch_compile.TorchCompileMode | None = 'max-autotune',
+    quantization: aitune.torch.backend.torchao_backend.QuantizationType | None = None,
+    quantization_config: torchao.core.config.AOBaseConfig | None = None,
+    filter_fn: collections.abc.Callable[[nn.Module, str], bool] | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+
+Configuration for TorchAOBackend.
+
+**Parameters:**
+
+<ParamField path="fullgraph" type="bool" default="False">
+Passed to ``torch.compile`` to require a single graph.
+</ParamField>
+
+<ParamField path="dynamic" type="bool | None" default="None">
+Passed to ``torch.compile``. When ``None``, TorchAOBackend enables dynamic compilation only for
+graph specs with detected dynamic axes, without mutating this config.
+</ParamField>
+
+<ParamField path="mode" type="TorchCompileMode | None" default="'max-autotune'">
+Passed through to ``torch.compile(mode=...)``. Valid presets are ``"default"``,
+``"reduce-overhead"``, ``"max-autotune"``, and ``"max-autotune-no-cudagraphs"``.
+</ParamField>
+
+<ParamField path="quantization" type="QuantizationType | None" default="None">
+Name of a built-in TorchAO quantization preset.
+</ParamField>
+
+<ParamField path="quantization_config" type="AOBaseConfig | None" default="None">
+Custom TorchAO quantization config. Use this instead of ``quantization`` for advanced
+TorchAO options.
+</ParamField>
+
+<ParamField path="filter_fn" type="Callable[[nn.Module, str], bool] | None" default="None">
+Optional TorchAO quantization predicate. It receives ``(module, fqn)`` and should return ``True``
+for modules that should be quantized. Compatibility preflight checks use the same predicate.
+</ParamField>
+
+
+<ParamField path="dynamic" type="bool | None = None">
+</ParamField>
+
+<ParamField path="filter_fn" type="Callable[[nn.Module, str], bool] | None = None">
+</ParamField>
+
+<ParamField path="fullgraph" type="bool = False">
+</ParamField>
+
+<ParamField path="mode" type="TorchCompileMode | None = 'max-autotune'">
+</ParamField>
+
+<ParamField path="quantization" type="QuantizationType | None = None">
+</ParamField>
+
+<ParamField path="quantization_config" type="AOBaseConfig | None = None">
+</ParamField>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackendConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post init for TorchAOBackendConfig.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig-_get_quantization_config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackendConfig._get_quantization_config(
+    quantization
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackendConfig.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the description of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig-from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.torchao_backend.TorchAOBackendConfig":"#aitune-torch-backend-torchao_backend-TorchAOBackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackendConfig.from_dict(
+    data: dict
+) -> aitune.torch.backend.torchao_backend.TorchAOBackendConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Initialise config from a plain dict (e.g. parsed from YAML).
+
+Supports two forms:
+
+- ``&#123;"quantization": "int8wo"&#125;`` — user-facing YAML form; ``quantization``
+  must be one of the supported ``QuantizationType`` literals.
+- ``&#123;"quantization_config": &lt;bytes&gt;&#125;`` — internal checkpoint form produced
+  by ``to_dict()``, where ``quantization_config`` is pickle-serialised.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig-key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackendConfig.key() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the key of the backend configuration.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.TorchAOBackendConfig.to_dict()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert TorchAOBackendConfig to dict.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-torchao_backend-DEFAULT_QUANTIZATION">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.DEFAULT_QUANTIZATION = 'fp8wo'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-torchao_backend-MXFP8DQ_BLOCK_SIZE_DIVISIBILITY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.MXFP8DQ_BLOCK_SIZE_DIVISIBILITY = 32
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-torchao_backend-MX_FORMATS_AVAILABLE">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.MX_FORMATS_AVAILABLE = torch.cuda.is_available() and torch.cuda.get_device_capability() >= (10, 0)
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-torchao_backend-NVFP4DQ_BLOCK_SIZE_DIVISIBILITY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.NVFP4DQ_BLOCK_SIZE_DIVISIBILITY = 16
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-torchao_backend-QuantizationType">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.QuantizationType = Literal['int8wo', 'int8dq', 'fp8wo', 'fp8dq', 'mxfp8dq', 'nvfp4dq']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-torchao_backend-_BASE_QUANTIZATION_CONFIGS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend._BASE_QUANTIZATION_CONFIGS: dict = {'int8wo': Int8WeightOnlyConfig(), 'int8dq': Int8DynamicActivationInt8WeightConf...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-torchao_backend-_HW_DEPENDENT_QUANTIZATIONS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend._HW_DEPENDENT_QUANTIZATIONS = frozenset({'nvfp4dq', 'mxfp8dq'})
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-torchao_backend-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torchao_backend.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

@@ -1,0 +1,128 @@
+---
+layout: overview
+slug: aitune/aitune/utils/monitoring/nvtx_annotation
+title: aitune.utils.monitoring.nvtx_annotation
+---
+
+Annotation for NVTX.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`annotate_with_nvtx`](#aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx) | Decorator/context manager for nvtx annotations. |
+
+### Data
+
+[`NVTX_ANNOTATION_DOMAIN`](#aitune-utils-monitoring-nvtx_annotation-NVTX_ANNOTATION_DOMAIN)
+
+### API
+
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx(
+    name: str | None = None,
+    color: str | int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Decorator/context manager for nvtx annotations.
+
+
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx-__call__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx.__call__(
+    func
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wraps the function as a decorator.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx-__enter__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx.__enter__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enters the context manager.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx.__exit__(
+    exc_type,
+    exc_value,
+    traceback
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Exits the context manager.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx-_post_init">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx._post_init()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post-initialization.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-NVTX_ANNOTATION_DOMAIN">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.nvtx_annotation.NVTX_ANNOTATION_DOMAIN = 'AITune'
+```
+
+</CodeBlock>
+</Anchor>
+

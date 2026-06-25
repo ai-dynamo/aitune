@@ -1,0 +1,68 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/torch_compile
+title: aitune.torch.libs.torch_compile
+---
+
+Shared torch.compile helpers.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`resolve_compile_dynamic`](#aitune-torch-libs-torch_compile-resolve_compile_dynamic) | Resolve effective dynamic compilation setting without mutating backend config. |
+
+### Data
+
+[`TorchCompileMode`](#aitune-torch-libs-torch_compile-TorchCompileMode)
+
+### API
+
+<Anchor id="aitune-torch-libs-torch_compile-resolve_compile_dynamic">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.torch_compile.resolve_compile_dynamic(
+    config_dynamic: bool | None,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> bool | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve effective dynamic compilation setting without mutating backend config.
+
+**Parameters:**
+
+<ParamField path="config_dynamic" type="bool | None">
+Explicit dynamic setting from backend config.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+Graph specification used for dynamic-axis detection.
+</ParamField>
+
+**Returns:** `bool | None`
+
+Effective value to pass to ``torch.compile(dynamic=...)``.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-torch_compile-TorchCompileMode">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.torch_compile.TorchCompileMode = Literal['default', 'reduce-overhead', 'max-autotune', 'max-autotune-no-cudagraph...
+```
+
+</CodeBlock>
+</Anchor>
+

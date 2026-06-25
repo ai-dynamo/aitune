@@ -1,0 +1,64 @@
+---
+layout: overview
+slug: aitune/aitune/torch/checkpoint/local_torch_storage
+title: aitune.torch.checkpoint.local_torch_storage
+---
+
+Local torch storage class which saves torch checkpoint on local disk.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`LocalTorchStorage`](#aitune-torch-checkpoint-local_torch_storage-LocalTorchStorage) | Implementation of storage that saves/loads from host machine. |
+
+### API
+
+<Anchor id="aitune-torch-checkpoint-local_torch_storage-LocalTorchStorage">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.local_torch_storage.LocalTorchStorage(
+    base_folder: str | pathlib.Path = 'checkpoints',
+    compress_checkpoint: bool = True,
+    overwrite_checkpoint_on_tune: bool = True,
+    remove_checkpoint_after_tune: bool = False,
+    sha_type: typing.Literal['256', '512'] = '256'
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [Storage](/aitune/aitune/torch/checkpoint/storage#aitune-torch-checkpoint-storage-Storage)
+
+Implementation of storage that saves/loads from host machine.
+
+
+<ParamField path="base_folder" type="= Path(base_folder)">
+</ParamField>
+<Anchor id="aitune-torch-checkpoint-local_torch_storage-LocalTorchStorage-_get_target_folder_path">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.local_torch_storage.LocalTorchStorage._get_target_folder_path(
+    path: str | pathlib.Path
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the target folder path.
+
+
+</Indent>
+</Indent>

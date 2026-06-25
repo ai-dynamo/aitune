@@ -1,0 +1,316 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/tensorrt/tensorrt_builder
+title: aitune.torch.backend.tensorrt.tensorrt_builder
+---
+
+TensorRT Builder module for building TensorRT engines from ONNX models.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TensorRTBuilder`](#aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder) | Class for building TensorRT engines from ONNX models. |
+
+### Data
+
+[`logger`](#aitune-torch-backend-tensorrt-tensorrt_builder-logger)
+
+[`trt`](#aitune-torch-backend-tensorrt-tensorrt_builder-trt)
+
+### API
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.tensorrt_builder.TensorRTBuilder(
+    input_onnx_path: pathlib.Path,
+    output_path: pathlib.Path,
+    workspace_size: int | None = None,
+    optimization_level: int | None = None,
+    compatibility_level: int | None = None,
+    timing_cache: pathlib.Path | None = None,
+    profiles: list[polygraphy.backend.trt.Profile] | None = None,
+    enable_tf32: bool = True
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Class for building TensorRT engines from ONNX models.
+
+
+<ParamField path="profiles" type="= profiles or []">
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder-_build_create_config_kwargs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.TensorRTBuilder._build_create_config_kwargs(
+    max_workspace_size,
+    optimization_level,
+    compatibility_level,
+    profiles,
+    timing_cache,
+    enable_tf32
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the kwargs for the CreateConfig constructor.
+
+**Parameters:**
+
+<ParamField path="max_workspace_size">
+Maximum workspace size
+</ParamField>
+
+<ParamField path="optimization_level">
+TensorRT optimization level
+</ParamField>
+
+<ParamField path="compatibility_level">
+Hardware compatibility level
+</ParamField>
+
+<ParamField path="profiles">
+List of optimization profiles
+</ParamField>
+
+<ParamField path="timing_cache">
+Path to timing cache
+</ParamField>
+
+<ParamField path="enable_tf32">
+Enable TF32 hardware acceleration
+</ParamField>
+
+**Returns:**
+
+Dictionary of kwargs for CreateConfig
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder-_build_engine_from_network">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.TensorRTBuilder._build_engine_from_network(
+    network: typing.Any,
+    config: typing.Any
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build TensorRT engine from network.
+
+**Parameters:**
+
+<ParamField path="network" type="Any">
+TensorRT network
+</ParamField>
+
+<ParamField path="config" type="Any">
+TensorRT configuration
+</ParamField>
+
+**Returns:** `Any`
+
+TensorRT engine
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder-_create_trt_config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.TensorRTBuilder._create_trt_config(
+    profiles: list[polygraphy.backend.trt.Profile]
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create TensorRT config.
+
+**Parameters:**
+
+<ParamField path="profiles" type="list[Profile]">
+List of TensorRT optimization profiles
+</ParamField>
+
+**Returns:** `Any`
+
+TensorRT configuration object
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder-_create_trt_network">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.TensorRTBuilder._create_trt_network() -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create TensorRT network from ONNX.
+
+**Returns:** `Any`
+
+TensorRT network
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder-_handle_failed_build">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.TensorRTBuilder._handle_failed_build(
+    error: Exception,
+    engine_path: pathlib.Path
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Handle errors during engine build.
+
+**Parameters:**
+
+<ParamField path="error" type="Exception">
+The exception that occurred
+</ParamField>
+
+<ParamField path="engine_path" type="Path">
+Path to the engine file
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder-_save_engine">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.TensorRTBuilder._save_engine(
+    engine,
+    path: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Save the TensorRT engine to a file.
+
+**Parameters:**
+
+<ParamField path="engine">
+TensorRT engine
+</ParamField>
+
+<ParamField path="path" type="Path">
+Path to save the engine
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder-_validate_onnx_file">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.TensorRTBuilder._validate_onnx_file() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that the ONNX file exists.
+
+**Raises:**
+
+- `FileNotFoundError`: If the ONNX file does not exist
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-TensorRTBuilder-build">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.TensorRTBuilder.build() -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the TensorRT engine.
+
+**Returns:** `Path`
+
+Path to the TensorRT engine
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_builder-trt">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_builder.trt = lazy_import('tensorrt')
+```
+
+</CodeBlock>
+</Anchor>
+

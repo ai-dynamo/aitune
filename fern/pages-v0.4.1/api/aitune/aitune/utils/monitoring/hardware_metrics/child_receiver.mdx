@@ -1,0 +1,44 @@
+---
+layout: overview
+slug: aitune/aitune/utils/monitoring/hardware_metrics/child_receiver
+title: aitune.utils.monitoring.hardware_metrics.child_receiver
+---
+
+Entry point for the child subprocess that accumulates hardware metrics forwarded by the parent process.
+
+On a normal shutdown the child sends the accumulated data back as a DataFrame. If the parent process
+terminates unexpectedly (detected as an IPC error), the child dumps the metrics to a CSV file instead.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`run_child_receiver`](#aitune-utils-monitoring-hardware_metrics-child_receiver-run_child_receiver) | Run the child receiver. |
+
+### API
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-child_receiver-run_child_receiver">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.child_receiver.run_child_receiver()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run the child receiver.
+
+In case parent process dies (which is detected by checking the pipe for EOF), it dumps the collected metrics
+to a CSV file. If parent process is still alive and requests the metrics back, sends them as pandas DataFrame so
+that it takes less memory to send them back.
+
+Communication uses pickle to serialize and deserialize data and sends/receives data via a stdin/stdout pipe.
+
+
+</Indent>

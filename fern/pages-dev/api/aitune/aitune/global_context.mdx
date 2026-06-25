@@ -1,0 +1,252 @@
+---
+layout: overview
+slug: aitune/aitune/global_context
+title: aitune.global_context
+---
+
+Global context for torch.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`GlobalContext`](#aitune-global_context-GlobalContext) | Global context holding key value pairs. |
+
+### Data
+
+[`BACKEND_CONTEXT_KEY`](#aitune-global_context-BACKEND_CONTEXT_KEY)
+
+[`BATCH_SIZE_KEY`](#aitune-global_context-BATCH_SIZE_KEY)
+
+[`LIBRARY_LOGGING_KEY`](#aitune-global_context-LIBRARY_LOGGING_KEY)
+
+[`MODULE_CONTEXT_KEY`](#aitune-global_context-MODULE_CONTEXT_KEY)
+
+[`global_context`](#aitune-global_context-global_context)
+
+### API
+
+<Anchor id="aitune-global_context-GlobalContext">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.global_context.GlobalContext()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Global context holding key value pairs.
+
+Creates only one instance (singleton) and can be used as a context manager to push and pop context.
+
+
+<ParamField path="_current_data">
+Return the current context.
+</ParamField>
+
+<ParamField path="_data_stack" type="= [&#123;&#125;]">
+</ParamField>
+
+<ParamField path="_lock" type="= threading.Lock()">
+</ParamField>
+<Anchor id="aitune-global_context-GlobalContext-__enter__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.GlobalContext.__enter__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enter a new context.
+
+
+</Indent>
+<Anchor id="aitune-global_context-GlobalContext-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.GlobalContext.__exit__(
+    exc_type,
+    exc_val,
+    exc_tb
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Exit the current context.
+
+
+</Indent>
+<Anchor id="aitune-global_context-GlobalContext-__getitem__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.GlobalContext.__getitem__(
+    key
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get a value from the current context.
+
+
+</Indent>
+<Anchor id="aitune-global_context-GlobalContext-__setitem__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.GlobalContext.__setitem__(
+    key,
+    value
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set a key-value pair in the current context.
+
+
+</Indent>
+<Anchor id="aitune-global_context-GlobalContext-clear">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.GlobalContext.clear()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Clear the current context.
+
+
+</Indent>
+<Anchor id="aitune-global_context-GlobalContext-get">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.GlobalContext.get(
+    key,
+    default = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get a value from the current context.
+
+
+</Indent>
+<Anchor id="aitune-global_context-GlobalContext-set">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.GlobalContext.set(
+    key,
+    value
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set a key-value pair in the current context.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-global_context-BACKEND_CONTEXT_KEY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.BACKEND_CONTEXT_KEY = 'current_backend'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-global_context-BATCH_SIZE_KEY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.BATCH_SIZE_KEY = 'batch_size'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-global_context-LIBRARY_LOGGING_KEY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.LIBRARY_LOGGING_KEY = 'library_logging'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-global_context-MODULE_CONTEXT_KEY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.MODULE_CONTEXT_KEY = 'current_module'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-global_context-global_context">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.global_context.global_context = GlobalContext()
+```
+
+</CodeBlock>
+</Anchor>
+

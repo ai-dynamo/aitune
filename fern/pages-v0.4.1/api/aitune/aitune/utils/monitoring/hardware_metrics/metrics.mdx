@@ -1,0 +1,189 @@
+---
+layout: overview
+slug: aitune/aitune/utils/monitoring/hardware_metrics/metrics
+title: aitune.utils.monitoring.hardware_metrics.metrics
+---
+
+Metrics providers for hardware metrics.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`AbstractHardwareMetricProvider`](#aitune-utils-monitoring-hardware_metrics-metrics-AbstractHardwareMetricProvider) | Abstract base class for hardware metric providers. |
+| [`HostMetricProvider`](#aitune-utils-monitoring-hardware_metrics-metrics-HostMetricProvider) | Host metric provider. |
+| [`NvmlMetricProvider`](#aitune-utils-monitoring-hardware_metrics-metrics-NvmlMetricProvider) | Nvml metric provider. |
+| [`TorchMetricProvider`](#aitune-utils-monitoring-hardware_metrics-metrics-TorchMetricProvider) | Torch metric provider. |
+
+### API
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-metrics-AbstractHardwareMetricProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.metrics.AbstractHardwareMetricProvider()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Abstract base class for hardware metric providers.
+
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-metrics-AbstractHardwareMetricProvider-get_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.metrics.AbstractHardwareMetricProvider.get_metrics() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Gets the metrics.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-metrics-HostMetricProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.metrics.HostMetricProvider()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [AbstractHardwareMetricProvider](#aitune-utils-monitoring-hardware_metrics-metrics-AbstractHardwareMetricProvider)
+
+Host metric provider.
+
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-metrics-HostMetricProvider-get_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.metrics.HostMetricProvider.get_metrics() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Gets the metrics.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-metrics-NvmlMetricProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.metrics.NvmlMetricProvider()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [AbstractHardwareMetricProvider](#aitune-utils-monitoring-hardware_metrics-metrics-AbstractHardwareMetricProvider)
+
+Nvml metric provider.
+
+
+<ParamField path="handles">
+</ParamField>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-metrics-NvmlMetricProvider-close">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.metrics.NvmlMetricProvider.close()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Closes the NvmlMetricProvider.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-metrics-NvmlMetricProvider-get_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.metrics.NvmlMetricProvider.get_metrics() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Gets the metrics.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-metrics-TorchMetricProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.metrics.TorchMetricProvider()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [AbstractHardwareMetricProvider](#aitune-utils-monitoring-hardware_metrics-metrics-AbstractHardwareMetricProvider)
+
+Torch metric provider.
+
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-metrics-TorchMetricProvider-get_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.metrics.TorchMetricProvider.get_metrics() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Gets the metrics.
+
+
+</Indent>
+</Indent>

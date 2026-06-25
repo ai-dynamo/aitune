@@ -1,0 +1,155 @@
+---
+layout: overview
+slug: aitune/aitune/torch/task/profiling/metrics
+title: aitune.torch.task.profiling.metrics
+---
+
+Metrics for profiling.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`get_batch_size`](#aitune-torch-task-profiling-metrics-get_batch_size) | Get batch size from profiling results. |
+| [`get_mean_executions_per_second`](#aitune-torch-task-profiling-metrics-get_mean_executions_per_second) | Get execution time per second from profiling results. |
+| [`get_throughput`](#aitune-torch-task-profiling-metrics-get_throughput) | Get throughput from profiling results. |
+| [`is_throughput_saturated`](#aitune-torch-task-profiling-metrics-is_throughput_saturated) | Validate if throughput saturated between consecutive samples. |
+
+### API
+
+<Anchor id="aitune-torch-task-profiling-metrics-get_batch_size">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.metrics.get_batch_size(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get batch size from profiling results.
+
+**Parameters:**
+
+<ParamField path="results" type="list[ProfilingResultEvent]">
+List of profiling results.
+</ParamField>
+
+**Returns:** `int`
+
+Batch size.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-metrics-get_mean_executions_per_second">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.metrics.get_mean_executions_per_second(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get execution time per second from profiling results.
+
+**Parameters:**
+
+<ParamField path="results" type="list[ProfilingResultEvent]">
+List of profiling results.
+</ParamField>
+
+**Returns:** `float`
+
+Executions per second based on mean execution time.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-metrics-get_throughput">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.metrics.get_throughput(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent],
+    batch_size: int | None = None
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get throughput from profiling results.
+
+**Parameters:**
+
+<ParamField path="results" type="list[ProfilingResultEvent]">
+List of profiling results.
+</ParamField>
+
+<ParamField path="batch_size" type="int | None" default="None">
+Batch size to use for throughput calculation. If not provided, it will be inferred from the results.
+</ParamField>
+
+**Returns:** `float`
+
+Throughput in samples per second.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-metrics-is_throughput_saturated">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.metrics.is_throughput_saturated(
+    profiling_result: list[aitune.torch.task.profiling.events.ProfilingResultEvent],
+    throughput_cutoff_threshold: float,
+    prev_results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate if throughput saturated between consecutive samples.
+
+**Parameters:**
+
+<ParamField path="profiling_result" type="list[ProfilingResultEvent]">
+Current profiling results.
+</ParamField>
+
+<ParamField path="throughput_cutoff_threshold" type="float">
+Threshold for throughput saturation.
+</ParamField>
+
+<ParamField path="prev_results" type="list[ProfilingResultEvent]">
+Previous profiling results or previous throughput.
+</ParamField>
+
+**Returns:** `bool`
+
+True when throughput saturated between consecutive samples. False when verification disabled or not yet saturated.
+
+
+</Indent>

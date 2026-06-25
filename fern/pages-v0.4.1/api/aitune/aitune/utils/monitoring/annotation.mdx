@@ -1,0 +1,125 @@
+---
+layout: overview
+slug: aitune/aitune/utils/monitoring/annotation
+title: aitune.utils.monitoring.annotation
+---
+
+Annotation wrapper for NVTX and hardware metrics collection - one entry point for both.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`annotate`](#aitune-utils-monitoring-annotation-annotate) | Annotation wrapper for NVTX and hardware metrics collection - one entry point for both. |
+
+### API
+
+<Anchor id="aitune-utils-monitoring-annotation-annotate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.annotation.annotate(
+    name: str | None = None,
+    color: str | int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Annotation wrapper for NVTX and hardware metrics collection - one entry point for both.
+
+This class wraps nvtx.annotate and collect_hardware_metrics to allow for future extensions.
+It can be used as a decorator or a context manager.
+
+**Parameters:**
+
+<ParamField path="name" type="str" default="None">
+A name associated with the annotated code range.
+</ParamField>
+
+<ParamField path="color" type="str or int" default="None">
+A color associated with the annotated code range.
+</ParamField>
+
+
+<Anchor id="aitune-utils-monitoring-annotation-annotate-__call__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotation.annotate.__call__(
+    func
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wraps the function as a decorator.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-annotation-annotate-__enter__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotation.annotate.__enter__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enters the context manager.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-annotation-annotate-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotation.annotate.__exit__(
+    exc_type,
+    exc_value,
+    traceback
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Exits the context manager.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-annotation-annotate-_post_init">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotation.annotate._post_init()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post-initialization.
+
+
+</Indent>
+</Indent>

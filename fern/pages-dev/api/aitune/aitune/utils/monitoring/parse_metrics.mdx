@@ -1,0 +1,181 @@
+---
+layout: overview
+slug: aitune/aitune/utils/monitoring/parse_metrics
+title: aitune.utils.monitoring.parse_metrics
+---
+
+Hardware metrics parsing and summary.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_format_label_recursive`](#aitune-utils-monitoring-parse_metrics-_format_label_recursive) | Recursively format a backend label with per-level indentation. |
+| [`_split_top_level_params`](#aitune-utils-monitoring-parse_metrics-_split_top_level_params) | Split a params string on commas at the top nesting level only. |
+| [`format_backend_label_for_display`](#aitune-utils-monitoring-parse_metrics-format_backend_label_for_display) | Format a compact backend label for multi-line table display. |
+| [`get_metrics_summary`](#aitune-utils-monitoring-parse_metrics-get_metrics_summary) | Get a formatted summary of hardware metrics (memory, utilization, power) per module and backend. |
+| [`parse_memory_metrics`](#aitune-utils-monitoring-parse_metrics-parse_memory_metrics) | Extract memory usage summary per module and backend (max values in GB). |
+| [`parse_power_metrics`](#aitune-utils-monitoring-parse_metrics-parse_power_metrics) | Extract power usage summary per module and backend (mean and max in W). |
+| [`parse_utilization_metrics`](#aitune-utils-monitoring-parse_metrics-parse_utilization_metrics) | Extract utilization summary per module and backend (mean and max in %). |
+
+### API
+
+<Anchor id="aitune-utils-monitoring-parse_metrics-_format_label_recursive">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.parse_metrics._format_label_recursive(
+    label: str,
+    indent: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Recursively format a backend label with per-level indentation.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-parse_metrics-_split_top_level_params">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.parse_metrics._split_top_level_params(
+    params: str
+) -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Split a params string on commas at the top nesting level only.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-parse_metrics-format_backend_label_for_display">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.parse_metrics.format_backend_label_for_display(
+    label: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Format a compact backend label for multi-line table display.
+
+Each top-level parameter is placed on its own indented line. Nested
+config objects are formatted recursively with increased indentation.
+
+Example::
+
+    TensorRTBackend(use_dynamo=False,quantization_config=ONNXQuantizationConfig(precision='int8'))
+    -&gt;
+    TensorRTBackend(
+        use_dynamo=False,
+        quantization_config=ONNXQuantizationConfig(
+            precision='int8'
+        )
+    )
+
+Labels with no parameters (e.g. ``TorchEagerBackend()``) or without
+parentheses are returned unchanged.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-parse_metrics-get_metrics_summary">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.parse_metrics.get_metrics_summary(
+    df: pandas.DataFrame
+) -> pandas.DataFrame | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get a formatted summary of hardware metrics (memory, utilization, power) per module and backend.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-parse_metrics-parse_memory_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.parse_metrics.parse_memory_metrics(
+    df: pandas.DataFrame
+) -> pandas.DataFrame
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Extract memory usage summary per module and backend (max values in GB).
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-parse_metrics-parse_power_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.parse_metrics.parse_power_metrics(
+    df: pandas.DataFrame
+) -> pandas.DataFrame
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Extract power usage summary per module and backend (mean and max in W).
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-parse_metrics-parse_utilization_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.parse_metrics.parse_utilization_metrics(
+    df: pandas.DataFrame
+) -> pandas.DataFrame
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Extract utilization summary per module and backend (mean and max in %).
+
+
+</Indent>

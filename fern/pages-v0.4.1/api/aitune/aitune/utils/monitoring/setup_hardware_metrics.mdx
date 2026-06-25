@@ -1,0 +1,367 @@
+---
+layout: overview
+slug: aitune/aitune/utils/monitoring/setup_hardware_metrics
+title: aitune.utils.monitoring.setup_hardware_metrics
+---
+
+Hardware metrics collector.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`HardwareMetricsSession`](#aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession) | Manages the lifecycle of hardware metrics collection. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_split_for_logging`](#aitune-utils-monitoring-setup_hardware_metrics-_split_for_logging) | Split a wide metrics table into narrower sub-tables for logging. |
+| [`disable_hardware_metrics`](#aitune-utils-monitoring-setup_hardware_metrics-disable_hardware_metrics) | Disable hardware metrics collection at runtime. |
+| [`dump_metrics`](#aitune-utils-monitoring-setup_hardware_metrics-dump_metrics) | Logs metrics summary and dumps the metrics to a CSV file. |
+| [`enable_hardware_metrics`](#aitune-utils-monitoring-setup_hardware_metrics-enable_hardware_metrics) | Enable hardware metrics collection at runtime. |
+| [`get_default_collector`](#aitune-utils-monitoring-setup_hardware_metrics-get_default_collector) | Get the default hardware metrics collector. |
+| [`get_hardware_metrics`](#aitune-utils-monitoring-setup_hardware_metrics-get_hardware_metrics) | Get metrics from the receiver. |
+| [`snapshot`](#aitune-utils-monitoring-setup_hardware_metrics-snapshot) | Dump currently collected hardware metrics to a CSV file. |
+
+### Data
+
+[`_DEFAULT_SESSION`](#aitune-utils-monitoring-setup_hardware_metrics-_DEFAULT_SESSION)
+
+### API
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsSession()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Manages the lifecycle of hardware metrics collection.
+
+Encapsulates the collector, receiver subprocess, runtime enable/disable state,
+and atexit registration.
+
+
+<ParamField path="_collector" type="HardwareMetricsCollector | None = None">
+</ParamField>
+
+<ParamField path="_noop_collector" type="= NoOpHardwareMetricsCollector()">
+</ParamField>
+
+<ParamField path="_receiver" type="ParentReceiver | None = None">
+</ParamField>
+
+<ParamField path="_runtime_enabled" type="bool | None = None">
+</ParamField>
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession-_ensure_initialized">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsSession._ensure_initialized() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession-_should_collect">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsSession._should_collect() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession-disable">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsSession.disable() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Disable collection at runtime, gracefully stopping any active session.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession-enable">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsSession.enable() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enable collection at runtime, overriding the env var.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession-get_collector">
+
+<CodeBlock links={{"aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector":"/aitune/aitune/utils/monitoring/hardware_metrics/collector#aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsSession.get_collector() -> aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the active collector, or a no-op when collection is disabled.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession-get_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsSession.get_metrics() -> pandas.DataFrame | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return accumulated metrics, or None if collection was never started.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession-snapshot">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsSession.snapshot(
+    path: pathlib.Path,
+    reset_metrics: bool = True
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Dump currently collected metrics to a CSV file.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+Path to write the CSV file.
+</ParamField>
+
+<ParamField path="reset_metrics" type="bool" default="True">
+If True, clears the accumulated metrics after writing.
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-_split_for_logging">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics._split_for_logging(
+    flat: pandas.DataFrame,
+    n_index_cols: int
+) -> list[pandas.DataFrame]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Split a wide metrics table into narrower sub-tables for logging.
+
+Each split contains the index columns (Module, Backend) plus up to 6
+metric columns. Returns the original frame unchanged when there are at
+most 6 metric columns.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-disable_hardware_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.disable_hardware_metrics() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Disable hardware metrics collection at runtime.
+
+Overrides the AITUNE_HARDWARE_METRICS environment variable.
+If collection was active, gracefully stops the receiver (dumping any
+accumulated metrics) and resets state so that a future enable_hardware_metrics()
+call starts a fresh collection session.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-dump_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.dump_metrics(
+    metrics: pandas.DataFrame
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Logs metrics summary and dumps the metrics to a CSV file.
+
+**Parameters:**
+
+<ParamField path="metrics" type="pd.DataFrame">
+The metrics to dump.
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-enable_hardware_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.enable_hardware_metrics() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enable hardware metrics collection at runtime.
+
+Overrides the AITUNE_HARDWARE_METRICS environment variable.
+The collector and receiver subprocess are started lazily on the first use.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-get_default_collector">
+
+<CodeBlock links={{"aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector":"/aitune/aitune/utils/monitoring/hardware_metrics/collector#aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.get_default_collector() -> aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the default hardware metrics collector.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-get_hardware_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.get_hardware_metrics() -> pandas.DataFrame | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get metrics from the receiver.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-snapshot">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics.snapshot(
+    path: pathlib.Path,
+    reset_metrics: bool = True
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Dump currently collected hardware metrics to a CSV file.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+Path to write the CSV file.
+</ParamField>
+
+<ParamField path="reset_metrics" type="bool" default="True">
+If True, clears the accumulated metrics after writing.
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-_DEFAULT_SESSION">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.setup_hardware_metrics._DEFAULT_SESSION: HardwareMetricsSession = HardwareMetricsSession()
+```
+
+</CodeBlock>
+</Anchor>
+

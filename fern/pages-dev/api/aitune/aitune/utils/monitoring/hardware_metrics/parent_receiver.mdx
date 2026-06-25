@@ -1,0 +1,166 @@
+---
+layout: overview
+slug: aitune/aitune/utils/monitoring/hardware_metrics/parent_receiver
+title: aitune.utils.monitoring.hardware_metrics.parent_receiver
+---
+
+Parent receiver for hardware metrics.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ParentReceiver`](#aitune-utils-monitoring-hardware_metrics-parent_receiver-ParentReceiver) | Receiver which gets metrics from queue and sends them to child process. |
+
+### API
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-parent_receiver-ParentReceiver">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.parent_receiver.ParentReceiver(
+    queue: queue.Queue | multiprocessing.queues.Queue
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Receiver which gets metrics from queue and sends them to child process.
+
+Communication uses pickle to serialize and deserialize data and sends/receives data via a stdin/stdout pipe.
+
+If the main process dies, the child process will dump the collected metrics to a CSV file.
+If the main process is still alive and requests the metrics back, the child process will send them as pandas DataFrame so
+that it takes less memory to send them back.
+
+**Parameters:**
+
+<ParamField path="queue" type="Queue | multiprocessing.queues.Queue">
+The queue to send the metrics to.
+</ParamField>
+
+
+<ParamField path="keep_running" type="= threading.Event()">
+</ParamField>
+
+<ParamField path="lock" type="= threading.Lock()">
+</ParamField>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-parent_receiver-ParentReceiver-get_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.parent_receiver.ParentReceiver.get_metrics() -> pandas.DataFrame
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Gets the metrics.
+
+**Returns:** `pd.DataFrame`
+
+The metrics as a pandas DataFrame.
+
+**Raises:**
+
+- `RuntimeError`: If the receiver is not started.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-parent_receiver-ParentReceiver-run">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.parent_receiver.ParentReceiver.run()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Runs the receiver.
+
+This method is run in a separate thread.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-parent_receiver-ParentReceiver-snapshot">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.parent_receiver.ParentReceiver.snapshot(
+    path: pathlib.Path,
+    reset_metrics: bool = True
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Dumps currently collected metrics to a file.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+Path to write the CSV file.
+</ParamField>
+
+<ParamField path="reset_metrics" type="bool" default="True">
+If True, clears the accumulated metrics after writing.
+</ParamField>
+
+**Raises:**
+
+- `RuntimeError`: If the receiver is not started.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-parent_receiver-ParentReceiver-start">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.parent_receiver.ParentReceiver.start()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Starts the receiver.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-parent_receiver-ParentReceiver-stop">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.parent_receiver.ParentReceiver.stop()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Stops the receiver.
+
+
+</Indent>
+</Indent>

@@ -1,0 +1,202 @@
+---
+layout: overview
+slug: aitune/aitune/torch/task/find_max_batch_size
+title: aitune.torch.task.find_max_batch_size
+---
+
+Find max batch size for a model.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_log_file`](#aitune-torch-task-find_max_batch_size-_log_file) | - |
+| [`find_max_batch_size`](#aitune-torch-task-find_max_batch_size-find_max_batch_size) | Finds max batch size for Torch Compile as a baseline. |
+| [`find_max_throughput_for_backend`](#aitune-torch-task-find_max_batch_size-find_max_throughput_for_backend) | Profiles a backend to find the batch size that achieves maximum throughput. |
+| [`get_throughput_per_batch_size`](#aitune-torch-task-find_max_batch_size-get_throughput_per_batch_size) | Gets throughput per batch size. |
+
+### Data
+
+[`logger`](#aitune-torch-task-find_max_batch_size-logger)
+
+### API
+
+<Anchor id="aitune-torch-task-find_max_batch_size-_log_file">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.find_max_batch_size._log_file(
+    cache_dir: pathlib.Path,
+    filename: str
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-find_max_batch_size-find_max_batch_size">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.profiling.ProfilingResults":"/aitune/aitune/torch/task/profiling/profiling#aitune-torch-task-profiling-profiling-ProfilingResults"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.find_max_batch_size.find_max_batch_size(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    data: list[aitune.torch.module.recording_module.Sample],
+    profiling_config: aitune.torch.task.profiling.config.ProfilingConfig,
+    device: torch.device,
+    cache_dir: pathlib.Path
+) -> tuple[int, float, aitune.torch.task.profiling.profiling.ProfilingResults]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Finds max batch size for Torch Compile as a baseline.
+
+Uses profiling with max throughput strategy to find max batch size.
+
+Note: This function expects user to set profiling_config.max_batch_size to the highest batch size they want to profile.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+Model to find max batch size for.
+</ParamField>
+
+<ParamField path="name" type="str">
+Name of the model.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+Graph spec of the model.
+</ParamField>
+
+<ParamField path="data" type="list[Sample]">
+Data to profile.
+</ParamField>
+
+<ParamField path="profiling_config" type="ProfilingConfig">
+Profiling configuration.
+</ParamField>
+
+<ParamField path="torch_backend">
+Backend to use for the find max batch size. If not provided, Torch Eager backend will be used.
+</ParamField>
+
+<ParamField path="device" type="torch.device">
+Device to use for the calculation.
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+Cache directory to store the backend artifacts.
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-find_max_batch_size-find_max_throughput_for_backend">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.profiling.ProfilingResults":"/aitune/aitune/torch/task/profiling/profiling#aitune-torch-task-profiling-profiling-ProfilingResults"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.find_max_batch_size.find_max_throughput_for_backend(
+    backend: aitune.torch.backend.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    data: list[aitune.torch.module.recording_module.Sample],
+    profiling_config: aitune.torch.task.profiling.config.ProfilingConfig
+) -> tuple[int, float, aitune.torch.task.profiling.profiling.ProfilingResults]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profiles a backend to find the batch size that achieves maximum throughput.
+
+**Parameters:**
+
+<ParamField path="module">
+Model to calculate maximum throughput for.
+</ParamField>
+
+<ParamField path="name" type="str">
+Name of the model.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+Graph spec of the model.
+</ParamField>
+
+<ParamField path="data" type="list[Sample]">
+Data to profile.
+</ParamField>
+
+<ParamField path="profiling_config" type="ProfilingConfig">
+Profiling configuration.
+</ParamField>
+
+<ParamField path="backend" type="Backend">
+Backend to use for the calculation.
+</ParamField>
+
+<ParamField path="device">
+Device to use for the calculation.
+</ParamField>
+
+**Returns:** `tuple[int, float, ProfilingResults]`
+
+Tuple containing:
+- Batch size with maximum throughput.
+- Throughput for the batch size.
+- Backend used for the calculation.
+- Profiling results.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-find_max_batch_size-get_throughput_per_batch_size">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent","aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy":"/aitune/aitune/torch/task/profiling/measuring_stop_strategy#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.find_max_batch_size.get_throughput_per_batch_size(
+    profiling_results: list[aitune.torch.task.profiling.events.ProfilingResultEvent],
+    measuring_stop_strategy: aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy
+) -> list[tuple[int, float]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Gets throughput per batch size.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-find_max_batch_size-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.find_max_batch_size.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+
