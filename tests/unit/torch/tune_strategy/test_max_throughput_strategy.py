@@ -123,8 +123,8 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
     strategy.enable_performance_validation(False)
     strategy.enable_correctness_check(False)
 
-    model = ToyTorchModel()
-    sample = model.sample().unsqueeze(0)  # as dataloader make batches, we need to unsqueeze the sample
+    model = ToyTorchModel().to(torch_device)
+    sample = model.sample().unsqueeze(0).to(torch_device)  # as dataloader make batches, we need to unsqueeze the sample
 
     def mock_measure(backend, name, graph_spec, data, profiling_cfg):
         return MaxThroughputProfilingResult(throughput=1.0 / backend.sleep_time, selected_batch_size=1)
@@ -132,7 +132,12 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
     strategy._measure = mock_measure
 
     max_throughput_backend = strategy.tune(
-        model, "test", model.graph_spec(batch_sizes=[1, 2]), [((sample,), {})], torch_device, tmp_path
+        model,
+        "test",
+        model.graph_spec(batch_sizes=[1, 2], device=torch_device),
+        [((sample,), {})],
+        torch_device,
+        tmp_path,
     )
     max_throughput_backend = cast(SleepBackend, max_throughput_backend)
 

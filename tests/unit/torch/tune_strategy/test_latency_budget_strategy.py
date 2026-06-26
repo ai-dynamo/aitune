@@ -168,8 +168,8 @@ def test_latency_budget_strategy_selects_max_throughput_backend(torch_device, tm
     strategy.enable_performance_validation(False)
     strategy.enable_correctness_check(False)
 
-    model = ToyTorchModel()
-    sample = model.sample().unsqueeze(0)
+    model = ToyTorchModel().to(torch_device)
+    sample = model.sample().unsqueeze(0).to(torch_device)
 
     def mock_measure(backend, name, graph_spec, data, profiling_cfg):
         return LatencyBudgetProfilingResult(
@@ -181,7 +181,12 @@ def test_latency_budget_strategy_selects_max_throughput_backend(torch_device, tm
     strategy._measure = mock_measure
 
     selected = strategy.tune(
-        model, "test", model.graph_spec(batch_sizes=[1, 2]), [((sample,), {})], torch_device, tmp_path
+        model,
+        "test",
+        model.graph_spec(batch_sizes=[1, 2], device=torch_device),
+        [((sample,), {})],
+        torch_device,
+        tmp_path,
     )
 
     assert isinstance(selected, SleepBackend)
@@ -197,8 +202,8 @@ def test_latency_budget_strategy_raises_when_no_user_backend_satisfies_budget(to
     )
     strategy.enable_correctness_check(False)
 
-    model = ToyTorchModel()
-    sample = model.sample().unsqueeze(0)
+    model = ToyTorchModel().to(torch_device)
+    sample = model.sample().unsqueeze(0).to(torch_device)
 
     def mock_measure(backend, name, graph_spec, data, profiling_cfg):
         if isinstance(backend, TorchEagerBackend):
@@ -208,4 +213,11 @@ def test_latency_budget_strategy_raises_when_no_user_backend_satisfies_budget(to
     strategy._measure = mock_measure
 
     with pytest.raises(RuntimeError, match="No backend satisfied latency budget"):
-        strategy.tune(model, "test", model.graph_spec(batch_sizes=[1, 2]), [((sample,), {})], torch_device, tmp_path)
+        strategy.tune(
+            model,
+            "test",
+            model.graph_spec(batch_sizes=[1, 2], device=torch_device),
+            [((sample,), {})],
+            torch_device,
+            tmp_path,
+        )

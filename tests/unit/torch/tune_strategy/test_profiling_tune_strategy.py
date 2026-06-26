@@ -207,9 +207,9 @@ def test_pre_tune_profiles_baseline_when_validation_enabled(torch_device, tmp_pa
     """_pre_tune sets _baseline_result and _baseline_backend when validation is enabled."""
     strategy = _ControlledStrategy(backends=[SleepBackend()], profiling_config=_profiling_config(), measure_value=5.0)
     strategy.enable_correctness_check(False)
-    model = ToyTorchModel()
+    model = ToyTorchModel().to(torch_device)
     graph_spec = model.graph_spec(batch_sizes=[1], device=torch_device)
-    data = [((model.sample().unsqueeze(0),), {})]
+    data = [((model.sample().unsqueeze(0).to(torch_device),), {})]
 
     strategy._pre_tune(model, "test", graph_spec, data, torch_device, tmp_path)
 
@@ -222,9 +222,9 @@ def test_pre_tune_skips_baseline_when_validation_disabled(torch_device, tmp_path
     strategy = _ControlledStrategy(backends=[SleepBackend()], profiling_config=_profiling_config())
     strategy.enable_performance_validation(False)
     strategy.enable_correctness_check(False)
-    model = ToyTorchModel()
+    model = ToyTorchModel().to(torch_device)
     graph_spec = model.graph_spec(batch_sizes=[1], device=torch_device)
-    data = [((model.sample().unsqueeze(0),), {})]
+    data = [((model.sample().unsqueeze(0).to(torch_device),), {})]
 
     strategy._pre_tune(model, "test", graph_spec, data, torch_device, tmp_path)
 
@@ -241,9 +241,9 @@ def test_pre_tune_resets_state_on_each_call(torch_device, tmp_path):
     strategy.perf_validation_results = [BackendPerfResult("stale", 1.0, 1.0, 1.0, True)]
     strategy._baseline_result = _ControlledProfilingResult(metric_value=99.0)
 
-    model = ToyTorchModel()
+    model = ToyTorchModel().to(torch_device)
     graph_spec = model.graph_spec(batch_sizes=[1], device=torch_device)
-    data = [((model.sample().unsqueeze(0),), {})]
+    data = [((model.sample().unsqueeze(0).to(torch_device),), {})]
 
     strategy._pre_tune(model, "test", graph_spec, data, torch_device, tmp_path)
 
