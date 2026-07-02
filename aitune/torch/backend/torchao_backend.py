@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import MISSING, dataclass, fields
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 import torch
 import torch.nn as nn
@@ -103,6 +103,8 @@ class TorchAOBackendConfig(BackendConfig):
             raise ValueError("Only one of quantization or quantization_config should be provided.")
         if self.quantization is None and self.quantization_config is None:
             raise ValueError("Either quantization or quantization_config should be provided.")
+        if self.mode is not None and self.mode not in get_args(TorchCompileMode):
+            raise ValueError(f"Invalid mode: {self.mode!r}. Supported values: {get_args(TorchCompileMode)}")
 
         if not self.quantization_config:
             if not MX_FORMATS_AVAILABLE and self.quantization in _HW_DEPENDENT_QUANTIZATIONS:

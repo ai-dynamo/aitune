@@ -74,6 +74,17 @@ class ONNXRuntimeBackendConfig(BackendConfig):
     execution_provider: ONNXExecutionProvider | None = None
     opset_version: int | None = None
 
+    def __post_init__(self):
+        """Post init."""
+        if self.execution_provider is not None:
+            try:
+                self.execution_provider = ONNXExecutionProvider(self.execution_provider)
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid execution_provider: {self.execution_provider!r}. "
+                    f"Supported values: {[entry.value for entry in list(ONNXExecutionProvider)]}"
+                ) from e
+
     @classmethod
     def from_dict(cls, data: dict) -> "ONNXRuntimeBackendConfig":
         """Initialise config from a plain dict (e.g. parsed from YAML).

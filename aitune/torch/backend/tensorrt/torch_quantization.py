@@ -6,7 +6,7 @@ import gc
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 import modelopt
 import modelopt.torch.quantization as mtq
@@ -29,6 +29,18 @@ QuantizationConfig = Literal[
     "INT4_AWQ_CFG",
 ]
 
+HAS_NVFP4_FP8_MHA_CONFIG = Version(modelopt.__version__) >= Version("0.35.0")
+
+
+def _validate_torch_quantization_config(config_name: str) -> None:
+    """Validate that quantization_config is a supported value."""
+    if config_name not in get_args(QuantizationConfig):
+        raise ValueError(
+            f"Unsupported quantization_config: {config_name!r}. Supported values: {get_args(QuantizationConfig)}"
+        )
+    if not HAS_NVFP4_FP8_MHA_CONFIG and config_name == "NVFP4_FP8_MHA_CONFIG":
+        raise ValueError("NVFP4_FP8_MHA_CONFIG is not supported with ModelOpt < 0.35.0")
+
 
 @dataclass
 class TorchQuantizationConfig:
@@ -42,6 +54,10 @@ class TorchQuantizationConfig:
 
     quantization_config: QuantizationConfig = "FP8_DEFAULT_CFG"
     device: str = "cuda"
+
+    def __post_init__(self):
+        """Validate quantization_config after initialization."""
+        _validate_torch_quantization_config(self.quantization_config)
 
     @classmethod
     def from_dict(cls, state_dict: dict):
@@ -196,7 +212,7 @@ class TorchQuantizer:
             "INT8_SMOOTHQUANT_CFG": mtq.INT8_SMOOTHQUANT_CFG,
             "INT4_AWQ_CFG": mtq.INT4_AWQ_CFG,
         }
-        if Version(modelopt.__version__) >= Version("0.35.0"):
+        if HAS_NVFP4_FP8_MHA_CONFIG:
             config_mapping["NVFP4_FP8_MHA_CONFIG"] = mtq.NVFP4_FP8_MHA_CONFIG
 
         if config_name not in config_mapping:

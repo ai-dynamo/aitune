@@ -419,6 +419,11 @@ def test_onnx_config_from_dict_none_execution_provider():
     assert config.execution_provider is None
 
 
+def test_onnx_config_rejects_invalid_execution_provider():
+    with pytest.raises(ValueError, match="Invalid execution_provider"):
+        ONNXRuntimeBackendConfig(execution_provider="invalid")  # pytype: disable=wrong-arg-types
+
+
 def test_onnx_config_from_dict_round_trip():
     original = ONNXRuntimeBackendConfig(execution_provider=ONNXExecutionProvider.CUDA, use_dynamo=False)
     restored = ONNXRuntimeBackendConfig.from_dict(original.to_dict())

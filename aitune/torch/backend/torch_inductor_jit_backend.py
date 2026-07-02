@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import torch
 import torch.nn as nn
@@ -86,6 +86,8 @@ class TorchInductorJitBackendConfig(BackendConfig):
                 "Use either 'mode' for predefined configurations or 'options' "
                 "for custom configurations, but not both."
             )
+        if self.mode is not None and self.mode not in get_args(TorchCompileMode):
+            raise ValueError(f"Invalid mode: {self.mode!r}. Supported values: {get_args(TorchCompileMode)}")
 
 
 class TorchInductorJitBackend(Backend):

@@ -937,6 +937,27 @@ def test_tensorrt_config_from_dict_with_torch_quantization_config_instance():
     assert config.quantization_config.quantization_config == "FP8_DEFAULT_CFG"
 
 
+def test_onnx_autocast_config_rejects_invalid_precision():
+    from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
+
+    with pytest.raises(ValueError, match="Unsupported autocast precision"):
+        ONNXAutoCastConfig(precision="invalid")  # pytype: disable=wrong-arg-types
+
+
+def test_onnx_quantization_config_rejects_invalid_precision():
+    from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig
+
+    with pytest.raises(ValueError, match="Unsupported precision"):
+        ONNXQuantizationConfig(precision="invalid")  # pytype: disable=wrong-arg-types
+
+
+def test_torch_quantization_config_rejects_invalid_config():
+    from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig
+
+    with pytest.raises(ValueError, match="Unsupported quantization_config"):
+        TorchQuantizationConfig(quantization_config="invalid")  # pytype: disable=wrong-arg-types
+
+
 def test_tensorrt_config_onnx_autocast_round_trip():
     from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
 

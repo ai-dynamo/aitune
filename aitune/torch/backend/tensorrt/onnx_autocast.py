@@ -5,7 +5,7 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
 import modelopt
 import onnx
@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 MixedPrecision = Literal["fp16", "bf16"]
 
 
+def _validate_autocast_precision(precision: str) -> None:
+    """Validate that precision is a supported value for autocast."""
+    if precision not in get_args(MixedPrecision):
+        raise ValueError(f"Unsupported autocast precision: {precision!r}. Supported values: {get_args(MixedPrecision)}")
+
+
 @dataclass
 class ONNXAutoCastConfig:
     """Configuration for mixed precision quantization.
@@ -33,6 +39,10 @@ class ONNXAutoCastConfig:
 
     precision: MixedPrecision = "fp16"
     keep_io_types: bool = True
+
+    def __post_init__(self):
+        """Validate precision after initialization."""
+        _validate_autocast_precision(self.precision)
 
     @classmethod
     def from_dict(cls, state_dict: dict):

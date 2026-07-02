@@ -5,7 +5,7 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
 import modelopt
 import modelopt.onnx.quantization as moq
@@ -35,6 +35,18 @@ QuantizationPrecision = Literal["int8", "int4", "fp8"]
 CalibrationMethod = Literal["max", "entropy", "awq_clip", "awq_lite", "awq_full", "rtn_dq"]
 
 
+def _validate_precision(precision: str) -> None:
+    """Validate that precision is a supported value."""
+    if precision not in get_args(QuantizationPrecision):
+        raise ValueError(f"Unsupported precision: {precision!r}. Supported values: {get_args(QuantizationPrecision)}")
+
+
+def _validate_calibration_method(method: str | None) -> None:
+    """Validate that calibration_method is a supported value."""
+    if method is not None and method not in get_args(CalibrationMethod):
+        raise ValueError(f"Unsupported calibration_method: {method!r}. Supported values: {get_args(CalibrationMethod)}")
+
+
 @dataclass
 class ONNXQuantizationConfig:
     """Configuration for ONNX quantization.
@@ -48,6 +60,11 @@ class ONNXQuantizationConfig:
     precision: QuantizationPrecision
     calibration_method: CalibrationMethod | None = None
     use_model_opt_post_processing: bool = False
+
+    def __post_init__(self):
+        """Validate precision and calibration_method after initialization."""
+        _validate_precision(self.precision)
+        _validate_calibration_method(self.calibration_method)
 
     @classmethod
     def from_dict(cls, state_dict: dict):

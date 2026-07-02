@@ -186,6 +186,11 @@ def test_torch_inductor_backend_with_mode_and_options():
         TorchInductorJitBackend(config=config)
 
 
+def test_torch_inductor_config_rejects_invalid_mode():
+    with pytest.raises(ValueError, match="Invalid mode"):
+        TorchInductorJitBackendConfig(mode="invalid")  # pytype: disable=wrong-arg-types
+
+
 @requires_cuda
 def test_serialization(model, sample_data, tmp_path):
     backend = backend_build(TorchInductorJitBackend(), torch.float16, model, sample_data, tmp_path)
