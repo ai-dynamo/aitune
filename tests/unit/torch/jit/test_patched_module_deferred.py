@@ -20,9 +20,10 @@ from aitune.torch.jit.patched_module import (
     PatchedModule,
 )
 from aitune.torch.jit.patcher import Patcher, prepare_for_jit_tuning
+from aitune.torch.jit.tune import deferred as jit_deferred
 from aitune.torch.tune_data.reporting import _active_report, report_tune_run_end
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
-from tests.toy_models.torch_models import OUTPUT_SIZE, ToyComplexPipeline
+from tests.toy_models.torch_models import INPUT_SIZE, OUTPUT_SIZE, ToyComplexPipeline, ToyTorchModel
 from tests.utilities.helpers import TestSink, requires_cuda
 
 
@@ -50,6 +51,56 @@ def mock_trt_backend():
     # in case strategy does a deepcopy, return self
     mock_backend.__deepcopy__ = lambda _: mock_backend
     return mock_backend
+
+
+def test_jit_deferred_call_arms_tuning_until_next_forward():
+    """tune.deferred() marks the flow; tuning runs on the next normal forward."""
+    config.device = torch.device("cpu")
+    config.dry_run = True
+    config.dry_run_failure_probability = 0.0
+    config.mode = JITMode.TUNE_DEFERRED
+
+    with prepare_for_jit_tuning():
+        model = ToyTorchModel().eval()
+
+    with torch.inference_mode():
+        model(torch.randn(1, INPUT_SIZE))
+
+    assert len(PatchedModule.heads) == 1
+    assert PatchedModule.heads[0]._state == ModuleState.RECORDING
+
+    jit_deferred()
+
+    assert PatchedModule.heads[0]._state == ModuleState.RECORDING
+
+    with torch.inference_mode():
+        model(torch.randn(1, INPUT_SIZE))
+
+    assert PatchedModule.heads[0]._state == ModuleState.TUNED
+    assert PatchedModule.heads[0]._call_count == 2
+
+
+def test_patcher_enable_tune_deferred_false_disarms_tuning():
+    """Patcher.enable_tune_deferred(False) disables deferred tuning before the next forward."""
+    config.device = torch.device("cpu")
+    config.dry_run = True
+    config.dry_run_failure_probability = 0.0
+    config.mode = JITMode.TUNE_DEFERRED
+
+    with prepare_for_jit_tuning():
+        model = ToyTorchModel().eval()
+
+    with torch.inference_mode():
+        model(torch.randn(1, INPUT_SIZE))
+
+    Patcher.enable_tune_deferred()
+    Patcher.enable_tune_deferred(False)
+
+    with torch.inference_mode():
+        model(torch.randn(1, INPUT_SIZE))
+
+    assert PatchedModule.heads[0]._state == ModuleState.RECORDING
+    assert PatchedModule.heads[0]._call_count == 2
 
 
 def test_set_original_forward_restores_unobserved_submodules():
@@ -99,7 +150,8 @@ def test_jit_dry_run_success(mock_trt_backend, torch_device):
         for x in pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device):
             pipeline(x)
 
-    # Explicitly trigger deferred tuning
+    # Enable deferred tuning for direct try_tune assertions.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -131,8 +183,9 @@ def test_jit_deferred_tuning_not_triggered_automatically(mock_trt_backend, torch
     assert PatchedModule.heads[0]._state == ModuleState.RECORDING
     mock_trt_backend.build.assert_not_called()
 
-    # Now explicitly trigger tuning
+    # Now allow direct try_tune assertions.
     mock_trt_backend.infer.return_value = torch.randn(1, OUTPUT_SIZE)
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -159,7 +212,8 @@ def test_jit_dry_run_failure(mock_trt_backend, torch_device):
         for x in pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device):
             pipeline(x)
 
-    # Explicitly trigger deferred tuning
+    # Enable deferred tuning for direct try_tune assertions.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -193,7 +247,8 @@ def test_jit_tuning_success(mock_trt_backend, torch_device, scenario):
         for x in pipeline.inputs(batch_sizes=[1, 2, 4], device=torch_device):
             pipeline(x)
 
-    # Explicitly trigger deferred tuning
+    # Enable deferred tuning for direct try_tune assertions.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -250,7 +305,8 @@ def test_jit_tuning_with_module_hooks(mock_trt_backend, torch_device, mocker):
         pipeline(torch.randn(2))
         assert hooks_history == ["pre_hook", "forward_hook"]
 
-    # Explicitly trigger deferred tuning
+    # Enable deferred tuning for direct try_tune assertions.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -281,7 +337,8 @@ def test_jit_tuning_graph_break(mock_trt_backend, torch_device, mocker):
         for x in inputs:
             pipeline(x)
 
-    # Explicitly trigger deferred tuning
+    # Enable deferred tuning for direct try_tune assertions.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -311,7 +368,8 @@ def test_jit_tuning_skip_module(mock_trt_backend, torch_device, mocker):
         for x in inputs:
             pipeline(x)
 
-    # Explicitly trigger deferred tuning (even though module is skipped)
+    # Enable deferred tuning for direct try_tune assertions, even though the module is skipped.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -345,7 +403,8 @@ def test_jit_tuning_skip_child_module_if_parent_failed(mock_trt_backend, torch_d
         for x in inputs:
             pipeline(x)
 
-    # Explicitly trigger deferred tuning
+    # Enable deferred tuning for direct try_tune assertions.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -379,7 +438,8 @@ def test_jit_tuning_no_modules(mock_trt_backend, torch_device):
     for _ in range(2):
         model(torch.randn(1, 10))
 
-    # Explicitly trigger deferred tuning (no heads to tune)
+    # Enable deferred tuning for direct try_tune assertions, with no heads to tune.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -415,7 +475,8 @@ def test_forward_method_should_have_same_signature(mock_trt_backend, torch_devic
     # in recording state
     assert set(inspect.signature(model.forward).parameters.keys()) == {"x", "y", "z", "pos"}
     model(1, 2, 3)  # we are in recording state
-    # Explicitly trigger deferred tuning
+    # Enable deferred tuning for direct try_tune assertions.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
     # in tuned state
@@ -456,7 +517,8 @@ def test_jit_tuning_skip_module_when_not_match_min_parameters(mock_trt_backend, 
         for x in inputs:
             pipeline(x)
 
-    # Explicitly trigger deferred tuning (no heads to tune due to min_parameters)
+    # Enable deferred tuning for direct try_tune assertions, with no heads due to min_parameters.
+    Patcher.enable_tune_deferred()
     for head in PatchedModule.heads:
         head.try_tune()
 
@@ -468,8 +530,8 @@ def test_jit_tuning_skip_module_when_not_match_min_parameters(mock_trt_backend, 
     mock_trt_backend.build.assert_not_called()
 
 
-def test_jit_deferred_tune_before_forward_pass_does_not_crash():
-    """Regression: Patcher.tune_deferred() must not raise on modules in INIT state.
+def test_enable_tune_deferred_before_forward_pass_does_not_crash():
+    """Regression: Patcher.enable_tune_deferred() must not raise on modules in INIT state.
 
     Modules created inside prepare_for_jit_tuning() land in _patched_modules without a _wrapper
     (set only on the first forward call). With min_samples > 1 and batch_axis_required=True,
@@ -484,7 +546,7 @@ def test_jit_deferred_tune_before_forward_pass_does_not_crash():
         torch.nn.Linear(10, 5)  # creates a PatchedModule in INIT state — _wrapper never set
 
     # Must not raise AttributeError: 'PatchedModule' object has no attribute '_wrapper'
-    Patcher.tune_deferred()
+    Patcher.enable_tune_deferred()
 
     assert len(PatchedModule.heads) == 0
 
@@ -521,7 +583,7 @@ def test_jit_deferred_tuning_records_inspection_details_before_tuning(mocker, tm
 
     mocker.patch.object(PatchedModule, "try_tune", autospec=True, side_effect=assert_inspection_details_collected)
 
-    Patcher.tune_deferred()
+    Patcher.enable_tune_deferred()
     report_tune_run_end()
 
     report = json.loads(report_path.read_text())

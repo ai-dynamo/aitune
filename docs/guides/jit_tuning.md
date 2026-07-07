@@ -139,9 +139,9 @@ jit_config.mode = JITMode.TUNE_EAGER  # default, explicit assignment not require
 
 ### Deferred Mode
 
-In deferred mode, AITune records samples during forward passes but does **not** tune automatically.  Tuning is triggered explicitly by calling `aitune.torch.jit.tune.deferred()` after the pipeline has completed at least one full step.
+In deferred mode, AITune records samples during forward passes but does **not** tune automatically until you mark a safe synchronization point. Calling `aitune.torch.jit.tune.deferred()` after a full pipeline step enables tuning; the actual tuning then happens on the next normal forward pass.
 
-This mode is intended for pipelines where different modules are called a **variable number of times per step** — for example, iterative denoising loops in text-to-image (Stable Diffusion, FLUX) or text-to-video models.  In such cases, eager mode may attempt to tune a module before all modules in the pipeline have been recorded; deferred mode lets you choose a safe synchronisation point after a full pass.
+This mode is intended for pipelines where different modules are called a **variable number of times per step** — for example, iterative denoising loops in text-to-image (Stable Diffusion, FLUX) or text-to-video models. In such cases, eager mode may attempt to tune a module before all modules in the pipeline have been recorded; deferred mode lets you choose a safe synchronisation point after a full pass while still compiling from inside the usual model flow.
 
 ```python
 import aitune.torch.jit.enable  # or set AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning
@@ -159,10 +159,13 @@ pipe.to("cuda")
 # First full pipeline step — records samples for every module encountered
 pipe("A beautiful landscape")
 
-# Explicitly trigger tuning after the complete pass
+# Mark that deferred tuning may start
 jit_deferred()
 
-# All subsequent calls use the tuned pipeline
+# This call triggers tuning from the normal pipeline flow
+pipe("A snowy mountain at sunset")
+
+# Subsequent calls use the tuned pipeline
 pipe("A snowy mountain at sunset")
 ```
 
@@ -250,7 +253,7 @@ jit_config.mode = JITMode.TUNE_EAGER  # Default
 Available values:
 
 - `JITMode.TUNE_EAGER` — tunes automatically after each forward pass once the sample threshold is reached.
-- `JITMode.TUNE_DEFERRED` — collects samples but does not tune until `aitune.torch.jit.tune.deferred()` is called explicitly.
+- `JITMode.TUNE_DEFERRED` — collects samples until `aitune.torch.jit.tune.deferred()` is called, then tunes on the next normal forward pass.
 - `JITMode.INSPECT` — inspect-only mode; no tuning is performed (see [JIT Inspect](jit_inspect.md)).
 
 #### min_samples
@@ -341,6 +344,16 @@ jit_config.strategy = FirstWinsStrategy(
 Accepts any `TuneStrategy` (e.g. `FirstWinsStrategy`, `MaxThroughputStrategy`, `OneBackendStrategy`). Leave it as `None` (default) to use a `FirstWinsStrategy` over TensorRT (with and without dynamo) and `TorchInductorJitBackend`.
 
 This setting is common for all tuned modules.
+
+#### patch_exclude
+
+Extra package prefixes or fully qualified class names the JIT patcher will not intercept, in addition to built-in defaults.
+
+```python
+jit_config.patch_exclude = ("my_package.MyCustomLayer", "third_party.SpecialModule")
+```
+
+**Why it matters**: Some third-party modules may conflict with JIT patching. Add their class names or package prefixes here to prevent interception beyond the built-in exclusion list.
 
 ## Limitations and Considerations
 

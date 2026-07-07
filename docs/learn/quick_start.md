@@ -167,7 +167,7 @@ jit_config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()]) # change t
 
 ### Deferred mode
 
-By default JIT tuning uses **eager mode** — each module is tuned automatically as soon as enough samples have been collected.  For pipelines where different modules are called a variable number of times per step (e.g. text-to-image or text-to-video diffusion models), use **deferred mode** instead.  In deferred mode, AITune only records samples during forward passes; tuning is triggered explicitly after a full pipeline step has completed.
+By default JIT tuning uses **eager mode** — each module is tuned automatically as soon as enough samples have been collected.  For pipelines where different modules are called a variable number of times per step (e.g. text-to-image or text-to-video diffusion models), use **deferred mode** instead. In deferred mode, AITune records samples until you mark a safe synchronization point; tuning then starts on the next normal forward pass.
 
 ```python
 import aitune.torch.jit.enable
@@ -185,8 +185,11 @@ pipe.to("cuda")
 # First full step — records samples for all modules
 pipe("A beautiful landscape")
 
-# Trigger tuning explicitly after the complete pass
+# Mark that deferred tuning may start
 jit_deferred()
+
+# This call triggers tuning from the normal pipeline flow
+pipe("A snowy mountain at sunset")
 
 # Subsequent calls run on the tuned pipeline
 pipe("A snowy mountain at sunset")

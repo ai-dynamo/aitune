@@ -22,7 +22,7 @@ class JITMode(enum.Enum):
 
     INSPECT = "inspect"  # inspect mode, only for inspection of model execution
     TUNE_EAGER = "tune_eager"  # tune mode, eager tuning after defined number of samples / inference calls
-    TUNE_DEFERRED = "tune_deferred"  # tune mode, deferred tuning with explicit call in the code
+    TUNE_DEFERRED = "tune_deferred"  # tune mode, deferred tuning enabled by an explicit marker call
 
 
 @dataclass

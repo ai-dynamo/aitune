@@ -10,6 +10,8 @@ title: "Changelog"
 - feat: Add `LatencyBudgetStrategy` tune strategy that maximizes throughput while satisfying a latency budget
 - feat: validate model correctness at min and max dynamic shape boundaries
 - feat: capture JIT inspection details and config in tuning data reports - full inspection for `deferred` mode and basic for the `eager` mode
+- feat: defer JIT deferred-mode tuning until the next normal forward pass after `aitune.torch.jit.tune.deferred()`
+- breaking change: `aitune.torch.jit.tune.deferred()` now marks tuning to run on the next forward pass instead of tuning immediately
 - breaking change: replace `FindMaxBatchSizeMixinConfig` and `PerformanceValidationMixinConfig` with a single strategy-level `ProfilingConfig`
 
 ## 0.4.1

@@ -3,7 +3,6 @@
 """Module for inspecting PyTorch models and tracking their execution."""
 
 import atexit
-import logging
 from collections.abc import Callable
 from contextlib import contextmanager
 from functools import wraps
@@ -18,9 +17,6 @@ from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.tune_data.reporting import has_active_report, report_inspection_details, report_tune_run_start
 
 T = TypeVar("T")
-
-
-logger = logging.getLogger(__name__)
 
 
 # Built-in exclusions the JIT patcher always applies. User-supplied entries on
@@ -75,22 +71,18 @@ class Patcher:
         torch.nn.Module.__init__ = _patched_init
 
     @classmethod
-    def tune_deferred(cls):
-        """Trigger tuning for all recorded modules in deferred mode.
+    def enable_tune_deferred(cls, enable: bool = True):
+        """Enable or disable tuning for recorded modules in deferred mode.
 
         Call this after running at least one full forward pass through the pipeline so that every
-        module has collected the samples it needs.  Intended for pipelines where modules are called
-        a variable number of times per step (e.g. text-to-image or text-to-video), making it
-        difficult to know when enough samples have been recorded inside the forward hook itself.
+        module has collected the samples it needs. Tuning runs from the next normal forward path
+        instead of this method, which preserves pipeline-managed device placement.
         """
-        report_inspection_details([
-            module.inspection_report() for module in cls._patched_modules if isinstance(module, PatchedModule)
-        ])
-        for module in list(PatchedModule.heads):
-            try:
-                module.try_tune()
-            except Exception as e:
-                logger.error("Failed to tune module %s: %s", module.__class__.__name__, e)
+        if enable:
+            report_inspection_details([
+                module.inspection_report() for module in cls._patched_modules if isinstance(module, PatchedModule)
+            ])
+        PatchedModule.deferred_tuning_enabled = enable
 
     @classmethod
     def patched_modules_under(cls, root: torch.nn.Module) -> list[PatchedModule | InspectModule]:

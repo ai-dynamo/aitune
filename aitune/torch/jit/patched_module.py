@@ -88,6 +88,7 @@ class PatchedModule:
     patched_classes: ClassVar[Counter[str]] = Counter()  # for generating unique names
     fq_name_counter: ClassVar[Counter[str]] = Counter()  # for unique fully qualified names (base_fqn -> count)
     attempted_tuning: ClassVar[bool] = False
+    deferred_tuning_enabled: ClassVar[bool] = False
     module_counter: ClassVar[int] = 0
 
     def __init__(self, module: torch.nn.Module):
@@ -369,12 +370,11 @@ class PatchedModule:
 
     def _tune_on_init(self):
         """Tune the module on init."""
-        # deferred mode never auto-tunes; tuning is triggered explicitly by the caller
-        if config.mode == JITMode.TUNE_DEFERRED:
+        if config.mode == JITMode.TUNE_DEFERRED and not PatchedModule.deferred_tuning_enabled:
             return
 
         # if min_samples is greater than 1, we don't need to tune on init
-        if config.min_samples > 1:
+        if config.mode == JITMode.TUNE_EAGER and config.min_samples > 1:
             return
 
         # if module is on skip list, we don't need to tune on init
@@ -403,7 +403,9 @@ class PatchedModule:
         self._proxy_forward()
         self._call_count += 1
 
-        if config.mode == JITMode.TUNE_EAGER:
+        if config.mode == JITMode.TUNE_EAGER or (
+            config.mode == JITMode.TUNE_DEFERRED and PatchedModule.deferred_tuning_enabled
+        ):
             self.try_tune()
         return result
 
@@ -570,10 +572,10 @@ class PatchedModule:
     def _should_be_tuned_deferred(self) -> bool:
         """Check if the module should be tuned in deferred mode.
 
-        The explicit tune.deferred() call signals that recording is complete, so only
-        a minimum of one recorded forward pass and tuning eligibility are required.
+        The explicit enable_tune_deferred() call marks that recording is complete, so the
+        next normal forward tunes eligible modules after recording that call.
         """
-        return self._allowed_to_tune and self._call_count >= 1
+        return PatchedModule.deferred_tuning_enabled and self._allowed_to_tune and self._call_count >= 1
 
     def _throw_if_has_graph_break(self, module: "PatchedModule", data: list[Sample]):
         """Throw if graph break is detected.
@@ -683,6 +685,7 @@ class PatchedModule:
         PatchedModule.history.clear()
         PatchedModule.heads.clear()
         PatchedModule.stack.clear()
+        PatchedModule.deferred_tuning_enabled = False
 
     @staticmethod
     def on_python_exit():

@@ -8,9 +8,9 @@ from aitune.torch.utils.memory import cleanup_memory
 
 
 def deferred():
-    """Tune the modules in deferred mode."""
+    """Enable deferred tuning on the next normal forward pass."""
     if config.mode != JITMode.TUNE_DEFERRED:
         raise ValueError(f"tune.deferred() requires JITMode.TUNE_DEFERRED, but current mode is {config.mode.value}")
 
     cleanup_memory()
-    Patcher.tune_deferred()
+    Patcher.enable_tune_deferred()

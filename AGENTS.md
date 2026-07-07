@@ -13,7 +13,7 @@ make install-dev          # editable install with all dev deps (uses --extra-ind
 make lint                 # pre-commit --all-files + pytype
 make test                 # pytest (unit tests + doctests)
 make coverage             # coverage report → htmlcov/
-make docs-serve           # mkdocs at http://localhost:8000
+make docs-serve           # Fern docs dev server (run 'make fern-setup' first)
 
 pytest tests/unit/path/to/test_file.py::test_name -v   # single test
 pytest -k "keyword" -v                                  # filter by keyword
@@ -35,8 +35,8 @@ Documentation source of truth: backend guides live under `docs/guides/backends/`
 - `AITUNE_TRANSFORMERS_INTEGRATION` — enable/disable Transformers integration (default: enabled)
 - `AITUNE_DIFFUSERS_INTEGRATION` — enable/disable Diffusers integration (default: disabled)
 - `AITUNE_CACHE_MIN_FREE_BYTES` — minimum free-space warning threshold for cache writes (default: 50 GiB)
-- `AITUNE_INSPECT_DEBUG` — enable debug logging during inspection
-- `AITUNE_INSPECT_DEBUG_RAISE` — raise on inspection errors instead of warning
+- `AITUNE_INSPECT_DEBUG` — enable debug logging during inspection (parsed in `inspecting/module_inspector.py`, not `env_vars.py`)
+- `AITUNE_INSPECT_DEBUG_RAISE` — raise on inspection errors instead of warning (parsed in `inspecting/module_inspector.py`, not `env_vars.py`)
 - `AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning` — enable JIT mode without modifying source
 
 **Environment variables — tests:**
@@ -81,16 +81,18 @@ JIT also supports `detect_graph_breaks` (uses `torch._dynamo.explain()` to skip 
 |---|---|
 | `aitune/torch/tuning.py` | `tune()`, `save()`, `load()` — top-level AOT API |
 | `aitune/torch/inspecting/` | `inspect()` / `wrap()` — traverses module hierarchy to find candidates |
-| `aitune/torch/module/` | `Module` wrapper and `ModuleState` FSM (INITIAL → RECORDING → TUNED / PASSTHROUGH) |
+| `aitune/torch/module/` | `Module` wrapper and `ModuleState` FSM (INIT → RECORDING → TUNED / PASSTHROUGH) |
 | `aitune/torch/backend/` | One class per backend; all extend `Backend` base class in `backend.py` |
 | `aitune/torch/tune_strategy/` | `OneBackendStrategy`, `FirstWinsStrategy`, `MaxThroughputStrategy`, `MinLatencyStrategy`, `LatencyBudgetStrategy` |
 | `aitune/torch/jit/` | `Patcher`, `PatchedModule`, `enable.py` (autowrapt bootstrap), JIT config |
-| `aitune/torch/checkpoint/` | `TorchCheckpoint` + `LocalTorchStorage` — gzip-compressed save/load, files named by SHA256 hash |
+| `aitune/torch/checkpoint/` | `TorchCheckpoint` + `LocalTorchStorage` — zip-compressed save/load (ZIP_STORED); SHA-256 hash verified on load via a sidecar file |
 | `aitune/torch/dataloader.py` | `DataLoaderFactory`, `samples_generator()` — normalises heterogeneous dataset types |
-| `aitune/torch/task/` | `profile()` + measuring strategies — profiling infrastructure used by `MaxThroughputStrategy` |
+| `aitune/torch/task/profiling/` | Internal profiling primitives (`profile()`, `profile_backend()`, `ProfilingConfig`) used by `MaxThroughputStrategy`, `MinLatencyStrategy`, and `LatencyBudgetStrategy` |
+| `aitune/torch/performance/` | `PerformanceProfile` + `profile()` — user-facing performance attribution profiler |
+| `aitune/torch/tune_data/` | `snapshot_tuning_data()` — manually flush in-memory tuning telemetry to disk |
 | `aitune/torch/config.py` | `AITuneConfig` singleton (`aitune.torch.config`) |
-| `aitune/torch/jit/config.py` | `Config` dataclass singleton (`aitune.torch.jit_config`) |
-| `aitune/utils/env_vars.py` | All env-var parsing in one place |
+| `aitune/torch/jit/config.py` | `Config` dataclass singleton (`aitune.torch.jit_config`); default strategy: `FirstWinsStrategy([TensorRTBackend(dynamo=True), TensorRTBackend(dynamo=False), TorchInductorJitBackend()])` |
+| `aitune/utils/env_vars.py` | Core env-var constants; inspect debug vars are parsed in `inspecting/module_inspector.py` |
 | `aitune/dynamo/` | `DynamoWorker` — serve tuned models as Dynamo endpoints (requires `aitune[dynamo]`) |
 
 ### Backend Implementations
@@ -111,7 +113,7 @@ Backends have their own state machine (`BackendState`): `INIT → ACTIVE` on suc
 
 `Module` (wrapper) is a `wrapt.CallableObjectProxy` that delegates `forward()` to different implementations depending on state:
 
-1. **INITIAL** — freshly wrapped, not yet recording
+1. **INIT** — freshly wrapped, not yet recording
 2. **RECORDING** — capturing input shapes/dtypes across forward passes via `RecordingModule`
 3. **TUNED** — successfully compiled; all calls go to the compiled engine via `TunedModule`
 4. **PASSTHROUGH** — compilation failed; falls back to original `forward` via `PassthroughModule`
@@ -123,9 +125,9 @@ All wrapped instances are tracked in a global `MODULE_REGISTRY` (in `aitune/torc
 Strategies decide which backend(s) to use and how:
 - `OneBackendStrategy` — single backend, raises on failure
 - `FirstWinsStrategy` — tries backends in order, uses first that compiles successfully
-- `MaxThroughputStrategy` — profiles all backends via `task/profile.py`, selects highest throughput
-- `MinLatencyStrategy` — profiles all backends via `task/profile.py`, selects lowest latency
-- `LatencyBudgetStrategy` — profiles all backends via `task/profile.py`, selects highest throughput under a latency budget
+- `MaxThroughputStrategy` — profiles all backends via `task/profiling/profiling.py`, selects highest throughput
+- `MinLatencyStrategy` — profiles all backends via `task/profiling/profiling.py`, selects lowest latency
+- `LatencyBudgetStrategy` — profiles all backends via `task/profiling/profiling.py`, selects highest throughput under a latency budget
 
 ## Code Style
 

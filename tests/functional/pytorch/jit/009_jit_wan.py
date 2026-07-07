@@ -81,6 +81,8 @@ def test_jit_wan():
         pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=10, height=32, width=64, num_frames=21)
 
     tune_deferred()
+    with torch.no_grad():
+        pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=10, height=16, width=32, num_frames=21)
 
     # Capture the print_hierarchy output
     history = []

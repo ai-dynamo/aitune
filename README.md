@@ -46,7 +46,7 @@ Before installing NVIDIA AITune, make sure your system meets these requirements:
 * **Operating System**: Linux (Ubuntu 22.04+ recommended)
 * **Python**: Version `3.10` or newer
 * **PyTorch**: Version `2.8` or newer
-* **TensorRT**: Version `10.5.0` or higher (for TensorRT backend)
+* **TensorRT**: Version `10.3` or higher (for TensorRT backend)
 * **NVIDIA GPU**: Required for GPU-accelerated tuning
 
 
@@ -58,18 +58,28 @@ You can install NVIDIA AITune from PyPI.
 pip install --extra-index-url https://pypi.nvidia.com aitune
 ```
 
-### PyTorch 2.10 + CUDA 13 (torch210 extra)
+### Pinning to a specific PyTorch version
 
-To use PyTorch 2.10 with CUDA 13 support, install the `torch210` optional dependency group:
+If you need to pin AITune's dependencies (`torch`, `torch-tensorrt`, `torchao`) to a specific PyTorch minor version, use one of the version extras:
+
+| Extra | PyTorch version |
+|---|---|
+| `torch28` | 2.8.x |
+| `torch29` | 2.9.x |
+| `torch210` | 2.10.x |
+| `torch211` | 2.11.x |
+| `torch212` | 2.12.x |
 
 ```bash
-pip install --extra-index-url https://pypi.nvidia.com --extra-index-url https://download.pytorch.org/whl/cu130 "aitune[torch210]"
+pip install --extra-index-url https://pypi.nvidia.com "aitune[torch211]"
 ```
 
-When using `uv`, add `--torch-backend=cu130` so uv resolves the CUDA 13 variants of the PyTorch packages:
+### Selecting a CUDA version
+
+To target a specific CUDA version, add the matching PyTorch index:
 
 ```bash
-uv pip install --torch-backend=cu130 --extra-index-url https://pypi.nvidia.com "aitune[torch210]"
+pip install --extra-index-url https://pypi.nvidia.com --extra-index-url https://download.pytorch.org/whl/cu130 "aitune[torch211]"
 ```
 
 ### NGC container install
@@ -105,18 +115,6 @@ or use editable mode for development:
 
 ```bash
 pip install --extra-index-url https://pypi.nvidia.com -e .
-```
-
-### NGC container install
-
-You can use NGC Containers for PyTorch which contain all necessary dependencies:
-
-* [PyTorch NGC Container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
-
-```bash
-# nvcr.io/nvidia/pytorch:25.10-py3
-pip install --extra-index-url https://pypi.nvidia.com aitune
-# NOTE: do not use uv as it may override the "alpha" packages
 ```
 
 ## Quick Start
@@ -236,6 +234,8 @@ In this mode, there is no need to modify the user's code. AITune records inferen
 
 that module is left unchanged and AITune tries to tune its children. This process continues until the module depth reaches a configured limit.
 
+For pipelines where different modules are called a variable number of times per step, such as diffusion or video generation pipelines, use deferred JIT mode. In deferred mode, AITune records normally until you call `aitune.torch.jit.tune.deferred()` at a safe synchronization point. That call only enables tuning; compilation starts from the next normal forward pass so pipeline-managed device placement and offload hooks remain in the usual flow.
+
 First, install the required third-party dependencies:
 
 ```bash
@@ -283,6 +283,19 @@ from aitune.torch.tune_strategy import FirstWinsStrategy
 jit_config.max_depth_level = 1  # change the default maximum depth level for nested modules to be tuned
 jit_config.detect_graph_breaks = False  # turn off graph break detection
 jit_config.strategy = FirstWinsStrategy(backends=[TensorRTBackend()])  # change the tune strategy
+```
+
+For variable-step pipelines, use deferred mode to choose when tuning may start:
+
+```python
+from aitune.torch.jit.config import JITMode, config as jit_config
+from aitune.torch.jit.tune import deferred as jit_deferred
+
+jit_config.mode = JITMode.TUNE_DEFERRED
+
+pipe("A beautiful landscape")  # records a full pass
+jit_deferred()  # enables tuning
+pipe("A snowy mountain")  # triggers tuning in the normal pipeline flow
 ```
 
 ## Comparison between ahead-of-time and just-in-time tuning

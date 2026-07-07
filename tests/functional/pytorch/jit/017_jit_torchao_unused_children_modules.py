@@ -59,6 +59,8 @@ def test_jit_torchao_unused_child():
         model(torch.randn(2, 16, device="cuda", dtype=torch.float16))
 
     tune_deferred()
+    with torch.no_grad():
+        model(torch.randn(2, 16, device="cuda", dtype=torch.float16))
 
     history = []
     PatchedModule.print_hierarchy(sink=lambda s: history.append(s))

@@ -51,6 +51,7 @@ def test_jit_sd15():
         pipe([prompt] * 2, num_inference_steps=50, height=size, width=size)
 
     tune_deferred()
+    pipe([prompt], num_inference_steps=50, height=256, width=256)
 
     # Capture the print_hierarchy output
     history = []
