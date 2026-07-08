@@ -3,6 +3,8 @@
 
 """Unit tests for PyTorch module utilities."""
 
+import gc
+
 import pytest
 import torch
 import torch.nn as nn
@@ -82,8 +84,11 @@ def test_offload_to_meta_frees_gpu_memory(device):
     free the GPU memory that was used by the original parameter tensors.
     """
     # Clear CUDA cache first to get accurate measurements
+    gc.collect()
+    torch.cuda.synchronize()
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
+    gpu_memory_baseline = torch.cuda.memory_allocated(device)
 
     # Create a larger model for more reliable memory measurements
     model = nn.Sequential(
@@ -99,10 +104,15 @@ def test_offload_to_meta_frees_gpu_memory(device):
 
     # Measure memory after model creation
     memory_allocated_before = torch.cuda.memory_allocated(device)
-    assert memory_allocated_before > 0, "Model should allocate some GPU memory"
+    assert memory_allocated_before > gpu_memory_baseline, "Model should allocate some GPU memory"
 
     # Offload weights to meta (replace tensors)
     offload(model, device="meta")
+
+    # Force memory deallocation
+    gc.collect()
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()
 
     # Verify memory is freed (should be much less)
     memory_allocated_after = torch.cuda.memory_allocated(device)
@@ -113,12 +123,13 @@ def test_offload_to_meta_frees_gpu_memory(device):
     # - Small models where overhead is proportionally larger
     # - CUDA context and other allocations
     # - Potential fragmentation
-    threshold = memory_allocated_before * 0.5
+    threshold = (memory_allocated_before - gpu_memory_baseline) * 0.5
     assert memory_freed > threshold, (
         f"Expected at least {threshold / 1e6:.2f} MB freed, "
         f"but only {memory_freed / 1e6:.2f} MB was freed. "
         f"Before: {memory_allocated_before / 1e6:.2f} MB, "
-        f"After: {memory_allocated_after / 1e6:.2f} MB"
+        f"After: {memory_allocated_after / 1e6:.2f} MB "
+        f"Baseline: {gpu_memory_baseline / 1e6:.2f} MB"
     )
 
 
@@ -132,8 +143,12 @@ def test_offload_gpu_to_cpu_to_meta(device):
     3. Offloading to meta frees CPU memory
     """
     # Clear CUDA cache first
+    gc.collect()
+    torch.cuda.synchronize()
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
+
+    gpu_memory_baseline = torch.cuda.memory_allocated(device)
 
     # Create a larger model for reliable memory measurements
     model = nn.Sequential(
@@ -149,7 +164,7 @@ def test_offload_gpu_to_cpu_to_meta(device):
     torch.cuda.synchronize()
 
     gpu_memory_after_load = torch.cuda.memory_allocated(device)
-    assert gpu_memory_after_load > 0, "Model should allocate GPU memory"
+    assert gpu_memory_after_load > gpu_memory_baseline, "Model should allocate GPU memory"
 
     # Step 2: Offload to CPU (should free GPU memory)
     offload(model, device="cpu")
@@ -157,13 +172,14 @@ def test_offload_gpu_to_cpu_to_meta(device):
 
     gpu_memory_after_cpu_offload = torch.cuda.memory_allocated(device)
 
-    # GPU memory should be significantly reduced (at least 50%)
+    # GPU memory should be significantly reduced (at least 40%)
     gpu_memory_freed = gpu_memory_after_load - gpu_memory_after_cpu_offload
-    assert gpu_memory_freed > gpu_memory_after_load * 0.5, (
+    assert gpu_memory_freed > (gpu_memory_after_load - gpu_memory_baseline) * 0.5, (
         f"Expected at least 50% of GPU memory freed after CPU offload. "
         f"Before: {gpu_memory_after_load / 1e6:.2f} MB, "
         f"After: {gpu_memory_after_cpu_offload / 1e6:.2f} MB, "
-        f"Freed: {gpu_memory_freed / 1e6:.2f} MB"
+        f"Freed: {gpu_memory_freed / 1e6:.2f} MB "
+        f"Baseline: {gpu_memory_baseline / 1e6:.2f} MB"
     )
 
     # Verify model is on CPU
@@ -171,6 +187,10 @@ def test_offload_gpu_to_cpu_to_meta(device):
 
     # Step 3: Offload to meta (should free CPU memory and move to meta)
     offload(model, device="meta")
+
+    gc.collect()
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()
 
     # Verify model is on CPU (as per current implementation)
     # Note: The function is called offload_to_meta but currently moves to CPU
