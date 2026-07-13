@@ -11,6 +11,7 @@ import torch
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import AITuneConfig
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 
@@ -25,7 +26,14 @@ def get_tuned_module(check_graph=True, strict_mode=False):
     backend2 = Mock()
     backends = OrderedDict({graph1: backend1, graph2: backend2})
 
-    module = TunedModule(backends=backends, check_graph=check_graph, config=config, module_name="test")
+    input_signature = ForwardSignature.from_callable(lambda *args: args)
+    module = TunedModule(
+        backends=backends,
+        check_graph=check_graph,
+        config=config,
+        module_name="test",
+        input_signature=input_signature,
+    )
     return backend1, backend2, module
 
 
@@ -33,7 +41,13 @@ def test_unique_backend():
     metadata = Mock(spec=SampleMetadata)
     backend = Mock(spec=Backend)
     backends = OrderedDict({metadata: backend})
-    module = TunedModule(backends=backends, check_graph=False, module_name="test")
+    input_signature = ForwardSignature.from_callable(lambda *args: args)
+    module = TunedModule(
+        backends=backends,
+        check_graph=False,
+        module_name="test",
+        input_signature=input_signature,
+    )
 
     module(2)
     backend.infer.assert_called_with(2)
@@ -51,6 +65,33 @@ def test_multiple_dict_backends(check_graph):
 
     with pytest.raises(RuntimeError):
         module(1, 2)
+
+
+@pytest.mark.parametrize("check_graph", [True, False])
+def test_equivalent_call_layouts_use_same_backend(check_graph):
+    def forward(x, y):
+        return x + y
+
+    config = AITuneConfig()
+    config.strict_mode = True
+    signature = ForwardSignature.from_callable(forward)
+    metadata = SampleMetadata.from_inputs((1, 2), {}, strict=True)
+    backend = Mock()
+    module = TunedModule(
+        OrderedDict({metadata: backend}),
+        module_name="test",
+        check_graph=check_graph,
+        config=config,
+        input_signature=signature,
+    )
+
+    module(1, 2)
+    module(1, y=2)
+    module(x=1, y=2)
+    module(y=2, x=1)
+
+    assert backend.infer.call_count == 4
+    backend.infer.assert_called_with(1, 2)
 
 
 def test_deactivate():
@@ -73,12 +114,19 @@ def test_serialization():
     backend2._orig_module = Mock(spec=torch.nn.Module)
     backends = OrderedDict({graph1: backend1, graph2: backend2})
 
-    module = TunedModule(backends=backends, check_graph=True, module_name="test")
+    signature = ForwardSignature.from_callable(lambda x: x)
+    module = TunedModule(
+        backends=backends,
+        check_graph=True,
+        module_name="test",
+        input_signature=signature,
+    )
     # Serialize
     state_dict = module.to_dict()
 
     # Deserialize
     new_module = TunedModule.from_dict(Mock(spec=torch.nn.Module), state_dict)
     assert new_module._check_graph == module._check_graph
+    assert new_module._input_signature == signature
     assert len(new_module._backends) == len(module._backends)
     assert all(k1 == k2 for k1, k2 in zip(new_module._backends.keys(), module._backends.keys(), strict=False))

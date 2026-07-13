@@ -178,7 +178,11 @@ class PatchedModule:
                                 backend = self._tune(strategy, current, graph_spec, data, device, cache_dir)
                             backends[graph_spec.input_spec] = backend
                     if backends:
-                        current._wrapper = TunedModule(backends, module_name=current.fq_name)
+                        current._wrapper = TunedModule(
+                            backends,
+                            module_name=current.fq_name,
+                            input_signature=recording.input_signature,
+                        )
                         current._extra_state_info = ", ".join([b.name for b in backends.values()])
                     else:
                         current._wrapper = PassthroughModule(current.__wrapped__, device=device)

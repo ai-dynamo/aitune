@@ -133,6 +133,28 @@ def test_recording_stores_original_args_and_kwargs():
     assert kwargs["cache"] == []
 
 
+def test_recording_normalizes_equivalent_call_layouts():
+    class Model(torch.nn.Module):
+        def forward(self, x, y):
+            return x + y
+
+    config = AITuneConfig()
+    config.max_num_samples_stored = 4
+    recording = RecordingModule(Model(), "test-module", config)
+    x = torch.randn(2, 3)
+    y = torch.randn(2, 3)
+
+    recording(x, y)
+    recording(x, y=y)
+    recording(x=x, y=y)
+    recording(y=y, x=x)
+
+    assert len(recording.graph_specs) == 1
+    samples = recording.samples_for_graph_spec(recording.graph_specs[0])
+    assert len(samples) == 4
+    assert all(len(args) == 2 and kwargs == {} for args, kwargs in samples)
+
+
 def test_recording_raises_error_if_model_is_not_in_no_grad_mode():
     """Test that recording raises an error if the model is not in no_grad mode."""
     rec_module = recording_module(strict_mode=True)

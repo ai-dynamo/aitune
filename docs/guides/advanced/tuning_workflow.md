@@ -67,13 +67,17 @@ As samples are collected, wrapped modules detect unique computational graphs:
 
 ```python
 # Example: Different input structures create different graphs
-module(torch.randn(1, 10))  # Graph 0
-module(torch.randn(1, 10), mask=True)  # Graph 1 (different kwargs)
+x = torch.randn(1, 10)
+module(x)  # Graph 0
+module(x, mask=True)  # Graph 1 (additional argument)
+module(x=x, mask=True)  # Graph 1 (equivalent positional/keyword call)
 module(torch.randn(1, 10, 5))  # Graph 2 (different tensor rank)
 ```
 
 **Graph Identity Rules**:
 
+- The same forward parameters passed positionally or by keyword → same graph
+- Additional or omitted parameters may produce different graphs
 - Tensors with different ranks → different graphs
 - Different tensor shapes but same rank → same graph (dynamic shapes)
 - Different non-tensor arguments (in strict mode) → different graphs

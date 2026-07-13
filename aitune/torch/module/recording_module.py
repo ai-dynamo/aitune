@@ -15,6 +15,7 @@ import torch
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.utils.path_utils import sanitize_filename
@@ -51,6 +52,7 @@ class RecordingModule:
         self._name = name
         self._config = config if config is not None else global_config
         self._forward_call = module.__call__
+        self._input_signature = ForwardSignature.from_callable(module.forward)
 
         self._samples = defaultdict(list)
         self._total_num_samples = 0
@@ -69,12 +71,17 @@ class RecordingModule:
         forward call may have side effects on the inputs (like KV cache in LLM models).
         """
         logger.debug("Calling recording %s module.", self._name)
-        inputs_metadata = SampleMetadata.from_inputs(args, kwargs, strict=self._config.strict_mode)
-        original_args, original_kwargs = self._copy_inputs(args, kwargs)
+        normalized_args, normalized_kwargs = self._input_signature.normalize(args, kwargs)
+        inputs_metadata = SampleMetadata.from_inputs(
+            normalized_args,
+            normalized_kwargs,
+            strict=self._config.strict_mode,
+        )
+        sample_args, sample_kwargs = self._copy_inputs(normalized_args, normalized_kwargs)
         outputs = self._forward_call(*args, **kwargs)
         outputs_metadata = SampleMetadata.from_outputs(outputs, strict=self._config.strict_mode)
 
-        self.record_sample((original_args, original_kwargs), inputs_metadata, outputs_metadata)
+        self.record_sample((sample_args, sample_kwargs), inputs_metadata, outputs_metadata)
 
         return outputs
 
@@ -82,6 +89,11 @@ class RecordingModule:
     def device(self) -> torch.device:
         """Get the device of the module."""
         return next(self._module.parameters()).device
+
+    @property
+    def input_signature(self) -> ForwardSignature:
+        """Get the forward signature used to normalize inputs."""
+        return self._input_signature
 
     def record_sample(self, inputs, inputs_metadata, outputs_metadata) -> None:
         """Record a sample from the module."""

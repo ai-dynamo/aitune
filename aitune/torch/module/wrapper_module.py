@@ -313,7 +313,11 @@ class Module(wrapt.CallableObjectProxy):
             if not dry_run:
                 self._self_prev_recording = recording
                 self._self_state = ModuleState.TUNED
-                self._self_wrapper = TunedModule(backends, module_name=self._self_name)
+                self._self_wrapper = TunedModule(
+                    backends,
+                    module_name=self._self_name,
+                    input_signature=recording.input_signature,
+                )
                 self._offload(backends)
 
     def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:

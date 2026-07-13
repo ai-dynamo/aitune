@@ -11,6 +11,7 @@ from aitune.global_context import MODULE_CONTEXT_KEY, global_context
 from aitune.torch.backend.backend import Backend
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
 
@@ -23,6 +24,7 @@ class TunedModule:
     CHECK_GRAPH_KEY = "check_graph"
     IS_ANY_JIT_KEY = "is_any_jit"
     MODULE_NAME_KEY = "module_name"
+    INPUT_SIGNATURE_KEY = "input_signature"
     TYPE_KEY = "type"
 
     # Error messages
@@ -34,6 +36,7 @@ class TunedModule:
         self,
         backends: OrderedDict[SampleMetadata, Backend],
         module_name: str,
+        input_signature: ForwardSignature,
         check_graph: bool = True,
         config: AITuneConfig | None = None,
     ) -> None:
@@ -42,6 +45,7 @@ class TunedModule:
         Args:
             backends: dictionary of backends to be used for inference.
             module_name: Name of the module, used to tag hardware metrics during inference.
+            input_signature: Forward signature used to normalize module calls.
             check_graph: whether to check the graph of the sample before calling the backend.
                 If True, the graph of the sample is checked against the graph of the backend.
                 If False, the graph of the sample is not checked against the graph of the backend.
@@ -50,6 +54,7 @@ class TunedModule:
         self._backends = backends
         self._module_name = module_name
         self._check_graph = check_graph
+        self._input_signature = input_signature
         if len(self._backends) == 0:
             raise ValueError(self.ERROR_NO_BACKENDS)
 
@@ -63,6 +68,7 @@ class TunedModule:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run the call through the tuned module."""
+        args, kwargs = self._input_signature.normalize(args, kwargs)
         sample = (args, kwargs)
         with global_context:
             global_context.set(MODULE_CONTEXT_KEY, self._module_name)
@@ -136,6 +142,7 @@ class TunedModule:
             backends=backends,
             check_graph=state_dict[TunedModule.CHECK_GRAPH_KEY],
             module_name=state_dict.get(TunedModule.MODULE_NAME_KEY, "Unknown"),  # for backward compatibility
+            input_signature=ForwardSignature.from_dict(state_dict[TunedModule.INPUT_SIGNATURE_KEY]),
         )
 
     def to_dict(self):
@@ -152,4 +159,5 @@ class TunedModule:
             self.CHECK_GRAPH_KEY: self._check_graph,
             self.IS_ANY_JIT_KEY: is_any_jit,
             self.MODULE_NAME_KEY: self._module_name,
+            self.INPUT_SIGNATURE_KEY: self._input_signature.to_dict(),
         }

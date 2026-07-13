@@ -23,12 +23,16 @@ AITune creates a new execution graph when it encounters inputs that differ in th
    module(torch.randn(1, 10, 5))    # Graph 1: rank-3 tensor (different graph!)
    ```
 
-- **Argument Structure**: Different combinations of positional and keyword arguments
+- **Argument Structure**: Different supplied parameters or nested input structures
 
    ```python
-   module(torch.randn(1, 10))              # Graph 0
-   module(torch.randn(1, 10), mask=True)   # Graph 1: additional kwarg
+   # Given forward(x, mask=False):
+   module(x, True)                 # Graph 0
+   module(x=x, mask=True)          # Graph 0: equivalent call
+   module(x)                       # Graph 1: mask is not supplied
    ```
+
+   Passing the same forward parameters positionally, by keyword, or with a mixture of both produces the same graph.
 
 - **Non-Tensor Arguments** (in strict mode): Different primitive values or configurations
 
