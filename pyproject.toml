@@ -167,6 +167,7 @@ conflicts = [
 
 [tool.pytest.ini_options]
 log_cli = true
+log_cli_level = "INFO"
 addopts = ["--import-mode=importlib", "--doctest-modules"]
 pythonpath = ["."]
 testpaths = ["aitune", "tests/unit"]
