@@ -181,7 +181,7 @@ class PatchedModule:
                         current._wrapper = TunedModule(
                             backends,
                             module_name=current.fq_name,
-                            input_signature=recording.input_signature,
+                            forward_signature=recording.forward_signature,
                         )
                         current._extra_state_info = ", ".join([b.name for b in backends.values()])
                     else:

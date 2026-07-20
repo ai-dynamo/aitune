@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Contains GraphSpec which represents a graph specification."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any
 
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.sample_metadata import SampleMetadata
 
 
@@ -21,16 +22,30 @@ class GraphSpec:
         name (str) - symbolic name of the graph
         input_spec (SampleMetadata) - spec which describes the graph input
         output_spec (SampleMetadata) - spec which describes the graph output
+        forward_signature (ForwardSignature) - signature of the module's forward method
     """
 
     name: str
     input_spec: SampleMetadata
     output_spec: SampleMetadata
+    forward_signature: ForwardSignature
 
     def update_shapes_seen(self, inputs_metadata: SampleMetadata, outputs_metadata: SampleMetadata):
         """Update input spec with other input spec."""
         self.input_spec.update_shapes_seen(inputs_metadata)
         self.output_spec.update_shapes_seen(outputs_metadata)
+
+    def make_batch(self, args: tuple, kwargs: dict[str, Any], batch_size: int) -> tuple[tuple, dict[str, Any]]:
+        """Return a normalized call resized to the specified batch size."""
+        forward_inputs = self.forward_signature.normalize(args, kwargs)
+        forward_inputs.arguments = self.input_spec.make_batch(forward_inputs.arguments, batch_size)
+        return forward_inputs.args, forward_inputs.kwargs
+
+    def update_max_batch_size(self, sample: tuple[tuple, dict], max_batch_size: int) -> None:
+        """Update input metadata with the specified maximum batch size."""
+        args, kwargs = sample
+        forward_inputs = self.forward_signature.normalize(args, kwargs)
+        self.input_spec.update_max_batch_size(forward_inputs.arguments, max_batch_size)
 
     def get_max_batch_size(self, normalized: bool = False) -> int:
         """Get max batch size from input spec.
@@ -56,16 +71,26 @@ class GraphSpec:
         return int(min_batch_size)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert TensorSpec to a serializable dictionary."""
-        return {"type": self.__class__.__name__} | asdict(self)
+        """Convert the graph specification to a serializable dictionary."""
+        return {
+            "type": self.__class__.__name__,
+            "name": self.name,
+            "input_spec": self.input_spec,
+            "output_spec": self.output_spec,
+            "forward_signature": self.forward_signature.to_dict(),
+        }
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "GraphSpec":
         """Create GraphSpec from dictionary."""
         if data.get("type") != GraphSpec.__name__:
             raise ValueError(f"Invalid dictionary format for {GraphSpec.__name__}")
-        del data["type"]
-        return GraphSpec(**data)
+        return GraphSpec(
+            name=data["name"],
+            input_spec=data["input_spec"],
+            output_spec=data["output_spec"],
+            forward_signature=ForwardSignature.from_dict(data["forward_signature"]),
+        )
 
     def __str__(self) -> str:
         """Return string representation of GraphSpec."""

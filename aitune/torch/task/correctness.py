@@ -10,8 +10,8 @@ from typing import Any
 import numpy as np
 import torch
 
+from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.module.tensor_spec import TensorSpec
 
 
 class CorrectnessValueError(ValueError):
@@ -28,8 +28,7 @@ class CorrectnessDynamicShapeError(ValueError):
 
 def check_dynamic_shape_boundary_inference(
     sample: tuple[tuple, dict],
-    input_spec: SampleMetadata,
-    output_spec: SampleMetadata,
+    graph_spec: GraphSpec,
     infer: Callable[..., Any],
     name: str,
 ):
@@ -37,8 +36,7 @@ def check_dynamic_shape_boundary_inference(
 
     Args:
         sample: Sample inputs used as a template for min and max shape checks.
-        input_spec: Recorded input metadata used to construct boundary inputs.
-        output_spec: Recorded output metadata with expected output tensor shapes.
+        graph_spec: Recorded graph metadata used to construct and validate boundary inputs.
         infer: Inference callable to validate.
         name: Name of the module or backend being checked.
 
@@ -50,7 +48,7 @@ def check_dynamic_shape_boundary_inference(
         None.
     """
     for boundary_name, (args, kwargs) in zip(
-        ("min", "max"), _dynamic_shape_boundary_samples(sample, input_spec), strict=False
+        ("min", "max"), _dynamic_shape_boundary_samples(sample, graph_spec), strict=False
     ):
         try:
             with torch.no_grad():
@@ -61,7 +59,7 @@ def check_dynamic_shape_boundary_inference(
                 f"{exc.__class__.__name__}: {exc}"
             ) from exc
         outputs_metadata = SampleMetadata.from_outputs(outputs)
-        _check_output_tensor_shapes(output_spec.tensor_specs, outputs_metadata.tensor_specs)
+        _check_output_tensor_shapes(graph_spec.output_spec, outputs_metadata)
 
 
 def check_inference_output_correctness(
@@ -90,21 +88,21 @@ def check_inference_output_correctness(
             outputs = infer(*copy.deepcopy(args), **copy.deepcopy(kwargs))
         _check_output_correctness(outputs, name=f"{name}.output")
         outputs_metadata = SampleMetadata.from_outputs(outputs)
-        _check_output_tensor_shapes(output_spec.tensor_specs, outputs_metadata.tensor_specs)
+        _check_output_tensor_shapes(output_spec, outputs_metadata)
 
 
-def _dynamic_shape_boundary_samples(sample: tuple[tuple, dict], input_spec: SampleMetadata) -> list[tuple[tuple, dict]]:
+def _dynamic_shape_boundary_samples(sample: tuple[tuple, dict], graph_spec: GraphSpec) -> list[tuple[tuple, dict]]:
     """Create min/max input samples for dynamic-shape correctness checks.
 
     Note: These samples are intended only for validating min and max shapes. Their tensor values may be
     numerically invalid and can produce NaN or Inf outputs.
     """
-    if not input_spec.detected_dynamic_axis():
+    if not graph_spec.input_spec.detected_dynamic_axis():
         return []
 
     return [
-        _resize_sample_to_shape(sample, input_spec, shape_attr="min_shape"),
-        _resize_sample_to_shape(sample, input_spec, shape_attr="max_shape"),
+        _resize_sample_to_shape(sample, graph_spec, shape_attr="min_shape"),
+        _resize_sample_to_shape(sample, graph_spec, shape_attr="max_shape"),
     ]
 
 
@@ -156,16 +154,21 @@ def _check_output_correctness(output: Any, name: str = "output", depth: int = 0)
             raise CorrectnessValueError(f"Output tensor {name} contains NaN values")
 
 
-def _check_output_tensor_shapes(expected_tensor_specs: list[TensorSpec], actual_tensor_specs: list[TensorSpec]):
+def _check_output_tensor_shapes(expected: SampleMetadata, actual: SampleMetadata):
     """Check if the output tensor shapes are the same as the original output tensor shapes."""
     errors = []
-    if len(expected_tensor_specs) != len(actual_tensor_specs):
-        errors.append(f"Expected {len(expected_tensor_specs)} output tensor(s) but got {len(actual_tensor_specs)}")
+    expected_tensors = dict(expected.tensor_data)
+    actual_tensors = dict(actual.tensor_data)
+    if len(expected_tensors) != len(actual_tensors):
+        errors.append(f"Expected {len(expected_tensors)} output tensor(s) but got {len(actual_tensors)}")
 
-    for orig_tensor, tuned_tensor in zip(expected_tensor_specs, actual_tensor_specs, strict=False):
-        if not orig_tensor.matches(tuned_tensor):
+    for locator, expected_tensor in expected_tensors.items():
+        actual_tensor = actual_tensors.get(locator)
+        if actual_tensor is None:
+            errors.append(f"Expected output tensor {locator.display_path} was not returned")
+        elif not expected_tensor.matches(actual_tensor):
             errors.append(
-                f"Expected tensor {orig_tensor.name} to have shape {orig_tensor.shape} but got {tuned_tensor.shape}"
+                f"Expected tensor {locator.display_path} to have shape {expected_tensor.shape} but got {actual_tensor.shape}"
             )
 
     if errors:
@@ -176,7 +179,7 @@ def _check_output_tensor_shapes(expected_tensor_specs: list[TensorSpec], actual_
 
 def _resize_sample_to_shape(
     sample: tuple[tuple, dict],
-    input_spec: SampleMetadata,
+    graph_spec: GraphSpec,
     *,
     shape_attr: str,
 ) -> tuple[tuple, dict]:
@@ -186,13 +189,14 @@ def _resize_sample_to_shape(
     numerically invalid and can produce NaN or Inf outputs.
     """
     args, kwargs = copy.deepcopy(sample)
-    for locator, tensor_spec in input_spec.tensor_data:
+    forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
+    for locator, tensor_spec in graph_spec.input_spec.tensor_data:
         target_shape = getattr(tensor_spec, shape_attr)
-        if tensor_spec.name.startswith("args"):
-            args = locator.set_value(args, _resize_tensor(locator.get_value(args), target_shape))
-        else:
-            kwargs = locator.set_value(kwargs, _resize_tensor(locator.get_value(kwargs), target_shape))
-    return args, kwargs
+        forward_inputs.arguments = locator.set_value(
+            forward_inputs.arguments,
+            _resize_tensor(locator.get_value(forward_inputs.arguments), target_shape),
+        )
+    return forward_inputs.args, forward_inputs.kwargs
 
 
 def _resize_tensor(tensor: torch.Tensor, target_shape: list[int]) -> torch.Tensor:

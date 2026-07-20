@@ -14,7 +14,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.utils.module import get_forward_arguments_names, offload
+from aitune.torch.utils.module import offload
 from aitune.torch.utils.shapes import build_dynamic_shapes, prepare_export_sample, print_dynamic_shapes
 
 logger = getLogger(__name__)
@@ -96,8 +96,7 @@ class TorchInductorAotBackend(Backend):
         args = tuple(a.to(self._device) if isinstance(a, torch.Tensor) else a for a in args)
         kwargs = {k: v.to(self._device) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
 
-        forward_args = get_forward_arguments_names(module.forward)
-        dynamic_shapes = build_dynamic_shapes(kwargs, graph_spec, forward_args)
+        dynamic_shapes = build_dynamic_shapes((args, kwargs), graph_spec)
         # All entries empty/None → fully static graph; pass None to torch.export.export
         # so it short-circuits the dynamic-shape resolution path.
         if not any(dynamic_shapes.values()):

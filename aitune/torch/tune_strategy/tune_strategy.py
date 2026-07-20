@@ -127,8 +127,7 @@ class TuneStrategy(ABC):
         )
         check_dynamic_shape_boundary_inference(
             data[0],
-            graph_spec.input_spec,
-            graph_spec.output_spec,
+            graph_spec,
             infer=backend.infer,
             name=f"{name}.{graph_spec.name}.{backend.describe()}",
         )

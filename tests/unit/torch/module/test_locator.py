@@ -61,11 +61,11 @@ def test_locator_string_representation_sequence():
 def test_locator_string_representation_dict():
     # Test dict access
     locator = Locator((("key", ObjectType.DICT),))
-    assert str(locator) == "['key']"
+    assert str(locator) == "key"
 
     # Test nested dict access
     locator = Locator((("a", ObjectType.DICT), ("b", ObjectType.DICT)))
-    assert str(locator) == "['a']['b']"
+    assert str(locator) == 'a["b"]'
 
 
 def test_locator_string_representation_dataclass():
@@ -85,7 +85,19 @@ def test_locator_string_representation_user_type():
 
 def test_locator_string_representation_mixed():
     locator = Locator((("field", ObjectType.DATACLASS), (0, ObjectType.SEQUENCE), ("key", ObjectType.DICT)))
-    assert str(locator) == ".field[0]['key']"
+    assert str(locator) == '.field[0]["key"]'
+
+
+def test_locator_display_path():
+    access_path = (("inner", ObjectType.DICT), ("a", ObjectType.DICT))
+    input_locator = Locator(access_path)
+    output_locator, _ = next(Locator.find_leaves({"inner": {"a": 1}}, is_output=True))
+
+    assert str(input_locator) == input_locator.display_path == 'inner["a"]'
+    assert repr(input_locator) == input_locator.display_path
+    assert str(output_locator) == output_locator.display_path == 'output["inner"]["a"]'
+    assert repr(output_locator) == output_locator.display_path
+    assert Locator((), is_output=True).display_path == "output"
 
 
 def test_find_leaves_primitive_value():
@@ -114,7 +126,7 @@ def test_find_leaves_nested_dict():
     obj = {"a": 1, "b": {"c": 2, "d": 3}}
     results = list(Locator.find_leaves(obj))
 
-    expected = [(1, "['a']"), (2, "['b']['c']"), (3, "['b']['d']")]
+    expected = [(1, "a"), (2, 'b["c"]'), (3, 'b["d"]')]
 
     assert len(results) == 3
     for (locator, value), (expected_value, expected_str) in zip(results, expected, strict=True):
@@ -128,7 +140,7 @@ def test_find_leaves_nested_dataclass():
     obj = NestedDataClass()
     results = sorted(Locator.find_leaves(obj), key=lambda x: x[1])
 
-    expected = [(1, ".inner.a"), (2, ".inner.b[0]"), (3, ".inner.b[1]"), (4, ".inner.c['d']"), (5, ".value")]
+    expected = [(1, ".inner.a"), (2, ".inner.b[0]"), (3, ".inner.b[1]"), (4, '.inner.c["d"]'), (5, ".value")]
 
     assert len(results) == 5
     for (locator, value), (expected_value, expected_str) in zip(results, expected, strict=True):
@@ -410,10 +422,10 @@ def test_find_leaves_user_dict_non_strict():
 
     assert len(results) == 2
     locators = {str(loc): val for loc, val in results}
-    assert "['input_ids']" in locators
-    assert "['attention_mask']" in locators
-    assert torch.equal(locators["['input_ids']"], t1)
-    assert torch.equal(locators["['attention_mask']"], t2)
+    assert "input_ids" in locators
+    assert "attention_mask" in locators
+    assert torch.equal(locators["input_ids"], t1)
+    assert torch.equal(locators["attention_mask"], t2)
 
 
 def test_find_leaves_user_dict_all_leaves():
@@ -425,10 +437,10 @@ def test_find_leaves_user_dict_all_leaves():
 
     assert len(results) == 2
     locators = {str(loc): val for loc, val in results}
-    assert "['input_ids']" in locators
-    assert "['meta']" in locators
-    assert torch.equal(locators["['input_ids']"], t)
-    assert locators["['meta']"] == "some_string"
+    assert "input_ids" in locators
+    assert "meta" in locators
+    assert torch.equal(locators["input_ids"], t)
+    assert locators["meta"] == "some_string"
 
 
 def test_find_leaves_user_dict_nested_inside_dict():
@@ -440,10 +452,10 @@ def test_find_leaves_user_dict_nested_inside_dict():
 
     assert len(results) == 2
     locators = {str(loc): val for loc, val in results}
-    assert "['outer']['input_ids']" in locators
-    assert "['outer']['flag']" in locators
-    assert torch.equal(locators["['outer']['input_ids']"], t)
-    assert locators["['outer']['flag']"] is True
+    assert 'outer["input_ids"]' in locators
+    assert 'outer["flag"]' in locators
+    assert torch.equal(locators['outer["input_ids"]'], t)
+    assert locators['outer["flag"]'] is True
 
 
 def test_find_leaves_user_dict_locator_get_value():
@@ -455,4 +467,4 @@ def test_find_leaves_user_dict_locator_get_value():
     assert len(results) == 1
     locator, _ = results[0]
     assert torch.equal(locator.get_value(obj), t)
-    assert str(locator) == "['input_ids']"
+    assert str(locator) == "input_ids"

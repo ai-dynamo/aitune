@@ -15,8 +15,8 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
-from aitune.torch.utils.module import get_forward_arguments_names
 from aitune.torch.utils.shapes import build_dynamic_shapes, prepare_export_sample, print_dynamic_shapes
+from aitune.torch.utils.tensor import format_tensor_name
 
 try:
     import torch_tensorrt
@@ -185,8 +185,7 @@ class TorchTensorRTAotBackend(Backend):
         args = tuple(a.to(self._device) if isinstance(a, torch.Tensor) else a for a in args)
         kwargs = {k: v.to(self._device) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
 
-        forward_args = get_forward_arguments_names(model.forward)
-        dynamic_shapes = build_dynamic_shapes(kwargs, graph_spec, forward_args, use_auto=False)
+        dynamic_shapes = build_dynamic_shapes((args, kwargs), graph_spec, use_auto=False)
         # All entries empty/None → fully static graph; pass None to torch.export.export
         # so it short-circuits the dynamic-shape resolution path.
         if not any(dynamic_shapes.values()):
@@ -208,18 +207,19 @@ class TorchTensorRTAotBackend(Backend):
 
         # Optimization-profile inputs for TRT engine building.
         input_signature = []
-        for tensor_spec in graph_spec.input_spec.tensor_specs:
+        for locator, tensor_spec in graph_spec.input_spec.tensor_data:
+            input_name = format_tensor_name(locator.path, "input")
             input_i = torch_tensorrt.Input(
                 min_shape=tensor_spec.min_shape,
                 opt_shape=tensor_spec.max_shape,
                 max_shape=tensor_spec.max_shape,
                 dtype=tensor_spec.dtype,
-                name=tensor_spec.name,
+                name=input_name,
             )
             input_signature.append(input_i)
             logger.info(
                 "Torch-TensorRT input profile %s: min=%s opt=%s max=%s dtype=%s",
-                tensor_spec.name,
+                input_name,
                 tensor_spec.min_shape,
                 tensor_spec.max_shape,
                 tensor_spec.max_shape,

@@ -16,8 +16,10 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.utils.tensor import format_tensor_name
 
 logger = getLogger(Path(__file__).stem)
 
@@ -45,6 +47,18 @@ class ModelWithOptionalKwargs(nn.Module):
         return out
 
 
+def _make_graph_spec(model: nn.Module, sample: tuple[tuple, dict], output: torch.Tensor, batch_size: int) -> GraphSpec:
+    args, kwargs = sample
+    forward_signature = ForwardSignature.from_callable(model.forward)
+    forward_inputs = forward_signature.normalize(args, kwargs)
+    return GraphSpec(
+        name="test_graph",
+        input_spec=SampleMetadata.from_inputs(forward_inputs.arguments, batch_size=batch_size),
+        output_spec=SampleMetadata.from_outputs(output, batch_size=batch_size),
+        forward_signature=forward_signature,
+    )
+
+
 def test_export_with_none_kwargs(tmp_path: Path, device: str = "cpu"):
     """Test dynamo export with None-valued kwargs - should filter them out."""
     logger.info("Test 1: Export with None kwargs")
@@ -59,10 +73,7 @@ def test_export_with_none_kwargs(tmp_path: Path, device: str = "cpu"):
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    # Create graph spec
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, batch_size=2)
-    output_metadata = SampleMetadata.from_outputs(output, batch_size=2)
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    graph_spec = _make_graph_spec(model, sample, output, batch_size=2)
 
     # Export with dynamo
     output_path = tmp_path / "model_none_kwargs.onnx"
@@ -73,7 +84,7 @@ def test_export_with_none_kwargs(tmp_path: Path, device: str = "cpu"):
     onnx_model = onnx.load(onnx_path)
     # Should only have 1 input (x), None kwargs should be filtered out
     assert len(onnx_model.graph.input) == 1, f"Expected 1 input, got {len(onnx_model.graph.input)}"
-    assert onnx_model.graph.input[0].name == "args_0"
+    assert onnx_model.graph.input[0].name == format_tensor_name("x", "input")
 
     logger.info("✓ Test 1 passed: None kwargs filtered correctly")
 
@@ -94,10 +105,7 @@ def test_export_with_kwargs_wrong_order(tmp_path: Path, device: str = "cpu"):
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    # Create graph spec
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, batch_size=2)
-    output_metadata = SampleMetadata.from_outputs(output, batch_size=2)
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    graph_spec = _make_graph_spec(model, sample, output, batch_size=2)
 
     # Export with dynamo
     output_path = tmp_path / "model_wrong_order.onnx"
@@ -108,9 +116,9 @@ def test_export_with_kwargs_wrong_order(tmp_path: Path, device: str = "cpu"):
     onnx_model = onnx.load(onnx_path)
     # Should have 3 inputs in correct order: x, optional_flag, optional_value
     assert len(onnx_model.graph.input) == 3, f"Expected 3 inputs, got {len(onnx_model.graph.input)}"
-    assert onnx_model.graph.input[0].name == "args_0"  # x
-    assert onnx_model.graph.input[1].name == "kwargs_optional_value"
-    assert onnx_model.graph.input[2].name == "kwargs_optional_flag"
+    assert onnx_model.graph.input[0].name == format_tensor_name("x", "input")
+    assert onnx_model.graph.input[1].name == format_tensor_name("optional_flag", "input")
+    assert onnx_model.graph.input[2].name == format_tensor_name("optional_value", "input")
 
     logger.info("✓ Test 2 passed: Kwargs reordered correctly")
 
@@ -130,10 +138,7 @@ def test_export_with_mixed_none_and_non_none_kwargs(tmp_path: Path, device: str 
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    # Create graph spec
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, batch_size=2)
-    output_metadata = SampleMetadata.from_outputs(output, batch_size=2)
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    graph_spec = _make_graph_spec(model, sample, output, batch_size=2)
 
     # Export with dynamo
     output_path = tmp_path / "model_mixed_kwargs.onnx"
@@ -144,8 +149,8 @@ def test_export_with_mixed_none_and_non_none_kwargs(tmp_path: Path, device: str 
     onnx_model = onnx.load(onnx_path)
     # Should have 2 inputs: x and optional_flag (optional_value=None should be filtered)
     assert len(onnx_model.graph.input) == 2, f"Expected 2 inputs, got {len(onnx_model.graph.input)}"
-    assert onnx_model.graph.input[0].name == "args_0"  # x
-    assert onnx_model.graph.input[1].name == "kwargs_optional_flag"  # optional_flag
+    assert onnx_model.graph.input[0].name == format_tensor_name("x", "input")
+    assert onnx_model.graph.input[1].name == format_tensor_name("optional_flag", "input")
 
     logger.info("✓ Test 3 passed: Mixed None and non-None kwargs handled correctly")
 

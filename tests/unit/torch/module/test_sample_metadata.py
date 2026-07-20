@@ -13,46 +13,38 @@ from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
 
 
 @pytest.fixture
-def sample():
-    return (
-        1,
-        3.14,
-        True,
-        b"bytes",
-        "string",
-        torch.randn(1, 1),
-        [torch.randn(2, 2), torch.randn(3, 3)],
-        {"t": torch.randn(4, 4)},
-    )
-
-
-@pytest.fixture
 def simple_sample():
-    args = [1, "abc", torch.randn(1)]
-    kwargs = {"t": torch.randn(4, 4), "xyz": "other"}
-    return args, kwargs
+    return {
+        "values": [1, "abc", torch.randn(1)],
+        "t": torch.randn(4, 4),
+        "other": "other",
+    }
 
 
 @pytest.mark.parametrize(
     "strict,expected",
     [
-        pytest.param(False, "Tensors: args_2, kwargs_t", id="non-strict"),
-        pytest.param(True, "Tensors: args_2, kwargs_t Others: args_0=1, args_1=abc, kwargs_xyz=other", id="strict"),
+        pytest.param(False, "Tensors: values[2], t", id="non-strict"),
+        pytest.param(
+            True,
+            "Tensors: values[2], t Others: values[0]=1, values[1]=abc, other=other",
+            id="strict",
+        ),
     ],
 )
 def test_from_inputs(simple_sample, strict, expected):
-    args, kwargs = simple_sample
-    res = SampleMetadata.from_inputs(args, kwargs, strict=strict)
+    res = SampleMetadata.from_inputs(simple_sample, strict=strict)
     assert res.describe(InfoLevel.SHORT) == expected
 
 
 @pytest.mark.parametrize(
     "strict,expected",
     [
-        pytest.param(False, "Tensors: outputs_0_2, outputs_1_t", id="non-strict"),
+        pytest.param(False, 'Tensors: output["values"][2], output["t"]', id="non-strict"),
         pytest.param(
             True,
-            "Tensors: outputs_0_2, outputs_1_t Others: outputs_0_0=1, outputs_0_1=abc, outputs_1_xyz=other",
+            'Tensors: output["values"][2], output["t"] Others: output["values"][0]=1, '
+            'output["values"][1]=abc, output["other"]=other',
             id="strict",
         ),
     ],
@@ -68,25 +60,25 @@ def test_describe():
         t: torch.Tensor
         other: str
 
-    args = [
-        "first",
-        torch.randn(1),
-        (torch.randn(2), torch.randn(3)),
-        {"t": torch.randn(4)},
-        TestClass(t=torch.randn(5), other="abc"),
-    ]
-    kwargs = {
+    inputs = {
+        "values": [
+            "first",
+            torch.randn(1),
+            (torch.randn(2), torch.randn(3)),
+            {"t": torch.randn(4)},
+            TestClass(t=torch.randn(5), other="abc"),
+        ],
         "t1": torch.randn(1, 1),
         "t2": [torch.randn(2, 2), torch.randn(3, 3)],
         "t3": TestClass(t=torch.randn(4, 4), other="xyz"),
         "last": "other",
     }
 
-    res = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    res = SampleMetadata.from_inputs(inputs, strict=True)
     assert (
         res.describe(InfoLevel.SHORT)
-        == "Tensors: args_1, args_2_0, args_2_1, args_3_t, args_4.t, kwargs_t1, kwargs_t2_0, kwargs_t2_1, kwargs_t3.t "
-        "Others: args_0=first, args_4.other=abc, kwargs_last=other, kwargs_t3.other=xyz"
+        == 'Tensors: values[1], values[2][0], values[2][1], values[3]["t"], values[4].t, t1, t2[0], t2[1], '
+        "t3.t Others: values[0]=first, values[4].other=abc, t3.other=xyz, last=other"
     )
 
     assert res.describe(InfoLevel.MEDIUM)  # check only string is not empty
@@ -95,14 +87,14 @@ def test_describe():
 
 @pytest.mark.parametrize("strict", [True, False])
 def test_to_from_dict(simple_sample, strict):
-    args, kwargs = simple_sample
-    metadata = SampleMetadata.from_inputs(args, kwargs, strict=strict)
+    metadata = SampleMetadata.from_inputs(simple_sample, strict=strict)
     result = SampleMetadata.from_dict(metadata.to_dict())
     assert metadata == result
 
     metadata = SampleMetadata.from_outputs(simple_sample, strict=strict)
     result = SampleMetadata.from_dict(metadata.to_dict())
     assert metadata == result
+    assert str(metadata) == str(result)
 
 
 def test_make_batch():
@@ -111,120 +103,147 @@ def test_make_batch():
     constant_tensor_scalar = torch.tensor(3.14)
 
     # given input data, where 3rd axis is batch axis with multipliers 1, 2, 3
-    inputs_bs2_args = (
-        torch.randn(1, 2, 2),  # tensor, multiplier 1
-        constant_tensor,
-        constant_tensor_scalar,
-        [torch.randn(4, 5, 4)],  # tensor list, multiplier 2
-        {"t": torch.randn(7, 8, 6)},  # tensor dict, multiplier 3
-    )  # this is on purpose a tuple
-    inputs_bs2_kwargs = {
+    inputs_bs2 = {
+        "values": (
+            torch.randn(1, 2, 2),  # tensor, multiplier 1
+            constant_tensor,
+            constant_tensor_scalar,
+            [torch.randn(4, 5, 4)],  # tensor list, multiplier 2
+            {"t": torch.randn(7, 8, 6)},  # tensor dict, multiplier 3
+        ),  # this is on purpose a tuple
         "t": torch.randn(2),
         "z": "abc",
     }
 
-    inputs_bs3_args = [
-        torch.randn(1, 2, 3),  # tensor, multiplier 1
-        constant_tensor,
-        constant_tensor_scalar,
-        [torch.randn(4, 5, 6)],  # tensor list, multiplier 2
-        {"t": torch.randn(7, 8, 9)},  # tensor dict, multiplier 3
-    ]  # this is on purpose a list
-
-    inputs_bs3_kwargs = {
+    inputs_bs3 = {
+        "values": [
+            torch.randn(1, 2, 3),  # tensor, multiplier 1
+            constant_tensor,
+            constant_tensor_scalar,
+            [torch.randn(4, 5, 6)],  # tensor list, multiplier 2
+            {"t": torch.randn(7, 8, 9)},  # tensor dict, multiplier 3
+        ],  # this is on purpose a list
         "t": torch.randn(3),
         "z": "abc",
     }
 
     with global_context:
         global_context.set(BATCH_SIZE_KEY, 3)
-        metadata1 = SampleMetadata.from_inputs(inputs_bs3_args, inputs_bs3_kwargs)
+        metadata1 = SampleMetadata.from_inputs(inputs_bs3)
         global_context.set(BATCH_SIZE_KEY, 2)
-        metadata2 = SampleMetadata.from_inputs(inputs_bs2_args, inputs_bs2_kwargs)
+        metadata2 = SampleMetadata.from_inputs(inputs_bs2)
         metadata1.update_shapes_seen(metadata2)
 
     # test making batch either from first or second sample
-    for args, kwargs in [(inputs_bs3_args, inputs_bs3_kwargs), (inputs_bs2_args, inputs_bs2_kwargs)]:
-        res_args, res_kwargs = metadata1.make_batch(args, kwargs, batch_size=10)
-        assert res_args[0].shape == (1, 2, 10)
-        assert res_args[1].shape == constant_tensor.shape
-        assert res_args[2].shape == constant_tensor_scalar.shape
-        assert res_args[3][0].shape == (4, 5, 20)
-        assert res_args[4]["t"].shape == (7, 8, 30)
-        assert res_kwargs["t"].shape == (10,)
-        assert res_kwargs["z"] == "abc"
+    for inputs in [inputs_bs3, inputs_bs2]:
+        result = metadata1.make_batch(inputs, batch_size=10)
+        values = result["values"]
+        assert values[0].shape == (1, 2, 10)
+        assert values[1].shape == constant_tensor.shape
+        assert values[2].shape == constant_tensor_scalar.shape
+        assert values[3][0].shape == (4, 5, 20)
+        assert values[4]["t"].shape == (7, 8, 30)
+        assert result["t"].shape == (10,)
+        assert result["z"] == "abc"
 
         # note that input sample should not  be modified
-        assert inputs_bs2_args[0].shape == (1, 2, 2)
-        assert inputs_bs3_args[0].shape == (1, 2, 3)
-        assert inputs_bs2_kwargs["t"].shape == (2,)
-        assert inputs_bs3_kwargs["t"].shape == (3,)
+        assert inputs_bs2["values"][0].shape == (1, 2, 2)
+        assert inputs_bs3["values"][0].shape == (1, 2, 3)
+        assert inputs_bs2["t"].shape == (2,)
+        assert inputs_bs3["t"].shape == (3,)
+
+
+def test_update_shapes_seen_matches_tensors_by_path():
+    metadata = SampleMetadata.from_inputs({"x": torch.randn(1, 2), "y": torch.randn(3)})
+    other = SampleMetadata.from_inputs({"y": torch.randn(5), "x": torch.randn(4, 2)})
+
+    metadata.update_shapes_seen(other)
+
+    tensor_specs = {locator.path: tensor_spec for locator, tensor_spec in metadata.tensor_data}
+    assert tensor_specs["x"].min_shape == [1, 2]
+    assert tensor_specs["x"].max_shape == [4, 2]
+    assert tensor_specs["y"].min_shape == [3]
+    assert tensor_specs["y"].max_shape == [5]
+
+
+def test_update_shapes_seen_rank_error_includes_metadata():
+    metadata = SampleMetadata.from_inputs({"inputs": {"tokens": torch.randn(2, 3)}})
+    different_rank = SampleMetadata.from_inputs({"inputs": {"tokens": torch.randn(2)}})
+
+    with pytest.raises(ValueError) as exc_info:
+        metadata.update_shapes_seen(different_rank)
+
+    message = str(exc_info.value)
+    assert metadata.describe(InfoLevel.FULL) in message
+    assert different_rank.describe(InfoLevel.FULL) in message
 
 
 def test_hash_non_strict():
     # same tensor ranks
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2, 2)})
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2, 2)})
+    m1 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "t": torch.randn(2, 2)})
+    m2 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "t": torch.randn(2, 2)})
     assert hash(m1) == hash(m2)
 
     # tensor rank same, different shapes
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2, 2)})
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(2, 2),), kwargs={"t": torch.randn(2, 2)})
+    m1 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "t": torch.randn(2, 2)})
+    m2 = SampleMetadata.from_inputs({"x": torch.randn(2, 2), "t": torch.randn(2, 2)})
     assert hash(m1) == hash(m2)
 
     # different rank
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1),), kwargs={"t": torch.randn(2, 2)})
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2)})
+    m1 = SampleMetadata.from_inputs({"x": torch.randn(1), "t": torch.randn(2, 2)})
+    m2 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "t": torch.randn(2)})
     assert hash(m1) != hash(m2)
 
-    # different kwarg name
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1),), kwargs={"t": torch.randn(2, 2)})
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1)), kwargs={"other": torch.randn(2, 2)})
+    # different parameter name
+    m1 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "t": torch.randn(2, 2)})
+    m2 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "other": torch.randn(2, 2)})
     assert hash(m1) != hash(m2)
 
 
 def test_hash_strict():
     # same tensor ranks
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1), "abc"), kwargs={"t": torch.randn(2, 2)}, strict=True)
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1), "abc"), kwargs={"t": torch.randn(2, 2)}, strict=True)
+    m1 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "label": "abc", "t": torch.randn(2, 2)}, strict=True)
+    m2 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "label": "abc", "t": torch.randn(2, 2)}, strict=True)
     assert hash(m1) == hash(m2)
 
-    # different other data in args
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1), "abc"), kwargs={"t": torch.randn(2, 2)}, strict=True)
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1), "xyz"), kwargs={"t": torch.randn(2, 2)}, strict=True)
+    # different parameter value
+    m1 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "label": "abc", "t": torch.randn(2, 2)}, strict=True)
+    m2 = SampleMetadata.from_inputs({"x": torch.randn(1, 1), "label": "xyz", "t": torch.randn(2, 2)}, strict=True)
     assert hash(m1) != hash(m2)
 
-    # different other data in wargs
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1, 1), "a"), kwargs={"t": torch.randn(2, 2), "x": 1}, strict=True)
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 1), "a"), kwargs={"t": torch.randn(2, 2), "x": 2}, strict=True)
+    # different option value
+    m1 = SampleMetadata.from_inputs(
+        {"x": torch.randn(1, 1), "label": "a", "t": torch.randn(2, 2), "option": 1}, strict=True
+    )
+    m2 = SampleMetadata.from_inputs(
+        {"x": torch.randn(1, 1), "label": "a", "t": torch.randn(2, 2), "option": 2}, strict=True
+    )
     assert hash(m1) != hash(m2)
 
 
 def test_hash_llm_dynamic():
-    m1 = SampleMetadata.from_inputs(args=("a",), kwargs={"cache_position": torch.randn(5)}, strict=True)
-    m2 = SampleMetadata.from_inputs(args=("b",), kwargs={"cache_position": torch.randn(5)}, strict=True)
-    m3 = SampleMetadata.from_inputs(args=("b",), kwargs={"cache_position": torch.randn(6)}, strict=True)
-    assert hash(m1) == hash(m2), "args should be ignored"
+    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.randn(5)}, strict=True)
+    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.randn(5)}, strict=True)
+    m3 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.randn(6)}, strict=True)
+    assert hash(m1) == hash(m2), "other inputs should be ignored"
     assert hash(m2) == hash(m3), "cache position should not affect hash"
 
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1),), kwargs={"cache_position": torch.randn(5)}, strict=False)
-    m2 = SampleMetadata.from_inputs(args=(torch.randn(1, 2),), kwargs={"cache_position": torch.randn(5)}, strict=False)
-    assert hash(m1) == hash(m2), "tensor args should be ignored"
+    m1 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1), "cache_position": torch.randn(5)})
+    m2 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1, 2), "cache_position": torch.randn(5)})
+    assert hash(m1) == hash(m2), "other tensor inputs should be ignored"
 
 
 def test_hash_llm_static():
-    m1 = SampleMetadata.from_inputs(args=("a",), kwargs={"cache_position": torch.tensor([0])}, strict=True)
-    m2 = SampleMetadata.from_inputs(args=("b",), kwargs={"cache_position": torch.tensor([0])}, strict=True)
-    assert hash(m1) == hash(m2), "args should be ignored"
+    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([0])}, strict=True)
+    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.tensor([0])}, strict=True)
+    assert hash(m1) == hash(m2), "other inputs should be ignored"
 
-    m1 = SampleMetadata.from_inputs(args=(torch.randn(1),), kwargs={"cache_position": torch.tensor([0])}, strict=False)
-    m2 = SampleMetadata.from_inputs(
-        args=(torch.randn(1, 2),), kwargs={"cache_position": torch.tensor([0])}, strict=False
-    )
-    assert hash(m1) == hash(m2), "tensor args should be ignored"
+    m1 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1), "cache_position": torch.tensor([0])})
+    m2 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1, 2), "cache_position": torch.tensor([0])})
+    assert hash(m1) == hash(m2), "other tensor inputs should be ignored"
 
-    m1 = SampleMetadata.from_inputs(args=("a",), kwargs={"cache_position": torch.tensor([0])})
-    m2 = SampleMetadata.from_inputs(args=("a",), kwargs={"cache_position": torch.tensor([1])})
+    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([0])})
+    m2 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([1])})
     assert hash(m1) != hash(m2), "cache position should affect hash"
 
 
@@ -232,7 +251,6 @@ def test_batch_tensor():
     # Case 1: tensor needs to be sliced to match batch size
     tensor = torch.arange(15).reshape(3, 5)
     spec = TensorSpec(
-        name="x",
         shape=[3, 5],
         min_shape=[3, 5],
         max_shape=[3, 5],
@@ -248,7 +266,6 @@ def test_batch_tensor():
     # Case 2: tensor needs to be repeated to match batch size
     tensor = torch.arange(15).reshape(3, 5)
     spec = TensorSpec(
-        name="x",
         shape=["batch0", 5],
         min_shape=[3, 5],
         max_shape=[3, 5],
@@ -262,7 +279,6 @@ def test_batch_tensor():
     # Case 3: multiple batch axes
     tensor = torch.arange(24).reshape(2, 3, 4)
     spec = TensorSpec(
-        name="x",
         shape=["batch0", 3, "batch2"],
         min_shape=[2, 3, 4],
         max_shape=[2, 3, 4],
@@ -277,7 +293,6 @@ def test_batch_tensor():
     # Case 4: tensor does not have batch axis
     tensor = torch.arange(15).reshape(3, 5)
     spec = TensorSpec(
-        name="x",
         shape=[3, 5],
         min_shape=[3, 5],
         max_shape=[3, 5],
@@ -289,69 +304,29 @@ def test_batch_tensor():
     assert torch.equal(batched, tensor)
 
 
-def test_get_names_mapping():
-    """Test get_names_mapping method with various input types.
-
-    This test verifies that get_names_mapping correctly extracts tensor names
-    from different metadata structures including:
-    1. Simple tensor
-    2. Sequence of tensors
-    3. Dictionary with tensors
-    4. Mixed structure with tensors and primitives
-    5. Nested structures
-    #"""
-    # Test case 1: Single tensor
-    tensor = torch.randn(2, 2)
-    metadata = SampleMetadata.from_inputs(args=(tensor,), kwargs={}, strict=True)
-    args_mapping, kwargs_mapping = metadata.get_names_mapping()
-    assert args_mapping == ["args_0"]
-    assert kwargs_mapping == {}
-
-    # Test case 2: Sequence of tensors
-    tensors = [torch.randn(2, 2), torch.randn(3, 3)]
-    metadata = SampleMetadata.from_inputs(args=(tensors,), kwargs={}, strict=True)
-    args_mapping, kwargs_mapping = metadata.get_names_mapping()
-    assert args_mapping == ["args_0_0", "args_0_1"]
-    assert kwargs_mapping == {}
-
-    # Test case 3: Dictionary with tensors
-    tensor_dict = {"a": torch.randn(2, 2), "b": torch.randn(3, 3)}
-    metadata = SampleMetadata.from_inputs(args=(), kwargs=tensor_dict, strict=True)
-    args_mapping, kwargs_mapping = metadata.get_names_mapping()
-    assert args_mapping == []
-    assert kwargs_mapping == {"a": ["kwargs_a"], "b": ["kwargs_b"]}
-
-    # Test case 4: Mixed structure with tensors and primitives
-    args = (1, torch.randn(2, 2), "str")
-    kwargs = {"t": torch.randn(3, 3)}
-    metadata = SampleMetadata.from_inputs(args=args, kwargs=kwargs, strict=True)
-    args_mapping, kwargs_mapping = metadata.get_names_mapping()
-    assert args_mapping == ["args_1"]
-    assert kwargs_mapping == {"t": ["kwargs_t"]}
-
-    # Test case 5: Nested structure
-    nested = {
-        "a": [torch.randn(2, 2), torch.randn(3, 3)],
-        "b": {"c": torch.randn(4, 4), "d": torch.randn(5, 5)},
-        "e": torch.randn(6, 6),
+def test_input_identity_uses_parameter_paths():
+    inputs = {
+        "hidden_states": torch.randn(2, 2),
+        "inputs": {"tokens": torch.randn(3, 3)},
     }
-    metadata = SampleMetadata.from_inputs(args=(), kwargs=nested, strict=True)
-    args_mapping, kwargs_mapping = metadata.get_names_mapping()
-    assert args_mapping == []
-    assert kwargs_mapping == {"a": ["kwargs_a_0", "kwargs_a_1"], "b": ["kwargs_b_c", "kwargs_b_d"], "e": ["kwargs_e"]}
 
-    # Test case 6: Empty structure
-    metadata = SampleMetadata.from_inputs(args=(), kwargs={}, strict=True)
-    args_mapping, kwargs_mapping = metadata.get_names_mapping()
-    assert args_mapping == []
-    assert kwargs_mapping == {}
+    metadata = SampleMetadata.from_inputs(inputs)
 
-    # Test case 7: Structure with only primitives
-    primitives = (1, 2.0, "str", True)
-    metadata = SampleMetadata.from_inputs(args=primitives, kwargs={}, strict=True)
-    args_mapping, kwargs_mapping = metadata.get_names_mapping()
-    assert args_mapping == []
-    assert kwargs_mapping == {}
+    assert [locator.path for locator, _ in metadata.tensor_data] == [
+        "hidden_states",
+        ("inputs", "tokens"),
+    ]
+
+
+def test_input_identity_does_not_depend_on_dictionary_order():
+    x = torch.randn(2, 2)
+    y = torch.randn(3, 3)
+
+    first = SampleMetadata.from_inputs({"x": x, "y": y})
+    second = SampleMetadata.from_inputs({"y": y, "x": x})
+
+    assert first == second
+    assert hash(first) == hash(second)
 
 
 def test_detected_dynamic_axis():
@@ -376,20 +351,23 @@ def test_detected_dynamic_axis():
 
 
 def test_to_json_dict_non_strict():
-    args = (torch.randn(2, 3),)
-    kwargs = {"x": torch.randn(4, 5)}
-    metadata = SampleMetadata.from_inputs(args, kwargs, strict=False)
+    metadata = SampleMetadata.from_inputs(
+        {"x": torch.randn(2, 3), "inputs": {"mask": torch.randn(4, 5)}},
+        strict=False,
+    )
 
     result = metadata.to_json_dict()
 
     assert result["strict"] is False
     assert result["llm_phase"] is None
-    assert result["other_data"] == {}
+    assert result["other_data"] == []
     assert len(result["tensor_data"]) == 2
 
-    # Check tensor entries are JSON-safe dicts
+    assert {entry["access_path"]: entry["semantic_path"] for entry in result["tensor_data"]} == {
+        "x": "x",
+        'inputs["mask"]': ["inputs", "mask"],
+    }
     for entry in result["tensor_data"]:
-        assert isinstance(entry["name"], str)
         assert isinstance(entry["shape"], list)
         assert isinstance(entry["min_shape"], list)
         assert isinstance(entry["max_shape"], list)
@@ -397,22 +375,19 @@ def test_to_json_dict_non_strict():
 
 
 def test_to_json_dict_strict():
-    args = (1, torch.randn(2, 3))
-    kwargs = {}
-    metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
+    metadata = SampleMetadata.from_inputs({"count": 1, "x": torch.randn(2, 3)}, strict=True)
 
     result = metadata.to_json_dict()
 
     assert result["strict"] is True
     assert len(result["tensor_data"]) == 1
-    assert result["other_data"] == {"args_0": 1}
+    assert result["other_data"] == [{"access_path": "count", "semantic_path": "count", "value": 1}]
 
 
 def test_to_json_dict_is_json_serializable():
     import json
 
-    args = (torch.randn(2, 3), torch.randn(4, 5))
-    metadata = SampleMetadata.from_inputs(args, kwargs={})
+    metadata = SampleMetadata.from_inputs({"x": torch.randn(2, 3), "mask": torch.randn(4, 5)})
 
     result = metadata.to_json_dict()
     serialized = json.dumps(result)  # should not raise

@@ -17,6 +17,7 @@ import torch.nn as nn
 from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
+from aitune.exceptions import AITuneUserInputError
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCast, ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig, ONNXQuantizer
@@ -31,6 +32,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
 from aitune.torch.utils.module import offload
+from aitune.torch.utils.tensor import format_tensor_name
 from aitune.utils.monitoring import annotate
 
 G_LOGGER.use_python_logging_system = True
@@ -840,12 +842,13 @@ class TensorRTBackend(Backend, TensorRTRunner):
         outputs = self._output_allocator.outputs
 
         result = copy.deepcopy(self._output_object)  # make each results a unique copy of the original output object
-        for locator, tensor_spec in self._graph_spec.output_spec.tensor_data:
-            if tensor_spec.name in outputs:
-                result = locator.set_value(result, outputs[tensor_spec.name].clone())
-                del outputs[tensor_spec.name]
+        for locator, _ in self._graph_spec.output_spec.tensor_data:
+            name = format_tensor_name(locator.path, "output")
+            if name in outputs:
+                result = locator.set_value(result, outputs[name].clone())
+                del outputs[name]
             else:
-                logger.debug("Output: %s not found in outputs", tensor_spec.name)
+                logger.debug("Output: %s not found in outputs", name)
 
         if len(outputs) > 0:
             logger.warning("Outputs not found in graph spec.")
@@ -874,14 +877,13 @@ class TensorRTBackend(Backend, TensorRTRunner):
         # Use input_names property directly from engine_info
         engine_input_names = set(self._engine_info.input_names)
         inputs = {}
-        for locator, tensor_spec in self._graph_spec.input_spec.tensor_data:
-            if tensor_spec.name in engine_input_names:
-                if tensor_spec.name.startswith("args"):
-                    inputs[tensor_spec.name] = locator.get_value(args)
-                else:
-                    inputs[tensor_spec.name] = locator.get_value(kwargs)
+        forward_inputs = self._graph_spec.forward_signature.normalize(args, kwargs)
+        for locator, _ in self._graph_spec.input_spec.tensor_data:
+            name = format_tensor_name(locator.path, "input")
+            if name in engine_input_names:
+                inputs[name] = locator.get_value(forward_inputs.arguments)
             else:
-                logger.debug("Input: %s not found in inputs", tensor_spec.name)
+                logger.debug("Input: %s not found in inputs", name)
 
         logger.debug("Prepared %s inputs for inference", len(inputs))
         logger.debug("Inputs names: %s", engine_input_names)
@@ -992,6 +994,18 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """
         # if user provided profiles, return them
         if isinstance(self._config.profiles, list):
+            input_names = {
+                format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data
+            }
+            for profile in self._config.profiles:
+                profile_names = set(profile.profile)
+                missing_names = input_names - profile_names
+                unknown_names = profile_names - input_names
+                if missing_names or unknown_names:
+                    raise AITuneUserInputError(
+                        f"TensorRT profile inputs {sorted(profile_names)} do not match recorded tensor inputs "
+                        f"{sorted(input_names)} (missing: {sorted(missing_names)}, unknown: {sorted(unknown_names)})."
+                    )
             return [user_config.profile for user_config in self._config.profiles]
 
         if self._config.profiles == ProfileMode.SINGLE:
@@ -1005,12 +1019,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
         for idx, sample in enumerate(data):
             profile = TensorRTProfile()
             args, kwargs = sample
-            for locator, tensor_spec in graph_spec.input_spec.tensor_data:
-                if tensor_spec.name.startswith("args"):
-                    shape = locator.get_value(args).shape
-                else:
-                    shape = locator.get_value(kwargs).shape
-                profile.add_input_shape(tensor_spec.name, shape, shape, shape)
+            forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
+            for locator, _ in graph_spec.input_spec.tensor_data:
+                shape = locator.get_value(forward_inputs.arguments).shape
+                profile.add_input_shape(locator.path, shape, shape, shape)
 
             logger.debug("Created profile %d: %s", idx, profile)
             profiles[profile] = True
@@ -1054,10 +1066,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
         min_shapes = {}
         opt_shapes = {}
         max_shapes = {}
-        for tensor_spec in graph_spec.input_spec.tensor_specs:
-            min_shapes[tensor_spec.name] = tuple(tensor_spec.min_shape)
-            opt_shapes[tensor_spec.name] = tuple(tensor_spec.max_shape)
-            max_shapes[tensor_spec.name] = tuple(tensor_spec.max_shape)
+        for locator, tensor_spec in graph_spec.input_spec.tensor_data:
+            input_name = format_tensor_name(locator.path, "input")
+            min_shapes[input_name] = tuple(tensor_spec.min_shape)
+            opt_shapes[input_name] = tuple(tensor_spec.max_shape)
+            max_shapes[input_name] = tuple(tensor_spec.max_shape)
 
         return min_shapes, opt_shapes, max_shapes
 

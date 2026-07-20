@@ -4,8 +4,6 @@
 
 import copy
 import pickle
-from collections import defaultdict
-from collections.abc import Sequence
 from typing import Any, Literal
 
 import torch
@@ -66,52 +64,55 @@ class SampleMetadata:
           'batch1', etc. with associated multipliers.
 
     Example - Basic Usage:
-        >>> args = 1, 2, 3, torch.randn(2, 2)
-        >>> kwargs = {"t": torch.randn(2, 3), "other": "abc"}
+        >>> inputs = {
+        ...     "t": torch.randn(2, 3),
+        ...     "values": (1, 2, 3, torch.randn(2, 2)),
+        ...     "other": "abc",
+        ... }
         >>> # Non-strict mode: only tensors tracked
-        >>> SampleMetadata.from_inputs(args, kwargs, strict=False)
+        >>> SampleMetadata.from_inputs(inputs, strict=False)
         Tensors:
-        ╒═══════════╤══════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-        │ Locator   │ Name     │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-        ╞═══════════╪══════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-        │ [3]       │ args_3   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
-        ├───────────┼──────────┼─────────┼─────────────┼─────────────┼───────────────┤
-        │ ['t']     │ kwargs_t │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
-        ╘═══════════╧══════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+        ╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+        │ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+        ╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+        │ t             │ t               │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+        ├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+        │ values[3]     │ ('values', 3)   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+        ╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
         <BLANKLINE>
         >>> # Strict mode: all data tracked
-        >>> SampleMetadata.from_inputs(args, kwargs, strict=True)
+        >>> SampleMetadata.from_inputs(inputs, strict=True)
         Tensors:
-        ╒═══════════╤══════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-        │ Locator   │ Name     │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-        ╞═══════════╪══════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-        │ [3]       │ args_3   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
-        ├───────────┼──────────┼─────────┼─────────────┼─────────────┼───────────────┤
-        │ ['t']     │ kwargs_t │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
-        ╘═══════════╧══════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+        ╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+        │ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+        ╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+        │ t             │ t               │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+        ├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+        │ values[3]     │ ('values', 3)   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+        ╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
         Other:
-        ╒═══════════╤══════════════╤═════════╕
-        │ Locator   │ Name         │ Value   │
-        ╞═══════════╪══════════════╪═════════╡
-        │ [0]       │ args_0       │ 1       │
-        ├───────────┼──────────────┼─────────┤
-        │ [1]       │ args_1       │ 2       │
-        ├───────────┼──────────────┼─────────┤
-        │ [2]       │ args_2       │ 3       │
-        ├───────────┼──────────────┼─────────┤
-        │ ['other'] │ kwargs_other │ abc     │
-        ╘═══════════╧══════════════╧═════════╛
+        ╒═══════════════╤═════════════════╤═════════╕
+        │ Access Path   │ Semantic Path   │ Value   │
+        ╞═══════════════╪═════════════════╪═════════╡
+        │ values[0]     │ ('values', 0)   │ 1       │
+        ├───────────────┼─────────────────┼─────────┤
+        │ values[1]     │ ('values', 1)   │ 2       │
+        ├───────────────┼─────────────────┼─────────┤
+        │ values[2]     │ ('values', 2)   │ 3       │
+        ├───────────────┼─────────────────┼─────────┤
+        │ other         │ other           │ abc     │
+        ╘═══════════════╧═════════════════╧═════════╛
         <BLANKLINE>
 
     Example - Tensor Rank Equality:
-        >>> s1 = SampleMetadata.from_inputs((torch.randn(1, 2, 3),), kwargs={})
-        >>> s2 = SampleMetadata.from_inputs((torch.randn(2, 2, 3),), kwargs={})
+        >>> s1 = SampleMetadata.from_inputs({"x": torch.randn(1, 2, 3)})
+        >>> s2 = SampleMetadata.from_inputs({"x": torch.randn(2, 2, 3)})
         >>> s1 == s2  # Same rank, different shape
         True
 
     Note:
     1. The __init__ method should not be used directly. instead:
-        - for inputs - use SampleMetadata.from_inputs(args, kwargs)
+        - for inputs - use SampleMetadata.from_inputs(bound_arguments)
         - for outputs - use SampleMetadata.from_outputs(output)
 
     2. In order to support Hugging Face integrations with kv cache the following behavior is changed:
@@ -129,8 +130,8 @@ class SampleMetadata:
 
     def __init__(
         self,
-        tensor_data: tuple[tuple[Locator, TensorSpec]],
-        other_data: tuple[tuple[Locator, str, Any]],
+        tensor_data: tuple[tuple[Locator, TensorSpec], ...],
+        other_data: tuple[tuple[Locator, Any], ...],
         strict: bool = False,
         llm_phase: Literal["prefill", "decode"] | None = None,
     ) -> None:
@@ -157,7 +158,9 @@ class SampleMetadata:
             return False
 
         if self._llm_phase is None:
-            return self._tensor_data == __value._tensor_data and self._other_data == __value._other_data
+            return dict(self._tensor_data) == dict(__value._tensor_data) and dict(self._other_data) == dict(
+                __value._other_data
+            )
         else:
             # LLM integration: check only LLM phase
             return self._llm_phase == __value._llm_phase
@@ -165,7 +168,7 @@ class SampleMetadata:
     def __hash__(self) -> int:
         """Compute hash of sample metadata."""
         if self._llm_phase is None:
-            return hash(self._tensor_data) ^ hash(self._other_data)
+            return hash(frozenset(self._tensor_data)) ^ hash(frozenset(self._other_data))
         else:
             # LLM integration: hash only LLM phase
             return hash(self._llm_phase)
@@ -173,29 +176,6 @@ class SampleMetadata:
     def detected_dynamic_axis(self) -> bool:
         """Check if dynamic axes are detected in the metadata."""
         return any(ts.has_dynamic_axis() or ts.has_batch_axis() for ts in self.tensor_specs)
-
-    def get_names(self) -> Sequence[str]:
-        """Get names of tensors."""
-        return [ts.name for ts in self.tensor_specs]
-
-    def get_names_mapping(self) -> tuple[list[str], dict[str, list[Any]]]:
-        """Get tensor names.
-
-        Returns:
-            Tuple of list of tensor names for args and dictionary with key kwarg name, value - list of tensor names under this kwarg
-            - for args it returns list of tensor names
-            - for kwargs it returns dictionary with key kwarg name, value - list of tensor names under this kwarg
-        """
-        args_names: list[str] = []
-        kwargs_names: dict[str, list[Any]] = defaultdict(list)  # make pytype happy
-        for locator, tensor_spec in self._tensor_data:
-            if tensor_spec.name.startswith("args"):
-                args_names.append(tensor_spec.name)
-            else:
-                kwarg_name = locator.root_name
-                kwargs_names[kwarg_name].append(tensor_spec.name)
-
-        return args_names, kwargs_names
 
     @property
     def llm_phase(self) -> Literal["prefill", "decode", ""]:
@@ -205,7 +185,7 @@ class SampleMetadata:
         return self._llm_phase
 
     @property
-    def other_data(self) -> tuple[tuple[Locator, str, str]]:
+    def other_data(self) -> tuple[tuple[Locator, Any], ...]:
         """Get list of other data."""
         return self._other_data
 
@@ -220,25 +200,20 @@ class SampleMetadata:
         return [ts for _, ts in self._tensor_data]
 
     @staticmethod
-    def from_inputs(
-        args: Any, kwargs: dict[str, Any], strict: bool = False, batch_size: int | None = None
-    ) -> "SampleMetadata":
-        """Create SampleMetadata from inputs: args and kwargs.
+    def from_inputs(inputs: dict[str, Any], strict: bool = False, batch_size: int | None = None) -> "SampleMetadata":
+        """Create SampleMetadata from inputs keyed by forward parameter name.
 
         If strict is True, then other data is also included.
         """
         batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
         tensor_data, other_data, cache_position = [], [], None
-        for prefix, data_source in zip(("args", "kwargs"), (args, kwargs), strict=False):
-            for locator, value in Locator.find_leaves(data_source):
-                name = prefix + locator.sanitized_name
-                if torch.is_tensor(value):
-                    tensor_data.append((locator, TensorSpec.from_tensor(name, value, batch_size)))
-                elif strict:
-                    other_data.append((locator, name, value))
-                if config.enable_transformers_integration:
-                    if locator.root_name == "cache_position":
-                        cache_position = value
+        for locator, value in Locator.find_leaves(inputs):
+            if torch.is_tensor(value):
+                tensor_data.append((locator, TensorSpec.from_tensor(value, batch_size)))
+            elif strict:
+                other_data.append((locator, value))
+            if config.enable_transformers_integration and locator.root_name == "cache_position":
+                cache_position = value
 
         if cache_position is None:
             llm_phase = None
@@ -255,12 +230,11 @@ class SampleMetadata:
         """
         batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
         tensor_data, other_data = [], []
-        for locator, value in Locator.find_leaves(output):
-            name = "outputs" + locator.sanitized_name
+        for locator, value in Locator.find_leaves(output, is_output=True):
             if torch.is_tensor(value):
-                tensor_data.append((locator, TensorSpec.from_tensor(name, value, batch_size)))
+                tensor_data.append((locator, TensorSpec.from_tensor(value, batch_size)))
             elif strict:
-                other_data.append((locator, name, value))
+                other_data.append((locator, value))
         return SampleMetadata(tuple(tensor_data), tuple(other_data), strict, llm_phase=None)
 
     @staticmethod
@@ -300,15 +274,23 @@ class SampleMetadata:
             A dictionary representation safe for ``json.dumps``.
         """
         tensor_data = []
-        for _, ts in self._tensor_data:
+        for locator, ts in self._tensor_data:
             tensor_data.append({
-                "name": ts.name,
+                "access_path": locator.display_path,
+                "semantic_path": locator.path,
                 "shape": ts.shape,
                 "min_shape": ts.min_shape,
                 "max_shape": ts.max_shape,
                 "dtype": ts.dtype,
             })
-        other_data = {name: value for _, name, value in self._other_data}
+        other_data = [
+            {
+                "access_path": locator.display_path,
+                "semantic_path": locator.path,
+                "value": value,
+            }
+            for locator, value in self._other_data
+        ]
         return json_serialize({
             "tensor_data": tensor_data,
             "other_data": other_data,
@@ -319,23 +301,25 @@ class SampleMetadata:
     def describe(self, info_level: InfoLevel = InfoLevel.FULL) -> str:
         """Get information describing sample metadata."""
         tensors, tensor_header = [], []
-        for locator, ts in sorted(self._tensor_data, key=lambda x: x[1].name):
+        for locator, ts in self._tensor_data:
+            access_path = locator.display_path
             if info_level == InfoLevel.SHORT:
-                tensors.append(ts.name)
+                tensors.append(access_path)
             elif info_level == InfoLevel.MEDIUM:
-                tensor_header = ["Locator", "Name", "Shape"]
-                tensors.append((str(locator), ts.name, ts.shape))
+                tensor_header = ["Access Path", "Semantic Path", "Shape"]
+                tensors.append((access_path, str(locator.path), ts.shape))
             elif info_level == InfoLevel.FULL:
-                tensor_header = ["Locator", "Name", "Shape", "Min Shape", "Max Shape", "Dtype"]
-                tensors.append((str(locator), ts.name, ts.shape, ts.min_shape, ts.max_shape, ts.dtype))
+                tensor_header = ["Access Path", "Semantic Path", "Shape", "Min Shape", "Max Shape", "Dtype"]
+                tensors.append((access_path, str(locator.path), ts.shape, ts.min_shape, ts.max_shape, ts.dtype))
 
         others, other_header = [], []
-        for locator, name, value in sorted(self._other_data, key=lambda x: x[1]):
+        for locator, value in self._other_data:
+            access_path = locator.display_path
             if info_level == InfoLevel.SHORT:
-                others.append(f"{name}={value}")
+                others.append(f"{access_path}={value}")
             else:
-                other_header = ["Locator", "Name", "Value"]
-                others.append((str(locator), name, str(value)))
+                other_header = ["Access Path", "Semantic Path", "Value"]
+                others.append((access_path, str(locator.path), str(value)))
 
         if info_level == InfoLevel.SHORT:
             result = "Tensors: " + ", ".join(tensors)
@@ -349,41 +333,37 @@ class SampleMetadata:
 
         return result
 
-    def make_batch(self, args: Any, kwargs: dict[str, Any], batch_size: int) -> tuple[Any, dict[str, Any]]:
-        """Takes args and kwargs and extrapolates all tensors according to tensor specs to have specified batch size.
+    def make_batch(self, inputs: dict[str, Any], batch_size: int) -> dict[str, Any]:
+        """Extrapolate all tensors in forward inputs to the specified batch size.
 
         Args:
-            args: Args to make batch from
-            kwargs: Kwargs to make batch from
+            inputs: Inputs keyed by forward parameter name
             batch_size: Batch size
 
         Returns:
-            args, kwargs with all tensors having specified batch size
+            Bound inputs with all tensors having the specified batch size
         """
-        args = copy.deepcopy(args)
-        kwargs = copy.deepcopy(kwargs)
+        inputs = copy.deepcopy(inputs)
         for locator, tensor_spec in self._tensor_data:
-            if tensor_spec.name.startswith("args"):
-                args = locator.set_value(args, batch_tensor(locator.get_value(args), tensor_spec, batch_size))
-            else:
-                kwargs = locator.set_value(kwargs, batch_tensor(locator.get_value(kwargs), tensor_spec, batch_size))
+            inputs = locator.set_value(inputs, batch_tensor(locator.get_value(inputs), tensor_spec, batch_size))
 
-        return args, kwargs
+        return inputs
 
     def update_shapes_seen(self, other: "SampleMetadata"):
         """Update shapes seen from other SampleMetadata."""
-        if hash(self._tensor_data) != hash(other._tensor_data):
+        tensor_data = dict(self._tensor_data)
+        other_tensor_data = dict(other._tensor_data)
+        if tensor_data != other_tensor_data:
             raise ValueError(
                 f"Cannot update shapes seen, because tensor data is different, {self.describe(InfoLevel.FULL)} != {other.describe(InfoLevel.FULL)}"
             )
-        for i, tensor_spec in enumerate(self.tensor_specs):
-            tensor_spec.update_shapes_seen(other.tensor_specs[i])
+        for locator, tensor_spec in tensor_data.items():
+            tensor_spec.update_shapes_seen(other_tensor_data[locator])
 
-    def update_max_batch_size(self, sample: Any, max_batch_size: int):
+    def update_max_batch_size(self, inputs: dict[str, Any], max_batch_size: int):
         """Update input spec with max batch size information."""
-        args, kwargs = sample
-        args, kwargs = self.make_batch(args, kwargs, max_batch_size)
-        max_batch_metadata = SampleMetadata.from_inputs(args, kwargs, batch_size=max_batch_size, strict=True)
+        inputs = self.make_batch(inputs, max_batch_size)
+        max_batch_metadata = SampleMetadata.from_inputs(inputs, batch_size=max_batch_size, strict=True)
         self.update_shapes_seen(max_batch_metadata)
 
     def has_batch_axis(self) -> bool:

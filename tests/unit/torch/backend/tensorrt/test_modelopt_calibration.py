@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 
 from aitune.torch.backend.tensorrt.modelopt_calibration import prepare_calibration_data
-from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models.torch_models import ToyTorchModel
+from tests.utilities.helpers import make_graph_spec
 
 
 def test_prepare_calibration_data():
@@ -24,10 +24,11 @@ def test_prepare_calibration_data():
     )
 
     # ModelOpt format: single dict, ONNX input name -> concatenated array
-    assert "args_0" in calibration_data
-    assert calibration_data["args_0"][0].shape == cpu_samples[0][0][0][0].shape
-    assert calibration_data["args_0"][1].shape == cpu_samples[0][0][0][1].shape
-    assert len(calibration_data["args_0"]) == len(cpu_samples[0][0][0]) == 2  # two batched samples
+    input_name = format_tensor_name("x", "input")
+    assert input_name in calibration_data
+    assert calibration_data[input_name][0].shape == cpu_samples[0][0][0][0].shape
+    assert calibration_data[input_name][1].shape == cpu_samples[0][0][0][1].shape
+    assert len(calibration_data[input_name]) == len(cpu_samples[0][0][0]) == 2  # two batched samples
 
 
 def test_prepare_calibration_data_returns_numpy_dict():
@@ -53,7 +54,7 @@ def test_prepare_calibration_data_multiple_samples_concatenated():
 
     calibration_data = prepare_calibration_data(data=samples, graph_spec=graph_spec)
 
-    assert calibration_data["args_0"].shape == (6, 32)
+    assert calibration_data[format_tensor_name("x", "input")].shape == (6, 32)
 
 
 def test_prepare_calibration_data_empty_data_raises():
@@ -67,8 +68,7 @@ def test_prepare_calibration_data_empty_data_raises():
 
 def test_prepare_calibration_data_graph_spec_no_tensors_raises():
     """GraphSpec with no tensor inputs raises ValueError."""
-    empty_spec = SampleMetadata.from_inputs((), {})
-    graph_spec = GraphSpec(name="empty", input_spec=empty_spec, output_spec=empty_spec)
+    graph_spec = make_graph_spec(lambda: None, ((), {}), name="empty")
 
     with pytest.raises(ValueError, match="no tensor inputs"):
         prepare_calibration_data(data=[((), {})], graph_spec=graph_spec)
@@ -78,7 +78,7 @@ def test_prepare_calibration_data_all_samples_skip_no_tensors_raises():
     """Samples with no tensors at expected locators raise ValueError."""
     model = ToyTorchModel()
     graph_spec = model.graph_spec()
-    # Pass scalars instead of tensors so no tensor is found for args_0
+    # Pass scalars instead of tensors so no tensor is found for x
     samples = [((1,), {}), ((2,), {})]
 
     with pytest.raises(ValueError, match="No valid calibration samples"):

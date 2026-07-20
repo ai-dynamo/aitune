@@ -16,9 +16,10 @@ from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyTorchModel
 from tests.toy_models.torch_models import ToyTorchConditionalModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_graph_spec, requires_cuda, update_input_spec
 
 
 @dataclass
@@ -56,11 +57,7 @@ def sample_data(torch_device) -> list[Sample]:
 def graph_spec(model, sample_data) -> GraphSpec:
     args, kwargs = sample_data[0]
     output = model(*args, **kwargs)
-    return GraphSpec(
-        "0",
-        input_spec=SampleMetadata.from_inputs(args, kwargs, strict=True),
-        output_spec=SampleMetadata.from_outputs(output),
-    )
+    return make_graph_spec(model.forward, (args, kwargs), output, name="0", strict=True)
 
 
 @pytest.fixture
@@ -92,18 +89,18 @@ def mock_torch_tensorrt(mocker, model: SimpleModel):
 def _graph_spec_from_samples(model: nn.Module, samples: list[Sample]) -> GraphSpec:
     args, kwargs = samples[0]
     output = model(*args, **kwargs)
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
-    output_metadata = SampleMetadata.from_outputs(output)
+    graph_spec = make_graph_spec(model.forward, (args, kwargs), output, name="0", strict=True)
     for args, kwargs in samples[1:]:
         output = model(*args, **kwargs)
-        input_metadata.update_shapes_seen(SampleMetadata.from_inputs(args, kwargs, strict=True))
-        output_metadata.update_shapes_seen(SampleMetadata.from_outputs(output))
-    return GraphSpec("0", input_metadata, output_metadata)
+        update_input_spec(graph_spec, (args, kwargs), strict=True)
+        graph_spec.output_spec.update_shapes_seen(SampleMetadata.from_outputs(output))
+    return graph_spec
 
 
 @requires_cuda
 def test_torch_tensorrt_aot_backend_config_key():
     """Test backend config with cache_dir."""
+
     config = TorchTensorRTAotBackendConfig()
     key1 = config.key()
     key2 = config.key()
@@ -153,6 +150,14 @@ def test_mock_build(
     assert active_backend.is_active
 
     export_mock.assert_called_once()
+    locator, tensor_spec = graph_spec.input_spec.tensor_data[0]
+    mock_torch_tensorrt.Input.assert_called_once_with(
+        min_shape=tensor_spec.min_shape,
+        opt_shape=tensor_spec.max_shape,
+        max_shape=tensor_spec.max_shape,
+        dtype=tensor_spec.dtype,
+        name=format_tensor_name(locator.path, "input"),
+    )
     mock_torch_tensorrt.dynamo.compile.assert_called_once()
     # Pin the pipeline shape: the ExportedProgram from torch.export.export must be
     # forwarded as the first positional arg to torch_tensorrt.dynamo.compile.
@@ -307,30 +312,6 @@ def test_conditional_model(torch_device, tmp_path: Path):
 
     output = backend.infer(inputs, apply_relu=True)
     assert output.shape == (2, 5)
-
-
-@pytest.fixture
-def dynamic_samples_data(torch_device):
-    dynamic_samples = [
-        ((torch.randn(1, 4, 244, device=torch_device),), {}),
-        ((torch.randn(2, 16, 244, device=torch_device),), {}),
-        ((torch.randn(4, 256, 244, device=torch_device),), {}),
-    ]
-    return dynamic_samples
-
-
-@pytest.fixture
-def graph_spec_with_dynamic_shape(dynamic_samples_data, model) -> GraphSpec:
-    args, kwargs = dynamic_samples_data[0]
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
-    output_metadata = SampleMetadata.from_outputs(dynamic_samples_data[0])
-    for sample in dynamic_samples_data[1:]:
-        args, kwargs = sample
-        input_metadata.update_shapes_seen(SampleMetadata.from_inputs(args, kwargs, strict=True))
-        output_metadata.update_shapes_seen(SampleMetadata.from_outputs(sample))
-
-    graph_spec = GraphSpec("0", input_metadata, output_metadata)
-    return graph_spec
 
 
 @requires_cuda

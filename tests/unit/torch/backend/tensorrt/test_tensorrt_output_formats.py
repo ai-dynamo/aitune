@@ -7,10 +7,9 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
-from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_graph_spec, requires_cuda, update_input_spec
 
 # Test constants
 BATCH_SIZE = 2
@@ -27,12 +26,12 @@ class GraphSpecModule(nn.Module):
         for sample in samples:
             args, kwargs = sample
             outputs = self(*args, **kwargs)
-            input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
             output_metadata = SampleMetadata.from_outputs(outputs, strict=True)
             if graph_spec is None:
-                graph_spec = GraphSpec(name="toy_model", input_spec=input_metadata, output_spec=output_metadata)
+                graph_spec = make_graph_spec(self.forward, sample, outputs, name="toy_model", strict=True)
             else:
-                graph_spec.update_shapes_seen(input_metadata, output_metadata)
+                update_input_spec(graph_spec, sample, strict=True)
+                graph_spec.output_spec.update_shapes_seen(output_metadata)
         return graph_spec
 
 

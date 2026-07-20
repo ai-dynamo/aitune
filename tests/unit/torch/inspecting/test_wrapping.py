@@ -9,10 +9,11 @@ from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend
 from aitune.torch.inspecting.module_info import ModuleInfo
 from aitune.torch.inspecting.module_inspector import DictOfModulesInfo, ListOfModulesInfo
 from aitune.torch.inspecting.wrapping import wrap
-from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.tune_strategy import FirstWinsStrategy, OneBackendStrategy
 from tests.toy_models import ToyTorchModel
+from tests.utilities.helpers import make_input_metadata
 
 
 @pytest.fixture
@@ -142,9 +143,10 @@ def test_wrap_with_strategies_list(simple_model):
 def test_wrap_with_strategies_map(simple_model):
     """Test wrapping with a strategy."""
     model = ToyTorchModel().to("cpu").eval()
-    samples = model.inputs(device="cpu")
-    sample_metadata1 = SampleMetadata.from_inputs(args=samples[0], kwargs={})
-    sample_metadata2 = SampleMetadata.from_inputs(args=samples[0], kwargs={})
+    forward_signature = ForwardSignature.from_callable(model.forward)
+    sample = ((model.inputs(device="cpu")[0],), {})
+    sample_metadata1 = make_input_metadata(forward_signature, sample)
+    sample_metadata2 = make_input_metadata(forward_signature, sample)
 
     strategies = {
         sample_metadata1: FirstWinsStrategy(backends=[TorchInductorJitBackend(), TensorRTBackend()]),

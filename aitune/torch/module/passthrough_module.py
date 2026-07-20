@@ -4,7 +4,7 @@
 
 from typing import Any
 
-from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.locator import Locator
 
 
 class PassthroughModule:
@@ -37,12 +37,9 @@ class PassthroughModule:
 
     def _prepare_inputs(self, *args, **kwargs):
         """Prepare inputs for inplace inference and place them on the same device if are not."""
-        sample_metadata = SampleMetadata.from_inputs(args, kwargs)
-
-        for locator, tensor_spec in sample_metadata.tensor_data:
-            if tensor_spec.name.startswith("args"):
-                args = locator.set_value(args, locator.get_value(args).to(self._device))
-            else:
-                kwargs = locator.set_value(kwargs, locator.get_value(kwargs).to(self._device))
+        for locator, tensor in Locator.find_leaves(args, only_tensors=True):
+            args = locator.set_value(args, tensor.to(self._device))
+        for locator, tensor in Locator.find_leaves(kwargs, only_tensors=True):
+            kwargs = locator.set_value(kwargs, tensor.to(self._device))
 
         return args, kwargs

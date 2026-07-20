@@ -14,6 +14,7 @@ from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
@@ -47,6 +48,12 @@ class Identity(torch.nn.Module):
 
 
 TEST_MODULE_NAME = "demo-identity"
+IDENTITY_FORWARD_SIGNATURE = ForwardSignature.from_callable(Identity().forward)
+
+
+def _identity_metadata(args, kwargs, *, strict=False):
+    forward_inputs = IDENTITY_FORWARD_SIGNATURE.normalize(args, kwargs)
+    return SampleMetadata.from_inputs(forward_inputs.arguments, strict=strict)
 
 
 def _torch_inductor_strategy_for_wrapper_tests() -> OneBackendStrategy:
@@ -157,8 +164,9 @@ def test_tune_dry_run(module, torch_device):
             TEST_MODULE_NAME,
             GraphSpec(
                 name="0",
-                input_spec=SampleMetadata.from_inputs(args=(1,), kwargs={"a": 1}, strict=True),
+                input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
                 output_spec=SampleMetadata.from_outputs(1, strict=True),
+                forward_signature=IDENTITY_FORWARD_SIGNATURE,
             ),
             [
                 ((1,), {"a": 1}),
@@ -171,8 +179,9 @@ def test_tune_dry_run(module, torch_device):
             TEST_MODULE_NAME,
             GraphSpec(
                 name="1",
-                input_spec=SampleMetadata.from_inputs(args=(2,), kwargs={"b": 2}, strict=True),
+                input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
                 output_spec=SampleMetadata.from_outputs(2, strict=True),
+                forward_signature=IDENTITY_FORWARD_SIGNATURE,
             ),
             [((2,), {"b": 2})],
             torch_device,
@@ -204,8 +213,9 @@ def test_tune(module, torch_device):
             TEST_MODULE_NAME,
             GraphSpec(
                 name="0",
-                input_spec=SampleMetadata.from_inputs(args=(1,), kwargs={"a": 1}, strict=True),
+                input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
                 output_spec=SampleMetadata.from_outputs(1, strict=True),
+                forward_signature=IDENTITY_FORWARD_SIGNATURE,
             ),
             [((1,), {"a": 1})],
             torch_device,
@@ -216,8 +226,9 @@ def test_tune(module, torch_device):
             TEST_MODULE_NAME,
             GraphSpec(
                 name="1",
-                input_spec=SampleMetadata.from_inputs(args=(2,), kwargs={"b": 2}, strict=True),
+                input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
                 output_spec=SampleMetadata.from_outputs(2, strict=True),
+                forward_signature=IDENTITY_FORWARD_SIGNATURE,
             ),
             [((2,), {"b": 2})],
             torch_device,
@@ -272,8 +283,8 @@ def test_tune_with_dict_of_strategies(torch_device):
     global_config.strict_mode = True
     strategy1 = Mock()
     strategy2 = Mock()
-    graph1 = SampleMetadata.from_inputs(args=(1,), kwargs={}, strict=True)
-    graph2 = SampleMetadata.from_inputs(args=(2,), kwargs={}, strict=True)
+    graph1 = _identity_metadata(args=(1,), kwargs={}, strict=True)
+    graph2 = _identity_metadata(args=(2,), kwargs={}, strict=True)
     module = Module(model, TEST_MODULE_NAME, strategies={graph1: strategy1, graph2: strategy2})
 
     module(1)

@@ -17,6 +17,7 @@ from aitune.torch.backend.onnx_runtime_backend import (
 )
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
+from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -68,7 +69,7 @@ def backend() -> ONNXRuntimeBackend:
 
 
 @pytest.fixture
-def mock_onnx(mocker, model):
+def mock_onnx(mocker, graph_spec):
     """Mock torch.onnx.export, onnx.checker.check_model, and onnxruntime.InferenceSession.
 
     memcpy_to_torch is patched to return a fixed tensor so _collect_outputs works
@@ -80,14 +81,16 @@ def mock_onnx(mocker, model):
         "aitune.torch.backend.onnx_runtime_backend.memcpy_to_torch",
         return_value=torch.zeros(1, 5),
     )
+    input_name = format_tensor_name(graph_spec.input_spec.tensor_data[0][0].path, "input")
+    output_name = format_tensor_name(graph_spec.output_spec.tensor_data[0][0].path, "output")
 
     def _make_session(path, providers=None):
         mock_sess = Mock()
         mock_inp = Mock()
-        mock_inp.name = "args_0"
+        mock_inp.name = input_name
         mock_sess.get_inputs.return_value = [mock_inp]
         mock_out = Mock()
-        mock_out.name = "outputs_0"
+        mock_out.name = output_name
         mock_sess.get_outputs.return_value = [mock_out]
         mock_ort_val = Mock()
         mock_ort_val.data_ptr.return_value = 0

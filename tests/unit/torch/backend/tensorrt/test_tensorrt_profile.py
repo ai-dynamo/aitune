@@ -5,6 +5,7 @@
 import pytest
 
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
+from aitune.torch.utils.tensor import format_tensor_name
 
 
 @pytest.fixture
@@ -25,7 +26,7 @@ def test_tensorrt_profile_init():
 def test_tensorrt_profile_add_input_shape(mock_polygraphy_profile):
     """Test add_input_shape method."""
     # Test data
-    input_name = "input"
+    input_path = ("inputs", 0)
     min_shape = (1, 3, 224, 224)
     opt_shape = (4, 3, 224, 224)
     max_shape = (8, 3, 224, 224)
@@ -33,10 +34,12 @@ def test_tensorrt_profile_add_input_shape(mock_polygraphy_profile):
     # Create profile and add shape
     profile = TensorRTProfile()
     profile._profile = mock_polygraphy_profile  # Replace with mock
-    result = profile.add_input_shape(input_name, min_shape, opt_shape, max_shape)
+    result = profile.add_input_shape(input_path, min_shape, opt_shape, max_shape)
 
     # Verify interactions
-    mock_polygraphy_profile.add.assert_called_once_with(name=input_name, min=min_shape, opt=opt_shape, max=max_shape)
+    mock_polygraphy_profile.add.assert_called_once_with(
+        name=format_tensor_name(input_path, "input"), min=min_shape, opt=opt_shape, max=max_shape
+    )
 
     # Verify chainable API
     assert result == profile
@@ -46,6 +49,14 @@ def test_tensorrt_profile_property():
     """Test profile property."""
     profile = TensorRTProfile()
     assert profile.profile is profile._profile
+
+
+def test_tensorrt_profile_round_trip_preserves_formatted_name():
+    profile = TensorRTProfile().add_input_shape(("inputs", 0), (1, 3), (2, 3), (4, 3))
+
+    restored = TensorRTProfile.from_dict(profile.to_dict())
+
+    assert restored == profile
 
 
 def test_tensorrt_profile_str(mocker):
@@ -98,14 +109,14 @@ def test_tensorrt_profile_multiple_inputs(mock_polygraphy_profile):
 
     # Check first call arguments
     first_call = mock_polygraphy_profile.add.call_args_list[0]
-    assert first_call[1]["name"] == input1_name
+    assert first_call[1]["name"] == format_tensor_name(input1_name, "input")
     assert first_call[1]["min"] == input1_min
     assert first_call[1]["opt"] == input1_opt
     assert first_call[1]["max"] == input1_max
 
     # Check second call arguments
     second_call = mock_polygraphy_profile.add.call_args_list[1]
-    assert second_call[1]["name"] == input2_name
+    assert second_call[1]["name"] == format_tensor_name(input2_name, "input")
     assert second_call[1]["min"] == input2_min
     assert second_call[1]["opt"] == input2_opt
     assert second_call[1]["max"] == input2_max

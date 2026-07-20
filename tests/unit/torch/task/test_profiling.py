@@ -418,23 +418,27 @@ def test_profile_toy_model_no_batching():
 
 
 @pytest.mark.parametrize("batching", [True, False])
-def test_profile_backend(batching: bool):
-    model = ToyTorchModel()
+def test_profile_backend(mocker, batching: bool):
+    class ModelWithCache(ToyTorchModel):
+        def forward(self, x, cache=None):
+            return super().forward(x)
+
+    model = ModelWithCache()
     graph_spec = model.graph_spec(batch_sizes=[1])
 
     class MockBackend(TorchEagerBackend):
         def __init__(self, model):
             self.model = model
 
-        def infer(self, *args, **kwargs):
+        def infer(self, x, cache=None):
             """The following function imitates adding something to cache each time it is called.
 
             If the profile is idempotent, the cache argument should always be empty
             i.e. any changes should be discarded.
             """
-            assert len(kwargs["cache"]) == 0, "Cache should be empty"
-            kwargs["cache"].append("not important, should be discarded")
-            return self.model(*args)
+            assert len(cache) == 0, "Cache should be empty"
+            cache.append("not important, should be discarded")
+            return self.model(x)
 
         def describe(self):
             return "mock_backend"
@@ -446,10 +450,17 @@ def test_profile_backend(batching: bool):
         measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1, warmup_samples=1),
     )
 
-    samples = [(model.inputs(batch_sizes=[1]), {"cache": []})]
-    result = profile_backend(backend, "test_model", graph_spec, samples, profile_config)  # type: ignore
+    samples = [((model.inputs(batch_sizes=[1])[0],), {"cache": []})]
+    make_batch = mocker.spy(graph_spec, "make_batch")
+    result = profile_backend(backend, "test_model", graph_spec, samples, profile_config)
 
     assert result.status == ProfilingStatus.Status.SUCCESS
 
     # Verify both calls produced results
     assert len(result.results.entries) > 0
+    if batching:
+        assert all(
+            call.args[0] is samples[0][0] and call.args[1] is samples[0][1] for call in make_batch.call_args_list
+        )
+    else:
+        make_batch.assert_not_called()

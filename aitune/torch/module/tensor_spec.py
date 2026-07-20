@@ -23,7 +23,6 @@ class TensorSpec:
     """TensorSpec is used to describe tensor metadata.
 
     Attributes:
-        name (str) - symbolic name of the tensor
         shape (list[Union[str, int]]) - shape of the tensor, int is a real dimension, str is a symbolic dimension
         min_shape (list[int]) - minimum dimensions seen so far
         max_shape (list[int]) - maximum dimensions seen so far
@@ -31,7 +30,6 @@ class TensorSpec:
         _bs_multipliers (list[float]) - batch size multipliers for each axis
     """
 
-    name: str
     shape: list[str | int]
     min_shape: list[int]
     max_shape: list[int]
@@ -39,11 +37,10 @@ class TensorSpec:
     _bs_multipliers: list[float]
 
     @staticmethod
-    def from_tensor(name: str, tensor: torch.Tensor, batch_size: int):
+    def from_tensor(tensor: torch.Tensor, batch_size: int):
         """Create TensorSpec from tensor.
 
         Args:
-            name: Name of the tensor
             tensor: Tensor to create TensorSpec from
             batch_size: Batch size
         """
@@ -54,7 +51,6 @@ class TensorSpec:
             _bs_multipliers = [size / batch_size for size in shape]
 
         return TensorSpec(
-            name=name,
             shape=shape,
             min_shape=shape[:],
             max_shape=shape[:],
@@ -73,33 +69,33 @@ class TensorSpec:
     def __eq__(self, other: object) -> bool:
         """Check if two TensorSpec are equal.
 
-        Tensors of the same name and rank are considered equal.
+        Tensors of the same rank are considered equal.
         Particular dimensions sizes can be different as there can be dynamic dimensions.
         """
         if not isinstance(other, TensorSpec):
             return False
-        return self.name == other.name and len(self.shape) == len(other.shape)
+        return len(self.shape) == len(other.shape)
 
     def __hash__(self) -> int:
         """Hash of TensorSpec.
 
-        Tensors of the same name and rank are considered equal.
+        Tensors of the same rank are considered equal.
         Particular dimensions sizes can be different as there can be dynamic dimensions.
         """
-        return hash((self.name, len(self.shape)))
+        return hash(len(self.shape))
 
     def describe(self, info_level: InfoLevel = InfoLevel.FULL) -> str:
         """Get information describing TensorSpec."""
+        shapes = ", ".join(str(dim) for dim in self.shape)
+        description = f"shape=[{shapes}]"
         if info_level == InfoLevel.SHORT:
-            return self.name
+            return description
         elif info_level == InfoLevel.MEDIUM:
-            shapes = ", ".join(str(dim) for dim in self.shape)
-            return f"{self.name}[{shapes}]"
+            return f"{description} dtype={self.dtype}"
         elif info_level == InfoLevel.FULL:
-            shapes = ", ".join(str(dim) for dim in self.shape)
             min_shape = ", ".join(str(dim) for dim in self.min_shape)
             max_shape = ", ".join(str(dim) for dim in self.max_shape)
-            return f"{self.name}[{shapes}] min_shape=[{min_shape}] max_shape=[{max_shape}] dtype={self.dtype}"  # type: ignore[bad-return-type]
+            return f"{description} min_shape=[{min_shape}] max_shape=[{max_shape}] dtype={self.dtype}"  # type: ignore[bad-return-type]
 
     def update_shapes_seen(self, other: "TensorSpec"):
         """Update shapes seen from other TensorSpec.

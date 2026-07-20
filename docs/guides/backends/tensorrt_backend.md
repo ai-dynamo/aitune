@@ -327,6 +327,8 @@ global_config.max_num_samples_stored = 100  # Or float("inf")
 
 Define exact optimization profiles:
 
+These profiles assume the module defines `forward(input)`, so `input` is the path of its top-level tensor parameter:
+
 ```python
 from aitune.torch.backend.tensorrt import TensorRTProfile
 
@@ -334,7 +336,7 @@ profiles = [
     # Profile for small inputs
     TensorRTProfile()
         .add_input_shape(
-            "args_0",
+            "input",
             min_shape=(1, 3, 224, 224),
             opt_shape=(4, 3, 224, 224),
             max_shape=(8, 3, 224, 224),
@@ -342,7 +344,7 @@ profiles = [
     # Profile for large inputs
     TensorRTProfile()
         .add_input_shape(
-            "args_0",
+            "input",
             min_shape=(1, 3, 512, 512),
             opt_shape=(4, 3, 512, 512),
             max_shape=(8, 3, 512, 512),
@@ -352,23 +354,25 @@ profiles = [
 config = TensorRTBackendConfig(profiles=profiles)
 ```
 
-### Finding Input Names
+### Finding Input Paths
 
-Input tensor names are shown in tuning logs:
+Input tensor paths are shown in tuning logs. Top-level paths are forward parameter names; nested paths include all
+dictionary keys, sequence indices, or attributes:
 
-```
+```text
 INFO - 🚀 Tuning graph `0` for module `my-model`:
 INFO -   graph_spec:
 INFO -     input_spec:
  Tensors:
-╒═══════════╤════════╤═══════════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
-│ Locator   │ Name   │ Shape                         │ Min Shape        │ Max Shape        │ Dtype         │
-╞═══════════╪════════╪═══════════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
-│ [0]       │ args_0 │ ['batch0', 3, 'dim2', 'dim3'] │ [2, 3, 224, 224] │ [8, 3, 448, 448] │ torch.float32 │
-╘═══════════╧════════╧═══════════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═══════════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape                         │ Min Shape        │ Max Shape        │ Dtype         │
+╞═══════════════╪═════════════════╪═══════════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
+│ input         │ input           │ ['batch0', 3, 'dim2', 'dim3'] │ [2, 3, 224, 224] │ [8, 3, 448, 448] │ torch.float32 │
+╘═══════════════╧═════════════════╧═══════════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
 ```
 
-Use the `Name` column value (e.g., `args_0`) in your profiles.
+Use the string shown in the `Path` column as the profile key. For example, the top-level path `input` uses `"input"`,
+while a nested dictionary path uses `inputs["tokens"]`.
 
 ### Best Practices for Profiles
 
@@ -406,7 +410,7 @@ config = TensorRTBackendConfig(workspace_size=512 << 20)  # 512MB
 ```python
 profiles = [
     TensorRTProfile()
-        .add_input_shape("args_0", min_shape=(1, 3, 224, 224), opt_shape=(4, 3, 224, 224), max_shape=(16, 3, 224, 224))
+        .add_input_shape("input", min_shape=(1, 3, 224, 224), opt_shape=(4, 3, 224, 224), max_shape=(16, 3, 224, 224))
 ]
 config = TensorRTBackendConfig(profiles=profiles)
 ```

@@ -13,11 +13,10 @@ import torch.nn as nn
 import wrapt
 
 from aitune.torch.libs.onnx.onnx_exporter import _ONNX_FALLBACK_SUPPORTED, ONNXExporter
-from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.utils.module import get_forward_arguments_names
+from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyOnnxModel, ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_graph_spec, make_input_metadata, requires_cuda
 
 # Constants for testing
 IN_FEATURES = 32
@@ -91,14 +90,7 @@ def test_export_trace(mock_torch_onnx, mock_onnx_lib, tmp_path):
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
-    output_metadata = SampleMetadata.from_outputs(output, strict=True)
-
-    graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=input_metadata,
-        output_spec=output_metadata,
-    )
+    graph_spec = make_graph_spec(model.forward, sample, output, strict=True)
 
     # Export model
     onnx_path = exporter.export(module=model, sample=sample, graph_spec=graph_spec)
@@ -113,6 +105,24 @@ def test_export_trace(mock_torch_onnx, mock_onnx_lib, tmp_path):
 
     # Verify returned path
     assert onnx_path == output_path
+
+
+def test_export_trace_uses_backend_safe_compound_names(tmp_path):
+    class NestedModule(nn.Module):
+        def forward(self, inner):
+            return {"inner": {"a": inner["a"] + 1}}
+
+    model = NestedModule().eval()
+    sample = ((), {"inner": {"a": torch.ones(1)}})
+    output = model(*sample[0], **sample[1])
+    graph_spec = make_graph_spec(model.forward, sample, output)
+    output_path = tmp_path / "compound_names.onnx"
+
+    ONNXExporter(output_path=output_path).export(model, sample, graph_spec)
+
+    onnx_model = onnx.load(output_path)
+    assert [value.name for value in onnx_model.graph.input] == [format_tensor_name(("inner", "a"), "input")]
+    assert [value.name for value in onnx_model.graph.output] == [format_tensor_name(("inner", "a"), "output")]
 
 
 def test_export_dynamo(mocker, mock_torch_onnx, mock_onnx_lib, tmp_path):
@@ -138,14 +148,7 @@ def test_export_dynamo(mocker, mock_torch_onnx, mock_onnx_lib, tmp_path):
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
-    output_metadata = SampleMetadata.from_outputs(output, strict=True)
-
-    graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=input_metadata,
-        output_spec=output_metadata,
-    )
+    graph_spec = make_graph_spec(model.forward, sample, output, strict=True)
 
     # Export model
     onnx_path = exporter.export(module=model, sample=sample, graph_spec=graph_spec)
@@ -179,14 +182,7 @@ def test_export_error_handling(mock_torch_onnx, tmp_path):
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
-    output_metadata = SampleMetadata.from_outputs(output, strict=True)
-
-    graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=input_metadata,
-        output_spec=output_metadata,
-    )
+    graph_spec = make_graph_spec(model.forward, sample, output, strict=True)
 
     # Export should fail
     with pytest.raises(RuntimeError, match="Export failed"):
@@ -236,14 +232,7 @@ def test_onnx_exporter_integration(tmp_path):
     args, kwargs = sample
     output = model(*args, **kwargs)
 
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
-    output_metadata = SampleMetadata.from_outputs(output, strict=True)
-
-    graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=input_metadata,
-        output_spec=output_metadata,
-    )
+    graph_spec = make_graph_spec(model.forward, sample, output, strict=True)
 
     # Export model
     onnx_path = exporter.export(module=model, sample=sample, graph_spec=graph_spec)
@@ -416,14 +405,17 @@ def test_should_work_basic_dynamic_shapes():
     def _forward(x):
         return x + 1.0
 
-    input_metadata = SampleMetadata.from_inputs((torch.randn(10, 10),), {})
-    output_metadata = SampleMetadata.from_outputs(torch.randn(10, 10))
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    sample = ((torch.randn(10, 10),), {})
+    graph_spec = make_graph_spec(_forward, sample, torch.randn(10, 10))
 
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(20, 10),), {}))
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(40, 10),), {}))
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((torch.randn(20, 10),), {}))
+    )
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((torch.randn(40, 10),), {}))
+    )
 
-    dynamic_shapes = ONNXExporter._create_dynamic_shapes(graph_spec, get_forward_arguments_names(_forward))
+    dynamic_shapes = ONNXExporter._create_dynamic_shapes(sample, graph_spec)
     assert dynamic_shapes["x"][0] is torch.export.Dim.AUTO
 
 
@@ -431,27 +423,31 @@ def test_should_work_basic_dynamic_shapes_explicit():
     def _forward(x):
         return x + 1.0
 
-    input_metadata = SampleMetadata.from_inputs((torch.randn(10, 10),), {})
-    output_metadata = SampleMetadata.from_outputs(torch.randn(10, 10))
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    sample = ((torch.randn(10, 10),), {})
+    graph_spec = make_graph_spec(_forward, sample, torch.randn(10, 10))
 
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(20, 10),), {}))
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(40, 10),), {}))
-
-    dynamic_shapes = ONNXExporter._create_dynamic_shapes(
-        graph_spec, get_forward_arguments_names(_forward), use_auto=False
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((torch.randn(20, 10),), {}))
     )
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((torch.randn(40, 10),), {}))
+    )
+
+    dynamic_shapes = ONNXExporter._create_dynamic_shapes(sample, graph_spec, use_auto=False)
     assert dynamic_shapes["x"][0].min == 10
     assert dynamic_shapes["x"][0].max == 40
 
 
 def test_what_if_once_arg_once_kwarg():
-    input_metadata = SampleMetadata.from_inputs((torch.randn(10, 10),), {})
-    try:
-        input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"x": torch.randn(20, 10)}))
-    except ValueError:
-        # error is known we can continue
-        pytest.skip("We do not support once arg once kwarg inputs yet")
+    def _forward(x):
+        return x
+
+    graph_spec = make_graph_spec(_forward, ((torch.randn(10, 10),), {}), torch.randn(10, 10))
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((), {"x": torch.randn(20, 10)}))
+    )
+
+    assert graph_spec.input_spec.tensor_specs[0].shape == ["dim0", 10]
 
 
 def test_should_extract_dynamic_shapes_from_graph_spec(simple_module_and_args, torch_device):
@@ -459,9 +455,8 @@ def test_should_extract_dynamic_shapes_from_graph_spec(simple_module_and_args, t
     output = module(x, y, z, w)
 
     # receiving kwargs in random order
-    input_metadata = SampleMetadata.from_inputs((), {"y": y, "z": z, "w": w, "x": x})
-    output_metadata = SampleMetadata.from_outputs(output)
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    sample = ((), {"y": y, "z": z, "w": w, "x": x})
+    graph_spec = make_graph_spec(module.forward, sample, output)
 
     # adding one more input for dynamic shapes
     x = torch.randn(2, 10).to(torch_device)
@@ -470,9 +465,11 @@ def test_should_extract_dynamic_shapes_from_graph_spec(simple_module_and_args, t
     w = torch.randn(2, 10).to(torch_device)
     module(x, y, z, w)
 
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"y": y, "z": z, "w": w, "x": x}))
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((), {"y": y, "z": z, "w": w, "x": x}))
+    )
 
-    dynamic_shapes = ONNXExporter._create_dynamic_shapes(graph_spec, get_forward_arguments_names(module.forward))
+    dynamic_shapes = ONNXExporter._create_dynamic_shapes(sample, graph_spec)
     assert dynamic_shapes["x"][0] is torch.export.Dim.AUTO
     assert dynamic_shapes["y"] == {}
     assert dynamic_shapes["z"][0] is torch.export.Dim.AUTO
@@ -482,9 +479,8 @@ def test_should_extract_dynamic_shapes_from_graph_spec_explicit(simple_module_an
     module, x, y, z, w = simple_module_and_args
     output = module(x, y, z, w)
 
-    input_metadata = SampleMetadata.from_inputs((), {"y": y, "z": z, "w": w, "x": x})
-    output_metadata = SampleMetadata.from_outputs(output)
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    sample = ((), {"y": y, "z": z, "w": w, "x": x})
+    graph_spec = make_graph_spec(module.forward, sample, output)
 
     x = torch.randn(2, 10).to(torch_device)
     y = torch.randn(5, 5).to(torch_device)
@@ -492,11 +488,11 @@ def test_should_extract_dynamic_shapes_from_graph_spec_explicit(simple_module_an
     w = torch.randn(2, 10).to(torch_device)
     module(x, y, z, w)
 
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"y": y, "z": z, "w": w, "x": x}))
-
-    dynamic_shapes = ONNXExporter._create_dynamic_shapes(
-        graph_spec, get_forward_arguments_names(module.forward), use_auto=False
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((), {"y": y, "z": z, "w": w, "x": x}))
     )
+
+    dynamic_shapes = ONNXExporter._create_dynamic_shapes(sample, graph_spec, use_auto=False)
     assert dynamic_shapes["x"][0].min == 2
     assert dynamic_shapes["y"] == {}
     assert dynamic_shapes["z"][0].min == 2
@@ -525,9 +521,8 @@ def test_does_onnx_export_work_with_nested_tensors(simple_module_and_args, torch
 
     expected_output1 = module(x, y, zw)
 
-    input_metadata = SampleMetadata.from_inputs((), {"y": y, "zw": zw, "x": x})
-    output_metadata = SampleMetadata.from_outputs(expected_output1)
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    sample = ((), {"y": y, "zw": zw, "x": x})
+    graph_spec = make_graph_spec(module.forward, sample, expected_output1)
 
     x = torch.randn(2, 10).to(torch_device)
     y = torch.randn(5, 5).to(torch_device)
@@ -536,9 +531,11 @@ def test_does_onnx_export_work_with_nested_tensors(simple_module_and_args, torch
     zw = {"z": z, "w": w}
 
     expected_output2 = module(x, y, zw)
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"y": y, "zw": zw, "x": x}))
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((), {"y": y, "zw": zw, "x": x}))
+    )
 
-    dynamic_shapes = ONNXExporter._create_dynamic_shapes(graph_spec, get_forward_arguments_names(module.forward))
+    dynamic_shapes = ONNXExporter._create_dynamic_shapes(sample, graph_spec)
 
     assert dynamic_shapes["x"][0] is torch.export.Dim.AUTO
     assert dynamic_shapes["y"] == {}
@@ -592,9 +589,8 @@ def test_does_onnx_export_work_with_nested_tensors_explicit(simple_module_and_ar
     module.to(torch_device)
     module.eval()
 
-    input_metadata = SampleMetadata.from_inputs((), {"y": y, "zw": zw, "x": x})
-    output_metadata = SampleMetadata.from_outputs(module(x, y, zw))
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    sample = ((), {"y": y, "zw": zw, "x": x})
+    graph_spec = make_graph_spec(module.forward, sample, module(x, y, zw))
 
     x = torch.randn(2, 10).to(torch_device)
     y = torch.randn(5, 5).to(torch_device)
@@ -602,11 +598,11 @@ def test_does_onnx_export_work_with_nested_tensors_explicit(simple_module_and_ar
     w = torch.randn(2, 10).to(torch_device)
     zw = {"z": z, "w": w}
 
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"y": y, "zw": zw, "x": x}))
-
-    dynamic_shapes = ONNXExporter._create_dynamic_shapes(
-        graph_spec, get_forward_arguments_names(module.forward), use_auto=False
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((), {"y": y, "zw": zw, "x": x}))
     )
+
+    dynamic_shapes = ONNXExporter._create_dynamic_shapes(sample, graph_spec, use_auto=False)
 
     assert dynamic_shapes["x"][0].min == 2
     assert dynamic_shapes["y"] == {}
@@ -636,9 +632,8 @@ def test_does_onnx_export_work_with_nested_tensors_list(simple_module_and_args, 
 
     expected_output1 = module(x, y, zw)
 
-    input_metadata = SampleMetadata.from_inputs((), {"y": y, "zw": zw, "x": x})
-    output_metadata = SampleMetadata.from_outputs(expected_output1)
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    sample = ((), {"y": y, "zw": zw, "x": x})
+    graph_spec = make_graph_spec(module.forward, sample, expected_output1)
 
     x = torch.randn(2, 10).to(torch_device)
     y = torch.randn(5, 5).to(torch_device)
@@ -647,9 +642,11 @@ def test_does_onnx_export_work_with_nested_tensors_list(simple_module_and_args, 
     zw = [z, w]
 
     expected_output2 = module(x, y, zw)
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"y": y, "zw": zw, "x": x}))
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((), {"y": y, "zw": zw, "x": x}))
+    )
 
-    dynamic_shapes = ONNXExporter._create_dynamic_shapes(graph_spec, get_forward_arguments_names(module.forward))
+    dynamic_shapes = ONNXExporter._create_dynamic_shapes(sample, graph_spec)
 
     assert dynamic_shapes["x"][0] is torch.export.Dim.AUTO
     assert dynamic_shapes["y"] == {}
@@ -703,9 +700,8 @@ def test_does_onnx_export_work_with_nested_tensors_list_explicit(simple_module_a
     module.to(torch_device)
     module.eval()
 
-    input_metadata = SampleMetadata.from_inputs((), {"y": y, "zw": zw, "x": x})
-    output_metadata = SampleMetadata.from_outputs(module(x, y, zw))
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    sample = ((), {"y": y, "zw": zw, "x": x})
+    graph_spec = make_graph_spec(module.forward, sample, module(x, y, zw))
 
     x = torch.randn(2, 10).to(torch_device)
     y = torch.randn(5, 5).to(torch_device)
@@ -713,11 +709,11 @@ def test_does_onnx_export_work_with_nested_tensors_list_explicit(simple_module_a
     w = torch.randn(2, 10).to(torch_device)
     zw = [z, w]
 
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"y": y, "zw": zw, "x": x}))
-
-    dynamic_shapes = ONNXExporter._create_dynamic_shapes(
-        graph_spec, get_forward_arguments_names(module.forward), use_auto=False
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(graph_spec.forward_signature, ((), {"y": y, "zw": zw, "x": x}))
     )
+
+    dynamic_shapes = ONNXExporter._create_dynamic_shapes(sample, graph_spec, use_auto=False)
 
     assert dynamic_shapes["x"][0].min == 2
     assert dynamic_shapes["y"] == {}
@@ -731,9 +727,7 @@ def test_onnx_exporter_should_produce_valid_simple_model(simple_module_and_args,
     sample = ((), {"y": y, "z": z, "w": w, "x": x})
     output = module(x, y, z, w)
 
-    input_metadata = SampleMetadata.from_inputs(sample[0], sample[1], batch_size=10)
-    output_metadata = SampleMetadata.from_outputs(output)
-    graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    graph_spec = make_graph_spec(module.forward, sample, output, batch_size=10)
 
     x = torch.randn(2, 10).to(torch_device)
     y = torch.randn(5, 5).to(torch_device)
@@ -741,7 +735,13 @@ def test_onnx_exporter_should_produce_valid_simple_model(simple_module_and_args,
     w = torch.randn(2, 10).to(torch_device)
     output = module(x, y, z, w)
 
-    input_metadata.update_shapes_seen(SampleMetadata.from_inputs((), {"y": y, "z": z, "w": w, "x": x}, batch_size=2))
+    graph_spec.input_spec.update_shapes_seen(
+        make_input_metadata(
+            graph_spec.forward_signature,
+            ((), {"y": y, "z": z, "w": w, "x": x}),
+            batch_size=2,
+        )
+    )
 
     model_path = tmp_path / "simple_model.onnx"
     exporter = ONNXExporter(output_path=model_path, use_dynamo=True, opset_version=19)

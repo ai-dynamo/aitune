@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -19,6 +20,18 @@ from aitune.torch.task.correctness import (
 )
 from aitune.torch.tune_strategy import TuneStrategy
 from tests.toy_models.torch_models import ToyTorchModel
+from tests.utilities.helpers import make_input_metadata
+
+
+def _forward(x=None, *, cache=None):
+    return x, cache
+
+
+FORWARD_SIGNATURE = ForwardSignature.from_callable(_forward)
+
+
+def _input_metadata(sample: Sample, batch_size: int | None = None) -> SampleMetadata:
+    return make_input_metadata(FORWARD_SIGNATURE, sample, batch_size=batch_size)
 
 
 class TuneStrategyTestCorrectness(TuneStrategy):
@@ -45,7 +58,6 @@ class TuneStrategyTestCorrectness(TuneStrategy):
 
 def test_correctness_extension_torch_eager_backend(torch_device, tmp_path):
     """Test correctness extension with torch eager backend."""
-
     module = ToyTorchModel()
     graph_spec = module.graph_spec()
     data = module.samples(device=torch_device)
@@ -73,8 +85,13 @@ def test_correctness_is_idempotent():
 
     cache = []
     data = [((cache,), {"cache": cache})]
-    input_spec = output_spec = SampleMetadata.from_inputs((), {})
-    graph_spec = GraphSpec(name="test_model", input_spec=input_spec, output_spec=output_spec)
+    input_spec = output_spec = _input_metadata(((), {}))
+    graph_spec = GraphSpec(
+        name="test_model",
+        input_spec=input_spec,
+        output_spec=output_spec,
+        forward_signature=FORWARD_SIGNATURE,
+    )
     strategy.check_correctness(MockBackend(), "test_model", graph_spec, data)  # type: ignore
     assert len(cache) == 0, "cache should be empty"
 
@@ -87,8 +104,13 @@ def test_correctness_requires_at_least_one_sample():
             return "mock_backend"
 
     strategy = TuneStrategyTestCorrectness()
-    input_spec = output_spec = SampleMetadata.from_inputs((), {})
-    graph_spec = GraphSpec(name="test_model", input_spec=input_spec, output_spec=output_spec)
+    input_spec = output_spec = _input_metadata(((), {}))
+    graph_spec = GraphSpec(
+        name="test_model",
+        input_spec=input_spec,
+        output_spec=output_spec,
+        forward_signature=FORWARD_SIGNATURE,
+    )
 
     with pytest.raises(ValueError, match="requires at least one sample"):
         strategy.check_correctness(MockBackend(), "test_model", graph_spec, [])  # type: ignore
@@ -115,13 +137,18 @@ def test_correctness_checks_dynamic_min_and_max_shapes():
     recorded_sample = ((torch.randn(2, 8),), {})
     min_sample = ((torch.randn(2, 4),), {})
     max_sample = ((torch.randn(2, 12),), {})
-    input_spec = SampleMetadata.from_inputs(*recorded_sample, batch_size=2)
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs(*min_sample, batch_size=2))
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs(*max_sample, batch_size=2))
+    input_spec = _input_metadata(recorded_sample, batch_size=2)
+    input_spec.update_shapes_seen(_input_metadata(min_sample, batch_size=2))
+    input_spec.update_shapes_seen(_input_metadata(max_sample, batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.randn(2, 8), batch_size=2)
     output_spec.update_shapes_seen(SampleMetadata.from_outputs(torch.randn(2, 4), batch_size=2))
     output_spec.update_shapes_seen(SampleMetadata.from_outputs(torch.randn(2, 12), batch_size=2))
-    graph_spec = GraphSpec(name="test_model", input_spec=input_spec, output_spec=output_spec)
+    graph_spec = GraphSpec(
+        name="test_model",
+        input_spec=input_spec,
+        output_spec=output_spec,
+        forward_signature=FORWARD_SIGNATURE,
+    )
 
     strategy.check_correctness(backend, "test_model", graph_spec, [recorded_sample])  # type: ignore
 
@@ -152,11 +179,16 @@ def test_correctness_skips_value_checks_for_dynamic_boundary_samples():
     recorded_sample = ((torch.randn(2, 8),), {})
     min_sample = ((torch.randn(2, 4),), {})
     max_sample = ((torch.randn(2, 12),), {})
-    input_spec = SampleMetadata.from_inputs(*recorded_sample, batch_size=2)
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs(*min_sample, batch_size=2))
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs(*max_sample, batch_size=2))
+    input_spec = _input_metadata(recorded_sample, batch_size=2)
+    input_spec.update_shapes_seen(_input_metadata(min_sample, batch_size=2))
+    input_spec.update_shapes_seen(_input_metadata(max_sample, batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2)
-    graph_spec = GraphSpec(name="test_model", input_spec=input_spec, output_spec=output_spec)
+    graph_spec = GraphSpec(
+        name="test_model",
+        input_spec=input_spec,
+        output_spec=output_spec,
+        forward_signature=FORWARD_SIGNATURE,
+    )
 
     strategy.check_correctness(backend, "test_model", graph_spec, [recorded_sample])  # type: ignore
 
@@ -181,11 +213,16 @@ def test_correctness_reports_dynamic_boundary_inference_failure():
     recorded_sample = ((torch.randn(2, 8),), {})
     min_sample = ((torch.randn(2, 4),), {})
     max_sample = ((torch.randn(2, 12),), {})
-    input_spec = SampleMetadata.from_inputs(*recorded_sample, batch_size=2)
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs(*min_sample, batch_size=2))
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs(*max_sample, batch_size=2))
+    input_spec = _input_metadata(recorded_sample, batch_size=2)
+    input_spec.update_shapes_seen(_input_metadata(min_sample, batch_size=2))
+    input_spec.update_shapes_seen(_input_metadata(max_sample, batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2)
-    graph_spec = GraphSpec(name="test_model", input_spec=input_spec, output_spec=output_spec)
+    graph_spec = GraphSpec(
+        name="test_model",
+        input_spec=input_spec,
+        output_spec=output_spec,
+        forward_signature=FORWARD_SIGNATURE,
+    )
 
     with pytest.raises(
         CorrectnessDynamicShapeError,
@@ -234,7 +271,7 @@ def test_correctness_extension_torch_eager_backend_with_wrong_shapes(torch_devic
     strategy = TuneStrategyTestCorrectness()
 
     with pytest.raises(
-        CorrectnessTensorShapeError, match=r"Expected tensor outputs to have shape \[2, 5\] but got \[1, 5\]"
+        CorrectnessTensorShapeError, match=r"Expected tensor output to have shape \[2, 5\] but got \[1, 5\]"
     ):
         backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
         backend.deactivate()
@@ -255,8 +292,9 @@ def test_correctness_failure_is_appended_to_build_log(mocker, torch_device, tmp_
     sample = ((torch.randn(2, 8),), {})
     graph_spec = GraphSpec(
         name="test_model",
-        input_spec=SampleMetadata.from_inputs(*sample, batch_size=2),
+        input_spec=_input_metadata(sample, batch_size=2),
         output_spec=SampleMetadata.from_outputs(torch.randn(2, 8), batch_size=2),
+        forward_signature=FORWARD_SIGNATURE,
     )
 
     result = strategy._build_and_validate_backend(

@@ -25,16 +25,35 @@ from aitune.torch.utils.shapes import (
     prepare_export_sample,
 )
 from tests.toy_models import ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_graph_spec, requires_cuda, update_input_spec
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
 
 
-def _empty_graph_spec(input_metadata: SampleMetadata) -> GraphSpec:
-    """Wrap input_metadata in a GraphSpec with a dummy output spec."""
-    return GraphSpec("test", input_metadata, SampleMetadata.from_inputs((), {}))
+def _single_input(x):
+    return x
+
+
+def _two_inputs(x, y):
+    return x, y
+
+
+def _arg_and_x(arg, x):
+    return arg, x
+
+
+def _arg_and_options(arg, x, opt_none=None, opt_dict=None):
+    return arg, x, opt_none, opt_dict
+
+
+def _mask_input(mask):
+    return mask
+
+
+def _input_metadata(x: torch.Tensor, batch_size: int) -> SampleMetadata:
+    return SampleMetadata.from_inputs({"x": x}, batch_size=batch_size)
 
 
 @pytest.fixture
@@ -126,8 +145,9 @@ def test_build_dynamic_shapes_static(backend):
     keeps the dict so ``list(values())`` produces one entry per model arg).
     """
     args = (torch.randn(2, 32),)
-    meta = SampleMetadata.from_inputs(args, {}, batch_size=2)
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    sample = (args, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=2)
+    result = build_dynamic_shapes(sample, graph_spec)
     assert result == {"x": {}}
 
 
@@ -135,10 +155,11 @@ def test_build_dynamic_shapes_batch_axis(backend):
     """Two samples with different batch sizes → axis 0 detected as batch."""
     args1 = (torch.randn(1, 32),)
     args2 = (torch.randn(2, 32),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=1)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert len(result) == 1
@@ -150,10 +171,11 @@ def test_build_dynamic_shapes_dynamic_axis(backend):
     """Same batch size but different sequence length → axis 1 detected as dynamic."""
     args1 = (torch.randn(2, 5),)
     args2 = (torch.randn(2, 7),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=2)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert isinstance(result["x"], dict)
@@ -164,10 +186,11 @@ def test_build_dynamic_shapes_mixed_batch_and_dynamic(backend):
     """Different batch size AND non-proportional axis → both batch and dim axes present."""
     args1 = (torch.randn(1, 5),)  # bs=1, seq=5
     args2 = (torch.randn(2, 7),)  # bs=2, seq=7 (not proportional → dim1)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=1)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert 0 in result["x"], "axis 0 should be batch"
@@ -178,14 +201,15 @@ def test_build_dynamic_shapes_batch_multiplier(backend):
     """Axis 0 = 2 * batch_size (CFG-style UNet) → batch Dim uses actual axis values [2, 4]."""
     args1 = (torch.randn(2, 10),)  # bs=1, axis_0 = 2
     args2 = (torch.randn(4, 10),)  # bs=2, axis_0 = 4
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=1)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert 0 in result["x"], "axis 0 should be marked as batch dynamic"
-    batch_dim = make_batch_dim(list(_empty_graph_spec(meta).input_spec.tensor_specs))
+    batch_dim = make_batch_dim(graph_spec.input_spec.tensor_specs)
     assert batch_dim is not None
     assert batch_dim.min == 2, "batch Dim min must equal the actual minimum axis_0 value"
     assert batch_dim.max == 4, "batch Dim max must equal the actual maximum axis_0 value"
@@ -201,10 +225,11 @@ def test_build_dynamic_shapes_batch_multiplier_only_bs1_with_dynamic_spatial(bac
     # batch=1 only; axis_0 = 2 always; height/width vary
     args1 = (torch.randn(2, 4, 32, 32),)
     args2 = (torch.randn(2, 4, 64, 64),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=1))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=1)
+    update_input_spec(graph_spec, (args2, {}), batch_size=1)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None, "spatial dynamic dims should produce a non-None result"
     assert 0 not in result["x"], "axis 0 (always 2) must NOT be marked dynamic"
@@ -216,10 +241,11 @@ def test_build_dynamic_shapes_shared_dim_across_tensors(backend):
     """Two args tensors sharing the same dynamic dim name get the same Dim object."""
     args1 = (torch.randn(2, 5), torch.randn(2, 5))
     args2 = (torch.randn(2, 7), torch.randn(2, 7))
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_two_inputs, sample, batch_size=2)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x", "y"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert result["x"][1] is result["y"][1], "shared dim name must map to the same Dim instance"
@@ -231,10 +257,11 @@ def test_build_dynamic_shapes_kwargs_are_covered(backend):
     kw1 = {"x": torch.randn(1, 10)}
     kw2 = {"x": torch.randn(2, 10)}
     # kwargs tensor changes batch; args tensor stays static
-    meta = SampleMetadata.from_inputs((arg,), kw1, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs((arg,), kw2, batch_size=2))
+    sample = ((arg,), kw1)
+    graph_spec = make_graph_spec(_arg_and_x, sample, batch_size=1)
+    update_input_spec(graph_spec, ((arg,), kw2), batch_size=2)
 
-    result = build_dynamic_shapes(kw1, _empty_graph_spec(meta), ([], ["arg", "x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
     assert result is not None
     assert "x" in result
     assert 0 in result["x"], "axis 0 of kwargs tensor should be marked as batch dynamic"
@@ -252,12 +279,13 @@ def test_build_dynamic_shapes_optional_none_kwargs_padded(backend):
     # Only the mandatory tensor kwarg is recorded; the optional ones are None.
     kw_recorded = {"x": torch.randn(1, 10)}
     kw_recorded_bs2 = {"x": torch.randn(2, 10)}
-    meta = SampleMetadata.from_inputs((arg,), kw_recorded, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs((arg,), kw_recorded_bs2, batch_size=2))
+    sample = ((arg,), kw_recorded)
+    graph_spec = make_graph_spec(_arg_and_options, sample, batch_size=1)
+    update_input_spec(graph_spec, ((arg,), kw_recorded_bs2), batch_size=2)
 
     # Actual kwargs dict passed to export includes a None-valued optional and a dict-valued optional.
     actual_kwargs = {"x": torch.randn(1, 10), "opt_none": None, "opt_dict": {"key": "val"}}
-    result = build_dynamic_shapes(actual_kwargs, _empty_graph_spec(meta), ([], ["arg", "x", "opt_none", "opt_dict"]))
+    result = build_dynamic_shapes(((arg,), actual_kwargs), graph_spec)
 
     assert result is not None
     assert "opt_none" in result, "optional None kwarg must be present in dynamic_shapes"
@@ -273,8 +301,7 @@ def test_build_dynamic_shapes_optional_none_kwargs_padded(backend):
 
 def test_make_batch_dim_returns_none_when_no_batch_axis():
     """Tensor specs without any batch axis → batch_dim is None."""
-    args = (torch.randn(2, 32),)
-    meta = SampleMetadata.from_inputs(args, {}, batch_size=2)
+    meta = _input_metadata(torch.randn(2, 32), batch_size=2)
     # single sample → no update_shapes_seen → no batch* labels
     batch_dim = make_batch_dim(list(meta.tensor_specs))
     assert batch_dim is None
@@ -282,10 +309,8 @@ def test_make_batch_dim_returns_none_when_no_batch_axis():
 
 def test_make_batch_dim_creates_correct_range():
     """Two batch sizes → batch_dim spans [min_axis_val, max_axis_val]."""
-    args1 = (torch.randn(1, 32),)
-    args2 = (torch.randn(4, 32),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=4))
+    meta = _input_metadata(torch.randn(1, 32), batch_size=1)
+    meta.update_shapes_seen(_input_metadata(torch.randn(4, 32), batch_size=4))
 
     batch_dim = make_batch_dim(list(meta.tensor_specs))
 
@@ -297,10 +322,8 @@ def test_make_batch_dim_creates_correct_range():
 def test_make_batch_dim_returns_none_when_batch_axis_is_constant():
     """CFG-doubled batch: axis_0 = 2 * bs, but only bs=1 recorded → axis_0 always 2 → None."""
     # Both samples have bs=1 but axis_0=2 (multiplier=2, consistent integer)
-    args1 = (torch.randn(2, 10),)
-    args2 = (torch.randn(2, 10),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=1))
+    meta = _input_metadata(torch.randn(2, 10), batch_size=1)
+    meta.update_shapes_seen(_input_metadata(torch.randn(2, 10), batch_size=1))
 
     batch_dim = make_batch_dim(list(meta.tensor_specs))
 
@@ -315,13 +338,11 @@ def test_make_batch_dim_returns_none_when_batch_axis_is_constant():
 
 def test_axis_dims_for_tensor_dynamic_axis_uses_dim_auto():
     """Non-batch varying axis must be assigned Dim.AUTO, not an explicit range Dim."""
-    args1 = (torch.randn(2, 5),)
-    args2 = (torch.randn(2, 9),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    meta = _input_metadata(torch.randn(2, 5), batch_size=2)
+    meta.update_shapes_seen(_input_metadata(torch.randn(2, 9), batch_size=2))
 
     tensor_spec = list(meta.tensor_specs)[0]
-    axis_dims = axis_dims_for_tensor(tensor_spec, batch_dim=None)
+    axis_dims = axis_dims_for_tensor(tensor_spec, batch_dim=None, tensor_name="x")
 
     assert 1 in axis_dims, "axis 1 should be present"
     assert axis_dims[1] is torch.export.Dim.AUTO
@@ -329,28 +350,24 @@ def test_axis_dims_for_tensor_dynamic_axis_uses_dim_auto():
 
 def test_axis_dims_for_tensor_static_axis_excluded():
     """Axis where min_shape == max_shape must not appear in the result."""
-    args1 = (torch.randn(1, 32),)
-    args2 = (torch.randn(2, 32),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    meta = _input_metadata(torch.randn(1, 32), batch_size=1)
+    meta.update_shapes_seen(_input_metadata(torch.randn(2, 32), batch_size=2))
 
     tensor_spec = list(meta.tensor_specs)[0]
     batch_dim = make_batch_dim(list(meta.tensor_specs))
-    axis_dims = axis_dims_for_tensor(tensor_spec, batch_dim)
+    axis_dims = axis_dims_for_tensor(tensor_spec, batch_dim, tensor_name="x")
 
     assert 1 not in axis_dims, "static axis 1 (always 32) must not be included"
 
 
 def test_axis_dims_for_tensor_batch_axis_uses_shared_batch_dim():
     """Batch axis must reference the same batch_dim object passed in."""
-    args1 = (torch.randn(1, 32),)
-    args2 = (torch.randn(2, 32),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    meta = _input_metadata(torch.randn(1, 32), batch_size=1)
+    meta.update_shapes_seen(_input_metadata(torch.randn(2, 32), batch_size=2))
 
     tensor_spec = list(meta.tensor_specs)[0]
     batch_dim = make_batch_dim(list(meta.tensor_specs))
-    axis_dims = axis_dims_for_tensor(tensor_spec, batch_dim)
+    axis_dims = axis_dims_for_tensor(tensor_spec, batch_dim, tensor_name="x")
 
     assert 0 in axis_dims
     assert axis_dims[0] is batch_dim
@@ -365,9 +382,8 @@ def test_prepare_export_sample_expands_size1_dim_axis():
     """A dim* axis with hint=1 is doubled to 2 via torch.cat."""
     args1 = (torch.zeros(2, 1),)  # batch=2, seq=1
     args2 = (torch.zeros(2, 8),)  # batch=2, seq=8
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
-    gs = _empty_graph_spec(meta)
+    gs = make_graph_spec(_single_input, (args1, {}), batch_size=2)
+    update_input_spec(gs, (args2, {}), batch_size=2)
 
     out_args, _ = prepare_export_sample((args1, {}), gs)
 
@@ -378,9 +394,8 @@ def test_prepare_export_sample_does_not_expand_already_large_dim_axis():
     """A dim* axis already > 1 is left unchanged."""
     args1 = (torch.zeros(2, 5),)
     args2 = (torch.zeros(2, 9),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
-    gs = _empty_graph_spec(meta)
+    gs = make_graph_spec(_single_input, (args1, {}), batch_size=2)
+    update_input_spec(gs, (args2, {}), batch_size=2)
 
     out_args, _ = prepare_export_sample((args1, {}), gs)
 
@@ -391,9 +406,8 @@ def test_prepare_export_sample_expands_batch_axis_to_2():
     """Batch axis with hint=1 is expanded to 2 via make_batch."""
     args1 = (torch.zeros(1, 32),)
     args2 = (torch.zeros(4, 32),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=4))
-    gs = _empty_graph_spec(meta)
+    gs = make_graph_spec(_single_input, (args1, {}), batch_size=1)
+    update_input_spec(gs, (args2, {}), batch_size=4)
 
     out_args, _ = prepare_export_sample((args1, {}), gs)
 
@@ -404,9 +418,8 @@ def test_prepare_export_sample_batch_already_at_2_unchanged():
     """Batch axis already at 2 (max=2) is not further expanded."""
     args1 = (torch.zeros(1, 32),)
     args2 = (torch.zeros(2, 32),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
-    gs = _empty_graph_spec(meta)
+    gs = make_graph_spec(_single_input, (args1, {}), batch_size=1)
+    update_input_spec(gs, (args2, {}), batch_size=2)
 
     # pass the bs=2 sample — already at the hint target
     out_args, _ = prepare_export_sample((args2, {}), gs)
@@ -414,17 +427,16 @@ def test_prepare_export_sample_batch_already_at_2_unchanged():
     assert out_args[0].shape[0] == 2
 
 
-def test_prepare_export_sample_kwargs_dim_axis_expanded():
-    """dim* axis in a kwarg tensor is also expanded."""
+def test_prepare_export_sample_keyword_input_dim_axis_expanded():
+    """A dim* axis passed by keyword is expanded in the normalized call."""
     kw1 = {"mask": torch.zeros(2, 1)}
     kw2 = {"mask": torch.zeros(2, 6)}
-    meta = SampleMetadata.from_inputs((), kw1, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs((), kw2, batch_size=2))
-    gs = _empty_graph_spec(meta)
+    gs = make_graph_spec(_mask_input, ((), kw1), batch_size=2)
+    update_input_spec(gs, ((), kw2), batch_size=2)
 
-    _, out_kwargs = prepare_export_sample(((), kw1), gs)
+    out_args, _ = prepare_export_sample(((), kw1), gs)
 
-    assert out_kwargs["mask"].shape[1] == 2, "size-1 dim* axis in kwarg must be expanded"
+    assert out_args[0].shape[1] == 2, "size-1 dim* axis passed by keyword must be expanded"
 
 
 # ---------------------------------------------------------------------------
@@ -436,10 +448,11 @@ def test_build_dynamic_shapes_dim_axis_uses_dim_auto(backend):
     """Non-batch dynamic axis must be Dim.AUTO in the result dict."""
     args1 = (torch.randn(2, 5),)
     args2 = (torch.randn(2, 9),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=2)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert result["x"][1] is torch.export.Dim.AUTO
@@ -449,10 +462,11 @@ def test_build_dynamic_shapes_batch_axis_at_non_zero_position(backend):
     """Batch axis at position 1 (not 0) is correctly identified and marked dynamic."""
     args1 = (torch.randn(5, 1, 32),)  # [seq=5, batch=1, feat=32]
     args2 = (torch.randn(5, 2, 32),)  # [seq=5, batch=2, feat=32]
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=1)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert 1 in result["x"], "axis 1 (batch) should be dynamic"
@@ -464,10 +478,11 @@ def test_build_dynamic_shapes_multiple_dim_axes(backend):
     """Two independent dim* axes (e.g. height and width) both get Dim.AUTO."""
     args1 = (torch.randn(2, 32, 32),)  # [batch, h, w]
     args2 = (torch.randn(2, 48, 64),)  # h and w change independently
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=2)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert 1 in result["x"], "height axis should be dynamic"
@@ -480,10 +495,11 @@ def test_build_dynamic_shapes_static_axis_not_in_result(backend):
     """Axes that never change across samples must not appear in the result."""
     args1 = (torch.randn(1, 32),)
     args2 = (torch.randn(2, 32),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=1)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=1)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert 0 in result["x"], "batch axis should be dynamic"
@@ -499,10 +515,11 @@ def test_build_dynamic_shapes_use_auto_false_explicit_dim_for_dim_axis():
     """``use_auto=False`` returns explicit Dim for non-batch dynamic axes (not Dim.AUTO)."""
     args1 = (torch.randn(2, 5),)
     args2 = (torch.randn(2, 9),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=2)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]), use_auto=False)
+    result = build_dynamic_shapes(sample, graph_spec, use_auto=False)
 
     assert result is not None
     dim = result["x"][1]
@@ -515,10 +532,11 @@ def test_build_dynamic_shapes_use_auto_false_caches_dim_by_range_across_tensors(
     """Two tensors with the same (min, max) range share the same Dim instance under use_auto=False."""
     args1 = (torch.randn(2, 5), torch.randn(2, 5))
     args2 = (torch.randn(2, 9), torch.randn(2, 9))
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_two_inputs, sample, batch_size=2)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x", "y"]), use_auto=False)
+    result = build_dynamic_shapes(sample, graph_spec, use_auto=False)
 
     assert result is not None
     assert result["x"][1] is result["y"][1], "shared (min, max) range must yield a single Dim instance"
@@ -528,10 +546,11 @@ def test_build_dynamic_shapes_use_auto_true_default_still_uses_dim_auto():
     """Default ``use_auto=True`` keeps the Dim.AUTO path (regression for default behaviour)."""
     args1 = (torch.randn(2, 5),)
     args2 = (torch.randn(2, 9),)
-    meta = SampleMetadata.from_inputs(args1, {}, batch_size=2)
-    meta.update_shapes_seen(SampleMetadata.from_inputs(args2, {}, batch_size=2))
+    sample = (args1, {})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=2)
+    update_input_spec(graph_spec, (args2, {}), batch_size=2)
 
-    result = build_dynamic_shapes({}, _empty_graph_spec(meta), ([], ["x"]))
+    result = build_dynamic_shapes(sample, graph_spec)
 
     assert result is not None
     assert result["x"][1] is torch.export.Dim.AUTO
@@ -576,14 +595,11 @@ def test_export_succeeds_with_shared_batch_kwargs_jit_style():
         "input_ids": torch.zeros(2, 8, dtype=torch.long),
         "attention_mask": torch.zeros(2, 8, dtype=torch.long),
     }
-    meta = SampleMetadata.from_inputs((), kw1, strict=True)
-    meta.update_shapes_seen(SampleMetadata.from_inputs((), kw2, strict=True))
-    output = model(**kw2)
-    gs = GraphSpec("test", meta, SampleMetadata.from_outputs(output))
+    gs = make_graph_spec(model.forward, ((), kw1))
+    update_input_spec(gs, ((), kw2))
 
     args, kwargs = prepare_export_sample(((), kw1), gs)
-    forward_args = ([], ["input_ids", "attention_mask"])
-    dynamic_shapes = build_dynamic_shapes(kwargs, gs, forward_args)
+    dynamic_shapes = build_dynamic_shapes((args, kwargs), gs)
 
     # Sanity: both shared axes resolve to Dim.AUTO; the old per-Input construction
     # would have produced two independent explicit Dims here.

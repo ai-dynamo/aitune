@@ -316,7 +316,7 @@ class Module(wrapt.CallableObjectProxy):
                 self._self_wrapper = TunedModule(
                     backends,
                     module_name=self._self_name,
-                    input_signature=recording.input_signature,
+                    forward_signature=recording.forward_signature,
                 )
                 self._offload(backends)
 

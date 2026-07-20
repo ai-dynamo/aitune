@@ -82,7 +82,6 @@ class ForwardSignature:
             ]
         }
 
-    def normalize(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-        """Return one deterministic invocation layout for equivalent calls."""
-        bound = self._signature.bind(*args, **kwargs)
-        return bound.args, bound.kwargs
+    def normalize(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> inspect.BoundArguments:
+        """Match args and kwargs to forward parameters in a consistent layout."""
+        return self._signature.bind(*args, **kwargs)

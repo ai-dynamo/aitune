@@ -6,6 +6,8 @@ import logging
 
 from polygraphy.backend.trt import Profile
 
+from aitune.torch.utils.tensor import format_tensor_name
+
 # Setup logger
 logger = logging.getLogger(__name__)
 
@@ -22,12 +24,16 @@ class TensorRTProfile:
         self._profile = Profile()
 
     def add_input_shape(
-        self, name: str, min_shape: tuple[int, ...], opt_shape: tuple[int, ...], max_shape: tuple[int, ...]
+        self,
+        path: str | tuple[str | int, ...],
+        min_shape: tuple[int, ...],
+        opt_shape: tuple[int, ...],
+        max_shape: tuple[int, ...],
     ) -> "TensorRTProfile":
         """Add a shape binding to the profile.
 
         Args:
-            name: The name of the input tensor
+            path: Forward parameter path identifying the input tensor
             min_shape: The minimum shape the profile will support
             opt_shape: The shape for which TensorRT will tune the engine
             max_shape: The maximum shape the profile will support
@@ -35,6 +41,7 @@ class TensorRTProfile:
         Returns:
             The profile object for chaining
         """
+        name = format_tensor_name(path, "input")
         self._profile.add(name=name, min=min_shape, opt=opt_shape, max=max_shape)
         logger.debug(
             "Added profile for input '%s': min=%s, opt=%s, max=%s",
@@ -93,7 +100,7 @@ class TensorRTProfile:
         """Create TensorRTProfile from dictionary."""
         profile = cls()
         for name, (min_, opt_, max_) in data.items():
-            profile.add_input_shape(name, tuple(min_), tuple(opt_), tuple(max_))
+            profile._profile.add(name=name, min=tuple(min_), opt=tuple(opt_), max=tuple(max_))
         return profile
 
     @classmethod

@@ -4,7 +4,6 @@
 
 import logging
 from copy import deepcopy
-from itertools import zip_longest
 from typing import Any
 
 import torch
@@ -15,62 +14,6 @@ from aitune.torch.module.recording_module import Sample
 
 # Setup logger
 logger = logging.getLogger(__name__)
-
-
-def create_inputs_mapping(input_spec) -> tuple[dict, dict]:
-    """Creates yet another input names mapping but with depth of nested tensors.
-
-    NOTE: NOT using graph_spec.input_spec.get_names_mapping() as we require depth of nested objects
-    """
-    input_args, input_kwargs = {}, {}
-    for locator, tensor_spec in input_spec.tensor_data:
-        if tensor_spec.name.startswith("args"):
-            input_args[locator.leaf_name] = tensor_spec.name
-            continue
-
-        # saving key with depth to avoid ambiguity with nested objects
-        input_kwargs[(locator.leaf_name, locator.depth)] = (locator, tensor_spec.name)
-    return input_args, input_kwargs
-
-
-def war_for_positional_arguments(input_args, forward_args, forward_kwargs):
-    """Checks if we got positional argument that python marked as kwarg and adds it to input_args.
-
-    It happens when argument is passed as positional and function signature does not have clear separation
-    between positional and keyword arguments like with / separator: def forward(x, y, z, w, /): return x, y, z, w
-
-    Name of the argument is stored in leaf of the locator.
-    """
-    for i, (arg_n, arg_name) in enumerate(zip_longest(list(input_args.items()), list(forward_args), fillvalue=None)):
-        if arg_name is not None:
-            # assuming it is ok
-            break
-        arg_name = forward_kwargs[i]
-        forward_args.append(arg_name)
-        input_args[arg_name] = arg_n[1]
-
-
-def create_ordered_dynamic_shapes(forward_args, forward_kwargs, input_args, input_kwargs, dynamic_shapes) -> dict:
-    """Creates ordered dynamic shapes with python function signature argument names."""
-    ordered_dynamic_shapes = {}
-    for fwd_arg in forward_args:
-        if tensor_spec_name := input_args.get(fwd_arg):
-            ordered_dynamic_shapes[fwd_arg] = dynamic_shapes[tensor_spec_name]
-
-    for kwarg in forward_kwargs:
-        if loc_and_name := input_kwargs.get((kwarg, 1)):
-            _locator, tensor_spec_name = loc_and_name
-            ordered_dynamic_shapes[kwarg] = dynamic_shapes[tensor_spec_name]
-
-    # by utilizing locator we can create a structure of nested dynamic shapes
-    for _, (locator, tensor_spec_name) in input_kwargs.items():
-        if locator.depth > 1:
-            # need to provide a parents as they are not created by set_value
-            _raise_on_locator_user_type(locator)
-            ordered_dynamic_shapes = _create_nested_structure(locator, root=ordered_dynamic_shapes)
-            locator.set_value(ordered_dynamic_shapes, dynamic_shapes[tensor_spec_name])
-
-    return ordered_dynamic_shapes
 
 
 def print_dynamic_shapes(dynamic_shapes: dict) -> None:
@@ -112,6 +55,7 @@ def axis_dims_for_tensor(
     tensor_spec,
     batch_dim: Any,
     *,
+    tensor_name: str,
     use_auto: bool = True,
     dim_cache: dict | None = None,
 ) -> dict[int, Any]:
@@ -157,7 +101,7 @@ def axis_dims_for_tensor(
                     if dim_cache is not None and key in dim_cache:
                         axis_dims[i] = dim_cache[key]
                     else:
-                        dim = torch.export.Dim(f"{tensor_spec.name}_dim_{i}", min=key[0], max=key[1])
+                        dim = torch.export.Dim(f"{tensor_name}_dim_{i}", min=key[0], max=key[1])
                         if dim_cache is not None:
                             dim_cache[key] = dim
                         axis_dims[i] = dim
@@ -165,9 +109,8 @@ def axis_dims_for_tensor(
 
 
 def build_dynamic_shapes(
-    kwargs: dict,
+    sample: Sample,
     graph_spec: GraphSpec,
-    forward_args: tuple[list[str], list[str]],
     *,
     use_auto: bool = True,
 ) -> dict:
@@ -188,12 +131,8 @@ def build_dynamic_shapes(
     which expands any size-1 dynamic axis to 2 before the export call.
 
     Args:
-        kwargs: The actual kwargs that will be passed to ``torch.export.export``.
-            Used to pad missing keys with placeholder entries (None or ``{}``) so
-            export does not reject the call.
+        sample: The normalized args and kwargs passed to ``torch.export.export``.
         graph_spec: The recorded graph spec.
-        forward_args: ``(positional_arg_names, keyword_arg_names)`` from the model's
-            forward signature.
         use_auto: When ``True`` (default), non-batch dynamic axes use ``Dim.AUTO``.
             When ``False``, they get explicit ``Dim(name, min, max)`` instances shared
             across tensors with identical ``(min, max)`` ranges. ``False`` is required
@@ -208,30 +147,31 @@ def build_dynamic_shapes(
         signal that no dynamic shapes are needed).
     """
     input_spec = graph_spec.input_spec
+    args, kwargs = sample
+    forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
     batch_dim = make_batch_dim(input_spec.tensor_specs)
     dim_cache: dict | None = None if use_auto else {}
 
-    spec_to_dims: dict[str, dict] = {}
-    for tensor_spec in input_spec.tensor_specs:
+    result: dict[str, Any] = {}
+    for locator, tensor_spec in input_spec.tensor_data:
         if tensor_spec.has_batch_axis() or tensor_spec.has_dynamic_axis():
-            spec_to_dims[tensor_spec.name] = axis_dims_for_tensor(
-                tensor_spec, batch_dim, use_auto=use_auto, dim_cache=dim_cache
+            dims = axis_dims_for_tensor(
+                tensor_spec,
+                batch_dim,
+                tensor_name=locator.display_path,
+                use_auto=use_auto,
+                dim_cache=dim_cache,
             )
         else:
-            spec_to_dims[tensor_spec.name] = {}
+            dims = {}
+        _raise_on_locator_user_type(locator)
+        result = _create_nested_structure(locator, root=result)
+        locator.set_value(result, dims)
 
-    fwd_args, fwd_kwargs = forward_args
-    input_args, input_kwargs = create_inputs_mapping(input_spec)
-    war_for_positional_arguments(input_args, fwd_args, fwd_kwargs)
-    result = create_ordered_dynamic_shapes(fwd_args, fwd_kwargs, input_args, input_kwargs, spec_to_dims)
-
-    # WAR: Non-tensor kwargs have to be mentioned in dynamic shapes - adding missing ones.
-    # torch.export.export requires that every key present in the kwargs passed to it
-    # appears in dynamic_shapes. Optional kwargs that are None at recording time are
-    # absent from input_kwargs but are still forwarded to export.
-    for key in kwargs:
+    # torch.export requires every forward parameter to be present, including non-tensors.
+    for key, value in forward_inputs.arguments.items():
         if key not in result:
-            result[key] = {} if isinstance(kwargs[key], (dict, list)) else None
+            result[key] = {} if isinstance(value, (dict, list, tuple)) else None
 
     return result
 
@@ -256,14 +196,14 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
     if input_spec.has_batch_axis():
         max_batch_size = graph_spec.get_max_batch_size()
         batch_size = min(max_batch_size, 2)
-        args, kwargs = input_spec.make_batch(*sample, batch_size=batch_size)
+        args, kwargs = graph_spec.make_batch(*sample, batch_size=batch_size)
     else:
         args, kwargs = deepcopy(sample)
 
+    forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
     for locator, tensor_spec in input_spec.tensor_data:
-        container = args if tensor_spec.name.startswith("args") else kwargs
         try:
-            tensor = locator.get_value(container)
+            tensor = locator.get_value(forward_inputs.arguments)
         except (IndexError, KeyError):
             continue
         if not isinstance(tensor, torch.Tensor):
@@ -280,11 +220,8 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
                 tensor = torch.cat([tensor, tensor], dim=i)
                 modified = True
         if modified:
-            if tensor_spec.name.startswith("args"):
-                args = locator.set_value(args, tensor)
-            else:
-                kwargs = locator.set_value(kwargs, tensor)
-    return args, kwargs
+            forward_inputs.arguments = locator.set_value(forward_inputs.arguments, tensor)
+    return forward_inputs.args, forward_inputs.kwargs
 
 
 def _create_nested_structure(locator: Locator, root: Any = None, last: Any = None) -> Any:

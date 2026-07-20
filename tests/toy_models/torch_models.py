@@ -4,6 +4,7 @@
 
 import torch
 
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -53,14 +54,21 @@ class ToyTorchModel(torch.nn.Module):
 
     def graph_spec(self, batch_sizes: list[int] | None = None, device: str = "cpu") -> GraphSpec:
         graph_spec = None
+        forward_signature = ForwardSignature.from_callable(self.forward)
         for sample in self.samples(batch_sizes=batch_sizes, device=device):
             args, kwargs = sample
 
             _output = self(*args, **kwargs)
-            input_metadata = SampleMetadata.from_inputs(args, kwargs, batch_size=args[0].shape[0])
+            forward_inputs = forward_signature.normalize(args, kwargs)
+            input_metadata = SampleMetadata.from_inputs(forward_inputs.arguments, batch_size=args[0].shape[0])
             output_metadata = SampleMetadata.from_outputs(_output, batch_size=args[0].shape[0])
             if graph_spec is None:
-                graph_spec = GraphSpec(name="toy_model", input_spec=input_metadata, output_spec=output_metadata)
+                graph_spec = GraphSpec(
+                    name="toy_model",
+                    input_spec=input_metadata,
+                    output_spec=output_metadata,
+                    forward_signature=forward_signature,
+                )
             else:
                 graph_spec.update_shapes_seen(input_metadata, output_metadata)
 
@@ -109,14 +117,21 @@ class ToyTorchConditionalModel(torch.nn.Module):
         self, batch_sizes: list[int] | None = None, device: str = "cpu", kwargs: dict | None = None
     ) -> GraphSpec:
         graph_spec = None
+        forward_signature = ForwardSignature.from_callable(self.forward)
         for sample in self.samples(batch_sizes=batch_sizes, device=device, kwargs=kwargs):
             args, kwargs = sample
 
             _output = self(*args, **kwargs)
-            input_metadata = SampleMetadata.from_inputs(args, kwargs, batch_size=args[0].shape[0])
+            forward_inputs = forward_signature.normalize(args, kwargs)
+            input_metadata = SampleMetadata.from_inputs(forward_inputs.arguments, batch_size=args[0].shape[0])
             output_metadata = SampleMetadata.from_outputs(_output, batch_size=args[0].shape[0])
             if graph_spec is None:
-                graph_spec = GraphSpec(name="toy_model", input_spec=input_metadata, output_spec=output_metadata)
+                graph_spec = GraphSpec(
+                    name="toy_model",
+                    input_spec=input_metadata,
+                    output_spec=output_metadata,
+                    forward_signature=forward_signature,
+                )
             else:
                 graph_spec.update_shapes_seen(input_metadata, output_metadata)
 

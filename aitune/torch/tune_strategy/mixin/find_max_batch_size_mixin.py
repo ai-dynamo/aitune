@@ -78,7 +78,7 @@ class FindMaxBatchSizeMixin(TuneStrategy):
                     max_batch_size,
                     max_throughput,
                 )
-                graph_spec.input_spec.update_max_batch_size(data[0], max_batch_size)
+                graph_spec.update_max_batch_size(data[0], max_batch_size)
             except Exception:
                 error_log_file = self._log_file(find_max_batch_size_cache_dir, "error.log")
                 error_log_file.write_text(f"Build log file: {build_log_file}\n\nError:\n{traceback.format_exc()}")

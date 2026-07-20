@@ -8,18 +8,34 @@ import pytest
 import torch
 from polygraphy.backend.trt import Profile
 
+from aitune.exceptions import AITuneUserInputError
 from aitune.torch.backend.tensorrt.tensorrt_backend import ProfileMode, TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
-from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models.torch_models import ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_graph_spec, requires_cuda, update_input_spec
 
 # Constants for testing
 IN_FEATURES = 32
 OUT_FEATURES = 5
 BATCH_SIZE = 2
+
+
+def _single_input(x):
+    return x
+
+
+def _single_input_with_options(x, **kwargs):
+    return x, kwargs
+
+
+def _two_inputs(arg, x):
+    return arg, x
+
+
+def _profile_inputs(x, input_tensor):
+    return x, input_tensor
 
 
 @pytest.fixture
@@ -49,18 +65,18 @@ def mock_tensorrt_components(mocker, tmp_path):
     # Mock execution context and bindings
     mock_context = mocker.MagicMock()
     mock_bindings = {}
-    mock_input_names = ["args_0"]
+    mock_input_names = ["x"]
     mock_output_names = ["outputs_0"]
 
     # Mock engine info
     mock_engine_info = mocker.MagicMock()
-    mock_engine_info.input_names = ["args_0"]
+    mock_engine_info.input_names = ["x"]
     mock_engine_info.output_names = ["outputs_0"]
-    mock_engine_info.input_shapes = {"args_0": (BATCH_SIZE, IN_FEATURES)}
+    mock_engine_info.input_shapes = {"x": (BATCH_SIZE, IN_FEATURES)}
     mock_engine_info.output_shapes = {
         "outputs_0": (BATCH_SIZE, OUT_FEATURES),
     }
-    mock_engine_info.input_dtypes = {"args_0": torch.float32}
+    mock_engine_info.input_dtypes = {"x": torch.float32}
     mock_engine_info.output_dtypes = {"outputs_0": torch.float32}
 
     mock_runtime_instance.create_execution_context.return_value = (
@@ -226,38 +242,34 @@ def test_tensorrt_backend_prepare_inputs(mocker):
     test_tensor = torch.randn(1, IN_FEATURES)
 
     # case 1: single arg only
+    x_name = format_tensor_name("x", "input")
     args, kwargs = (test_tensor,), {}
     sample = (args, kwargs)
-    backend._engine_info.input_names = ["args_0"]
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
-    output_metadata = SampleMetadata.from_outputs(sample)
-    backend._graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    backend._engine_info.input_names = [x_name]
+    backend._graph_spec = make_graph_spec(_single_input, sample, sample)
 
     prepared_inputs = backend._prepare_inputs((test_tensor,), {})
-    assert torch.equal(prepared_inputs["args_0"], test_tensor)
+    assert torch.equal(prepared_inputs[x_name], test_tensor)
 
     # case 2: single kwarg only
     args, kwargs = (), {"x": test_tensor}
     sample = (args, kwargs)
-    backend._engine_info.input_names = ["kwargs_x"]
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
-    output_metadata = SampleMetadata.from_outputs(sample)
-    backend._graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    backend._engine_info.input_names = [x_name]
+    backend._graph_spec = make_graph_spec(_single_input, sample, sample)
 
     prepared_inputs = backend._prepare_inputs((), {"x": test_tensor})
-    assert torch.equal(prepared_inputs["kwargs_x"], test_tensor)
+    assert torch.equal(prepared_inputs[x_name], test_tensor)
 
     # case 3: single arg and single kwarg
     args, kwargs = (test_tensor,), {"x": test_tensor}
     sample = (args, kwargs)
-    backend._engine_info.input_names = ["args_0", "kwargs_x"]
-    input_metadata = SampleMetadata.from_inputs(args, kwargs, strict=True)
-    output_metadata = SampleMetadata.from_outputs(sample)
-    backend._graph_spec = GraphSpec(name="test_graph", input_spec=input_metadata, output_spec=output_metadata)
+    arg_name = format_tensor_name("arg", "input")
+    backend._engine_info.input_names = [arg_name, x_name]
+    backend._graph_spec = make_graph_spec(_two_inputs, sample, sample)
 
     prepared_inputs = backend._prepare_inputs((test_tensor,), {"x": test_tensor})
-    assert torch.equal(prepared_inputs["args_0"], test_tensor)
-    assert torch.equal(prepared_inputs["kwargs_x"], test_tensor)
+    assert torch.equal(prepared_inputs[arg_name], test_tensor)
+    assert torch.equal(prepared_inputs[x_name], test_tensor)
 
 
 @requires_cuda
@@ -277,11 +289,7 @@ def test_backend_inference_returns_copy_of_tensors(tmp_path):
     model.eval()
     x = torch.tensor([[1, 1]], device=device)
     args, kwargs = (x,), {}
-    graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=SampleMetadata.from_inputs(args, kwargs),
-        output_spec=SampleMetadata.from_outputs(x),
-    )
+    graph_spec = make_graph_spec(model.forward, (args, kwargs), x)
 
     backend = TensorRTBackend()
     backend = backend.build(model, graph_spec, [(args, kwargs)], device=device, cache_dir=tmp_path)
@@ -310,11 +318,7 @@ def test_backend_handle_args_kwargs(tmp_path, use_dynamo):
     x = torch.tensor([[1, 1]], device=device)
     y = torch.tensor([[1, 1]], device=device)
     args, kwargs = (x,), {"y": y}
-    graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=SampleMetadata.from_inputs(args, kwargs),
-        output_spec=SampleMetadata.from_outputs((x, y)),
-    )
+    graph_spec = make_graph_spec(model.forward, (args, kwargs), (x, y))
 
     config = TensorRTBackendConfig(use_dynamo=use_dynamo)
     backend = TensorRTBackend(config=config)
@@ -406,20 +410,20 @@ def test_build_with_dynamic_shapes(tmp_path, mocker):
     # Mock the create_execution_context method to return the expected 4 values
     mock_context = mocker.MagicMock()
     mock_bindings = {}
-    mock_input_names = ["args_0"]
+    mock_input_names = ["x"]
     mock_output_names = ["outputs_0"]
 
     # Mock engine info
     mock_engine_info = mocker.MagicMock()
-    mock_engine_info.input_names = ["args_0"]
+    mock_engine_info.input_names = ["x"]
     mock_engine_info.output_names = [
         "outputs_0",
     ]
-    mock_engine_info.input_shapes = {"args_0": (BATCH_SIZE, IN_FEATURES)}
+    mock_engine_info.input_shapes = {"x": (BATCH_SIZE, IN_FEATURES)}
     mock_engine_info.output_shapes = {
         "outputs_0": (BATCH_SIZE, OUT_FEATURES),
     }
-    mock_engine_info.input_dtypes = {"args_0": torch.float32}
+    mock_engine_info.input_dtypes = {"x": torch.float32}
     mock_engine_info.output_dtypes = {"outputs_0": torch.float32}
 
     mock_runtime.create_execution_context.return_value = (
@@ -481,20 +485,20 @@ def test_build_without_dynamic_shapes(tmp_path, mocker):
     # Mock the create_execution_context method to return the expected 4 values
     mock_context = mocker.MagicMock()
     mock_bindings = {}
-    mock_input_names = ["args_0"]
+    mock_input_names = ["x"]
     mock_output_names = ["outputs_0"]
 
     # Mock engine info
     mock_engine_info = mocker.MagicMock()
-    mock_engine_info.input_names = ["args_0"]
+    mock_engine_info.input_names = ["x"]
     mock_engine_info.output_names = [
         "outputs_0",
     ]
-    mock_engine_info.input_shapes = {"args_0": (BATCH_SIZE, IN_FEATURES)}
+    mock_engine_info.input_shapes = {"x": (BATCH_SIZE, IN_FEATURES)}
     mock_engine_info.output_shapes = {
         "outputs_0": (BATCH_SIZE, OUT_FEATURES),
     }
-    mock_engine_info.input_dtypes = {"args_0": torch.float32}
+    mock_engine_info.input_dtypes = {"x": torch.float32}
     mock_engine_info.output_dtypes = {"outputs_0": torch.float32}
 
     mock_runtime.create_execution_context.return_value = (
@@ -585,35 +589,50 @@ def test_serialization(tmp_path):
 def test_get_profiles_single_profile():
     """Test the _get_profiles_from_shapes method."""
     backend = TensorRTBackend()
-    backend._graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=SampleMetadata.from_inputs((torch.randn(1, IN_FEATURES),), {}),
-        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),)),
+    sample = ((torch.randn(1, IN_FEATURES),), {})
+    backend._graph_spec = make_graph_spec(
+        _single_input,
+        sample,
+        (torch.randn(1, OUT_FEATURES),),
     )
-    backend._graph_spec.input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, IN_FEATURES),), {}))
-    backend._graph_spec.input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(4, IN_FEATURES),), {}))
+    update_input_spec(backend._graph_spec, ((torch.randn(2, IN_FEATURES),), {}))
+    update_input_spec(backend._graph_spec, ((torch.randn(4, IN_FEATURES),), {}))
 
     profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=[])
     assert len(profiles) == 1
 
     pr = profiles[0]
-    assert pr["args_0"].min == (1, IN_FEATURES)
-    assert pr["args_0"].opt == (4, IN_FEATURES)
-    assert pr["args_0"].max == (4, IN_FEATURES)
+    input_name = format_tensor_name("x", "input")
+    assert pr[input_name].min == (1, IN_FEATURES)
+    assert pr[input_name].opt == (4, IN_FEATURES)
+    assert pr[input_name].max == (4, IN_FEATURES)
+
+
+def test_get_profiles_uses_backend_safe_compound_names():
+    def nested_input(inner):
+        return inner["a"]
+
+    sample = ((), {"inner": {"a": torch.randn(1, IN_FEATURES)}})
+    backend = TensorRTBackend()
+    backend._graph_spec = make_graph_spec(nested_input, sample, nested_input(**sample[1]))
+
+    profile = backend.get_profiles(graph_spec=backend._graph_spec, data=[])[0]
+
+    assert profile[format_tensor_name(("inner", "a"), "input")].min == (1, IN_FEATURES)
 
 
 def test_profiles_eq():
-    profile1 = TensorRTProfile().add_input_shape("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
-    profile2 = TensorRTProfile().add_input_shape("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    profile1 = TensorRTProfile().add_input_shape("x", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    profile2 = TensorRTProfile().add_input_shape("x", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
     assert profile1 == profile2
     assert hash(profile1) == hash(profile2)
 
-    profile1 = TensorRTProfile().add_input_shape("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
-    profile2 = TensorRTProfile().add_input_shape("args_1", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    profile1 = TensorRTProfile().add_input_shape("x", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    profile2 = TensorRTProfile().add_input_shape("y", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
     assert profile1 != profile2
 
-    profile1 = TensorRTProfile().add_input_shape("args_0", (2, IN_FEATURES), (2, IN_FEATURES), (2, IN_FEATURES))
-    profile2 = TensorRTProfile().add_input_shape("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
+    profile1 = TensorRTProfile().add_input_shape("x", (2, IN_FEATURES), (2, IN_FEATURES), (2, IN_FEATURES))
+    profile2 = TensorRTProfile().add_input_shape("x", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES))
     assert profile1 != profile2
 
 
@@ -633,14 +652,14 @@ def test_get_profiles_multiple_profiles(global_config_max_num_samples_all):
     """Test the get_profiles method with multiple profiles."""
 
     backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
-    backend._graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=SampleMetadata.from_inputs((torch.randn(1, IN_FEATURES),), {}, batch_size=1),
-        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),), batch_size=1),
+    sample = ((torch.randn(1, IN_FEATURES),), {})
+    backend._graph_spec = make_graph_spec(
+        _single_input,
+        sample,
+        (torch.randn(1, OUT_FEATURES),),
+        batch_size=1,
     )
-    backend._graph_spec.input_spec.update_shapes_seen(
-        SampleMetadata.from_inputs((torch.randn(8, IN_FEATURES),), {}, batch_size=8)
-    )
+    update_input_spec(backend._graph_spec, ((torch.randn(8, IN_FEATURES),), {}), batch_size=8)
 
     profiles = backend.get_profiles(
         graph_spec=backend._graph_spec,
@@ -651,15 +670,16 @@ def test_get_profiles_multiple_profiles(global_config_max_num_samples_all):
     )
     assert len(profiles) == 2
 
+    input_name = format_tensor_name("x", "input")
     pr = profiles[0]
-    assert pr["args_0"].min == (1, IN_FEATURES)
-    assert pr["args_0"].opt == (1, IN_FEATURES)
-    assert pr["args_0"].max == (1, IN_FEATURES)
+    assert pr[input_name].min == (1, IN_FEATURES)
+    assert pr[input_name].opt == (1, IN_FEATURES)
+    assert pr[input_name].max == (1, IN_FEATURES)
 
     pr = profiles[1]
-    assert pr["args_0"].min == (8, IN_FEATURES)
-    assert pr["args_0"].opt == (8, IN_FEATURES)
-    assert pr["args_0"].max == (8, IN_FEATURES)
+    assert pr[input_name].min == (8, IN_FEATURES)
+    assert pr[input_name].opt == (8, IN_FEATURES)
+    assert pr[input_name].max == (8, IN_FEATURES)
 
 
 def test_get_profiles_multiple_profiles_with_kwargs(global_config_max_num_samples_all):
@@ -671,35 +691,36 @@ def test_get_profiles_multiple_profiles_with_kwargs(global_config_max_num_sample
     ]
 
     backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
-    backend._graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=SampleMetadata.from_inputs(samples[0][0], samples[0][1], batch_size=1),
-        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),), batch_size=1),
+    backend._graph_spec = make_graph_spec(
+        _profile_inputs,
+        samples[0],
+        (torch.randn(1, OUT_FEATURES),),
+        batch_size=1,
     )
-    backend._graph_spec.input_spec.update_shapes_seen(
-        SampleMetadata.from_inputs(samples[1][0], samples[1][1], batch_size=8)
-    )
+    update_input_spec(backend._graph_spec, samples[1], batch_size=8)
 
     profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=samples)
     assert len(profiles) == 2
 
+    x_name = format_tensor_name("x", "input")
+    input_tensor_name = format_tensor_name("input_tensor", "input")
     pr = profiles[0]
-    assert pr["args_0"].min == (1, IN_FEATURES)
-    assert pr["args_0"].opt == (1, IN_FEATURES)
-    assert pr["args_0"].max == (1, IN_FEATURES)
+    assert pr[x_name].min == (1, IN_FEATURES)
+    assert pr[x_name].opt == (1, IN_FEATURES)
+    assert pr[x_name].max == (1, IN_FEATURES)
 
-    assert pr["kwargs_input_tensor"].min == (1, IN_FEATURES)
-    assert pr["kwargs_input_tensor"].opt == (1, IN_FEATURES)
-    assert pr["kwargs_input_tensor"].max == (1, IN_FEATURES)
+    assert pr[input_tensor_name].min == (1, IN_FEATURES)
+    assert pr[input_tensor_name].opt == (1, IN_FEATURES)
+    assert pr[input_tensor_name].max == (1, IN_FEATURES)
 
     pr = profiles[1]
-    assert pr["args_0"].min == (8, IN_FEATURES)
-    assert pr["args_0"].opt == (8, IN_FEATURES)
-    assert pr["args_0"].max == (8, IN_FEATURES)
+    assert pr[x_name].min == (8, IN_FEATURES)
+    assert pr[x_name].opt == (8, IN_FEATURES)
+    assert pr[x_name].max == (8, IN_FEATURES)
 
-    assert pr["kwargs_input_tensor"].min == (8, IN_FEATURES)
-    assert pr["kwargs_input_tensor"].opt == (8, IN_FEATURES)
-    assert pr["kwargs_input_tensor"].max == (8, IN_FEATURES)
+    assert pr[input_tensor_name].min == (8, IN_FEATURES)
+    assert pr[input_tensor_name].opt == (8, IN_FEATURES)
+    assert pr[input_tensor_name].max == (8, IN_FEATURES)
 
 
 def test_get_profiles_with_user_provided_profiles():
@@ -707,32 +728,63 @@ def test_get_profiles_with_user_provided_profiles():
 
     config_profiles = [
         TensorRTProfile().add_input_shape(
-            name="args_0", min_shape=(1, IN_FEATURES), opt_shape=(2, IN_FEATURES), max_shape=(4, IN_FEATURES)
+            path="x", min_shape=(1, IN_FEATURES), opt_shape=(2, IN_FEATURES), max_shape=(4, IN_FEATURES)
         )
     ]
     backend = TensorRTBackend(TensorRTBackendConfig(profiles=config_profiles))
-    backend._graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=SampleMetadata.from_inputs((torch.randn(1, IN_FEATURES),), {}),
-        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),)),
+    backend._graph_spec = make_graph_spec(
+        _single_input,
+        ((torch.randn(1, IN_FEATURES),), {}),
+        (torch.randn(1, OUT_FEATURES),),
     )
     profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=[])
     assert len(profiles) == 1
-    assert profiles[0]["args_0"].min == (1, IN_FEATURES)
-    assert profiles[0]["args_0"].opt == (2, IN_FEATURES)
-    assert profiles[0]["args_0"].max == (4, IN_FEATURES)
+    input_name = format_tensor_name("x", "input")
+    assert profiles[0][input_name].min == (1, IN_FEATURES)
+    assert profiles[0][input_name].opt == (2, IN_FEATURES)
+    assert profiles[0][input_name].max == (4, IN_FEATURES)
+
+
+def test_get_profiles_rejects_unknown_user_profile_input():
+    profile = TensorRTProfile().add_input_shape(
+        path="unknown", min_shape=(1, IN_FEATURES), opt_shape=(2, IN_FEATURES), max_shape=(4, IN_FEATURES)
+    )
+    backend = TensorRTBackend(TensorRTBackendConfig(profiles=[profile]))
+    graph_spec = make_graph_spec(
+        _single_input,
+        ((torch.randn(1, IN_FEATURES),), {}),
+        (torch.randn(1, OUT_FEATURES),),
+    )
+
+    with pytest.raises(AITuneUserInputError, match="unknown"):
+        backend.get_profiles(graph_spec=graph_spec, data=[])
+
+
+def test_get_profiles_rejects_missing_user_profile_input():
+    profile = TensorRTProfile().add_input_shape(
+        path="x", min_shape=(1, IN_FEATURES), opt_shape=(2, IN_FEATURES), max_shape=(4, IN_FEATURES)
+    )
+    backend = TensorRTBackend(TensorRTBackendConfig(profiles=[profile]))
+    graph_spec = make_graph_spec(
+        _two_inputs,
+        ((torch.randn(1, IN_FEATURES), torch.randn(1, IN_FEATURES)), {}),
+        (torch.randn(1, OUT_FEATURES),),
+    )
+
+    missing_name = format_tensor_name("arg", "input")
+    with pytest.raises(AITuneUserInputError, match=missing_name):
+        backend.get_profiles(graph_spec=graph_spec, data=[])
 
 
 def test_save_and_load_trt_optimization_profiles(tmp_path, global_config_max_num_samples_all):
     backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
-    backend._graph_spec = GraphSpec(
-        name="test_graph",
-        input_spec=SampleMetadata.from_inputs((torch.randn(1, IN_FEATURES),), {}, batch_size=1),
-        output_spec=SampleMetadata.from_outputs((torch.randn(1, OUT_FEATURES),), batch_size=1),
+    backend._graph_spec = make_graph_spec(
+        _single_input_with_options,
+        ((torch.randn(1, IN_FEATURES),), {}),
+        (torch.randn(1, OUT_FEATURES),),
+        batch_size=1,
     )
-    backend._graph_spec.input_spec.update_shapes_seen(
-        SampleMetadata.from_inputs((torch.randn(8, IN_FEATURES),), {}, batch_size=8)
-    )
+    update_input_spec(backend._graph_spec, ((torch.randn(8, IN_FEATURES),), {}), batch_size=8)
     samples = [
         ((torch.randn(1, IN_FEATURES),), {"input_tensor": torch.randn(1, IN_FEATURES)}),
         ((torch.randn(8, IN_FEATURES),), {"input_tensor": torch.randn(8, IN_FEATURES)}),
@@ -747,13 +799,14 @@ def test_save_and_load_trt_optimization_profiles(tmp_path, global_config_max_num
     loaded_profiles = backend._load_trt_optimization_profiles(trt_optimization_profiles_path)
 
     assert len(loaded_profiles) == 2
-    assert loaded_profiles[0]["args_0"].min == (1, IN_FEATURES)
-    assert loaded_profiles[0]["args_0"].opt == (1, IN_FEATURES)
-    assert loaded_profiles[0]["args_0"].max == (1, IN_FEATURES)
+    input_name = format_tensor_name("x", "input")
+    assert loaded_profiles[0][input_name].min == (1, IN_FEATURES)
+    assert loaded_profiles[0][input_name].opt == (1, IN_FEATURES)
+    assert loaded_profiles[0][input_name].max == (1, IN_FEATURES)
 
-    assert loaded_profiles[1]["args_0"].min == (8, IN_FEATURES)
-    assert loaded_profiles[1]["args_0"].opt == (8, IN_FEATURES)
-    assert loaded_profiles[1]["args_0"].max == (8, IN_FEATURES)
+    assert loaded_profiles[1][input_name].min == (8, IN_FEATURES)
+    assert loaded_profiles[1][input_name].opt == (8, IN_FEATURES)
+    assert loaded_profiles[1][input_name].max == (8, IN_FEATURES)
 
 
 def test_set_optimization_profiles_01(mocker, global_config_max_num_samples_all):
@@ -855,19 +908,21 @@ def test_tensorrt_backend_config_to_dict_with_profiles():
     config = TensorRTBackendConfig(
         profiles=[
             TensorRTProfile()
-            .add_input_shape("args_0", (1, 32), (1, 32), (1, 32))
-            .add_input_shape("kwargs_input_tensor", (1, 64), (1, 64), (1, 64)),
-            TensorRTProfile().add_input_shape("args_0", (8, 128), (8, 128), (8, 128)),
+            .add_input_shape("x", (1, 32), (1, 32), (1, 32))
+            .add_input_shape("input_tensor", (1, 64), (1, 64), (1, 64)),
+            TensorRTProfile().add_input_shape("x", (8, 128), (8, 128), (8, 128)),
         ]
     )
     new_config = TensorRTBackendConfig.from_dict(config.to_dict())
 
     assert len(new_config.profiles) == len(config.profiles)
-    assert "args_0" in new_config.profiles[0].profile
-    assert "kwargs_input_tensor" in new_config.profiles[0].profile
+    x_name = format_tensor_name("x", "input")
+    input_tensor_name = format_tensor_name("input_tensor", "input")
+    assert x_name in new_config.profiles[0].profile
+    assert input_tensor_name in new_config.profiles[0].profile
 
-    assert "args_0" in new_config.profiles[1].profile
-    assert "kwargs_input_tensor" not in new_config.profiles[1].profile
+    assert x_name in new_config.profiles[1].profile
+    assert input_tensor_name not in new_config.profiles[1].profile
 
 
 def test_tensorrt_backend_config_to_dict_with_profiles_mode():

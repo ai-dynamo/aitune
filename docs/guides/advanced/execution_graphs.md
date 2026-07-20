@@ -94,116 +94,97 @@ Let's start with a simple example:
 from dataclasses import dataclass
 import torch
 from aitune.torch.module.sample_metadata import SampleMetadata, InfoLevel
+
 # Create a simple tensor and capture its metadata
 simple_tensor = torch.randn(2, 3, 4)
-args = (simple_tensor,)
-kwargs = {}
+inputs = {"simple_tensor": simple_tensor}
 
-metadata = SampleMetadata.from_inputs(args, kwargs)
+metadata = SampleMetadata.from_inputs(inputs)
 print(repr(metadata))
 ```
 
 ```text
 Tensors:
-╒═══════════╤════════╤═══════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name   │ Shape     │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪════════╪═══════════╪═════════════╪═════════════╪═══════════════╡
-│ [0]       │ args_0 │ [2, 3, 4] │ [2, 3, 4]   │ [2, 3, 4]   │ torch.float32 │
-╘═══════════╧════════╧═══════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═══════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape     │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪═══════════╪═════════════╪═════════════╪═══════════════╡
+│ simple_tensor │ simple_tensor   │ [2, 3, 4] │ [2, 3, 4]   │ [2, 3, 4]   │ torch.float32 │
+╘═══════════════╧═════════════════╧═══════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
-The output shows that `SampleMetadata` automatically detected the tensor, assigned it a name (`args_0`), and captured its shape `[2, 3, 4]` along with data type information.
+The output shows that `SampleMetadata` automatically detected the tensor and captured its forward parameter path,
+shape, and data type.
 
 ## Creating Metadata from Inputs
 
 The primary way to create `SampleMetadata` is through the `from_inputs()` static method. This method accepts:
 
-- `args`: Positional arguments (typically a tuple)
-- `kwargs`: Keyword arguments (a dictionary)
+- `inputs`: A dictionary keyed by the module's forward parameter names
 - `strict`: Boolean flag controlling whether to track non-tensor data (default: `False`)
+
+AITune obtains this dictionary by binding a normalized `(args, kwargs)` call to its saved forward signature:
+
+```python
+forward_inputs = forward_signature.normalize(args, kwargs)
+metadata = SampleMetadata.from_inputs(forward_inputs.arguments)
+```
+
+Equivalent positional and keyword calls therefore produce the same parameter-keyed input representation.
 
 Let's explore different input patterns:
 
 ```python
-# Example 1: Multiple tensors in args
-args = (
-    torch.randn(2, 3),
-    torch.randn(4, 5),
-)
-kwargs = {}
+# Example 1: Multiple tensor parameters
+inputs = {
+    "first": torch.randn(2, 3),
+    "second": torch.randn(4, 5),
+}
 
-meta1 = SampleMetadata.from_inputs(args, kwargs)
-print("Example 1 - Multiple args:")
+meta1 = SampleMetadata.from_inputs(inputs)
+print("Example 1 - Multiple parameters:")
 print(repr(meta1))
 
 ```
 
 ```text
-Example 1 - Multiple args:
+Example 1 - Multiple parameters:
 Tensors:
-╒═══════════╤════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-│ [0]       │ args_0 │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
-├───────────┼────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ [1]       │ args_1 │ [4, 5]  │ [4, 5]      │ [4, 5]      │ torch.float32 │
-╘═══════════╧════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+│ first         │ first           │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ second        │ second          │ [4, 5]  │ [4, 5]      │ [4, 5]      │ torch.float32 │
+╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 ```python
-# Example 2: Tensors in kwargs
-args = ()
-kwargs = {
-    "input_tensor": torch.randn(3, 4),
-    "mask": torch.randn(3, 1),
-}
-
-meta2 = SampleMetadata.from_inputs(args, kwargs)
-print("Example 2 - Kwargs only:")
-print(repr(meta2))
-```
-
-```text
-Example 2 - Kwargs only:
-Tensors:
-╒══════════════════╤═════════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator          │ Name                │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-╞══════════════════╪═════════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-│ ['input_tensor'] │ kwargs_input_tensor │ [3, 4]  │ [3, 4]      │ [3, 4]      │ torch.float32 │
-├──────────────────┼─────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['mask']         │ kwargs_mask         │ [3, 1]  │ [3, 1]      │ [3, 1]      │ torch.float32 │
-╘══════════════════╧═════════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
-```
-
-```python
-# Example 3: Mixed primitives and tensors
-args = (
-    "some_string",           # Primitive - ignored by default
-    torch.randn(2, 2),       # Tensor - tracked
-    42,                      # Primitive - ignored by default
-)
-kwargs = {
+# Example 2: Mixed primitives and tensors
+inputs = {
+    "label": "some_string",       # Primitive - ignored by default
+    "tensor": torch.randn(2, 2),   # Tensor - tracked
+    "steps": 42,                   # Primitive - ignored by default
     "data": torch.randn(3, 3),
-    "learning_rate": 0.001,  # Primitive - ignored by default
+    "learning_rate": 0.001,        # Primitive - ignored by default
 }
 
-meta3 = SampleMetadata.from_inputs(args, kwargs)
-print("Example 3 - Mixed types (strict=False):")
-print(repr(meta3))
+meta2 = SampleMetadata.from_inputs(inputs)
+print("Example 2 - Mixed types (strict=False):")
+print(repr(meta2))
 print("\nNotice that only tensors are tracked!")
 
 ```
 
 ```text
-Example 3 - Mixed types (strict=False):
+Example 2 - Mixed types (strict=False):
 Tensors:
-╒═══════════╤═════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name        │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪═════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-│ [1]       │ args_1      │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
-├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['data']  │ kwargs_data │ [3, 3]  │ [3, 3]      │ [3, 3]      │ torch.float32 │
-╘═══════════╧═════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+│ tensor        │ tensor          │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ data          │ data            │ [3, 3]  │ [3, 3]      │ [3, 3]      │ torch.float32 │
+╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 Notice that only tensors are tracked!
@@ -224,17 +205,20 @@ Let's compare the two modes:
 
 ```python
 # Same inputs, different modes
-args = (1, 2, 3, torch.randn(2, 2))
-kwargs = {"t": torch.randn(2, 3), "other": "abc"}
+inputs = {
+    "values": (1, 2, 3, torch.randn(2, 2)),
+    "t": torch.randn(2, 3),
+    "other": "abc",
+}
 
 # Non-strict mode (default)
-meta_non_strict = SampleMetadata.from_inputs(args, kwargs, strict=False)
+meta_non_strict = SampleMetadata.from_inputs(inputs, strict=False)
 print("Non-Strict Mode (strict=False):")
 print(repr(meta_non_strict))
 print("\n" + "="*80 + "\n")
 
 # Strict mode
-meta_strict = SampleMetadata.from_inputs(args, kwargs, strict=True)
+meta_strict = SampleMetadata.from_inputs(inputs, strict=True)
 print("Strict Mode (strict=True):")
 print(repr(meta_strict))
 
@@ -243,37 +227,37 @@ print(repr(meta_strict))
 ```text
 Non-Strict Mode (strict=False):
 Tensors:
-╒═══════════╤══════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name     │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪══════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-│ [3]       │ args_3   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
-├───────────┼──────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['t']     │ kwargs_t │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
-╘═══════════╧══════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+│ values[3]     │ ('values', 3)   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ t             │ t               │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
 
 ================================================================================
 
 Strict Mode (strict=True):
 Tensors:
-╒═══════════╤══════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name     │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪══════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-│ [3]       │ args_3   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
-├───────────┼──────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['t']     │ kwargs_t │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
-╘═══════════╧══════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+│ values[3]     │ ('values', 3)   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ t             │ t               │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
 Other:
-╒═══════════╤══════════════╤═════════╕
-│ Locator   │ Name         │ Value   │
-╞═══════════╪══════════════╪═════════╡
-│ [0]       │ args_0       │ 1       │
-├───────────┼──────────────┼─────────┤
-│ [1]       │ args_1       │ 2       │
-├───────────┼──────────────┼─────────┤
-│ [2]       │ args_2       │ 3       │
-├───────────┼──────────────┼─────────┤
-│ ['other'] │ kwargs_other │ abc     │
-╘═══════════╧══════════════╧═════════╛
+╒═══════════════╤═════════════════╤═════════╕
+│ Access Path   │ Semantic Path   │ Value   │
+╞═══════════════╪═════════════════╪═════════╡
+│ values[0]     │ ('values', 0)   │ 1       │
+├───────────────┼─────────────────┼─────────┤
+│ values[1]     │ ('values', 1)   │ 2       │
+├───────────────┼─────────────────┼─────────┤
+│ values[2]     │ ('values', 2)   │ 3       │
+├───────────────┼─────────────────┼─────────┤
+│ other         │ other           │ abc     │
+╘═══════════════╧═════════════════╧═════════╛
 ```
 
 Notice that in strict mode, we see an additional "Other" section that includes the primitive values (1, 2, 3, and "abc").
@@ -297,92 +281,96 @@ class ModelInput:
     data: torch.Tensor
     metadata: str
 
-# Create complex nested structure
-args = [
-    "first_arg",
-    torch.randn(1),                                      # Simple tensor
-    (torch.randn(2), torch.randn(3)),                    # Tuple of tensors
-    {"t": torch.randn(4)},                               # Dict with tensor
-    ModelInput(data=torch.randn(5), metadata="info"),    # Dataclass with tensor
-]
-
-kwargs = {
+# Create complex nested structure keyed by forward parameter name
+inputs = {
+    "values": [
+        "first_arg",
+        torch.randn(1),                                      # Simple tensor
+        (torch.randn(2), torch.randn(3)),                    # Tuple of tensors
+        {"t": torch.randn(4)},                              # Dict with tensor
+        ModelInput(data=torch.randn(5), metadata="info"),   # Dataclass with tensor
+    ],
     "t1": torch.randn(1, 1),
     "t2": [torch.randn(2, 2), torch.randn(3, 3)],        # List of tensors
     "t3": ModelInput(data=torch.randn(4, 4), metadata="xyz"),
     "last": "other",
 }
 
-nested_meta = SampleMetadata.from_inputs(args, kwargs, strict=True)
+nested_meta = SampleMetadata.from_inputs(inputs, strict=True)
 print(repr(nested_meta))
 
 ```
 
 ```text
 Tensors:
-╒═════════════╤════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator     │ Name           │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-╞═════════════╪════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-│ [1]         │ args_1         │ [1]     │ [1]         │ [1]         │ torch.float32 │
-├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ [2][0]      │ args_2_0       │ [2]     │ [2]         │ [2]         │ torch.float32 │
-├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ [2][1]      │ args_2_1       │ [3]     │ [3]         │ [3]         │ torch.float32 │
-├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ [3]['t']    │ args_3_t       │ [4]     │ [4]         │ [4]         │ torch.float32 │
-├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ [4].data    │ args_4.data    │ [5]     │ [5]         │ [5]         │ torch.float32 │
-├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['t1']      │ kwargs_t1      │ [1, 1]  │ [1, 1]      │ [1, 1]      │ torch.float32 │
-├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['t2'][0]   │ kwargs_t2_0    │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
-├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['t2'][1]   │ kwargs_t2_1    │ [3, 3]  │ [3, 3]      │ [3, 3]      │ torch.float32 │
-├─────────────┼────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['t3'].data │ kwargs_t3.data │ [4, 4]  │ [4, 4]      │ [4, 4]      │ torch.float32 │
-╘═════════════╧════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+╒════════════════╤═══════════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path    │ Semantic Path         │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+╞════════════════╪═══════════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+│ values[1]      │ ('values', 1)         │ [1]     │ [1]         │ [1]         │ torch.float32 │
+├────────────────┼───────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ values[2][0]   │ ('values', 2, 0)      │ [2]     │ [2]         │ [2]         │ torch.float32 │
+├────────────────┼───────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ values[2][1]   │ ('values', 2, 1)      │ [3]     │ [3]         │ [3]         │ torch.float32 │
+├────────────────┼───────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ values[3]["t"] │ ('values', 3, 't')    │ [4]     │ [4]         │ [4]         │ torch.float32 │
+├────────────────┼───────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ values[4].data │ ('values', 4, 'data') │ [5]     │ [5]         │ [5]         │ torch.float32 │
+├────────────────┼───────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ t1             │ t1                    │ [1, 1]  │ [1, 1]      │ [1, 1]      │ torch.float32 │
+├────────────────┼───────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ t2[0]          │ ('t2', 0)             │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+├────────────────┼───────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ t2[1]          │ ('t2', 1)             │ [3, 3]  │ [3, 3]      │ [3, 3]      │ torch.float32 │
+├────────────────┼───────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ t3.data        │ ('t3', 'data')        │ [4, 4]  │ [4, 4]      │ [4, 4]      │ torch.float32 │
+╘════════════════╧═══════════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
 Other:
-╒═════════════════╤════════════════════╤═══════════╕
-│ Locator         │ Name               │ Value     │
-╞═════════════════╪════════════════════╪═══════════╡
-│ [0]             │ args_0             │ first_arg │
-├─────────────────┼────────────────────┼───────────┤
-│ [4].metadata    │ args_4.metadata    │ info      │
-├─────────────────┼────────────────────┼───────────┤
-│ ['last']        │ kwargs_last        │ other     │
-├─────────────────┼────────────────────┼───────────┤
-│ ['t3'].metadata │ kwargs_t3.metadata │ xyz       │
-╘═════════════════╧════════════════════╧═══════════╛
+╒════════════════════╤═══════════════════════════╤═══════════╕
+│ Access Path        │ Semantic Path             │ Value     │
+╞════════════════════╪═══════════════════════════╪═══════════╡
+│ values[0]          │ ('values', 0)             │ first_arg │
+├────────────────────┼───────────────────────────┼───────────┤
+│ values[4].metadata │ ('values', 4, 'metadata') │ info      │
+├────────────────────┼───────────────────────────┼───────────┤
+│ t3.metadata        │ ('t3', 'metadata')        │ xyz       │
+├────────────────────┼───────────────────────────┼───────────┤
+│ last               │ last                      │ other     │
+╘════════════════════╧═══════════════════════════╧═══════════╛
 ```
 
-### Understanding Locators
+### Understanding Paths
 
-The **Locator** column shows the path to each tensor in the nested structure:
+The **Access Path** column uses Python-like access syntax rooted at the real forward parameter name:
 
-- `[1]`: Second element of args (0-indexed)
-- `[2][0]`: First element of the tuple at args[2]
-- `[3]['t']`: Value at key 't' in the dict at args[3]
-- `[4].data`: The 'data' attribute of the dataclass at args[4]
-- `['t2'][0]`: First element of the list at kwargs['t2']
-- `['t3'].data`: The 'data' attribute of the dataclass at kwargs['t3']
+- `values[1]`: Second element of the `values` parameter
+- `values[2][0]`: First element of the tuple at `values[2]`
+- `values[3]["t"]`: Value at key `"t"` in the dictionary at `values[3]`
+- `values[4].data`: The `data` attribute of the dataclass at `values[4]`
+- `t2[0]`: First element of the `t2` parameter
+- `t3.data`: The `data` attribute of the `t3` parameter
 
-This allows `SampleMetadata` to precisely locate and manipulate tensors in complex structures.
+The **Semantic Path** column shows the stable identity used to match inputs and configure them, for example
+`("values", 3, "t")`. Internally, a `Locator` also retains the container details required to retrieve or replace the
+value. Access paths are used in reports and as backend tensor IDs.
 
 ## Describing Metadata - InfoLevel
 
 `SampleMetadata` provides three levels of detail when displaying information, controlled by the `InfoLevel` enum:
 
-1. **`InfoLevel.SHORT`**: Compact representation with just tensor names
-2. **`InfoLevel.MEDIUM`**: Includes locators and current shapes (simple table format)
-3. **`InfoLevel.FULL`**: Complete details including min/max shapes and dtypes (fancy table format)
+1. **`InfoLevel.SHORT`**: Compact representation with just tensor access paths
+2. **`InfoLevel.MEDIUM`**: Includes access paths, semantic paths, and current shapes (simple table format)
+3. **`InfoLevel.FULL`**: Complete details including both paths, min/max shapes, and dtypes (fancy table format)
 
 Let's see the same metadata displayed at all three levels:
 
 ```python
 # Create sample metadata
-args = (torch.randn(2, 3), torch.randn(4, 5, 6))
-kwargs = {"mask": torch.randn(2, 1)}
-meta = SampleMetadata.from_inputs(args, kwargs)
+inputs = {
+    "first": torch.randn(2, 3),
+    "second": torch.randn(4, 5, 6),
+    "mask": torch.randn(2, 1),
+}
+meta = SampleMetadata.from_inputs(inputs)
 
 print("InfoLevel.SHORT:")
 print(meta.describe(InfoLevel.SHORT))
@@ -399,31 +387,31 @@ print(meta.describe(InfoLevel.FULL))
 
 ```text
 InfoLevel.SHORT:
-Tensors: args_0, args_1, kwargs_mask
+Tensors: first, second, mask
 
 ================================================================================
 
 InfoLevel.MEDIUM:
 Tensors:
-Locator    Name         Shape
----------  -----------  ---------
-[0]        args_0       [2, 3]
-[1]        args_1       [4, 5, 6]
-['mask']   kwargs_mask  [2, 1]
+Access Path    Semantic Path    Shape
+-------------  ---------------  ---------
+first          first            [2, 3]
+second         second           [4, 5, 6]
+mask           mask             [2, 1]
 
 ================================================================================
 
 InfoLevel.FULL:
 Tensors:
-╒═══════════╤═════════════╤═══════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name        │ Shape     │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪═════════════╪═══════════╪═════════════╪═════════════╪═══════════════╡
-│ [0]       │ args_0      │ [2, 3]    │ [2, 3]      │ [2, 3]      │ torch.float32 │
-├───────────┼─────────────┼───────────┼─────────────┼─────────────┼───────────────┤
-│ [1]       │ args_1      │ [4, 5, 6] │ [4, 5, 6]   │ [4, 5, 6]   │ torch.float32 │
-├───────────┼─────────────┼───────────┼─────────────┼─────────────┼───────────────┤
-│ ['mask']  │ kwargs_mask │ [2, 1]    │ [2, 1]      │ [2, 1]      │ torch.float32 │
-╘═══════════╧═════════════╧═══════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═══════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape     │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪═══════════╪═════════════╪═════════════╪═══════════════╡
+│ first         │ first           │ [2, 3]    │ [2, 3]      │ [2, 3]      │ torch.float32 │
+├───────────────┼─────────────────┼───────────┼─────────────┼─────────────┼───────────────┤
+│ second        │ second          │ [4, 5, 6] │ [4, 5, 6]   │ [4, 5, 6]   │ torch.float32 │
+├───────────────┼─────────────────┼───────────┼─────────────┼─────────────┼───────────────┤
+│ mask          │ mask            │ [2, 1]    │ [2, 1]      │ [2, 1]      │ torch.float32 │
+╘═══════════════╧═════════════════╧═══════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 The `FULL` level is particularly useful because it shows:
@@ -450,16 +438,14 @@ Let's see this in action:
 
 ```python
 # Create initial metadata with batch size 1
-args_initial = [
-    torch.randn(1),
-    torch.randn(2),
-    torch.randn(5),
-]
-kwargs_initial = {
+inputs_initial = {
+    "first": torch.randn(1),
+    "second": torch.randn(2),
+    "third": torch.randn(5),
     "data": torch.randn(1, 10),  # First dim batch, second dynamic
 }
 
-meta_initial = SampleMetadata.from_inputs(args_initial, kwargs_initial, strict=False, batch_size=1)
+meta_initial = SampleMetadata.from_inputs(inputs_initial, strict=False, batch_size=1)
 print("Initial Metadata (batch_size=1):")
 print(meta_initial.describe(InfoLevel.FULL))
 
@@ -468,31 +454,29 @@ print(meta_initial.describe(InfoLevel.FULL))
 ```text
 Initial Metadata (batch_size=1):
 Tensors:
-╒═══════════╤═════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name        │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪═════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-│ [0]       │ args_0      │ [1]     │ [1]         │ [1]         │ torch.float32 │
-├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ [1]       │ args_1      │ [2]     │ [2]         │ [2]         │ torch.float32 │
-├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ [2]       │ args_2      │ [5]     │ [5]         │ [5]         │ torch.float32 │
-├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['data']  │ kwargs_data │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.float32 │
-╘═══════════╧═════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+│ first         │ first           │ [1]     │ [1]         │ [1]         │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ second        │ second          │ [2]     │ [2]         │ [2]         │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ third         │ third           │ [5]     │ [5]         │ [5]         │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ data          │ data            │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.float32 │
+╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 ```python
 # Create second metadata with different shapes and batch size 2
-args_second = [
-    torch.randn(2),      # Doubled (batch axis)
-    torch.randn(5),      # Changed but not proportionally (dynamic)
-    torch.randn(15),     # Changed but not proportionally (dynamic)
-]
-kwargs_second = {
+inputs_second = {
+    "first": torch.randn(2),   # Doubled (batch axis)
+    "second": torch.randn(5),  # Changed but not proportionally (dynamic)
+    "third": torch.randn(15),  # Changed but not proportionally (dynamic)
     "data": torch.randn(2, 25),  # First dim doubled, second changed
 }
 
-meta_second = SampleMetadata.from_inputs(args_second, kwargs_second, strict=False, batch_size=2)
+meta_second = SampleMetadata.from_inputs(inputs_second, strict=False, batch_size=2)
 print("Second Metadata (batch_size=2):")
 print(meta_second.describe(InfoLevel.FULL))
 
@@ -501,17 +485,17 @@ print(meta_second.describe(InfoLevel.FULL))
 ```text
 Second Metadata (batch_size=2):
 Tensors:
-╒═══════════╤═════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name        │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪═════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-│ [0]       │ args_0      │ [2]     │ [2]         │ [2]         │ torch.float32 │
-├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ [1]       │ args_1      │ [5]     │ [5]         │ [5]         │ torch.float32 │
-├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ [2]       │ args_2      │ [15]    │ [15]        │ [15]        │ torch.float32 │
-├───────────┼─────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['data']  │ kwargs_data │ [2, 25] │ [2, 25]     │ [2, 25]     │ torch.float32 │
-╘═══════════╧═════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+│ first         │ first           │ [2]     │ [2]         │ [2]         │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ second        │ second          │ [5]     │ [5]         │ [5]         │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ third         │ third           │ [15]    │ [15]        │ [15]        │ torch.float32 │
+├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ data          │ data            │ [2, 25] │ [2, 25]     │ [2, 25]     │ torch.float32 │
+╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 ```python
@@ -525,17 +509,17 @@ print(meta_initial.describe(InfoLevel.FULL))
 ```text
 Updated Metadata (after seeing both samples):
 Tensors:
-╒═══════════╤═════════════╤════════════════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name        │ Shape              │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪═════════════╪════════════════════╪═════════════╪═════════════╪═══════════════╡
-│ [0]       │ args_0      │ ['batch0']         │ [1]         │ [2]         │ torch.float32 │
-├───────────┼─────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
-│ [1]       │ args_1      │ ['dim0']           │ [2]         │ [5]         │ torch.float32 │
-├───────────┼─────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
-│ [2]       │ args_2      │ ['dim0']           │ [5]         │ [15]        │ torch.float32 │
-├───────────┼─────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
-│ ['data']  │ kwargs_data │ ['batch0', 'dim1'] │ [1, 10]     │ [2, 25]     │ torch.float32 │
-╘═══════════╧═════════════╧════════════════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤════════════════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape              │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪════════════════════╪═════════════╪═════════════╪═══════════════╡
+│ first         │ first           │ ['batch0']         │ [1]         │ [2]         │ torch.float32 │
+├───────────────┼─────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+│ second        │ second          │ ['dim0']           │ [2]         │ [5]         │ torch.float32 │
+├───────────────┼─────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+│ third         │ third           │ ['dim0']           │ [5]         │ [15]        │ torch.float32 │
+├───────────────┼─────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+│ data          │ data            │ ['batch0', 'dim1'] │ [1, 10]     │ [2, 25]     │ torch.float32 │
+╘═══════════════╧═════════════════╧════════════════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 ### Understanding the Results
@@ -569,16 +553,22 @@ Let's see this in action:
 
 ```python
 # First, create metadata and teach it about batch axes
-args1 = [torch.randn(1, 5), torch.randn(2, 3)]
-kwargs1 = {"mask": torch.randn(1, 10)}
+inputs1 = {
+    "features": torch.randn(1, 5),
+    "stacked": torch.randn(2, 3),
+    "mask": torch.randn(1, 10),
+}
 
-meta = SampleMetadata.from_inputs(args1, kwargs1, batch_size=1)
+meta = SampleMetadata.from_inputs(inputs1, batch_size=1)
 
 # Second sample with batch size 2
-args2 = [torch.randn(2, 5), torch.randn(4, 3)]
-kwargs2 = {"mask": torch.randn(2, 10)}
+inputs2 = {
+    "features": torch.randn(2, 5),
+    "stacked": torch.randn(4, 3),
+    "mask": torch.randn(2, 10),
+}
 
-meta2 = SampleMetadata.from_inputs(args2, kwargs2, batch_size=2)
+meta2 = SampleMetadata.from_inputs(inputs2, batch_size=2)
 meta.update_shapes_seen(meta2)
 
 print("Learned Metadata:")
@@ -589,54 +579,57 @@ print(meta.describe(InfoLevel.FULL))
 ```text
 Learned Metadata:
 Tensors:
-╒═══════════╤═════════════╤════════════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name        │ Shape          │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪═════════════╪════════════════╪═════════════╪═════════════╪═══════════════╡
-│ [0]       │ args_0      │ ['batch0', 5]  │ [1, 5]      │ [2, 5]      │ torch.float32 │
-├───────────┼─────────────┼────────────────┼─────────────┼─────────────┼───────────────┤
-│ [1]       │ args_1      │ ['batch0', 3]  │ [2, 3]      │ [4, 3]      │ torch.float32 │
-├───────────┼─────────────┼────────────────┼─────────────┼─────────────┼───────────────┤
-│ ['mask']  │ kwargs_mask │ ['batch0', 10] │ [1, 10]     │ [2, 10]     │ torch.float32 │
-╘═══════════╧═════════════╧════════════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤════════════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape          │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪════════════════╪═════════════╪═════════════╪═══════════════╡
+│ features      │ features        │ ['batch0', 5]  │ [1, 5]      │ [2, 5]      │ torch.float32 │
+├───────────────┼─────────────────┼────────────────┼─────────────┼─────────────┼───────────────┤
+│ stacked       │ stacked         │ ['batch0', 3]  │ [2, 3]      │ [4, 3]      │ torch.float32 │
+├───────────────┼─────────────────┼────────────────┼─────────────┼─────────────┼───────────────┤
+│ mask          │ mask            │ ['batch0', 10] │ [1, 10]     │ [2, 10]     │ torch.float32 │
+╘═══════════════╧═════════════════╧════════════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 ```python
 # Now use make_batch to scale to a larger batch size
-original_args = [torch.randn(1, 5), torch.randn(2, 3)]
-original_kwargs = {"mask": torch.randn(1, 10)}
+original_inputs = {
+    "features": torch.randn(1, 5),
+    "stacked": torch.randn(2, 3),
+    "mask": torch.randn(1, 10),
+}
 
 print("Original shapes:")
-print(f"  args[0]: {original_args[0].shape}")
-print(f"  args[1]: {original_args[1].shape}")
-print(f"  kwargs['mask']: {original_kwargs['mask'].shape}")
+print(f"  features: {original_inputs['features'].shape}")
+print(f"  stacked: {original_inputs['stacked'].shape}")
+print(f"  mask: {original_inputs['mask'].shape}")
 print()
 
 # Scale to batch size 10
-batched_args, batched_kwargs = meta.make_batch(original_args, original_kwargs, batch_size=10)
+batched_inputs = meta.make_batch(original_inputs, batch_size=10)
 
 print("After make_batch(batch_size=10):")
-print(f"  args[0]: {batched_args[0].shape}")
-print(f"  args[1]: {batched_args[1].shape}")
-print(f"  kwargs['mask']: {batched_kwargs['mask'].shape}")
+print(f"  features: {batched_inputs['features'].shape}")
+print(f"  stacked: {batched_inputs['stacked'].shape}")
+print(f"  mask: {batched_inputs['mask'].shape}")
 
 ```
 
 ```text
 Original shapes:
-  args[0]: torch.Size([1, 5])
-  args[1]: torch.Size([2, 3])
-  kwargs['mask']: torch.Size([1, 10])
+  features: torch.Size([1, 5])
+  stacked: torch.Size([2, 3])
+  mask: torch.Size([1, 10])
 
 After make_batch(batch_size=10):
-  args[0]: torch.Size([10, 5])
-  args[1]: torch.Size([20, 3])
-  kwargs['mask']: torch.Size([10, 10])
+  features: torch.Size([10, 5])
+  stacked: torch.Size([20, 3])
+  mask: torch.Size([10, 10])
 ```
 
 Notice how:
 
 - The first dimensions (batch axes) scaled to match the target batch size of 10
-- `args[1]` has a multiplier of 2 (it's a stacked batch), so it scaled to 20 (10 × 2)
+- `stacked` has a multiplier of 2, so it scaled to 20 (10 × 2)
 - Non-batch dimensions (like the 5, 3, 10) remained unchanged
 
 ## TensorSpec Deep Dive
@@ -645,31 +638,30 @@ Notice how:
 
 ### TensorSpec Attributes
 
-- **`name`**: Symbolic name (e.g., `args_0`, `kwargs_mask`)
 - **`shape`**: Current shape representation (may include symbolic dimensions)
 - **`min_shape`**: Minimum dimensions observed
 - **`max_shape`**: Maximum dimensions observed
 - **`dtype`**: PyTorch data type
 - **`_bs_multipliers`**: Internal batch size multipliers for each axis
 
+Input identity is not part of `TensorSpec`. The paired `Locator` provides the parameter path, while `TensorSpec`
+contains only tensor properties.
+
 Let's inspect TensorSpec objects directly:
 
 ```python
 # Create metadata with dynamic shapes
-args1 = [torch.randn(1, 5)]
-kwargs1 = {"data": torch.randn(1, 10)}
-meta = SampleMetadata.from_inputs(args1, kwargs1, batch_size=1)
+inputs1 = {"features": torch.randn(1, 5), "data": torch.randn(1, 10)}
+meta = SampleMetadata.from_inputs(inputs1, batch_size=1)
 
-args2 = [torch.randn(2, 5)]
-kwargs2 = {"data": torch.randn(2, 20)}
-meta2 = SampleMetadata.from_inputs(args2, kwargs2, batch_size=2)
+inputs2 = {"features": torch.randn(2, 5), "data": torch.randn(2, 20)}
+meta2 = SampleMetadata.from_inputs(inputs2, batch_size=2)
 meta.update_shapes_seen(meta2)
 
 # Access individual TensorSpec objects
 print("Individual TensorSpec objects:\n")
 for locator, tensor_spec in meta.tensor_data:
-    print(f"Locator: {locator}")
-    print(f"  Name: {tensor_spec.name}")
+    print(f"Path: {locator.display_path}")
     print(f"  Shape: {tensor_spec.shape}")
     print(f"  Min Shape: {tensor_spec.min_shape}")
     print(f"  Max Shape: {tensor_spec.max_shape}")
@@ -682,8 +674,7 @@ for locator, tensor_spec in meta.tensor_data:
 ```text
 Individual TensorSpec objects:
 
-Locator: [0]
-  Name: args_0
+Path: features
   Shape: ['batch0', 5]
   Min Shape: [1, 5]
   Max Shape: [2, 5]
@@ -691,8 +682,7 @@ Locator: [0]
   Has batch axis: True
   Has dynamic axis: False
   Batch multipliers: {0: 1}
-Locator: ['data']
-  Name: kwargs_data
+Path: data
   Shape: ['batch0', 'batch1']
   Min Shape: [1, 10]
   Max Shape: [2, 20]
@@ -734,8 +724,7 @@ class ModelInputs:
     position_ids: torch.Tensor
 
 # Sample 1: batch_size=1, seq_len=10
-sample1_args = ()
-sample1_kwargs = {
+sample1_inputs = {
     "inputs": ModelInputs(
         input_ids=torch.randint(0, 1000, (1, 10)),
         attention_mask=torch.ones(1, 10),
@@ -743,7 +732,7 @@ sample1_kwargs = {
     )
 }
 
-metadata = SampleMetadata.from_inputs(sample1_args, sample1_kwargs, batch_size=1, strict=False)
+metadata = SampleMetadata.from_inputs(sample1_inputs, batch_size=1, strict=False)
 print("After Sample 1 (batch=1, seq_len=10):")
 print(metadata.describe(InfoLevel.FULL))
 ```
@@ -751,21 +740,20 @@ print(metadata.describe(InfoLevel.FULL))
 ```text
 After Sample 1 (batch=1, seq_len=10):
 Tensors:
-╒═══════════════════════════╤══════════════════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator                   │ Name                         │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════════════════════╪══════════════════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
-│ ['inputs'].input_ids      │ kwargs_inputs.input_ids      │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.int64   │
-├───────────────────────────┼──────────────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['inputs'].attention_mask │ kwargs_inputs.attention_mask │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.float32 │
-├───────────────────────────┼──────────────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
-│ ['inputs'].position_ids   │ kwargs_inputs.position_ids   │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.int64   │
-╘═══════════════════════════╧══════════════════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════════════╤══════════════════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path           │ Semantic Path                │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════════════╪══════════════════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+│ inputs.input_ids      │ ('inputs', 'input_ids')      │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.int64   │
+├───────────────────────┼──────────────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ inputs.attention_mask │ ('inputs', 'attention_mask') │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.float32 │
+├───────────────────────┼──────────────────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+│ inputs.position_ids   │ ('inputs', 'position_ids')   │ [1, 10] │ [1, 10]     │ [1, 10]     │ torch.int64   │
+╘═══════════════════════╧══════════════════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 ```python
 # Sample 2: batch_size=2, seq_len=15
-sample2_args = ()
-sample2_kwargs = {
+sample2_inputs = {
     "inputs": ModelInputs(
         input_ids=torch.randint(0, 1000, (2, 15)),
         attention_mask=torch.ones(2, 15),
@@ -773,7 +761,7 @@ sample2_kwargs = {
     )
 }
 
-metadata2 = SampleMetadata.from_inputs(sample2_args, sample2_kwargs, batch_size=2, strict=False)
+metadata2 = SampleMetadata.from_inputs(sample2_inputs, batch_size=2, strict=False)
 metadata.update_shapes_seen(metadata2)
 
 print("After Sample 2 (batch=2, seq_len=15):")
@@ -784,21 +772,20 @@ print(metadata.describe(InfoLevel.FULL))
 ```text
 After Sample 2 (batch=2, seq_len=15):
 Tensors:
-╒═══════════════════════════╤══════════════════════════════╤════════════════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator                   │ Name                         │ Shape              │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════════════════════╪══════════════════════════════╪════════════════════╪═════════════╪═════════════╪═══════════════╡
-│ ['inputs'].input_ids      │ kwargs_inputs.input_ids      │ ['batch0', 'dim1'] │ [1, 10]     │ [2, 15]     │ torch.int64   │
-├───────────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
-│ ['inputs'].attention_mask │ kwargs_inputs.attention_mask │ ['batch0', 'dim1'] │ [1, 10]     │ [2, 15]     │ torch.float32 │
-├───────────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
-│ ['inputs'].position_ids   │ kwargs_inputs.position_ids   │ ['batch0', 'dim1'] │ [1, 10]     │ [2, 15]     │ torch.int64   │
-╘═══════════════════════════╧══════════════════════════════╧════════════════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════════════╤══════════════════════════════╤════════════════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path           │ Semantic Path                │ Shape              │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════════════╪══════════════════════════════╪════════════════════╪═════════════╪═════════════╪═══════════════╡
+│ inputs.input_ids      │ ('inputs', 'input_ids')      │ ['batch0', 'dim1'] │ [1, 10]     │ [2, 15]     │ torch.int64   │
+├───────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+│ inputs.attention_mask │ ('inputs', 'attention_mask') │ ['batch0', 'dim1'] │ [1, 10]     │ [2, 15]     │ torch.float32 │
+├───────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+│ inputs.position_ids   │ ('inputs', 'position_ids')   │ ['batch0', 'dim1'] │ [1, 10]     │ [2, 15]     │ torch.int64   │
+╘═══════════════════════╧══════════════════════════════╧════════════════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 ```python
 # Sample 3: batch_size=4, seq_len=20
-sample3_args = ()
-sample3_kwargs = {
+sample3_inputs = {
     "inputs": ModelInputs(
         input_ids=torch.randint(0, 1000, (4, 20)),
         attention_mask=torch.ones(4, 20),
@@ -806,7 +793,7 @@ sample3_kwargs = {
     )
 }
 
-metadata3 = SampleMetadata.from_inputs(sample3_args, sample3_kwargs, batch_size=4, strict=False)
+metadata3 = SampleMetadata.from_inputs(sample3_inputs, batch_size=4, strict=False)
 metadata.update_shapes_seen(metadata3)
 
 print("After Sample 3 (batch=4, seq_len=20):")
@@ -817,15 +804,15 @@ print(metadata.describe(InfoLevel.FULL))
 ```text
 After Sample 3 (batch=4, seq_len=20):
 Tensors:
-╒═══════════════════════════╤══════════════════════════════╤════════════════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator                   │ Name                         │ Shape              │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════════════════════╪══════════════════════════════╪════════════════════╪═════════════╪═════════════╪═══════════════╡
-│ ['inputs'].input_ids      │ kwargs_inputs.input_ids      │ ['batch0', 'dim1'] │ [1, 10]     │ [4, 20]     │ torch.int64   │
-├───────────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
-│ ['inputs'].attention_mask │ kwargs_inputs.attention_mask │ ['batch0', 'dim1'] │ [1, 10]     │ [4, 20]     │ torch.float32 │
-├───────────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
-│ ['inputs'].position_ids   │ kwargs_inputs.position_ids   │ ['batch0', 'dim1'] │ [1, 10]     │ [4, 20]     │ torch.int64   │
-╘═══════════════════════════╧══════════════════════════════╧════════════════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════════════╤══════════════════════════════╤════════════════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path           │ Semantic Path                │ Shape              │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════════════╪══════════════════════════════╪════════════════════╪═════════════╪═════════════╪═══════════════╡
+│ inputs.input_ids      │ ('inputs', 'input_ids')      │ ['batch0', 'dim1'] │ [1, 10]     │ [4, 20]     │ torch.int64   │
+├───────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+│ inputs.attention_mask │ ('inputs', 'attention_mask') │ ['batch0', 'dim1'] │ [1, 10]     │ [4, 20]     │ torch.float32 │
+├───────────────────────┼──────────────────────────────┼────────────────────┼─────────────┼─────────────┼───────────────┤
+│ inputs.position_ids   │ ('inputs', 'position_ids')   │ ['batch0', 'dim1'] │ [1, 10]     │ [4, 20]     │ torch.int64   │
+╘═══════════════════════╧══════════════════════════════╧════════════════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 ### Analysis
@@ -840,8 +827,7 @@ This information can now be used by optimization backends to compile efficient c
 
 ```python
 # Now we can create inputs for any batch size!
-test_input_args = ()
-test_input_kwargs = {
+test_inputs = {
     "inputs": ModelInputs(
         input_ids=torch.randint(0, 1000, (2, 12)),
         attention_mask=torch.ones(2, 12),
@@ -850,18 +836,18 @@ test_input_kwargs = {
 }
 
 print("Original test input shapes:")
-print(f"  input_ids: {test_input_kwargs['inputs'].input_ids.shape}")
-print(f"  attention_mask: {test_input_kwargs['inputs'].attention_mask.shape}")
-print(f"  position_ids: {test_input_kwargs['inputs'].position_ids.shape}")
+print(f"  input_ids: {test_inputs['inputs'].input_ids.shape}")
+print(f"  attention_mask: {test_inputs['inputs'].attention_mask.shape}")
+print(f"  position_ids: {test_inputs['inputs'].position_ids.shape}")
 print()
 
 # Scale to batch size 8
-scaled_args, scaled_kwargs = metadata.make_batch(test_input_args, test_input_kwargs, batch_size=8)
+scaled_inputs = metadata.make_batch(test_inputs, batch_size=8)
 
 print("After scaling to batch_size=8:")
-print(f"  input_ids: {scaled_kwargs['inputs'].input_ids.shape}")
-print(f"  attention_mask: {scaled_kwargs['inputs'].attention_mask.shape}")
-print(f"  position_ids: {scaled_kwargs['inputs'].position_ids.shape}")
+print(f"  input_ids: {scaled_inputs['inputs'].input_ids.shape}")
+print(f"  attention_mask: {scaled_inputs['inputs'].attention_mask.shape}")
+print(f"  position_ids: {scaled_inputs['inputs'].position_ids.shape}")
 print("\nNote: Batch dimension scaled to 8, but sequence length (dim1) remained at 12")
 
 ```
@@ -886,7 +872,7 @@ Note: Batch dimension scaled to 8, but sequence length (dim1) remained at 12
 
 1. **Purpose**: `SampleMetadata` captures and tracks metadata about tensors in complex data structures, enabling model optimization and dynamic batching.
 
-2. **Creation**: Use `SampleMetadata.from_inputs(args, kwargs, strict=bool)` to create metadata from function inputs.
+2. **Creation**: Use `SampleMetadata.from_inputs(inputs, strict=bool)` with inputs keyed by forward parameter name.
 
 3. **Strict Mode**: Controls whether only tensors (`strict=False`) or all data types (`strict=True`) are tracked.
 

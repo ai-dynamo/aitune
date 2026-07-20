@@ -14,8 +14,8 @@ import torch.nn as nn
 
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
-from aitune.torch.utils.module import get_forward_arguments_names
 from aitune.torch.utils.shapes import build_dynamic_shapes, print_dynamic_shapes
+from aitune.torch.utils.tensor import format_tensor_name
 
 # torch.onnx.export(dynamo=True, fallback=...) was removed in 2.11 (and some nightlies before).
 # Inspect the signature directly rather than relying on version string parsing.
@@ -104,27 +104,16 @@ class ONNXExporter:
         self, module: nn.Module, sample: Sample, graph_spec: GraphSpec, onnx_path: Path, verbose: bool | None = None
     ):
         """Export the module to ONNX using torch.dynamo."""
-        forward_args = get_forward_arguments_names(module.forward)
-        dynamic_shapes = self._create_dynamic_shapes(graph_spec, forward_args)
-        input_names = graph_spec.input_spec.get_names()
-        output_names = graph_spec.output_spec.get_names()
-
         args, kwargs = sample
 
         if graph_spec.input_spec.has_batch_axis():
             min_batch_size = graph_spec.get_min_batch_size() or 2
             batch_size = max(min_batch_size, 2)
+            args, kwargs = graph_spec.make_batch(args, kwargs, batch_size=batch_size)
 
-            args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size=batch_size)
-
-        ordered_kwargs = {}
-        for kwarg in forward_args[1]:
-            if kwarg in kwargs:
-                ordered_kwargs[kwarg] = kwargs[kwarg]
-
-                # WAR: Non-tensor kwargs have to be mentioned in dynamic shapes - adding missing ones
-                if kwarg not in dynamic_shapes:
-                    dynamic_shapes[kwarg] = {} if isinstance(kwargs[kwarg], (dict, list)) else None
+        dynamic_shapes = self._create_dynamic_shapes((args, kwargs), graph_spec)
+        input_names = [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
+        output_names = [format_tensor_name(locator.path, "output") for locator, _ in graph_spec.output_spec.tensor_data]
 
         print_dynamic_shapes(dynamic_shapes)
 
@@ -140,7 +129,7 @@ class ONNXExporter:
             module,
             f=onnx_path.as_posix(),
             args=args,
-            kwargs=ordered_kwargs,
+            kwargs=kwargs,
             dynamo=True,
             opset_version=self.opset_version,
             input_names=input_names,
@@ -158,25 +147,8 @@ class ONNXExporter:
         # Use standard torch ONNX export
         dynamic_axes = self._create_dynamic_axes(graph_spec)
 
-        # Use standard torch ONNX export
-        args_mapping, kwargs_mapping = graph_spec.input_spec.get_names_mapping()
-        _, forward_kwargs = get_forward_arguments_names(module.forward)
-
-        for argname in kwargs_mapping:
-            assert argname in forward_kwargs, f"""Argument {argname} is not in forward argspec {forward_kwargs}.
-            Collected args mapping: {args_mapping}
-            Collected kwargs mapping: {kwargs_mapping}
-            """
-
-        input_names = []
-        for args_names in args_mapping:
-            input_names.append(args_names)
-
-        for argname in forward_kwargs:
-            if argname in kwargs_mapping:
-                input_names.extend(kwargs_mapping[argname])
-
-        output_names = graph_spec.output_spec.get_names()
+        input_names = [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
+        output_names = [format_tensor_name(locator.path, "output") for locator, _ in graph_spec.output_spec.tensor_data]
 
         logger.info("Input names: %s", input_names)
         logger.info("Output names: %s", output_names)
@@ -199,20 +171,17 @@ class ONNXExporter:
 
     @staticmethod
     def _create_dynamic_shapes(
+        sample: Sample,
         graph_spec: GraphSpec,
-        forward_arguments: tuple[list[str], list[str]],
         use_auto: bool = True,
     ) -> dict[str, Any]:
-        """Using graph spec and forward arguments to infer how does dynamic shapes look like.
+        """Build dynamic shapes for the normalized export sample.
 
-        Delegates to ``aitune.torch.backend.dynamic_shapes.build_dynamic_shapes``,
-        passing ``kwargs={}`` because the caller in ``_export_dynamo`` runs its own
-        WAR for missing kwargs after this returns.
+        Delegates to ``aitune.torch.utils.shapes.build_dynamic_shapes``.
 
         Args:
+            sample: Normalized args and kwargs used for export.
             graph_spec: Input graph spec.
-            forward_arguments: Tuple of forward arguments and kwargs from the model's
-                forward signature.
             use_auto: When ``True`` (default), use ``Dim.AUTO`` for non-batch varying
                 axes so torch.export infers divisibility constraints automatically.
                 Pass ``False`` to get explicit ``Dim(name, min, max)`` instances —
@@ -225,7 +194,7 @@ class ONNXExporter:
             ``list(result.values())`` ordering matches the model signature.
         """
         logger.debug("Extracting dynamic shapes")
-        return build_dynamic_shapes({}, graph_spec, forward_arguments, use_auto=use_auto)
+        return build_dynamic_shapes(sample, graph_spec, use_auto=use_auto)
 
     def _create_dynamic_axes(self, graph_spec: GraphSpec) -> dict:
         """Create dynamic axes for the ONNX trace model.
@@ -238,15 +207,15 @@ class ONNXExporter:
         dynamic_axes = defaultdict(list)
 
         # Process input dynamic axes
-        for tensor_spec in graph_spec.input_spec.tensor_specs:
+        for locator, tensor_spec in graph_spec.input_spec.tensor_data:
             for ax, (d1, d2) in enumerate(zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)):
                 if d1 != d2:
-                    dynamic_axes[tensor_spec.name].append(ax)
+                    dynamic_axes[format_tensor_name(locator.path, "input")].append(ax)
 
         # Process output dynamic axes
-        for tensor_spec in graph_spec.output_spec.tensor_specs:
+        for locator, tensor_spec in graph_spec.output_spec.tensor_data:
             for ax, (d1, d2) in enumerate(zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)):
                 if d1 != d2:
-                    dynamic_axes[tensor_spec.name].append(ax)
+                    dynamic_axes[format_tensor_name(locator.path, "output")].append(ax)
 
         return dynamic_axes

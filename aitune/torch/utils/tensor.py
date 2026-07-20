@@ -2,9 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tensor utility helpers."""
 
-from typing import Any
+import re
+from typing import Any, Literal
 
 import torch
+
+
+def format_tensor_name(path: int | str | tuple[int | str, ...], prefix: Literal["input", "output"]) -> str:
+    """Format a semantic path as a readable, backend-safe tensor name."""
+    if path == ():
+        return prefix
+    readable_path = re.sub(r"[^A-Za-z0-9_]+", "_", repr(path)).strip("_")
+    return f"{prefix}_{readable_path}"
 
 
 def none_at_tensors(obj: Any) -> Any:

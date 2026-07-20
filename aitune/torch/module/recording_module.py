@@ -52,7 +52,7 @@ class RecordingModule:
         self._name = name
         self._config = config if config is not None else global_config
         self._forward_call = module.__call__
-        self._input_signature = ForwardSignature.from_callable(module.forward)
+        self._forward_signature = ForwardSignature.from_callable(module.forward)
 
         self._samples = defaultdict(list)
         self._total_num_samples = 0
@@ -71,13 +71,12 @@ class RecordingModule:
         forward call may have side effects on the inputs (like KV cache in LLM models).
         """
         logger.debug("Calling recording %s module.", self._name)
-        normalized_args, normalized_kwargs = self._input_signature.normalize(args, kwargs)
+        forward_inputs = self._forward_signature.normalize(args, kwargs)
         inputs_metadata = SampleMetadata.from_inputs(
-            normalized_args,
-            normalized_kwargs,
+            forward_inputs.arguments,
             strict=self._config.strict_mode,
         )
-        sample_args, sample_kwargs = self._copy_inputs(normalized_args, normalized_kwargs)
+        sample_args, sample_kwargs = self._copy_inputs(forward_inputs.args, forward_inputs.kwargs)
         outputs = self._forward_call(*args, **kwargs)
         outputs_metadata = SampleMetadata.from_outputs(outputs, strict=self._config.strict_mode)
 
@@ -91,9 +90,9 @@ class RecordingModule:
         return next(self._module.parameters()).device
 
     @property
-    def input_signature(self) -> ForwardSignature:
+    def forward_signature(self) -> ForwardSignature:
         """Get the forward signature used to normalize inputs."""
-        return self._input_signature
+        return self._forward_signature
 
     def record_sample(self, inputs, inputs_metadata, outputs_metadata) -> None:
         """Record a sample from the module."""
@@ -106,7 +105,10 @@ class RecordingModule:
             if inputs_metadata.llm_phase:
                 graph_name += f" (LLM phase {inputs_metadata.llm_phase})"
             self._graph_specs[inputs_metadata] = GraphSpec(
-                name=graph_name, input_spec=inputs_metadata, output_spec=outputs_metadata
+                name=graph_name,
+                input_spec=inputs_metadata,
+                output_spec=outputs_metadata,
+                forward_signature=self._forward_signature,
             )
 
         if len(self._samples[inputs_metadata]) < self._config.max_num_samples_stored:

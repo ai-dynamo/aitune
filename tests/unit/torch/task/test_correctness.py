@@ -6,8 +6,9 @@ import numpy as np
 import pytest
 import torch
 
+from aitune.torch.module.forward_signature import ForwardSignature
+from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.module.tensor_spec import TensorSpec
 from aitune.torch.task.correctness import (
     CorrectnessDynamicShapeError,
     CorrectnessTensorShapeError,
@@ -17,6 +18,28 @@ from aitune.torch.task.correctness import (
     check_dynamic_shape_boundary_inference,
     check_inference_output_correctness,
 )
+from tests.utilities.helpers import make_input_metadata
+
+
+def _forward(x, *, mask=None):
+    return x, mask
+
+
+FORWARD_SIGNATURE = ForwardSignature.from_callable(_forward)
+
+
+def _input_metadata(sample, batch_size: int) -> SampleMetadata:
+    return make_input_metadata(FORWARD_SIGNATURE, sample, batch_size=batch_size)
+
+
+def make_graph_spec(input_spec: SampleMetadata, output_spec: SampleMetadata | None = None) -> GraphSpec:
+    """Create a graph specification for the generic test forward call."""
+    return GraphSpec(
+        name="test_model",
+        input_spec=input_spec,
+        output_spec=output_spec or SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2),
+        forward_signature=FORWARD_SIGNATURE,
+    )
 
 
 def test_private_check_output_correctness_valid():
@@ -92,16 +115,16 @@ def test_private_dynamic_shape_boundary_samples_resize_args_and_kwargs():
     """Boundary samples should cover configured min/max input shapes from one stored sample."""
     args = (torch.arange(16, dtype=torch.float32).reshape(2, 8),)
     kwargs = {"mask": torch.arange(16, dtype=torch.float32).reshape(2, 8)}
-    input_spec = SampleMetadata.from_inputs(args, kwargs, batch_size=2)
+    input_spec = _input_metadata((args, kwargs), batch_size=2)
 
     min_args = (torch.randn(2, 4),)
     min_kwargs = {"mask": torch.randn(2, 4)}
     max_args = (torch.randn(2, 12),)
     max_kwargs = {"mask": torch.randn(2, 12)}
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs(min_args, min_kwargs, batch_size=2))
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs(max_args, max_kwargs, batch_size=2))
+    input_spec.update_shapes_seen(_input_metadata((min_args, min_kwargs), batch_size=2))
+    input_spec.update_shapes_seen(_input_metadata((max_args, max_kwargs), batch_size=2))
 
-    min_sample, max_sample = _dynamic_shape_boundary_samples((args, kwargs), input_spec)
+    min_sample, max_sample = _dynamic_shape_boundary_samples((args, kwargs), make_graph_spec(input_spec))
 
     assert min_sample[0][0].shape == torch.Size([2, 4])
     assert min_sample[1]["mask"].shape == torch.Size([2, 4])
@@ -112,17 +135,17 @@ def test_private_dynamic_shape_boundary_samples_resize_args_and_kwargs():
 def test_private_dynamic_shape_boundary_samples_returns_empty_for_static_shapes():
     """Static input specs should not add boundary correctness samples."""
     args = (torch.randn(2, 6),)
-    input_spec = SampleMetadata.from_inputs(args, {}, batch_size=2)
+    input_spec = _input_metadata((args, {}), batch_size=2)
 
-    assert _dynamic_shape_boundary_samples((args, {}), input_spec) == []
+    assert _dynamic_shape_boundary_samples((args, {}), make_graph_spec(input_spec)) == []
 
 
 def test_check_dynamic_shape_boundary_inference_reports_backend_failure():
     """Dynamic boundary inference failures should be raised as correctness errors."""
     args = (torch.randn(2, 8),)
-    input_spec = SampleMetadata.from_inputs(args, {}, batch_size=2)
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, 4),), {}, batch_size=2))
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, 12),), {}, batch_size=2))
+    input_spec = _input_metadata((args, {}), batch_size=2)
+    input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 4),), {}), batch_size=2))
+    input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 12),), {}), batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2)
 
     def infer(tensor):
@@ -135,7 +158,7 @@ def test_check_dynamic_shape_boundary_inference_reports_backend_failure():
         match="Dynamic shape correctness check failed.*min.*test_model.mock_backend",
     ) as exc_info:
         check_dynamic_shape_boundary_inference(
-            (args, {}), input_spec, output_spec, infer=infer, name="test_model.mock_backend"
+            (args, {}), make_graph_spec(input_spec, output_spec), infer=infer, name="test_model.mock_backend"
         )
 
     assert isinstance(exc_info.value.__cause__, RuntimeError)
@@ -144,9 +167,9 @@ def test_check_dynamic_shape_boundary_inference_reports_backend_failure():
 def test_check_dynamic_shape_boundary_inference_validates_output_shapes_without_value_check():
     """Dynamic boundary outputs should be shape-checked without finite-value checks."""
     args = (torch.randn(2, 8),)
-    input_spec = SampleMetadata.from_inputs(args, {}, batch_size=2)
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, 4),), {}, batch_size=2))
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, 12),), {}, batch_size=2))
+    input_spec = _input_metadata((args, {}), batch_size=2)
+    input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 4),), {}), batch_size=2))
+    input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 12),), {}), batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2)
     output_spec.update_shapes_seen(SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2))
     output_spec.update_shapes_seen(SampleMetadata.from_outputs(torch.zeros(2, 12), batch_size=2))
@@ -155,16 +178,16 @@ def test_check_dynamic_shape_boundary_inference_validates_output_shapes_without_
         return torch.full(tuple(tensor.shape), float("nan"))
 
     check_dynamic_shape_boundary_inference(
-        (args, {}), input_spec, output_spec, infer=infer, name="test_model.mock_backend"
+        (args, {}), make_graph_spec(input_spec, output_spec), infer=infer, name="test_model.mock_backend"
     )
 
 
 def test_check_dynamic_shape_boundary_inference_reports_output_shape_failure():
     """Dynamic boundary inference should fail when outputs do not match the graph output spec."""
     args = (torch.randn(2, 8),)
-    input_spec = SampleMetadata.from_inputs(args, {}, batch_size=2)
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, 4),), {}, batch_size=2))
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, 12),), {}, batch_size=2))
+    input_spec = _input_metadata((args, {}), batch_size=2)
+    input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 4),), {}), batch_size=2))
+    input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 12),), {}), batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2)
 
     def infer(tensor):
@@ -172,16 +195,16 @@ def test_check_dynamic_shape_boundary_inference_reports_output_shape_failure():
 
     with pytest.raises(CorrectnessTensorShapeError, match="output tensor shapes"):
         check_dynamic_shape_boundary_inference(
-            (args, {}), input_spec, output_spec, infer=infer, name="test_model.mock_backend"
+            (args, {}), make_graph_spec(input_spec, output_spec), infer=infer, name="test_model.mock_backend"
         )
 
 
 def test_check_dynamic_shape_boundary_inference_reports_missing_output_data():
     """Dynamic boundary inference should fail when the backend returns no output tensors."""
     args = (torch.randn(2, 8),)
-    input_spec = SampleMetadata.from_inputs(args, {}, batch_size=2)
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, 4),), {}, batch_size=2))
-    input_spec.update_shapes_seen(SampleMetadata.from_inputs((torch.randn(2, 12),), {}, batch_size=2))
+    input_spec = _input_metadata((args, {}), batch_size=2)
+    input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 4),), {}), batch_size=2))
+    input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 12),), {}), batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2)
 
     def infer(tensor):
@@ -190,87 +213,43 @@ def test_check_dynamic_shape_boundary_inference_reports_missing_output_data():
 
     with pytest.raises(CorrectnessTensorShapeError, match="Expected 1 output tensor"):
         check_dynamic_shape_boundary_inference(
-            (args, {}), input_spec, output_spec, infer=infer, name="test_model.mock_backend"
+            (args, {}), make_graph_spec(input_spec, output_spec), infer=infer, name="test_model.mock_backend"
         )
 
 
 def test_private_check_output_tensor_shapes_matching_shapes():
     """Test _check_output_tensor_shapes with matching tensor shapes."""
-    expected_specs = [
-        TensorSpec.from_tensor("output__0", torch.randn(2, 5), batch_size=2),
-        TensorSpec.from_tensor("output__1", torch.randn(2, 10), batch_size=2),
-    ]
-    actual_specs = [
-        TensorSpec.from_tensor("output__0", torch.randn(2, 5), batch_size=2),
-        TensorSpec.from_tensor("output__1", torch.randn(2, 10), batch_size=2),
-    ]
+    expected = SampleMetadata.from_outputs((torch.randn(2, 5), torch.randn(2, 10)), batch_size=2)
+    actual = SampleMetadata.from_outputs((torch.randn(2, 5), torch.randn(2, 10)), batch_size=2)
 
     # Should not raise any exception
-    _check_output_tensor_shapes(expected_specs, actual_specs)
+    _check_output_tensor_shapes(expected, actual)
 
 
 def test_private_check_output_tensor_shapes_matching_with_symbolic_dimensions():
     """Test _check_output_tensor_shapes with symbolic dimensions that should match."""
-    # Create specs with symbolic dimensions that should match
-    expected_specs = [
-        TensorSpec(
-            name="output__0",
-            shape=[2, "dim1"],
-            min_shape=[2, 5],
-            max_shape=[2, 10],
-            dtype=torch.float32,
-            _bs_multipliers=[1.0, 2.5],
-        ),
-        TensorSpec(
-            name="output__1",
-            shape=[2, "batch1"],
-            min_shape=[2, 10],
-            max_shape=[2, 10],
-            dtype=torch.float32,
-            _bs_multipliers=[1.0, 5.0],
-        ),
-    ]
-    actual_specs = [
-        TensorSpec(
-            name="output__0",
-            shape=[2, 7],  # Concrete dimension that falls within symbolic range
-            min_shape=[2, 7],
-            max_shape=[2, 7],
-            dtype=torch.float32,
-            _bs_multipliers=[1.0, 3.5],
-        ),
-        TensorSpec(
-            name="output__1",
-            shape=[2, 10],  # Concrete dimension that matches batch dimension
-            min_shape=[2, 10],
-            max_shape=[2, 10],
-            dtype=torch.float32,
-            _bs_multipliers=[1.0, 5.0],
-        ),
-    ]
+    expected = SampleMetadata.from_outputs((torch.randn(2, 5), torch.randn(2, 10)), batch_size=2)
+    expected.tensor_specs[0].shape = [2, "dim1"]
+    expected.tensor_specs[0].max_shape = [2, 10]
+    expected.tensor_specs[1].shape = [2, "batch1"]
+    actual = SampleMetadata.from_outputs((torch.randn(2, 7), torch.randn(2, 10)), batch_size=2)
 
     # Should not raise any exception
-    _check_output_tensor_shapes(expected_specs, actual_specs)
+    _check_output_tensor_shapes(expected, actual)
 
 
 def test_private_check_output_tensor_shapes_mismatched_shapes():
     """Test _check_output_tensor_shapes with mismatched tensor shapes."""
-    expected_specs = [
-        TensorSpec.from_tensor("output__0", torch.randn(2, 5), batch_size=2),
-        TensorSpec.from_tensor("output__1", torch.randn(2, 10), batch_size=2),
-        TensorSpec.from_tensor("output__2", torch.randn(2, 10, 20), batch_size=2),
-    ]
-    actual_specs = [
-        TensorSpec.from_tensor("output__0", torch.randn(1, 5), batch_size=1),  # Different batch size
-        TensorSpec.from_tensor("output__1", torch.randn(2, 8), batch_size=2),  # Different feature size
-        TensorSpec.from_tensor("output__2", torch.randn(2, 10), batch_size=2),
-    ]
+    expected = SampleMetadata.from_outputs(
+        (torch.randn(2, 5), torch.randn(2, 10), torch.randn(2, 10, 20)), batch_size=2
+    )
+    actual = SampleMetadata.from_outputs((torch.randn(1, 5), torch.randn(2, 8), torch.randn(2, 10)), batch_size=2)
 
     with pytest.raises(CorrectnessTensorShapeError) as exc_info:
-        _check_output_tensor_shapes(expected_specs, actual_specs)
+        _check_output_tensor_shapes(expected, actual)
 
     error_message = str(exc_info.value)
-    assert "Expected tensor output__0 to have shape [2, 5] but got [1, 5]" in error_message
-    assert "Expected tensor output__1 to have shape [2, 10] but got [2, 8]" in error_message
-    assert "Expected tensor output__2 to have shape [2, 10, 20] but got [2, 10]" in error_message
+    assert "Expected tensor output[0] to have shape [2, 5] but got [1, 5]" in error_message
+    assert "Expected tensor output[1] to have shape [2, 10] but got [2, 8]" in error_message
+    assert "Expected tensor output[2] to have shape [2, 10, 20] but got [2, 10]" in error_message
     assert "3 error(s) related to output tensor shapes" in error_message

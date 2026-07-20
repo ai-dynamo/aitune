@@ -98,13 +98,13 @@ def profile_backend(
     """
 
     def generator():
-        args, kwargs = data[0]
+        base_args, base_kwargs = data[0]
         if profiling_config.batching:
             for batch_size in profiling_config.batch_sizes:
-                args, kwargs = graph_spec.input_spec.make_batch(args, kwargs, batch_size)
+                args, kwargs = graph_spec.make_batch(base_args, base_kwargs, batch_size)
                 yield batch_size, args, kwargs
         else:
-            yield 1, args, kwargs
+            yield 1, base_args, base_kwargs
 
     return _profile(
         backend.infer,
@@ -117,7 +117,7 @@ def profile_backend(
 
 def _profile(
     func: Callable,
-    samples: Generator[tuple[int, list, dict], None, None],
+    samples: Generator[tuple[int, list | tuple, dict], None, None],
     profiling_config: ProfilingConfig,
     model_name: str | None = None,
     backend_details: str | None = None,
@@ -154,7 +154,7 @@ def _profile(
 def _run_profiling_batch_size(
     batch_size: int,
     model: Callable,
-    sample: tuple[list, dict],
+    sample: tuple[list | tuple, dict],
     profiling_config: ProfilingConfig,
     model_name: str,
     backend_details: str,

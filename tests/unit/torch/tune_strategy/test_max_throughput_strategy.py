@@ -155,8 +155,8 @@ def test_max_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_
     graph_spec = model.graph_spec(batch_sizes=[1, 2, 4, 8], device=torch_device)
 
     # sanity heck that graph spec input_spec was updated with max batch size
-    max_batch_sample = graph_spec.input_spec.make_batch(args=(sample,), kwargs={}, batch_size=8)
-    assert max_batch_sample[0][0].shape[0] == 8
+    max_batch_args, _ = graph_spec.make_batch((sample,), {}, batch_size=8)
+    assert max_batch_args[0].shape[0] == 8
 
     # Run tuning to update graph spec with max batch size
     strategy.tune(model, "test", graph_spec, [((sample,), {})], torch_device, cache_dir=tmp_path)

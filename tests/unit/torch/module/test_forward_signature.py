@@ -10,11 +10,15 @@ def test_equivalent_calls_have_same_normalized_layout():
 
     signature = ForwardSignature.from_callable(forward)
 
-    expected = ((1, 2), {})
-    assert signature.normalize((1, 2), {}) == expected
-    assert signature.normalize((1,), {"y": 2}) == expected
-    assert signature.normalize((), {"x": 1, "y": 2}) == expected
-    assert signature.normalize((), {"y": 2, "x": 1}) == expected
+    for args, kwargs in (
+        ((1, 2), {}),
+        ((1,), {"y": 2}),
+        ((), {"x": 1, "y": 2}),
+        ((), {"y": 2, "x": 1}),
+    ):
+        normalized = signature.normalize(args, kwargs)
+        assert normalized.args == (1, 2)
+        assert normalized.kwargs == {}
 
 
 def test_normalize_supports_all_parameter_kinds():
@@ -27,8 +31,9 @@ def test_normalize_supports_all_parameter_kinds():
         {"optional": 2, "keyword": 3, "extra": 4},
     )
 
-    assert normalized == ((1, 2), {"keyword": 3, "extra": 4})
-    assert forward(*normalized[0], **normalized[1]) == (1, 2, (), 3, {"extra": 4})
+    assert normalized.args == (1, 2)
+    assert normalized.kwargs == {"keyword": 3, "extra": 4}
+    assert forward(*normalized.args, **normalized.kwargs) == (1, 2, (), 3, {"extra": 4})
 
 
 def test_forward_signature_serialization_round_trip():

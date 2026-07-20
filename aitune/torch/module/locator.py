@@ -7,7 +7,7 @@ import itertools
 from collections import UserDict
 from collections.abc import Generator
 from enum import IntEnum
-from functools import cache
+from functools import cache, cached_property
 from typing import ClassVar
 
 import torch
@@ -75,7 +75,7 @@ class Locator:
     and mutation of values at those paths, as well as traversing nested contents and supporting
     custom types.
 
-    The path is stored as a sequence of (accessor, ObjectType) tuples. The accessor is either
+    The access path is stored as a sequence of (accessor, ObjectType) tuples. The accessor is either
     an integer index (for sequences) or a string key/attribute name (for dicts, dataclasses,
     or user types).
 
@@ -92,67 +92,74 @@ class Locator:
     _user_types: ClassVar[dict[type, bool]] = dict[type, bool]()
     _ignored_types: ClassVar[set[type]] = set()
 
-    __slots__ = ("_path",)
-
-    def __init__(self, path: tuple[tuple[int | str, ObjectType], ...]):
+    def __init__(self, access_path: tuple[tuple[int | str, ObjectType], ...], is_output: bool = False):
         """Initialize the locator.
 
         Args:
-            path: Tuple of (accessor, ObjectType) tuples defining the path
+            access_path: Tuple of (accessor, ObjectType) tuples defining the path
                 through a nested structure. The accessor is an int for sequences
                 or a str for dicts/dataclasses/user types.
+            is_output: Whether the locator points into forward outputs.
         """
-        self._path = path  # make it immutable
+        self._access_path = access_path  # make it immutable
+        self._is_output = is_output
 
     @property
     def depth(self) -> int:
         """Get the depth of the locator."""
-        return len(self._path)
+        return len(self._access_path)
 
     @property
     def leaf_name(self) -> int | str:
         """Get the leaf of the locator."""
-        return self._path[-1][0]
+        return self._access_path[-1][0]
 
     @property
     def root_name(self) -> int | str:
         """Get the root of the locator."""
-        return self._path[0][0] if self._path else ""
-
-    @staticmethod
-    @cache
-    def _compute_sanitized_name(path: tuple) -> str:
-        """Compute the sanitized name for a given path."""
-        result = []
-        for accessor, obj_type in path:
-            if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
-                result.append(f".{accessor}")
-            else:
-                result.append(f"_{accessor}")
-        return "".join(result)
+        return self._access_path[0][0] if self._access_path else ""
 
     @property
-    def sanitized_name(self) -> str:
-        """Returns a sanitized string representation for tensor names."""
-        return self._compute_sanitized_name(self._path)
+    def path(self) -> int | str | tuple[int | str, ...]:
+        """Get the semantic path, without the container types in the access path. Example ``("inputs", "tokens", 0)``."""
+        accessors = tuple(accessor for accessor, _ in self._access_path)
+        return accessors[0] if len(accessors) == 1 else accessors
 
     def accessor_at(self, index: int) -> int | str:
         """Get the accessor at the given index."""
-        return self._path[index][0]
+        return self._access_path[index][0]
 
     def path_iter(self):
         """Yield (accessor, ObjectType) tuples for each step in the path."""
-        return iter(self._path)
+        return iter(self._access_path)
+
+    @cached_property
+    def display_path(self) -> str:
+        """Format the locator as a Python-like access path."""
+        result = "output" if self._is_output else ""
+        for index, (accessor, obj_type) in enumerate(self._access_path):
+            is_forward_parameter = (
+                not self._is_output and index == 0 and isinstance(accessor, str) and accessor.isidentifier()
+            )
+            if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
+                result += f".{accessor}"
+            elif is_forward_parameter:
+                result = str(accessor)
+            elif obj_type == ObjectType.SEQUENCE:
+                result += f"[{accessor}]"
+            elif obj_type == ObjectType.DICT:
+                result += f'["{accessor}"]' if isinstance(accessor, str) else f"[{accessor}]"
+        return result
 
     def __eq__(self, value: object, /) -> bool:
         """Equality operator."""
         if not isinstance(value, Locator):
             return False
-        return self._path == value._path
+        return self._access_path == value._access_path
 
     def __hash__(self) -> int:
         """Hash of the locator."""
-        return hash(self._path)
+        return hash(self._access_path)
 
     def __repr__(self):
         """Representation of the locator."""
@@ -160,19 +167,11 @@ class Locator:
 
     def __str__(self):
         """String representation of the locator."""
-        result = []
-        for accessor, obj_type in self._path:
-            if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
-                result.append(f".{accessor}")
-            elif obj_type == ObjectType.SEQUENCE:
-                result.append(f"[{accessor}]")
-            elif obj_type == ObjectType.DICT:
-                result.append(f"['{accessor}']")
-        return "".join(result)
+        return self.display_path
 
     def get_value(self, obj: object) -> object:
         """Get the value of the locator."""
-        for accessor, obj_type in self._path:
+        for accessor, obj_type in self._access_path:
             if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
                 obj = getattr(obj, accessor)
             else:
@@ -182,11 +181,11 @@ class Locator:
 
     def set_value(self, obj: object, value: object) -> object:
         """Set the value of the locator."""
-        num_paths = len(self._path)
+        num_paths = len(self._access_path)
         root = obj
         if num_paths == 0:
             return value
-        for i, (accessor, obj_type) in enumerate(self._path):
+        for i, (accessor, obj_type) in enumerate(self._access_path):
             if i == num_paths - 1:
                 break
             if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
@@ -200,7 +199,7 @@ class Locator:
             obj[accessor] = value  # type: ignore
             obj = tuple(obj)
             if i > 0:  # we have to modify parent with changed child reference
-                parent_locator = Locator(self._path[:i])
+                parent_locator = Locator(self._access_path[:i], self._is_output)
                 return parent_locator.set_value(root, obj)
             else:
                 return obj
@@ -295,7 +294,9 @@ class Locator:
         return parent_only_tensors
 
     @staticmethod
-    def find_leaves(obj: object, only_tensors: bool = False) -> Generator[tuple["Locator", object], None, None]:
+    def find_leaves(
+        obj: object, only_tensors: bool = False, is_output: bool = False
+    ) -> Generator[tuple["Locator", object], None, None]:
         """Walks the object and yields locators and their leaf values.
 
         Leaf value is anything that is stored in a sequence, dictionary, or dataclass. If `only_tensors` is True,
@@ -304,6 +305,7 @@ class Locator:
         Args:
             obj: The object to walk.
             only_tensors: Whether to only return tensors.
+            is_output: Whether the locators point into forward outputs.
 
         Yields:
             A tuple of (locator, value) where locator is the path to the leaf and value is the leaf value.
@@ -321,7 +323,7 @@ class Locator:
         if not iter_handler:
             # there is only a simple type that is not a container
             if not only_tensors or isinstance(obj, torch.Tensor):
-                yield Locator(()), obj  # type: ignore[arg-type]
+                yield Locator((), is_output), obj  # type: ignore[arg-type]
             return
 
         child_only_tensors = Locator._resolve_only_tensors(type(obj), only_tensors)
@@ -348,7 +350,7 @@ class Locator:
                 else:
                     # It is a leaf
                     if not current_only_tensors or isinstance(value, torch.Tensor):
-                        yield Locator(tuple(path)), value
+                        yield Locator(tuple(path), is_output), value
                     path.pop()
 
             except StopIteration:

@@ -98,12 +98,8 @@ if __name__ == "__main__":
         TensorRTBackend(
             config=TensorRTBackendConfig(
                 profiles=[
-                    TensorRTProfile().add_input_shape(
-                        "args_0", (16, 3, 224, 224), (16, 3, 224, 224), (16, 3, 224, 224)
-                    ),
-                    TensorRTProfile().add_input_shape(
-                        "args_0", (32, 3, 224, 224), (32, 3, 224, 224), (32, 3, 224, 224)
-                    ),
+                    TensorRTProfile().add_input_shape("x", (16, 3, 224, 224), (16, 3, 224, 224), (16, 3, 224, 224)),
+                    TensorRTProfile().add_input_shape("x", (32, 3, 224, 224), (32, 3, 224, 224), (32, 3, 224, 224)),
                 ],
             ),
         ),

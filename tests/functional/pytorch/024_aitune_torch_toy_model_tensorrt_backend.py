@@ -17,6 +17,7 @@ from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tuning import tune
+from aitune.torch.utils.tensor import format_tensor_name
 
 logger = getLogger(Path(__file__).stem)
 
@@ -77,7 +78,8 @@ def testing_multi_profile_with_samples():
     active_backend = next(iter(module.module.backends.values()))
     profiles = active_backend._trt_optimization_profiles
 
-    shapes = {tuple(profile["args_0"].min) for profile in profiles}
+    input_name = format_tensor_name("x", "input")
+    shapes = {tuple(profile[input_name].min) for profile in profiles}
 
     assert (8, 3, 448, 448) in shapes
     assert (2, 3, 448, 448) in shapes

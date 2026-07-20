@@ -21,6 +21,7 @@ from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.module import offload
+from aitune.torch.utils.tensor import format_tensor_name
 
 logger = getLogger(__name__)
 
@@ -204,22 +205,24 @@ class ONNXRuntimeBackend(Backend):
         """
         session_input_names = {inp.name for inp in self._session.get_inputs()}
         inputs: dict[str, Any] = {}
-        for locator, tensor_spec in self._graph_spec.input_spec.tensor_data:
-            if tensor_spec.name not in session_input_names:
-                logger.debug("Input: %s not found in session inputs", tensor_spec.name)
+        forward_inputs = self._graph_spec.forward_signature.normalize(args, kwargs)
+        for locator, _ in self._graph_spec.input_spec.tensor_data:
+            name = format_tensor_name(locator.path, "input")
+            if name not in session_input_names:
+                logger.debug("Input: %s not found in session inputs", name)
                 continue
-            source = args if tensor_spec.name.startswith("args") else kwargs
-            inputs[tensor_spec.name] = locator.get_value(source)
+            inputs[name] = locator.get_value(forward_inputs.arguments)
         return inputs
 
     def _prepare_outputs(self, outputs: dict[str, torch.Tensor]) -> Any:
         """Reconstruct original output structure from session output tensors."""
         result = copy.deepcopy(self._output_object)
-        for locator, tensor_spec in self._graph_spec.output_spec.tensor_data:
-            if tensor_spec.name in outputs:
-                result = locator.set_value(result, outputs[tensor_spec.name])
+        for locator, _ in self._graph_spec.output_spec.tensor_data:
+            name = format_tensor_name(locator.path, "output")
+            if name in outputs:
+                result = locator.set_value(result, outputs[name])
             else:
-                logger.debug("Output: %s not found in session outputs", tensor_spec.name)
+                logger.debug("Output: %s not found in session outputs", name)
         return result
 
     def _bind_inputs(self, io_binding: onnxruntime.IOBinding, inputs: dict[str, Any]) -> None:
