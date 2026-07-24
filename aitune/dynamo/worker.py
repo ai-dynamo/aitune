@@ -373,7 +373,8 @@ class _HighLevelDynamoWorker(DynamoWorker):
             model_type,
             endpoint,
             self._config.model_path,
-            served_name,
+            model_name=served_name,
+            **self._version_specific_register_model_kwargs(),
         )
         logger.info(
             "Registered '%s' with Dynamo frontend as %s model",
@@ -401,6 +402,18 @@ class _HighLevelDynamoWorker(DynamoWorker):
             result = await loop.run_in_executor(None, lambda: self._model_or_fn(typed_req))
 
         yield _pack_response(result, self._config)
+
+    def _version_specific_register_model_kwargs(self) -> dict:
+        """From version 1.3.0 dynamo introduces a new WorkerType enum and made it required."""
+        from dynamo.common import __version__ as dynamo_version
+        from packaging.version import Version
+
+        if Version(dynamo_version) >= Version("1.3.0"):
+            from dynamo.llm import WorkerType
+
+            return {"worker_type": WorkerType.Aggregated}
+        else:
+            return {}
 
 
 def dynamo_worker(
