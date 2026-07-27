@@ -14,6 +14,7 @@ from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
+from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -104,6 +105,15 @@ def test_recording(module):
     module(2)
     assert len(module.graph_specs) == 2
     assert module.state == ModuleState.RECORDING
+
+
+def test_recording_with_explicit_dynamic_shapes():
+    dynamic_shapes = {"x": (BatchDim("batch", min=1, opt=2, max=4), 5)}
+    module = Module(Identity(), TEST_MODULE_NAME, dynamic_shapes=dynamic_shapes)
+
+    module(torch.ones(2, 5))
+
+    assert module.graph_specs[0].dynamic_shapes == dynamic_shapes
 
 
 def test_passthrough(module):
@@ -355,10 +365,11 @@ def test_tune_with_torch_compile_backend_simulate_prefill_decode(module, torch_d
 def test_serialization(torch_device):
     """Test converting module to dictionary."""
     model = Identity()
-    module = Module(model, TEST_MODULE_NAME)
+    dynamic_shapes = {"x": (BatchDim("batch", min=1, opt=2, max=4), 5)}
+    module = Module(model, TEST_MODULE_NAME, dynamic_shapes=dynamic_shapes)
 
     # Record samples and tune the module
-    module(torch.tensor(1))
+    module(torch.ones(2, 5))
     strategy = _torch_inductor_strategy_for_wrapper_tests()
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
     assert module.state == ModuleState.TUNED
@@ -369,6 +380,7 @@ def test_serialization(torch_device):
     module_data = state_dict["test"]
     assert module_data[Module.TYPE_KEY] == Module.__name__
     assert module_data[Module.NAME_KEY] == TEST_MODULE_NAME
+    assert module_data[Module.DYNAMIC_SHAPES_KEY] == dynamic_shapes
     assert Module.TUNED_MODULE_KEY in module_data
 
     # Test from_dict
@@ -376,6 +388,7 @@ def test_serialization(torch_device):
     module = Module.from_dict(model, state_dict["test"], device=torch_device)
     assert module.state == ModuleState.TUNED
     assert module._self_name == TEST_MODULE_NAME
+    assert module._self_dynamic_shapes == dynamic_shapes
     assert isinstance(module._self_wrapper, TunedModule)
 
 

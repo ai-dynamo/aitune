@@ -6,6 +6,8 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
+from aitune.exceptions import AITuneUserInputError
+
 _PARAMETER_KINDS = {
     kind.name: kind
     for kind in (
@@ -16,6 +18,26 @@ _PARAMETER_KINDS = {
         inspect.Parameter.VAR_KEYWORD,
     )
 }
+
+ForwardInputPath = str | tuple[str | int, ...]
+
+
+def validate_forward_input_path(path: object) -> None:
+    """Validate a forward parameter name or nested path rooted at one."""
+    if isinstance(path, str):
+        if path:
+            return
+    elif isinstance(path, tuple):
+        if (
+            len(path) >= 2
+            and isinstance(path[0], str)
+            and path[0]
+            and all(isinstance(component, (str, int)) and not isinstance(component, bool) for component in path[1:])
+        ):
+            return
+    raise AITuneUserInputError(
+        f"Forward input path must be a non-empty parameter name or a nested path tuple, got {path!r}."
+    )
 
 
 @dataclass(frozen=True, slots=True)

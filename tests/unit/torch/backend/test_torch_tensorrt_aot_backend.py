@@ -13,6 +13,7 @@ from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackendConfig,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
+from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -164,9 +165,24 @@ def test_mock_build(
     assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is sentinel_exported
 
 
+@pytest.mark.parametrize(
+    ("dynamic_shapes", "expected_opt", "expected_max"),
+    [
+        pytest.param(None, 4, 4, id="inferred"),
+        pytest.param(
+            {"x": (BatchDim("batch", min=1, opt=2, max=8), 10)},
+            2,
+            8,
+            id="explicit",
+        ),
+    ],
+)
 def test_mock_build_exports_bounded_dynamic_shapes(
     mocker,
     tmp_path: Path,
+    dynamic_shapes,
+    expected_opt,
+    expected_max,
 ):
     model = SimpleModel().eval()
     sample_data = [
@@ -175,6 +191,8 @@ def test_mock_build_exports_bounded_dynamic_shapes(
         ((torch.randn(2, 10),), {}),
     ]
     graph_spec = _graph_spec_from_samples(model, sample_data)
+    if dynamic_shapes is not None:
+        graph_spec.dynamic_shapes = dynamic_shapes
     mock_torch_tensorrt = mocker.Mock()
     mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
     mock_torch_tensorrt.save = mocker.Mock(side_effect=_fake_torch_tensorrt_save)
@@ -193,7 +211,14 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     dim = dynamic_shapes["x"][0]
     assert dim is not torch.export.Dim.AUTO
     assert dim.min == 1
-    assert dim.max == 4
+    assert dim.max == expected_max
+    mock_torch_tensorrt.Input.assert_called_once_with(
+        min_shape=[1, 10],
+        opt_shape=[expected_opt, 10],
+        max_shape=[expected_max, 10],
+        dtype=torch.float32,
+        name=format_tensor_name("x", "input"),
+    )
 
 
 @requires_cuda

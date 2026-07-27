@@ -7,7 +7,9 @@ from unittest.mock import Mock
 import pytest
 import torch
 
+from aitune.exceptions import AITuneUserInputError
 from aitune.torch.config import AITuneConfig
+from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.module.recording_module import RecordingModule
 from tests.toy_models.torch_models import ToyTorchModel
 
@@ -165,3 +167,56 @@ def test_recording_raises_error_if_model_is_not_in_no_grad_mode():
     requires_grad_input = torch.tensor(1.0, requires_grad=True) + 1  # +1 fills grad buffer
     with pytest.raises(RuntimeError, match=r"Cannot copy model inputs\. Model is not in no_grad mode\."):
         rec_module(requires_grad_input)
+
+
+def test_recording_resolves_nested_shapes_and_shared_dimensions():
+    class Model(torch.nn.Module):
+        def forward(self, input_ids, options, extra):
+            return input_ids + options["mask"] + extra[:, : input_ids.shape[1]]
+
+    dynamic_shapes = {
+        "input_ids": (BatchDim("batch", min=1, opt=2, max=4), DynamicDim("sequence", min=2, opt=4, max=8)),
+        ("options", "mask"): (
+            BatchDim("batch", min=1, opt=2, max=4),
+            DynamicDim("sequence", min=2, opt=4, max=8),
+        ),
+    }
+    recording = RecordingModule(Model(), "encoder", dynamic_shapes=dynamic_shapes)
+
+    recording(torch.ones(2, 4), {"mask": torch.ones(2, 4)}, torch.ones(2, 5))
+    recording(torch.ones(2, 4), {"mask": torch.ones(2, 4)}, torch.ones(2, 7))
+
+    graph_spec = recording.graph_specs[0]
+    assert graph_spec.dynamic_shapes == dynamic_shapes
+    tensor_specs = {locator.path: spec for locator, spec in graph_spec.input_spec.tensor_data}
+    assert tensor_specs["extra"].max_shape == [2, 7]
+
+    with pytest.raises(AITuneUserInputError, match="must have the same size"):
+        recording(torch.ones(2, 4), {"mask": torch.ones(2, 5)}, torch.ones(2, 5))
+
+
+@pytest.mark.parametrize(
+    ("definition", "shape", "message"),
+    [
+        ((DynamicDim("size", min=1, max=4),), (2, 3), "expects rank 1"),
+        ((2, 3), (2, 4), "expects size 3"),
+        ((DynamicDim("size", min=2, max=4),), (1,), "between 2 and 4"),
+    ],
+)
+def test_recording_rejects_shapes_outside_the_definition(definition, shape, message):
+    recording = RecordingModule(torch.nn.Identity(), "identity", dynamic_shapes={"input": definition})
+
+    with pytest.raises(AITuneUserInputError, match=message):
+        recording(torch.ones(shape))
+
+
+def test_recording_rejects_configured_paths_that_were_never_observed():
+    recording = RecordingModule(
+        torch.nn.Identity(),
+        "identity",
+        dynamic_shapes={"missing": (DynamicDim("size", min=1, max=4),)},
+    )
+    recording(torch.ones(2))
+
+    with pytest.raises(AITuneUserInputError, match="did not match any recorded tensor"):
+        recording.validate_dynamic_shape_paths_recorded()

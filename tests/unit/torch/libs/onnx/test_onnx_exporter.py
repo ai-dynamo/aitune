@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import wrapt
 
+from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.libs.onnx.onnx_exporter import _ONNX_FALLBACK_SUPPORTED, ONNXExporter
 from aitune.torch.utils.module import get_forward_arguments_names
 from aitune.torch.utils.tensor import format_tensor_name
@@ -436,6 +437,20 @@ def test_should_work_basic_dynamic_shapes_explicit():
     dynamic_shapes = ONNXExporter._create_dynamic_shapes(sample, graph_spec, use_auto=False)
     assert dynamic_shapes["x"][0].min == 10
     assert dynamic_shapes["x"][0].max == 40
+
+
+def test_trace_dynamic_axes_use_explicit_dimension_names(tmp_path):
+    sample = ((torch.ones(2, 4), torch.ones(2, 4)), {})
+    graph_spec = make_graph_spec(lambda x, y: x + y, sample)
+    graph_spec.dynamic_shapes = {
+        "x": (BatchDim("batch", min=1, opt=2, max=8), DynamicDim("sequence", min=1, opt=4, max=16)),
+        "y": (BatchDim("batch", min=1, opt=2, max=8), DynamicDim("sequence", min=1, opt=4, max=16)),
+    }
+
+    dynamic_axes = ONNXExporter(tmp_path / "model.onnx")._create_dynamic_axes(graph_spec)
+
+    assert dynamic_axes[format_tensor_name("x", "input")] == {0: "batch", 1: "sequence"}
+    assert dynamic_axes[format_tensor_name("y", "input")] == {0: "batch", 1: "sequence"}
 
 
 def test_what_if_once_arg_once_kwarg():

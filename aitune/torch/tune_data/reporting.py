@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
 from aitune.torch.config import AITuneMode, config
+from aitune.torch.dynamic_shapes import dynamic_shapes_to_json
 from aitune.torch.tune_data.report_models import (
     BackendBuildReport,
     ExceptionInfo,
@@ -202,6 +203,7 @@ def report_graph_tune(graph_spec: GraphSpec, strategy: TuneStrategy):
         output_spec=graph_spec.output_spec.to_json_dict(),
         strategy_name=strategy.__class__.__name__,
         strategy_config=strategy.to_json_dict(),
+        dynamic_shapes=dynamic_shapes_to_json(graph_spec.dynamic_shapes),
     )
     module.graphs.append(graph)
     token = _active_graph.set(graph)

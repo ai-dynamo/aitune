@@ -124,7 +124,7 @@ class InspectedModulesInfo:
             List of ModuleInfo objects.
         """
         if min_execution_ratio is not None:
-            validation.ratio(min_execution_ratio)
+            validation.in_range(min_execution_ratio, min_value=0, max_value=1)
 
         modules = []
         sorted_modules = sorted(

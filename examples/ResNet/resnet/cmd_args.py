@@ -35,4 +35,11 @@ def get_parser():
         default=4,
         help="Maximum batch size (default: 4)",
     )
+    parser.add_argument(
+        "--dynamic-shapes",
+        type=int,
+        choices=(0, 1),
+        default=0,
+        help="Enable user-provided dynamic shapes (default: 0)",
+    )
     return parser

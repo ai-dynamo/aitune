@@ -6,6 +6,7 @@ title: "Changelog"
 # Changelog
 
 ## 0.5.0 (unreleased)
+- feat: allow AOT modules to declare explicit dynamic input shapes
 - feat: Add `MinLatencyStrategy` tune strategy that profiles all backends and selects the one with the lowest latency
 - feat: Add `LatencyBudgetStrategy` tune strategy that maximizes throughput while satisfying a latency budget
 - feat: validate model correctness at min and max dynamic shape boundaries

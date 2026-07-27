@@ -8,6 +8,7 @@ from typing import Any
 
 import torch
 
+from aitune.torch.dynamic_shapes import BatchDim, ShapeDefinition
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.module.recording_module import Sample
@@ -81,11 +82,12 @@ def axis_dims_for_tensor(
     in ``prepare_export_sample`` by expanding any size-1 dynamic axis to 2.
 
     With ``use_auto=False``, ``dim*`` axes get explicit ``Dim(name, min, max)``
-    instances instead of ``Dim.AUTO``. Required for downstream tooling that needs
-    concrete ranges (e.g. ONNXRuntime quantization shape inference). When
-    ``dim_cache`` is provided, axes with identical ``(min, max)`` ranges share the
-    same ``Dim`` instance — preserving cross-tensor equality without relying on
-    torch.export's auto-merge.
+    instances instead of ``Dim.AUTO``. Required by Torch-TensorRT AOT: it turns the
+    ``ExportedProgram`` into a TensorRT optimization profile, which needs a literal
+    min/max per dynamic axis, whereas a bare ``Dim.AUTO`` resolves to an unbounded
+    ``[2, int_oo]`` range. When ``dim_cache`` is provided, axes with identical
+    ``(min, max)`` ranges share the same ``Dim`` instance — preserving cross-tensor
+    equality without relying on torch.export's auto-merge.
     """
     axis_dims: dict[int, Any] = {}
     if batch_dim is not None:
@@ -108,6 +110,40 @@ def axis_dims_for_tensor(
     return axis_dims
 
 
+def axis_dims_for_shape_definition(
+    definition: ShapeDefinition,
+    dim_cache: dict[str, Any],
+    *,
+    use_auto: bool = True,
+) -> dict[int, Any]:
+    """Return the ``{axis_index: Dim}`` constraints for a user shape definition.
+
+    Non-batch axes become ``Dim.DYNAMIC(min, max)`` hints, which keep the user's bounds
+    without asking torch.export to prove every size in the range satisfies the model's
+    traced guards — ResNet-style stride arithmetic rejects most ranges outright.
+    ``BatchDim`` keeps an explicit named ``Dim`` so it stays shared across tensors and is
+    not specialised to the export sample's single batch size.
+
+    With ``use_auto=False`` every axis gets an explicit named ``Dim`` for Torch-TensorRT
+    AOT (see ``axis_dims_for_tensor``); repeated names reuse one instance via ``dim_cache``.
+    """
+    axis_dims = {}
+    for axis, dimension in enumerate(definition):
+        if isinstance(dimension, int):
+            continue
+        if use_auto and not isinstance(dimension, BatchDim):
+            axis_dims[axis] = torch.export.Dim.DYNAMIC(min=dimension.min, max=dimension.max)
+            continue
+        if dimension.name not in dim_cache:
+            dim_cache[dimension.name] = torch.export.Dim(
+                dimension.name,
+                min=dimension.min,
+                max=dimension.max,
+            )
+        axis_dims[axis] = dim_cache[dimension.name]
+    return axis_dims
+
+
 def build_dynamic_shapes(
     sample: Sample,
     graph_spec: GraphSpec,
@@ -127,17 +163,20 @@ def build_dynamic_shapes(
       UNet) and divisibility (e.g. spatial dims that must be multiples of 8). Axes
       whose min and max are identical are treated as static.
 
+    Explicit user definitions take precedence over inferred axes. Their bounds are always
+    preserved; see ``axis_dims_for_shape_definition`` for how each axis is expressed.
+
     ``Dim.AUTO`` 0/1 hint-specialisation is avoided by ``prepare_export_sample``,
     which expands any size-1 dynamic axis to 2 before the export call.
 
     Args:
         sample: The normalized args and kwargs passed to ``torch.export.export``.
         graph_spec: The recorded graph spec.
-        use_auto: When ``True`` (default), non-batch dynamic axes use ``Dim.AUTO``.
-            When ``False``, they get explicit ``Dim(name, min, max)`` instances shared
-            across tensors with identical ``(min, max)`` ranges. ``False`` is required
-            for downstream tooling that needs concrete ranges (e.g. ONNXRuntime
-            quantization shape inference).
+        use_auto: When ``True`` (default), non-batch dynamic axes are expressed as hints
+            and torch.export infers their constraints. When ``False``, they get explicit
+            ``Dim(name, min, max)`` instances shared across tensors with identical
+            ``(min, max)`` ranges. ``False`` is required by Torch-TensorRT AOT, which
+            needs a literal min/max per axis to build its TensorRT optimization profile.
 
     Returns:
         A dict mapping each forward parameter name to its ``{axis: Dim}`` constraints,
@@ -149,12 +188,21 @@ def build_dynamic_shapes(
     input_spec = graph_spec.input_spec
     args, kwargs = sample
     forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
-    batch_dim = make_batch_dim(input_spec.tensor_specs)
+    inferred_tensor_specs = [
+        tensor_spec
+        for locator, tensor_spec in input_spec.tensor_data
+        if graph_spec.get_shape_definition(locator) is None
+    ]
+    batch_dim = make_batch_dim(inferred_tensor_specs)
     dim_cache: dict | None = None if use_auto else {}
+    explicit_dim_cache: dict[str, Any] = {}
 
     result: dict[str, Any] = {}
     for locator, tensor_spec in input_spec.tensor_data:
-        if tensor_spec.has_batch_axis() or tensor_spec.has_dynamic_axis():
+        definition = graph_spec.get_shape_definition(locator)
+        if definition is not None:
+            dims = axis_dims_for_shape_definition(definition, explicit_dim_cache, use_auto=use_auto)
+        elif tensor_spec.has_batch_axis() or tensor_spec.has_dynamic_axis():
             dims = axis_dims_for_tensor(
                 tensor_spec,
                 batch_dim,
@@ -180,7 +228,7 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
     """Return a copy of ``sample`` with all dynamic axes having hint > 1.
 
     ``torch.export.export`` specialises any axis whose hint is 0 or 1 as a
-    compile-time constant, breaking inference at other sizes.  Two cases:
+    compile-time constant, breaking inference at other sizes. Three cases:
 
     - **batch* axes**: delegate to ``input_spec.make_batch(batch_size=min(max_batch_size, 2))``
       which scales all batch tensors consistently. When ``max_batch_size == 1``, the batch
@@ -190,6 +238,8 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
       truly dynamic (``min_shape < max_shape``) but has a current hint ≤ 1, double
       the tensor along that axis via ``torch.cat``.  A hint of 2 is sufficient to
       keep the dimension symbolic.
+    - **Explicit axes**: apply the same expansion when the configured range supports
+      a size of at least 2.
     """
     input_spec = graph_spec.input_spec
 
@@ -209,15 +259,23 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
         if not isinstance(tensor, torch.Tensor):
             continue
         modified = False
-        for i, entry in enumerate(tensor_spec.shape):
-            if (
-                isinstance(entry, str)
-                and entry.startswith("dim")
-                and tensor_spec.min_shape[i] < tensor_spec.max_shape[i]
-                and tensor_spec.max_shape[i] >= 2
-                and tensor.shape[i] <= 1
-            ):
-                tensor = torch.cat([tensor, tensor], dim=i)
+        definition = graph_spec.get_shape_definition(locator)
+        if definition is not None:
+            dynamic_axes = [axis for axis, dimension in enumerate(definition) if not isinstance(dimension, int)]
+        else:
+            dynamic_axes = [
+                axis
+                for axis, entry in enumerate(tensor_spec.shape)
+                if (
+                    isinstance(entry, str)
+                    and entry.startswith("dim")
+                    and tensor_spec.min_shape[axis] < tensor_spec.max_shape[axis]
+                    and tensor_spec.max_shape[axis] >= 2
+                )
+            ]
+        for axis in dynamic_axes:
+            if tensor.shape[axis] <= 1:
+                tensor = torch.cat([tensor, tensor], dim=axis)
                 modified = True
         if modified:
             forward_inputs.arguments = locator.set_value(forward_inputs.arguments, tensor)

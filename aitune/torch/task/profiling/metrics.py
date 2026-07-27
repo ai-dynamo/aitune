@@ -24,7 +24,7 @@ def is_throughput_saturated(
         True when throughput saturated between consecutive samples.
         False when verification disabled or not yet saturated.
     """
-    validation.ratio(min_throughput_gain_ratio)
+    validation.in_range(min_throughput_gain_ratio, min_value=0, max_value=1)
 
     if not prev_results:
         return False

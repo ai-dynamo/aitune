@@ -56,7 +56,7 @@ class ThroughputSaturatedProfilingStopStrategy(ProfilingStopStrategy):
 
     def __post_init__(self):
         """Validate ratio configuration."""
-        validation.ratio(self.min_throughput_gain_ratio)
+        validation.in_range(self.min_throughput_gain_ratio, min_value=0, max_value=1)
         validation.non_negative(self.throughput_backoff_limit)
 
     def should_stop(self, results: list[ProfilingResultEvent]) -> bool:

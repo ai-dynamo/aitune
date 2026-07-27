@@ -50,4 +50,4 @@ include = ["resnet"]
 resnet = ["**/*"]
 
 [tool.aitune]
-arguments = [{ "image-path" = "dog.webp" }]
+arguments = [{ "image-path" = "dog.webp" }, { "image-path" = "dog.webp", "dynamic-shapes" = 1 }]

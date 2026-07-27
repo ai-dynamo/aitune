@@ -9,7 +9,15 @@ import torch
 from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 from PIL import Image
 
-from aitune.torch import LocalTorchStorage, MaxThroughputStrategy, Module, save, tune
+from aitune.torch import (
+    BatchDim,
+    DynamicDim,
+    LocalTorchStorage,
+    MaxThroughputStrategy,
+    Module,
+    save,
+    tune,
+)
 from aitune.torch.backend import (
     ONNXAutoCastConfig,
     ONNXQuantizationConfig,
@@ -31,6 +39,7 @@ def tune_model(
     image_path,
     tuned_model_path,
     max_batch_size,
+    dynamic_shapes,
 ):
     """Tunes ResNet model.
 
@@ -39,6 +48,7 @@ def tune_model(
         image_path: Path to the input image file.
         tuned_model_path: Path to save the tuned model.
         max_batch_size: Maximum batch size.
+        dynamic_shapes: Whether to use user-provided dynamic shapes.
     """
     batch_sizes = [2**n for n in range(max_batch_size.bit_length())]
     logger.info("Tuning with batch sizes: %s", batch_sizes)
@@ -50,6 +60,13 @@ def tune_model(
     dataset = transform(img).to("cuda")
 
     module_name = f"example-{model_name}"
+
+    shape_definitions = None
+    if dynamic_shapes:
+        batch = BatchDim("batch", min=1, opt=max_batch_size, max=max_batch_size)
+        height = DynamicDim("spatial", min=224, opt=224, max=256)
+        width = DynamicDim("spatial", min=224, opt=224, max=256)
+        shape_definitions = {"x": (batch, 3, height, width)}
 
     module = Module(
         model,
@@ -86,6 +103,7 @@ def tune_model(
                 ),
             ]
         ).enable_find_max_batch_size(False),
+        dynamic_shapes=shape_definitions,
     )
 
     logger.info("Tuning module: %s", model_name)
@@ -109,6 +127,7 @@ def main():
         image_path=args.image_path,
         tuned_model_path=args.tuned_model_path,
         max_batch_size=args.max_batch_size,
+        dynamic_shapes=args.dynamic_shapes,
     )
 
 

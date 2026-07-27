@@ -4,6 +4,7 @@
 
 import pytest
 
+from aitune.exceptions import AITuneUserInputError
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.utils.tensor import format_tensor_name
 
@@ -43,6 +44,11 @@ def test_tensorrt_profile_add_input_shape(mock_polygraphy_profile):
 
     # Verify chainable API
     assert result == profile
+
+
+def test_tensorrt_profile_rejects_invalid_input_path():
+    with pytest.raises(AITuneUserInputError, match="Forward input path"):
+        TensorRTProfile().add_input_shape(("", 0), (1,), (2,), (4,))
 
 
 def test_tensorrt_profile_property():

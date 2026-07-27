@@ -1,7 +1,24 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from aitune.torch.module.forward_signature import ForwardSignature
+import pytest
+
+from aitune.exceptions import AITuneUserInputError
+from aitune.torch.module.forward_signature import ForwardSignature, validate_forward_input_path
+
+
+@pytest.mark.parametrize("path", ["input", ("input", 0), ("input", "nested")])
+def test_validate_forward_input_path_accepts_valid_paths(path):
+    assert validate_forward_input_path(path) is None
+
+
+@pytest.mark.parametrize(
+    "path",
+    [None, "", ("input",), ("", 0), (0, "nested"), ("input", True), ("input", None)],
+)
+def test_validate_forward_input_path_rejects_invalid_paths(path):
+    with pytest.raises(AITuneUserInputError, match="Forward input path"):
+        validate_forward_input_path(path)
 
 
 def test_equivalent_calls_have_same_normalized_layout():

@@ -137,7 +137,7 @@ def test_throughput_saturated_strategy_rejects_invalid_min_throughput_gain_ratio
 
 
 def test_throughput_saturated_strategy_rejects_negative_backoff_limit():
-    with pytest.raises(ValueError, match="value must not be negative - greater than or equal to 0"):
+    with pytest.raises(ValueError, match=r"value must not be negative, got -1\."):
         ThroughputSaturatedProfilingStopStrategy(throughput_backoff_limit=-1)
 
 
@@ -233,7 +233,7 @@ def test_measurement_stop_strategy_num_steps_get_events_returns_last_steps_after
 
 @pytest.mark.parametrize("warmup_samples", [0, -1])
 def test_measurement_stop_strategy_num_steps_rejects_non_positive_warmup_samples(warmup_samples: int):
-    with pytest.raises(ValueError, match="value must be positive - greater than 0"):
+    with pytest.raises(ValueError, match=rf"value must be positive, got {warmup_samples}\."):
         NumStepsMeasuringStopStrategy(warmup_samples=warmup_samples)
 
 

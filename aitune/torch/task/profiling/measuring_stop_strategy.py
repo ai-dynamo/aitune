@@ -84,7 +84,7 @@ class StableWindowMeasuringStopStrategy(MeasuringStopStrategy):
         self.warmup_samples = warmup_samples
         self.max_samples = max_samples
 
-        validation.ratio(self.max_cv_ratio)
+        validation.in_range(self.max_cv_ratio, min_value=0, max_value=1)
         validation.positive(self.window_size)
         validation.positive(self.max_samples)
         validation.positive(self.warmup_samples)

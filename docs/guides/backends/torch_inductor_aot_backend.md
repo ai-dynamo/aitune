@@ -89,8 +89,7 @@ torch._inductor.list_options()
 
 ## Dynamic Shapes
 
-Dynamic shapes are **inferred automatically** from the data samples passed to `ait.tune` — no
-manual configuration is required.
+By default, dynamic shapes are inferred automatically from the data samples passed to `ait.tune`.
 
 - **Batch axis**: detected when the same tensor dimension varies proportionally with `batch_size`
 - **Spatial / sequence axes**: detected when a dimension varies independently of batch size
@@ -111,6 +110,10 @@ data loader from stacking tensors of mismatched shapes.
 </Note>
 The backend uses `torch.export.Dim.AUTO` for spatial / sequence axes, letting PyTorch infer
 valid ranges and divisibility constraints from the model automatically.
+
+When recorded samples do not cover the full production range, provide explicit bounded dimensions on `ait.Module`.
+See [User-provided dynamic shapes](../aot_tuning.md#user-provided-dynamic-shapes) and the runnable
+[ResNet dynamic-shapes example](../../../examples/ResNet/README.md#user-provided-dynamic-shapes).
 
 ## Save and Load
 
@@ -136,7 +139,7 @@ The compiled `.pt2` runner is fully self-contained for inference.
 | **Compilation time**     | At `tune()` call                | At first inference call      |
 | **Artifact persistence** | Yes (`.pt2` file)               | No                           |
 | **Python overhead**      | None at inference               | Minimal (compiled graph)     |
-| **Dynamic shapes**       | Auto-detected from data         | Configurable via `dynamic=`  |
+| **Dynamic shapes**       | Inferred or explicitly configured | Configurable via `dynamic=`  |
 | **Save / Load**          | Supported                       | Supported (recompiles)       |
 | **Requires PyTorch**     | ≥ 2.6                           | Any                          |
 

@@ -15,6 +15,7 @@ import wrapt
 from aitune.torch.backend.backend import Backend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
+from aitune.torch.dynamic_shapes import DynamicShapes, validate_dynamic_shape_definitions
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule
@@ -70,6 +71,7 @@ class Module(wrapt.CallableObjectProxy):
 
     TYPE_KEY = "type"
     NAME_KEY = "name"
+    DYNAMIC_SHAPES_KEY = "dynamic_shapes"
     TUNED_MODULE_KEY = "tuned_module"
 
     def __init__(
@@ -78,6 +80,7 @@ class Module(wrapt.CallableObjectProxy):
         name: str | None = None,
         strategy: TuneStrategy | None = None,
         strategies: StrategyList | StrategyMap | None = None,
+        dynamic_shapes: DynamicShapes | None = None,
     ):
         """Initializes module.
 
@@ -86,7 +89,15 @@ class Module(wrapt.CallableObjectProxy):
             name: module name which differences from other tuned modules.
             strategy: optional strategy, which will be used for all encountered graphs
             strategies: list or dict of strategies, each for a graph
+            dynamic_shapes: Optional input shape definitions keyed by forward parameter paths. Dimensions
+                are fixed integers, `DynamicDim`, or `BatchDim` instances. Dynamic dimensions with the same name are
+                shared, even when they are separate objects.
         """
+        if dynamic_shapes is not None:
+            validate_dynamic_shape_definitions(dynamic_shapes)
+            # Keep module configuration isolated from mutations to the caller's dictionary.
+            dynamic_shapes = dict(dynamic_shapes)
+
         super().__init__(module)
         self._self_name = sanitize_model_name(name) or get_object_name(module)
         self._self_orig_forward = module.forward
@@ -100,6 +111,7 @@ class Module(wrapt.CallableObjectProxy):
         self._self_state = ModuleState.INIT
         self._self_wrapper = None
         self._self_prev_recording = None
+        self._self_dynamic_shapes = dynamic_shapes
 
         MODULE_REGISTRY.register(self._self_name, self)
 
@@ -200,6 +212,7 @@ class Module(wrapt.CallableObjectProxy):
                 self._self_wrapper = RecordingModule(
                     self.__wrapped__,
                     self._self_name,
+                    dynamic_shapes=self._self_dynamic_shapes,
                 )
             else:
                 # continue with previous recording
@@ -232,7 +245,11 @@ class Module(wrapt.CallableObjectProxy):
         if not Module.is_state_dict_valid(state_dict):
             raise ValueError(f"Invalid dictionary format for {Module.__class__.__name__}")
 
-        self = Module(module, state_dict[Module.NAME_KEY])
+        self = Module(
+            module,
+            state_dict[Module.NAME_KEY],
+            dynamic_shapes=state_dict[Module.DYNAMIC_SHAPES_KEY],
+        )
         self._self_state = ModuleState.TUNED
         self._self_wrapper = TunedModule.from_dict(module, state_dict[Module.TUNED_MODULE_KEY])
         self._deploy_wrapper(device)
@@ -255,6 +272,7 @@ class Module(wrapt.CallableObjectProxy):
         destination[prefix] = {
             self.TYPE_KEY: Module.__name__,  # self.__class__ returns wrapped class, use direct class object instead
             self.NAME_KEY: self._self_name,
+            self.DYNAMIC_SHAPES_KEY: self._self_dynamic_shapes,
             self.TUNED_MODULE_KEY: self._self_wrapper.to_dict(),  # pytype: disable=attribute-error
         }
         return destination
@@ -289,6 +307,7 @@ class Module(wrapt.CallableObjectProxy):
             device = device or self._self_device
 
             recording = cast(RecordingModule, self._self_wrapper)
+            recording.validate_dynamic_shape_paths_recorded()
             backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
             strategies = self._get_strategies_for_graph_specs(strategy, recording.graph_specs, dry_run)
 

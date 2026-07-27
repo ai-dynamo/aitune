@@ -32,7 +32,7 @@ class ExceptionInfo:
         )
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 @dataclass(kw_only=True)
@@ -59,6 +59,7 @@ class GraphTuneReport:
     output_spec: dict[str, Any]
     strategy_name: str
     strategy_config: dict[str, Any]
+    dynamic_shapes: list[dict[str, Any]] | None = None
     duration_s: float | None = None
     selected_backend: str | None = None
     strategy_results: list[dict[str, Any]] | None = None

@@ -985,6 +985,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
         If self._config.profiles is a list, return the user provided profiles.
         If self._config.profiles is ProfileMode.SINGLE, create a single profile from the graph spec.
         If self._config.profiles is ProfileMode.SAMPLES_USED, create profiles from shapes seen in samples.
+        Explicit module shape definitions always produce a single authoritative profile and cannot be combined with
+        user-provided TensorRT profiles.
 
         Args:
             graph_spec: Input graph spec
@@ -992,6 +994,13 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Returns:
             List of The Polygraphy Profile objects
         """
+        if graph_spec.dynamic_shapes:
+            if isinstance(self._config.profiles, list):
+                raise AITuneUserInputError(
+                    "TensorRT profiles cannot be provided together with module dynamic shape definitions."
+                )
+            return self._get_profiles_from_shapes()
+
         # if user provided profiles, return them
         if isinstance(self._config.profiles, list):
             input_names = {
@@ -1068,9 +1077,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
         max_shapes = {}
         for locator, tensor_spec in graph_spec.input_spec.tensor_data:
             input_name = format_tensor_name(locator.path, "input")
-            min_shapes[input_name] = tuple(tensor_spec.min_shape)
-            opt_shapes[input_name] = tuple(tensor_spec.max_shape)
-            max_shapes[input_name] = tuple(tensor_spec.max_shape)
+            min_shape, opt_shape, max_shape = graph_spec.get_effective_input_shapes(locator, tensor_spec)
+            min_shapes[input_name] = tuple(min_shape)
+            opt_shapes[input_name] = tuple(opt_shape)
+            max_shapes[input_name] = tuple(max_shape)
 
         return min_shapes, opt_shapes, max_shapes
 

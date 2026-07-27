@@ -6,6 +6,7 @@ import logging
 
 from polygraphy.backend.trt import Profile
 
+from aitune.torch.module.forward_signature import ForwardInputPath, validate_forward_input_path
 from aitune.torch.utils.tensor import format_tensor_name
 
 # Setup logger
@@ -25,7 +26,7 @@ class TensorRTProfile:
 
     def add_input_shape(
         self,
-        path: str | tuple[str | int, ...],
+        path: ForwardInputPath,
         min_shape: tuple[int, ...],
         opt_shape: tuple[int, ...],
         max_shape: tuple[int, ...],
@@ -41,6 +42,7 @@ class TensorRTProfile:
         Returns:
             The profile object for chaining
         """
+        validate_forward_input_path(path)
         name = format_tensor_name(path, "input")
         self._profile.add(name=name, min=min_shape, opt=opt_shape, max=max_shape)
         logger.debug(

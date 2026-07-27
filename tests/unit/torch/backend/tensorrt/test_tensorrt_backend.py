@@ -12,6 +12,7 @@ from aitune.exceptions import AITuneUserInputError
 from aitune.torch.backend.tensorrt.tensorrt_backend import ProfileMode, TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
+from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models.torch_models import ToyTorchModel
 from tests.utilities.helpers import make_graph_spec, requires_cuda, update_input_spec
@@ -606,6 +607,36 @@ def test_get_profiles_single_profile():
     assert pr[input_name].min == (1, IN_FEATURES)
     assert pr[input_name].opt == (4, IN_FEATURES)
     assert pr[input_name].max == (4, IN_FEATURES)
+
+
+def test_get_profiles_uses_explicit_shape_range():
+    backend = TensorRTBackend()
+    sample = ((torch.randn(2, IN_FEATURES),), {})
+    backend._graph_spec = make_graph_spec(_single_input, sample, (torch.randn(2, OUT_FEATURES),))
+    backend._graph_spec.dynamic_shapes = {
+        "x": (BatchDim("batch", min=1, opt=2, max=8), IN_FEATURES),
+    }
+
+    profile = backend.get_profiles(graph_spec=backend._graph_spec, data=[])[0]
+
+    input_name = format_tensor_name("x", "input")
+    assert profile[input_name].min == (1, IN_FEATURES)
+    assert profile[input_name].opt == (2, IN_FEATURES)
+    assert profile[input_name].max == (8, IN_FEATURES)
+
+
+def test_get_profiles_rejects_explicit_shapes_with_user_profiles():
+    configured_profile = TensorRTProfile().add_input_shape(
+        path="x", min_shape=(1, IN_FEATURES), opt_shape=(2, IN_FEATURES), max_shape=(8, IN_FEATURES)
+    )
+    backend = TensorRTBackend(TensorRTBackendConfig(profiles=[configured_profile]))
+    graph_spec = make_graph_spec(_single_input, ((torch.randn(2, IN_FEATURES),), {}))
+    graph_spec.dynamic_shapes = {
+        "x": (BatchDim("batch", min=1, opt=2, max=8), IN_FEATURES),
+    }
+
+    with pytest.raises(AITuneUserInputError, match="cannot be provided together"):
+        backend.get_profiles(graph_spec=graph_spec, data=[])
 
 
 def test_get_profiles_uses_backend_safe_compound_names():

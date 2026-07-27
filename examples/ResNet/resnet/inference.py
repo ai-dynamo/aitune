@@ -28,7 +28,7 @@ def add_args(parser):
 
 
 @annotate(name="inference", color="green")
-def do_inference(model_name, tuned_model_path, image_path, expected_class_id=None):
+def do_inference(model_name, tuned_model_path, image_path, expected_class_id=None, dynamic_shapes=False):
     """Do inference on a tuned ResNet model.
 
     Args:
@@ -36,6 +36,7 @@ def do_inference(model_name, tuned_model_path, image_path, expected_class_id=Non
         image_path: Path to the input image file.
         tuned_model_path: Path to the tuned model.
         expected_class_id: Expected class ID to verify the prediction against.
+        dynamic_shapes: Whether to run an unseen shape allowed by the user configuration.
     """
     model = get_model(model_name=model_name, pretrained=False)
     transform = get_transform(model)
@@ -44,6 +45,10 @@ def do_inference(model_name, tuned_model_path, image_path, expected_class_id=Non
     img = Image.open(image_path)
     x = transform(img).to("cuda")
     batch = x.unsqueeze(0)  # during tuning model sees batches, we have to unsqueeze to see single sample
+    if dynamic_shapes:
+        batch = torch.nn.functional.interpolate(batch, size=(256, 256), mode="bilinear", align_corners=False).repeat(
+            2, 1, 1, 1
+        )
     out = tuned_model(batch)
     actual_probs = torch.nn.functional.softmax(out[0], dim=0)
     class_id = torch.argmax(actual_probs)
@@ -66,6 +71,7 @@ def main():
         image_path=args.image_path,
         tuned_model_path=relocated_checkpoint_path(args.tuned_model_path),
         expected_class_id=args.expected_class_id,
+        dynamic_shapes=args.dynamic_shapes,
     )
 
 

@@ -9,6 +9,7 @@ import pytest
 
 from aitune.__version__ import __version__
 from aitune.torch.config import AITuneConfig, AITuneMode
+from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.tune_data.report_models import SCHEMA_VERSION, ExceptionInfo, ModuleInspectionReport
 from aitune.torch.tune_data.reporting import (
     _active_graph,
@@ -225,9 +226,33 @@ def test_end_tune_run_with_exception(enable_reporting):
 def _make_graph_spec(name="graph_0"):
     spec = MagicMock()
     spec.name = name
+    spec.dynamic_shapes = None
     spec.input_spec.to_json_dict.return_value = {"tensor_data": [{"name": "x"}]}
     spec.output_spec.to_json_dict.return_value = {"tensor_data": [{"name": "y"}]}
     return spec
+
+
+def test_graph_dynamic_shapes_are_json_serializable(enable_reporting):
+    graph_spec = _make_graph_spec()
+    graph_spec.dynamic_shapes = {
+        ("options", "mask"): (BatchDim("batch", min=1, opt=2, max=4), 128),
+    }
+
+    with report_tune_run(AITuneMode.DECLARATIVE):
+        with report_module_tune(module_name="encoder", num_parameters=100):
+            with report_graph_tune(graph_spec, _make_strategy()):
+                pass
+
+    graph = json.loads(enable_reporting.read_text())["modules"][0]["graphs"][0]
+    assert graph["dynamic_shapes"] == [
+        {
+            "path": ["options", "mask"],
+            "shape": [
+                {"type": "BatchDim", "name": "batch", "min": 1, "max": 4, "opt": 2},
+                128,
+            ],
+        }
+    ]
 
 
 def _make_strategy(name="MaxThroughputStrategy"):

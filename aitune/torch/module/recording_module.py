@@ -8,14 +8,15 @@ import tempfile
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
-from aitune.torch.module.forward_signature import ForwardSignature
+from aitune.torch.dynamic_shapes import DynamicShapes
+from aitune.torch.module.forward_signature import ForwardInputPath, ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.utils.path_utils import sanitize_filename
@@ -36,6 +37,7 @@ class RecordingModule:
         module: torch.nn.Module,
         name: str,
         config: AITuneConfig | None = None,
+        dynamic_shapes: DynamicShapes | None = None,
     ) -> None:
         """Initialize BaseModule.
 
@@ -43,6 +45,7 @@ class RecordingModule:
             module: module to be tuned.
             name: name of the module.
             config: Configuration for the module, if not provided, global config is used.
+            dynamic_shapes: Explicit input shape definitions.
         """
         super().__init__()
         if not isinstance(module, torch.nn.Module):
@@ -53,6 +56,7 @@ class RecordingModule:
         self._config = config if config is not None else global_config
         self._forward_call = module.__call__
         self._forward_signature = ForwardSignature.from_callable(module.forward)
+        self._dynamic_shapes = dynamic_shapes or {}
 
         self._samples = defaultdict(list)
         self._total_num_samples = 0
@@ -76,11 +80,14 @@ class RecordingModule:
             forward_inputs.arguments,
             strict=self._config.strict_mode,
         )
+        dynamic_shapes = {}
+        if self._dynamic_shapes:
+            dynamic_shapes = self._resolve_and_validate_dynamic_shapes(inputs_metadata)
         sample_args, sample_kwargs = self._copy_inputs(forward_inputs.args, forward_inputs.kwargs)
         outputs = self._forward_call(*args, **kwargs)
         outputs_metadata = SampleMetadata.from_outputs(outputs, strict=self._config.strict_mode)
 
-        self.record_sample((sample_args, sample_kwargs), inputs_metadata, outputs_metadata)
+        self.record_sample((sample_args, sample_kwargs), inputs_metadata, outputs_metadata, dynamic_shapes)
 
         return outputs
 
@@ -94,11 +101,14 @@ class RecordingModule:
         """Get the forward signature used to normalize inputs."""
         return self._forward_signature
 
-    def record_sample(self, inputs, inputs_metadata, outputs_metadata) -> None:
+    def record_sample(
+        self, inputs, inputs_metadata, outputs_metadata, dynamic_shapes: DynamicShapes | None = None
+    ) -> None:
         """Record a sample from the module."""
         if inputs_metadata in self._graph_specs:
             # graphs share same hash but can have different min, max seen shapes
-            self._graph_specs[inputs_metadata].update_shapes_seen(inputs_metadata, outputs_metadata)
+            graph_spec = self._graph_specs[inputs_metadata]
+            graph_spec.update_shapes_seen(inputs_metadata, outputs_metadata)
         else:
             # create a new graph spec for the sample metadata
             graph_name = f"{next(self._graphs_counter)}"
@@ -109,6 +119,7 @@ class RecordingModule:
                 input_spec=inputs_metadata,
                 output_spec=outputs_metadata,
                 forward_signature=self._forward_signature,
+                dynamic_shapes=dynamic_shapes or {},
             )
 
         if len(self._samples[inputs_metadata]) < self._config.max_num_samples_stored:
@@ -136,6 +147,74 @@ class RecordingModule:
         for path in self._samples[graph_spec.input_spec]:
             result.append(torch.load(path, weights_only=False))
         return result
+
+    def validate_dynamic_shape_paths_recorded(self) -> None:
+        """Validate that every configured input path matched a tensor during recording."""
+        matched_paths = {path for graph_spec in self._graph_specs.values() for path in graph_spec.dynamic_shapes}
+        unmatched_paths = self._dynamic_shapes.keys() - matched_paths
+        if unmatched_paths:
+            raise AITuneUserInputError(
+                f"Dynamic shape paths for module {self._name!r} did not match any recorded tensor inputs: "
+                f"{sorted(unmatched_paths, key=repr)!r}."
+            )
+
+    def _resolve_and_validate_dynamic_shapes(self, inputs_metadata: SampleMetadata) -> DynamicShapes:
+        """Match explicit shape definitions to tensors in a recorded sample.
+
+        The returned mapping is a validated, graph-specific subset of ``self._dynamic_shapes`` containing only
+        definitions whose paths resolve to tensor inputs in ``inputs_metadata``. Unconfigured tensor inputs remain
+        represented by their ``TensorSpec`` and continue using shapes inferred from recorded samples.
+        """
+        resolved: DynamicShapes = {}
+        dimension_sizes_by_name: dict[str, int] = {}
+        for locator, tensor_spec in inputs_metadata.tensor_data:
+            path = cast(ForwardInputPath, locator.path)
+            shape_definition = self._dynamic_shapes.get(path)
+            # Inputs without an explicit definition keep their inferred shapes.
+            if shape_definition is None:
+                continue
+
+            recorded_shape = tensor_spec.min_shape
+            # The shape definition rank must match the recorded tensor rank.
+            if len(shape_definition) != len(recorded_shape):
+                raise AITuneUserInputError(
+                    f"Dynamic shape for module {self._name!r}, input {path!r} expects rank {len(shape_definition)}, "
+                    f"got shape {recorded_shape!r}."
+                )
+
+            for axis, (dimension, recorded_size) in enumerate(zip(shape_definition, recorded_shape, strict=True)):
+                # Integer dimensions are static and must match exactly.
+                if isinstance(dimension, int):
+                    if recorded_size != dimension:
+                        raise AITuneUserInputError(
+                            f"Dynamic shape for module {self._name!r}, input {path!r}, axis {axis} expects "
+                            f"size {dimension}, got {recorded_size} from shape {recorded_shape!r}."
+                        )
+                    continue
+
+                # Dynamic dimensions must contain the recorded size.
+                if not dimension.min <= recorded_size <= dimension.max:
+                    raise AITuneUserInputError(
+                        f"Dynamic shape for module {self._name!r}, input {path!r}, axis {axis} expects "
+                        f"{dimension.name!r} between {dimension.min} and {dimension.max}, got {recorded_size} "
+                        f"from shape {recorded_shape!r}."
+                    )
+
+                # Track shared dimensions by name and require their sizes to match within this sample.
+                if dimension.name not in dimension_sizes_by_name:
+                    dimension_sizes_by_name[dimension.name] = recorded_size
+                else:
+                    expected_size = dimension_sizes_by_name[dimension.name]
+                    if expected_size != recorded_size:
+                        raise AITuneUserInputError(
+                            f"Dynamic dimension {dimension.name!r} for module {self._name!r} must have the same size "
+                            f"across inputs; input {path!r}, axis {axis} expected {expected_size}, got {recorded_size} "
+                            f"from shape {recorded_shape!r}."
+                        )
+
+            resolved[path] = shape_definition
+
+        return resolved
 
     @staticmethod
     def _copy_inputs(args: tuple, kwargs: dict) -> tuple[tuple, dict]:

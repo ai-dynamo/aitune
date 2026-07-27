@@ -12,6 +12,7 @@ import onnx
 import torch
 import torch.nn as nn
 
+from aitune.torch.dynamic_shapes import DynamicDim
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.shapes import build_dynamic_shapes, print_dynamic_shapes
@@ -184,9 +185,9 @@ class ONNXExporter:
             graph_spec: Input graph spec.
             use_auto: When ``True`` (default), use ``Dim.AUTO`` for non-batch varying
                 axes so torch.export infers divisibility constraints automatically.
-                Pass ``False`` to get explicit ``Dim(name, min, max)`` instances —
-                required for downstream tooling that needs concrete ranges (e.g.
-                ONNXRuntime quantization shape inference).
+                Pass ``False`` to get explicit ``Dim(name, min, max)`` instances. The
+                ONNX graph stores dynamic axes as named symbols and leaves shape
+                resolution to the runtime, so the default suits every export here.
 
         Returns:
             Dict of dynamic shapes keyed by forward parameter name. Recorded forward
@@ -208,6 +209,17 @@ class ONNXExporter:
 
         # Process input dynamic axes
         for locator, tensor_spec in graph_spec.input_spec.tensor_data:
+            definition = graph_spec.get_shape_definition(locator)
+            if definition is not None:
+                axes = {
+                    axis: dimension.name
+                    for axis, dimension in enumerate(definition)
+                    if isinstance(dimension, DynamicDim)
+                }
+                if axes:
+                    dynamic_axes[format_tensor_name(locator.path, "input")] = axes
+                continue
+
             for ax, (d1, d2) in enumerate(zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)):
                 if d1 != d2:
                     dynamic_axes[format_tensor_name(locator.path, "input")].append(ax)

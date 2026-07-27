@@ -7,6 +7,7 @@ from aitune.torch.config import aitune_cache_dir, config  # noqa: I001
 
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.dataloader import DataLoaderFactory
+from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.inspecting import inspect, wrap
 from aitune.torch.module import Module
 from aitune.torch.performance import PerformanceProfile, profile
@@ -37,6 +38,8 @@ __all__ = [
     "PerformanceProfile",
     "profile",
     "Module",
+    "DynamicDim",
+    "BatchDim",
     "PatchedModule",
     "TuneStrategy",
     "OneBackendStrategy",

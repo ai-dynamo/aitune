@@ -5,6 +5,7 @@
 import pytest
 import torch
 
+from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -148,6 +149,20 @@ def test_get_min_batch_size_returns_none_without_batch_axes():
     assert graph_spec.get_min_batch_size() is None
 
 
+def test_explicit_shapes_override_inferred_ranges():
+    graph_spec = _graph_spec(batch_size=1)
+    graph_spec.dynamic_shapes = {
+        "x": (BatchDim("batch", min=1, opt=2, max=4), 3),
+        "y": (2, DynamicDim("sequence", min=1, opt=8, max=16)),
+    }
+    tensor_data = {locator.path: (locator, tensor_spec) for locator, tensor_spec in graph_spec.input_spec.tensor_data}
+
+    assert graph_spec.get_effective_input_shapes(*tensor_data["x"]) == ([1, 3], [2, 3], [4, 3])
+    assert graph_spec.get_effective_input_shapes(*tensor_data["y"]) == ([2, 1], [2, 8], [2, 16])
+    assert graph_spec.get_min_batch_size() == 1
+    assert graph_spec.get_max_batch_size() == 4
+
+
 def test_to_dict_and_from_dict_round_trip():
     graph_spec = _graph_spec(batch_size=1)
     graph_spec.update_shapes_seen(
@@ -157,6 +172,22 @@ def test_to_dict_and_from_dict_round_trip():
 
     restored = GraphSpec.from_dict(graph_spec.to_dict())
 
+    assert restored == graph_spec
+
+
+def test_explicit_shapes_round_trip(tmp_path):
+    graph_spec = _graph_spec(batch_size=1)
+    graph_spec.dynamic_shapes = {
+        "x": (BatchDim("batch", min=1, opt=2, max=4), 3),
+        ("options", "mask"): (2, DynamicDim("sequence", min=1, opt=8, max=16)),
+    }
+
+    state = graph_spec.to_dict()
+    checkpoint = tmp_path / "graph_spec.pt"
+    torch.save(state, checkpoint)
+    restored = GraphSpec.from_dict(torch.load(checkpoint, weights_only=False))
+
+    assert state["dynamic_shapes"] == graph_spec.dynamic_shapes
     assert restored == graph_spec
 
 

@@ -209,10 +209,11 @@ class TorchTensorRTAotBackend(Backend):
         input_signature = []
         for locator, tensor_spec in graph_spec.input_spec.tensor_data:
             input_name = format_tensor_name(locator.path, "input")
+            min_shape, opt_shape, max_shape = graph_spec.get_effective_input_shapes(locator, tensor_spec)
             input_i = torch_tensorrt.Input(
-                min_shape=tensor_spec.min_shape,
-                opt_shape=tensor_spec.max_shape,
-                max_shape=tensor_spec.max_shape,
+                min_shape=min_shape,
+                opt_shape=opt_shape,
+                max_shape=max_shape,
                 dtype=tensor_spec.dtype,
                 name=input_name,
             )
@@ -220,9 +221,9 @@ class TorchTensorRTAotBackend(Backend):
             logger.info(
                 "Torch-TensorRT input profile %s: min=%s opt=%s max=%s dtype=%s",
                 input_name,
-                tensor_spec.min_shape,
-                tensor_spec.max_shape,
-                tensor_spec.max_shape,
+                min_shape,
+                opt_shape,
+                max_shape,
                 tensor_spec.dtype,
             )
 
