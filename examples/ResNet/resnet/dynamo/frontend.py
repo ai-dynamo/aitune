@@ -3,7 +3,6 @@
 """AI Dynamo ResNet frontend."""
 
 import asyncio
-import json
 import logging
 import uuid
 from pathlib import Path
@@ -25,11 +24,7 @@ app = FastAPI()
 async def frontend_worker(runtime: DistributedRuntime):
     logging.basicConfig(level=logging.INFO, force=True)
 
-    namespace_name = "resnet"
-    component_name = "backend"
-    endpoint_name = "classify_image"
-
-    endpoint = runtime.namespace(namespace_name).component(component_name).endpoint(endpoint_name)
+    endpoint = runtime.endpoint("resnet.backend.classify_image")
 
     client = await endpoint.client()
     await client.wait_for_instances()
@@ -85,7 +80,7 @@ async def frontend_worker(runtime: DistributedRuntime):
             "image_path": str(image_file_path),
         }
 
-        stream = await client.generate(json.dumps(request))
+        stream = await client.generate(request)
         async for response in stream:
             logger.info(" .... Response: %s", response.data())
             return response.data()

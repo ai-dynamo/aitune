@@ -26,9 +26,6 @@ def main() -> None:
     backend_cfg = cfg.get("Backend", {})
     model_name = backend_cfg.get("model_name", MODEL_NAME)
     tuned_model_path = backend_cfg.get("tuned_model_path")
-    tuned_model_path = Path(tuned_model_path)
-    if not (Path("checkpoints") / tuned_model_path).exists():
-        raise RuntimeError(f"Tuned model not found at {tuned_model_path}. Run `tune` to tune the model.")
 
     model = get_model(model_name)
 

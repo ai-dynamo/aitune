@@ -84,35 +84,15 @@ AITUNE_HARDWARE_METRICS=True uv run tune
 
 ### AI Dynamo ResNet Deployment with Batching
 
-To run ResNet as AI Dynamo service with dynamic batching, we have prepared additional configs and scripts.
+Run ResNet as an AI Dynamo service with dynamic batching:
 
-Code starts in `resnet/dynamo/backend.py`, Docker and Docker Compose is used to make setup simple.
-
-Firstly, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
-
-After successful tuning and services start run below commands to test the service.
-
-#### Single Request
-```sh
-python -m resnet.dynamo.client --num-requests 1
-# response should be:
-#    {"request_id":"img-resnet-single","prediction":"golden retriever","confidence":0.9992710947990417,"class_id":207,"inference_time":0.123}
+```bash
+pip install ".[dynamo]"
+tune --image-path dog.webp
+./run_dynamo.sh
 ```
 
-#### Batching Demonstration
-```sh
-python -m resnet.dynamo.client --num-requests 2
-python -m resnet.dynamo.client --num-requests 4
-python -m resnet.dynamo.client --num-requests 8
-python -m resnet.dynamo.client --num-requests 100
-```
-
-#### Custom Image
-```sh
-python -m resnet.dynamo.client --image-path your_image.jpg --num-requests 4
-```
-
-Finally, to shut it down use `docker compose down --volumes`.
+This script starts the frontend and backend services, waits for them to be ready, then runs a test client to send a sample request. Once the test completes, all services are automatically shut down. This is meant as a functional check, not to provide a permanent server.
 
 #### Dynamic batching
 

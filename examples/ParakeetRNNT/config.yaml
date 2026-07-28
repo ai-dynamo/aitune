@@ -4,3 +4,4 @@ Backend:
   model_name: "nvidia/parakeet-rnnt-1.1b"
   max_batch_size: 4
   batch_timeout: 0.5
+  tuned_model_path: "parakeet_rnnt_1.1b_tuned.pt"

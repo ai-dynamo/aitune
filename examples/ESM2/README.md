@@ -50,23 +50,13 @@ inference
 
 ### AI Dynamo ESM2 Deployment
 
-To run ESM2 as AI Dynamo service, we have prepared a few additional configs and scripts.
-
-The service is split into backend (`esm2/dynamo/backend.py`) and frontend (`esm2/dynamo/frontend.py`) components. Docker and Docker Compose are used to make setup simple.
-
-First, start all services by running `HF_TOKEN=hf.... docker compose --profile all up --detach`. This will build and start all required services. The token for the HuggingFace is required to download the model.
-
-After successful download, tuning and services start run below command to test the service.
+To run ESM2 as AI Dynamo service, use the helper script:
 
 ```sh
-python -m esm2.dynamo.client # same as with --num-requests 1
-python -m esm2.dynamo.client --num-requests 2
-python -m esm2.dynamo.client --num-requests 4
-python -m esm2.dynamo.client --num-requests 8
-python -m esm2.dynamo.client --num-requests 100
+uv pip install ".[dynamo]"
+tune
+./run_dynamo.sh
 ```
-
-Finally, to shut it down use `docker compose --profile all down`.
 
 #### Dynamic batching
 

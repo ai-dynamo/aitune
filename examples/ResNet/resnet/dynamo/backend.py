@@ -9,9 +9,7 @@ to improve throughput by processing multiple images together.
 import asyncio
 import logging
 import os
-import sys
 import time
-from asyncio import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -78,15 +76,15 @@ class ResNetBatchedBackend:
         self.model_name = config.get("Backend", {}).get("model_name", "resnet50")
         self.max_batch_size = config.get("Backend", {}).get("max_batch_size", 4)
         self.batch_timeout = config.get("Backend", {}).get("batch_timeout", 0.5)  # seconds
-        self.image_path = config.get("Backend", {}).get("image_path", "/opt/aitune/dynamo/app/dog.webp")
-        self.classes_file = config.get("Backend", {}).get("classes_file", "/opt/aitune/dynamo/app/imagenet_classes.txt")
+        self.image_path = config.get("Backend", {}).get("image_path", "dog.webp")
+        self.classes_file = config.get("Backend", {}).get("classes_file", "imagenet_classes.txt")
         self.pretrained = config.get("Backend", {}).get("pretrained", True)
         self.force_tune = config.get("Backend", {}).get("force_tune", False)
         self.image_storage_path = config.get("Backend", {}).get("image_storage_path", "/tmp/images")
 
         self.tuned_model_path = config.get("Backend", {}).get("tuned_model_path")
         if self.tuned_model_path is None:
-            self.tuned_model_path = aitune_cache_dir() / f"{self.model_name}.pt"
+            self.tuned_model_path = aitune_cache_dir() / f"{self.model_name}.ait"
         else:
             self.tuned_model_path = Path(self.tuned_model_path)
 
@@ -211,57 +209,14 @@ class ResNetBatchedBackend:
             logger.error("Request failed: %s", e)
             yield ImageClassificationResponse.make_error_response(request.request_id, str(e)).model_dump()
 
-    async def tune_model(self):
-        """Tune the model."""
-        if self.tuned_model_path.exists() and not self.force_tune:
-            logger.info("Model is already tuned, skipping tuning")
-            return
-
-        logger.info("Tuning model...")
-        logger.info("  Model name: %s", self.model_name)
-        logger.info("  Tuned model path: %s", self.tuned_model_path)
-        logger.info("  Image path: %s", self.image_path)
-        logger.info("  Max batch size: %s", self.max_batch_size)
-
-        process = await subprocess.create_subprocess_exec(
-            sys.executable,
-            "-m",
-            "resnet.tune",
-            "--model-name",
-            self.model_name,
-            "--tuned-model-path",
-            str(self.tuned_model_path),
-            "--image-path",
-            self.image_path,
-            "--max-batch-size",
-            str(self.max_batch_size),
-        )
-
-        await process.wait()
-        if process.returncode != 0:
-            logger.error("Tuning model failed with return code %s", process.returncode)
-            raise RuntimeError("Tuning model failed")
-
-        logger.info("Tuning model completed")
-
 
 @dynamo_worker()
 async def backend_worker(runtime: DistributedRuntime):
-    namespace_name = "resnet"
-    component_name = "backend"
-    endpoint_name = "classify_image"
-
-    component = runtime.namespace(namespace_name).component(component_name)
-    await component.create_service()
-
-    logger.info("Created service %s/%s", namespace_name, component_name)
-
-    endpoint = component.endpoint(endpoint_name)
-    lease_id = endpoint.lease_id()
-    logger.info("Serving endpoint %s on lease %s", endpoint_name, lease_id)
+    endpoint_path = "resnet.backend.classify_image"
+    endpoint = runtime.endpoint(endpoint_path)
+    logger.info("Serving endpoint %s", endpoint_path)
 
     backend = ResNetBatchedBackend(_get_config())
-    await backend.tune_model()
     await backend.initialize_model()
     await endpoint.serve_endpoint(backend.classify_image)
 

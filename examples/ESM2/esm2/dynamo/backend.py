@@ -24,7 +24,7 @@ import aitune.torch as ait
 from aitune.torch.config import aitune_cache_dir
 
 from ..infer import decode
-from ..tune import DEVICE, get_model, tune
+from ..tune import DEVICE, get_model
 
 logger = logging.getLogger(__name__)
 
@@ -90,13 +90,6 @@ class ESM2BatchedBackend:
 
     async def initialize_model(self):
         """Tune the model on start."""
-        logger.info("Tuning model on start")
-
-        # Load model
-        if not self.tuned_model_path.exists() or self.force_tune:
-            # Tune model
-            tune(str(self.tuned_model_path), self.model_name)
-
         logger.info("Loading tuned model from %s", self.tuned_model_path)
         self.pipeline = get_model(self.model_name)
         ait.load(self.pipeline, self.tuned_model_path)
@@ -211,18 +204,8 @@ class ESM2BatchedBackend:
 
 @dynamo_worker()
 async def backend_worker(runtime: DistributedRuntime):
-    namespace_name = "esm2"
-    component_name = "backend"
-    endpoint_name = "generate_sequence"
-
-    component = runtime.namespace(namespace_name).component(component_name)
-    await component.create_service()
-
-    logger.info("Created service %s/%s", namespace_name, component_name)
-
-    endpoint = component.endpoint(endpoint_name)
-    lease_id = endpoint.lease_id()
-    logger.info("Serving endpoint %s on lease %s", endpoint_name, lease_id)
+    endpoint = runtime.endpoint("esm2.backend.generate_sequence")
+    logger.info("Serving endpoint esm2.backend.generate_sequence")
 
     backend = ESM2BatchedBackend(_get_config())
     await backend.initialize_model()

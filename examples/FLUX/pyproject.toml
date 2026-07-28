@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dynamo = [
-    "ai-dynamo<2.0.0",
+    "ai-dynamo>=1.3,<2.0.0",
     "openai",
     "uvicorn",
     "aiohttp",
@@ -56,3 +56,4 @@ flux = ["**/*"]
 [tool.aitune]
 additional_tags = ["gpu/sm/120"]
 use_gated_hf_token = true
+allow_failure = true

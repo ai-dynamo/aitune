@@ -63,24 +63,15 @@ AITUNE_HARDWARE_METRICS=True uv run inference
 
 ### AI Dynamo ParakeetRNNT Deployment
 
-To run ParakeetRNNT as AI Dynamo service, we have prepared a few additional configs and scripts.
-
-Code starts in `parakeet_rnnt/dynamo/backend.py`. Docker and Docker Compose are used to make setup simple.
-
-First, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
-
-After successful tuning and services start run below command to test the service.
+To run ParakeetRNNT as an AI Dynamo service, you need to first tune your model and then launch a test run using the provided script.
 
 ```sh
-python -m parakeet_rnnt.dynamo.client --help
-python -m parakeet_rnnt.dynamo.client --num-requests 1
-python -m parakeet_rnnt.dynamo.client --num-requests 2
-python -m parakeet_rnnt.dynamo.client --num-requests 4
-python -m parakeet_rnnt.dynamo.client --num-requests 8
-python -m parakeet_rnnt.dynamo.client --num-requests 100
+uv pip install ".[dynamo]"
+tune
+./run_dynamo.sh
 ```
 
-Finally, to shut it down use `docker compose --profile all down --volumes`.
+This script starts the frontend and backend services, waits for them to be ready, then runs a test client to send sample requests. Once the test completes, all services are automatically shut down. This is meant as a functional check, not to provide a permanent server.
 
 #### Dynamic batching
 

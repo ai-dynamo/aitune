@@ -30,11 +30,7 @@ class SequenceGenerationRequest(BaseModel):
 
 @dynamo_worker()
 async def frontend_worker(runtime: DistributedRuntime):
-    namespace_name = "esm2"
-    component_name = "backend"
-    endpoint_name = "generate_sequence"
-
-    endpoint = runtime.namespace(namespace_name).component(component_name).endpoint(endpoint_name)
+    endpoint = runtime.endpoint("esm2.backend.generate_sequence")
 
     client = await endpoint.client()
     await client.wait_for_instances()

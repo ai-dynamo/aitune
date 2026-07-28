@@ -65,28 +65,15 @@ AITUNE_HARDWARE_METRICS=True uv run inference --prompt "A beautiful landscape wi
 
 ### AI Dynamo FLUX Deployment
 
-Serves the tuned FLUX model as an OpenAI-compatible image generation endpoint via [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo).
+To run FLUX as an AI Dynamo service, you need to first tune your model and then launch a test run using the provided script.
 
-**Prerequisite:** tune the model first and set `Backend.tuned_model_path` in `config.yaml`.
-
-`run_dynamo.sh` starts everything in one command — it launches the Dynamo HTTP frontend and the backend worker, waits for both to be ready, then runs a smoke-test image generation request:
-
-```bash
+```sh
+uv pip install ".[dynamo]"
+tune
 ./run_dynamo.sh
-# Starting the frontend...
-# Starting the backend...
-# Waiting for dyn://aitune.backend.generate to appear in /health...
-# Image saved to output.png
 ```
 
-The frontend listens on port 8000 (OpenAI-compatible). You can also call it directly:
-
-```bash
-python -m flux.dynamo.client --prompt "A futuristic cityscape at night"
-# Image saved to output.png
-```
-
-Or use any OpenAI-compatible client pointed at `http://localhost:8000/v1` with model `black-forest-labs/FLUX.1-dev`.
+This script starts the frontend and backend services, waits for them to be ready, then runs a test client to send a sample request. Once the test completes, all services are automatically shut down. This is meant as a functional check, not to provide a permanent server.
 
 #### Dynamic batching
 

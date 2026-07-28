@@ -4,3 +4,4 @@ Backend:
   model_name: "nvidia/parakeet-ctc-0.6b"
   max_batch_size: 4
   batch_timeout: 0.5
+  tuned_model_path: "parakeet_ctc_0.6b_tuned.ait"

@@ -4,12 +4,12 @@ Backend:
   model_name: "resnet50"
   max_batch_size: 4
   batch_timeout: 0.5
-  image_path: "/opt/aitune/dynamo/app/dog.webp"
-  classes_file: "/opt/aitune/dynamo/app/imagenet_classes.txt"
-  image_storage_path: "/images"
+  image_path: "dog.webp"
+  classes_file: "imagenet_classes.txt"
+  image_storage_path: "/tmp/images"
   pretrained: true
   force_tune: false
-  tuned_model_path: null
+  tuned_model_path: resnet50.ait
 
 Frontend:
   port: 8000

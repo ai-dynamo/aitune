@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 Backend:
   model_name: "facebook/esm2_t33_650M_UR50D"
+  tuned_model_path: "esm2_tuned.ait"
   max_batch_size: 4
   batch_timeout: 2.0
   pretrained: true

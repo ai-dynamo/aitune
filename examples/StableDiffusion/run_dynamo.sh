@@ -9,6 +9,9 @@
 #   ./run_dynamo.sh
 #
 export DYN_DISCOVERY_BACKEND=file
+export DYN_EVENT_PLANE=zmq
+export DYN_REQUEST_PLANE=tcp
+export DYN_ROUTER_USE_KV_EVENTS=false
 
 echo "Starting the frontend..."
 python -m dynamo.frontend --http-port 8000 & # (1) start the frontend in the background
@@ -30,7 +33,7 @@ trap "kill -9 $FRONTEND_PID; kill -9 $BACKEND_PID" EXIT
 echo "Waiting for the backend to start..."
 sleep 2
 
-for i in {1..10}; do
+for i in {1..100}; do
   if curl -s http://localhost:8000/health | grep -q '"dyn://aitune.backend.generate"'; then
     break
   fi

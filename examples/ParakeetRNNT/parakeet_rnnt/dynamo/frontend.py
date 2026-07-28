@@ -23,11 +23,7 @@ app = FastAPI()
 
 @dynamo_worker()
 async def frontend_worker(runtime: DistributedRuntime):
-    namespace_name = "parakeet_rnnt"
-    component_name = "backend"
-    endpoint_name = "transcribe_audio"
-
-    endpoint = runtime.namespace(namespace_name).component(component_name).endpoint(endpoint_name)
+    endpoint = runtime.endpoint("parakeet_rnnt.backend.transcribe_audio")
 
     client = await endpoint.client()
     await client.wait_for_instances()

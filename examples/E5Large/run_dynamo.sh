@@ -9,6 +9,10 @@
 #   ./run_dynamo.sh
 #
 export DYN_DISCOVERY_BACKEND=file
+export DYN_EVENT_PLANE=zmq
+export DYN_REQUEST_PLANE=tcp
+export DYN_ROUTER_USE_KV_EVENTS=false
+
 
 echo "Starting the frontend..."
 python -m dynamo.frontend --http-port 8000 & # (1) start the frontend in the background
@@ -38,7 +42,7 @@ for i in {1..10}; do
   sleep 2
 done
 
-for i in {1..5}; do
+for i in {1..10}; do
   if curl -s http://localhost:8000/v1/models | grep -q '"intfloat/e5-large-v2"'; then
     break
   fi

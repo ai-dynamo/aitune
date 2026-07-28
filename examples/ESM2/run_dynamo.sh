@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Start the Dynamo HTTP frontend (OpenAI-compatible API, default port 8000), and the backend worker.
+# Start the ESM2 Dynamo HTTP frontend (default port 8000), and the backend worker.
 # Then, run the test script to verify the backend is running.
 #
 # Usage:
@@ -14,7 +14,7 @@ export DYN_REQUEST_PLANE=tcp
 export DYN_ROUTER_USE_KV_EVENTS=false
 
 echo "Starting the frontend..."
-python -m dynamo.frontend --http-port 8000 & # (1) start the frontend in the background
+python -m esm2.dynamo.frontend & # (1) start the frontend in the background
 
 FRONTEND_PID=$!
 echo "Frontend PID: $FRONTEND_PID"
@@ -23,7 +23,7 @@ echo "Waiting for the frontend to start..."
 sleep 2 # wait for the frontend to start
 
 echo "Starting the backend..."
-python -m flux.dynamo.backend & # (2) start the backend in the background
+python -m esm2.dynamo.backend & # (2) start the backend in the background
 
 BACKEND_PID=$!
 echo "Backend PID: $BACKEND_PID"
@@ -34,19 +34,11 @@ echo "Waiting for the backend to start..."
 sleep 2
 
 for i in {1..100}; do
-  if curl -s http://localhost:8000/health | grep -q '"dyn://aitune.backend.generate"'; then
+  if curl -s http://localhost:8000/health | grep -q '"status":"ok"'; then
     break
   fi
-  echo "Waiting for dyn://aitune.backend.generate to appear in /health... (attempt $i)"
+  echo "Waiting for ESM2 frontend health check... (attempt $i)"
   sleep 10
 done
 
-for i in {1..5}; do
-  if curl -s http://localhost:8000/v1/models | grep -q '"black-forest-labs/FLUX.1-dev"'; then
-    break
-  fi
-  echo "Waiting for black-forest-labs/FLUX.1-dev to appear in /v1/models... (attempt $i)"
-  sleep 2
-done
-
-python -m flux.dynamo.client --prompt "A futuristic cityscape at night" # (3) run the test script
+python -m esm2.dynamo.client --num-requests 1 # (3) run the test script

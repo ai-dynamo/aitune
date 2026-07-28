@@ -29,10 +29,8 @@ def main() -> None:
     model_name = backend_cfg.get("model_name", MODEL_NAME)
     tuned_model_path = backend_cfg.get("tuned_model_path")
 
-    if not Path("checkpoints", tuned_model_path).exists():
-        raise RuntimeError(f"Tuned model not found at {tuned_model_path}")
-
     pipeline = get_pipeline(model_name)
+
     ait.load(pipeline, tuned_model_path)
 
     def mapping(req) -> dict:
@@ -61,6 +59,9 @@ def main() -> None:
         buf = io.BytesIO()
         result.images[0].save(buf, format="PNG")
         return buf.getvalue()
+
+    # WAR: JIT warmup
+    generate("A futuristic cityscape at night", 1024, 1024, 2, 7.5, 77)
 
     config = dyn.DynamoWorkerConfig(
         type="image",

@@ -3,7 +3,6 @@
 """AI Dynamo ParakeetCTC frontend."""
 
 import asyncio
-import json
 import logging
 import uuid
 from pathlib import Path
@@ -23,11 +22,7 @@ app = FastAPI()
 
 @dynamo_worker()
 async def frontend_worker(runtime: DistributedRuntime):
-    namespace_name = "parakeet_ctc"
-    component_name = "backend"
-    endpoint_name = "transcribe_audio"
-
-    endpoint = runtime.namespace(namespace_name).component(component_name).endpoint(endpoint_name)
+    endpoint = runtime.endpoint("parakeet_ctc.backend.transcribe_audio")
 
     client = await endpoint.client()
     await client.wait_for_instances()
@@ -66,7 +61,7 @@ async def frontend_worker(runtime: DistributedRuntime):
             "audio_path": str(audio_file_path),
         }
 
-        stream = await client.generate(json.dumps(request))
+        stream = await client.generate(request)
         async for response in stream:
             logger.info(" .... Response: %s", response.data())
             return response.data()

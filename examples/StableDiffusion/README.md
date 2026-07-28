@@ -71,6 +71,8 @@ Serves the tuned Stable Diffusion model as an OpenAI-compatible image generation
 `run_dynamo.sh` starts everything in one command — it launches the Dynamo HTTP frontend and the backend worker, waits for both to be ready, then runs a smoke-test image generation request:
 
 ```bash
+uv pip install ".[dynamo]"
+tune
 ./run_dynamo.sh
 # Starting the frontend...
 # Starting the backend...
@@ -78,14 +80,8 @@ Serves the tuned Stable Diffusion model as an OpenAI-compatible image generation
 # Image saved to output.png
 ```
 
-The frontend listens on port 8000 (OpenAI-compatible). You can also call it directly:
+This script starts the frontend and backend services, waits for them to be ready, then runs a test client to send a sample request. Once the test completes, all services are automatically shut down. This is meant as a functional check, not to provide a permanent server.
 
-```bash
-python -m stable_diffusion.dynamo.client --prompt "A serene mountain landscape at sunset"
-# Image saved to output.png
-```
-
-Or use any OpenAI-compatible client pointed at `http://localhost:8000/v1` with model `stabilityai/stable-diffusion-3-medium-diffusers`.
 
 #### Dynamic batching
 

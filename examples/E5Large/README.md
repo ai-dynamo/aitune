@@ -66,6 +66,8 @@ Serves the tuned E5Large model as an OpenAI-compatible embedding endpoint via [N
 `run_dynamo.sh` starts everything in one command — it launches the Dynamo HTTP frontend and the backend worker, waits for both to be ready, then runs a smoke-test embedding request:
 
 ```bash
+uv pip install ".[dynamo]"
+tune
 ./run_dynamo.sh
 # Starting the frontend...
 # Starting the backend...
@@ -73,17 +75,6 @@ Serves the tuned E5Large model as an OpenAI-compatible embedding endpoint via [N
 # Embedding dim: 1024
 # First 5 values: [0.022, -0.034, ...]
 ```
-
-The frontend listens on port 8000 (OpenAI-compatible). You can also call it directly:
-
-```bash
-python -m e5large.dynamo.client --sentence "query: What is the capital city of France?"
-# Embedding dim: 1024
-# First 5 values: [...]
-```
-
-Or use any OpenAI-compatible client pointed at `http://localhost:8000/v1` with model `intfloat/e5-large-v2`.
-
 
 ## Model Details
 

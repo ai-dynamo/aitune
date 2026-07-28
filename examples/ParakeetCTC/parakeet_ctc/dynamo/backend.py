@@ -21,11 +21,10 @@ from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeCo
 from pydantic import BaseModel, Field
 
 import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend
 from aitune.torch.config import aitune_cache_dir
 
 from ..sample_data import ensure_sample_audio
-from ..tune import get_model, tune_model
+from ..tune import get_model
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ class ParakeetCTCBatchedBackend:
 
         self.tuned_model_path = config.get("Backend", {}).get("tuned_model_path")
         if self.tuned_model_path is None:
-            self.tuned_model_path = aitune_cache_dir() / f"{self.model_name.replace('/', '_')}.pt"
+            self.tuned_model_path = aitune_cache_dir() / "parakeet_ctc_0.6b_tuned.ait"
         else:
             self.tuned_model_path = Path(self.tuned_model_path)
 
@@ -91,26 +90,6 @@ class ParakeetCTCBatchedBackend:
 
     async def initialize_model(self):
         """Tune the model on start."""
-        logger.info("Tuning model on start")
-
-        strategy = ait.FirstWinsStrategy(
-            backends=[
-                TensorRTBackend(),
-                TorchInductorJitBackend(),
-            ]
-        ).enable_find_max_batch_size(enable=False)
-
-        # Load model
-        if not self.tuned_model_path.exists() or self.force_tune:
-            # Tune model
-            tune_model(
-                self.model_name,
-                self.tuning_audio_path,
-                self.tuned_model_path,
-                strategy=strategy,
-                batch_sizes=list(range(1, self.max_batch_size + 1)),
-            )
-
         logger.info("Loading tuned model from %s", self.tuned_model_path)
 
         self.pipeline = get_model(self.model_name)
@@ -225,18 +204,10 @@ class ParakeetCTCBatchedBackend:
 
 @dynamo_worker()
 async def backend_worker(runtime: DistributedRuntime):
-    namespace_name = "parakeet_ctc"
-    component_name = "backend"
-    endpoint_name = "transcribe_audio"
+    logger.info("Created service parakeet_ctc/parakeet_ctc")
 
-    component = runtime.namespace(namespace_name).component(component_name)
-    await component.create_service()
-
-    logger.info("Created service %s/%s", namespace_name, component_name)
-
-    endpoint = component.endpoint(endpoint_name)
-    lease_id = endpoint.lease_id()
-    logger.info("Serving endpoint %s on lease %s", endpoint_name, lease_id)
+    endpoint = runtime.endpoint("parakeet_ctc.backend.transcribe_audio")
+    logger.info("Serving endpoint transcribe_audio")
 
     backend = ParakeetCTCBatchedBackend(_get_config())
     await backend.initialize_model()
