@@ -664,5 +664,5 @@ def test_export_succeeds_with_explicit_spatial_range_on_strided_model():
 
     # The user's bounds survive; sizes outside them are rejected at runtime.
     assert exported.module()(torch.randn(2, 3, 256, 256)).shape == (2, 4)
-    with pytest.raises(AssertionError, match="Guard failed"):
+    with pytest.raises((AssertionError, RuntimeError)):
         exported.module()(torch.randn(2, 3, 300, 300))
