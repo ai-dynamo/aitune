@@ -17,7 +17,7 @@ export type BadgeItem = {
   alt: string;
 };
 
-export function BadgeLinks({ badges = [] }: { badges?: BadgeItem[] }) {
+export function BadgeLinks({ badges = [] }: { readonly badges?: BadgeItem[] }) {
   if (badges.length === 0) {
     return null;
   }

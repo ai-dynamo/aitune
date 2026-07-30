@@ -13,6 +13,7 @@ from ..model import MODEL_NAME
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--protocol", type=str.lower, choices=("http", "https"), default="http")
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--prompt", default="A futuristic cityscape at night")
@@ -21,7 +22,7 @@ def main() -> None:
     args = parser.parse_args()
 
     client = OpenAI(
-        base_url=f"http://{args.host}:{args.port}/v1",
+        base_url=f"{args.protocol}://{args.host}:{args.port}/v1",
         api_key="unused",
     )
     response = client.images.generate(
