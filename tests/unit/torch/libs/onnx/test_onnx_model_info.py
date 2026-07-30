@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for ONNXModelInfo and ONNXPrecision."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -172,18 +171,18 @@ def test_input_shapes_mixed_dims():
 
 
 @patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
-def test_input_shapes_static_dims(mock_load):
+def test_input_shapes_static_dims(mock_load, tmp_path):
     inputs = [_make_value_info("x", [2, 3, 224, 224])]
     mock_load.return_value = _make_model(input_specs=inputs)
-    info = ONNXModelInfo(Path("/tmp/model.onnx"))
+    info = ONNXModelInfo(tmp_path / "model.onnx")
     assert info.input_shapes == {"x": [2, 3, 224, 224]}
 
 
 @patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
-def test_input_shapes_unknown_dim(mock_load):
+def test_input_shapes_unknown_dim(mock_load, tmp_path):
     inputs = [_make_value_info("x", [None, 3])]
     mock_load.return_value = _make_model(input_specs=inputs)
-    info = ONNXModelInfo(Path("/tmp/model.onnx"))
+    info = ONNXModelInfo(tmp_path / "model.onnx")
     assert info.input_shapes == {"x": [None, 3]}
 
 
@@ -193,11 +192,11 @@ def test_input_shapes_unknown_dim(mock_load):
 
 
 @patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
-def test_opset_version_none_when_no_opset(mock_load):
+def test_opset_version_none_when_no_opset(mock_load, tmp_path):
     model = _make_model()
     model.opset_import = []
     mock_load.return_value = model
-    info = ONNXModelInfo(Path("/tmp/model.onnx"))
+    info = ONNXModelInfo(tmp_path / "model.onnx")
     assert info.opset_version is None
 
 
@@ -213,34 +212,34 @@ def test_precision_fp32_model_returns_none():
 
 
 @patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
-def test_precision_fp16_model(mock_load):
+def test_precision_fp16_model(mock_load, tmp_path):
     inits = [_make_initializer(10)] * 5  # dtype 10 = FLOAT16
     mock_load.return_value = _make_model(initializers=inits)
-    info = ONNXModelInfo(Path("/tmp/model.onnx"))
+    info = ONNXModelInfo(tmp_path / "model.onnx")
     assert info.precision == ONNXPrecision.FP16
 
 
 @patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
-def test_precision_int8_model(mock_load):
+def test_precision_int8_model(mock_load, tmp_path):
     inits = [_make_initializer(3)] * 10  # dtype 3 = INT8
     mock_load.return_value = _make_model(initializers=inits)
-    info = ONNXModelInfo(Path("/tmp/model.onnx"))
+    info = ONNXModelInfo(tmp_path / "model.onnx")
     assert info.precision == ONNXPrecision.INT8
 
 
 @patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
-def test_precision_lowest_wins(mock_load):
+def test_precision_lowest_wins(mock_load, tmp_path):
     # FP16 + INT8 present → INT8 is lower precision, should be reported
     inits = [_make_initializer(10)] * 10 + [_make_initializer(3)] * 3
     mock_load.return_value = _make_model(initializers=inits)
-    info = ONNXModelInfo(Path("/tmp/model.onnx"))
+    info = ONNXModelInfo(tmp_path / "model.onnx")
     assert info.precision == ONNXPrecision.INT8
 
 
 @patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
-def test_precision_no_initializers_returns_none(mock_load):
+def test_precision_no_initializers_returns_none(mock_load, tmp_path):
     mock_load.return_value = _make_model(initializers=[])
-    info = ONNXModelInfo(Path("/tmp/model.onnx"))
+    info = ONNXModelInfo(tmp_path / "model.onnx")
     assert info.precision is None
 
 
@@ -249,16 +248,16 @@ def test_precision_no_initializers_returns_none(mock_load):
 # ---------------------------------------------------------------------------
 
 
-def test_import_error_propagates(monkeypatch):
+def test_import_error_propagates(monkeypatch, tmp_path):
     import aitune.torch.libs.onnx.onnx_model_info as module_under_test
 
     monkeypatch.setattr(module_under_test.onnx, "load", MagicMock(side_effect=ImportError("no onnx")))
     with pytest.raises(ImportError):
-        ONNXModelInfo(Path("/tmp/model.onnx"))
+        ONNXModelInfo(tmp_path / "model.onnx")
 
 
 @patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
-def test_load_error_propagates(mock_load):
+def test_load_error_propagates(mock_load, tmp_path):
     mock_load.side_effect = RuntimeError("corrupt model")
     with pytest.raises(RuntimeError, match="corrupt model"):
-        ONNXModelInfo(Path("/tmp/model.onnx"))
+        ONNXModelInfo(tmp_path / "model.onnx")
