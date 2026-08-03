@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 import torch
 
+from aitune.torch.backend import Backend
 from aitune.torch.backend.backend import DummyBackend
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patched_module import (
@@ -30,6 +31,13 @@ from tests.utilities.helpers import TestSink, requires_cuda
 
 class CustomType:
     """Custom type for testing."""
+
+
+class _SimpleJitModule(torch.nn.Module):
+    """Simple JIT module for testing."""
+
+    def forward(self, x):
+        return x
 
 
 @pytest.fixture(autouse=True)
@@ -282,7 +290,7 @@ def test_jit_tuning_success(mock_trt_backend, torch_device, scenario):
 
 
 @requires_cuda
-def test_jit_tuning_with_module_hooks(mock_trt_backend, torch_device, mocker):
+def test_jit_tuning_with_module_hooks(mock_trt_backend, torch_device):
     config.min_samples = 2
     config.dry_run = False
     config.detect_graph_breaks = False
@@ -475,13 +483,6 @@ def test_jit_tuning_no_modules(mock_trt_backend, torch_device):
 # ── capture_outputs hook preservation ────────────────────────────────────────
 
 
-class _SimpleJitModule(torch.nn.Module):
-    """Minimal module used in JIT hook-preservation tests."""
-
-    def forward(self, x):
-        return x * 2
-
-
 def test_jit_external_hook_preserved_in_forward_hooks_after_restore_proxy_cycle():
     """A forward hook registered after wrapping must survive _restore_original_forward/_proxy_forward."""
     inner = _SimpleJitModule()
@@ -510,8 +511,7 @@ def test_jit_external_hook_fires_exactly_once_after_restore_proxy_cycle():
     patched._restore_original_forward()
     patched._proxy_forward()
 
-    x = torch.ones(1)
-    inner(x)
+    inner(1)
     assert len(hook_calls) == 1
 
 
@@ -541,12 +541,56 @@ def test_jit_first_proxy_forward_without_prior_restore_does_not_crash():
     assert inner._forward_hooks == patched._current_forward_hooks
 
 
+def test_jit_tuning_backend_added_hooks():
+    """Test that backend added hooks are preserved after a proxy forward."""
+    hook_calls = []
+
+    class TestStrategyWhichAddsHooks(TuneStrategy):
+        def _tune(
+            self,
+            module: torch.nn.Module,
+            *args,
+            **kwargs,
+        ):
+            # Imitate a backend which adds hooks to the module.
+            module.register_forward_pre_hook(lambda mod, inp: hook_calls.append("backend pre hook"))
+            module.register_forward_hook(lambda mod, inp, out: hook_calls.append("backend hook"))
+            backend = Mock(spec=Backend)
+            backend.name = "TestBackend"
+            backend.describe.return_value = "TestBackend"
+            return backend
+
+        def describe(self):
+            return "Test strategy which adds hooks."
+
+        def _describe_parts(self):
+            return ["Test strategy which adds hooks."]
+
+        def to_json_dict(self):
+            return {"type": "test_strategy_which_adds_hooks"}
+
+    config.strategy = TestStrategyWhichAddsHooks()
+    config.min_parameters = -1
+
+    with prepare_for_jit_tuning():
+        module = _SimpleJitModule()
+
+    module.register_forward_pre_hook(lambda mod, inp: hook_calls.append("module pre hook"))
+    module.register_forward_hook(lambda mod, inp, out: hook_calls.append("module hook"))
+
+    module(1)
+
+    hook_calls.clear()
+    module(1)
+    assert hook_calls == ["backend pre hook", "module pre hook", "backend hook", "module hook"]
+
+
 @requires_cuda
 def test_forward_method_should_have_same_signature(mock_trt_backend, torch_device):
     config.dry_run = False
     config.mode = JITMode.TUNE_EAGER
 
-    class TestNet(torch.nn.Module):
+    class _SimpleJitModule(torch.nn.Module):
         def __init__(self):
             super().__init__()
             self.linear = torch.nn.Linear(10, 10)
@@ -556,7 +600,7 @@ def test_forward_method_should_have_same_signature(mock_trt_backend, torch_devic
             return x, y, z, pos
 
     with prepare_for_jit_tuning():
-        model = TestNet().to(torch_device)
+        model = _SimpleJitModule().to(torch_device)
 
     # in init state
     assert set(inspect.signature(model.forward).parameters.keys()) == {"x", "y", "z", "pos"}

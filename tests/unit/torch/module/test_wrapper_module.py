@@ -10,6 +10,7 @@ from unittest.mock import Mock, call
 import pytest
 import torch
 
+from aitune.torch import TuneStrategy
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import aitune_cache_dir
@@ -130,29 +131,29 @@ def test_passthrough(module):
 
 
 def test_forward_hooks(module):
-    hooks_history = []
+    hook_calls = []
 
     def pre_hook(module, input):  # noqa: A002
-        hooks_history.append("pre_hook")
+        hook_calls.append("pre_hook")
         return input
 
     def hook(module, input, output):  # noqa: A002
-        hooks_history.append("forward_hook")
+        hook_calls.append("forward_hook")
         return output
 
     module.register_forward_hook(hook)
     module.register_forward_pre_hook(pre_hook)
 
     module(1)
-    assert hooks_history == ["pre_hook", "forward_hook"]
-    hooks_history.clear()
+    assert hook_calls == ["pre_hook", "forward_hook"]
+    hook_calls.clear()
     module(2)
-    assert hooks_history == ["pre_hook", "forward_hook"]
-    hooks_history.clear()
+    assert hook_calls == ["pre_hook", "forward_hook"]
+    hook_calls.clear()
     assert module.state == ModuleState.RECORDING
     module.enable_passthrough()
     module(3)
-    assert hooks_history == ["pre_hook", "forward_hook"]
+    assert hook_calls == ["pre_hook", "forward_hook"]
     assert module.state == ModuleState.PASSTHROUGH
 
 
@@ -542,3 +543,41 @@ def test_first_proxy_forward_without_prior_restore_does_not_crash():
 
     wrapper._proxy_forward()  # must not raise
     assert inner._forward_hooks == wrapper._current_forward_hooks
+
+
+def test_backend_added_hooks():
+    """Test that backend added hooks are preserved after a proxy forward."""
+    hook_calls = []
+
+    class TestStrategyWhichAddsHooks(TuneStrategy):
+        def _tune(
+            self,
+            module: torch.nn.Module,
+            *args,
+            **kwargs,
+        ):
+            # Imitate a backend which adds hooks to the module.
+            module.register_forward_pre_hook(lambda mod, inp: hook_calls.append("backend pre hook"))
+            module.register_forward_hook(lambda mod, inp, out: hook_calls.append("backend hook"))
+            return Mock()
+
+        def describe(self):
+            return "Test strategy which adds hooks."
+
+        def _describe_parts(self):
+            return ["Test strategy which adds hooks."]
+
+        def to_json_dict(self):
+            return {"type": "test_strategy_which_adds_hooks"}
+
+    module = Module(_SimpleHookModule(), "backend-added-hooks-aot", strategy=DummyTuneStrategy())
+    module.register_forward_pre_hook(lambda mod, inp: hook_calls.append("module pre hook"))
+    module.register_forward_hook(lambda mod, inp, out: hook_calls.append("module hook"))
+
+    module(1)
+
+    module.tune(strategy=TestStrategyWhichAddsHooks(), dry_run=False, device=torch.device("cpu"))
+    hook_calls.clear()
+
+    module(1)
+    assert hook_calls == ["backend pre hook", "module pre hook", "backend hook", "module hook"]

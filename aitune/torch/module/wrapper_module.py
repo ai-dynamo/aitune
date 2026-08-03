@@ -323,6 +323,7 @@ class Module(wrapt.CallableObjectProxy):
                     try:
                         self._restore_original_forward()
                         backend = strategy.tune(self.__wrapped__, self._self_name, graph_spec, data, device, cache_dir)
+                        self._handle_backend_added_hooks()
                         backends[graph_spec.input_spec] = backend
                         graph_result["selected_backend"] = backend.describe()
                     finally:
@@ -419,6 +420,18 @@ class Module(wrapt.CallableObjectProxy):
         self.__wrapped__._forward_pre_hooks = OrderedDict()
         self.__wrapped__.forward = self._self_orig_forward
         self.__wrapped__._forward_hooks = OrderedDict()
+
+    def _handle_backend_added_hooks(self):
+        """Handle new hooks if added by a backend.
+
+        Before tuning hooks are cleared (empty OrderedDict). If there are new hooks added by a backend,
+        they should be added to the existing ones but before the original hooks so that application layer hooks
+        (like HF post processing hooks) are called after the backend hooks.
+        """
+        if self.__wrapped__._forward_pre_hooks:
+            self._current_forward_pre_hooks = self.__wrapped__._forward_pre_hooks | self._current_forward_pre_hooks
+        if self.__wrapped__._forward_hooks:
+            self._current_forward_hooks = self.__wrapped__._forward_hooks | self._current_forward_hooks
 
     def _reset(self):
         """Resets the module to initial state."""

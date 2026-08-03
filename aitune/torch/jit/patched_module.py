@@ -189,6 +189,7 @@ class PatchedModule:
                         current._extra_state_info = "dry-run tuning success"
 
                     # tuning success, we can revert forward for current module, unpatch child modules
+                    current._handle_backend_added_hooks()
                     current._update_state(ModuleState.TUNED)
                     current._patch_device_attribute(device)
                     current._unpatch_hierarchy(include_self=False)
@@ -518,6 +519,18 @@ class PatchedModule:
         self.__wrapped__._forward_pre_hooks = OrderedDict()
         self.__wrapped__.forward = self._original_forward
         self.__wrapped__._forward_hooks = OrderedDict()
+
+    def _handle_backend_added_hooks(self):
+        """Handle new hooks if added by a backend.
+
+        Before tuning hooks are cleared (empty OrderedDict). If there are new hooks added by a backend,
+        they should be added to the existing ones but before the original hooks so that application layer hooks
+        (like HF post processing hooks) are called after the backend hooks.
+        """
+        if self.__wrapped__._forward_pre_hooks:
+            self._current_forward_pre_hooks = self.__wrapped__._forward_pre_hooks | self._current_forward_pre_hooks
+        if self.__wrapped__._forward_hooks:
+            self._current_forward_hooks = self.__wrapped__._forward_hooks | self._current_forward_hooks
 
     def _set_original_forward_for_hierarchy(self):
         """Set original forwards for all patched descendants in the module tree.
