@@ -96,7 +96,7 @@ Profiling status.
 ```python
 aitune.torch.task.profiling.profiling._profile(
     func: collections.abc.Callable,
-    samples: collections.abc.Generator[tuple[int, list, dict], None, None],
+    samples: collections.abc.Generator[tuple[int, list | tuple, dict], None, None],
     profiling_config: aitune.torch.task.profiling.config.ProfilingConfig,
     model_name: str | None = None,
     backend_details: str | None = None
@@ -121,7 +121,7 @@ Profile a model.
 aitune.torch.task.profiling.profiling._run_profiling_batch_size(
     batch_size: int,
     model: collections.abc.Callable,
-    sample: tuple[list, dict],
+    sample: tuple[list | tuple, dict],
     profiling_config: aitune.torch.task.profiling.config.ProfilingConfig,
     model_name: str,
     backend_details: str

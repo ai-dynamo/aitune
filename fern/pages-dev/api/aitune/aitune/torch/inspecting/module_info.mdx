@@ -129,7 +129,7 @@ Describe the inspected modules specification.
 
 ```python
 aitune.torch.inspecting.module_info.InspectedModulesInfo.get_modules(
-    min_execution_percentage: float | None = None,
+    min_execution_ratio: float | None = None,
     limit: int | None = None
 ) -> list[aitune.torch.inspecting.module_info.ModuleInfo]
 ```
@@ -143,8 +143,8 @@ Get the list of modules.
 
 **Parameters:**
 
-<ParamField path="min_execution_percentage" type="float | None" default="None">
-Minimum execution percentage to include a module.
+<ParamField path="min_execution_ratio" type="float | None" default="None">
+Minimum execution ratio to include a module.
 </ParamField>
 
 <ParamField path="limit" type="int | None" default="None">

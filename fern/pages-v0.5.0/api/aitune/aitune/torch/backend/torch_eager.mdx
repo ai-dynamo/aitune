@@ -1,0 +1,390 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/torch_eager
+title: aitune.torch.backend.torch_eager
+---
+
+Torch eager backend.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TorchEagerBackend`](#aitune-torch-backend-torch_eager-TorchEagerBackend) | Backend that runs the model in eager mode with/without autocast. |
+| [`TorchEagerBackendConfig`](#aitune-torch-backend-torch_eager-TorchEagerBackendConfig) | Configuration for torch eager backend. |
+
+### API
+
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend">
+
+<CodeBlock links={{"aitune.torch.backend.torch_eager.TorchEagerBackendConfig":"#aitune-torch-backend-torch_eager-TorchEagerBackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.torch_eager.TorchEagerBackend(
+    config: aitune.torch.backend.torch_eager.TorchEagerBackendConfig | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+
+Backend that runs the model in eager mode with/without autocast.
+
+Note: inference is done with torch.no_grad() context. The torch.inference_mode() context must not be used
+as it would require outputs from a model to be used with same inference mode - this would be confusing to a user
+and required code changes from the user.
+
+
+<ParamField path="STATE_CONFIG" type="= 'config'">
+</ParamField>
+
+<ParamField path="STATE_DEVICE" type="= 'device'">
+</ParamField>
+
+<ParamField path="STATE_ORIG_MODULE" type="= 'orig_module'">
+</ParamField>
+
+<ParamField path="STATE_OUTPUT_DTYPE" type="= 'output_dtype'">
+</ParamField>
+
+<ParamField path="STATE_TYPE" type="= 'type'">
+</ParamField>
+
+<ParamField path="_config" type="= config or TorchEagerBackendConfig()">
+</ParamField>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend._activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Activates runner.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend._build(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    data: list[aitune.torch.module.recording_module.Sample],
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Builds the model.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend._deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivates runner.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_deploy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend._deploy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deploys the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_get_required_casting_dtype">
+
+<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend._get_required_casting_dtype(
+    module: torch.nn.Module,
+    data: list[aitune.torch.module.recording_module.Sample]
+) -> torch.dtype | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the required casting dtype of the module by running a sample inference with and without autocast.
+
+If the dtype of the output is different with and without autocast, return the dtype of the output without autocast.
+Otherwise, return None.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The module to get the dtype from.
+</ParamField>
+
+<ParamField path="data" type="list[Sample]">
+List of sample inputs to run through the module.
+</ParamField>
+
+**Returns:** `torch.dtype | None`
+
+torch.dtype: The required casting dtype. Returns None if no casting is required.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Runs inference with the given arguments. Does not use autocast.
+
+It can be replaced at runtime by _infer_with_autocast.
+
+**Parameters:**
+
+<ParamField path="*args" type="Any" default="()">
+inference arguments
+</ParamField>
+
+<ParamField path="**kwargs" type="Any" default="&#123;&#125;">
+inference keyword arguments
+</ParamField>
+
+**Returns:** `Any`
+
+The result of the inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_infer_with_autocast">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend._infer_with_autocast(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Runs inference with the given arguments.
+
+**Parameters:**
+
+<ParamField path="*args" type="Any" default="()">
+inference arguments
+</ParamField>
+
+<ParamField path="**kwargs" type="Any" default="&#123;&#125;">
+inference keyword arguments
+</ParamField>
+
+**Returns:** `Any`
+
+The result of the inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_save_config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend._save_config(
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Store the backend configuration to a file.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the description of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend.from_dict(
+    module: torch.nn.Module | None,
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Creates a backend from a state_dict.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-is_jit">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend.is_jit() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns True if the backend is a JIT backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend.key() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the key of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend.to_dict()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the state_dict of the backend.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackendConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.torch_eager.TorchEagerBackendConfig(
+    autocast_enabled: bool = False,
+    autocast_dtype: torch.dtype | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+
+Configuration for torch eager backend.
+
+**Parameters:**
+
+<ParamField path="autocast_enabled" type="bool" default="False">
+If True, enable autocast.
+</ParamField>
+
+<ParamField path="autocast_dtype" type="torch.dtype" default="None">
+The dtype to use for autocast.
+</ParamField>
+
+
+<ParamField path="autocast_dtype" type="dtype | None = None">
+</ParamField>
+
+<ParamField path="autocast_enabled" type="bool = False">
+</ParamField>
+</Indent>

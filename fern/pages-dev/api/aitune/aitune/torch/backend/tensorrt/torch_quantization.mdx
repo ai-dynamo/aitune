@@ -15,7 +15,15 @@ NVIDIA ModelOpt PyTorch quantization module for TensorRT backend.
 | [`TorchQuantizationConfig`](#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig) | Configuration for Torch quantization. |
 | [`TorchQuantizer`](#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer) | NVIDIA ModelOpt PyTorch quantizer for TensorRT backend. |
 
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_validate_torch_quantization_config`](#aitune-torch-backend-tensorrt-torch_quantization-_validate_torch_quantization_config) | Validate that quantization_config is a supported value. |
+
 ### Data
+
+[`HAS_NVFP4_FP8_MHA_CONFIG`](#aitune-torch-backend-tensorrt-torch_quantization-HAS_NVFP4_FP8_MHA_CONFIG)
 
 [`QuantizationConfig`](#aitune-torch-backend-tensorrt-torch_quantization-QuantizationConfig)
 
@@ -63,6 +71,23 @@ Enable verbose logging
 
 <ParamField path="quantization_config" type="QuantizationConfig = 'FP8_DEFAULT_CFG'">
 </ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate quantization_config after initialization.
+
+
+</Indent>
 <Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig-from_dict">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -297,6 +322,38 @@ Quantized model
 
 </Indent>
 </Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-_validate_torch_quantization_config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization._validate_torch_quantization_config(
+    config_name: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that quantization_config is a supported value.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-HAS_NVFP4_FP8_MHA_CONFIG">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.HAS_NVFP4_FP8_MHA_CONFIG = Version(modelopt.__version__) >= Version('0.35.0')
+```
+
+</CodeBlock>
+</Anchor>
+
 
 <Anchor id="aitune-torch-backend-tensorrt-torch_quantization-QuantizationConfig">
 

@@ -1,0 +1,298 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/graph_spec
+title: aitune.torch.module.graph_spec
+---
+
+Contains GraphSpec which represents a graph specification.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`GraphSpec`](#aitune-torch-module-graph_spec-GraphSpec) | GraphSpec used to describe a computational graph. |
+
+### API
+
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.module.forward_signature.ForwardSignature":"/aitune/aitune/torch/module/forward_signature#aitune-torch-module-forward_signature-ForwardSignature","aitune.torch.dynamic_shapes.DynamicShapes":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.graph_spec.GraphSpec(
+    name: str,
+    input_spec: aitune.torch.module.sample_metadata.SampleMetadata,
+    output_spec: aitune.torch.module.sample_metadata.SampleMetadata,
+    forward_signature: aitune.torch.module.forward_signature.ForwardSignature,
+    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes = dict()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+GraphSpec used to describe a computational graph.
+
+Each torch module has its own specification of input and output variables. The input specification i.e. args and kwargs
+of the torch modules `forward` function is represented by SampleMetadata. Those inputs can change computational
+graph. AITune treats each unique input specification as a separate graph which is tuned separately. This object
+represents such a computational graph with a name and input_spec information.
+
+
+<ParamField path="dynamic_shapes" type="DynamicShapes = field(default_factory=dict)">
+</ParamField>
+
+<ParamField path="forward_signature" type="ForwardSignature">
+</ParamField>
+
+<ParamField path="input_spec" type="SampleMetadata">
+</ParamField>
+
+<ParamField path="name" type="str">
+</ParamField>
+
+<ParamField path="output_spec" type="SampleMetadata">
+</ParamField>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.__repr__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return representation of GraphSpec.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-__str__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.__str__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return string representation of GraphSpec.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-_iter_batch_size_ranges">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec._iter_batch_size_ranges(
+    normalized: bool = False
+) -> collections.abc.Iterator[tuple[int, int]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Yield batch ranges from explicit definitions or inferred metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-from_dict">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.from_dict(
+    data: dict[str, typing.Any]
+) -> aitune.torch.module.graph_spec.GraphSpec
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create GraphSpec from dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-get_effective_input_shapes">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"/aitune/aitune/torch/module/locator#aitune-torch-module-locator-Locator","aitune.torch.module.tensor_spec.TensorSpec":"/aitune/aitune/torch/module/tensor_spec#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.get_effective_input_shapes(
+    locator: aitune.torch.module.locator.Locator,
+    tensor_spec: aitune.torch.module.tensor_spec.TensorSpec
+) -> tuple[list[int], list[int], list[int]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the minimum, optimal, and maximum shapes to use for compilation.
+
+An explicit user definition takes precedence. Otherwise, use the recorded TensorSpec bounds with its maximum
+shape as the optimal shape.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-get_max_batch_size">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.get_max_batch_size(
+    normalized: bool = False
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get max batch size from input spec.
+
+**Parameters:**
+
+<ParamField path="normalized" type="bool" default="False">
+Flag to normalize the batch size against the global batch size.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-get_min_batch_size">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.get_min_batch_size() -> int | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get min batch size from input spec.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-get_shape_definition">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"/aitune/aitune/torch/module/locator#aitune-torch-module-locator-Locator","aitune.torch.dynamic_shapes.ShapeDefinition":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-ShapeDefinition"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.get_shape_definition(
+    locator: aitune.torch.module.locator.Locator
+) -> aitune.torch.dynamic_shapes.ShapeDefinition | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the explicit shape definition for an input tensor, if configured.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-make_batch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.make_batch(
+    args: tuple,
+    kwargs: dict[str, typing.Any],
+    batch_size: int
+) -> tuple[tuple, dict[str, typing.Any]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return a normalized call resized to the specified batch size.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert the graph specification to a serializable dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-update_max_batch_size">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.update_max_batch_size(
+    sample: tuple[tuple, dict],
+    max_batch_size: int
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Update input metadata with the specified maximum batch size.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-update_shapes_seen">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.update_shapes_seen(
+    inputs_metadata: aitune.torch.module.sample_metadata.SampleMetadata,
+    outputs_metadata: aitune.torch.module.sample_metadata.SampleMetadata
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Update input spec with other input spec.
+
+
+</Indent>
+</Indent>

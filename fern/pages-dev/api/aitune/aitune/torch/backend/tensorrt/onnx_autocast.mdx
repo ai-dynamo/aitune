@@ -15,6 +15,12 @@ NVIDIA ModelOpt ONNX quantization module for TensorRT backend.
 | [`ONNXAutoCast`](#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCast) | NVIDIA ModelOpt ONNX autocast for TensorRT backend. |
 | [`ONNXAutoCastConfig`](#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig) | Configuration for mixed precision quantization. |
 
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_validate_autocast_precision`](#aitune-torch-backend-tensorrt-onnx_autocast-_validate_autocast_precision) | Validate that precision is a supported value for autocast. |
+
 ### Data
 
 [`MixedPrecision`](#aitune-torch-backend-tensorrt-onnx_autocast-MixedPrecision)
@@ -130,6 +136,23 @@ Mixed precision quantization precision ("fp16", "bf16")
 
 <ParamField path="precision" type="MixedPrecision = 'fp16'">
 </ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate precision after initialization.
+
+
+</Indent>
 <Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig-from_dict">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -151,6 +174,26 @@ Convert dict to MixedPrecisionConfig.
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-_validate_autocast_precision">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_autocast._validate_autocast_precision(
+    precision: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that precision is a supported value for autocast.
+
+
 </Indent>
 
 <Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-MixedPrecision">

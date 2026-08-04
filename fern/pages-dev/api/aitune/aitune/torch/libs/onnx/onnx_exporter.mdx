@@ -74,12 +74,12 @@ Input graph spec
 </Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_create_dynamic_shapes">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._create_dynamic_shapes(
+    sample: aitune.torch.module.recording_module.Sample,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    forward_arguments: tuple[list[str], list[str]],
     use_auto: bool = True
 ) -> dict[str, typing.Any]
 ```
@@ -91,29 +91,26 @@ aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._create_dynamic_shapes(
 
 <Badge>staticmethod</Badge>
 
-Using graph spec and forward arguments to infer how does dynamic shapes look like.
+Build dynamic shapes for the normalized export sample.
 
-Delegates to ``aitune.torch.backend.dynamic_shapes.build_dynamic_shapes``,
-passing ``kwargs=&#123;&#125;`` because the caller in ``_export_dynamo`` runs its own
-WAR for missing kwargs after this returns.
+Delegates to ``aitune.torch.utils.shapes.build_dynamic_shapes``.
 
 **Parameters:**
+
+<ParamField path="sample" type="Sample">
+Normalized args and kwargs used for export.
+</ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec">
 Input graph spec.
 </ParamField>
 
-<ParamField path="forward_arguments" type="tuple[list[str], list[str]]">
-Tuple of forward arguments and kwargs from the model's
-forward signature.
-</ParamField>
-
 <ParamField path="use_auto" type="bool" default="True">
 When ``True`` (default), use ``Dim.AUTO`` for non-batch varying
 axes so torch.export infers divisibility constraints automatically.
-Pass ``False`` to get explicit ``Dim(name, min, max)`` instances —
-required for downstream tooling that needs concrete ranges (e.g.
-ONNXRuntime quantization shape inference).
+Pass ``False`` to get explicit ``Dim(name, min, max)`` instances. The
+ONNX graph stores dynamic axes as named symbols and leaves shape
+resolution to the runtime, so the default suits every export here.
 </ParamField>
 
 **Returns:** `dict[str, Any]`

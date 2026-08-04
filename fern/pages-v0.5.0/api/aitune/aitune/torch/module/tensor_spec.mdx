@@ -1,0 +1,418 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/tensor_spec
+title: aitune.torch.module.tensor_spec
+---
+
+Contains TensorSpec which represents metadata of a tensor.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`InfoLevel`](#aitune-torch-module-tensor_spec-InfoLevel) | Enum representing different levels of information detail. |
+| [`TensorSpec`](#aitune-torch-module-tensor_spec-TensorSpec) | TensorSpec is used to describe tensor metadata. |
+
+### API
+
+<Anchor id="aitune-torch-module-tensor_spec-InfoLevel">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.tensor_spec.InfoLevel
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Enum representing different levels of information detail.
+
+<ParamField path="FULL" type="= auto()">
+</ParamField>
+
+<ParamField path="MEDIUM" type="= auto()">
+</ParamField>
+
+<ParamField path="SHORT" type="= auto()">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.tensor_spec.TensorSpec(
+    shape: list[str | int],
+    min_shape: list[int],
+    max_shape: list[int],
+    dtype: torch.dtype | None,
+    _bs_multipliers: list[float]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+TensorSpec is used to describe tensor metadata.
+
+
+<ParamField path="_bs_multipliers" type="list[float]">
+</ParamField>
+
+<ParamField path="dtype" type="dtype | None">
+</ParamField>
+
+<ParamField path="max_shape" type="list[int]">
+</ParamField>
+
+<ParamField path="min_shape" type="list[int]">
+</ParamField>
+
+<ParamField path="shape" type="list[str | int]">
+</ParamField>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-__eq__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.__eq__(
+    other: object
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if two TensorSpec are equal.
+
+Tensors of the same rank are considered equal.
+Particular dimensions sizes can be different as there can be dynamic dimensions.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-__hash__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.__hash__() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Hash of TensorSpec.
+
+Tensors of the same rank are considered equal.
+Particular dimensions sizes can be different as there can be dynamic dimensions.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.__repr__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get representation of TensorSpec.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-__str__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.__str__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get string representation of TensorSpec.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-describe">
+
+<CodeBlock links={{"aitune.torch.module.tensor_spec.InfoLevel":"#aitune-torch-module-tensor_spec-InfoLevel"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.describe(
+    info_level: aitune.torch.module.tensor_spec.InfoLevel = InfoLevel.FULL
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get information describing TensorSpec.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-from_dict">
+
+<CodeBlock links={{"aitune.torch.module.tensor_spec.TensorSpec":"#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.from_dict(
+    data: dict[str, typing.Any]
+) -> aitune.torch.module.tensor_spec.TensorSpec
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create TensorSpec from dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-from_tensor">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.from_tensor(
+    tensor: torch.Tensor,
+    batch_size: int
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create TensorSpec from tensor.
+
+**Parameters:**
+
+<ParamField path="tensor" type="torch.Tensor">
+Tensor to create TensorSpec from
+</ParamField>
+
+<ParamField path="batch_size" type="int">
+Batch size
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-get_batch_axis_multipliers">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.get_batch_axis_multipliers() -> dict[int, int]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return mapping for batch axis and its multiplier.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-get_max_batch_size">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.get_max_batch_size() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get max batch size from tensor spec.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-get_min_batch_size">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.get_min_batch_size() -> int | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get min batch size from tensor spec.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-has_batch_axis">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.has_batch_axis() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if tensor has batch axis.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-has_dynamic_axis">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.has_dynamic_axis() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if tensor has dynamic axis.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-is_int">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.is_int(
+    value: float
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Check if value is an integer by checking value not the type.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-matches">
+
+<CodeBlock links={{"aitune.torch.module.tensor_spec.TensorSpec":"#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.matches(
+    other: aitune.torch.module.tensor_spec.TensorSpec
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if tensor spec matches other tensor spec.
+
+Tensor spec matches other if ranks are same and each ordinal dimension is the same.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert TensorSpec to a serializable dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tensor_spec-TensorSpec-update_shapes_seen">
+
+<CodeBlock links={{"aitune.torch.module.tensor_spec.TensorSpec":"#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tensor_spec.TensorSpec.update_shapes_seen(
+    other: aitune.torch.module.tensor_spec.TensorSpec
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Update shapes seen from other TensorSpec.
+
+Tensor have to have same rank in order to update self.
+
+The algorithm for detecting batch dimension is the following: given two different batch sizes, if batch size
+multiplier is the same for same axis in both tensors and is an integer, then it is a batch dimension otherwise
+it is a dynamic dimension.
+
+The reason for using multipliers is that some models stack input tensor vertically and the resulting input has
+double of the batch size i.e. local batch size is 2x the global batch size.
+
+Example of the algorithm - let's assume we observed tensor[1, 2, 3, 4] given bs=1. We calculated multipliers
+to be [1, 2, 3, 4]. Now if we see tensor[2, 8, 6, 4] with bs=2, we calculate multipliers to be
+[1, 4, 3, 2]. We can make some conclusions:
+- 0th axis is batch axis, multiplier is 1
+- 1st axis is dynamic axis, multiplier is 2 and 4 - this could be for example length in LLMs
+- 2nd axis is batch axis, multiplier is 3 - the input tensor is v-stacked thus multiplier is 3
+- 3rd axis is static axis - never changes w.r.t. batch size
+
+This algorithm is not foolproof and can fail in some cases e.g. sequence length in LLMs is equal to batch size
+which is unlikely to happen in practice. However to mitigate this risk, there is additional check for batch axis
+multiplier which has to be an integer.
+
+
+</Indent>
+</Indent>

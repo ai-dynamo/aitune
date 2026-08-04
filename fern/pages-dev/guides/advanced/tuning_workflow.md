@@ -67,13 +67,17 @@ As samples are collected, wrapped modules detect unique computational graphs:
 
 ```python
 # Example: Different input structures create different graphs
-module(torch.randn(1, 10))  # Graph 0
-module(torch.randn(1, 10), mask=True)  # Graph 1 (different kwargs)
+x = torch.randn(1, 10)
+module(x)  # Graph 0
+module(x, mask=True)  # Graph 1 (additional argument)
+module(x=x, mask=True)  # Graph 1 (equivalent positional/keyword call)
 module(torch.randn(1, 10, 5))  # Graph 2 (different tensor rank)
 ```
 
 **Graph Identity Rules**:
 
+- The same forward parameters passed positionally or by keyword → same graph
+- Additional or omitted parameters may produce different graphs
 - Tensors with different ranks → different graphs
 - Different tensor shapes but same rank → same graph (dynamic shapes)
 - Different non-tensor arguments (in strict mode) → different graphs
@@ -332,19 +336,19 @@ Now the logs will show the inputs and outputs of the module:
 2026-02-04 13:32:38,342 - INFO -   graph_spec:
 2026-02-04 13:32:38,343 - INFO -     input_spec:
  Tensors:
-╒═══════════╤════════╤═════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
-│ Locator   │ Name   │ Shape                   │ Min Shape        │ Max Shape        │ Dtype         │
-╞═══════════╪════════╪═════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
-│ [0]       │ args_0 │ ['batch0', 3, 224, 224] │ [1, 3, 224, 224] │ [4, 3, 224, 224] │ torch.float32 │
-╘═══════════╧════════╧═════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape                   │ Min Shape        │ Max Shape        │ Dtype         │
+╞═══════════════╪═════════════════╪═════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
+│ x             │ x               │ ['batch0', 3, 224, 224] │ [1, 3, 224, 224] │ [4, 3, 224, 224] │ torch.float32 │
+╘═══════════════╧═════════════════╧═════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
 
 2026-02-04 13:32:38,343 - INFO -     output_spec:
  Tensors:
-╒═══════════╤═════════╤══════════════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name    │ Shape            │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪═════════╪══════════════════╪═════════════╪═════════════╪═══════════════╡
-│           │ outputs │ ['batch0', 1000] │ [1, 1000]   │ [4, 1000]   │ torch.float32 │
-╘═══════════╧═════════╧══════════════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤══════════════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape            │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪══════════════════╪═════════════╪═════════════╪═══════════════╡
+│ output        │ ()              │ ['batch0', 1000] │ [1, 1000]   │ [4, 1000]   │ torch.float32 │
+╘═══════════════╧═════════════════╧══════════════════╧═════════════╧═════════════╧═══════════════╛
 ```
 
 As you can see, AITune detected the batch axis as the first one, hence the name `batch0` and input shapes `3x224x224`, i.e., batch of images, and output shape `1000`, i.e., batch of categories.
@@ -421,18 +425,18 @@ Finally the winning backend is presented:
 2026-02-04 13:34:32,581 - INFO - ✅ Selected TorchAOBackend(quantization_config=Int8WeightOnlyConfig()) for module example-resnet50 and graph spec Name=0
 Input_spec:
 Tensors:
-╒═══════════╤════════╤═════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
-│ Locator   │ Name   │ Shape                   │ Min Shape        │ Max Shape        │ Dtype         │
-╞═══════════╪════════╪═════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
-│ [0]       │ args_0 │ ['batch0', 3, 224, 224] │ [1, 3, 224, 224] │ [4, 3, 224, 224] │ torch.float32 │
-╘═══════════╧════════╧═════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape                   │ Min Shape        │ Max Shape        │ Dtype         │
+╞═══════════════╪═════════════════╪═════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
+│ x             │ x               │ ['batch0', 3, 224, 224] │ [1, 3, 224, 224] │ [4, 3, 224, 224] │ torch.float32 │
+╘═══════════════╧═════════════════╧═════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
 Output_spec:
 Tensors:
-╒═══════════╤═════════╤══════════════════╤═════════════╤═════════════╤═══════════════╕
-│ Locator   │ Name    │ Shape            │ Min Shape   │ Max Shape   │ Dtype         │
-╞═══════════╪═════════╪══════════════════╪═════════════╪═════════════╪═══════════════╡
-│           │ outputs │ ['batch0', 1000] │ [1, 1000]   │ [4, 1000]   │ torch.float32 │
-╘═══════════╧═════════╧══════════════════╧═════════════╧═════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤══════════════════╤═════════════╤═════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape            │ Min Shape   │ Max Shape   │ Dtype         │
+╞═══════════════╪═════════════════╪══════════════════╪═════════════╪═════════════╪═══════════════╡
+│ output        │ ()              │ ['batch0', 1000] │ [1, 1000]   │ [4, 1000]   │ torch.float32 │
+╘═══════════════╧═════════════════╧══════════════════╧═════════════╧═════════════╧═══════════════╛
 .
 2026-02-04 13:34:32,581 - INFO -    Batch size: 4, throughput: 23666.16 samples/s
 2026-02-04 13:34:32,581 - INFO - ⏱️ Tune `MaxThroughputStrategy`: completed in 1.90min

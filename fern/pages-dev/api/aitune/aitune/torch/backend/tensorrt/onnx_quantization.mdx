@@ -15,6 +15,13 @@ NVIDIA ModelOpt ONNX quantization module for TensorRT backend.
 | [`ONNXQuantizationConfig`](#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig) | Configuration for ONNX quantization. |
 | [`ONNXQuantizer`](#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizer) | NVIDIA ModelOpt ONNX quantizer for TensorRT backend. |
 
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_validate_calibration_method`](#aitune-torch-backend-tensorrt-onnx_quantization-_validate_calibration_method) | Validate that calibration_method is a supported value. |
+| [`_validate_precision`](#aitune-torch-backend-tensorrt-onnx_quantization-_validate_precision) | Validate that precision is a supported value. |
+
 ### Data
 
 [`CalibrationMethod`](#aitune-torch-backend-tensorrt-onnx_quantization-CalibrationMethod)
@@ -71,6 +78,23 @@ Whether to apply ModelOpt post-processing to the quantized model
 
 <ParamField path="use_model_opt_post_processing" type="bool = False">
 </ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate precision and calibration_method after initialization.
+
+
+</Indent>
 <Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig-from_dict">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -201,6 +225,46 @@ Path to the quantized ONNX file
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-_validate_calibration_method">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_quantization._validate_calibration_method(
+    method: str | None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that calibration_method is a supported value.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-_validate_precision">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_quantization._validate_precision(
+    precision: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that precision is a supported value.
+
+
 </Indent>
 
 <Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-CalibrationMethod">

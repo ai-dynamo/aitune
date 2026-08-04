@@ -14,7 +14,7 @@ Measuring stop strategies for profiling.
 |------|-------------|
 | [`MeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy) | Strategy when to stop collecting measurements for given batch size. |
 | [`NumStepsMeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy) | Strategy to stop collecting measurements after a given number of steps. |
-| [`StableWindowMeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy) | Strategy to stop collecting measurements after stable windows of measurements have been collected. |
+| [`StableWindowMeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy) | Strategy to stop collecting measurements after a stable sliding window has been collected. |
 
 ### API
 
@@ -96,7 +96,8 @@ True if the measurement should be stopped, False otherwise.
 
 ```python
 class aitune.torch.task.profiling.measuring_stop_strategy.NumStepsMeasuringStopStrategy(
-    num_steps: int
+    num_steps: int = 20,
+    warmup_samples: int = 10
 )
 ```
 
@@ -110,7 +111,10 @@ class aitune.torch.task.profiling.measuring_stop_strategy.NumStepsMeasuringStopS
 Strategy to stop collecting measurements after a given number of steps.
 
 
-<ParamField path="_steps_counter" type="= 0">
+<ParamField path="_min_samples_seen" type="= self.warmup_samples + self.num_steps">
+</ParamField>
+
+<ParamField path="_samples_seen" type="= 0">
 </ParamField>
 <Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy-get_events">
 
@@ -127,7 +131,7 @@ aitune.torch.task.profiling.measuring_stop_strategy.NumStepsMeasuringStopStrateg
 
 <Indent>
 
-Get events to use for measuring stop strategy.
+Get final measured events after should_stop() has returned True.
 
 
 </Indent>
@@ -137,7 +141,7 @@ Get events to use for measuring stop strategy.
 
 ```python
 aitune.torch.task.profiling.measuring_stop_strategy.NumStepsMeasuringStopStrategy.should_stop(
-    _: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
 ) -> bool
 ```
 
@@ -158,8 +162,10 @@ Check if the measurement should be stopped.
 
 ```python
 class aitune.torch.task.profiling.measuring_stop_strategy.StableWindowMeasuringStopStrategy(
-    window_size: int,
-    stability_percentage: float
+    window_size: int = 20,
+    max_cv_ratio: float = 0.1,
+    warmup_samples: int = 10,
+    max_samples: int = 100
 )
 ```
 
@@ -170,8 +176,14 @@ class aitune.torch.task.profiling.measuring_stop_strategy.StableWindowMeasuringS
 
 **Bases:** [MeasuringStopStrategy](#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy)
 
-Strategy to stop collecting measurements after stable windows of measurements have been collected.
+Strategy to stop collecting measurements after a stable sliding window has been collected.
 
+
+<ParamField path="_max_samples_seen" type="= self.max_samples + self.warmup_samples">
+</ParamField>
+
+<ParamField path="_min_samples_seen" type="= self.window_size + self.warmup_samples">
+</ParamField>
 
 <ParamField path="_samples_seen" type="= 0">
 </ParamField>

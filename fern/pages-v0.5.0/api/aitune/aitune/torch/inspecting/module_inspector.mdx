@@ -1,0 +1,644 @@
+---
+layout: overview
+slug: aitune/aitune/torch/inspecting/module_inspector
+title: aitune.torch.inspecting.module_inspector
+---
+
+Module for inspecting PyTorch models and tracking their execution.
+
+This module is used to inspect PyTorch models and track their execution. It is
+used to find the modules that are executed and the modules that are not
+executed. It is also used to wrap the forward methods of the modules to track
+the execution time and input/output types.
+
+In ModuleInspector, we use `vars(obj)` to get the members of an object.
+
+Double references to the same module may cause issues. The inspector takes the
+first reference to the module that is inspected. So, even if the second
+reference is used for inference, the first will be returned for wrapping.
+
+Object paths used in ModuleInfo are relative to the root module and are in all
+dot notation, even for dictionaries and lists. (e.g., '.list.0.layers`,
+'.dict.key.layers`, `.encoder.layers.0.self_attn.q_proj.weight`).
+
+Environment variables that could be used:
+
+    AITUNE_INSPECT_DEBUG:
+        Whether to enable more verbose debug mode for inspecting. Adds visited
+        nodes, and execution order. Default is False.
+
+    AITUNE_INSPECT_DEBUG_RAISE:
+        Whether to raise an error when an error occurs during inspecting -
+        ignored by default. Default is False.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`InspectContext`](#aitune-torch-inspecting-module_inspector-InspectContext) | Context for inspecting modules. |
+| [`ModuleInspector`](#aitune-torch-inspecting-module_inspector-ModuleInspector) | Class for inspecting PyTorch modules and tracking their execution. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_get_inspect_debug`](#aitune-torch-inspecting-module_inspector-_get_inspect_debug) | - |
+| [`_get_inspect_debug_raise`](#aitune-torch-inspecting-module_inspector-_get_inspect_debug_raise) | - |
+
+### Data
+
+[`DEFAULT_INSPECT_DEBUG`](#aitune-torch-inspecting-module_inspector-DEFAULT_INSPECT_DEBUG)
+
+[`DEFAULT_INSPECT_DEBUG_RAISE`](#aitune-torch-inspecting-module_inspector-DEFAULT_INSPECT_DEBUG_RAISE)
+
+[`DEFAULT_MAX_RECURSION_DEPTH`](#aitune-torch-inspecting-module_inspector-DEFAULT_MAX_RECURSION_DEPTH)
+
+[`logger`](#aitune-torch-inspecting-module_inspector-logger)
+
+### API
+
+<Anchor id="aitune-torch-inspecting-module_inspector-InspectContext">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.inspecting.module_inspector.InspectContext(
+    depth: int = 0,
+    object_path: str = '',
+    module_parent: aitune.torch.inspecting.module_info.ModuleInfo | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Context for inspecting modules.
+
+
+<ParamField path="depth" type="int = 0">
+</ParamField>
+
+<ParamField path="module_parent" type="ModuleInfo | None = None">
+</ParamField>
+
+<ParamField path="name" type="str">
+Get the name.
+</ParamField>
+
+<ParamField path="object_path" type="str = ''">
+</ParamField>
+<Anchor id="aitune-torch-inspecting-module_inspector-InspectContext-clone">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.InspectContext.clone(
+    kwargs = {}
+) -> aitune.torch.inspecting.module_inspector.InspectContext
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the inspect context, with optional changes.
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-InspectContext-create_module_info">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.InspectContext.create_module_info(
+    module: torch.nn.Module | list | dict | typing.Any
+) -> aitune.torch.inspecting.module_info.ModuleInfo
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the ModuleInfo based on current context and provided object type.
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-InspectContext-next">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.InspectContext.next(
+    name: str = '',
+    parent: aitune.torch.inspecting.module_info.ModuleInfo | None = None
+) -> aitune.torch.inspecting.module_inspector.InspectContext
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the next inspect context - increment depth and add name to object path.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.inspecting.module_inspector.ModuleInspector(
+    min_depth: int = 0,
+    max_depth: int = 5
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Class for inspecting PyTorch modules and tracking their execution.
+
+
+<ParamField path="_execution_parent_module" type="list[ModuleInfo] = []">
+</ParamField>
+
+<ParamField path="_inspected_objects" type="set = set()">
+</ParamField>
+
+<ParamField path="_module_info" type="dict[Any, ModuleInfo] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_original_forward" type="dict[Any, Any] = &#123;&#125;">
+</ParamField>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_debug_error">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._debug_error(
+    message: str,
+    args: typing.Any = (),
+    error: Exception
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Debug an error.
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_debug_inspecting_functions">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._debug_inspecting_functions() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Debug inspecting functions.
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_inspect_dict">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._inspect_dict(
+    obj: dict,
+    context: aitune.torch.inspecting.module_inspector.InspectContext
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect the values of a dictionary.
+
+**Parameters:**
+
+<ParamField path="obj" type="dict">
+The dictionary to inspect
+</ParamField>
+
+<ParamField path="context" type="InspectContext">
+The context of the inspection
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_inspect_list">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._inspect_list(
+    obj: list,
+    context: aitune.torch.inspecting.module_inspector.InspectContext
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect the elements of a list.
+
+**Parameters:**
+
+<ParamField path="obj" type="list">
+The list to inspect
+</ParamField>
+
+<ParamField path="context" type="InspectContext">
+The context of the inspection
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_inspect_members">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._inspect_members(
+    obj: typing.Any,
+    members: dict[str, typing.Any],
+    context: aitune.torch.inspecting.module_inspector.InspectContext
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect the members of an object.
+
+**Parameters:**
+
+<ParamField path="obj" type="Any">
+The object to inspect
+</ParamField>
+
+<ParamField path="members" type="dict[str, Any]">
+The members of the object to inspect
+</ParamField>
+
+<ParamField path="context" type="InspectContext">
+The context of the inspection
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_inspect_module">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._inspect_module(
+    module: torch.nn.Module,
+    context: aitune.torch.inspecting.module_inspector.InspectContext
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Start inspecting a module and its submodules.
+
+**Parameters:**
+
+<ParamField path="module" type="torch.nn.Module">
+The PyTorch module to inspect
+</ParamField>
+
+<ParamField path="context" type="InspectContext">
+The context of the inspection
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_inspect_object">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._inspect_object(
+    obj: typing.Any,
+    context: aitune.torch.inspecting.module_inspector.InspectContext
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect an object and its members for PyTorch modules.
+
+**Parameters:**
+
+<ParamField path="obj" type="Any">
+The object to inspect
+</ParamField>
+
+<ParamField path="context" type="InspectContext">
+The context of the inspection
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_register_module">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext","aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._register_module(
+    module: torch.nn.Module,
+    context: aitune.torch.inspecting.module_inspector.InspectContext
+) -> aitune.torch.inspecting.module_info.ModuleInfo | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Register a module and its submodules in the inspector.
+
+**Parameters:**
+
+<ParamField path="module" type="torch.nn.Module">
+The module to register
+</ParamField>
+
+<ParamField path="parent">
+The parent module info if any
+</ParamField>
+
+<ParamField path="context" type="InspectContext">
+The context of the inspection
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_should_skip_member">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._should_skip_member(
+    obj: typing.Any,
+    member_name: str
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if a member should be skipped.
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_wrap_debug_inspect">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._wrap_debug_inspect(
+    method: collections.abc.Callable,
+    collection: bool = False
+) -> collections.abc.Callable
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wrap a method to add debug logging.
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_wrap_forward_methods">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._wrap_forward_methods(
+    module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wrap forward methods of a module and its submodules.
+
+**Parameters:**
+
+<ParamField path="module">
+The module whose forward method to wrap
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-get_modules">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector.get_modules() -> list[aitune.torch.inspecting.module_info.ModuleInfo]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get list of top-level executed modules or their first executed children.
+
+**Returns:** `list[ModuleInfo]`
+
+List of modules that were executed at the top level or their first executed children
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-inspect">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector.inspect(
+    obj: typing.Any
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect an object and its members for PyTorch modules.
+
+**Parameters:**
+
+<ParamField path="obj" type="Any">
+The object to inspect
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-nn_module_base_members">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector.nn_module_base_members() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Get the base class members of a PyTorch module.
+
+**Returns:** `list[str]`
+
+List of names
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-reset">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector.reset() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reset the inspector state.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_inspector-_get_inspect_debug">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector._get_inspect_debug() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_inspector-_get_inspect_debug_raise">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector._get_inspect_debug_raise() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_inspector-DEFAULT_INSPECT_DEBUG">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.DEFAULT_INSPECT_DEBUG = False
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-inspecting-module_inspector-DEFAULT_INSPECT_DEBUG_RAISE">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.DEFAULT_INSPECT_DEBUG_RAISE = False
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-inspecting-module_inspector-DEFAULT_MAX_RECURSION_DEPTH">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.DEFAULT_MAX_RECURSION_DEPTH = 5
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-inspecting-module_inspector-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

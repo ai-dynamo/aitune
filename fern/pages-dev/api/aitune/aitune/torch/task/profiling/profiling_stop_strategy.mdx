@@ -116,8 +116,8 @@ True if the profiling should be stopped, False otherwise.
 
 ```python
 class aitune.torch.task.profiling.profiling_stop_strategy.ThroughputSaturatedProfilingStopStrategy(
-    throughput_cutoff_threshold: float,
-    throughput_backoff_limit: int = 0,
+    min_throughput_gain_ratio: float = 0.05,
+    throughput_backoff_limit: int = 2,
     _best_results: list[aitune.torch.task.profiling.events.ProfilingResultEvent] = list(),
     _backoff_counter: int = 0
 )
@@ -139,12 +139,13 @@ This is useful to avoid stopping profiling too early, when the model is still no
 
 **Parameters:**
 
-<ParamField path="throughput_cutoff_threshold" type="float">
-Threshold for throughput saturation.
+<ParamField path="min_throughput_gain_ratio" type="float" default="0.05">
+Minimum relative throughput gain required to continue profiling.
 </ParamField>
 
-<ParamField path="throughput_backoff_limit" type="int" default="0">
-Number of measurements after saturation is detected to continue profiling. 0 or negative value means no backoff.
+<ParamField path="throughput_backoff_limit" type="int" default="2">
+Number of measurements after saturation is detected to continue profiling.
+0 means no backoff.
 </ParamField>
 
 
@@ -154,11 +155,28 @@ Number of measurements after saturation is detected to continue profiling. 0 or 
 <ParamField path="_best_results" type="list[ProfilingResultEvent] = field(default_factory=list)">
 </ParamField>
 
-<ParamField path="throughput_backoff_limit" type="int = 0">
+<ParamField path="min_throughput_gain_ratio" type="float = 0.05">
 </ParamField>
 
-<ParamField path="throughput_cutoff_threshold" type="float">
+<ParamField path="throughput_backoff_limit" type="int = 2">
 </ParamField>
+<Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ThroughputSaturatedProfilingStopStrategy-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.profiling_stop_strategy.ThroughputSaturatedProfilingStopStrategy.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate ratio configuration.
+
+
+</Indent>
 <Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ThroughputSaturatedProfilingStopStrategy-should_stop">
 
 <CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>

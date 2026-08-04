@@ -12,7 +12,7 @@ Torch compile backend.
 
 | Name | Description |
 |------|-------------|
-| [`TorchTensorRTConfig`](#aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTConfig) | Allows testing when torch_tensorrt is not installed. |
+| [`TorchTensorRTConfig`](#aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTConfig) | Fallback settings matching upstream defaults when torch_tensorrt is unavailable. |
 | [`TorchTensorRTJitBackend`](#aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend) | Torch TensorRT thought torch.compile(backend="torch_tensorrt"). |
 | [`TorchTensorRTJitBackendConfig`](#aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackendConfig) | Configuration for torch.compile(backend="torch_tensorrt"). |
 
@@ -47,7 +47,7 @@ class aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig(
 
 <Badge>Dataclass</Badge>
 
-Allows testing when torch_tensorrt is not installed.
+Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 
 
 <ParamField path="enabled_precisions" type="set[dtype] | None = None">
@@ -354,6 +354,8 @@ class aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackendCon
 **Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
 
 Configuration for torch.compile(backend="torch_tensorrt").
+
+Defaults preserve torch.compile behavior unless callers opt into stricter compilation options.
 
 
 <ParamField path="autocast_dtype" type="dtype | None = None">

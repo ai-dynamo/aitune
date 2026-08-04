@@ -20,7 +20,7 @@ import { BadgeLinks } from "../_components/BadgeLinks";
     },
     {
       href: "https://pytorch.org/",
-      src: "https://img.shields.io/badge/PyTorch-2.7%2B-red",
+      src: "https://img.shields.io/badge/PyTorch-2.8%2B-red",
       alt: "PyTorch",
     },
   ]}

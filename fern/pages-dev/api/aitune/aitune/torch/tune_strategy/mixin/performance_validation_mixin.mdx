@@ -12,8 +12,7 @@ Performance validation mixin for tune strategy.
 
 | Name | Description |
 |------|-------------|
-| [`PerformanceValidationMixin`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin) | Mixin that validates each correctness-passing backend against a TorchEager throughput baseline. |
-| [`PerformanceValidationMixinConfig`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixinConfig) | Configuration for performance validation. |
+| [`PerformanceValidationMixin`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin) | TuneStrategy mixin that validates each backend against a TorchEager throughput baseline. |
 | [`PerformanceValidationMixinResult`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixinResult) | Throughput and speedup result for a single backend. |
 
 ### Functions
@@ -27,13 +26,12 @@ Performance validation mixin for tune strategy.
 
 <Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixinConfig":"#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixinConfig"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin(
     args = (),
-    perf_validation_config: aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixinConfig | None = None,
-    sink: collections.abc.Callable | None = None,
+    min_speedup_threshold_percent: float = 1.0,
     kwargs = {}
 )
 ```
@@ -43,15 +41,14 @@ class aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceV
 
 <Indent>
 
-**Bases:** [FindMaxBatchSizeMixin](/aitune/aitune/torch/tune_strategy/mixin/find_max_batch_size_mixin#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin)
+**Bases:** [TuneStrategy](/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy)
 
-Mixin that validates each correctness-passing backend against a TorchEager throughput baseline.
+TuneStrategy mixin that validates each backend against a TorchEager throughput baseline.
 
-Profiles TorchEager during _pre_tune at the resolved batch size (from graph_spec.get_max_batch_size())
-to establish a baseline. For every candidate backend, profiles at the resolved batch size and appends a
-PerformanceValidationMixinResult. When validate_against_baseline=True (default),
-backends with speedup &lt; 1 + min_speedup_threshold are rejected (return None or
-fall back). Profiling and result recording always occur regardless of the flag.
+When performance validation is enabled, profiles TorchEager during _pre_tune with the strategy profiling
+config narrowed to the resolved batch size (from graph_spec.get_max_batch_size()) to establish a baseline.
+For every candidate backend, profiles with the same task-local profiling config and appends a
+PerformanceValidationMixinResult. Backends with speedup below the configured threshold are rejected.
 
 
 <ParamField path="_baseline_backend" type="Backend | None = None">
@@ -60,16 +57,13 @@ fall back). Profiling and result recording always occur regardless of the flag.
 <ParamField path="_baseline_throughput" type="float | None = None">
 </ParamField>
 
+<ParamField path="_performance_validation_enabled" type="bool = True">
+</ParamField>
+
 <ParamField path="_resolved_batch_size" type="int | None = None">
 </ParamField>
 
-<ParamField path="perf_validation_config">
-</ParamField>
-
 <ParamField path="perf_validation_results" type="list[PerformanceValidationMixinResult] = []">
-</ParamField>
-
-<ParamField path="validate_against_baseline" type="bool = True">
 </ParamField>
 <Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_build_validate_and_check_perf">
 
@@ -97,7 +91,7 @@ Build, correctness-validate, then profile and check throughput against baseline.
 
 Returns the built backend, or None when correctness fails
 (raise_on_failure=False) or performance check rejects it
-(validate_against_baseline=True and speedup below threshold).
+(speedup below threshold).
 
 
 </Indent>
@@ -162,16 +156,36 @@ aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidat
 
 <Indent>
 
-Calls super()._pre_tune() then profiles TorchEager at the resolved batch size.
+Runs pre-tune setup and profiles TorchEager when performance validation is enabled.
 
 
 </Indent>
-<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-enable_validate_against_baseline">
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_profiling_config_for_batch_size">
+
+<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin._profiling_config_for_batch_size(
+    batch_size: int,
+    batching: bool | None = None
+) -> aitune.torch.task.profiling.ProfilingConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the strategy profiling config narrowed to one validation batch size.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-enable_performance_validation">
 
 <CodeBlock links={{"aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin":"#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin.enable_validate_against_baseline(
+aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin.enable_performance_validation(
     enable: bool = True
 ) -> aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin
 ```
@@ -181,57 +195,7 @@ aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidat
 
 <Indent>
 
-Enables or disables baseline validation.
-
-
-</Indent>
-</Indent>
-
-<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixinConfig">
-
-<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-class aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixinConfig(
-    min_speedup_threshold: float = DEFAULT_MIN_SPEEDUP_THRESHOLD,
-    profiling_config: aitune.torch.task.profiling.ProfilingConfig | None = None
-)
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-<Badge>Dataclass</Badge>
-
-Configuration for performance validation.
-
-profiling_config is an optional user override. When None, a default
-ProfilingConfig is built at runtime for the resolved batch size.
-
-
-<ParamField path="min_speedup_threshold" type="float = DEFAULT_MIN_SPEEDUP_THRESHOLD">
-</ParamField>
-
-<ParamField path="profiling_config" type="ProfilingConfig | None = None">
-</ParamField>
-<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixinConfig-profiling_config_for_batch_size">
-
-<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixinConfig.profiling_config_for_batch_size(
-    batch_size: int
-) -> aitune.torch.task.profiling.ProfilingConfig
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Returns profiling config with batch_sizes set to [batch_size].
+Enables or disables TorchEager baseline profiling and candidate performance checks.
 
 
 </Indent>

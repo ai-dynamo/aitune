@@ -92,6 +92,59 @@ pipe.unet = ait.Module(pipe.unet, strategy=strategy_for_unet)
 pipe.transformer = ait.Module(pipe.transformer, strategy=strategy_for_transformer)
 ```
 
+#### User-provided dynamic shapes
+
+When recorded samples do not cover every shape needed in production, pass an explicit shape contract to
+`ait.Module`. Each mapping key is a tensor's forward parameter path, and each value describes the tensor's full rank:
+
+- Use an integer for a fixed dimension.
+- Use `BatchDim` for the logical batch dimension.
+- Use `DynamicDim` for any other bounded dynamic dimension.
+
+`min` and `max` are inclusive. `opt` selects the preferred compilation shape and defaults to `max` when omitted.
+Configure `dynamic_shapes` when constructing `ait.Module` directly; `ait.wrap` does not accept per-module shape
+definitions.
+
+```python
+import aitune.torch as ait
+
+batch = ait.BatchDim("batch", min=1, opt=2, max=8)
+height = ait.DynamicDim("spatial", min=224, opt=224, max=512)
+width = ait.DynamicDim("spatial", min=224, opt=224, max=512)
+
+model = ait.Module(
+    model,
+    dynamic_shapes={"x": (batch, 3, height, width)},
+)
+```
+
+The integer `3` fixes the channel dimension. `height` and `width` are shared because they have the same name, even
+though they are separate `DynamicDim` objects. Shared definitions must have the same type and bounds.
+
+Forward input paths are shown in the `input_spec` sample-metadata table in tuning logs. Use the **Semantic Path**
+column as the `dynamic_shapes` key. Top-level tensors use their forward parameter name, while tensors nested in
+dictionaries, sequences, dataclasses, or supported custom objects include every key, index, or attribute:
+
+```text
+Tensors:
+Access Path       Semantic Path          Shape
+----------------  ---------------------  ----------------
+x                 x                      [1, 3, 224, 224]
+options["mask"]   ('options', 'mask')    [1, 224, 224]
+items[0]          ('items', 0)           [1, 128]
+request.image     ('request', 'image')   [1, 3, 512, 512]
+```
+
+Use a string such as `"x"` for a top-level path and a tuple such as `("options", "mask")`, `("items", 0)`, or
+`("request", "image")` for a nested path. Inputs omitted from the mapping keep using shapes inferred from recorded
+samples.
+
+Each dynamic shape definition must match the corresponding input tensor's rank and fixed dimensions, and its ranges
+must include all dimension sizes present in the tuning samples.
+The explicit definitions then determine the ranges used by supported AOT backends.
+
+See the runnable [ResNet dynamic-shapes example](../../examples/ResNet/README.md#user-provided-dynamic-shapes), which
+records `(1, 3, 224, 224)` and runs the tuned model at `(2, 3, 256, 256)`.
 
 ### 3. Tuning Phase
 
@@ -306,33 +359,33 @@ Example output from dry-run
 2026-01-26 16:23:44,369 - INFO -   graph_spec:
 2026-01-26 16:23:44,369 - INFO -     input_spec:
  Tensors:
-╒═══════════════════════════╤══════════════════════════════╤══════════════════════════╤═══════════════════╤═══════════════════╤═══════════════╕
-│ Locator                   │ Name                         │ Shape                    │ Min Shape         │ Max Shape         │ Dtype         │
-╞═══════════════════════════╪══════════════════════════════╪══════════════════════════╪═══════════════════╪═══════════════════╪═══════════════╡
-│ ['encoder_hidden_states'] │ kwargs_encoder_hidden_states │ ['batch0', 333, 4096]    │ [2, 333, 4096]    │ [4, 333, 4096]    │ torch.float16 │
-├───────────────────────────┼──────────────────────────────┼──────────────────────────┼───────────────────┼───────────────────┼───────────────┤
-│ ['hidden_states']         │ kwargs_hidden_states         │ ['batch0', 16, 128, 128] │ [2, 16, 128, 128] │ [4, 16, 128, 128] │ torch.float16 │
-├───────────────────────────┼──────────────────────────────┼──────────────────────────┼───────────────────┼───────────────────┼───────────────┤
-│ ['pooled_projections']    │ kwargs_pooled_projections    │ ['batch0', 2048]         │ [2, 2048]         │ [4, 2048]         │ torch.float16 │
-├───────────────────────────┼──────────────────────────────┼──────────────────────────┼───────────────────┼───────────────────┼───────────────┤
-│ ['timestep']              │ kwargs_timestep              │ ['batch0']               │ [2]               │ [4]               │ torch.float32 │
-╘═══════════════════════════╧══════════════════════════════╧══════════════════════════╧═══════════════════╧═══════════════════╧═══════════════╛
+╒═══════════════════════╤═══════════════════════╤══════════════════════════╤═══════════════════╤═══════════════════╤═══════════════╕
+│ Access Path           │ Semantic Path         │ Shape                    │ Min Shape         │ Max Shape         │ Dtype         │
+╞═══════════════════════╪═══════════════════════╪══════════════════════════╪═══════════════════╪═══════════════════╪═══════════════╡
+│ encoder_hidden_states │ encoder_hidden_states │ ['batch0', 333, 4096]    │ [2, 333, 4096]    │ [4, 333, 4096]    │ torch.float16 │
+├───────────────────────┼───────────────────────┼──────────────────────────┼───────────────────┼───────────────────┼───────────────┤
+│ hidden_states         │ hidden_states         │ ['batch0', 16, 128, 128] │ [2, 16, 128, 128] │ [4, 16, 128, 128] │ torch.float16 │
+├───────────────────────┼───────────────────────┼──────────────────────────┼───────────────────┼───────────────────┼───────────────┤
+│ pooled_projections    │ pooled_projections    │ ['batch0', 2048]         │ [2, 2048]         │ [4, 2048]         │ torch.float16 │
+├───────────────────────┼───────────────────────┼──────────────────────────┼───────────────────┼───────────────────┼───────────────┤
+│ timestep              │ timestep              │ ['batch0']               │ [2]               │ [4]               │ torch.float32 │
+╘═══════════════════════╧═══════════════════════╧══════════════════════════╧═══════════════════╧═══════════════════╧═══════════════╛
 Other:
-╒════════════════════════════╤═══════════════════════════════╤═════════╕
-│ Locator                    │ Name                          │ Value   │
-╞════════════════════════════╪═══════════════════════════════╪═════════╡
-│ ['joint_attention_kwargs'] │ kwargs_joint_attention_kwargs │ None    │
-├────────────────────────────┼───────────────────────────────┼─────────┤
-│ ['return_dict']            │ kwargs_return_dict            │ False   │
-╘════════════════════════════╧═══════════════════════════════╧═════════╛
+╒════════════════════════╤════════════════════════╤═════════╕
+│ Access Path            │ Semantic Path          │ Value   │
+╞════════════════════════╪════════════════════════╪═════════╡
+│ joint_attention_kwargs │ joint_attention_kwargs │ None    │
+├────────────────────────┼────────────────────────┼─────────┤
+│ return_dict            │ return_dict            │ False   │
+╘════════════════════════╧════════════════════════╧═════════╛
 
 2026-01-26 16:23:44,370 - INFO -     output_spec:
  Tensors:
-╒═══════════╤═══════════╤══════════════════════════╤═══════════════════╤═══════════════════╤═══════════════╕
-│ Locator   │ Name      │ Shape                    │ Min Shape         │ Max Shape         │ Dtype         │
-╞═══════════╪═══════════╪══════════════════════════╪═══════════════════╪═══════════════════╪═══════════════╡
-│ [0]       │ outputs_0 │ ['batch0', 16, 128, 128] │ [2, 16, 128, 128] │ [4, 16, 128, 128] │ torch.float16 │
-╘═══════════╧═══════════╧══════════════════════════╧═══════════════════╧═══════════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤══════════════════════════╤═══════════════════╤═══════════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape                    │ Min Shape         │ Max Shape         │ Dtype         │
+╞═══════════════╪═════════════════╪══════════════════════════╪═══════════════════╪═══════════════════╪═══════════════╡
+│ output[0]     │ 0               │ ['batch0', 16, 128, 128] │ [2, 16, 128, 128] │ [4, 16, 128, 128] │ torch.float16 │
+╘═══════════════╧═════════════════╧══════════════════════════╧═══════════════════╧═══════════════════╧═══════════════╛
 
 2026-01-26 16:23:44,370 - INFO -   num samples: 1
 2026-01-26 16:23:44,370 - INFO -   device: cuda:0

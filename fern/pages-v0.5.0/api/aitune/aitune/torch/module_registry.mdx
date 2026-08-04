@@ -1,0 +1,132 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module_registry
+title: aitune.torch.module_registry
+---
+
+Inplace model registry.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ModuleRegistry`](#aitune-torch-module_registry-ModuleRegistry) | Registry for inplace modules. |
+
+### Data
+
+[`MODULE_REGISTRY`](#aitune-torch-module_registry-MODULE_REGISTRY)
+
+### API
+
+<Anchor id="aitune-torch-module_registry-ModuleRegistry">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module_registry.ModuleRegistry()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Registry for inplace modules.
+
+
+<ParamField path="_registry" type="OrderedDict[str, Module] = OrderedDict()">
+</ParamField>
+
+<ParamField path="modules" type="dict[str, Module]">
+Get all registered modules.
+</ParamField>
+<Anchor id="aitune-torch-module_registry-ModuleRegistry-clear">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module_registry.ModuleRegistry.clear() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Removes already registered modules.
+
+
+</Indent>
+<Anchor id="aitune-torch-module_registry-ModuleRegistry-get">
+
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module_registry.ModuleRegistry.get(
+    name: str
+) -> aitune.torch.module.wrapper_module.Module
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get a module.
+
+
+</Indent>
+<Anchor id="aitune-torch-module_registry-ModuleRegistry-register">
+
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module_registry.ModuleRegistry.register(
+    name: str,
+    module: aitune.torch.module.wrapper_module.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Register a module.
+
+
+</Indent>
+<Anchor id="aitune-torch-module_registry-ModuleRegistry-unregister">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module_registry.ModuleRegistry.unregister(
+    name: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Unregister a module.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module_registry-MODULE_REGISTRY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module_registry.MODULE_REGISTRY = ModuleRegistry()
+```
+
+</CodeBlock>
+</Anchor>
+

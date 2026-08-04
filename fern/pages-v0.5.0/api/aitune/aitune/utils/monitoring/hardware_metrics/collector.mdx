@@ -1,0 +1,246 @@
+---
+layout: overview
+slug: aitune/aitune/utils/monitoring/hardware_metrics/collector
+title: aitune.utils.monitoring.hardware_metrics.collector
+---
+
+Hardware metrics collector.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`HardwareMetricsCollector`](#aitune-utils-monitoring-hardware_metrics-collector-HardwareMetricsCollector) | Hardware metrics collector that collects metrics from the GPU and CPU. |
+| [`NoOpHardwareMetricsCollector`](#aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector) | No-op hardware metrics collector used when metric collection is disabled. |
+
+### API
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-HardwareMetricsCollector">
+
+<CodeBlock links={{"aitune.utils.monitoring.hardware_metrics.metrics.AbstractHardwareMetricProvider":"/aitune/aitune/utils/monitoring/hardware_metrics/metrics#aitune-utils-monitoring-hardware_metrics-metrics-AbstractHardwareMetricProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.collector.HardwareMetricsCollector(
+    metric_providers: list[aitune.utils.monitoring.hardware_metrics.metrics.AbstractHardwareMetricProvider],
+    queue: queue.Queue | multiprocessing.queues.Queue,
+    interval: float = 0.1
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [NoOpHardwareMetricsCollector](#aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector)
+
+Hardware metrics collector that collects metrics from the GPU and CPU.
+
+This class collects metrics from the GPU and CPU at a given interval using a timer.
+The results are sent to a queue to be processed by the hardware metrics receiver.
+The metrics are collected only if there is any scope active.
+
+
+<ParamField path="lock" type="= threading.RLock()">
+</ParamField>
+
+<ParamField path="scopes" type="= deque[str]()">
+</ParamField>
+
+<ParamField path="start_time" type="= perf_counter()">
+</ParamField>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-HardwareMetricsCollector-_cancel_polling">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.collector.HardwareMetricsCollector._cancel_polling()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Cancels the polling.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-HardwareMetricsCollector-_collect_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.collector.HardwareMetricsCollector._collect_metrics() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Collects metrics from the GPU and CPU.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-HardwareMetricsCollector-_poll_stats">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.collector.HardwareMetricsCollector._poll_stats() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Polls the metrics.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-HardwareMetricsCollector-_queue_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.collector.HardwareMetricsCollector._queue_metrics()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Queues the metrics.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-HardwareMetricsCollector-_update_metrics_with_context_info">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.collector.HardwareMetricsCollector._update_metrics_with_context_info(
+    metrics: dict[str, typing.Any],
+    curr_time: float
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Updates collected metrics with context information.
+
+**Parameters:**
+
+<ParamField path="metrics" type="dict[str, Any]">
+The metrics dictionary to update.
+</ParamField>
+
+<ParamField path="curr_time" type="float">
+The current timestamp.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-HardwareMetricsCollector-end_scope">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.collector.HardwareMetricsCollector.end_scope() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Ends the current scope.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-HardwareMetricsCollector-start_scope">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.collector.HardwareMetricsCollector.start_scope(
+    name: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Starts a new scope.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+No-op hardware metrics collector used when metric collection is disabled.
+
+Both methods intentionally do nothing. This is the null-object counterpart to
+HardwareMetricsCollector and can be used wherever a collector is required but
+collecting metrics is not desired.
+
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector-end_scope">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector.end_scope() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Ends the current scope.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector-start_scope">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector.start_scope(
+    name: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Starts a new scope.
+
+
+</Indent>
+</Indent>

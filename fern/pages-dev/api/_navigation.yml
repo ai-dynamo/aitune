@@ -252,6 +252,14 @@
           slug: aitune/aitune/torch/dataloader
           pageId: aitune/aitune/torch/dataloader.mdx
     - type: section
+      title: dynamic_shapes
+      slug: aitune/aitune/torch/dynamic_shapes
+      children:
+        - type: page
+          title: dynamic_shapes
+          slug: aitune/aitune/torch/dynamic_shapes
+          pageId: aitune/aitune/torch/dynamic_shapes.mdx
+    - type: section
       title: inspecting
       slug: aitune/aitune/torch/inspecting
       children:
@@ -440,6 +448,14 @@
       slug: aitune/aitune/torch/module
       children:
         - type: section
+          title: forward_signature
+          slug: aitune/aitune/torch/module/forward_signature
+          children:
+            - type: page
+              title: forward_signature
+              slug: aitune/aitune/torch/module/forward_signature
+              pageId: aitune/aitune/torch/module/forward_signature.mdx
+        - type: section
           title: graph_spec
           slug: aitune/aitune/torch/module/graph_spec
           children:
@@ -511,6 +527,58 @@
           title: module_registry
           slug: aitune/aitune/torch/module_registry
           pageId: aitune/aitune/torch/module_registry.mdx
+    - type: section
+      title: performance
+      slug: aitune/aitune/torch/performance
+      children:
+        - type: section
+          title: attribution_hooks
+          slug: aitune/aitune/torch/performance/attribution_hooks
+          children:
+            - type: page
+              title: attribution_hooks
+              slug: aitune/aitune/torch/performance/attribution_hooks
+              pageId: aitune/aitune/torch/performance/attribution_hooks.mdx
+        - type: section
+          title: context
+          slug: aitune/aitune/torch/performance/context
+          children:
+            - type: page
+              title: context
+              slug: aitune/aitune/torch/performance/context
+              pageId: aitune/aitune/torch/performance/context.mdx
+        - type: section
+          title: markdown
+          slug: aitune/aitune/torch/performance/markdown
+          children:
+            - type: page
+              title: markdown
+              slug: aitune/aitune/torch/performance/markdown
+              pageId: aitune/aitune/torch/performance/markdown.mdx
+        - type: section
+          title: profile
+          slug: aitune/aitune/torch/performance/profile
+          children:
+            - type: page
+              title: profile
+              slug: aitune/aitune/torch/performance/profile
+              pageId: aitune/aitune/torch/performance/profile.mdx
+        - type: section
+          title: runtime_profile
+          slug: aitune/aitune/torch/performance/runtime_profile
+          children:
+            - type: page
+              title: runtime_profile
+              slug: aitune/aitune/torch/performance/runtime_profile
+              pageId: aitune/aitune/torch/performance/runtime_profile.mdx
+        - type: section
+          title: utils
+          slug: aitune/aitune/torch/performance/utils
+          children:
+            - type: page
+              title: utils
+              slug: aitune/aitune/torch/performance/utils
+              pageId: aitune/aitune/torch/performance/utils.mdx
     - type: section
       title: task
       slug: aitune/aitune/torch/task
@@ -604,6 +672,14 @@
               slug: aitune/aitune/torch/tune_strategy/first_wins_strategy
               pageId: aitune/aitune/torch/tune_strategy/first_wins_strategy.mdx
         - type: section
+          title: latency_budget_strategy
+          slug: aitune/aitune/torch/tune_strategy/latency_budget_strategy
+          children:
+            - type: page
+              title: latency_budget_strategy
+              slug: aitune/aitune/torch/tune_strategy/latency_budget_strategy
+              pageId: aitune/aitune/torch/tune_strategy/latency_budget_strategy.mdx
+        - type: section
           title: max_throughput_strategy
           slug: aitune/aitune/torch/tune_strategy/max_throughput_strategy
           children:
@@ -611,6 +687,14 @@
               title: max_throughput_strategy
               slug: aitune/aitune/torch/tune_strategy/max_throughput_strategy
               pageId: aitune/aitune/torch/tune_strategy/max_throughput_strategy.mdx
+        - type: section
+          title: min_latency_strategy
+          slug: aitune/aitune/torch/tune_strategy/min_latency_strategy
+          children:
+            - type: page
+              title: min_latency_strategy
+              slug: aitune/aitune/torch/tune_strategy/min_latency_strategy
+              pageId: aitune/aitune/torch/tune_strategy/min_latency_strategy.mdx
         - type: section
           title: mixin
           slug: aitune/aitune/torch/tune_strategy/mixin
@@ -639,6 +723,14 @@
               title: one_backend_strategy
               slug: aitune/aitune/torch/tune_strategy/one_backend_strategy
               pageId: aitune/aitune/torch/tune_strategy/one_backend_strategy.mdx
+        - type: section
+          title: profiling_tune_strategy
+          slug: aitune/aitune/torch/tune_strategy/profiling_tune_strategy
+          children:
+            - type: page
+              title: profiling_tune_strategy
+              slug: aitune/aitune/torch/tune_strategy/profiling_tune_strategy
+              pageId: aitune/aitune/torch/tune_strategy/profiling_tune_strategy.mdx
         - type: section
           title: tune_strategy
           slug: aitune/aitune/torch/tune_strategy/tune_strategy
@@ -807,3 +899,11 @@
           title: timer
           slug: aitune/aitune/utils/timer
           pageId: aitune/aitune/utils/timer.mdx
+    - type: section
+      title: validation
+      slug: aitune/aitune/utils/validation
+      children:
+        - type: page
+          title: validation
+          slug: aitune/aitune/utils/validation
+          pageId: aitune/aitune/utils/validation.mdx

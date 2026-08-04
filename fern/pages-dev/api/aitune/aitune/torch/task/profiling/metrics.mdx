@@ -13,6 +13,7 @@ Metrics for profiling.
 | Name | Description |
 |------|-------------|
 | [`get_batch_size`](#aitune-torch-task-profiling-metrics-get_batch_size) | Get batch size from profiling results. |
+| [`get_latency`](#aitune-torch-task-profiling-metrics-get_latency) | Get mean latency from profiling results. |
 | [`get_mean_executions_per_second`](#aitune-torch-task-profiling-metrics-get_mean_executions_per_second) | Get execution time per second from profiling results. |
 | [`get_throughput`](#aitune-torch-task-profiling-metrics-get_throughput) | Get throughput from profiling results. |
 | [`is_throughput_saturated`](#aitune-torch-task-profiling-metrics-is_throughput_saturated) | Validate if throughput saturated between consecutive samples. |
@@ -45,6 +46,36 @@ List of profiling results.
 **Returns:** `int`
 
 Batch size.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-metrics-get_latency">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.metrics.get_latency(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get mean latency from profiling results.
+
+**Parameters:**
+
+<ParamField path="results" type="list[ProfilingResultEvent]">
+List of profiling results.
+</ParamField>
+
+**Returns:** `float`
+
+Mean latency in milliseconds.
 
 
 </Indent>
@@ -121,7 +152,7 @@ Throughput in samples per second.
 ```python
 aitune.torch.task.profiling.metrics.is_throughput_saturated(
     profiling_result: list[aitune.torch.task.profiling.events.ProfilingResultEvent],
-    throughput_cutoff_threshold: float,
+    min_throughput_gain_ratio: float,
     prev_results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
 ) -> bool
 ```
@@ -139,8 +170,8 @@ Validate if throughput saturated between consecutive samples.
 Current profiling results.
 </ParamField>
 
-<ParamField path="throughput_cutoff_threshold" type="float">
-Threshold for throughput saturation.
+<ParamField path="min_throughput_gain_ratio" type="float">
+Minimum relative throughput gain required to continue profiling.
 </ParamField>
 
 <ParamField path="prev_results" type="list[ProfilingResultEvent]">
@@ -149,7 +180,7 @@ Previous profiling results or previous throughput.
 
 **Returns:** `bool`
 
-True when throughput saturated between consecutive samples. False when verification disabled or not yet saturated.
+True when throughput saturated between consecutive samples.
 
 
 </Indent>

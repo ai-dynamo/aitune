@@ -5,6 +5,18 @@ title: "Changelog"
 ---
 # Changelog
 
+## 0.5.0
+- feat: allow AOT modules to declare explicit dynamic input shapes
+- feat: Add `MinLatencyStrategy` tune strategy that profiles all backends and selects the one with the lowest latency
+- feat: Add `LatencyBudgetStrategy` tune strategy that maximizes throughput while satisfying a latency budget
+- feat: validate model correctness at min and max dynamic shape boundaries
+- feat: capture JIT inspection details and config in tuning data reports - full inspection for `deferred` mode and basic for the `eager` mode
+- feat: defer JIT deferred-mode tuning until the next normal forward pass after `aitune.torch.jit.tune.deferred()`
+- breaking change: treat calls that pass the same forward parameters positionally or by keyword as the same graph; existing tuned checkpoints must be regenerated
+- breaking change: use forward parameter paths instead of `args_*` and `kwargs_*` names in metadata reports and TensorRT optimization profiles; custom profiles must use the new paths
+- breaking change: `aitune.torch.jit.tune.deferred()` now marks tuning to run on the next forward pass instead of tuning immediately
+- breaking change: replace `FindMaxBatchSizeMixinConfig` and `PerformanceValidationMixinConfig` with a single strategy-level `ProfilingConfig`
+
 ## 0.4.1
 - fix: use the recorded global batch size for baseline performance profiling
 - fix: align Torch-TensorRT defaults and JIT inspection CUDA synchronization

@@ -51,7 +51,6 @@ Enum representing different levels of information detail.
 
 ```python
 class aitune.torch.module.tensor_spec.TensorSpec(
-    name: str,
     shape: list[str | int],
     min_shape: list[int],
     max_shape: list[int],
@@ -82,9 +81,6 @@ TensorSpec is used to describe tensor metadata.
 <ParamField path="min_shape" type="list[int]">
 </ParamField>
 
-<ParamField path="name" type="str">
-</ParamField>
-
 <ParamField path="shape" type="list[str | int]">
 </ParamField>
 <Anchor id="aitune-torch-module-tensor_spec-TensorSpec-__eq__">
@@ -104,7 +100,7 @@ aitune.torch.module.tensor_spec.TensorSpec.__eq__(
 
 Check if two TensorSpec are equal.
 
-Tensors of the same name and rank are considered equal.
+Tensors of the same rank are considered equal.
 Particular dimensions sizes can be different as there can be dynamic dimensions.
 
 
@@ -124,7 +120,7 @@ aitune.torch.module.tensor_spec.TensorSpec.__hash__() -> int
 
 Hash of TensorSpec.
 
-Tensors of the same name and rank are considered equal.
+Tensors of the same rank are considered equal.
 Particular dimensions sizes can be different as there can be dynamic dimensions.
 
 
@@ -209,7 +205,6 @@ Create TensorSpec from dictionary.
 
 ```python
 aitune.torch.module.tensor_spec.TensorSpec.from_tensor(
-    name: str,
     tensor: torch.Tensor,
     batch_size: int
 )
@@ -225,10 +220,6 @@ aitune.torch.module.tensor_spec.TensorSpec.from_tensor(
 Create TensorSpec from tensor.
 
 **Parameters:**
-
-<ParamField path="name" type="str">
-Name of the tensor
-</ParamField>
 
 <ParamField path="tensor" type="torch.Tensor">
 Tensor to create TensorSpec from

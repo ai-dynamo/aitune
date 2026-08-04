@@ -1,0 +1,140 @@
+navigation:
+  - section: Learn
+    contents:
+      - page: Overview
+        path: ../pages-v0.5.0/learn/overview.md
+      - page: Install
+        path: ../pages-v0.5.0/learn/install.md
+      - page: Quick Start
+        path: ../pages-v0.5.0/learn/quick_start.md
+      - page: Core Functionalities
+        path: ../pages-v0.5.0/learn/core_functionalities.md
+      - page: Backends
+        path: ../pages-v0.5.0/learn/backends.md
+      - page: Observability
+        path: ../pages-v0.5.0/learn/observability.md
+  - section: Guides
+    contents:
+      - page: Ahead-of-time Tuning
+        path: ../pages-v0.5.0/guides/aot_tuning.md
+      - page: Ahead-of-time Inspect
+        path: ../pages-v0.5.0/guides/aot_inspect.md
+      - page: Just-in-time Tuning
+        path: ../pages-v0.5.0/guides/jit_tuning.md
+      - page: Just-in-time Inspect
+        path: ../pages-v0.5.0/guides/jit_inspect.md
+      - section: Backends
+        contents:
+          - page: TensorRT Backend
+            path: ../pages-v0.5.0/guides/backends/tensorrt_backend.md
+          - page: TensorRT Optimization Profiles
+            path: ../pages-v0.5.0/guides/backends/tensorrt_optimization_profiles.md
+          - page: ONNXRuntime Backend
+            path: ../pages-v0.5.0/guides/backends/onnx_runtime_backend.md
+          - page: Torch-TensorRT Backend (JIT)
+            path: ../pages-v0.5.0/guides/backends/torch_tensorrt_jit_backend.md
+          - page: Torch-TensorRT Backend (AOT)
+            path: ../pages-v0.5.0/guides/backends/torch_tensorrt_aot_backend.md
+          - page: TorchAO Backend
+            path: ../pages-v0.5.0/guides/backends/torchao_backend.md
+          - page: Torch Inductor JIT Backend
+            path: ../pages-v0.5.0/guides/backends/torch_inductor_jit_backend.md
+          - page: Torch Inductor AOT Backend
+            path: ../pages-v0.5.0/guides/backends/torch_inductor_aot_backend.md
+      - page: Tune Strategies
+        path: ../pages-v0.5.0/guides/tune_strategies/tune_strategies.md
+      - page: Deployment
+        path: ../pages-v0.5.0/guides/deployment/deployment.md
+      - section: Advanced
+        contents:
+          - page: Tuning Workflow
+            path: ../pages-v0.5.0/guides/advanced/tuning_workflow.md
+          - page: Execution Graphs
+            path: ../pages-v0.5.0/guides/advanced/execution_graphs.md
+          - page: Profiling and Hardware Metrics
+            path: ../pages-v0.5.0/guides/advanced/profiling_and_hardware_metrics.md
+          - page: Performance Profile
+            path: ../pages-v0.5.0/guides/advanced/performance_profile.md
+      - section: AI Agents
+        contents:
+          - page: Tuning Assistant
+            path: ../pages-v0.5.0/guides/tuning-assistant.md
+  - section: Examples
+    contents:
+      - page: Overview
+        path: ../pages-v0.5.0/examples/README.md
+      - page: E5Large
+        path: ../pages-v0.5.0/examples/E5Large/README.md
+      - page: ESM2
+        path: ../pages-v0.5.0/examples/ESM2/README.md
+      - page: FLUX
+        path: ../pages-v0.5.0/examples/FLUX/README.md
+      - page: JitTuning
+        path: ../pages-v0.5.0/examples/JitTuning/README.md
+      - page: LLM
+        path: ../pages-v0.5.0/examples/LLM/README.md
+      - page: ParakeetCTC
+        path: ../pages-v0.5.0/examples/ParakeetCTC/README.md
+      - page: ParakeetRNNT
+        path: ../pages-v0.5.0/examples/ParakeetRNNT/README.md
+      - page: ResNet
+        path: ../pages-v0.5.0/examples/ResNet/README.md
+      - page: StableDiffusion
+        path: ../pages-v0.5.0/examples/StableDiffusion/README.md
+  - section: API Reference
+    contents:
+      - section: Ahead-of-time Tuning API
+        contents:
+          - page: Module
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/module/index.mdx
+          - page: Tuning
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/tuning.mdx
+          - page: Config
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/config.mdx
+          - page: Backend
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/backend/backend.mdx
+          - page: Inspect
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/inspecting/inspecting.mdx
+      - section: Just-in-time Tuning API
+        contents:
+          - page: Config
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/jit/config.mdx
+      - section: Backends API
+        contents:
+          - page: TensorRT Backend
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/backend/tensorrt/tensorrt_backend.mdx
+          - page: Torch-TensorRT Backend (JIT)
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/backend/torch_tensorrt_jit_backend.mdx
+          - page: Torch-TensorRT Backend (AOT)
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/backend/torch_tensorrt_aot_backend.mdx
+          - page: TorchAO Backend
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/backend/torchao_backend.mdx
+          - page: Torch Inductor JIT Backend
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/backend/torch_inductor_jit_backend.mdx
+          - page: Torch Inductor AOT Backend
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/backend/torch_inductor_aot_backend.mdx
+      - section: Tuning Strategies API
+        contents:
+          - page: FirstWinsStrategy
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/tune_strategy/first_wins_strategy.mdx
+          - page: OneBackendStrategy
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/tune_strategy/one_backend_strategy.mdx
+          - page: MaxThroughputStrategy
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/tune_strategy/max_throughput_strategy.mdx
+          - page: LatencyBudgetStrategy
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/tune_strategy/latency_budget_strategy.mdx
+          - page: MinLatencyStrategy
+            path: ../pages-v0.5.0/api/aitune/aitune/torch/tune_strategy/min_latency_strategy.mdx
+      - section: Other APIs
+        contents:
+          - folder: ../pages-v0.5.0/api/aitune/aitune
+  - section: Resources
+    contents:
+      - page: Changelog
+        path: ../pages-v0.5.0/CHANGELOG.md
+      - page: Known Issues
+        path: ../pages-v0.5.0/known_issues.md
+      - page: Contributing
+        path: ../pages-v0.5.0/CONTRIBUTING.md
+      - page: License
+        path: ../pages-v0.5.0/LICENSE

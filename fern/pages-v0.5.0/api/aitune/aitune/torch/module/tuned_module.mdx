@@ -1,0 +1,234 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/tuned_module
+title: aitune.torch.module.tuned_module
+---
+
+Tuned module.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TunedModule`](#aitune-torch-module-tuned_module-TunedModule) | Module that does inference using tuned backend. |
+
+### API
+
+<Anchor id="aitune-torch-module-tuned_module-TunedModule">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.forward_signature.ForwardSignature":"/aitune/aitune/torch/module/forward_signature#aitune-torch-module-forward_signature-ForwardSignature","aitune.torch.config.AITuneConfig":"/aitune/aitune/torch/config#aitune-torch-config-AITuneConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.tuned_module.TunedModule(
+    backends: collections.OrderedDict[aitune.torch.module.sample_metadata.SampleMetadata, aitune.torch.backend.backend.Backend],
+    module_name: str,
+    forward_signature: aitune.torch.module.forward_signature.ForwardSignature,
+    check_graph: bool = True,
+    config: aitune.torch.config.AITuneConfig | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Module that does inference using tuned backend.
+
+
+<ParamField path="BACKENDS_KEY" type="= 'backends'">
+</ParamField>
+
+<ParamField path="CHECK_GRAPH_KEY" type="= 'check_graph'">
+</ParamField>
+
+<ParamField path="ERROR_NO_BACKENDS" type="= 'No backends provided'">
+</ParamField>
+
+<ParamField path="ERROR_NO_BACKEND_FOUND" type="= 'No backend found for a graph with metadata: &#123;&#125;'">
+</ParamField>
+
+<ParamField path="ERROR_UNKNOWN_BACKEND" type="= 'Unknown backend type: &#123;&#125;'">
+</ParamField>
+
+<ParamField path="FORWARD_SIGNATURE_KEY" type="= 'forward_signature'">
+</ParamField>
+
+<ParamField path="IS_ANY_JIT_KEY" type="= 'is_any_jit'">
+</ParamField>
+
+<ParamField path="MODULE_NAME_KEY" type="= 'module_name'">
+</ParamField>
+
+<ParamField path="TYPE_KEY" type="= 'type'">
+</ParamField>
+
+<ParamField path="_backend_func" type="= self.safe_call_backend">
+</ParamField>
+
+<ParamField path="_config" type="= config if config is not None else global_config">
+</ParamField>
+
+<ParamField path="_unique_backend" type="= list(self._backends.values())[0]">
+</ParamField>
+
+<ParamField path="backends">
+Get the backends of the module.
+</ParamField>
+
+<ParamField path="device" type="device">
+Get the device of the module.
+</ParamField>
+<Anchor id="aitune-torch-module-tuned_module-TunedModule-__call__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tuned_module.TunedModule.__call__(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run the call through the tuned module.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tuned_module-TunedModule-activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tuned_module.TunedModule.activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Activates the module backends.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tuned_module-TunedModule-call_unique_backend">
+
+<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tuned_module.TunedModule.call_unique_backend(
+    sample: aitune.torch.module.recording_module.Sample
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Calls the only backend without checking metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tuned_module-TunedModule-deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tuned_module.TunedModule.deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivates the module backends.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tuned_module-TunedModule-deploy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tuned_module.TunedModule.deploy(
+    device: torch.device | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deploys the module backends.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tuned_module-TunedModule-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tuned_module.TunedModule.from_dict(
+    module: torch.nn.Module,
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Creates a TunedModule from a state_dict.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tuned_module-TunedModule-safe_call_backend">
+
+<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tuned_module.TunedModule.safe_call_backend(
+    sample: aitune.torch.module.recording_module.Sample
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Calls the backend according to the metadata of the sample.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-tuned_module-TunedModule-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.tuned_module.TunedModule.to_dict()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the state_dict of the module.
+
+
+</Indent>
+</Indent>

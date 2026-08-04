@@ -97,11 +97,12 @@ Returns config dict for dummy strategy.
 
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.tune_strategy.tune_strategy.TuneStrategy(
-    sink: collections.abc.Callable | None = None
+    sink: collections.abc.Callable | None = None,
+    profiling_config: aitune.torch.task.profiling.ProfilingConfig | None = None
 )
 ```
 
@@ -120,6 +121,9 @@ Get a logger specific to this backend implementation.
 </ParamField>
 
 <ParamField path="_sink" type="= sink or self._logger.info">
+</ParamField>
+
+<ParamField path="profiling_config">
 </ParamField>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_build_and_validate_backend">
 
@@ -337,6 +341,23 @@ aitune.torch.tune_strategy.tune_strategy.TuneStrategy._pre_tune(
 <Indent>
 
 Pre-tune hook. Override to add custom logic before tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_profiling_config_to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._profiling_config_to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns a JSON-serializable summary of the shared profiling config.
 
 
 </Indent>

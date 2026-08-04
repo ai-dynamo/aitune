@@ -125,11 +125,11 @@ String representation
 </Indent>
 <Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-add_input_shape">
 
-<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardInputPath":"/aitune/aitune/torch/module/forward_signature#aitune-torch-module-forward_signature-ForwardInputPath","aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.add_input_shape(
-    name: str,
+    path: aitune.torch.module.forward_signature.ForwardInputPath,
     min_shape: tuple[int, ...],
     opt_shape: tuple[int, ...],
     max_shape: tuple[int, ...]
@@ -145,8 +145,8 @@ Add a shape binding to the profile.
 
 **Parameters:**
 
-<ParamField path="name" type="str">
-The name of the input tensor
+<ParamField path="path" type="ForwardInputPath">
+Forward parameter path identifying the input tensor
 </ParamField>
 
 <ParamField path="min_shape" type="tuple[int, ...]">

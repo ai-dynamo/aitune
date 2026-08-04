@@ -158,6 +158,9 @@ device attribute is patched with dynamic class creation so that only instance at
 <ParamField path="attempted_tuning" type="bool = False">
 </ParamField>
 
+<ParamField path="deferred_tuning_enabled" type="bool = False">
+</ParamField>
+
 <ParamField path="fq_name" type="str">
 Get the fully qualified name of the module.
 
@@ -373,6 +376,61 @@ Assumption: given name (actual class name + number of parameters) + id is unique
 
 
 </Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_handle_backend_added_hooks">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._handle_backend_added_hooks()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Handle new hooks if added by a backend.
+
+Before tuning hooks are cleared (empty OrderedDict). If there are new hooks added by a backend,
+they should be added to the existing ones but before the original hooks so that application layer hooks
+(like HF post processing hooks) are called after the backend hooks.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_inspection_graphs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._inspection_graphs() -> list[dict]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return JSON-ready graph specs recorded before deferred tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_module_dtypes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._module_dtypes() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return unique parameter and buffer dtypes for this module tree.
+
+
+</Indent>
 <Anchor id="aitune-torch-jit-patched_module-PatchedModule-_offload">
 
 <CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
@@ -535,8 +593,8 @@ aitune.torch.jit.patched_module.PatchedModule._should_be_tuned_deferred() -> boo
 
 Check if the module should be tuned in deferred mode.
 
-The explicit tune.deferred() call signals that recording is complete, so only
-a minimum of one recorded forward pass and tuning eligibility are required.
+The explicit enable_tune_deferred() call marks that recording is complete, so the
+next normal forward tunes eligible modules after recording that call.
 
 
 </Indent>
@@ -557,6 +615,23 @@ Check if the module should be tuned in eager mode.
 
 Requires a minimum number of forward passes and, when dynamic shapes are expected,
 at least one sample with a detected dynamic axis.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_should_report_inspection">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._should_report_inspection() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether this tuning path should emit per-module inspection details.
 
 
 </Indent>
@@ -715,6 +790,40 @@ the original forward is restored.
 <ParamField path="state" type="ModuleState">
 The new state of the module
 </ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-inspection_report">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.inspection_report() -> aitune.torch.tune_data.report_models.ModuleInspectionReport
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build a report snapshot of the JIT data observed for this module.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-inspection_subtree_reports">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.inspection_subtree_reports() -> list[aitune.torch.tune_data.report_models.ModuleInspectionReport]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build report snapshots for this module and observed child modules.
 
 
 </Indent>

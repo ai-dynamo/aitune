@@ -1,0 +1,214 @@
+---
+layout: overview
+slug: aitune/aitune/torch/dynamic_shapes
+title: aitune.torch.dynamic_shapes
+---
+
+Dynamic shape dimension definitions.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`BatchDim`](#aitune-torch-dynamic_shapes-BatchDim) | Dynamic dimension representing the module's logical batch size. |
+| [`DynamicDim`](#aitune-torch-dynamic_shapes-DynamicDim) | Named dynamic dimension with inclusive bounds. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`dynamic_shapes_to_json`](#aitune-torch-dynamic_shapes-dynamic_shapes_to_json) | Convert dynamic shape definitions to JSON-compatible data. |
+| [`validate_dynamic_shape_definitions`](#aitune-torch-dynamic_shapes-validate_dynamic_shape_definitions) | Validate explicit shape definitions before recording. |
+
+### Data
+
+[`DynamicShapes`](#aitune-torch-dynamic_shapes-DynamicShapes)
+
+[`ShapeDefinition`](#aitune-torch-dynamic_shapes-ShapeDefinition)
+
+[`__all__`](#aitune-torch-dynamic_shapes-__all__)
+
+### API
+
+<Anchor id="aitune-torch-dynamic_shapes-BatchDim">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.dynamic_shapes.BatchDim(
+    name: str,
+    min: int,
+    max: int,
+    opt: int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [DynamicDim](#aitune-torch-dynamic_shapes-DynamicDim)
+
+Dynamic dimension representing the module's logical batch size.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-dynamic_shapes-DynamicDim">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.dynamic_shapes.DynamicDim(
+    name: str,
+    min: int,
+    max: int,
+    opt: int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Named dynamic dimension with inclusive bounds.
+
+
+<ParamField path="max" type="int">
+</ParamField>
+
+<ParamField path="min" type="int">
+</ParamField>
+
+<ParamField path="name" type="str">
+</ParamField>
+
+<ParamField path="opt" type="int | None = None">
+</ParamField>
+<Anchor id="aitune-torch-dynamic_shapes-DynamicDim-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dynamic_shapes.DynamicDim.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate the dimension name and bounds.
+
+
+</Indent>
+<Anchor id="aitune-torch-dynamic_shapes-DynamicDim-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dynamic_shapes.DynamicDim.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert the dynamic dimension to a serializable dictionary.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-dynamic_shapes-dynamic_shapes_to_json">
+
+<CodeBlock links={{"aitune.torch.dynamic_shapes.DynamicShapes":"#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dynamic_shapes.dynamic_shapes_to_json(
+    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None
+) -> list[dict[str, typing.Any]] | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert dynamic shape definitions to JSON-compatible data.
+
+&gt;&gt;&gt; shapes = &#123;("options", "mask"): (BatchDim("batch", min=1, opt=2, max=4), 128)&#125;
+&gt;&gt;&gt; dynamic_shapes_to_json(shapes)  # doctest: +NORMALIZE_WHITESPACE
+[&#123;'path': ['options', 'mask'],
+  'shape': [&#123;'type': 'BatchDim', 'name': 'batch', 'min': 1, 'max': 4, 'opt': 2&#125;, 128]&#125;]
+
+
+</Indent>
+
+<Anchor id="aitune-torch-dynamic_shapes-validate_dynamic_shape_definitions">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dynamic_shapes.validate_dynamic_shape_definitions(
+    dynamic_shapes: object
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate explicit shape definitions before recording.
+
+Each mapping value must define the complete input shape using non-negative static sizes or dynamic dimensions.
+Repeated dynamic dimension names define shared dimensions and must use identical definitions.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-dynamic_shapes-DynamicShapes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dynamic_shapes.DynamicShapes = dict[ForwardInputPath, ShapeDefinition]
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-dynamic_shapes-ShapeDefinition">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dynamic_shapes.ShapeDefinition = tuple[int | DynamicDim, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-dynamic_shapes-__all__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dynamic_shapes.__all__ = ['BatchDim', 'DynamicDim']
+```
+
+</CodeBlock>
+</Anchor>
+

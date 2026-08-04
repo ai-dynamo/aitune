@@ -52,6 +52,28 @@ or for uv:
 uv run inference --model-name resnet50 --image-path your_image
 ```
 
+### User-provided dynamic shapes
+
+The dynamic-shapes mode uses the same tuning flow while explicitly defining its batch and spatial ranges. With the
+defaults, it records batch sizes 1–4 at `224×224` and then runs inference at the unseen shape `(2, 3, 256, 256)`:
+
+```bash
+uv run tune --dynamic-shapes 1
+uv run inference --dynamic-shapes 1
+```
+
+The full-rank shape definition uses integers for fixed dimensions. Dimensions with the same name are shared, even
+when defined as separate objects:
+
+```python
+from aitune.torch import BatchDim, DynamicDim
+
+batch = BatchDim("batch", min=1, opt=4, max=4)
+height = DynamicDim("spatial", min=224, opt=224, max=256)
+width = DynamicDim("spatial", min=224, opt=224, max=256)
+dynamic_shapes = {"x": (batch, 3, height, width)}
+```
+
 ### Logging hardware metrics
 
 If you would like to log hardware metrics during tuning or inference export `AITUNE_HARDWARE_METRICS=True` envorinment variable e.g.
@@ -62,35 +84,15 @@ AITUNE_HARDWARE_METRICS=True uv run tune
 
 ### AI Dynamo ResNet Deployment with Batching
 
-To run ResNet as AI Dynamo service with dynamic batching, we have prepared additional configs and scripts.
+Run ResNet as an AI Dynamo service with dynamic batching:
 
-Code starts in `resnet/dynamo/backend.py`, Docker and Docker Compose is used to make setup simple.
-
-Firstly, start all services by running `docker compose --profile all up --detach`. This will build and start all required services.
-
-After successful tuning and services start run below commands to test the service.
-
-#### Single Request
-```sh
-python -m resnet.dynamo.client --num-requests 1
-# response should be:
-#    {"request_id":"img-resnet-single","prediction":"golden retriever","confidence":0.9992710947990417,"class_id":207,"inference_time":0.123}
+```bash
+pip install ".[dynamo]"
+tune --image-path dog.webp
+./run_dynamo.sh
 ```
 
-#### Batching Demonstration
-```sh
-python -m resnet.dynamo.client --num-requests 2
-python -m resnet.dynamo.client --num-requests 4
-python -m resnet.dynamo.client --num-requests 8
-python -m resnet.dynamo.client --num-requests 100
-```
-
-#### Custom Image
-```sh
-python -m resnet.dynamo.client --image-path your_image.jpg --num-requests 4
-```
-
-Finally, to shut it down use `docker compose down --volumes`.
+This script starts the frontend and backend services, waits for them to be ready, then runs a test client to send a sample request. Once the test completes, all services are automatically shut down. This is meant as a functional check, not to provide a permanent server.
 
 #### Dynamic batching
 
@@ -101,4 +103,3 @@ The service uses dynamic batching — requests are grouped and processed togethe
 Can be found in following pages:
 * https://pytorch.org/vision/stable/models.html#classification
 * https://huggingface.co/timm
-

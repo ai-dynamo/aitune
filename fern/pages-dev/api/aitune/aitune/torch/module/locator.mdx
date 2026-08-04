@@ -31,7 +31,8 @@ Locator for an object in a nested structure.
 
 ```python
 class aitune.torch.module.locator.Locator(
-    path: tuple[tuple[int | str, aitune.torch.module.locator.ObjectType], ...]
+    access_path: tuple[tuple[int | str, aitune.torch.module.locator.ObjectType], ...],
+    is_output: bool = False
 )
 ```
 
@@ -48,16 +49,13 @@ and custom user types. It maintains a path that traverses the structure, allowin
 and mutation of values at those paths, as well as traversing nested contents and supporting
 custom types.
 
-The path is stored as a sequence of (accessor, ObjectType) tuples. The accessor is either
+The access path is stored as a sequence of (accessor, ObjectType) tuples. The accessor is either
 an integer index (for sequences) or a string key/attribute name (for dicts, dataclasses,
 or user types).
 
 The primary entry point for this class is the `find_leaves` method, which yields all leaves
 found within a nested structure.
 
-
-<ParamField path="__slots__" type="= ('_path',)">
-</ParamField>
 
 <ParamField path="_ignored_types" type="set[type] = set()">
 </ParamField>
@@ -69,16 +67,20 @@ found within a nested structure.
 Get the depth of the locator.
 </ParamField>
 
+<ParamField path="display_path" type="str">
+Format the locator as a Python-like access path.
+</ParamField>
+
 <ParamField path="leaf_name" type="int | str">
 Get the leaf of the locator.
 </ParamField>
 
-<ParamField path="root_name" type="int | str">
-Get the root of the locator.
+<ParamField path="path" type="int | str | tuple[int | str, ...]">
+Get the semantic path, without the container types in the access path. Example ``("inputs", "tokens", 0)``.
 </ParamField>
 
-<ParamField path="sanitized_name" type="str">
-Returns a sanitized string representation for tensor names.
+<ParamField path="root_name" type="int | str">
+Get the root of the locator.
 </ParamField>
 <Anchor id="aitune-torch-module-locator-Locator-__eq__">
 
@@ -147,27 +149,6 @@ aitune.torch.module.locator.Locator.__str__()
 <Indent>
 
 String representation of the locator.
-
-
-</Indent>
-<Anchor id="aitune-torch-module-locator-Locator-_compute_sanitized_name">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.module.locator.Locator._compute_sanitized_name(
-    path: tuple
-) -> str
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-<Badge>staticmethod</Badge>
-
-Compute the sanitized name for a given path.
 
 
 </Indent>
@@ -360,7 +341,8 @@ Get the accessor at the given index.
 ```python
 aitune.torch.module.locator.Locator.find_leaves(
     obj: object,
-    only_tensors: bool = False
+    only_tensors: bool = False,
+    is_output: bool = False
 ) -> collections.abc.Generator[tuple[aitune.torch.module.locator.Locator, object], None, None]
 ```
 
@@ -390,6 +372,10 @@ The object to walk.
 
 <ParamField path="only_tensors" type="bool" default="False">
 Whether to only return tensors.
+</ParamField>
+
+<ParamField path="is_output" type="bool" default="False">
+Whether the locators point into forward outputs.
 </ParamField>
 
 

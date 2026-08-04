@@ -28,8 +28,8 @@ Contains SampleMetadata which represents metadata of a function inputs (args and
 
 ```python
 class aitune.torch.module.sample_metadata.SampleMetadata(
-    tensor_data: tuple[tuple[aitune.torch.module.locator.Locator, aitune.torch.module.tensor_spec.TensorSpec]],
-    other_data: tuple[tuple[aitune.torch.module.locator.Locator, str, typing.Any]],
+    tensor_data: tuple[tuple[aitune.torch.module.locator.Locator, aitune.torch.module.tensor_spec.TensorSpec], ...],
+    other_data: tuple[tuple[aitune.torch.module.locator.Locator, typing.Any], ...],
     strict: bool = False,
     llm_phase: typing.Literal['prefill', 'decode'] | None = None
 )
@@ -54,7 +54,7 @@ several important purposes:
 
 Note:
 1. The __init__ method should not be used directly. instead:
-    - for inputs - use SampleMetadata.from_inputs(args, kwargs)
+    - for inputs - use SampleMetadata.from_inputs(bound_arguments)
     - for outputs - use SampleMetadata.from_outputs(output)
 
 2. In order to support Hugging Face integrations with kv cache the following behavior is changed:
@@ -68,7 +68,7 @@ Note:
 Get LLM graph type.
 </ParamField>
 
-<ParamField path="other_data" type="tuple[tuple[Locator, str, str]]">
+<ParamField path="other_data" type="tuple[tuple[Locator, Any], ...]">
 Get list of other data.
 </ParamField>
 
@@ -222,8 +222,7 @@ A SampleMetadata instance
 
 ```python
 aitune.torch.module.sample_metadata.SampleMetadata.from_inputs(
-    args: typing.Any,
-    kwargs: dict[str, typing.Any],
+    inputs: dict[str, typing.Any],
     strict: bool = False,
     batch_size: int | None = None
 ) -> aitune.torch.module.sample_metadata.SampleMetadata
@@ -236,7 +235,7 @@ aitune.torch.module.sample_metadata.SampleMetadata.from_inputs(
 
 <Badge>staticmethod</Badge>
 
-Create SampleMetadata from inputs: args and kwargs.
+Create SampleMetadata from inputs keyed by forward parameter name.
 
 If strict is True, then other data is also included.
 
@@ -267,44 +266,6 @@ If strict is True, then other data is also included.
 
 
 </Indent>
-<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-get_names">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.module.sample_metadata.SampleMetadata.get_names() -> collections.abc.Sequence[str]
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Get names of tensors.
-
-
-</Indent>
-<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-get_names_mapping">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.module.sample_metadata.SampleMetadata.get_names_mapping() -> tuple[list[str], dict[str, list[typing.Any]]]
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Get tensor names.
-
-**Returns:** `list[str]`
-
-Tuple of list of tensor names for args and dictionary with key kwarg name, value - list of tensor names under this kwarg
-
-
-</Indent>
 <Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-has_batch_axis">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -328,10 +289,9 @@ Check if metadata has batch axis.
 
 ```python
 aitune.torch.module.sample_metadata.SampleMetadata.make_batch(
-    args: typing.Any,
-    kwargs: dict[str, typing.Any],
+    inputs: dict[str, typing.Any],
     batch_size: int
-) -> tuple[typing.Any, dict[str, typing.Any]]
+) -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -339,25 +299,21 @@ aitune.torch.module.sample_metadata.SampleMetadata.make_batch(
 
 <Indent>
 
-Takes args and kwargs and extrapolates all tensors according to tensor specs to have specified batch size.
+Extrapolate all tensors in forward inputs to the specified batch size.
 
 **Parameters:**
 
-<ParamField path="args" type="Any">
-Args to make batch from
-</ParamField>
-
-<ParamField path="kwargs" type="dict[str, Any]">
-Kwargs to make batch from
+<ParamField path="inputs" type="dict[str, Any]">
+Inputs keyed by forward parameter name
 </ParamField>
 
 <ParamField path="batch_size" type="int">
 Batch size
 </ParamField>
 
-**Returns:** `tuple[Any, dict[str, Any]]`
+**Returns:** `dict[str, Any]`
 
-args, kwargs with all tensors having specified batch size
+Bound inputs with all tensors having the specified batch size
 
 
 </Indent>
@@ -409,7 +365,7 @@ A dictionary representation safe for ``json.dumps``.
 
 ```python
 aitune.torch.module.sample_metadata.SampleMetadata.update_max_batch_size(
-    sample: typing.Any,
+    inputs: dict[str, typing.Any],
     max_batch_size: int
 )
 ```

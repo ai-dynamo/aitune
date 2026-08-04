@@ -1,0 +1,270 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/forward_signature
+title: aitune.torch.module.forward_signature
+---
+
+Bind module inputs to a forward signature.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ForwardParameter`](#aitune-torch-module-forward_signature-ForwardParameter) | Serializable description of a forward parameter. |
+| [`ForwardSignature`](#aitune-torch-module-forward_signature-ForwardSignature) | Serializable forward signature used to normalize module calls. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`validate_forward_input_path`](#aitune-torch-module-forward_signature-validate_forward_input_path) | Validate a forward parameter name or nested path rooted at one. |
+
+### Data
+
+[`ForwardInputPath`](#aitune-torch-module-forward_signature-ForwardInputPath)
+
+[`_PARAMETER_KINDS`](#aitune-torch-module-forward_signature-_PARAMETER_KINDS)
+
+### API
+
+<Anchor id="aitune-torch-module-forward_signature-ForwardParameter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_signature.ForwardParameter(
+    name: str,
+    kind: str,
+    has_default: bool
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Serializable description of a forward parameter.
+
+
+<ParamField path="has_default" type="bool">
+</ParamField>
+
+<ParamField path="kind" type="str">
+</ParamField>
+
+<ParamField path="name" type="str">
+</ParamField>
+<Anchor id="aitune-torch-module-forward_signature-ForwardParameter-from_parameter">
+
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardParameter":"#aitune-torch-module-forward_signature-ForwardParameter"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardParameter.from_parameter(
+    parameter: inspect.Parameter
+) -> aitune.torch.module.forward_signature.ForwardParameter
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create a description from an inspected parameter.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-forward_signature-ForwardParameter-to_parameter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardParameter.to_parameter() -> inspect.Parameter
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create an inspect parameter suitable for call binding.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_signature-ForwardSignature">
+
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardParameter":"#aitune-torch-module-forward_signature-ForwardParameter"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_signature.ForwardSignature(
+    parameters: tuple[aitune.torch.module.forward_signature.ForwardParameter, ...]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Serializable forward signature used to normalize module calls.
+
+An inspected signature is stored as ``ForwardParameter`` records so it can be serialized with an AITune
+checkpoint. An ``inspect.Signature`` is reconstructed from those records for argument binding.
+
+
+<ParamField path="_signature" type="Signature = field(init=False, repr=False, compare=False)">
+</ParamField>
+
+<ParamField path="parameters" type="tuple[ForwardParameter, ...]">
+</ParamField>
+<Anchor id="aitune-torch-module-forward_signature-ForwardSignature-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardSignature.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the inspect signature used for call binding.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-forward_signature-ForwardSignature-from_callable">
+
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardSignature":"#aitune-torch-module-forward_signature-ForwardSignature"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardSignature.from_callable(
+    forward: typing.Any
+) -> aitune.torch.module.forward_signature.ForwardSignature
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Inspect a forward callable.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-forward_signature-ForwardSignature-from_dict">
+
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardSignature":"#aitune-torch-module-forward_signature-ForwardSignature"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardSignature.from_dict(
+    data: dict[str, typing.Any]
+) -> aitune.torch.module.forward_signature.ForwardSignature
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Restore a signature from a dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-forward_signature-ForwardSignature-normalize">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardSignature.normalize(
+    args: tuple[typing.Any, ...],
+    kwargs: dict[str, typing.Any]
+) -> inspect.BoundArguments
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Match args and kwargs to forward parameters in a consistent layout.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-forward_signature-ForwardSignature-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardSignature.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert the signature to a serializable dictionary.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_signature-validate_forward_input_path">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.validate_forward_input_path(
+    path: object
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate a forward parameter name or nested path rooted at one.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_signature-ForwardInputPath">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardInputPath = str | tuple[str | int, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-module-forward_signature-_PARAMETER_KINDS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature._PARAMETER_KINDS = {(kind.name): kind for kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Param...
+```
+
+</CodeBlock>
+</Anchor>
+

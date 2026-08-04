@@ -18,12 +18,13 @@ Tuned module.
 
 <Anchor id="aitune-torch-module-tuned_module-TunedModule">
 
-<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.config.AITuneConfig":"/aitune/aitune/torch/config#aitune-torch-config-AITuneConfig"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.forward_signature.ForwardSignature":"/aitune/aitune/torch/module/forward_signature#aitune-torch-module-forward_signature-ForwardSignature","aitune.torch.config.AITuneConfig":"/aitune/aitune/torch/config#aitune-torch-config-AITuneConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.module.tuned_module.TunedModule(
     backends: collections.OrderedDict[aitune.torch.module.sample_metadata.SampleMetadata, aitune.torch.backend.backend.Backend],
     module_name: str,
+    forward_signature: aitune.torch.module.forward_signature.ForwardSignature,
     check_graph: bool = True,
     config: aitune.torch.config.AITuneConfig | None = None
 )
@@ -50,6 +51,9 @@ Module that does inference using tuned backend.
 </ParamField>
 
 <ParamField path="ERROR_UNKNOWN_BACKEND" type="= 'Unknown backend type: &#123;&#125;'">
+</ParamField>
+
+<ParamField path="FORWARD_SIGNATURE_KEY" type="= 'forward_signature'">
 </ParamField>
 
 <ParamField path="IS_ANY_JIT_KEY" type="= 'is_any_jit'">

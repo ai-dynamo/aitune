@@ -15,7 +15,7 @@ TorchTensorRT backend with AOT compilation and intermediate model save.
 | [`TorchTensorRTAotBackend`](#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend) | Backend that compiles model using TensorRT. |
 | [`TorchTensorRTAotBackendConfig`](#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig) | Configuration for TorchTensorRTAotBackend. |
 | [`TorchTensorRTAotBuildStep`](#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBuildStep) | Identifiers for discrete sub-steps of a TorchTensorRTAot backend build. |
-| [`TorchTensorRTConfig`](#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTConfig) | Allows testing when torch_tensorrt is not installed. |
+| [`TorchTensorRTConfig`](#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTConfig) | Fallback settings matching upstream defaults when torch_tensorrt is unavailable. |
 
 ### Functions
 
@@ -25,8 +25,6 @@ TorchTensorRT backend with AOT compilation and intermediate model save.
 | [`assert_torch_tensorrt`](#aitune-torch-backend-torch_tensorrt_aot_backend-assert_torch_tensorrt) | Check if torch_tensorrt is installed. |
 
 ### Data
-
-[`IRType`](#aitune-torch-backend-torch_tensorrt_aot_backend-IRType)
 
 [`logger`](#aitune-torch-backend-torch_tensorrt_aot_backend-logger)
 
@@ -301,13 +299,12 @@ Returns the state_dict of the backend.
 
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig">
 
-<CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.IRType":"#aitune-torch-backend-torch_tensorrt_aot_backend-IRType","aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTConfig"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig(
-    ir: aitune.torch.backend.torch_tensorrt_aot_backend.IRType = 'dynamo',
     compile_config: aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig = TorchTensorRTConfig(),
-    pickle_protocol: int = DEFAULT_PICKLE_PROTOCOL
+    pickle_protocol: int = 5
 )
 ```
 
@@ -328,10 +325,7 @@ See torch_tensorrt/dynamo/_settings.py CompilationSettings for compile_config(To
 <ParamField path="compile_config" type="TorchTensorRTConfig = field(default_factory=TorchTensorRTConfig)">
 </ParamField>
 
-<ParamField path="ir" type="IRType = 'dynamo'">
-</ParamField>
-
-<ParamField path="pickle_protocol" type="int = DEFAULT_PICKLE_PROTOCOL">
+<ParamField path="pickle_protocol" type="int = 5">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig-describe">
 
@@ -440,7 +434,7 @@ class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig(
 
 <Badge>Dataclass</Badge>
 
-Allows testing when torch_tensorrt is not installed.
+Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 
 
 <ParamField path="enabled_precisions" type="set[dtype] | None = None">
@@ -490,18 +484,6 @@ Check if torch_tensorrt is installed.
 
 
 </Indent>
-
-<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-IRType">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.torch_tensorrt_aot_backend.IRType = Literal['dynamo', 'ts', 'fx']
-```
-
-</CodeBlock>
-</Anchor>
-
 
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-logger">
 

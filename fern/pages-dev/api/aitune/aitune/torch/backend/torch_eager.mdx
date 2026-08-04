@@ -12,7 +12,7 @@ Torch eager backend.
 
 | Name | Description |
 |------|-------------|
-| [`TorchEagerBackend`](#aitune-torch-backend-torch_eager-TorchEagerBackend) | Backend that runs the model in eager mode without any optimizations. |
+| [`TorchEagerBackend`](#aitune-torch-backend-torch_eager-TorchEagerBackend) | Backend that runs the model in eager mode with/without autocast. |
 | [`TorchEagerBackendConfig`](#aitune-torch-backend-torch_eager-TorchEagerBackendConfig) | Configuration for torch eager backend. |
 
 ### API
@@ -34,7 +34,11 @@ class aitune.torch.backend.torch_eager.TorchEagerBackend(
 
 **Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
 
-Backend that runs the model in eager mode without any optimizations.
+Backend that runs the model in eager mode with/without autocast.
+
+Note: inference is done with torch.no_grad() context. The torch.inference_mode() context must not be used
+as it would require outputs from a model to be used with same inference mode - this would be confusing to a user
+and required code changes from the user.
 
 
 <ParamField path="STATE_CONFIG" type="= 'config'">
@@ -127,15 +131,15 @@ Deploys the backend.
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_get_dtype">
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_get_required_casting_dtype">
 
 <CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend._get_dtype(
+aitune.torch.backend.torch_eager.TorchEagerBackend._get_required_casting_dtype(
     module: torch.nn.Module,
     data: list[aitune.torch.module.recording_module.Sample]
-) -> torch.dtype
+) -> torch.dtype | None
 ```
 
 </CodeBlock>
@@ -143,9 +147,10 @@ aitune.torch.backend.torch_eager.TorchEagerBackend._get_dtype(
 
 <Indent>
 
-<Badge>staticmethod</Badge>
+Get the required casting dtype of the module by running a sample inference with and without autocast.
 
-Get the output dtype of the module by running a sample inference.
+If the dtype of the output is different with and without autocast, return the dtype of the output without autocast.
+Otherwise, return None.
 
 **Parameters:**
 
@@ -157,9 +162,9 @@ The module to get the dtype from.
 List of sample inputs to run through the module.
 </ParamField>
 
-**Returns:** `torch.dtype`
+**Returns:** `torch.dtype | None`
 
-torch.dtype: The dtype of the module's output tensor. Returns None if output is not a tensor.
+torch.dtype: The required casting dtype. Returns None if no casting is required.
 
 
 </Indent>
@@ -169,6 +174,42 @@ torch.dtype: The dtype of the module's output tensor. Returns None if output is 
 
 ```python
 aitune.torch.backend.torch_eager.TorchEagerBackend._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Runs inference with the given arguments. Does not use autocast.
+
+It can be replaced at runtime by _infer_with_autocast.
+
+**Parameters:**
+
+<ParamField path="*args" type="Any" default="()">
+inference arguments
+</ParamField>
+
+<ParamField path="**kwargs" type="Any" default="&#123;&#125;">
+inference keyword arguments
+</ParamField>
+
+**Returns:** `Any`
+
+The result of the inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_infer_with_autocast">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_eager.TorchEagerBackend._infer_with_autocast(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any

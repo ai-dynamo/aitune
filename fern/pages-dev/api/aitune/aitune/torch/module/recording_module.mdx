@@ -28,13 +28,14 @@ Inplace wrap modules.
 
 <Anchor id="aitune-torch-module-recording_module-RecordingModule">
 
-<CodeBlock links={{"aitune.torch.config.AITuneConfig":"/aitune/aitune/torch/config#aitune-torch-config-AITuneConfig"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.config.AITuneConfig":"/aitune/aitune/torch/config#aitune-torch-config-AITuneConfig","aitune.torch.dynamic_shapes.DynamicShapes":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.module.recording_module.RecordingModule(
     module: torch.nn.Module,
     name: str,
-    config: aitune.torch.config.AITuneConfig | None = None
+    config: aitune.torch.config.AITuneConfig | None = None,
+    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None = None
 )
 ```
 
@@ -49,7 +50,13 @@ Module that records samples for tuning.
 <ParamField path="_config" type="= config if config is not None else global_config">
 </ParamField>
 
+<ParamField path="_dynamic_shapes" type="= dynamic_shapes or &#123;&#125;">
+</ParamField>
+
 <ParamField path="_forward_call" type="= module.__call__">
+</ParamField>
+
+<ParamField path="_forward_signature" type="= ForwardSignature.from_callable(module.forward)">
 </ParamField>
 
 <ParamField path="_graph_specs" type="OrderedDict[SampleMetadata, GraphSpec] = OrderedDict()">
@@ -72,6 +79,10 @@ Module that records samples for tuning.
 
 <ParamField path="device" type="device">
 Get the device of the module.
+</ParamField>
+
+<ParamField path="forward_signature" type="ForwardSignature">
+Get the forward signature used to normalize inputs.
 </ParamField>
 
 <ParamField path="graph_specs" type="list[GraphSpec]">
@@ -146,15 +157,39 @@ Tuple containing deep copies of args and kwargs.
 
 
 </Indent>
+<Anchor id="aitune-torch-module-recording_module-RecordingModule-_resolve_and_validate_dynamic_shapes">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.dynamic_shapes.DynamicShapes":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.recording_module.RecordingModule._resolve_and_validate_dynamic_shapes(
+    inputs_metadata: aitune.torch.module.sample_metadata.SampleMetadata
+) -> aitune.torch.dynamic_shapes.DynamicShapes
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Match explicit shape definitions to tensors in a recorded sample.
+
+The returned mapping is a validated, graph-specific subset of ``self._dynamic_shapes`` containing only
+definitions whose paths resolve to tensor inputs in ``inputs_metadata``. Unconfigured tensor inputs remain
+represented by their ``TensorSpec`` and continue using shapes inferred from recorded samples.
+
+
+</Indent>
 <Anchor id="aitune-torch-module-recording_module-RecordingModule-record_sample">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.dynamic_shapes.DynamicShapes":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.module.recording_module.RecordingModule.record_sample(
     inputs,
     inputs_metadata,
-    outputs_metadata
+    outputs_metadata,
+    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None = None
 ) -> None
 ```
 
@@ -183,6 +218,23 @@ aitune.torch.module.recording_module.RecordingModule.samples_for_graph_spec(
 <Indent>
 
 Get the samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-recording_module-RecordingModule-validate_dynamic_shape_paths_recorded">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.recording_module.RecordingModule.validate_dynamic_shape_paths_recorded() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that every configured input path matched a tensor during recording.
 
 
 </Indent>

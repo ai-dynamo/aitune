@@ -896,6 +896,8 @@ Create profiles from samples or from graph_spec.
 If self._config.profiles is a list, return the user provided profiles.
 If self._config.profiles is ProfileMode.SINGLE, create a single profile from the graph spec.
 If self._config.profiles is ProfileMode.SAMPLES_USED, create profiles from shapes seen in samples.
+Explicit module shape definitions always produce a single authoritative profile and cannot be combined with
+user-provided TensorRT profiles.
 
 Returns:
     List of The Polygraphy Profile objects

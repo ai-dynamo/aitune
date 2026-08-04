@@ -1,0 +1,380 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/tensorrt/torch_quantization
+title: aitune.torch.backend.tensorrt.torch_quantization
+---
+
+NVIDIA ModelOpt PyTorch quantization module for TensorRT backend.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TorchQuantizationConfig`](#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig) | Configuration for Torch quantization. |
+| [`TorchQuantizer`](#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer) | NVIDIA ModelOpt PyTorch quantizer for TensorRT backend. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_validate_torch_quantization_config`](#aitune-torch-backend-tensorrt-torch_quantization-_validate_torch_quantization_config) | Validate that quantization_config is a supported value. |
+
+### Data
+
+[`HAS_NVFP4_FP8_MHA_CONFIG`](#aitune-torch-backend-tensorrt-torch_quantization-HAS_NVFP4_FP8_MHA_CONFIG)
+
+[`QuantizationConfig`](#aitune-torch-backend-tensorrt-torch_quantization-QuantizationConfig)
+
+[`logger`](#aitune-torch-backend-tensorrt-torch_quantization-logger)
+
+### API
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.torch_quantization.QuantizationConfig":"#aitune-torch-backend-tensorrt-torch_quantization-QuantizationConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig(
+    quantization_config: aitune.torch.backend.tensorrt.torch_quantization.QuantizationConfig = 'FP8_DEFAULT_CFG',
+    device: str = 'cuda'
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configuration for Torch quantization.
+
+**Parameters:**
+
+<ParamField path="quantization_config" type="QuantizationConfig" default="'FP8_DEFAULT_CFG'">
+ModelOpt quantization configuration name.
+</ParamField>
+
+<ParamField path="device" type="str" default="'cuda'">
+Target device for quantization (default: "cuda")
+</ParamField>
+
+<ParamField path="verbose">
+Enable verbose logging
+</ParamField>
+
+
+<ParamField path="device" type="str = 'cuda'">
+</ParamField>
+
+<ParamField path="quantization_config" type="QuantizationConfig = 'FP8_DEFAULT_CFG'">
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate quantization_config after initialization.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig.from_dict(
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Convert dict to TorchQuantizationConfig.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+NVIDIA ModelOpt PyTorch quantizer for TensorRT backend.
+
+This class provides functionality to quantize PyTorch models using NVIDIA ModelOpt
+for deployment with TensorRT. It supports various quantization modes including
+INT8, FP8, and INT4 quantization with different calibration methods.
+
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer-_clean_memory">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer._clean_memory()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Clean up memory.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer-_configure_quantizers_for_onnx_export">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer._configure_quantizers_for_onnx_export(
+    model: torch.nn.Module
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Configure quantizers in the model for ONNX export.
+
+Sets appropriate attributes on input and weight quantizers to ensure proper ONNX export.
+For input quantizers, sets dynamic quantization mode and half precision.
+For weight quantizers, sets static quantization mode.
+
+**Parameters:**
+
+<ParamField path="model" type="nn.Module">
+The quantized PyTorch model with quantizers to configure
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer-_create_forward_loop">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer._create_forward_loop(
+    calibration_samples: list[typing.Any]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create forward loop function for model calibration.
+
+**Parameters:**
+
+<ParamField path="calibration_samples" type="list[Any]">
+List of calibration samples
+</ParamField>
+
+**Returns:**
+
+Forward loop function for calibration
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer-_get_quantization_config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer._get_quantization_config(
+    config_name: str
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get quantization configuration by name.
+
+**Parameters:**
+
+<ParamField path="config_name" type="str">
+Name of the quantization configuration
+</ParamField>
+
+**Returns:** `dict[str, Any]`
+
+Quantization configuration dictionary
+
+**Raises:**
+
+- `ImportError`: If ModelOpt is not available
+- `ValueError`: If configuration name is not supported
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer-_prepare_calibration_sample">
+
+<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer._prepare_calibration_sample(
+    sample: aitune.torch.module.recording_module.Sample,
+    device: str
+) -> aitune.torch.module.recording_module.Sample
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Move sample to target device and return as Sample tuple.
+
+**Parameters:**
+
+<ParamField path="sample" type="Sample">
+Example input sample
+</ParamField>
+
+<ParamField path="device" type="str">
+Target device for calibration
+</ParamField>
+
+**Returns:** `Sample`
+
+List containing the sample converted to target device
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer-quantize">
+
+<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig":"#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer.quantize(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.recording_module.Sample,
+    config: aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig
+) -> torch.nn.Module
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Quantize the module using NVIDIA ModelOpt.
+
+This method performs quantization of a PyTorch model using NVIDIA ModelOpt.
+It supports various quantization algorithms including FP8, INT8, and INT4.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+PyTorch module to export
+</ParamField>
+
+<ParamField path="sample" type="Sample">
+Example input for the model
+</ParamField>
+
+<ParamField path="config" type="TorchQuantizationConfig">
+TorchQuantizationConfig
+</ParamField>
+
+**Returns:** `nn.Module`
+
+Quantized model
+
+**Raises:**
+
+- `ImportError`: If ModelOpt is not installed
+- `RuntimeError`: If quantization or export fails
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-_validate_torch_quantization_config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization._validate_torch_quantization_config(
+    config_name: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that quantization_config is a supported value.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-HAS_NVFP4_FP8_MHA_CONFIG">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.HAS_NVFP4_FP8_MHA_CONFIG = Version(modelopt.__version__) >= Version('0.35.0')
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-QuantizationConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.QuantizationConfig = Literal['NVFP4_DEFAULT_CFG', 'NVFP4_FP8_MHA_CONFIG', 'FP8_DEFAULT_CFG', 'INT8_DE...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.torch_quantization.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

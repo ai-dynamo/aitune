@@ -1,0 +1,98 @@
+---
+layout: overview
+slug: aitune/aitune/torch/tune_strategy/one_backend_strategy
+title: aitune.torch.tune_strategy.one_backend_strategy
+---
+
+Simple tune strategy.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`OneBackendStrategy`](#aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy) | Strategy which uses just one provided backend. |
+
+### API
+
+<Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.one_backend_strategy.OneBackendStrategy(
+    backend: aitune.torch.backend.backend.Backend,
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [PerformanceValidationMixin](/aitune/aitune/torch/tune_strategy/mixin/performance_validation_mixin#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin), [FindMaxBatchSizeMixin](/aitune/aitune/torch/tune_strategy/mixin/find_max_batch_size_mixin#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin)
+
+Strategy which uses just one provided backend.
+
+
+<Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy-_describe_parts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.one_backend_strategy.OneBackendStrategy._describe_parts()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describes the tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy-_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.one_backend_strategy.OneBackendStrategy._tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    data: list[aitune.torch.module.recording_module.Sample],
+    device: torch.device,
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tunes given torch module with provided graph_spec and data.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.one_backend_strategy.OneBackendStrategy.to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns config dict for one backend strategy.
+
+
+</Indent>
+</Indent>

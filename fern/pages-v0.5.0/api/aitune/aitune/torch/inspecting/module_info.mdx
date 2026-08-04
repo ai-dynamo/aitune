@@ -1,0 +1,340 @@
+---
+layout: overview
+slug: aitune/aitune/torch/inspecting/module_info
+title: aitune.torch.inspecting.module_info
+---
+
+Module Info for inspected modules.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`DictOfModulesInfo`](#aitune-torch-inspecting-module_info-DictOfModulesInfo) | Information about a dictionary of PyTorch modules. |
+| [`InspectedModulesInfo`](#aitune-torch-inspecting-module_info-InspectedModulesInfo) | Information about inspected modules. |
+| [`ListOfModulesInfo`](#aitune-torch-inspecting-module_info-ListOfModulesInfo) | Information about a list of PyTorch modules. |
+| [`ModuleInfo`](#aitune-torch-inspecting-module_info-ModuleInfo) | Information about a PyTorch module. |
+| [`ObjectOfModulesInfo`](#aitune-torch-inspecting-module_info-ObjectOfModulesInfo) | Information about a custom object containing PyTorch modules. |
+
+### API
+
+<Anchor id="aitune-torch-inspecting-module_info-DictOfModulesInfo">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.inspecting.module_info.DictOfModulesInfo()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [ModuleInfo](#aitune-torch-inspecting-module_info-ModuleInfo)
+
+Information about a dictionary of PyTorch modules.
+
+
+<Anchor id="aitune-torch-inspecting-module_info-DictOfModulesInfo-set_wrapped">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_info.DictOfModulesInfo.set_wrapped(
+    name: str,
+    wrapped: typing.Any
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set the wrapped module in a dict under name as key.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.inspecting.module_info.InspectedModulesInfo(
+    total_execution_time: float,
+    number_of_batches: int
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Information about inspected modules.
+
+
+<ParamField path="_modules" type="dict[str, ModuleInfo] = &#123;&#125;">
+</ParamField>
+<Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo-add_module">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_info.InspectedModulesInfo.add_module(
+    module: aitune.torch.inspecting.module_info.ModuleInfo
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Add a module to the specification.
+
+**Parameters:**
+
+<ParamField path="module" type="ModuleInfo">
+ModuleInfo object.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_info.InspectedModulesInfo.describe() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describe the inspected modules specification.
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo-get_modules">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_info.InspectedModulesInfo.get_modules(
+    min_execution_ratio: float | None = None,
+    limit: int | None = None
+) -> list[aitune.torch.inspecting.module_info.ModuleInfo]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the list of modules.
+
+**Parameters:**
+
+<ParamField path="min_execution_ratio" type="float | None" default="None">
+Minimum execution ratio to include a module.
+</ParamField>
+
+<ParamField path="limit" type="int | None" default="None">
+Maximum number of modules to return.
+</ParamField>
+
+**Returns:** `list[ModuleInfo]`
+
+List of ModuleInfo objects.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_info-ListOfModulesInfo">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.inspecting.module_info.ListOfModulesInfo()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [ModuleInfo](#aitune-torch-inspecting-module_info-ModuleInfo)
+
+Information about a list of PyTorch modules.
+
+
+<Anchor id="aitune-torch-inspecting-module_info-ListOfModulesInfo-set_wrapped">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_info.ListOfModulesInfo.set_wrapped(
+    name: str,
+    wrapped: typing.Any
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set the wrapped module in a list under name as index.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_info-ModuleInfo">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.inspecting.module_info.ModuleInfo(
+    module: torch.nn.Module,
+    name: str = '',
+    parent: typing.Optional[aitune.torch.inspecting.module_info.ModuleInfo] = None,
+    forward_called: bool = False,
+    execution_count: int = 0,
+    total_execution_time: float = 0.0,
+    input_types: list[dict[str, typing.Any]] = list(),
+    output_types: list[dict[str, typing.Any]] = list(),
+    object_path: str | None = None,
+    depth: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Information about a PyTorch module.
+
+
+<ParamField path="average_execution_time" type="float">
+Get average execution time of the forward function.
+</ParamField>
+
+<ParamField path="depth" type="int = 0">
+</ParamField>
+
+<ParamField path="execution_count" type="int = 0">
+</ParamField>
+
+<ParamField path="forward_called" type="bool = False">
+</ParamField>
+
+<ParamField path="input_types" type="list[dict[str, Any]] = field(default_factory=list)">
+</ParamField>
+
+<ParamField path="module" type="Module">
+</ParamField>
+
+<ParamField path="module_type" type="type">
+Get the type of the module.
+</ParamField>
+
+<ParamField path="name" type="str = ''">
+</ParamField>
+
+<ParamField path="num_layers" type="int">
+Get the number of layers in the module.
+</ParamField>
+
+<ParamField path="num_parameters" type="int">
+Get the number of parameters in the module.
+</ParamField>
+
+<ParamField path="object_path" type="str | None = None">
+</ParamField>
+
+<ParamField path="output_types" type="list[dict[str, Any]] = field(default_factory=list)">
+</ParamField>
+
+<ParamField path="parent" type="Optional[ModuleInfo] = None">
+</ParamField>
+
+<ParamField path="precisions" type="set">
+Get the layers precisions of the module and return a set of unique precisions.
+</ParamField>
+
+<ParamField path="total_execution_time" type="float = 0.0">
+</ParamField>
+<Anchor id="aitune-torch-inspecting-module_info-ModuleInfo-set_wrapped">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_info.ModuleInfo.set_wrapped(
+    name: str,
+    wrapped: typing.Any
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set the wrapped module.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_info-ObjectOfModulesInfo">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.inspecting.module_info.ObjectOfModulesInfo()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [ModuleInfo](#aitune-torch-inspecting-module_info-ModuleInfo)
+
+Information about a custom object containing PyTorch modules.
+
+
+<Anchor id="aitune-torch-inspecting-module_info-ObjectOfModulesInfo-set_wrapped">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_info.ObjectOfModulesInfo.set_wrapped(
+    name: str,
+    wrapped: typing.Any
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set the wrapped module.
+
+
+</Indent>
+</Indent>

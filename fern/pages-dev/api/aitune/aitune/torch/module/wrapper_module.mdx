@@ -36,14 +36,15 @@ AITune wrapper module.
 
 <Anchor id="aitune-torch-module-wrapper_module-Module">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.wrapper_module.StrategyList":"#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.wrapper_module.StrategyList":"#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"#aitune-torch-module-wrapper_module-StrategyMap","aitune.torch.dynamic_shapes.DynamicShapes":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.module.wrapper_module.Module(
     module: torch.nn.Module,
     name: str | None = None,
     strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None,
-    strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None = None
+    strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None = None,
+    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None = None
 )
 ```
 
@@ -68,6 +69,9 @@ You can go from tuned to passthrough/recording only if the force flag is True - 
 
 This wrapper can be used in place of a torch module, and will behave identically to the original module.
 
+
+<ParamField path="DYNAMIC_SHAPES_KEY" type="= 'dynamic_shapes'">
+</ParamField>
 
 <ParamField path="NAME_KEY" type="= 'name'">
 </ParamField>
@@ -285,6 +289,27 @@ Returns strategies for given graph specs.
 
 Module level strategies (list/dict) take precedence over provided strategy.
 The function checks if there is sufficient strategies (list/dict).
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_handle_backend_added_hooks">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._handle_backend_added_hooks()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Handle new hooks if added by a backend.
+
+Before tuning hooks are cleared (empty OrderedDict). If there are new hooks added by a backend,
+they should be added to the existing ones but before the original hooks so that application layer hooks
+(like HF post processing hooks) are called after the backend hooks.
 
 
 </Indent>

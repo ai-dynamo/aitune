@@ -63,17 +63,20 @@ See `tests/functional/pytorch/027_aitune_torch_toy_model_tensorrt_backend.py` fo
 ## Using your own profiles
 
 You can use your own profiles by setting the `profiles` argument in the `TensorRTBackendConfig` class.
+These profiles assume the module defines `forward(input)`, so `input` is the path of its top-level tensor parameter:
 
 ```python
 backend = TensorRTBackend(TensorRTBackendConfig(profiles=[
-    TensorRTProfile().add_input_shape("args_0", (3, 224, 224), (3, 224, 224), (3, 224, 224)),
-    TensorRTProfile().add_input_shape("args_0", (3, 448, 448), (3, 448, 448), (3, 448, 448)),
+    TensorRTProfile().add_input_shape("input", (3, 224, 224), (3, 224, 224), (3, 224, 224)),
+    TensorRTProfile().add_input_shape("input", (3, 448, 448), (3, 448, 448), (3, 448, 448)),
 ]))
 ```
 
-### Getting the argument names
+### Getting the input paths
 
-The argument names `args_0`, etc. are the names of the input tensors in the model. You can get them from logs during tuning for the default single profile mode.
+Profile keys are Python-like tensor paths rooted at their real `forward` parameter names. For `forward(input)`,
+the key is `"input"`. A nested dictionary path uses a key such as `inputs["tokens"]`. You can get
+the exact keys from the `Path` column in tuning logs for the default single-profile mode.
 
 ```text
 INFO - 🎯 Tuning module: `toy-model` (all graphs)
@@ -85,9 +88,9 @@ INFO -   precisions:
 INFO -   graph_spec:
 INFO -     input_spec:
  Tensors:
-╒═══════════╤════════╤═══════════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
-│ Locator   │ Name   │ Shape                         │ Min Shape        │ Max Shape        │ Dtype         │
-╞═══════════╪════════╪═══════════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
-│ [0]       │ args_0 │ ['batch0', 3, 'dim2', 'dim3'] │ [2, 3, 224, 224] │ [8, 3, 448, 448] │ torch.float32 │
-╘═══════════╧════════╧═══════════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
+╒═══════════════╤═════════════════╤═══════════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
+│ Access Path   │ Semantic Path   │ Shape                         │ Min Shape        │ Max Shape        │ Dtype         │
+╞═══════════════╪═════════════════╪═══════════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
+│ input         │ input           │ ['batch0', 3, 'dim2', 'dim3'] │ [2, 3, 224, 224] │ [8, 3, 448, 448] │ torch.float32 │
+╘═══════════════╧═════════════════╧═══════════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
 ```
