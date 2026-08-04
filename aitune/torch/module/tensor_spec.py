@@ -37,12 +37,12 @@ class TensorSpec:
     _bs_multipliers: list[float]
 
     @staticmethod
-    def from_tensor(tensor: torch.Tensor, batch_size: int):
+    def from_tensor(tensor: torch.Tensor, batch_size: int | float):
         """Create TensorSpec from tensor.
 
         Args:
             tensor: Tensor to create TensorSpec from
-            batch_size: Batch size
+            batch_size: Batch size, float("nan") if batch size is unknown
         """
         shape = list(tensor.shape)
         if math.isnan(batch_size):
