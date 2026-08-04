@@ -221,6 +221,17 @@ def test_hash_strict():
     assert hash(m1) != hash(m2)
 
 
+def test_hash_strict_with_unhashable_inputs_is_a_valid_dict_key():
+    metadata = SampleMetadata.from_inputs({"options": {"fast", "stable"}}, strict=True)
+    same_metadata = SampleMetadata.from_inputs({"options": {"stable", "fast"}}, strict=True)
+    different_metadata = SampleMetadata.from_inputs({"options": {"fast"}}, strict=True)
+
+    cache = {metadata: "matching", different_metadata: "different"}
+
+    assert cache[same_metadata] == "matching"
+    assert cache[different_metadata] == "different"
+
+
 def test_hash_llm_dynamic():
     m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.randn(5)}, strict=True)
     m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.randn(5)}, strict=True)

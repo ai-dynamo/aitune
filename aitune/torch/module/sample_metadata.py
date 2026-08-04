@@ -4,6 +4,7 @@
 
 import copy
 import pickle
+from collections.abc import Mapping
 from typing import Any, Literal
 
 import torch
@@ -14,6 +15,23 @@ from aitune.torch.config import config
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
 from aitune.utils.serialization import json_serialize
+
+
+def _hash_value(value: Any) -> int:
+    """Hash nested values, falling back safely for unsupported unhashable objects."""
+    if isinstance(value, Mapping):
+        return hash(frozenset((_hash_value(key), _hash_value(item)) for key, item in value.items()))
+    if isinstance(value, (set, frozenset)):
+        return hash(frozenset(_hash_value(item) for item in value))
+    if isinstance(value, (list, tuple)):
+        return hash(tuple(_hash_value(item) for item in value))
+
+    try:
+        return hash(value)
+    except TypeError:
+        # Equal metadata must always have equal hashes. A constant fallback preserves that
+        # contract for arbitrary unhashable leaf objects; __eq__ resolves collisions.
+        return 0
 
 
 class SampleMetadata:
@@ -168,10 +186,14 @@ class SampleMetadata:
     def __hash__(self) -> int:
         """Compute hash of sample metadata."""
         if self._llm_phase is None:
-            return hash(frozenset(self._tensor_data)) ^ hash(frozenset(self._other_data))
+            return hash(frozenset(self._tensor_data)) ^ self._hash_other_data()
         else:
             # LLM integration: hash only LLM phase
             return hash(self._llm_phase)
+
+    def _hash_other_data(self) -> int:
+        """Compute an order-independent hash for non-tensor data."""
+        return hash(frozenset((locator, _hash_value(value)) for locator, value in self._other_data))
 
     def detected_dynamic_axis(self) -> bool:
         """Check if dynamic axes are detected in the metadata."""
