@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Bind module inputs to a forward signature."""
 
+import functools
 import inspect
 from dataclasses import dataclass, field
 from typing import Any
@@ -20,6 +21,40 @@ _PARAMETER_KINDS = {
 }
 
 ForwardInputPath = str | tuple[str | int, ...]
+
+
+def _is_partial(obj: Any) -> bool:
+    """Return whether the object itself, rather than a transparent proxy, is a partial."""
+    return issubclass(type(obj), functools.partial)
+
+
+def _find_partial(obj: Any) -> functools.partial | None:
+    """Return the first concrete partial in a callable's wrapper chain.
+
+    ``inspect.signature`` normally follows ``__wrapped__``. For a wrapped partial, that loses the partial's pre-bound
+    arguments and exposes the original callable's signature. An explicit ``__signature__`` remains authoritative and
+    therefore stops traversal before any deeper partial is considered.
+
+    For example, Diffusers Context Parallelism effectively installs
+    ``update_wrapper(partial(context_parallel_forward, module), context_parallel_forward)``. Following
+    ``__wrapped__`` reports ``(module, x, ...)`` even though ``module`` is already bound; inspecting the concrete
+    partial reports the callable interface correctly as ``(x, ...)``.
+    """
+    seen = set()
+    # Wrapper metadata is user-controlled and may contain cycles. Track identities so malformed chains cannot hang
+    # signature inspection.
+    while id(obj) not in seen:
+        seen.add(id(obj))
+        if _is_partial(obj):
+            return obj
+        if hasattr(obj, "__signature__"):
+            # Match inspect.signature semantics: a caller-provided public signature takes precedence over unwrapping.
+            return None
+        try:
+            obj = obj.__wrapped__
+        except AttributeError:
+            return None
+    return None
 
 
 def validate_forward_input_path(path: object) -> None:
@@ -85,7 +120,10 @@ class ForwardSignature:
     @staticmethod
     def from_callable(forward: Any) -> "ForwardSignature":
         """Inspect a forward callable."""
-        signature = inspect.signature(forward)
+        partial = _find_partial(forward)
+        signature = (
+            inspect.signature(partial, follow_wrapped=False) if partial is not None else inspect.signature(forward)
+        )
         return ForwardSignature(
             tuple(ForwardParameter.from_parameter(parameter) for parameter in signature.parameters.values())
         )
