@@ -151,7 +151,9 @@ class BackendConfig:
 
         changed_fields = []
         for f in fields(current):
-            if (getattr(current, f.name) != getattr(other, f.name) and f.name not in exclude) or f.name in include:
+            if f.name in exclude and f.name not in include:
+                continue
+            if f.name in include or getattr(current, f.name) != getattr(other, f.name):
                 changed_fields.append(f"{f.name}={getattr(current, f.name)}")
         return changed_fields
 

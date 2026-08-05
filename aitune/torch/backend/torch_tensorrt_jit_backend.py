@@ -17,6 +17,7 @@ from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
+from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 
 try:
     import torch_tensorrt
@@ -74,7 +75,10 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         """Describe the backend configuration. Display only changed fields."""
         other = self.__class__()
         compile_config_parts = self._get_changed_fields(
-            self.compile_config, other.compile_config, include=["enabled_precisions"]
+            self.compile_config,
+            other.compile_config,
+            exclude=["device"],
+            include=["enabled_precisions"],
         )
         parts = [f"compile_config=TorchTensorRTConfig({','.join(compile_config_parts)})"]
 
@@ -86,7 +90,9 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
     def to_dict(self):
         """Convert TorchTensorRTJitBackendConfig to dict."""
         state_dict = asdict(self)
-        state_dict["compile_config"] = asdict(self.compile_config)  # explicitly convert to dict
+        compile_config = asdict(self.compile_config)
+        compile_config.pop("device", None)
+        state_dict["compile_config"] = compile_config
         return state_dict
 
     @classmethod
@@ -98,7 +104,9 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         """
         data = dict(data)
         if isinstance(data.get("compile_config"), dict):
-            data["compile_config"] = TorchTensorRTConfig(**data["compile_config"])
+            compile_config = dict(data["compile_config"])
+            compile_config.pop("device", None)
+            data["compile_config"] = TorchTensorRTConfig(**compile_config)
         return cls(**data)
 
 
@@ -173,10 +181,16 @@ class TorchTensorRTJitBackend(Backend):
 
         self._orig_module.to(self._device)
 
+        compile_options = asdict(self._config.compile_config)
+        if self._device.type == "cuda":
+            compile_options["device"] = get_cuda_device(self._device)
+        else:
+            compile_options.pop("device", None)
+
         self._compiled_module = torch.compile(
             self._orig_module,
             backend="torch_tensorrt",
-            options=asdict(self._config.compile_config),
+            options=compile_options,
             fullgraph=self._config.fullgraph,
             dynamic=self._compile_dynamic,
         )

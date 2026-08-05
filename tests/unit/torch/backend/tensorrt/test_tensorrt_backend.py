@@ -9,6 +9,7 @@ import torch
 from polygraphy.backend.trt import Profile
 
 from aitune.exceptions import AITuneUserInputError
+from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.tensorrt_backend import ProfileMode, TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
@@ -108,12 +109,17 @@ def test_tensorrt_backend_config_describe():
     config = TensorRTBackendConfig()
     describe = config.describe()
 
-    assert describe == "quantization_config=None"
+    assert describe == ""
 
     config = TensorRTBackendConfig(use_dynamo=False)
     describe = config.describe()
 
-    assert describe == "use_dynamo=False,quantization_config=None"
+    assert describe == "use_dynamo=False"
+
+    config = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="bf16"))
+    describe = config.describe()
+
+    assert describe == "quantization_config=ONNXAutoCastConfig(precision='bf16', keep_io_types=True)"
 
 
 def test_tensorrt_backend_init():

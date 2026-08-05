@@ -31,6 +31,7 @@ def _mock_graph_spec():
 @dataclass
 class TorchTensorRTTestConfig:
     workspace_size: int = 0
+    device: int = 0
 
 
 @pytest.fixture
@@ -111,10 +112,13 @@ def test_torch_tensorrt_auto_dynamic_setting_is_restored_from_state_dict(mocker,
 
     backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
     state_dict = backend.to_dict()
-    loaded_backend = TorchTensorRTJitBackend.from_dict(toy, state_dict)
 
     assert state_dict[TorchTensorRTJitBackend.STATE_CONFIG]["dynamic"] is None
+    assert "device" not in state_dict[TorchTensorRTJitBackend.STATE_CONFIG]["compile_config"]
     assert state_dict[TorchTensorRTJitBackend.STATE_COMPILE_DYNAMIC] is True
+
+    state_dict[TorchTensorRTJitBackend.STATE_CONFIG]["compile_config"]["device"] = 0
+    loaded_backend = TorchTensorRTJitBackend.from_dict(toy, state_dict)
 
     compile_mock.reset_mock()
     loaded_backend.activate()
@@ -202,6 +206,8 @@ def test_mock_infer(torch_tensorrt_jit_backend, model, sample_data, torch_device
     torch_mod.compile.assert_called_once()
 
     assert torch_mod.compile.call_args[1]["backend"] == "torch_tensorrt"
+    assert torch_mod.compile.call_args.kwargs["options"]["device"] == f"cuda:{torch_device.index or 0}"
+    assert torch_tensorrt_jit_backend._config.compile_config.device == 0
 
     #     mocker.ANY,
     #     backend=

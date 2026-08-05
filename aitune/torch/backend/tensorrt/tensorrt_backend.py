@@ -122,10 +122,6 @@ class TensorRTBackendConfig(BackendConfig):
     enable_tf32: bool = True
     use_cuda_graphs: bool = False
 
-    def _default_describe_fields(self) -> list[str]:
-        """Returns the default fields to describe."""
-        return ["quantization_config"]
-
     @classmethod
     def from_dict(cls, data: dict) -> "TensorRTBackendConfig":
         """Initialise config from a plain dict (e.g. parsed from YAML).

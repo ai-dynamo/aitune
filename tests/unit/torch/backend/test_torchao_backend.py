@@ -111,6 +111,12 @@ def test_torchao_config_describe():
     assert describe == "quantization_config=Int8WeightOnlyConfig()"
 
 
+def test_torchao_config_describe_includes_non_default_compile_options():
+    config = TorchAOBackendConfig(quantization="int8wo", fullgraph=True, dynamic=False, mode="reduce-overhead")
+
+    assert config.describe().startswith("fullgraph=True,dynamic=False,mode=reduce-overhead,")
+
+
 def test_torchao_config_initialization():
     # Test valid initialization with quantization type
     for quantization in TorchAOBackendConfig._QUANTIZATION_CONFIGS.keys():

@@ -3,7 +3,7 @@
 
 # /// script
 # dependencies = ["timm"]
-# additional_tags = ["gpu/rtx-a6000"]
+# additional_tags = ["gpu/sm/120"]
 # ///
 
 from itertools import product

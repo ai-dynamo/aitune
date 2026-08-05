@@ -137,7 +137,17 @@ class TorchAOBackendConfig(BackendConfig):
     def describe(self) -> str:
         """Returns the description of the backend."""
         if self.quantization_config is None:
-            return f"quantization={self.quantization}"
+            default = self.__class__(quantization=self.quantization)
+        else:
+            default = self.__class__(quantization_config=self.quantization_config)
+        compile_options = self._get_changed_fields(
+            self,
+            default,
+            exclude=["quantization", "quantization_config", "filter_fn"],
+        )
+        if self.quantization_config is None:
+            quantization = f"quantization={self.quantization}"
+            return ",".join([*compile_options, quantization])
         kwargs = {}
         for f in fields(self.quantization_config.__class__):
             if f.default is MISSING and f.default_factory is MISSING:
@@ -148,7 +158,8 @@ class TorchAOBackendConfig(BackendConfig):
             self.quantization_config.__class__(*kwargs),
             include=list(kwargs.keys()),
         )
-        return f"quantization_config={self.quantization_config.__class__.__name__}({','.join(changed_fields)})"
+        quantization = f"quantization_config={self.quantization_config.__class__.__name__}({','.join(changed_fields)})"
+        return ",".join([*compile_options, quantization])
 
     def to_dict(self):
         """Convert TorchAOBackendConfig to dict."""
