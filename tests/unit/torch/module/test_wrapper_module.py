@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Test for wrapper module."""
 
+import functools
 import inspect
 from collections import OrderedDict
 from copy import deepcopy
@@ -106,6 +107,59 @@ def test_recording(module):
     module(2)
     assert len(module.graph_specs) == 2
     assert module.state == ModuleState.RECORDING
+
+
+def test_recording_with_functools_wrapped_bound_forward():
+    def decorator(forward):
+        @functools.wraps(forward)
+        def wrapper(self, *args, **kwargs):
+            return forward(self, *args, **kwargs)
+
+        return wrapper
+
+    class DecoratedIdentity(Identity):
+        @decorator
+        def forward(self, x, **kwargs):
+            return self.linear(x)
+
+    model = DecoratedIdentity()
+    module = Module(model, TEST_MODULE_NAME, strategy=DummyTuneStrategy())
+    sample = torch.ones(1, 5)
+
+    output = module(sample, lora_scale=1.0)
+
+    assert torch.equal(output, model.linear(sample))
+    assert module.state == ModuleState.RECORDING
+    assert len(module.graph_specs) == 1
+    assert tuple(parameter.name for parameter in module.graph_specs[0].forward_signature.parameters) == (
+        "x",
+        "kwargs",
+    )
+
+
+def test_recording_with_update_wrapped_partial_forward():
+    model = Identity()
+
+    def context_parallel_forward(module, x, **kwargs):
+        assert kwargs["context_parallel"] is True
+        return module.linear(x)
+
+    model.forward = functools.update_wrapper(
+        functools.partial(context_parallel_forward, model),
+        context_parallel_forward,
+    )
+    module = Module(model, TEST_MODULE_NAME, strategy=DummyTuneStrategy())
+    sample = torch.ones(1, 5)
+
+    output = module(sample, context_parallel=True)
+
+    assert torch.equal(output, model.linear(sample))
+    assert module.state == ModuleState.RECORDING
+    assert len(module.graph_specs) == 1
+    assert tuple(parameter.name for parameter in module.graph_specs[0].forward_signature.parameters) == (
+        "x",
+        "kwargs",
+    )
 
 
 def test_recording_with_explicit_dynamic_shapes():
