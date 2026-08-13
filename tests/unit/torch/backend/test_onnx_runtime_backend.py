@@ -9,6 +9,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.backend import BackendState
 from aitune.torch.backend.onnx_runtime_backend import (
     ONNXExecutionProvider,
@@ -229,7 +230,7 @@ def test_build_returns_active_backend(mock_onnx, backend, model, graph_spec, sam
     built = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
     assert built is backend
     assert backend.is_active
-    assert backend._onnx_model_path == tmp_path / "model_raw.onnx"
+    assert backend._onnx_model_artifact == ArtifactPath(tmp_path, Path("model_raw.onnx"))
 
 
 @requires_cuda
@@ -363,7 +364,7 @@ def test_to_dict_contains_required_keys(mock_onnx, backend, model, graph_spec, s
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
     state = backend.to_dict()
     assert state[ONNXRuntimeBackend.STATE_TYPE] == "ONNXRuntimeBackend"
-    assert isinstance(state[ONNXRuntimeBackend.STATE_ONNX_MODEL_PATH], Path)
+    assert state[ONNXRuntimeBackend.STATE_ONNX_MODEL_PATH] == ArtifactPath(tmp_path, Path("model_raw.onnx"))
     assert state[ONNXRuntimeBackend.STATE_DEVICE] == torch_device
     assert ONNXRuntimeBackend.STATE_GRAPH_SPEC in state
     assert ONNXRuntimeBackend.STATE_OUTPUT_OBJECT in state
@@ -376,17 +377,17 @@ def test_from_dict_restores_state(tmp_path, torch_device):
     dummy_output = torch.zeros(1, 5)
 
     config = ONNXRuntimeBackendConfig()
-    onnx_path = tmp_path / "model_raw.onnx"
+    onnx_artifact = ArtifactPath(tmp_path, "model_raw.onnx")
     state = {
         ONNXRuntimeBackend.STATE_TYPE: "ONNXRuntimeBackend",
-        ONNXRuntimeBackend.STATE_ONNX_MODEL_PATH: onnx_path,
+        ONNXRuntimeBackend.STATE_ONNX_MODEL_PATH: onnx_artifact,
         ONNXRuntimeBackend.STATE_DEVICE: torch_device,
         ONNXRuntimeBackend.STATE_CONFIG: config.to_dict(),
         ONNXRuntimeBackend.STATE_GRAPH_SPEC: real_graph_spec.to_dict(),
         ONNXRuntimeBackend.STATE_OUTPUT_OBJECT: dummy_output,
     }
     restored = ONNXRuntimeBackend.from_dict(None, state)
-    assert restored._onnx_model_path == onnx_path
+    assert restored._onnx_model_artifact == onnx_artifact
     assert restored._device == torch_device
     assert restored._graph_spec is not None
     assert restored._output_object is not None

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from aitune.torch.backend import ArtifactPath
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.storage_tasks import (
     AIT_EXTENSION,
@@ -50,7 +51,9 @@ def test_save_copy_load_relocates_backend_artifact_paths(tmp_path):
     artifact_path = artifact_root / "model.plan"
     artifact_path.write_bytes(b"engine")
 
-    state_dict = _backend_state_with_paths(engine_path=artifact_path)
+    state_dict = _backend_state_with_paths(
+        engine_path=ArtifactPath(root=artifact_root, relative_path=Path("model.plan"))
+    )
     source_checkpoint = Path("my_model")
     LocalTorchStorage(base_folder=compile_root).save(source_checkpoint, state_dict)
 
@@ -60,9 +63,12 @@ def test_save_copy_load_relocates_backend_artifact_paths(tmp_path):
 
     loaded_state_dict = LocalTorchStorage(base_folder=serve_root).load(source_checkpoint)
 
-    loaded_artifact_path = _only_backend_data(loaded_state_dict)["engine_path"]
-    assert loaded_artifact_path == (serve_root / "my_model" / "1" / "model.plan").resolve()
-    assert loaded_artifact_path.read_bytes() == b"engine"
+    loaded_artifact = _only_backend_data(loaded_state_dict)["engine_path"]
+    assert loaded_artifact == ArtifactPath(
+        root=(serve_root / "my_model").resolve(),
+        relative_path=Path("1/1/model.plan"),
+    )
+    assert loaded_artifact.path.read_bytes() == b"engine"
 
 
 def test_save_move_load_relocates_backend_artifact_paths(tmp_path):
@@ -75,7 +81,9 @@ def test_save_move_load_relocates_backend_artifact_paths(tmp_path):
     artifact_path = artifact_root / "model.plan"
     artifact_path.write_bytes(b"engine")
 
-    state_dict = _backend_state_with_paths(engine_path=artifact_path)
+    state_dict = _backend_state_with_paths(
+        engine_path=ArtifactPath(root=artifact_root, relative_path=Path("model.plan"))
+    )
     LocalTorchStorage(base_folder=compile_root).save(Path("my_model"), state_dict)
 
     shutil.move(str(compile_root / "my_model.ait"), serve_root / "moved_model.ait")
@@ -84,9 +92,12 @@ def test_save_move_load_relocates_backend_artifact_paths(tmp_path):
 
     loaded_state_dict = LocalTorchStorage(base_folder=serve_root).load(Path("moved_model"))
 
-    loaded_artifact_path = _only_backend_data(loaded_state_dict)["engine_path"]
-    assert loaded_artifact_path == (serve_root / "moved_model" / "1" / "model.plan").resolve()
-    assert loaded_artifact_path.read_bytes() == b"engine"
+    loaded_artifact = _only_backend_data(loaded_state_dict)["engine_path"]
+    assert loaded_artifact == ArtifactPath(
+        root=(serve_root / "moved_model").resolve(),
+        relative_path=Path("1/1/model.plan"),
+    )
+    assert loaded_artifact.path.read_bytes() == b"engine"
 
 
 def test_save_copy_load_torch_model_preserves_outputs(tmp_path):

@@ -296,15 +296,23 @@ class Backend(ABC):
     def to_dict(self):
         """Returns the state_dict of the backend.
 
-        Note: if there any binary artifacts (files) which should be stored by a backend,
-        they must be passed as Python Path object. Such objects will be bundled with a checkpoint.
+        Files or directories required to restore the backend must be represented by
+        :class:`aitune.torch.backend.ArtifactPath`. A checkpoint copies only values
+        explicitly marked with ``ArtifactPath``; ordinary :class:`pathlib.Path`
+        values are serialized without copying their targets.
         """
         pass
 
     @classmethod
     @abstractmethod
     def from_dict(cls, module: torch.nn.Module | None, state_dict: dict):
-        """Creates a backend from a module and state_dict."""
+        """Creates a backend from a module and state_dict.
+
+        Artifact values have already been relocated by the checkpoint loader and
+        are provided as ready-to-use :class:`aitune.torch.backend.ArtifactPath`
+        objects. Implementations should use them directly without reconstructing
+        or rebasing their paths.
+        """
         pass
 
     @property

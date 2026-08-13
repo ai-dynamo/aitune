@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import numpy as np
 import nvtx
@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.cuda.memory import memcpy_to_torch
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
@@ -136,8 +137,8 @@ class ONNXRuntimeBackend(Backend):
         """
         super().__init__()
         self._config = config or ONNXRuntimeBackendConfig()
-        self._onnx_model_path: Path | None = None
-        self._onnx_data_path: Path | None = None
+        self._onnx_model_artifact: ArtifactPath | None = None
+        self._onnx_data_artifact: ArtifactPath | None = None
         self._session: onnxruntime.InferenceSession | None = None
         self._output_object = None
         self._graph_spec: GraphSpec | None = None
@@ -158,17 +159,17 @@ class ONNXRuntimeBackend(Backend):
         self._output_object = self._get_output_object(module=module, sample=data[0])
 
         module = module.eval().to(self._device)
-        self._onnx_model_path = cache_dir / "model_raw.onnx"
+        self._onnx_model_artifact = ArtifactPath(cache_dir, "model_raw.onnx")
         onnx_exporter = ONNXExporter(
-            output_path=self._onnx_model_path,
+            output_path=self._onnx_model_artifact.path,
             use_dynamo=self._config.use_dynamo,
             opset_version=self._config.opset_version,
         )
         onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
 
-        data_file = Path(str(self._onnx_model_path) + ".data")
+        data_file = Path(str(self._onnx_model_artifact.path) + ".data")
         if data_file.exists():
-            self._onnx_data_path = data_file
+            self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=cache_dir)
 
         offload(module, device="cpu")
         self._activate()
@@ -193,9 +194,10 @@ class ONNXRuntimeBackend(Backend):
 
     def _activate(self):
         """Load the ONNX Runtime session from disk."""
-        logger.debug("Loading ONNX Runtime session from %s.", self._onnx_model_path)
+        model_artifact = cast(ArtifactPath, self._onnx_model_artifact)
+        logger.debug("Loading ONNX Runtime session from %s.", model_artifact)
         providers = self._get_execution_providers()
-        self._session = onnxruntime.InferenceSession(str(self._onnx_model_path), providers=providers)
+        self._session = onnxruntime.InferenceSession(str(model_artifact.path), providers=providers)
 
     def _prepare_inputs(self, args: tuple, kwargs: dict) -> dict[str, Any]:
         """Map args/kwargs to session input names using graph_spec locators.
@@ -309,18 +311,18 @@ class ONNXRuntimeBackend(Backend):
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""
-        if self._onnx_model_path is None:
+        if self._onnx_model_artifact is None:
             raise RuntimeError("Backend has not been built yet. Please call build() first.")
         state = {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
-            self.STATE_ONNX_MODEL_PATH: self._onnx_model_path,
+            self.STATE_ONNX_MODEL_PATH: self._onnx_model_artifact,
             self.STATE_OUTPUT_OBJECT: self._output_object,
             self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
             self.STATE_DEVICE: self._device,
         }
-        if self._onnx_data_path is not None:
-            state[self.STATE_ONNX_DATA_PATH] = self._onnx_data_path
+        if self._onnx_data_artifact is not None:
+            state[self.STATE_ONNX_DATA_PATH] = self._onnx_data_artifact
         return state
 
     @classmethod
@@ -332,8 +334,8 @@ class ONNXRuntimeBackend(Backend):
         config = ONNXRuntimeBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend = cls(config=config)
-        backend._onnx_model_path = state_dict[cls.STATE_ONNX_MODEL_PATH]
-        backend._onnx_data_path = state_dict.get(cls.STATE_ONNX_DATA_PATH)
+        backend._onnx_model_artifact = state_dict[cls.STATE_ONNX_MODEL_PATH]
+        backend._onnx_data_artifact = state_dict.get(cls.STATE_ONNX_DATA_PATH)
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]

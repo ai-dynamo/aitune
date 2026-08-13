@@ -303,7 +303,8 @@ To write a custom backend, extend the `Backend` base class and `BackendConfig` d
 
 - `key()` - Returns a stable identifier for the backend/config combination; used for caching and lookup.
 - `describe()` - Returns a short human-readable description of the backend/config changes.
-- `to_dict()` - Serializes backend state; includes `Path` objects for artifacts to bundle in checkpoints.
+- `to_dict()` - Serializes backend state; includes `ArtifactPath` objects for files or directories to bundle in
+  checkpoints.
 - `from_dict()` - Reconstructs a backend instance from the serialized state.
 - `is_jit` - Boolean property indicating whether the backend is of just-in-time type. This information helps AITune manage resources as just-in-time backends require the original torch module for activation. Otherwise, the original module can be offloaded to system memory.
 - `_build()` - Builds backend artifacts for a specific module/graph and returns a ready backend.
@@ -312,7 +313,31 @@ To write a custom backend, extend the `Backend` base class and `BackendConfig` d
 - `_deploy()` - Finalizes the backend for deployment; after this it cannot change state.
 - `_infer()` - Executes inference with the backend for the provided inputs.
 
-For serialization with `ait.load` and `ait.save`, the `to_dict` and `from_dict` methods are used. Anything placed in the dictionary will be saved and restored as a checkpoint. Path objects will be copied to the checkpoints folder and can be used by a backend in the `_deploy` method.
+For serialization with `ait.load` and `ait.save`, the `to_dict` and `from_dict` methods are used. Anything placed in
+the dictionary will be saved and restored as checkpoint state. Files and directories are copied only when explicitly
+represented by `ArtifactPath`; ordinary `Path` values remain regular serialized configuration values.
+
+Create a planned artifact from its owning cache directory and relative path. Both arguments accept strings and
+`Path` objects, while the `path` property returns the effective filesystem location used by the backend:
+
+```python
+from aitune.torch.backend import ArtifactPath
+
+engine_artifact = ArtifactPath(cache_dir, "tensorrt/model.engine")
+build_engine(output_path=engine_artifact.path)
+
+
+def to_dict(self):
+    return {"engine_path": engine_artifact}
+```
+
+If another API returns the path of an artifact it has already created, use
+`ArtifactPath.from_existing(engine_path, root=cache_dir)`. The explicit root preserves the intended directory
+structure and prevents accidentally including a file outside that directory. A backend's `from_dict()` receives
+ready-to-use `ArtifactPath` objects, so it should not construct or rebase them itself.
+
+AITune preserves `tensorrt/model.engine` inside the checkpoint and rebases the artifact root when loading it from a
+different location.
 
 ## Monitoring the Workflow
 

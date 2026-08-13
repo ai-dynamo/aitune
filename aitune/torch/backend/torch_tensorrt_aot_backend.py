@@ -5,12 +5,13 @@
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import torch
 import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
+from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
@@ -141,7 +142,7 @@ class TorchTensorRTAotBackend(Backend):
 
         # build variables
         self._opt_module = None
-        self._exported_model_path = None
+        self._exported_model_artifact: ArtifactPath | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -249,14 +250,14 @@ class TorchTensorRTAotBackend(Backend):
             )
 
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
-            self._exported_model_path = self._create_exported_model_path(cache_dir)
+            self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
             torch_tensorrt.save(
                 trt_model_compiled,
-                self._exported_model_path.as_posix(),
+                self._exported_model_artifact.path.as_posix(),
                 retrace=False,
                 pickle_protocol=self._config.pickle_protocol,
             )
-            result["compiled_model_size_bytes"] = self._exported_model_path.stat().st_size
+            result["compiled_model_size_bytes"] = self._exported_model_artifact.path.stat().st_size
 
         logger.info("Module has been compiled and saved with TensorRT.")
         self._opt_module = trt_model_compiled
@@ -264,7 +265,8 @@ class TorchTensorRTAotBackend(Backend):
 
     def _activate(self):
         """Load compiled module."""
-        self._opt_module = torch_tensorrt.load(self._exported_model_path.as_posix()).module().to(self._device)
+        exported_model_artifact = cast(ArtifactPath, self._exported_model_artifact)
+        self._opt_module = torch_tensorrt.load(exported_model_artifact.path.as_posix()).module().to(self._device)
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with TensorRT engine.
@@ -296,22 +298,21 @@ class TorchTensorRTAotBackend(Backend):
         self._config.to_json(config_path)
         logger.info("Config saved to %s", config_path)
 
-    def _create_exported_model_path(self, cache_dir: Path) -> Path:
-        """Create path to exported model.
+    def _create_exported_model_artifact(self, cache_dir: Path) -> ArtifactPath:
+        """Create the exported model artifact.
 
         In order to avoid name clashes we create a unique path for each model and graph spec.
         """
-        path = cache_dir / "exported_model.pt"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return path
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return ArtifactPath(cache_dir, "exported_model.pt")
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""
-        if self._exported_model_path is None:
+        if self._exported_model_artifact is None:
             raise RuntimeError("No exported model path available. Model must be built first.")
         return {
             self.STATE_TYPE: self.__class__.__name__,
-            self.EXPORTED_MODEL_PATH_KEY: self._exported_model_path,
+            self.EXPORTED_MODEL_PATH_KEY: self._exported_model_artifact,
             self.STATE_DEVICE: self._device,
         }
 
@@ -322,7 +323,7 @@ class TorchTensorRTAotBackend(Backend):
             raise ValueError(f"Invalid state_dict type: {state_dict.get(cls.STATE_TYPE)}")
 
         backend = cls()  # create with default args, config is not needed
-        backend._exported_model_path = state_dict[cls.EXPORTED_MODEL_PATH_KEY]
+        backend._exported_model_artifact = state_dict[cls.EXPORTED_MODEL_PATH_KEY]
         backend._device = state_dict[cls.STATE_DEVICE]
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend

@@ -10,7 +10,7 @@ from collections import OrderedDict
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import torch
 import torch.nn as nn
@@ -26,6 +26,7 @@ from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.backend.tensorrt.tensorrt_runtime import TensorRTRuntime
 from aitune.torch.backend.tensorrt.torch_output_allocator import TorchOutputAllocator
 from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig, TorchQuantizer
+from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.config import config as global_config
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
@@ -171,6 +172,8 @@ class TensorRTBackendConfig(BackendConfig):
             state_dict["profiles"] = [
                 TensorRTProfile.profile_to_dict(profile.profile) for profile in state_dict["profiles"]
             ]
+        else:
+            state_dict["profiles"] = self.profiles.value
         if self.quantization_config is not None:
             state_dict["quantization_config"] = {
                 "_type": type(self.quantization_config).__name__,
@@ -236,8 +239,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._outputs = None
 
         # build variables
-        self._engine_path = None
-        self._trt_optimization_profiles_path = None
+        self._engine_artifact: ArtifactPath | None = None
+        self._trt_optimization_profiles_artifact: ArtifactPath | None = None
         self._output_object = None
         self._graph_spec = None
 
@@ -322,20 +325,23 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._output_object = self._get_output_object(module=module, sample=data[0])
 
         if isinstance(self._config.quantization_config, TorchQuantizationConfig):
-            self._engine_path = self._build_modelopt_torch(module, graph_spec, data, cache_dir)
+            engine_path = self._build_modelopt_torch(module, graph_spec, data, cache_dir)
         elif isinstance(self._config.quantization_config, ONNXQuantizationConfig):
-            self._engine_path = self._build_modelopt_onnx(module, graph_spec, data, cache_dir)
+            engine_path = self._build_modelopt_onnx(module, graph_spec, data, cache_dir)
         elif isinstance(self._config.quantization_config, ONNXAutoCastConfig):
-            self._engine_path = self._build_modelopt_onnx_autocast(module, graph_spec, data, cache_dir)
+            engine_path = self._build_modelopt_onnx_autocast(module, graph_spec, data, cache_dir)
         else:
-            self._engine_path = self._build_standard(module, graph_spec, data, cache_dir)
+            engine_path = self._build_standard(module, graph_spec, data, cache_dir)
+        self._engine_artifact = ArtifactPath.from_existing(engine_path, root=cache_dir)
 
         # Save optimization profiles after building the engine
-        self._trt_optimization_profiles_path = self._save_trt_optimization_profiles(
-            self._trt_optimization_profiles, cache_dir
+        profiles_path = self._save_trt_optimization_profiles(self._trt_optimization_profiles, cache_dir)
+        self._trt_optimization_profiles_artifact = ArtifactPath.from_existing(
+            profiles_path,
+            root=cache_dir,
         )
 
-        logger.info("TensorRT backend building finished successfully with engine path %s", self._engine_path)
+        logger.info("TensorRT backend building finished successfully with engine path %s", self._engine_artifact)
         self._activate()
 
         return self
@@ -691,11 +697,13 @@ class TensorRTBackend(Backend, TensorRTRunner):
     def _activate(self):
         """Activate the TensorRT engine."""
         logger.debug("Activating TensorRT backend")
+        engine_artifact = cast(ArtifactPath, self._engine_artifact)
+        optimization_profiles_artifact = cast(ArtifactPath, self._trt_optimization_profiles_artifact)
 
         cuda_set_device(self._device)
 
         self._trt_runtime = TensorRTRuntime()
-        engine_bytes = self._trt_runtime.load_engine(engine_path=self._engine_path)
+        engine_bytes = self._trt_runtime.load_engine(engine_path=engine_artifact.path)
 
         self._context, self._io_tensors, self._input_names, self._output_names, self._engine_info = (
             self._trt_runtime.create_execution_context(engine_bytes=engine_bytes)
@@ -732,7 +740,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             logger.debug("Set output allocator for tensor '%s'", output_name)
 
         # Load optimization profiles
-        self._trt_optimization_profiles = self._load_trt_optimization_profiles(self._trt_optimization_profiles_path)
+        self._trt_optimization_profiles = self._load_trt_optimization_profiles(optimization_profiles_artifact.path)
 
     def _deactivate(self):
         """Deactivate the TensorRT engine."""
@@ -1133,22 +1141,22 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """Returns the state_dict of the backend."""
         return {
             self.STATE_TYPE: self.__class__.__name__,
-            self.STATE_ENGINE_PATH: self._engine_path,
+            self.STATE_ENGINE_PATH: self._engine_artifact,
             self.STATE_OUTPUT_OBJECT: self._output_object,
             self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_QUANTIZATION_CONFIG: self._config.quantization_config,
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_USE_CUDA_GRAPHS: self._config.use_cuda_graphs,
-            self.STATE_TRT_OPTIMIZATION_PROFILES_PATH: self._trt_optimization_profiles_path,
+            self.STATE_TRT_OPTIMIZATION_PROFILES_PATH: self._trt_optimization_profiles_artifact,
         }
 
     @classmethod
     def from_dict(cls, module: torch.nn.Module, state_dict: dict):
         """Creates a backend from a state_dict."""
         backend = cls()
-        backend._engine_path = state_dict[cls.STATE_ENGINE_PATH]
-        backend._trt_optimization_profiles_path = state_dict.get(cls.STATE_TRT_OPTIMIZATION_PROFILES_PATH, [])
+        backend._engine_artifact = state_dict[cls.STATE_ENGINE_PATH]
+        backend._trt_optimization_profiles_artifact = state_dict[cls.STATE_TRT_OPTIMIZATION_PROFILES_PATH]
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend._device = state_dict[cls.STATE_DEVICE]
         backend.state = BackendState.CHECKPOINT_LOADED

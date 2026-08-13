@@ -29,8 +29,10 @@ from aitune.torch.backend.torch_tensorrt_jit_backend import (
     TorchTensorRTJitBackendConfig,
 )
 from aitune.torch.backend.torchao_backend import TorchAOBackend, TorchAOBackendConfig
+from aitune.torch.checkpoint.artifact import ArtifactPath
 
 __all__ = [
+    "ArtifactPath",
     "Backend",
     "ONNXAutoCastConfig",
     "ONNXExecutionProvider",

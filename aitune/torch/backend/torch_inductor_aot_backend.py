@@ -5,13 +5,14 @@
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import nvtx
 import torch
 import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
+from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
 from aitune.torch.utils.module import offload
@@ -75,7 +76,7 @@ class TorchInductorAotBackend(Backend):
         """
         super().__init__()
         self._config = config or TorchInductorAotBackendConfig()
-        self._compiled_model_path: Path | None = None
+        self._compiled_model_artifact: ArtifactPath | None = None
         self._runner = None
 
     def key(self) -> str:
@@ -116,15 +117,15 @@ class TorchInductorAotBackend(Backend):
                 )
 
         with self._track_build_step(TorchInductorAotBuildStep.AOT_COMPILE) as result:
-            self._compiled_model_path = cache_dir / "model.pt2"
-            logger.info("Compiling model with AOT Inductor to %s.", self._compiled_model_path)
+            self._compiled_model_artifact = ArtifactPath(cache_dir, "model.pt2")
+            logger.info("Compiling model with AOT Inductor to %s.", self._compiled_model_artifact)
             torch._inductor.aoti_compile_and_package(
                 exported,
-                package_path=str(self._compiled_model_path),
+                package_path=str(self._compiled_model_artifact.path),
                 inductor_configs=self._config.inductor_configs or {},
             )
-            result["compiled_model_size_bytes"] = self._compiled_model_path.stat().st_size
-        logger.info("AOT Inductor compilation complete with package path %s.", self._compiled_model_path)
+            result["compiled_model_size_bytes"] = self._compiled_model_artifact.path.stat().st_size
+        logger.info("AOT Inductor compilation complete with package path %s.", self._compiled_model_artifact)
 
         # The compiled artifact is self-contained; offload the original module to CPU
         # to free GPU memory now that the runner is loaded.
@@ -135,9 +136,10 @@ class TorchInductorAotBackend(Backend):
 
     def _activate(self):
         """Load the compiled model from disk."""
-        logger.debug("Loading compiled AOT Inductor runner from %s.", self._compiled_model_path)
+        compiled_model_artifact = cast(ArtifactPath, self._compiled_model_artifact)
+        logger.debug("Loading compiled AOT Inductor runner from %s.", compiled_model_artifact)
         device_index = self._device.index if self._device.index is not None else 0
-        self._runner = torch._inductor.aoti_load_package(str(self._compiled_model_path), device_index=device_index)
+        self._runner = torch._inductor.aoti_load_package(str(compiled_model_artifact.path), device_index=device_index)
 
     @nvtx.annotate(message="TorchInductorAotBackend.infer", domain="AITune", color="orange")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
@@ -169,11 +171,11 @@ class TorchInductorAotBackend(Backend):
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""
-        if self._compiled_model_path is None:
+        if self._compiled_model_artifact is None:
             raise RuntimeError("Backend has not been built yet. Please call build() first.")
         return {
             self.STATE_TYPE: self.__class__.__name__,
-            self.STATE_COMPILED_MODEL_PATH: self._compiled_model_path,
+            self.STATE_COMPILED_MODEL_PATH: self._compiled_model_artifact,
             self.STATE_DEVICE: self._device,
         }
 
@@ -184,7 +186,7 @@ class TorchInductorAotBackend(Backend):
             raise ValueError(f"Invalid state_dict type: {state_dict.get(cls.STATE_TYPE)}")
 
         backend = cls()
-        backend._compiled_model_path = state_dict[cls.STATE_COMPILED_MODEL_PATH]
+        backend._compiled_model_artifact = state_dict[cls.STATE_COMPILED_MODEL_PATH]
         backend._device = state_dict[cls.STATE_DEVICE]
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend

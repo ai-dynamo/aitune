@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for TensorRTBackend."""
 
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -9,6 +10,7 @@ import torch
 from polygraphy.backend.trt import Profile
 
 from aitune.exceptions import AITuneUserInputError
+from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.tensorrt_backend import ProfileMode, TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
@@ -132,7 +134,7 @@ def test_tensorrt_backend_init():
     assert backend._io_tensors is None
     assert backend._output_names is None
     assert backend._input_names is None
-    assert backend._engine_path is None
+    assert backend._engine_artifact is None
     assert backend._engine_info is None
     assert backend._cuda_stream is None
     assert backend._start_time is None
@@ -155,7 +157,7 @@ def test_tensorrt_backend_init_with_custom_parameters():
     assert backend._io_tensors is None
     assert backend._output_names is None
     assert backend._input_names is None
-    assert backend._engine_path is None
+    assert backend._engine_artifact is None
     assert backend._engine_info is None
     assert backend._cuda_stream is None
     assert backend._start_time is None
@@ -190,10 +192,29 @@ def test_tensorrt_backend_build(mock_tensorrt_components, tmp_path):
     mock_builder_instance.build.assert_called_once()
     mock_runtime_instance.load_engine.assert_called_once()
 
-    assert backend._engine_path is not None
+    assert backend._engine_artifact == ArtifactPath(tmp_path, Path("tensorrt/model.plan"))
 
     # Verify backend is properly initialized
     assert backend is not None
+
+
+def test_tensorrt_state_marks_runtime_artifacts_but_not_timing_cache(tmp_path):
+    timing_cache = tmp_path / "timing.cache"
+    backend = TensorRTBackend(TensorRTBackendConfig(timing_cache=timing_cache))
+    backend._engine_artifact = ArtifactPath(tmp_path, Path("tensorrt/model.plan"))
+    backend._trt_optimization_profiles_artifact = ArtifactPath(
+        tmp_path,
+        Path("tensorrt/model_optimization_profiles.json"),
+    )
+    sample = ((torch.randn(1, 4),), {})
+    backend._graph_spec = make_graph_spec(_single_input, sample, sample[0][0])
+    backend._output_object = torch.randn(1, 4)
+
+    state_dict = backend.to_dict()
+
+    assert isinstance(state_dict[TensorRTBackend.STATE_ENGINE_PATH], ArtifactPath)
+    assert isinstance(state_dict[TensorRTBackend.STATE_TRT_OPTIMIZATION_PROFILES_PATH], ArtifactPath)
+    assert state_dict[TensorRTBackend.STATE_CONFIG]["timing_cache"] == timing_cache
 
 
 @requires_cuda
@@ -964,7 +985,10 @@ def test_tensorrt_backend_config_to_dict_with_profiles():
 
 def test_tensorrt_backend_config_to_dict_with_profiles_mode():
     config = TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED)
-    new_config = TensorRTBackendConfig.from_dict(config.to_dict())
+    config_dict = config.to_dict()
+    new_config = TensorRTBackendConfig.from_dict(config_dict)
+
+    assert config_dict["profiles"] == "samples_used"
     assert new_config.profiles == ProfileMode.SAMPLES_USED
 
 

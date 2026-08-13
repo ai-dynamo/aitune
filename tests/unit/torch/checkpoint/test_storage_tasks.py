@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for model state storage functionality."""
 
+import logging
 import shutil
 from pathlib import Path
 
 import pytest
 
+from aitune.torch.backend import ArtifactPath
 from aitune.torch.checkpoint.storage_tasks import (
     AIT_EXTENSION,
     CopyBackendArtifactsTask,
@@ -22,8 +24,25 @@ from aitune.torch.checkpoint.storage_tasks import (
     check_checkpoint_valid,
     get_sha_sums_path,
 )
+from aitune.torch.module.tuned_module import TunedModule
 from tests.toy_models.torch_models import ToyTorchModel
 from tests.unit.torch.checkpoint.helpers import _backend_state_with_paths, _only_backend_data
+
+_STORAGE_TASKS_LOGGER = "aitune.torch.checkpoint.storage_tasks"
+_DEPRECATED_FORMAT_WARNING = "This checkpoint uses a deprecated format"
+
+
+class _UnsafeCheckpointValue:
+    pass
+
+
+class _PositionalOutput(dict):
+    """Dictionary-like output that also supports positional access."""
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return tuple(self.values())[key]
+        return super().__getitem__(key)
 
 
 def test_save_load_torch_task(tmp_path):
@@ -33,12 +52,14 @@ def test_save_load_torch_task(tmp_path):
 
     orig_state_dict = model.state_dict()
     orig_state_dict["extra_data"] = "for testing"
+    orig_state_dict["artifact"] = ArtifactPath(tmp_path, "artifact.bin")
 
     save_task.save(tmp_path, orig_state_dict)
     state_dict = load_task.load(tmp_path)
 
     assert state_dict.keys() == orig_state_dict.keys()
     assert state_dict["extra_data"] == orig_state_dict["extra_data"]
+    assert state_dict["artifact"] == orig_state_dict["artifact"]
 
 
 def test_make_folder_task_overwrite(tmp_path):
@@ -110,19 +131,22 @@ def test_sha_sums_save_task(tmp_path, sha_type):
         sha_sums_load_task.load(tmp_path)
 
 
-def test_copy_backend_artifacts_stores_relative_file_paths(tmp_path):
+def test_copy_backend_artifacts_preserves_root_relative_file_path(tmp_path):
     checkpoint_path = tmp_path / "checkpoint"
     checkpoint_path.mkdir()
-    artifact = tmp_path / "source.plan"
-    artifact.write_bytes(b"engine")
-    state_dict = _backend_state_with_paths(engine_path=artifact)
+    artifact_root = tmp_path / "cache"
+    artifact_path = artifact_root / "nested" / "source.plan"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_bytes(b"engine")
+    state_dict = _backend_state_with_paths(
+        engine_path=ArtifactPath(root=artifact_root, relative_path=Path("nested/source.plan"))
+    )
 
     CopyBackendArtifactsTask().save(checkpoint_path, state_dict)
 
     backend_data = _only_backend_data(state_dict)
-    assert backend_data["engine_path"] == Path("1/source.plan")
-    assert not backend_data["engine_path"].is_absolute()
-    assert (checkpoint_path / "1" / "source.plan").read_bytes() == b"engine"
+    assert backend_data["engine_path"] == ArtifactPath(root=Path("."), relative_path=Path("1/1/nested/source.plan"))
+    assert (checkpoint_path / "1" / "1" / "nested" / "source.plan").read_bytes() == b"engine"
 
 
 def test_copy_backend_artifacts_stores_relative_directory_paths(tmp_path):
@@ -131,34 +155,177 @@ def test_copy_backend_artifacts_stores_relative_directory_paths(tmp_path):
     artifact_dir = tmp_path / "compiled_model"
     artifact_dir.mkdir()
     (artifact_dir / "model.bin").write_bytes(b"compiled")
-    state_dict = _backend_state_with_paths(compiled_model_path=artifact_dir)
+    state_dict = _backend_state_with_paths(compiled_model_path=ArtifactPath(root=artifact_dir, relative_path=Path(".")))
 
     CopyBackendArtifactsTask().save(checkpoint_path, state_dict)
 
     backend_data = _only_backend_data(state_dict)
-    assert backend_data["compiled_model_path"] == Path("1/compiled_model")
-    assert not backend_data["compiled_model_path"].is_absolute()
-    assert (checkpoint_path / "1" / "compiled_model" / "model.bin").read_bytes() == b"compiled"
+    assert backend_data["compiled_model_path"] == ArtifactPath(root=Path("."), relative_path=Path("1/1"))
+    assert (checkpoint_path / "1" / "1" / "model.bin").read_bytes() == b"compiled"
 
 
-def test_relocate_backend_artifacts_resolves_relative_paths(tmp_path):
+def test_copy_backend_artifacts_recurses_through_dicts_lists_and_tuples(tmp_path):
     checkpoint_path = tmp_path / "checkpoint"
-    artifact_path = checkpoint_path / "1" / "model.plan"
+    checkpoint_path.mkdir()
+    artifact_root = tmp_path / "artifacts"
+    artifact_root.mkdir()
+    first_artifact = artifact_root / "first.plan"
+    second_artifact = artifact_root / "metadata" / "second.json"
+    second_artifact.parent.mkdir()
+    first_artifact.write_bytes(b"engine")
+    second_artifact.write_text("{}", encoding="utf-8")
+    state_dict = _backend_state_with_paths(
+        kernel_plan={
+            "replacements": [
+                {
+                    "artifacts": (
+                        ArtifactPath.from_existing(first_artifact, root=artifact_root),
+                        {"metadata": [ArtifactPath.from_existing(second_artifact, root=artifact_root)]},
+                    ),
+                },
+            ],
+        },
+    )
+
+    CopyBackendArtifactsTask().save(checkpoint_path, state_dict)
+
+    artifacts = _only_backend_data(state_dict)["kernel_plan"]["replacements"][0]["artifacts"]
+    assert artifacts == (
+        ArtifactPath(root=Path("."), relative_path=Path("1/1/first.plan")),
+        {"metadata": [ArtifactPath(root=Path("."), relative_path=Path("1/1/metadata/second.json"))]},
+    )
+    assert (checkpoint_path / artifacts[0].path).read_bytes() == b"engine"
+    assert (checkpoint_path / artifacts[1]["metadata"][0].path).read_text(encoding="utf-8") == "{}"
+
+
+def test_copy_backend_artifacts_preserves_custom_output_collection_type(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    artifact_path = tmp_path / "model.plan"
+    artifact_path.write_bytes(b"engine")
+    output = _PositionalOutput(last_hidden_state="hidden", pooler_output="pooled")
+    state_dict = _backend_state_with_paths(
+        engine_path=ArtifactPath.from_existing(artifact_path, root=tmp_path),
+        output_object=output,
+    )
+
+    CopyBackendArtifactsTask().save(checkpoint_path, state_dict)
+
+    restored_output = _only_backend_data(state_dict)["output_object"]
+    assert type(restored_output) is _PositionalOutput
+    assert restored_output[0] == "hidden"
+
+
+def test_copy_backend_artifacts_leaves_plain_paths_unchanged(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    timing_cache = tmp_path / "timing.cache"
+    timing_cache.write_bytes(b"timings")
+    state_dict = _backend_state_with_paths(config={"timing_cache": timing_cache})
+
+    CopyBackendArtifactsTask().save(checkpoint_path, state_dict)
+
+    assert _only_backend_data(state_dict)["config"]["timing_cache"] == timing_cache
+    assert list((checkpoint_path / "1").iterdir()) == []
+
+
+def test_copy_backend_artifacts_separates_distinct_roots_with_same_relative_path(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first_root.mkdir()
+    second_root.mkdir()
+    (first_root / "model.bin").write_bytes(b"first")
+    (second_root / "model.bin").write_bytes(b"second")
+    state_dict = _backend_state_with_paths(
+        artifacts=[
+            ArtifactPath(first_root, Path("model.bin")),
+            ArtifactPath(second_root, Path("model.bin")),
+        ]
+    )
+
+    CopyBackendArtifactsTask().save(checkpoint_path, state_dict)
+
+    artifacts = _only_backend_data(state_dict)["artifacts"]
+    assert artifacts == [
+        ArtifactPath(Path("."), Path("1/1/model.bin")),
+        ArtifactPath(Path("."), Path("1/2/model.bin")),
+    ]
+    assert (checkpoint_path / artifacts[0].path).read_bytes() == b"first"
+    assert (checkpoint_path / artifacts[1].path).read_bytes() == b"second"
+
+
+def test_copy_backend_artifacts_reuses_repeated_artifact(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    artifact_path = tmp_path / "model.bin"
+    artifact_path.write_bytes(b"model")
+    artifact = ArtifactPath.from_existing(artifact_path, root=tmp_path)
+    state_dict = _backend_state_with_paths(artifacts=[artifact, artifact])
+
+    CopyBackendArtifactsTask().save(checkpoint_path, state_dict)
+
+    artifacts = _only_backend_data(state_dict)["artifacts"]
+    assert artifacts[0] == artifacts[1]
+    assert list((checkpoint_path / "1" / "1").iterdir()) == [checkpoint_path / artifacts[0].path]
+
+
+def test_relocate_backend_artifacts_resolves_relative_paths(tmp_path, caplog):
+    checkpoint_path = tmp_path / "checkpoint"
+    artifact_path = checkpoint_path / "1" / "1" / "model.plan"
     artifact_path.parent.mkdir(parents=True)
     artifact_path.write_bytes(b"engine")
-    state_dict = _backend_state_with_paths(engine_path=Path("1/model.plan"))
+    state_dict = _backend_state_with_paths(
+        engine_path=ArtifactPath(root=Path("."), relative_path=Path("1/1/model.plan"))
+    )
+
+    with caplog.at_level(logging.WARNING, logger=_STORAGE_TASKS_LOGGER):
+        update = RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+    assert update == {}
+    backend_data = _only_backend_data(state_dict)
+    assert backend_data["engine_path"] == ArtifactPath(
+        root=checkpoint_path.resolve(), relative_path=Path("1/1/model.plan")
+    )
+    assert backend_data["engine_path"].path == artifact_path.resolve()
+    assert _DEPRECATED_FORMAT_WARNING not in caplog.text
+
+
+def test_relocate_backend_artifacts_recurses_through_dicts_lists_and_tuples(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    first_artifact = checkpoint_path / "1" / "1" / "first.plan"
+    second_artifact = checkpoint_path / "1" / "1" / "second.json"
+    first_artifact.parent.mkdir(parents=True)
+    first_artifact.write_bytes(b"engine")
+    second_artifact.write_text("{}", encoding="utf-8")
+    state_dict = _backend_state_with_paths(
+        kernel_plan={
+            "replacements": [
+                {
+                    "artifacts": (
+                        ArtifactPath(Path("."), Path("1/1/first.plan")),
+                        {"metadata": [ArtifactPath(Path("."), Path("1/1/second.json"))]},
+                    ),
+                },
+            ],
+        },
+    )
 
     update = RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
 
     assert update == {}
-    backend_data = _only_backend_data(state_dict)
-    assert backend_data["engine_path"] == artifact_path.resolve()
+    artifacts = _only_backend_data(state_dict)["kernel_plan"]["replacements"][0]["artifacts"]
+    assert artifacts == (
+        ArtifactPath(checkpoint_path.resolve(), Path("1/1/first.plan")),
+        {"metadata": [ArtifactPath(checkpoint_path.resolve(), Path("1/1/second.json"))]},
+    )
 
 
 def test_relocate_backend_artifacts_rejects_relative_path_escape(tmp_path):
     checkpoint_path = tmp_path / "checkpoint"
     checkpoint_path.mkdir()
-    state_dict = _backend_state_with_paths(engine_path=Path("../model.plan"))
+    state_dict = _backend_state_with_paths(engine_path=ArtifactPath(root=Path(".."), relative_path=Path("model.plan")))
 
     with pytest.raises(ValueError, match="outside checkpoint"):
         RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
@@ -167,24 +334,12 @@ def test_relocate_backend_artifacts_rejects_relative_path_escape(tmp_path):
 def test_relocate_backend_artifacts_requires_existing_relative_path(tmp_path):
     checkpoint_path = tmp_path / "checkpoint"
     checkpoint_path.mkdir()
-    state_dict = _backend_state_with_paths(engine_path=Path("1/missing.plan"))
+    state_dict = _backend_state_with_paths(
+        engine_path=ArtifactPath(root=Path("."), relative_path=Path("1/1/missing.plan"))
+    )
 
     with pytest.raises(FileNotFoundError, match="Backend artifact not found"):
         RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
-
-
-def test_relocate_backend_artifacts_keeps_existing_absolute_paths(tmp_path):
-    checkpoint_path = tmp_path / "checkpoint"
-    checkpoint_path.mkdir()
-    artifact_path = checkpoint_path / "existing.plan"
-    artifact_path.write_bytes(b"engine")
-    state_dict = _backend_state_with_paths(engine_path=artifact_path)
-
-    update = RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
-
-    assert update == {}
-    backend_data = _only_backend_data(state_dict)
-    assert backend_data["engine_path"] == artifact_path
 
 
 def test_relocate_backend_artifacts_keeps_absolute_paths_when_checkpoint_has_same_basename(tmp_path):
@@ -203,6 +358,77 @@ def test_relocate_backend_artifacts_keeps_absolute_paths_when_checkpoint_has_sam
     backend_data = _only_backend_data(state_dict)
     assert backend_data["engine_path"] == old_absolute_path
     assert backend_data["engine_path"].read_bytes() == b"stale source"
+
+
+def test_relocate_backend_artifacts_supports_legacy_relative_paths(tmp_path, caplog):
+    checkpoint_path = tmp_path / "checkpoint"
+    artifact_path = checkpoint_path / "1" / "model.plan"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_bytes(b"engine")
+    state_dict = _backend_state_with_paths(engine_path=Path("1/model.plan"))
+
+    with caplog.at_level(logging.WARNING, logger=_STORAGE_TASKS_LOGGER):
+        RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+    assert _only_backend_data(state_dict)["engine_path"] == ArtifactPath(
+        root=checkpoint_path.resolve(), relative_path=Path("1/model.plan")
+    )
+    warning_records = [record for record in caplog.records if _DEPRECATED_FORMAT_WARNING in record.message]
+    assert len(warning_records) == 1
+    assert warning_records[0].levelno == logging.WARNING
+
+
+def test_relocate_legacy_checkpoint_format_warns_once_for_multiple_backends(tmp_path, caplog):
+    checkpoint_path = tmp_path / "checkpoint"
+    first_artifact = checkpoint_path / "1" / "model.plan"
+    second_artifact = checkpoint_path / "2" / "model.plan"
+    first_artifact.parent.mkdir(parents=True)
+    second_artifact.parent.mkdir(parents=True)
+    first_artifact.write_bytes(b"first")
+    second_artifact.write_bytes(b"second")
+    state_dict = {
+        "wrapped": {
+            TunedModule.BACKENDS_KEY: [
+                ({"sample": "first"}, {TunedModule.TYPE_KEY: "FakeBackend", "engine_path": Path("1/model.plan")}),
+                ({"sample": "second"}, {TunedModule.TYPE_KEY: "FakeBackend", "engine_path": Path("2/model.plan")}),
+            ]
+        }
+    }
+
+    with caplog.at_level(logging.WARNING, logger=_STORAGE_TASKS_LOGGER):
+        RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+    warning_records = [record for record in caplog.records if _DEPRECATED_FORMAT_WARNING in record.message]
+    assert len(warning_records) == 1
+
+
+def test_relocate_backend_artifacts_rejects_legacy_path_escape(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    state_dict = _backend_state_with_paths(engine_path=Path("1/../../model.plan"))
+
+    with pytest.raises(ValueError, match="outside checkpoint"):
+        RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+
+def test_relocate_backend_artifacts_requires_existing_legacy_path(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    state_dict = _backend_state_with_paths(engine_path=Path("1/missing.plan"))
+
+    with pytest.raises(FileNotFoundError, match="Backend artifact not found"):
+        RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+
+def test_relocate_backend_artifacts_leaves_plain_relative_paths_unchanged(tmp_path):
+    checkpoint_path = tmp_path / "checkpoint"
+    checkpoint_path.mkdir()
+    timing_cache = Path("shared/timing.cache")
+    state_dict = _backend_state_with_paths(config={"timing_cache": timing_cache})
+
+    RelocateBackendArtifactsTask().load(checkpoint_path, state_dict)
+
+    assert _only_backend_data(state_dict)["config"]["timing_cache"] == timing_cache
 
 
 def test_relocate_backend_artifacts_requires_loaded_state_dict(tmp_path):

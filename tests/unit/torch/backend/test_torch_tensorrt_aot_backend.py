@@ -8,6 +8,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
@@ -294,7 +295,8 @@ def test_full_run_simple_model(
 ):
     backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
-    assert backend._exported_model_path.exists()
+    assert backend._exported_model_artifact == ArtifactPath(tmp_path, Path("exported_model.pt"))
+    assert backend._exported_model_artifact.path.exists()
 
     args, kwargs = sample_data[0]
 

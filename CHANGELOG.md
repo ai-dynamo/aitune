@@ -5,6 +5,9 @@ title: "Changelog"
 ---
 # Changelog
 
+## 0.6.0 (unreleased)
+- feat: introduce explicit backend artifacts declaration
+
 ## 0.5.0
 - feat: allow AOT modules to declare explicit dynamic input shapes
 - feat: Add `MinLatencyStrategy` tune strategy that profiles all backends and selects the one with the lowest latency

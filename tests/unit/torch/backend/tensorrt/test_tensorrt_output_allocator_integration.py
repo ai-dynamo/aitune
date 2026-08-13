@@ -8,6 +8,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.backend import BackendState
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
 from aitune.torch.backend.tensorrt.torch_output_allocator import TorchOutputAllocator
@@ -81,7 +82,8 @@ def test_output_allocator_integration():
 
         # Set up required attributes for activation (no actual file paths)
         backend._model_name = "test_model"
-        backend._engine_path = "mock_engine.plan"  # Don't use actual file path
+        backend._engine_artifact = ArtifactPath(".", "mock_engine.plan")
+        backend._trt_optimization_profiles_artifact = ArtifactPath(".", "mock_profiles.json")
         backend._device = torch.device("cuda:0")  # Set device for activation
 
         # Set the backend state to INACTIVE so we can activate it
@@ -125,7 +127,7 @@ def test_output_allocator_inference_flow(tmp_path):
 
         # Initialize required components
         backend._model_name = "test_model"
-        backend._engine_path = tmp_path / "test.engine"
+        backend._engine_artifact = ArtifactPath(tmp_path, "test.engine")
         backend._context = mock_context
         backend._engine_info = mock_engine_info
         backend._input_names = ["input_0"]
@@ -264,7 +266,8 @@ def test_output_allocator_multiple_outputs():
 
         # Set up required attributes for activation
         backend._model_name = "test_multi_output_model"
-        backend._engine_path = "mock_multi_engine.plan"  # Don't use actual file path
+        backend._engine_artifact = ArtifactPath(".", "mock_multi_engine.plan")
+        backend._trt_optimization_profiles_artifact = ArtifactPath(".", "mock_profiles.json")
         backend._device = torch.device("cuda:0")  # Set device for activation
 
         # Set the backend state to INACTIVE so we can activate it
@@ -328,7 +331,8 @@ def test_output_allocator_set_failure():
 
         # Set up required attributes for activation
         backend._model_name = "test_model"
-        backend._engine_path = "mock_engine.plan"  # Don't use actual file path
+        backend._engine_artifact = ArtifactPath(".", "mock_engine.plan")
+        backend._trt_optimization_profiles_artifact = ArtifactPath(".", "mock_profiles.json")
         backend._device = torch.device("cuda:0")  # Set device for activation
 
         # Set the backend state to INACTIVE so we can activate it

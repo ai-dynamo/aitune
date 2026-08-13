@@ -8,12 +8,15 @@ import shutil
 import zipfile
 from abc import ABC, abstractmethod
 from collections import deque
+from collections.abc import Callable
+from functools import partial
 from itertools import count
 from pathlib import Path, PosixPath
-from typing import Literal
+from typing import Any, Literal
 
 import torch
 
+from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.utils.path_utils import format_file_size, get_file_size
 
@@ -132,16 +135,37 @@ def _iter_backend_data_dicts(state_dict: dict):
                     yield backend_data
 
 
+def _transform_artifact_paths(value: Any, transform: Callable[[ArtifactPath], ArtifactPath]) -> Any:
+    """Transform artifact paths in plain checkpoint collections in place where possible.
+
+    Collection subclasses may encode user-visible behavior, such as positional indexing in
+    ``transformers.ModelOutput``. Treat them as opaque values so checkpoint processing does not
+    replace them with their plain built-in counterparts. Tuples are rebuilt because they are
+    immutable.
+    """
+    if isinstance(value, ArtifactPath):
+        return transform(value)
+    if type(value) is dict:
+        for key, item in value.items():
+            value[key] = _transform_artifact_paths(item, transform)
+        return value
+    if type(value) is list:
+        for index, item in enumerate(value):
+            value[index] = _transform_artifact_paths(item, transform)
+        return value
+    if type(value) is tuple:
+        return tuple(_transform_artifact_paths(item, transform) for item in value)
+    return value
+
+
 class CopyBackendArtifactsTask(SaveTask):
     """Task to copy backend artifacts."""
 
     def save(self, target_path: Path, state_dict: dict) -> None:
         """Copy backend artifacts to the specified path.
 
-        Function traverses through state_dict which can contain torch parameters, layers or AITune backend artifacts.
-        If it finds a backend artifact, it looks for any Path and copies it to the specified target path.
-
-        It enumerates (with a counter) copied artifacts to avoid name collisions.
+        Each backend and each distinct artifact root receives its own numbered
+        directory. Paths relative to an artifact root are preserved.
 
         Args:
             target_path: The path where the backend artifacts should be copied.
@@ -150,22 +174,72 @@ class CopyBackendArtifactsTask(SaveTask):
         counter = count(1)
 
         for backend_data in _iter_backend_data_dicts(state_dict):
-            # Each backend gets its own numbered subdirectory so that artifacts with
-            # identical filenames from different backends do not collide, and each
-            # artifact is stored under its original name (required e.g. by ONNX
-            # Runtime which resolves external-data paths from the name embedded in
-            # the .onnx protobuf).
             backend_dir = target_path / str(next(counter))
             backend_dir.mkdir()
-            for backend_property_name, backend_value in backend_data.items():
-                # look for Path objects
-                if isinstance(backend_value, Path):
-                    new_path = backend_dir / backend_value.name
-                    if backend_value.is_dir():
-                        shutil.copytree(backend_value, new_path)
-                    else:
-                        shutil.copy(backend_value, new_path)
-                    backend_data[backend_property_name] = new_path.relative_to(target_path)
+            artifact_root_dirs: dict[Path, Path] = {}
+            copy_artifact = partial(
+                self._copy_artifact,
+                target_path=target_path,
+                backend_dir=backend_dir,
+                artifact_root_dirs=artifact_root_dirs,
+            )
+            _transform_artifact_paths(backend_data, copy_artifact)
+
+    def _copy_artifact(
+        self,
+        artifact: ArtifactPath,
+        *,
+        target_path: Path,
+        backend_dir: Path,
+        artifact_root_dirs: dict[Path, Path],
+    ) -> ArtifactPath:
+        """Copy an artifact into the checkpoint while preserving its root-relative path.
+
+        The destination path has the following structure::
+
+            <target_path>/<backend index>/<artifact root index>/<artifact.relative_path>
+
+        ``backend_dir`` already contains the backend index. Each distinct resolved
+        ``artifact.root`` is assigned a numbered directory below ``backend_dir``;
+        artifacts sharing a root also share that directory. The artifact's relative
+        path is appended unchanged, preserving its original directory structure.
+
+        Args:
+            artifact: Artifact to copy, including its owning root and relative path.
+            target_path: Root directory of the checkpoint being created.
+            backend_dir: Numbered checkpoint directory assigned to the artifact's backend.
+            artifact_root_dirs: Mapping from resolved artifact roots to their numbered
+                directories within ``backend_dir``.
+
+        Returns:
+            An artifact pointing to the copied checkpoint entry. Its root is ``.``
+            and its relative path is relative to ``target_path``, so it can be
+            rebased when the checkpoint is loaded from another location.
+
+        Raises:
+            ValueError: If the resolved artifact path is outside its declared root.
+        """
+        source_root = artifact.root.resolve()
+        source_path = artifact.path.resolve()
+        try:
+            source_relative_path = source_path.relative_to(source_root)
+        except ValueError as e:
+            raise ValueError(f"Backend artifact path resolves outside its root: {artifact.path}") from e
+
+        artifact_root_dir = artifact_root_dirs.get(source_root)
+        if artifact_root_dir is None:
+            # create a new artifact root directory
+            artifact_root_dir = backend_dir / str(len(artifact_root_dirs) + 1)
+            artifact_root_dirs[source_root] = artifact_root_dir
+
+        copied_path = artifact_root_dir / source_relative_path
+        if source_path.is_dir():
+            shutil.copytree(source_path, copied_path, dirs_exist_ok=True)
+        elif not copied_path.exists():
+            copied_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(source_path, copied_path)
+
+        return ArtifactPath(root=Path("."), relative_path=copied_path.relative_to(target_path))
 
 
 class ShaSumsSaveTask(SaveTask):
@@ -243,12 +317,10 @@ class ZipSaveTask(SaveTask):
 class RelocateBackendArtifactsTask(LoadTask):
     """Rebase saved backend artifact paths onto the extracted checkpoint.
 
-    Save stores copied backend artifacts as paths relative to the checkpoint root
-    so a .ait archive can be copied or moved. After TorchLoadTask restores those
-    Path objects, this task mutates the loaded state_dict in place and turns
-    relative artifact paths into absolute paths for backend loaders. Absolute
-    legacy paths are left unchanged because they already point at a concrete
-    filesystem location.
+    New checkpoints identify artifacts with :class:`ArtifactPath`. Checkpoints
+    created before ``ArtifactPath`` used direct, checkpoint-relative ``Path``
+    values in backend state dictionaries; those values still load, but the format
+    is deprecated and a warning is emitted.
     """
 
     def load(self, path: Path, state_dict: dict | None = None) -> dict:
@@ -257,19 +329,98 @@ class RelocateBackendArtifactsTask(LoadTask):
             raise ValueError("RelocateBackendArtifactsTask requires loaded state_dict")
 
         checkpoint_root = path.resolve()
-        for backend_data in _iter_backend_data_dicts(state_dict):
-            for backend_property_name, backend_value in backend_data.items():
-                if isinstance(backend_value, Path) and not backend_value.is_absolute():
-                    artifact_path = (checkpoint_root / backend_value).resolve()
-                    try:
-                        artifact_path.relative_to(checkpoint_root)
-                    except ValueError as e:
-                        raise ValueError(f"Backend artifact path resolves outside checkpoint: {backend_value}") from e
-                    if not artifact_path.exists():
-                        raise FileNotFoundError(f"Backend artifact not found: {artifact_path}")
-                    backend_data[backend_property_name] = artifact_path
+        relocate_artifact = partial(self._relocate_artifact, checkpoint_root=checkpoint_root)
+        used_legacy_format = False
+        for backend_index, backend_data in enumerate(_iter_backend_data_dicts(state_dict), start=1):
+            _transform_artifact_paths(backend_data, relocate_artifact)
+            if self._relocate_legacy_paths(checkpoint_root, backend_index, backend_data):
+                used_legacy_format = True
+
+        if used_legacy_format:
+            logger.warning(
+                "⚠️ This checkpoint uses a deprecated format. It still loads, "
+                "but support will be removed in a future release."
+            )
 
         return {}
+
+    @staticmethod
+    def _relocate_artifact(artifact: ArtifactPath, *, checkpoint_root: Path) -> ArtifactPath:
+        """Rebase a checkpoint-relative artifact onto the extracted checkpoint root.
+
+        Saved artifacts contain a path relative to the checkpoint directory, for
+        example ``1/1/nested/model.bin``. This method resolves that entry below
+        ``checkpoint_root`` and returns an artifact whose root is the absolute
+        checkpoint directory while preserving the checkpoint-relative path.
+
+        Args:
+            artifact: Artifact path restored from the checkpoint state dictionary.
+            checkpoint_root: Resolved root directory of the extracted checkpoint.
+
+        Returns:
+            An artifact rebased onto ``checkpoint_root``.
+
+        Raises:
+            ValueError: If the resolved artifact path is outside ``checkpoint_root``.
+            FileNotFoundError: If the referenced artifact does not exist in the checkpoint.
+        """
+        checkpoint_relative_path = artifact.path
+        artifact_path = (checkpoint_root / checkpoint_relative_path).resolve()
+        try:
+            artifact_path.relative_to(checkpoint_root)
+        except ValueError as e:
+            raise ValueError(f"Backend artifact path resolves outside checkpoint: {checkpoint_relative_path}") from e
+        if not artifact_path.exists():
+            raise FileNotFoundError(f"Backend artifact not found: {artifact_path}")
+        return ArtifactPath(root=checkpoint_root, relative_path=checkpoint_relative_path)
+
+    @staticmethod
+    def _relocate_legacy_paths(checkpoint_root: Path, backend_index: int, backend_data: dict) -> bool:
+        """Convert top-level artifact paths written by the legacy checkpoint format.
+
+        Before ``ArtifactPath`` was introduced, copied backend artifacts were
+        stored directly as checkpoint-relative ``Path`` values. Their first path
+        component was the numbered backend directory, for example
+        ``Path("1/model.plan")`` for the first backend. A relative ``Path`` is
+        treated as a legacy artifact only when this component matches
+        ``backend_index``; other relative paths may be regular backend configuration
+        and are left unchanged.
+
+        A recognized path is resolved below ``checkpoint_root``, checked for path
+        traversal and existence, and replaced in ``backend_data`` with an
+        ``ArtifactPath`` rooted at the extracted checkpoint. Absolute ``Path``
+        values are left unchanged. Only values directly in ``backend_data`` are
+        considered because built-in backends stored legacy artifacts at that level.
+
+        Args:
+            checkpoint_root: Resolved root directory of the extracted checkpoint.
+            backend_index: One-based index identifying the backend's legacy artifact directory.
+            backend_data: Backend state dictionary to update in place.
+
+        Returns:
+            True if at least one legacy path was converted.
+
+        Raises:
+            ValueError: If a recognized legacy path resolves outside ``checkpoint_root``.
+            FileNotFoundError: If the referenced legacy artifact does not exist.
+        """
+        converted = False
+        for key, value in backend_data.items():
+            if not isinstance(value, Path) or value.is_absolute():
+                continue
+            if not value.parts or value.parts[0] != str(backend_index):
+                continue
+
+            artifact_path = (checkpoint_root / value).resolve()
+            try:
+                artifact_path.relative_to(checkpoint_root)
+            except ValueError as e:
+                raise ValueError(f"Backend artifact path resolves outside checkpoint: {value}") from e
+            if not artifact_path.exists():
+                raise FileNotFoundError(f"Backend artifact not found: {artifact_path}")
+            backend_data[key] = ArtifactPath(root=checkpoint_root, relative_path=value)
+            converted = True
+        return converted
 
 
 class ShaSumsLoadTask(LoadTask):
@@ -382,8 +533,16 @@ class UnzipLoadTask(LoadTask):
 
 
 def torch_load_with_custom_types(path: Path) -> dict:
-    """Doest not use safe globals to load torch checkpoint with PosixPath object allowed."""
-    with torch.serialization.safe_globals([PosixPath]):
+    """Load a checkpoint safely with AITune's serialized value types allowlisted."""
+    from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
+    from aitune.torch.module.locator import Locator, ObjectType
+    from aitune.torch.module.sample_metadata import SampleMetadata
+    from aitune.torch.module.tensor_spec import TensorSpec
+
+    safe_globals = [ArtifactPath, BatchDim, DynamicDim, Locator, ObjectType, PosixPath, SampleMetadata, TensorSpec]
+    with torch.serialization.safe_globals(safe_globals):
+        # unfortunately, we cannot use weights_only=True here because some backends store internal objects
+        # until this is not fixed, we need weights_only=False
         return torch.load(path, weights_only=False)
 
 

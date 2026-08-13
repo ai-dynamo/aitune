@@ -9,6 +9,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.backend import BackendState
 from aitune.torch.backend.torch_inductor_aot_backend import (
     TorchInductorAotBackend,
@@ -111,7 +112,7 @@ def test_build_returns_active_backend(mock_aoti, backend, model, graph_spec, sam
     built = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
     assert built is backend
     assert backend.is_active
-    assert backend._compiled_model_path == tmp_path / "model.pt2"
+    assert backend._compiled_model_artifact == ArtifactPath(tmp_path, Path("model.pt2"))
 
 
 @requires_cuda
@@ -204,20 +205,20 @@ def test_to_dict_contains_required_keys(mock_aoti, backend, model, graph_spec, s
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
     state = backend.to_dict()
     assert state[TorchInductorAotBackend.STATE_TYPE] == "TorchInductorAotBackend"
-    assert isinstance(state[TorchInductorAotBackend.STATE_COMPILED_MODEL_PATH], Path)
+    assert state[TorchInductorAotBackend.STATE_COMPILED_MODEL_PATH] == ArtifactPath(tmp_path, Path("model.pt2"))
     assert state[TorchInductorAotBackend.STATE_DEVICE] == torch_device
 
 
 @requires_cuda
 def test_from_dict_restores_state(tmp_path, torch_device):
-    compiled_path = tmp_path / "model.pt2"
+    compiled_artifact = ArtifactPath(tmp_path, "model.pt2")
     state = {
         TorchInductorAotBackend.STATE_TYPE: "TorchInductorAotBackend",
-        TorchInductorAotBackend.STATE_COMPILED_MODEL_PATH: compiled_path,
+        TorchInductorAotBackend.STATE_COMPILED_MODEL_PATH: compiled_artifact,
         TorchInductorAotBackend.STATE_DEVICE: torch_device,
     }
     restored = TorchInductorAotBackend.from_dict(None, state)
-    assert restored._compiled_model_path == compiled_path
+    assert restored._compiled_model_artifact == compiled_artifact
     assert restored._device == torch_device
     assert restored.state == BackendState.CHECKPOINT_LOADED
 
