@@ -6,6 +6,7 @@
 from aitune.torch.config import aitune_cache_dir, config  # noqa: I001
 
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
+from aitune.torch.backend.kernels.module_function_kernel_profiler import ModuleFunctionKernelProfiler
 from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.inspecting import inspect, wrap
@@ -35,6 +36,7 @@ __all__ = [
     "load",
     "save",
     "snapshot_tuning_data",
+    "ModuleFunctionKernelProfiler",
     "PerformanceProfile",
     "profile",
     "Module",

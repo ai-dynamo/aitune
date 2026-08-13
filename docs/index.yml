@@ -58,6 +58,8 @@ navigation:
             path: ../docs/guides/advanced/profiling_and_hardware_metrics.md
           - page: Performance Profile
             path: ../docs/guides/advanced/performance_profile.md
+          - page: Module Function Kernel Profiler
+            path: ../docs/guides/advanced/module_function_kernel_profiler.md
       - section: AI Agents
         contents:
           - page: Tuning Assistant

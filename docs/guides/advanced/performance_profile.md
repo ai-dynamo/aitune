@@ -260,6 +260,7 @@ Runtime attribution is **complementary** to AITune's other observability feature
 | Feature | Question it answers |
 |---|---|
 | `aitune.torch.profile(...)` | *Where is time spent in my code?* |
+| [`ModuleFunctionKernelProfiler`](module_function_kernel_profiler.md) | *Which module-scoped `torch.nn.functional` calls launch each CUDA kernel, and with which inputs?* |
 | `AITUNE_HARDWARE_METRICS=1` | *How is the hardware behaving?* (GPU/CPU utilization, memory, power) |
 | `AITUNE_NVTX_EVENTS=1` | *What does this look like in Nsight Systems?* |
 | Tuning telemetry | *What did AITune choose and why?* |
