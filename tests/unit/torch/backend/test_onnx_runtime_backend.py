@@ -234,6 +234,26 @@ def test_build_returns_active_backend(mock_onnx, backend, model, graph_spec, sam
 
 
 @requires_cuda
+def test_build_validates_execution_provider_with_recorded_samples(mock_onnx, backend, model, torch_device, tmp_path):
+    samples = model.samples(batch_sizes=[1, 2, 3], device=torch_device)
+    graph_spec = model.graph_spec(batch_sizes=[1, 2, 3], device=torch_device)
+
+    backend.build(model, graph_spec, samples, device=torch_device, cache_dir=tmp_path)
+
+    assert backend._session.run_with_iobinding.call_count == len(samples)
+
+
+@requires_cuda
+def test_build_fails_when_execution_provider_validation_fails(
+    mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
+):
+    backend._validate = Mock(side_effect=RuntimeError("provider failed"))
+
+    with pytest.raises(RuntimeError, match="provider failed"):
+        backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+
+
+@requires_cuda
 def test_build_default_calls_onnx_export_with_dynamo_true(
     mock_onnx, mocker, backend, model, graph_spec, sample_data, torch_device, tmp_path
 ):
@@ -271,10 +291,8 @@ def test_build_dynamo_passes_dynamic_shapes_for_batch_graph(
 
 
 @requires_cuda
-def test_build_dynamo_static_graph_no_dynamic_shapes(mocker, torch_device, tmp_path):
+def test_build_dynamo_static_graph_no_dynamic_shapes(mock_onnx, mocker, torch_device, tmp_path):
     """Single batch size (static graph) → dynamic_shapes=None in export call."""
-    mocker.patch("onnxruntime.InferenceSession", return_value=Mock())
-    mocker.patch("onnx.checker.check_model")
     export_mock = mocker.patch("torch.onnx.export")
 
     toy = ToyTorchModel().to(torch_device)
@@ -293,7 +311,7 @@ def test_infer_calls_session_and_returns_tensor(
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
     args, kwargs = sample_data[0]
     output = backend.infer(*args, **kwargs)
-    backend._session.run_with_iobinding.assert_called_once()
+    assert backend._session.run_with_iobinding.call_count == 2
     assert isinstance(output, torch.Tensor)
 
 

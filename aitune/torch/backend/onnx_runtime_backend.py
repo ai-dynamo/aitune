@@ -173,6 +173,12 @@ class ONNXRuntimeBackend(Backend):
 
         offload(module, device="cpu")
         self._activate()
+        try:
+            self._validate(data)
+        except Exception:
+            self._deactivate()
+            raise
+
         return self
 
     # ------------------------------------------------------------------
@@ -198,6 +204,21 @@ class ONNXRuntimeBackend(Backend):
         logger.debug("Loading ONNX Runtime session from %s.", model_artifact)
         providers = self._get_execution_providers()
         self._session = onnxruntime.InferenceSession(str(model_artifact.path), providers=providers)
+
+    def _validate(self, data: list[Sample]) -> None:
+        """Run representative samples to initialize and validate the execution provider.
+
+        Some execution providers defer work until inference. In particular, the TensorRT
+        execution provider compiles the ONNX graph when it first runs. Exercising a small
+        number of recorded samples makes those failures part of the backend build instead
+        of deferring them until profiling or application inference.
+
+        Args:
+            data: Recorded input samples for the backend build.
+        """
+        logger.info("Validating ONNX Runtime execution provider with %d sample(s).", len(data))
+        for args, kwargs in data:
+            self._infer(*args, **kwargs)
 
     def _prepare_inputs(self, args: tuple, kwargs: dict) -> dict[str, Any]:
         """Map args/kwargs to session input names using graph_spec locators.
