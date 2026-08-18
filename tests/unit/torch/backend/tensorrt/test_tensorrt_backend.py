@@ -885,6 +885,77 @@ def test_set_optimization_profiles_01(mocker, global_config_max_num_samples_all)
     mock_context.set_optimization_profile_async.assert_called_with(1, "stream")
 
 
+def test_set_optimization_profiles_rejects_failed_context_update(mocker, global_config_max_num_samples_all):
+    backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+    backend._trt_optimization_profiles = [
+        Profile().add("args_0", (1, IN_FEATURES), (1, IN_FEATURES), (1, IN_FEATURES)),
+        Profile().add("args_0", (8, IN_FEATURES), (8, IN_FEATURES), (8, IN_FEATURES)),
+    ]
+    backend._context = mocker.MagicMock()
+    backend._context.set_optimization_profile_async.return_value = False
+    backend._cuda_stream = mocker.MagicMock()
+    backend._cuda_stream.cuda_stream = "stream"
+
+    with pytest.raises(RuntimeError, match="TensorRT rejected optimization profile 1"):
+        backend._set_optimization_profiles({"args_0": torch.randn(8, IN_FEATURES)})
+
+
+def test_set_input_tensors_rejects_invalid_shape(mocker):
+    backend = TensorRTBackend()
+    backend._context = mocker.MagicMock()
+    backend._context.set_input_shape.return_value = False
+    backend._context.active_optimization_profile = 1
+    backend._io_tensors = {"args_0": {"shape": (-1, IN_FEATURES)}}
+    tensor = mocker.MagicMock()
+    tensor.is_contiguous.return_value = True
+    tensor.is_cuda = True
+    tensor.shape = (BATCH_SIZE, IN_FEATURES)
+    tensor.dtype = torch.float32
+
+    with pytest.raises(RuntimeError, match="TensorRT rejected shape") as error:
+        backend._set_input_tensors({"args_0": tensor})
+
+    assert "optimization profile 1" in str(error.value)
+    assert "engine shape is (-1, 32)" in str(error.value)
+
+
+def test_set_input_tensors_rejects_invalid_address(mocker):
+    backend = TensorRTBackend()
+    backend._context = mocker.MagicMock()
+    backend._context.set_input_shape.return_value = True
+    backend._context.set_tensor_address.return_value = False
+    backend._io_tensors = {"args_0": {"shape": (-1, IN_FEATURES)}}
+    tensor = mocker.MagicMock()
+    tensor.is_contiguous.return_value = True
+    tensor.is_cuda = True
+    tensor.shape = (BATCH_SIZE, IN_FEATURES)
+    tensor.dtype = torch.float32
+    tensor.data_ptr.return_value = 123
+
+    with pytest.raises(RuntimeError, match="TensorRT rejected the address for input 'args_0'"):
+        backend._set_input_tensors({"args_0": tensor})
+
+
+def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
+    backend = TensorRTBackend()
+    backend._context = mocker.MagicMock()
+    backend._context.execute_async_v3.return_value = True
+    backend._cuda_stream = mocker.MagicMock()
+    backend._cuda_stream.cuda_stream = "stream"
+    backend._start_time = mocker.MagicMock()
+    backend._end_time = mocker.MagicMock()
+    backend._prepare_inputs = mocker.MagicMock(return_value={"args_0": mocker.MagicMock()})
+    backend._invalidate_cuda_graph = mocker.MagicMock()
+    backend._prepare_outputs_for_return = mocker.MagicMock(return_value="output")
+    mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.torch.cuda.stream")
+    calls = []
+    backend._set_optimization_profiles = mocker.MagicMock(side_effect=lambda inputs: calls.append("profile"))
+    backend._set_input_tensors = mocker.MagicMock(side_effect=lambda inputs: calls.append("inputs"))
+
+    assert backend._infer() == "output"
+    assert calls == ["profile", "inputs"]
+
+
 def test_set_optimization_profiles_additional_kwargs(mocker, global_config_max_num_samples_all):
     backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
     backend._trt_optimization_profiles = [

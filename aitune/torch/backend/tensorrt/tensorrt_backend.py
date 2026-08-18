@@ -648,10 +648,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Check if input shapes have changed (for CUDA graph invalidation)
                 self._invalidate_cuda_graph(inputs)
 
+                self._set_optimization_profiles(inputs)
+
                 # Set input tensor shapes and addresses
                 logger.debug("Setting input tensor shapes and addresses")
                 self._set_input_tensors(inputs)
-                self._set_optimization_profiles(inputs)
 
                 # Run inference with timing
                 logger.debug("Executing TensorRT inference")
@@ -930,23 +931,22 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
                 tensor = static_tensor
 
-            try:
-                # Set input tensor shape directly
-                self._context.set_input_shape(name, shape)
-                logger.debug("Set input shape for %s successfully", name)
-            except Exception as e:
-                logger.error("Failed to set shape for %s: %s", name, e)
-                raise e
+            success = self._context.set_input_shape(name, shape)
+            if not success:
+                engine_shape = tuple(self._io_tensors[name]["shape"])
+                profile_index = self._context.active_optimization_profile
+                raise RuntimeError(
+                    f"TensorRT rejected shape {shape} for input {name!r} with optimization profile {profile_index}; "
+                    f"engine shape is {engine_shape}"
+                )
+            logger.debug("Set input shape for %s successfully", name)
 
-            try:
-                ptr = tensor.data_ptr()
-                self._context.set_tensor_address(name, ptr)
-                logger.debug("Set tensor address for %s successfully", name)
-            except Exception as e:
-                logger.error("Failed to set tensor address for %s: %s", name, e)
-                raise e
+            success = self._context.set_tensor_address(name, tensor.data_ptr())
+            if not success:
+                raise RuntimeError(f"TensorRT rejected the address for input {name!r}")
+            logger.debug("Set tensor address for %s successfully", name)
 
-    def _set_optimization_profiles(self, inputs: dict[str, torch.Tensor]):
+    def _set_optimization_profiles(self, inputs: dict[str, torch.Tensor]) -> None:
         """Set optimization profiles for the input tensors.
 
         Args:
@@ -977,11 +977,13 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     break  # shape mismatch, skipping profile
 
             else:  # for else is executed if the loop did not break
-                # all shapes matched, setting optimization profile
-                self._context.set_optimization_profile_async(idx, self._cuda_stream.cuda_stream)
+                success = self._context.set_optimization_profile_async(idx, self._cuda_stream.cuda_stream)
+                if not success:
+                    raise RuntimeError(f"TensorRT rejected optimization profile {idx}")
+                logger.debug("Selected TensorRT optimization profile %d", idx)
                 return
 
-        raise RuntimeError("No optimization profile found for the given inputs")
+        raise RuntimeError("No TensorRT optimization profile matches the input shapes")
 
     def get_profiles(self, graph_spec: GraphSpec, data: list[Sample]) -> list[Profile]:
         """Create profiles from samples or from graph_spec.
