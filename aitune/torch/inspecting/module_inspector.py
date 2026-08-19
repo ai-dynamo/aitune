@@ -324,6 +324,7 @@ class ModuleInspector:
             if _get_inspect_debug():
                 logger.debug("%-75s from %s", " " * depth * 2 + module_info.object_path + "()", exec_parent.object_path)
 
+        @wraps(original_forward)
         def wrapped_forward(*args, **kwargs):
             module_info = self._module_info[module]
 

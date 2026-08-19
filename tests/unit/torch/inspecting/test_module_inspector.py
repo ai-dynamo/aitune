@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
+
 import pytest
 import torch
 import torch.nn as nn
@@ -411,6 +413,34 @@ def test_inspect_module_with_custom_forward():
     module_info = next(iter(inspector._module_info.values()))
     assert module_info.execution_count == 2
     assert len(module_info.output_types) == 2
+
+
+def test_inspect_module_preserves_forward_signature():
+    """Test inspecting preserves the observable forward signature."""
+
+    class MultimodalModule(nn.Module):
+        def forward(
+            self,
+            input_ids: torch.Tensor,
+            *,
+            mm_token_type_ids: torch.Tensor | None = None,
+        ) -> torch.Tensor:
+            return input_ids if mm_token_type_ids is None else input_ids + mm_token_type_ids
+
+    model = MultimodalModule()
+    original_forward = model.forward
+    original_signature = inspect.signature(original_forward)
+    inspector = ModuleInspector()
+
+    inspector.inspect(model)
+
+    assert inspect.signature(model.forward) == original_signature
+    assert inspect.unwrap(model.forward) == original_forward
+    input_ids = torch.ones(1, 2)
+    assert torch.equal(model(input_ids, mm_token_type_ids=torch.ones_like(input_ids)), input_ids + 1)
+
+    inspector.reset()
+    assert inspect.signature(model.forward) == original_signature
 
 
 def test_inspect_module_with_errors():

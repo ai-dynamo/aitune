@@ -8,6 +8,10 @@ title: "Changelog"
 ## 0.6.0 (unreleased)
 - feat: introduce explicit backend artifacts declaration
 - feat: add `ModuleFunctionKernelProfiler` API for attributing CUDA kernels to module-scoped `torch.nn.functional` calls
+- fix: preserve forward signatures across callable wrappers and AOT inspection instrumentation
+- fix: normalize backend device and configuration descriptions
+- fix: surface rejected TensorRT optimization profiles, input shapes, and tensor addresses
+- fix: validate ONNX Runtime execution providers during backend build
 
 ## 0.5.0
 - feat: allow AOT modules to declare explicit dynamic input shapes
