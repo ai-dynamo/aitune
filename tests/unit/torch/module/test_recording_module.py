@@ -11,6 +11,7 @@ from aitune.exceptions import AITuneUserInputError
 from aitune.torch.config import AITuneConfig
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.module.recording_module import RecordingModule
+from aitune.torch.module.sample_store import SampleStore
 from tests.toy_models.torch_models import ToyTorchModel
 
 
@@ -100,6 +101,7 @@ def test_samples_for_graph():
 
     for graph_spec, num_expected_samples in zip(rec_module.graph_specs, [1, 1, 2], strict=False):
         samples = rec_module.samples_for_graph_spec(graph_spec)
+        assert isinstance(samples, SampleStore)
         assert len(samples) == num_expected_samples
 
     samples = rec_module.samples_for_graph_spec(rec_module.graph_specs[1])

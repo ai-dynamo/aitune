@@ -13,6 +13,7 @@ import logging
 import shutil
 import traceback
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -34,7 +35,7 @@ from aitune.torch.backend import (
     TorchTensorRTJitBackend,
 )
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
@@ -131,7 +132,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         backend: Backend,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         profiling_cfg: ProfilingConfig,
     ) -> BackendProfilingResult:
         """Profiles the backend and returns its result."""
@@ -156,7 +157,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):
@@ -199,7 +200,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ) -> Backend:
@@ -239,7 +240,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
         batching: bool,
@@ -343,7 +344,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
             raise RuntimeError("No correct backend found")
         return best
 
-    def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, data: list[Sample]):
+    def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, data: Sequence[Sample]):
         """Emits a speedup line after tuning completes."""
         super()._post_tune(backend, name, graph_spec, data)
         if backend is None:

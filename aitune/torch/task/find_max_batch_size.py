@@ -4,6 +4,7 @@
 
 import logging
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 
 import torch
@@ -12,7 +13,7 @@ import torch.nn as nn
 from aitune.torch.backend import TorchEagerBackend
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inference_events
 from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStrategy
@@ -29,7 +30,7 @@ def find_max_batch_size(
     module: nn.Module,
     name: str,
     graph_spec: GraphSpec,
-    data: list[Sample],
+    data: Sequence[Sample],
     profiling_config: ProfilingConfig,
     device: torch.device,
     cache_dir: Path,
@@ -62,7 +63,7 @@ def find_max_throughput_for_backend(
     backend: Backend,
     name: str,
     graph_spec: GraphSpec,
-    data: list[Sample],
+    data: Sequence[Sample],
     profiling_config: ProfilingConfig,
 ) -> tuple[int, float, ProfilingResults]:
     """Profiles a backend to find the batch size that achieves maximum throughput.

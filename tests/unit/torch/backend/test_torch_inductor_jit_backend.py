@@ -13,6 +13,7 @@ from aitune.torch.checkpoint.storage_tasks import TorchLoadTask, TorchSaveTask
 from aitune.torch.libs.torch_compile import TorchCompileMode
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import SampleStore
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -66,6 +67,45 @@ def test_torch_inductor_build_auto_dynamic_does_not_mutate_config(mocker, tmp_pa
     assert backend._config.dynamic is None
     assert backend.key() == original_key
     assert compile_mock.call_args.kwargs["dynamic"] is True
+
+
+def test_torch_inductor_build_persists_samples_instead_of_retaining_data(mocker, tmp_path):
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1])
+    sample_data = toy.samples(batch_sizes=[1])
+    mocker.patch("aitune.torch.backend.torch_inductor_jit_backend.torch.compile", return_value=toy)
+
+    backend = TorchInductorJitBackend().build(
+        toy,
+        graph_spec=graph_spec,
+        data=sample_data,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
+
+    assert isinstance(backend._samples, SampleStore)
+    assert backend._data is None
+    state = backend.to_dict()
+    assert state[TorchInductorJitBackend.STATE_SAMPLES] == backend._samples.artifact
+    assert TorchInductorJitBackend.STATE_DATA not in state
+
+
+def test_torch_inductor_loads_legacy_inline_samples(mocker, tmp_path):
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1])
+    sample_data = toy.samples(batch_sizes=[1])
+    compile_mock = mocker.patch("aitune.torch.backend.torch_inductor_jit_backend.torch.compile", return_value=toy)
+    backend = TorchInductorJitBackend()
+    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    state = backend.to_dict()
+    state.pop(TorchInductorJitBackend.STATE_SAMPLES)
+    state[TorchInductorJitBackend.STATE_DATA] = sample_data
+
+    loaded_backend = TorchInductorJitBackend.from_dict(toy, state)
+    compile_mock.reset_mock()
+    loaded_backend.activate()
+
+    compile_mock.assert_called_once()
 
 
 def test_torch_inductor_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):

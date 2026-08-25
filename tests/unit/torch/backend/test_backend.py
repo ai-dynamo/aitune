@@ -5,8 +5,12 @@
 
 import json
 from dataclasses import dataclass, field
+from unittest.mock import Mock
 
-from aitune.torch.backend.backend import BackendConfig
+import torch
+import torch.nn as nn
+
+from aitune.torch.backend.backend import BackendConfig, DummyBackend
 from aitune.utils.hashing import hash_string
 
 
@@ -44,6 +48,17 @@ class BackendTestConfigWithDefaults(BackendConfig):
     def _default_describe_fields(self) -> list[str]:
         """Returns the default fields to describe."""
         return ["name", "enabled"]  # Always include these fields
+
+
+def test_backend_build_releases_unused_memory(mocker, tmp_path):
+    collect = mocker.patch("aitune.torch.utils.memory.gc.collect")
+    mocker.patch("aitune.torch.utils.memory.torch.cuda.is_available", return_value=True)
+    empty_cache = mocker.patch("aitune.torch.utils.memory.torch.cuda.empty_cache")
+
+    DummyBackend().build(nn.Identity(), Mock(), [], torch.device("cpu"), tmp_path)
+
+    collect.assert_called_once()
+    empty_cache.assert_called_once()
 
 
 def test_backend_config_key():

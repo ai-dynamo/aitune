@@ -4,7 +4,7 @@
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -14,7 +14,7 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, DummyBackend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.task.correctness import (
     check_dynamic_shape_boundary_inference,
     check_inference_output_correctness,
@@ -61,7 +61,7 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):
@@ -77,7 +77,7 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ) -> Backend:
@@ -90,7 +90,7 @@ class TuneStrategy(ABC):
             self._post_tune(backend, name, graph_spec, data)
             return backend
 
-    def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, data: list[Sample]):
+    def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, data: Sequence[Sample]):
         """Check outputs for NaN/inf.
 
         Args:
@@ -157,7 +157,7 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
         *,
@@ -221,14 +221,14 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):
         """Pre-tune hook. Override to add custom logic before tuning."""
         return
 
-    def _post_tune(self, backend: Backend, name: str, graph_spec: GraphSpec, data: list[Sample]):
+    def _post_tune(self, backend: Backend, name: str, graph_spec: GraphSpec, data: Sequence[Sample]):
         """Post-tune hook. Override to add custom logic after tuning."""
         return
 
@@ -238,7 +238,7 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ) -> Backend:
@@ -295,7 +295,7 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
         dry_run: bool = False,
@@ -349,7 +349,7 @@ class DummyTuneStrategy(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):

@@ -8,7 +8,7 @@ TODO: add support for additional out of module(this source) events
 """
 
 import logging
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import Enum
@@ -19,7 +19,7 @@ import torch
 from aitune.torch.backend.backend import Backend
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inference_events
 
@@ -81,7 +81,7 @@ def profile_backend(
     backend: Backend,
     name: str,
     graph_spec: GraphSpec,
-    data: list[Sample],
+    data: Sequence[Sample],
     profiling_config: ProfilingConfig,
 ) -> ProfilingStatus:
     """Profile a backend with graph spec and data.
@@ -95,6 +95,12 @@ def profile_backend(
 
     Returns:
         ProfilingStatus: Status of the profiling.
+
+    Note:
+        The first recorded sample is loaded and expanded to each requested batch
+        size before :class:`ModelExecutionTimeMeasuringStrategy` starts its timer.
+        This keeps ``SampleStore`` disk I/O and batch construction out of reported
+        inference latency and throughput.
     """
 
     def generator():

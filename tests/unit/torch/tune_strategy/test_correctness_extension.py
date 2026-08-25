@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +41,7 @@ class TuneStrategyTestCorrectness(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):

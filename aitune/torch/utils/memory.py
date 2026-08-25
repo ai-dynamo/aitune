@@ -2,10 +2,23 @@
 # SPDX-License-Identifier: Apache-2.0
 """PyTorch memory utilities for garbage collection and CUDA cache cleanup."""
 
+import contextlib
 import ctypes
 import gc
+from collections.abc import Generator
 
 import torch
+
+
+@contextlib.contextmanager
+def release_transient_memory() -> Generator[None, None, None]:
+    """Release unreachable objects and unused CUDA allocator blocks on exit."""
+    try:
+        yield
+    finally:
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 def cleanup_memory() -> None:

@@ -63,7 +63,7 @@ def check_dynamic_shape_boundary_inference(
 
 
 def check_inference_output_correctness(
-    data: list[tuple[tuple, dict]],
+    data: Sequence[tuple[tuple, dict]],
     output_spec: SampleMetadata,
     infer: Callable[..., Any],
     name: str,

@@ -5,7 +5,7 @@
 import copy
 import gc
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import MISSING, dataclass, fields
 from logging import getLogger
 from pathlib import Path
@@ -39,7 +39,7 @@ except ImportError:
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore, ensure_sample_store
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
 
@@ -209,6 +209,7 @@ class TorchAOBackend(Backend):
     STATE_CONFIG = "config"
     STATE_ORIG_MODULE = "orig_module"
     STATE_DATA = "data"
+    STATE_SAMPLES = "samples"
     STATE_DEVICE = "device"
     STATE_COMPILE_DYNAMIC = "compile_dynamic"
 
@@ -228,6 +229,8 @@ class TorchAOBackend(Backend):
         # build variables
         self._quant_module = None
         self._orig_module = None
+        self._samples: SampleStore | None = None
+        # Kept only for loading checkpoints written before samples became disk-backed.
         self._data = None
         self._compile_dynamic = self._config.dynamic
 
@@ -239,14 +242,14 @@ class TorchAOBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
         """Builds the model with torchao quantization and torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
 
         self._save_config(cache_dir)
 
         self._orig_module = module
-        self._data = data
+        self._samples = ensure_sample_store(data, cache_dir)
         self._do_torchao_quantization()
         return self
 
@@ -274,6 +277,7 @@ class TorchAOBackend(Backend):
     def _deploy(self):
         """Deploys the backend."""
         self._activate()
+        self._samples = None
         self._data = None
         gc.collect()
 
@@ -289,7 +293,7 @@ class TorchAOBackend(Backend):
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
-            self.STATE_DATA: self._data,
+            self.STATE_SAMPLES: self._samples.artifact if self._samples is not None else None,
             self.STATE_DEVICE: self._device,
             self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
         }
@@ -306,7 +310,9 @@ class TorchAOBackend(Backend):
         config = TorchAOBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend = cls(config=config)
-        backend._data = state_dict[cls.STATE_DATA]
+        samples_artifact = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore(samples_artifact) if samples_artifact is not None else None
+        backend._data = state_dict.get(cls.STATE_DATA)
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module
@@ -319,7 +325,7 @@ class TorchAOBackend(Backend):
         """Apply TorchAO quantization and warm up the compiled model."""
         if self._orig_module is None:
             raise RuntimeError("Backend has not been properly initialized. Please call build() first.")
-        if self._data is None:
+        if self._samples is None and self._data is None:
             raise RuntimeError("Backend has no warmup data. Please call build() first.")
 
         self._check_hardware_compatibility(self._orig_module)
@@ -335,8 +341,14 @@ class TorchAOBackend(Backend):
             mode=self._config.mode,
         )
         with torch.no_grad():
-            for args, kwargs in self._data:
+            for args, kwargs in self._iter_samples():
                 self._quant_module(*args, **kwargs)
+
+    def _iter_samples(self):
+        """Iterate persisted samples, with support for legacy inline checkpoint data."""
+        if self._samples is not None:
+            return self._samples.iter_samples(self._device)
+        return iter(self._data)
 
     def _check_hardware_compatibility(self, module: nn.Module) -> None:
         """Check hardware and model constraints for the selected quantization format.

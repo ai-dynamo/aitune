@@ -3,6 +3,7 @@
 """Torch Inductor JIT backend."""
 
 import gc
+from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from logging import getLogger
@@ -15,7 +16,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore, ensure_sample_store
 
 logger = getLogger(__name__)
 
@@ -100,6 +101,7 @@ class TorchInductorJitBackend(Backend):
     STATE_CONFIG = "config"
     STATE_ORIG_MODULE = "orig_module"
     STATE_DATA = "data"
+    STATE_SAMPLES = "samples"
     STATE_OUTPUT_DTYPE = "output_dtype"
     STATE_DEVICE = "device"
     STATE_COMPILE_DYNAMIC = "compile_dynamic"
@@ -122,6 +124,8 @@ class TorchInductorJitBackend(Backend):
         self._compiled_module = None
         self._orig_module = None
         self._required_casting_dtype = None
+        self._samples: SampleStore | None = None
+        # Kept only for loading checkpoints written before samples became disk-backed.
         self._data = None
         self._compile_dynamic = self._config.dynamic
 
@@ -133,7 +137,7 @@ class TorchInductorJitBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _get_required_casting_dtype(self, module: nn.Module, data: list[Sample]) -> torch.dtype | None:
+    def _get_required_casting_dtype(self, module: nn.Module, data: Sequence[Sample]) -> torch.dtype | None:
         """Get the required casting dtype of the module by running a sample inference with and without autocast.
 
         If the dtype of the output is different with and without autocast, return the dtype of the output without autocast.
@@ -141,7 +145,7 @@ class TorchInductorJitBackend(Backend):
 
         Args:
             module (nn.Module): The module to get the dtype from.
-            data (list[Sample]): List of sample inputs to run through the module.
+            data (Sequence[Sample]): List of sample inputs to run through the module.
 
         Returns:
             torch.dtype: The required casting dtype. Returns None if no casting is required.
@@ -163,16 +167,16 @@ class TorchInductorJitBackend(Backend):
 
         return None
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
         """Builds the model with torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
         self._save_config(cache_dir)
 
         module.to(self._device)
         self._orig_module = module
-        self._data = data
         if self._config.autocast_enabled:
             self._required_casting_dtype = self._get_required_casting_dtype(module, data)
+        self._samples = ensure_sample_store(data, cache_dir)
         self._compile()
         self._activate()
         return self
@@ -196,7 +200,7 @@ class TorchInductorJitBackend(Backend):
                 options=self._config.options,
             )
 
-            for args, kwargs in self._data:
+            for args, kwargs in self._iter_samples():
                 self._compiled_module(*deepcopy(args), **deepcopy(kwargs))
         logger.info("Module has been compiled.")
 
@@ -251,8 +255,17 @@ class TorchInductorJitBackend(Backend):
     def _deploy(self):
         """Deploys the backend."""
         self._activate()
+        self._samples = None
         self._data = None
         gc.collect()
+
+    def _iter_samples(self):
+        """Iterate persisted samples, with support for legacy inline checkpoint data."""
+        if self._samples is not None:
+            return self._samples.iter_samples(self._device)
+        if self._data is not None:
+            return iter(self._data)
+        raise RuntimeError("Backend has no warmup data. Please call build() first.")
 
     def _save_config(self, cache_dir: Path):
         """Store the backend configuration to a file."""
@@ -269,7 +282,7 @@ class TorchInductorJitBackend(Backend):
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_OUTPUT_DTYPE: self._required_casting_dtype,
-            self.STATE_DATA: self._data,
+            self.STATE_SAMPLES: self._samples.artifact if self._samples is not None else None,
             self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
@@ -288,7 +301,9 @@ class TorchInductorJitBackend(Backend):
 
         backend = cls(config=config)
         backend._required_casting_dtype = state_dict[cls.STATE_OUTPUT_DTYPE]
-        backend._data = state_dict[cls.STATE_DATA]
+        samples_artifact = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore(samples_artifact) if samples_artifact is not None else None
+        backend._data = state_dict.get(cls.STATE_DATA)
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module

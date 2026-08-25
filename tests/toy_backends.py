@@ -3,10 +3,12 @@
 """Toy backends for unit tests."""
 
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from aitune.torch.backend.backend import Backend
+from aitune.torch.module.sample_store import Sample
 
 
 class SleepBackend(Backend):
@@ -22,7 +24,7 @@ class SleepBackend(Backend):
     def describe(self) -> str:
         return "SleepBackend - test only"
 
-    def _build(self, module: Any, graph_spec: Any, data: list[Any], cache_dir: Path) -> Backend:
+    def _build(self, module: Any, graph_spec: Any, data: Sequence[Sample], cache_dir: Path) -> Backend:
         self._activate()
         self._module = module
         return self
@@ -66,5 +68,5 @@ class BuildFailsBackend(SleepBackend):
         super().__init__()
         self.exception_class = exception_class
 
-    def _build(self, module: Any, graph_spec: Any, data: list[Any], cache_dir: Path) -> Backend:
+    def _build(self, module: Any, graph_spec: Any, data: Sequence[Sample], cache_dir: Path) -> Backend:
         raise self.exception_class("Build failed")

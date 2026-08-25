@@ -3,6 +3,7 @@
 """ONNX Runtime backend."""
 
 import copy
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from logging import getLogger
@@ -20,7 +21,7 @@ from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.cuda.memory import memcpy_to_torch
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore, ensure_sample_store
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
 
@@ -126,6 +127,7 @@ class ONNXRuntimeBackend(Backend):
     STATE_CONFIG = "config"
     STATE_OUTPUT_OBJECT = "output_object"
     STATE_GRAPH_SPEC = "graph_spec"
+    STATE_SAMPLES = "samples"
 
     _devices: ClassVar[list[str]] = ["cuda"]
 
@@ -142,6 +144,7 @@ class ONNXRuntimeBackend(Backend):
         self._session: onnxruntime.InferenceSession | None = None
         self._output_object = None
         self._graph_spec: GraphSpec | None = None
+        self._samples: SampleStore | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -151,7 +154,7 @@ class ONNXRuntimeBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
         """Export the model to ONNX then load the session."""
         self._save_config(cache_dir)
         self._graph_spec = graph_spec
@@ -171,13 +174,9 @@ class ONNXRuntimeBackend(Backend):
         if data_file.exists():
             self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=cache_dir)
 
+        self._samples = ensure_sample_store(data, cache_dir)
         offload(module, device="cpu")
         self._activate()
-        try:
-            self._validate(data)
-        except Exception:
-            self._deactivate()
-            raise
 
         return self
 
@@ -204,9 +203,15 @@ class ONNXRuntimeBackend(Backend):
         logger.debug("Loading ONNX Runtime session from %s.", model_artifact)
         providers = self._get_execution_providers()
         self._session = onnxruntime.InferenceSession(str(model_artifact.path), providers=providers)
+        if self._samples is not None:
+            try:
+                self._warmup(self._samples.iter_samples(self._device))
+            except Exception:
+                self._deactivate()
+                raise
 
-    def _validate(self, data: list[Sample]) -> None:
-        """Run representative samples to initialize and validate the execution provider.
+    def _warmup(self, samples: Iterable[Sample]) -> None:
+        """Run representative samples to initialize the execution provider.
 
         Some execution providers defer work until inference. In particular, the TensorRT
         execution provider compiles the ONNX graph when it first runs. Exercising a small
@@ -214,10 +219,10 @@ class ONNXRuntimeBackend(Backend):
         of deferring them until profiling or application inference.
 
         Args:
-            data: Recorded input samples for the backend build.
+            samples: Recorded input samples for the backend build.
         """
-        logger.info("Validating ONNX Runtime execution provider with %d sample(s).", len(data))
-        for args, kwargs in data:
+        logger.info("Warming up ONNX Runtime execution provider.")
+        for args, kwargs in samples:
             self._infer(*args, **kwargs)
 
     def _prepare_inputs(self, args: tuple, kwargs: dict) -> dict[str, Any]:
@@ -323,6 +328,7 @@ class ONNXRuntimeBackend(Backend):
     def _deploy(self):
         """Deploy backend."""
         self._activate()
+        self._samples = None
 
     def _save_config(self, cache_dir: Path):
         """Store the backend configuration to a file."""
@@ -341,6 +347,7 @@ class ONNXRuntimeBackend(Backend):
             self.STATE_OUTPUT_OBJECT: self._output_object,
             self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
             self.STATE_DEVICE: self._device,
+            self.STATE_SAMPLES: self._samples.artifact if self._samples is not None else None,
         }
         if self._onnx_data_artifact is not None:
             state[self.STATE_ONNX_DATA_PATH] = self._onnx_data_artifact
@@ -360,5 +367,7 @@ class ONNXRuntimeBackend(Backend):
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]
+        samples_artifact = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore(samples_artifact) if samples_artifact is not None else None
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend

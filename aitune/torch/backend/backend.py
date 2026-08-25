@@ -3,11 +3,10 @@
 """Backend interface."""
 
 import contextlib
-import gc
 import json
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
@@ -17,8 +16,9 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.tune_data.reporting import report_backend_build
+from aitune.torch.utils.memory import release_transient_memory
 from aitune.utils.hashing import hash_string
 from aitune.utils.monitoring import annotate, with_backend_context
 from aitune.utils.serialization import json_serialize
@@ -190,7 +190,7 @@ class Backend(ABC):
         self,
         module: nn.Module,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
         log_file: Path | None = None,
@@ -206,16 +206,17 @@ class Backend(ABC):
         if self.state != BackendState.INIT:
             raise RuntimeError(f"Backend {self.name} build should be called only once")
 
-        with report_backend_build(self, log_file=log_file):
-            try:
-                self._assert_device(device)
-                self._set_device(device)
-                ready_backend = self._build(module, graph_spec, data, cache_dir)
-                self.state = BackendState.ACTIVE
-                return ready_backend
-            except Exception as e:
-                self._logger.error("Failed to build backend(%s): %s", self.__class__.__name__, e, exc_info=True)
-                raise e
+        with release_transient_memory():
+            with report_backend_build(self, log_file=log_file):
+                try:
+                    self._assert_device(device)
+                    self._set_device(device)
+                    ready_backend = self._build(module, graph_spec, data, cache_dir)
+                    self.state = BackendState.ACTIVE
+                    return ready_backend
+                except Exception as e:
+                    self._logger.error("Failed to build backend(%s): %s", self.__class__.__name__, e, exc_info=True)
+                    raise e
 
     @annotate(color="cyan")
     def activate(self):
@@ -229,8 +230,9 @@ class Backend(ABC):
             raise RuntimeError(f"Cannot activate backend {self.name}, backend is already deployed")
 
         if self.state == BackendState.INACTIVE or self.state == BackendState.CHECKPOINT_LOADED:
-            self._activate()
-            self.state = BackendState.ACTIVE
+            with release_transient_memory():
+                self._activate()
+                self.state = BackendState.ACTIVE
 
     @annotate(color="red")
     def deactivate(self):
@@ -263,8 +265,9 @@ class Backend(ABC):
             raise RuntimeError(f"Cannot deploy backend {self.name}, backend should be loaded from a checkpoint")
 
         self._set_device(device)
-        self._deploy()
-        self.state = BackendState.DEPLOYED
+        with release_transient_memory():
+            self._deploy()
+            self.state = BackendState.DEPLOYED
 
     @annotate(color="green")
     def infer(self, *args: Any, **kwargs: Any) -> Any:
@@ -344,7 +347,7 @@ class Backend(ABC):
         return self.state == BackendState.ACTIVE
 
     @abstractmethod
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> "Backend":
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> "Backend":
         """Build the model with the given arguments.
 
         After building, the backend should be activated.
@@ -423,10 +426,9 @@ class Backend(ABC):
 
     def _clean_memory(self):
         """Clean up memory."""
-        torch._dynamo.reset()
-        torch.compiler.reset()
-        torch.cuda.empty_cache()
-        gc.collect()
+        with release_transient_memory():
+            torch._dynamo.reset()
+            torch.compiler.reset()
 
 
 class DummyBackend(Backend):
@@ -443,7 +445,7 @@ class DummyBackend(Backend):
         """Returns the description of the backend."""
         return "Dummy backend"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
         """Build the model with the given arguments."""
         return self
 

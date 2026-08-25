@@ -3,6 +3,7 @@
 """NVIDIA ModelOpt ONNX quantization module for TensorRT backend."""
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, get_args
@@ -25,7 +26,7 @@ else:
 
 from aitune.torch.backend.tensorrt.modelopt_calibration import prepare_calibration_data
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.utils.monitoring import annotate
 
 # Setup logger
@@ -149,7 +150,7 @@ class ONNXQuantizer:
         input_onnx_path: str | Path,
         output_path: str | Path,
         config: ONNXQuantizationConfig,
-        samples: list[Sample] | None = None,
+        samples: Sequence[Sample] | None = None,
         graph_spec: GraphSpec | None = None,
     ) -> Path:
         """Quantize the ONNX model using NVIDIA ModelOpt.

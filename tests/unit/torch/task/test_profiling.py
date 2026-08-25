@@ -7,6 +7,7 @@ import pytest
 
 from aitune.torch import Module
 from aitune.torch.backend import TorchEagerBackend
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent
 from aitune.torch.task.profiling.measuring_stop_strategy import (
@@ -464,3 +465,42 @@ def test_profile_backend(mocker, batching: bool):
         )
     else:
         make_batch.assert_not_called()
+
+
+def test_profile_backend_excludes_sample_store_load_from_measurements(mocker, tmp_path):
+    model = ToyTorchModel()
+    graph_spec = model.graph_spec(batch_sizes=[1])
+    sample = ((model.inputs(batch_sizes=[1])[0],), {})
+    samples = SampleStore.from_samples([sample], tmp_path, "samples")
+    call_order = []
+    original_load_sample = samples._load_sample
+
+    def load_sample(index):
+        call_order.append("load")
+        return original_load_sample(index)
+
+    mocker.patch.object(samples, "_load_sample", side_effect=load_sample)
+    mocker.patch(
+        "aitune.torch.task.profiling.measuring_strategy.time.monotonic_ns",
+        side_effect=[100, 200, 300, 400],
+    )
+
+    class MockBackend(TorchEagerBackend):
+        def infer(self, x):
+            call_order.append("infer")
+            return model(x)
+
+        def describe(self):
+            return "mock_backend"
+
+    profile_config = ProfilingConfig(
+        batch_sizes=[1],
+        batching=False,
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1, warmup_samples=1),
+    )
+
+    result = profile_backend(MockBackend(), "test_model", graph_spec, samples, profile_config)
+
+    assert result.status == ProfilingStatus.Status.SUCCESS
+    assert call_order == ["load", "infer", "infer"]
+    assert [entry.execution_time for entry in result.results.entries] == [100, 100]

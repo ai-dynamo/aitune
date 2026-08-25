@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Min latency tune strategy."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.task.profiling.events import get_inference_events
 from aitune.torch.task.profiling.metrics import get_latency
@@ -52,7 +53,7 @@ class MinLatencyStrategy(ProfilingTuneStrategy):
         backend: Backend,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         profiling_cfg: ProfilingConfig,
     ) -> MinLatencyProfilingResult:
         """Profiles the backend at batch size 1 and returns latency."""

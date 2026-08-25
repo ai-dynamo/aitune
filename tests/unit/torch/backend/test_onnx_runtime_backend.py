@@ -234,7 +234,7 @@ def test_build_returns_active_backend(mock_onnx, backend, model, graph_spec, sam
 
 
 @requires_cuda
-def test_build_validates_execution_provider_with_recorded_samples(mock_onnx, backend, model, torch_device, tmp_path):
+def test_build_warms_up_execution_provider_with_recorded_samples(mock_onnx, backend, model, torch_device, tmp_path):
     samples = model.samples(batch_sizes=[1, 2, 3], device=torch_device)
     graph_spec = model.graph_spec(batch_sizes=[1, 2, 3], device=torch_device)
 
@@ -244,10 +244,10 @@ def test_build_validates_execution_provider_with_recorded_samples(mock_onnx, bac
 
 
 @requires_cuda
-def test_build_fails_when_execution_provider_validation_fails(
+def test_build_fails_when_execution_provider_warmup_fails(
     mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
 ):
-    backend._validate = Mock(side_effect=RuntimeError("provider failed"))
+    backend._warmup = Mock(side_effect=RuntimeError("provider failed"))
 
     with pytest.raises(RuntimeError, match="provider failed"):
         backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
@@ -364,6 +364,7 @@ def test_activate_reloads_session(mock_onnx, backend, model, graph_spec, sample_
 
     assert backend._session is not None
     assert session_constructor.call_count == initial_count + 1
+    assert backend._session.run_with_iobinding.call_count == len(sample_data)
 
 
 # ---------------------------------------------------------------------------
@@ -386,6 +387,7 @@ def test_to_dict_contains_required_keys(mock_onnx, backend, model, graph_spec, s
     assert state[ONNXRuntimeBackend.STATE_DEVICE] == torch_device
     assert ONNXRuntimeBackend.STATE_GRAPH_SPEC in state
     assert ONNXRuntimeBackend.STATE_OUTPUT_OBJECT in state
+    assert state[ONNXRuntimeBackend.STATE_SAMPLES] == backend._samples.artifact
 
 
 @requires_cuda

@@ -6,6 +6,7 @@ import logging
 import shutil
 import sys
 import traceback
+from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -16,7 +17,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import (
     ProfilingConfig,
@@ -108,7 +109,7 @@ class PerformanceValidationMixin(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):
@@ -161,7 +162,7 @@ class PerformanceValidationMixin(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
         *,
@@ -241,7 +242,7 @@ class PerformanceValidationMixin(TuneStrategy):
             batching=self.profiling_config.batching if batching is None else batching,
         )
 
-    def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, data: list[Sample]):
+    def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, data: Sequence[Sample]):
         """Emits a speedup line after tuning completes."""
         super()._post_tune(backend, name, graph_spec, data)
 

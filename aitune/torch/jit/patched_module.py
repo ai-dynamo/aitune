@@ -6,6 +6,7 @@ import hashlib
 import logging
 import random
 from collections import Counter, OrderedDict, deque
+from collections.abc import Sequence
 from enum import Enum
 from pathlib import Path
 from time import perf_counter
@@ -20,8 +21,9 @@ from aitune.torch.config import config as global_config
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
-from aitune.torch.module.recording_module import RecordingModule, Sample
+from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_data.report_models import ModuleInspectionReport
 from aitune.torch.tune_data.reporting import (
@@ -266,7 +268,7 @@ class PatchedModule:
         strategy: TuneStrategy,
         module: "PatchedModule",
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):
@@ -286,7 +288,7 @@ class PatchedModule:
         strategy: TuneStrategy,
         module: "PatchedModule",
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):
@@ -594,7 +596,7 @@ class PatchedModule:
         """
         return PatchedModule.deferred_tuning_enabled and self._allowed_to_tune and self._call_count >= 1
 
-    def _throw_if_has_graph_break(self, module: "PatchedModule", data: list[Sample]):
+    def _throw_if_has_graph_break(self, module: "PatchedModule", data: Sequence[Sample]):
         """Throw if graph break is detected.
 
         Adds to history the duration of the checking.

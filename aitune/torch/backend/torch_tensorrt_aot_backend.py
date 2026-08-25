@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """TorchTensorRT backend with AOT compilation and intermediate model save."""
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
@@ -13,7 +14,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.shapes import build_dynamic_shapes, prepare_export_sample, print_dynamic_shapes
@@ -156,7 +157,7 @@ class TorchTensorRTAotBackend(Backend):
         self,
         module: nn.Module,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         cache_dir: Path,
     ) -> Backend:
         """Build the model with TensorRT.

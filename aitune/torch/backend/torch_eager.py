@@ -3,6 +3,7 @@
 
 """Torch eager backend."""
 
+from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,7 +14,7 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 
 
 @dataclass
@@ -64,7 +65,7 @@ class TorchEagerBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _get_required_casting_dtype(self, module: nn.Module, data: list[Sample]) -> torch.dtype | None:
+    def _get_required_casting_dtype(self, module: nn.Module, data: Sequence[Sample]) -> torch.dtype | None:
         """Get the required casting dtype of the module by running a sample inference with and without autocast.
 
         If the dtype of the output is different with and without autocast, return the dtype of the output without autocast.
@@ -72,7 +73,7 @@ class TorchEagerBackend(Backend):
 
         Args:
             module (nn.Module): The module to get the dtype from.
-            data (list[Sample]): List of sample inputs to run through the module.
+            data (Sequence[Sample]): List of sample inputs to run through the module.
 
         Returns:
             torch.dtype: The required casting dtype. Returns None if no casting is required.
@@ -94,7 +95,7 @@ class TorchEagerBackend(Backend):
 
         return None
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
         """Builds the model."""
         self._save_config(cache_dir)
         module.to(self._device)

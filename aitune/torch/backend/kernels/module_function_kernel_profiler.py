@@ -5,7 +5,7 @@
 import contextvars
 import inspect
 from collections import defaultdict
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Sequence
 from contextlib import contextmanager
 from logging import getLogger
 from typing import Any, TypedDict, cast
@@ -20,7 +20,7 @@ from torch.profiler import ProfilerActivity, profile, record_function
 
 from aitune.torch.module.exact_sample_metadata import ExactSampleMetadata
 from aitune.torch.module.locator import Locator
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 
 logger = getLogger(__name__)
 
@@ -92,7 +92,7 @@ class ModuleFunctionKernelProfiler:
     def profile(
         self,
         function: Callable,
-        data: list[Sample] | None = None,
+        data: Sequence[Sample] | None = None,
         *,
         module: nn.Module | None = None,
         warmup_iterations: int = 3,
@@ -368,7 +368,7 @@ class ModuleFunctionKernelProfiler:
         return getattr(func, "__module__", None) in {module.__name__, "torch", "torch._C._nn"}
 
     @staticmethod
-    def _run_inference(function: Callable, data: list[Sample] | None) -> None:
+    def _run_inference(function: Callable, data: Sequence[Sample] | None) -> None:
         """Run one complete inference iteration."""
         if data is None:
             function()

@@ -253,7 +253,7 @@ def test_torch_compile_backend_deactivate(
     torch_mod_backend = mocker.patch("aitune.torch.backend.backend.torch")
     torch_mod_backend._dynamo.reset = mocker.MagicMock()
     torch_mod_backend.compiler.reset = mocker.MagicMock()
-    torch_mod_backend.cuda.empty_cache = mocker.MagicMock()
+    empty_cache = mocker.patch("aitune.torch.utils.memory.torch.cuda.empty_cache")
 
     mock_gc = mocker.patch("gc.collect")
 
@@ -267,7 +267,7 @@ def test_torch_compile_backend_deactivate(
     # Verify cleanup was performed
     torch_mod_backend._dynamo.reset.assert_called()
     torch_mod_backend.compiler.reset.assert_called()
-    torch_mod_backend.cuda.empty_cache.assert_called()
+    empty_cache.assert_called()
     mock_gc.assert_called()
 
 

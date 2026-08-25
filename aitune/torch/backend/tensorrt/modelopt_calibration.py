@@ -3,19 +3,20 @@
 """NVIDIA ModelOpt Calibration module for quantization and autocast."""
 
 import logging
+from collections.abc import Sequence
 
 import numpy as np
 import torch
 
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.utils.tensor import format_tensor_name
 
 # Setup logger
 logger = logging.getLogger(__name__)
 
 
-def prepare_calibration_data(data: list[Sample], graph_spec: GraphSpec) -> dict[str, np.ndarray]:
+def prepare_calibration_data(data: Sequence[Sample], graph_spec: GraphSpec) -> dict[str, np.ndarray]:
     """Prepare calibration data in ModelOpt format from 1..N samples and graph_spec.
 
     Builds a single dict of arrays (one per ONNX input) by mapping each sample to
@@ -78,7 +79,7 @@ def prepare_calibration_data(data: list[Sample], graph_spec: GraphSpec) -> dict[
 
 
 def _collect_per_sample_dicts(
-    data: list[Sample],
+    data: Sequence[Sample],
     graph_spec: GraphSpec,
 ) -> list[dict[str, np.ndarray]]:
     """Build list of per-sample dicts (ONNX name -> array), skip empty, raise on batch size 0."""

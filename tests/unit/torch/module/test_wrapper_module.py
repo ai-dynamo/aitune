@@ -20,6 +20,7 @@ from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
@@ -57,6 +58,13 @@ IDENTITY_FORWARD_SIGNATURE = ForwardSignature.from_callable(Identity().forward)
 def _identity_metadata(args, kwargs, *, strict=False):
     forward_inputs = IDENTITY_FORWARD_SIGNATURE.normalize(args, kwargs)
     return SampleMetadata.from_inputs(forward_inputs.arguments, strict=strict)
+
+
+def _assert_sample_stores(mock: Mock, expected_samples: list[list[tuple[tuple, dict]]]) -> list[SampleStore]:
+    stores = [mock_call.args[3] for mock_call in mock.call_args_list]
+    assert all(isinstance(store, SampleStore) for store in stores)
+    assert [list(store) for store in stores] == expected_samples
+    return stores
 
 
 def _torch_inductor_strategy_for_wrapper_tests() -> OneBackendStrategy:
@@ -223,6 +231,8 @@ def test_tune_dry_run(module, torch_device):
     module(2, b=2)
     module.tune(strategy=strategy, dry_run=True, device=torch_device)
 
+    stores = _assert_sample_stores(strategy.tune_dry_run, [[((1,), {"a": 1})], [((2,), {"b": 2})]])
+
     strategy.tune_dry_run.assert_has_calls([
         call(
             module,
@@ -233,9 +243,7 @@ def test_tune_dry_run(module, torch_device):
                 output_spec=SampleMetadata.from_outputs(1, strict=True),
                 forward_signature=IDENTITY_FORWARD_SIGNATURE,
             ),
-            [
-                ((1,), {"a": 1}),
-            ],
+            stores[0],
             torch_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[0].name,
         ),
@@ -248,7 +256,7 @@ def test_tune_dry_run(module, torch_device):
                 output_spec=SampleMetadata.from_outputs(2, strict=True),
                 forward_signature=IDENTITY_FORWARD_SIGNATURE,
             ),
-            [((2,), {"b": 2})],
+            stores[1],
             torch_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,
         ),
@@ -272,6 +280,8 @@ def test_tune(module, torch_device):
     module(2, b=2)
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
 
+    stores = _assert_sample_stores(strategy.tune, [[((1,), {"a": 1})], [((2,), {"b": 2})]])
+
     assert strategy.tune.call_args_list == [
         call(
             module,
@@ -282,7 +292,7 @@ def test_tune(module, torch_device):
                 output_spec=SampleMetadata.from_outputs(1, strict=True),
                 forward_signature=IDENTITY_FORWARD_SIGNATURE,
             ),
-            [((1,), {"a": 1})],
+            stores[0],
             torch_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[0].name,
         ),
@@ -295,7 +305,7 @@ def test_tune(module, torch_device):
                 output_spec=SampleMetadata.from_outputs(2, strict=True),
                 forward_signature=IDENTITY_FORWARD_SIGNATURE,
             ),
-            [((2,), {"b": 2})],
+            stores[1],
             torch_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,
         ),

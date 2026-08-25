@@ -7,6 +7,7 @@ import copy
 import json
 import logging
 from collections import OrderedDict
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
@@ -30,7 +31,7 @@ from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.config import config as global_config
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
@@ -301,7 +302,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         optimization_profiles_dir.mkdir(parents=True, exist_ok=True)
         return optimization_profiles_dir / "model_optimization_profiles.json"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
         """Build the TensorRT model.
 
         This method will export the module to ONNX and build a TensorRT engine from it using Polygraphy.
@@ -310,7 +311,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (list[Sample]): The data of the model.
+            data (Sequence[Sample]): The data of the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
 
         Returns:
@@ -347,7 +348,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         return self
 
     def _build_modelopt_torch(
-        self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path
+        self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path
     ) -> Path:
         """Build the TensorRT model  ModelOpt torch quantization.
 
@@ -357,7 +358,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (list[Sample]): The data of the model.
+            data (Sequence[Sample]): The data of the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
 
         """
@@ -415,7 +416,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             raise e
 
     def _build_modelopt_onnx(
-        self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path
+        self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path
     ) -> Path:
         """Build the TensorRT model ModelOpt ONNX quantization.
 
@@ -425,7 +426,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (list[Sample]): The data of the model.
+            data (Sequence[Sample]): The data of the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
@@ -492,7 +493,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             raise e
 
     def _build_modelopt_onnx_autocast(
-        self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path
+        self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path
     ) -> Path:
         """Build the TensorRT model.
 
@@ -502,7 +503,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (list[Sample]): The data of the model.
+            data (Sequence[Sample]): The data of the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
@@ -567,7 +568,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._deactivate()
             raise e
 
-    def _build_standard(self, module: nn.Module, graph_spec: GraphSpec, data: list[Sample], cache_dir: Path) -> Path:
+    def _build_standard(
+        self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path
+    ) -> Path:
         """Build the TensorRT model.
 
         This method will export the module to ONNX and build a TensorRT engine from it using Polygraphy.
@@ -576,7 +579,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (list[Sample]): The data of the model.
+            data (Sequence[Sample]): The data of the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
@@ -985,7 +988,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         raise RuntimeError("No TensorRT optimization profile matches the input shapes")
 
-    def get_profiles(self, graph_spec: GraphSpec, data: list[Sample]) -> list[Profile]:
+    def get_profiles(self, graph_spec: GraphSpec, data: Sequence[Sample]) -> list[Profile]:
         """Create profiles from samples or from graph_spec.
 
         If self._config.profiles is a list, return the user provided profiles.

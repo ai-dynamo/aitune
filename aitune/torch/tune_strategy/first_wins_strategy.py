@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """First Wins tune strategy."""
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +12,7 @@ import torch.nn as nn
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorJitBackend
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin, PerformanceValidationMixin
 from aitune.utils.logging import log
 
@@ -29,7 +30,7 @@ class FirstWinsStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ) -> Backend:

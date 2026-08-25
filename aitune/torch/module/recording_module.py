@@ -5,7 +5,7 @@
 import itertools
 import logging
 import tempfile
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
@@ -19,14 +19,14 @@ from aitune.torch.dynamic_shapes import DynamicShapes
 from aitune.torch.module.forward_signature import ForwardInputPath, ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import Sample as Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.path_utils import sanitize_filename
 
 INPUT_METADATA_PREFIX = "input"
 OUTPUT_METADATA_PREFIX = "output"
 
 logger = logging.getLogger(__name__)
-
-Sample = tuple[tuple, dict]
 
 
 class RecordingModule:
@@ -58,9 +58,7 @@ class RecordingModule:
         self._forward_signature = ForwardSignature.from_callable(module.forward)
         self._dynamic_shapes = dynamic_shapes or {}
 
-        self._samples = defaultdict(list)
-        self._total_num_samples = 0
-
+        self._samples: dict[SampleMetadata, SampleStore] = {}
         # make temp directory to store samples, it has to be a field so that is not prematurely removed
         tempdir_prefix = sanitize_filename(self._name)
         self._temp_dir = tempfile.TemporaryDirectory(prefix=f"{tempdir_prefix}_")
@@ -121,12 +119,14 @@ class RecordingModule:
                 forward_signature=self._forward_signature,
                 dynamic_shapes=dynamic_shapes or {},
             )
+            self._samples[inputs_metadata] = SampleStore.create(
+                self._samples_dir,
+                f"graph-{graph_name}",
+                owner=self._temp_dir,
+            )
 
         if len(self._samples[inputs_metadata]) < self._config.max_num_samples_stored:
-            sample_path = self._samples_dir / f"{self._total_num_samples}.pt"
-            self._total_num_samples += 1
-            torch.save(inputs, sample_path)
-            self._samples[inputs_metadata].append(sample_path)
+            self._samples[inputs_metadata].append(inputs)
 
     @property
     def is_ready_for_optimization(self) -> bool:
@@ -141,12 +141,9 @@ class RecordingModule:
         """Get the graph specs."""
         return list(self._graph_specs.values())
 
-    def samples_for_graph_spec(self, graph_spec: GraphSpec) -> list[Sample]:
+    def samples_for_graph_spec(self, graph_spec: GraphSpec) -> SampleStore:
         """Get the samples."""
-        result = []
-        for path in self._samples[graph_spec.input_spec]:
-            result.append(torch.load(path, weights_only=False))
-        return result
+        return self._samples[graph_spec.input_spec]
 
     def validate_dynamic_shape_paths_recorded(self) -> None:
         """Validate that every configured input path matched a tensor during recording."""

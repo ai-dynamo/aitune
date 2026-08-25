@@ -6,6 +6,7 @@ Looks for best batch size for the module using Torch Eager backend.
 """
 
 import traceback
+from collections.abc import Sequence
 from copy import deepcopy
 from pathlib import Path
 
@@ -15,7 +16,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.utils.logging import control_output
@@ -51,7 +52,7 @@ class FindMaxBatchSizeMixin(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):
@@ -90,7 +91,7 @@ class FindMaxBatchSizeMixin(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         device: torch.device,
         cache_dir: Path,
     ):

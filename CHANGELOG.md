@@ -12,6 +12,7 @@ title: "Changelog"
 - fix: normalize backend device and configuration descriptions
 - fix: surface rejected TensorRT optimization profiles, input shapes, and tensor addresses
 - fix: validate ONNX Runtime execution providers during backend build
+- fix: reduce memory usage in multi-module tuning by storing recorded samples on disk and loading them lazily during backend warmup
 
 ## 0.5.0
 - feat: allow AOT modules to declare explicit dynamic input shapes

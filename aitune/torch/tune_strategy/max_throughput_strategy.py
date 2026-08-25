@@ -9,11 +9,12 @@
    performance validation is enabled and no user backend beats the baseline.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_strategy.profiling_tune_strategy import BackendProfilingResult, ProfilingTuneStrategy
@@ -52,7 +53,7 @@ class MaxThroughputStrategy(ProfilingTuneStrategy):
         backend: Backend,
         name: str,
         graph_spec: GraphSpec,
-        data: list[Sample],
+        data: Sequence[Sample],
         profiling_cfg: ProfilingConfig,
     ) -> MaxThroughputProfilingResult:
         """Profiles the backend and returns throughput with the selected batch size."""
