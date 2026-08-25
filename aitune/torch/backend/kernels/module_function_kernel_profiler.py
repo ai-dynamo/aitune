@@ -165,13 +165,14 @@ class ModuleFunctionKernelProfiler:
 
         Returns:
             A dataframe summarizing call counts, distinct samples, modules, kernel time, time share, and input tensor
-            size for up to ``top_k`` functional calls. Time share is relative to the functions included in the summary.
+            size for up to ``top_k`` functional calls. Time share is relative to all profiled functions.
         """
         if profiling_df.empty:
             return pd.DataFrame(columns=tuple(_SummaryItem.__annotations__))
 
-        top_k_function_times = profiling_df.groupby("function_name")["kernel_us"].sum().nlargest(top_k)
-        total_time_spent_us = top_k_function_times.sum()
+        function_times = profiling_df.groupby("function_name")["kernel_us"].sum()
+        top_k_function_times = function_times.nlargest(top_k)
+        total_time_spent_us = function_times.sum()
 
         summary: list[_SummaryItem] = []
         for function_name, time_spent_us in top_k_function_times.items():

@@ -8,6 +8,7 @@ title: "Changelog"
 ## 0.6.0 (unreleased)
 - feat: introduce explicit backend artifacts declaration
 - feat: add `ModuleFunctionKernelProfiler` API for attributing CUDA kernels to module-scoped `torch.nn.functional` calls
+- feat: add the experimental `KernelOptimizer` API with Torch SDPA, SageAttention, and FlashAttention-4 providers and serializable provider runtime plans
 - fix: preserve forward signatures across callable wrappers and AOT inspection instrumentation
 - fix: normalize backend device and configuration descriptions
 - fix: surface rejected TensorRT optimization profiles, input shapes, and tensor addresses

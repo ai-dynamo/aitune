@@ -130,6 +130,8 @@ functional-test = [
     "transformers>=4.54,<5",
     "sentencepiece>=0.2.0",
     "urllib3>=2.6.3", # sec
+    "sageattention",
+    "flash-attn-4==4.0.0b27",
 ]
 doc = [
     "PyYAML >= 6.0",

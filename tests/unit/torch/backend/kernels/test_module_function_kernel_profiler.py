@@ -42,6 +42,52 @@ class _MultipleLinearLayerModel(nn.Module):
         return [((torch.randn(batch_size, 5, device=device),), {}) for batch_size in batch_sizes]
 
 
+class _NestedFunctionCallsModel(nn.Module):
+    """Model that uses nested function calls.
+
+    F.multi_head_attention_forward calls F.linear and F.scaled_dot_product_attention.
+    """
+
+    def __init__(self, device: str = "cuda"):
+        super().__init__()
+        self.seq_len = 16
+        self.batch_size = 2
+        self.embed_dim = 64
+        self.num_heads = 8
+        self.device = "cuda"
+
+        self.in_proj_weight = torch.randn(3 * self.embed_dim, self.embed_dim, device=self.device)
+        self.in_proj_bias = torch.randn(3 * self.embed_dim, device=self.device)
+
+        self.out_proj_weight = torch.randn(self.embed_dim, self.embed_dim, device=self.device)
+        self.out_proj_bias = torch.randn(self.embed_dim, device=self.device)
+
+    def forward(self, x):
+        return F.multi_head_attention_forward(
+            query=x,
+            key=x,
+            value=x,
+            embed_dim_to_check=self.embed_dim,
+            num_heads=self.num_heads,
+            in_proj_weight=self.in_proj_weight,
+            in_proj_bias=self.in_proj_bias,
+            bias_k=None,
+            bias_v=None,
+            add_zero_attn=False,
+            dropout_p=0.0,
+            out_proj_weight=self.out_proj_weight,
+            out_proj_bias=self.out_proj_bias,
+            training=False,
+            key_padding_mask=None,
+            need_weights=False,  # if True, it uses scaled_dot_product_attention
+            attn_mask=None,
+            is_causal=False,
+        )
+
+    def samples(self):
+        return [((torch.randn(self.seq_len, self.batch_size, self.embed_dim, device=self.device),), {})]
+
+
 class _FakeProfilerEvent:
     """Minimal stand-in for profiler events that expose cpu_parent and key."""
 
@@ -203,7 +249,7 @@ def test_describe_results_includes_time_spent_pct_for_described_functions():
     df = profiler.describe_results(profiling_df, function_data, top_k=2)
 
     assert df["function_name"].tolist() == ["softmax", "linear"]
-    assert df["time_spent_pct"].tolist() == [600.0 / 900.0 * 100.0, 300.0 / 900.0 * 100.0]
+    assert df["time_spent_pct"].tolist() == [600.0 / 1000.0 * 100.0, 300.0 / 1000.0 * 100.0]
 
 
 def test_describe_results_uses_nan_sample_metrics_for_functions_without_collected_data():
@@ -389,3 +435,15 @@ def test_get_tensor_size_uses_logical_tensor_payload():
     kwargs = {"tensor": kwargs_storage[:2, :2]}
 
     assert get_tensor_size(args, kwargs) == 4 + 4 * 2  # 1x1x4 + 2x2x2 bytes
+
+
+@requires_cuda
+def test_nested_function_calls():
+    profiler = ModuleFunctionKernelProfiler()
+    net = _NestedFunctionCallsModel().to("cuda")
+    data = net.samples()
+    # when
+    profiling_df, function_data = profiler.profile(net, data)
+    df = profiler.describe_results(profiling_df, function_data)
+    observed_function_names = set(df["function_name"].unique().tolist())
+    assert observed_function_names == {"multi_head_attention_forward", "linear", "scaled_dot_product_attention"}

@@ -35,6 +35,7 @@ Documentation source of truth: backend guides live under `docs/guides/backends/`
 - `AITUNE_TRANSFORMERS_INTEGRATION` — enable/disable Transformers integration (default: enabled)
 - `AITUNE_DIFFUSERS_INTEGRATION` — enable/disable Diffusers integration (default: disabled)
 - `AITUNE_CACHE_MIN_FREE_BYTES` — minimum free-space warning threshold for cache writes (default: 50 GiB)
+- `AITUNE_KERNEL_GENERATION_TIMEOUT` — kernel generator timeout in seconds (default: 21600 / six hours)
 - `AITUNE_INSPECT_DEBUG` — enable debug logging during inspection (parsed in `inspecting/module_inspector.py`, not `env_vars.py`)
 - `AITUNE_INSPECT_DEBUG_RAISE` — raise on inspection errors instead of warning (parsed in `inspecting/module_inspector.py`, not `env_vars.py`)
 - `AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning` — enable JIT mode without modifying source

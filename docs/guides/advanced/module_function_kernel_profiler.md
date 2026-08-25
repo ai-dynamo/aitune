@@ -16,6 +16,9 @@ It can also collect distinct input samples and their call counts for selected fu
 identifying frequently executed operations, preparing representative kernel benchmarks, or deciding which functions
 are worth optimizing.
 
+See [Kernel Providers](kernel_provider.md) to prepare, validate, benchmark, and activate alternative implementations for
+the functional calls identified by the profiler.
+
 This profiler answers a different question from [`aitune.torch.profile()`](performance_profile.md):
 
 | API | Use it to answer |
@@ -103,7 +106,7 @@ function:
 | `num_distinct_samples` | Number of distinct input samples. `NaN` if sample collection was disabled. |
 | `num_modules` | Number of distinct profiled modules that invoked this function. |
 | `time_spent_us` | Total CUDA kernel time attributed to this function, in microseconds. |
-| `time_spent_pct` | Share of kernel time among the functions in this summary. When `top_k` truncates the result, the share is relative to those functions only. |
+| `time_spent_pct` | Share of kernel time across all profiled functions, including functions omitted by `top_k`. |
 | `tensor_size_MB` | Total size of input tensors across distinct samples, in megabytes. `NaN` if sample collection was disabled. |
 
 Example dataframe:
@@ -115,6 +118,8 @@ Example dataframe:
 3                        conv2d     10                     3           10         51.747        1.993658        0.563641
 4                          silu      9                     1            5         11.968        0.461092        0.250000
 ```
+
+Note: `time_spent` is calculated for that particular function excluding calls for inner functions e.g. for a `multi_head_attention_forward` which calls `linear` and `scaled_dot_product_attention`, `time_spent` will cover each function own time.
 
 ## Collected input samples
 

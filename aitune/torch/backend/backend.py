@@ -288,12 +288,12 @@ class Backend(ABC):
     @abstractmethod
     def key(self) -> str:
         """Returns the key of the backend."""
-        pass
+        ...
 
     @abstractmethod
     def describe(self) -> str:
         """Returns the description of the backend."""
-        pass
+        ...
 
     @abstractmethod
     def to_dict(self):
@@ -304,7 +304,7 @@ class Backend(ABC):
         explicitly marked with ``ArtifactPath``; ordinary :class:`pathlib.Path`
         values are serialized without copying their targets.
         """
-        pass
+        ...
 
     @classmethod
     @abstractmethod
@@ -316,7 +316,7 @@ class Backend(ABC):
         objects. Implementations should use them directly without reconstructing
         or rebasing their paths.
         """
-        pass
+        ...
 
     @property
     def name(self) -> str:
@@ -339,7 +339,7 @@ class Backend(ABC):
 
         This method ensures that the backend has this property defined.
         """
-        pass
+        ...
 
     @property
     def is_active(self) -> bool:
@@ -359,7 +359,7 @@ class Backend(ABC):
             data: The data to build the backend on.
             cache_dir: The cache directory to store the backend artifacts.
         """
-        pass
+        ...
 
     @abstractmethod
     def _activate(self):
@@ -367,7 +367,7 @@ class Backend(ABC):
 
         After activating, the backend should be ready to do inference.
         """
-        pass
+        ...
 
     @abstractmethod
     def _deactivate(self):
@@ -375,7 +375,7 @@ class Backend(ABC):
 
         After deactivating, the backend cannot be used to do inference.
         """
-        pass
+        ...
 
     @abstractmethod
     def _deploy(self):
@@ -383,7 +383,7 @@ class Backend(ABC):
 
         After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
         """
-        pass
+        ...
 
     @abstractmethod
     def _infer(self, *args, **kwargs):
@@ -396,7 +396,7 @@ class Backend(ABC):
         Returns:
             Any: The result of the inference.
         """
-        pass
+        ...
 
     def _assert_device(self, device: torch.device):
         """Assert the device of the backend.

@@ -118,6 +118,7 @@ See [Performance Profile](../guides/advanced/performance_profile.md) for the ful
 | `AITUNE_CACHE_DIR` | AOT cache directory, defaulting to `~/.cache/aitune` |
 | `AITUNE_JIT_CACHE_DIR` | JIT build-artifact and log directory, defaulting to `~/.cache/aitune.jit` |
 | `AITUNE_CACHE_MIN_FREE_BYTES` | Minimum free-space warning threshold for cache writes, defaulting to 50 GiB |
+| `AITUNE_KERNEL_GENERATION_TIMEOUT` | Maximum time in seconds to wait for kernel generators, defaulting to 21600 (six hours) |
 | `AITUNE_CONSOLE_OUTPUT=1` | Mirror backend build stdout/stderr to the console while still writing build logs |
 | `AITUNE_TUNING_DATA_PATH` | Override the tuning telemetry JSON output path |
 | `AITUNE_NVTX_EVENTS=1` | Enable NVTX profiling annotations |

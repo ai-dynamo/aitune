@@ -12,6 +12,7 @@
 """Functional test for ModuleFunctionKernelProfiler on a tiny Flux pipeline."""
 
 import logging
+from logging import basicConfig
 
 import diffusers
 from torch import nn
@@ -36,6 +37,8 @@ def profile_module(profiler: ModuleFunctionKernelProfiler, pipe, module: nn.Modu
             f"got {row.num_distinct_samples}"
         )
 
+    logging.info("Module: %s, summary: %s", name, df.to_string())
+
 
 def test_profile_and_describe_in_tiny_flux():
     model_id = "hf-internal-testing/tiny-flux-pipe"
@@ -49,5 +52,5 @@ def test_profile_and_describe_in_tiny_flux():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
+    basicConfig(level=logging.INFO, format="%(message)s", force=True)
     test_profile_and_describe_in_tiny_flux()
