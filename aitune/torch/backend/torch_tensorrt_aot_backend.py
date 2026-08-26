@@ -12,11 +12,11 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.checkpoint.artifact import ArtifactPath
+from aitune.torch.libs.torch import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
-from aitune.torch.utils.shapes import build_dynamic_shapes, prepare_export_sample, print_dynamic_shapes
 from aitune.torch.utils.tensor import format_tensor_name
 
 try:
@@ -182,29 +182,18 @@ class TorchTensorRTAotBackend(Backend):
         # Set the device for the TensorRT backend compilation
         self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
 
-        args, kwargs = prepare_export_sample(samples[0], graph_spec)
-        args = tuple(a.to(self._device) if isinstance(a, torch.Tensor) else a for a in args)
-        kwargs = {k: v.to(self._device) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
-
-        dynamic_shapes = build_dynamic_shapes((args, kwargs), graph_spec, use_auto=False)
-        # All entries empty/None → fully static graph; pass None to torch.export.export
-        # so it short-circuits the dynamic-shape resolution path.
-        if not any(dynamic_shapes.values()):
-            dynamic_shapes = None
-
-        if dynamic_shapes is not None:
-            print_dynamic_shapes(dynamic_shapes)
-
         with self._track_build_step(TorchTensorRTAotBuildStep.TORCH_EXPORT):
-            logger.info("Exporting model with torch.export.export.")
-            with torch.no_grad():
-                exported = torch.export.export(
-                    model,
-                    args,
-                    kwargs=kwargs if kwargs else None,
-                    dynamic_shapes=dynamic_shapes,
-                    strict=False,
-                )
+            # ``use_auto=False`` replaces ``Dim.AUTO`` hints with the finite explicit ranges required by
+            # TensorRT optimization profiles. ``strict=False`` retains non-strict Torch Export compatibility,
+            # while the exporter also avoids size-0/1 hints at problematic profile boundaries (TensorRT #4103).
+            export_result = TorchExporter(use_auto=False, strict=False).export(
+                model,
+                samples[0],
+                graph_spec,
+                device=self._device,
+            )
+            exported = export_result.exported_program
+            _, kwargs = export_result.sample
 
         # Optimization-profile inputs for TRT engine building.
         input_signature = []
@@ -251,11 +240,11 @@ class TorchTensorRTAotBackend(Backend):
 
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
-            torch_tensorrt.save(
+            _save_compiled_model(
                 trt_model_compiled,
-                self._exported_model_artifact.path.as_posix(),
-                retrace=False,
-                pickle_protocol=self._config.pickle_protocol,
+                self._exported_model_artifact.path,
+                export_result.dynamic_shapes,
+                self._config.pickle_protocol,
             )
             result["compiled_model_size_bytes"] = self._exported_model_artifact.path.stat().st_size
 
@@ -327,3 +316,33 @@ class TorchTensorRTAotBackend(Backend):
         backend._device = state_dict[cls.STATE_DEVICE]
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend
+
+
+def _save_compiled_model(
+    module: nn.Module,
+    path: Path,
+    dynamic_shapes: dict[str, Any] | None,
+    pickle_protocol: int,
+) -> None:
+    """Save a compiled graph, retrying with re-export when direct serialization fails."""
+    try:
+        torch_tensorrt.save(
+            module,
+            path.as_posix(),
+            retrace=False,
+            pickle_protocol=pickle_protocol,
+        )
+        logger.info("Saved the Torch-TensorRT artifact without retracing.")
+    except Exception:
+        logger.warning(
+            "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
+            exc_info=True,
+        )
+        torch_tensorrt.save(
+            module,
+            path.as_posix(),
+            retrace=True,
+            dynamic_shapes=dynamic_shapes,
+            pickle_protocol=pickle_protocol,
+        )
+        logger.info("Saved the Torch-TensorRT artifact using the retracing fallback.")

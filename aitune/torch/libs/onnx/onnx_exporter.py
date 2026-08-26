@@ -15,7 +15,7 @@ import torch.nn as nn
 from aitune.torch.dynamic_shapes import DynamicDim
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
-from aitune.torch.utils.shapes import build_dynamic_shapes, print_dynamic_shapes
+from aitune.torch.utils.shapes import build_dynamic_shapes, log_dynamic_shapes
 from aitune.torch.utils.tensor import format_tensor_name
 
 # torch.onnx.export(dynamo=True, fallback=...) was removed in 2.11 (and some nightlies before).
@@ -116,11 +116,7 @@ class ONNXExporter:
         input_names = [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
         output_names = [format_tensor_name(locator.path, "output") for locator, _ in graph_spec.output_spec.tensor_data]
 
-        print_dynamic_shapes(dynamic_shapes)
-
-        # drop root level names in dynamic shapes as we relay on input_names to set the names
-        # NOTE: dynamic shapes could be created as list but we need names for WAR above
-        dynamic_shapes = list(dynamic_shapes.values())
+        log_dynamic_shapes(dynamic_shapes)
 
         export_kwargs = {}
         if _ONNX_FALLBACK_SUPPORTED:
@@ -175,7 +171,7 @@ class ONNXExporter:
         sample: Sample,
         graph_spec: GraphSpec,
         use_auto: bool = True,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         """Build dynamic shapes for the normalized export sample.
 
         Delegates to ``aitune.torch.utils.shapes.build_dynamic_shapes``.
@@ -190,9 +186,8 @@ class ONNXExporter:
                 resolution to the runtime, so the default suits every export here.
 
         Returns:
-            Dict of dynamic shapes keyed by forward parameter name. Recorded forward
-            args with no dynamic axes get an empty inner dict so the downstream
-            ``list(result.values())`` ordering matches the model signature.
+            Dynamic shapes matching the normalized forward input structure, or ``None``
+            when all inputs are static.
         """
         logger.debug("Extracting dynamic shapes")
         return build_dynamic_shapes(sample, graph_spec, use_auto=use_auto)

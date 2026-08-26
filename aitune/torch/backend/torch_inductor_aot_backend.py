@@ -13,10 +13,10 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.checkpoint.artifact import ArtifactPath
+from aitune.torch.libs.torch import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.module import offload
-from aitune.torch.utils.shapes import build_dynamic_shapes, prepare_export_sample, print_dynamic_shapes
 
 logger = getLogger(__name__)
 
@@ -93,28 +93,8 @@ class TorchInductorAotBackend(Backend):
 
         module = module.eval().to(self._device)
 
-        args, kwargs = prepare_export_sample(samples[0], graph_spec)
-        args = tuple(a.to(self._device) if isinstance(a, torch.Tensor) else a for a in args)
-        kwargs = {k: v.to(self._device) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
-
-        dynamic_shapes = build_dynamic_shapes((args, kwargs), graph_spec)
-        # All entries empty/None → fully static graph; pass None to torch.export.export
-        # so it short-circuits the dynamic-shape resolution path.
-        if not any(dynamic_shapes.values()):
-            dynamic_shapes = None
-
-        if dynamic_shapes is not None:
-            print_dynamic_shapes(dynamic_shapes)
-
         with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
-            logger.info("Exporting model with torch.export.export.")
-            with torch.no_grad():
-                exported = torch.export.export(
-                    module,
-                    args,
-                    kwargs=kwargs if kwargs else None,
-                    dynamic_shapes=dynamic_shapes,
-                )
+            exported = TorchExporter().export(module, samples[0], graph_spec, device=self._device).exported_program
 
         with self._track_build_step(TorchInductorAotBuildStep.AOT_COMPILE) as result:
             self._compiled_model_artifact = ArtifactPath(cache_dir, "model.pt2")

@@ -16,12 +16,17 @@ from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.libs.onnx.onnx_exporter import _ONNX_FALLBACK_SUPPORTED, ONNXExporter
 from aitune.torch.utils.module import get_forward_arguments_names
 from aitune.torch.utils.tensor import format_tensor_name
-from tests.toy_models import ToyOnnxModel, ToyTorchModel
-from tests.utilities.helpers import make_graph_spec, make_input_metadata, requires_cuda
+from tests.toy_models import TOY_EXPORT_MODELS, ToyOnnxModel, ToyTorchModel
+from tests.utilities.helpers import make_graph_spec, make_input_metadata, requires_cuda, update_input_spec
 
 # Constants for testing
 IN_FEATURES = 32
 BATCH_SIZE = 2
+
+ONNX_DYNAMO_SHAPE_CASES = (
+    pytest.param([2], False, id="static"),
+    pytest.param([2, 4], True, id="dynamic"),
+)
 
 
 class SimpleModuleMayArgs(nn.Module):
@@ -164,6 +169,31 @@ def test_export_dynamo(mocker, mock_torch_onnx, mock_onnx_lib, tmp_path):
 
     # Verify returned path
     assert onnx_path == output_path
+
+
+def test_export_dynamo_preserves_named_nested_dynamic_shapes(mock_torch_onnx, tmp_path):
+    """ONNX Dynamo must receive the named pytree instead of a flattened value list."""
+
+    class NestedModule(nn.Module):
+        def forward(self, x, cache):
+            return x + cache[0]
+
+    model = NestedModule().eval()
+    sample = ((torch.randn(2, 4), [torch.randn(2, 4), None]), {})
+    graph_spec = make_graph_spec(model.forward, sample, model(*sample[0]), batch_size=2)
+    update_input_spec(
+        graph_spec,
+        ((torch.randn(3, 4), [torch.randn(3, 4), None]), {}),
+        batch_size=3,
+    )
+    exporter = ONNXExporter(output_path=tmp_path / "nested.onnx", use_dynamo=True)
+
+    exporter._export_dynamo(model, sample, graph_spec, exporter.output_path)
+
+    dynamic_shapes = mock_torch_onnx.export.call_args.kwargs["dynamic_shapes"]
+    assert isinstance(dynamic_shapes, dict)
+    assert isinstance(dynamic_shapes["cache"], list)
+    assert dynamic_shapes["cache"][1] is None
 
 
 def test_export_error_handling(mock_torch_onnx, tmp_path):
@@ -773,3 +803,36 @@ def test_onnx_exporter_should_produce_valid_simple_model(simple_module_and_args,
         output,
         run=False,  # IR version 11 is not supported by onnx runtime
     )
+
+
+@pytest.mark.parametrize(
+    ("model_name", "model_factory"), TOY_EXPORT_MODELS, ids=[name for name, _ in TOY_EXPORT_MODELS]
+)
+@pytest.mark.parametrize(("batch_sizes", "has_dynamic_shapes"), ONNX_DYNAMO_SHAPE_CASES)
+def test_onnx_dynamo_export_supports_representative_input_structures_and_shape_modes(
+    tmp_path,
+    model_name,
+    model_factory,
+    batch_sizes,
+    has_dynamic_shapes,
+):
+    """Export simple, pipeline-like, and nested inputs with static and dynamic shapes."""
+    model = model_factory().eval()
+    samples = model.samples(batch_sizes=batch_sizes)
+    graph_spec = model.graph_spec(batch_sizes=batch_sizes)
+    output_path = tmp_path / f"{model_name}.onnx"
+
+    exporter = ONNXExporter(output_path, use_dynamo=True)
+    exported_path = exporter.export(model, samples[0], graph_spec)
+
+    assert exported_path == output_path
+    exported_model = onnx.load(output_path)
+    onnx.checker.check_model(exported_model)
+    dynamic_shapes = exporter._create_dynamic_shapes(samples[0], graph_spec)
+    assert (dynamic_shapes is not None) is has_dynamic_shapes
+    if has_dynamic_shapes:
+        assert any(
+            dimension.dim_param
+            for value_info in exported_model.graph.input
+            for dimension in value_info.type.tensor_type.shape.dim
+        )

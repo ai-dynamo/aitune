@@ -7,6 +7,7 @@ from copy import deepcopy
 from typing import Any
 
 import torch
+from torch.utils._pytree import tree_map
 
 from aitune.torch.dynamic_shapes import BatchDim, ShapeDefinition
 from aitune.torch.module.graph_spec import GraphSpec
@@ -17,16 +18,34 @@ from aitune.torch.module.sample_store import Sample
 logger = logging.getLogger(__name__)
 
 
-def print_dynamic_shapes(dynamic_shapes: dict) -> None:
-    """Print the dynamic shapes."""
+def log_dynamic_shapes(dynamic_shapes: dict[str, Any] | None) -> None:
+    """Log the dynamic shapes."""
+    if dynamic_shapes is None:
+        return
+
     logger.debug("Extracted dynamic shapes:")
-    for key, value in dynamic_shapes.items():
-        logger.debug("%s:", key)
-        for idx, ds in (value or {}).items():
-            if isinstance(ds, torch.export.dynamic_shapes._Dim):
-                logger.debug("  %s: min:%d, max:%d, %s", idx, ds.min, ds.max, str(ds).split(".")[-1])
-            else:
-                logger.debug("  %s: %s", idx, ds)
+
+    def _print(value: Any, path: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                _print(child, f"{path}[{key!r}]")
+        elif isinstance(value, list | tuple):
+            for index, child in enumerate(value):
+                _print(child, f"{path}[{index}]")
+        elif isinstance(value, torch.export.dynamic_shapes._Dim):
+            logger.debug("  %s: min:%d, max:%d, %s", path, value.min, value.max, str(value).split(".")[-1])
+        elif value is not None:
+            logger.debug("  %s: %s", path, value)
+
+    _print(dynamic_shapes, "dynamic_shapes")
+
+
+def _build_dynamic_shapes_skeleton(value: Any) -> Any:
+    """Mirror an input pytree with empty tensor constraints and ``None`` static leaves."""
+    return tree_map(
+        lambda leaf: {} if isinstance(leaf, torch.Tensor) else None,
+        value,
+    )
 
 
 def make_batch_dim(tensor_specs) -> Any:
@@ -149,7 +168,7 @@ def build_dynamic_shapes(
     graph_spec: GraphSpec,
     *,
     use_auto: bool = True,
-) -> dict:
+) -> dict[str, Any] | None:
     """Build a dynamic_shapes dict for ``torch.export.export``, keyed by parameter name.
 
     Creates one ``torch.export.Dim`` per symbolic dimension class, using the ranges
@@ -179,11 +198,9 @@ def build_dynamic_shapes(
             needs a literal min/max per axis to build its TensorRT optimization profile.
 
     Returns:
-        A dict mapping each forward parameter name to its ``{axis: Dim}`` constraints,
-        covering both positional args and keyword arguments. Tensors with no dynamic
-        axes get an empty inner dict. Callers that pass the result to
-        ``torch.export.export`` should convert the all-empty case to ``None`` (the
-        signal that no dynamic shapes are needed).
+        A structure matching the normalized forward inputs, with tensor leaves replaced
+        by their ``{axis: Dim}`` constraints and static leaves replaced by ``None``.
+        Returns ``None`` when no tensor has a dynamic axis.
     """
     input_spec = graph_spec.input_spec
     args, kwargs = sample
@@ -197,7 +214,8 @@ def build_dynamic_shapes(
     dim_cache: dict | None = None if use_auto else {}
     explicit_dim_cache: dict[str, Any] = {}
 
-    result: dict[str, Any] = {}
+    result = _build_dynamic_shapes_skeleton(forward_inputs.arguments)
+    has_dynamic_axes = False
     for locator, tensor_spec in input_spec.tensor_data:
         definition = graph_spec.get_shape_definition(locator)
         if definition is not None:
@@ -213,15 +231,19 @@ def build_dynamic_shapes(
         else:
             dims = {}
         _raise_on_locator_user_type(locator)
-        result = _create_nested_structure(locator, root=result)
-        locator.set_value(result, dims)
+        try:
+            value = locator.get_value(forward_inputs.arguments)
+        except (IndexError, KeyError) as error:
+            raise ValueError(f"Recorded tensor path {locator} is absent from the selected export sample.") from error
+        if not isinstance(value, torch.Tensor):
+            raise ValueError(
+                f"Recorded tensor path {locator} resolves to {type(value).__name__}, not a tensor, "
+                "in the selected export sample."
+            )
+        result = locator.set_value(result, dims)
+        has_dynamic_axes |= bool(dims)
 
-    # torch.export requires every forward parameter to be present, including non-tensors.
-    for key, value in forward_inputs.arguments.items():
-        if key not in result:
-            result[key] = {} if isinstance(value, dict | list | tuple) else None
-
-    return result
+    return result if has_dynamic_axes else None
 
 
 def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:

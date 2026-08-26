@@ -301,7 +301,7 @@ def test_build_dynamo_static_graph_no_dynamic_shapes(mock_onnx, mocker, torch_de
 
     ONNXRuntimeBackend().build(toy, gs, samples, device=torch_device, cache_dir=tmp_path)
     _, call_kwargs = export_mock.call_args
-    assert call_kwargs.get("dynamic_shapes") == [{}]
+    assert call_kwargs.get("dynamic_shapes") is None
 
 
 @requires_cuda

@@ -44,6 +44,10 @@ def _mask_input(mask):
     return mask
 
 
+def _nested_input(x, cache, options):
+    return x, cache, options
+
+
 def _input_metadata(x: torch.Tensor, batch_size: int) -> SampleMetadata:
     return SampleMetadata.from_inputs({"x": x}, batch_size=batch_size)
 
@@ -104,17 +108,12 @@ def test_raise_on_locator_user_type_ok_for_dict_and_sequence():
 
 
 def test_build_dynamic_shapes_static():
-    """Single sample → no shape updates → all static dims → empty inner dict per arg.
-
-    The all-empty result lets the caller decide whether to pass ``None`` or the dict
-    itself to ``torch.export.export`` (AOT backends post-process to ``None``; ONNX
-    keeps the dict so ``list(values())`` produces one entry per model arg).
-    """
+    """Single sample → no shape updates → fully static export."""
     args = (torch.randn(2, 32),)
     sample = (args, {})
     graph_spec = make_graph_spec(_single_input, sample, batch_size=2)
     result = build_dynamic_shapes(sample, graph_spec)
-    assert result == {"x": {}}
+    assert result is None
 
 
 def test_build_dynamic_shapes_batch_axis():
@@ -304,7 +303,42 @@ def test_build_dynamic_shapes_optional_none_kwargs_padded():
     assert "opt_none" in result, "optional None kwarg must be present in dynamic_shapes"
     assert "opt_dict" in result, "optional dict kwarg must be present in dynamic_shapes"
     assert result["opt_none"] is None, "None kwarg should map to None in dynamic_shapes"
-    assert result["opt_dict"] == {}, "dict kwarg should map to {} in dynamic_shapes"
+    assert result["opt_dict"] == {"key": None}, "dict kwarg must preserve its input structure"
+
+
+def test_build_dynamic_shapes_preserves_nested_input_structure():
+    """Dynamic shapes must mirror lists, tuples, dictionaries, and static leaves."""
+    sample = (
+        (
+            torch.randn(2, 4),
+            [torch.randn(2, 4), None],
+            {"mask": torch.randn(2, 4), "scale": 1.0, "metadata": ("value", None)},
+        ),
+        {},
+    )
+    graph_spec = make_graph_spec(_nested_input, sample, batch_size=2)
+    update_input_spec(
+        graph_spec,
+        (
+            (
+                torch.randn(3, 4),
+                [torch.randn(3, 4), None],
+                {"mask": torch.randn(3, 4), "scale": 1.0, "metadata": ("value", None)},
+            ),
+            {},
+        ),
+        batch_size=3,
+    )
+
+    result = build_dynamic_shapes(sample, graph_spec)
+
+    assert result is not None
+    assert isinstance(result["cache"], list)
+    assert result["cache"][1] is None
+    assert result["options"]["scale"] is None
+    assert result["options"]["metadata"] == (None, None)
+    assert 0 in result["cache"][0]
+    assert 0 in result["options"]["mask"]
 
 
 # ---------------------------------------------------------------------------
@@ -572,6 +606,57 @@ def test_build_dynamic_shapes_use_auto_true_default_still_uses_dim_auto():
 # ---------------------------------------------------------------------------
 # End-to-end torch.export regression tests (no GPU, no torch_tensorrt)
 # ---------------------------------------------------------------------------
+
+
+def test_export_succeeds_with_dynamic_tensor_in_list_input():
+    """The generated dynamic-shape pytree must be accepted for a list parameter."""
+
+    class ListInputModel(nn.Module):
+        def forward(self, x, cache, scale=1.0):
+            return x + cache[0] * scale
+
+    model = ListInputModel().eval()
+    sample = ((torch.randn(2, 4), [torch.randn(2, 4), None]), {"scale": 1.0})
+    graph_spec = make_graph_spec(model.forward, sample, batch_size=2)
+    update_input_spec(
+        graph_spec,
+        ((torch.randn(3, 4), [torch.randn(3, 4), None]), {"scale": 1.0}),
+        batch_size=3,
+    )
+    dynamic_shapes = build_dynamic_shapes(sample, graph_spec)
+
+    assert dynamic_shapes is not None
+    assert isinstance(dynamic_shapes["cache"], list)
+    exported = torch.export.export(
+        model,
+        sample[0],
+        kwargs=sample[1],
+        dynamic_shapes=dynamic_shapes,
+        strict=False,
+    )
+
+    assert exported is not None
+
+
+def test_build_dynamic_shapes_preserves_var_keyword_structure():
+    """The generated pytree must preserve every entry collected by ``**kwargs``."""
+
+    class VarKeywordModel(nn.Module):
+        def forward(self, x, **kwargs):
+            return x + kwargs["residual"]
+
+    model = VarKeywordModel().eval()
+    sample = ((torch.randn(2, 4),), {"residual": torch.randn(2, 4)})
+    graph_spec = make_graph_spec(model.forward, sample, batch_size=2)
+    update_input_spec(
+        graph_spec,
+        ((torch.randn(3, 4),), {"residual": torch.randn(3, 4)}),
+        batch_size=3,
+    )
+    dynamic_shapes = build_dynamic_shapes(sample, graph_spec)
+
+    assert dynamic_shapes is not None
+    assert 0 in dynamic_shapes["kwargs"]["residual"]
 
 
 def test_export_succeeds_with_shared_batch_kwargs_jit_style():

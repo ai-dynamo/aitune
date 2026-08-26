@@ -12,6 +12,7 @@ from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
+    _save_compiled_model,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.dynamic_shapes import BatchDim
@@ -76,6 +77,45 @@ def backend(mocker) -> TorchTensorRTAotBackend:
 
 def _fake_torch_tensorrt_save(model, path, **kwargs):
     Path(path).write_bytes(b"fake")
+
+
+def test_save_compiled_model_without_retracing(mocker, tmp_path: Path):
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    module = mocker.Mock(spec=nn.Module)
+
+    _save_compiled_model(module, tmp_path / "model.pt", dynamic_shapes=None, pickle_protocol=5)
+
+    mock_torch_tensorrt.save.assert_called_once_with(
+        module,
+        (tmp_path / "model.pt").as_posix(),
+        retrace=False,
+        pickle_protocol=5,
+    )
+
+
+def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path: Path):
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.save.side_effect = [RuntimeError("direct save failed"), None]
+    module = mocker.Mock(spec=nn.Module)
+    dynamic_shapes = {"x": {0: mocker.sentinel.batch}}
+
+    _save_compiled_model(module, tmp_path / "model.pt", dynamic_shapes=dynamic_shapes, pickle_protocol=5)
+
+    assert mock_torch_tensorrt.save.call_args_list == [
+        mocker.call(
+            module,
+            (tmp_path / "model.pt").as_posix(),
+            retrace=False,
+            pickle_protocol=5,
+        ),
+        mocker.call(
+            module,
+            (tmp_path / "model.pt").as_posix(),
+            retrace=True,
+            dynamic_shapes=dynamic_shapes,
+            pickle_protocol=5,
+        ),
+    ]
 
 
 @pytest.fixture
