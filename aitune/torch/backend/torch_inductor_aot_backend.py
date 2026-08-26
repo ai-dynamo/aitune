@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch Inductor AOT backend."""
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
@@ -15,7 +14,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.shapes import build_dynamic_shapes, prepare_export_sample, print_dynamic_shapes
 
@@ -88,13 +87,13 @@ class TorchInductorAotBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Export and compile the model with AOT Inductor, then load the runner."""
         self._save_config(cache_dir)
 
         module = module.eval().to(self._device)
 
-        args, kwargs = prepare_export_sample(data[0], graph_spec)
+        args, kwargs = prepare_export_sample(samples[0], graph_spec)
         args = tuple(a.to(self._device) if isinstance(a, torch.Tensor) else a for a in args)
         kwargs = {k: v.to(self._device) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
 

@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +11,8 @@ import torch.nn as nn
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.task.correctness import (
     CorrectnessDynamicShapeError,
     CorrectnessTensorShapeError,
@@ -21,7 +20,7 @@ from aitune.torch.task.correctness import (
 )
 from aitune.torch.tune_strategy import TuneStrategy
 from tests.toy_models.torch_models import ToyTorchModel
-from tests.utilities.helpers import make_input_metadata
+from tests.utilities.helpers import make_input_metadata, make_sample_store
 
 
 def _forward(x=None, *, cache=None):
@@ -41,13 +40,13 @@ class TuneStrategyTestCorrectness(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
         backend = TorchEagerBackend()
-        backend = backend.build(module, graph_spec, data, device, cache_dir)
-        self.check_correctness(backend, name, graph_spec, data)
+        backend = backend.build(module, graph_spec, samples, device, cache_dir)
+        self.check_correctness(backend, name, graph_spec, samples)
         return backend
 
     def _describe_parts(self) -> list[str]:
@@ -61,15 +60,15 @@ def test_correctness_extension_torch_eager_backend(torch_device, tmp_path):
     """Test correctness extension with torch eager backend."""
     module = ToyTorchModel()
     graph_spec = module.graph_spec()
-    data = module.samples(device=torch_device)
+    samples = module.sample_store(tmp_path, device=torch_device)
 
     strategy = TuneStrategyTestCorrectness()
 
-    backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
+    backend = strategy.tune(module, "test_model", graph_spec, samples, torch_device, cache_dir=tmp_path)
     backend.deactivate()
 
 
-def test_correctness_is_idempotent():
+def test_correctness_is_idempotent(tmp_path):
     """Test correctness is idempotent, has no side effects."""
 
     class MockBackend:
@@ -85,7 +84,7 @@ def test_correctness_is_idempotent():
     strategy = TuneStrategyTestCorrectness()
 
     cache = []
-    data = [((cache,), {"cache": cache})]
+    samples = make_sample_store([((cache,), {"cache": cache})], tmp_path)
     input_spec = output_spec = _input_metadata(((), {}))
     graph_spec = GraphSpec(
         name="test_model",
@@ -93,11 +92,11 @@ def test_correctness_is_idempotent():
         output_spec=output_spec,
         forward_signature=FORWARD_SIGNATURE,
     )
-    strategy.check_correctness(MockBackend(), "test_model", graph_spec, data)  # type: ignore
+    strategy.check_correctness(MockBackend(), "test_model", graph_spec, samples)  # type: ignore
     assert len(cache) == 0, "cache should be empty"
 
 
-def test_correctness_requires_at_least_one_sample():
+def test_correctness_requires_at_least_one_sample(tmp_path):
     """Correctness validation should not pass without recorded samples."""
 
     class MockBackend:
@@ -114,10 +113,10 @@ def test_correctness_requires_at_least_one_sample():
     )
 
     with pytest.raises(ValueError, match="requires at least one sample"):
-        strategy.check_correctness(MockBackend(), "test_model", graph_spec, [])  # type: ignore
+        strategy.check_correctness(MockBackend(), "test_model", graph_spec, SampleStore.create(tmp_path, "samples"))  # type: ignore
 
 
-def test_correctness_checks_dynamic_min_and_max_shapes():
+def test_correctness_checks_dynamic_min_and_max_shapes(tmp_path):
     """Dynamic graph correctness should validate recorded, min, and max input shapes."""
 
     class MockBackend:
@@ -151,12 +150,13 @@ def test_correctness_checks_dynamic_min_and_max_shapes():
         forward_signature=FORWARD_SIGNATURE,
     )
 
-    strategy.check_correctness(backend, "test_model", graph_spec, [recorded_sample])  # type: ignore
+    samples = make_sample_store([recorded_sample], tmp_path)
+    strategy.check_correctness(backend, "test_model", graph_spec, samples)  # type: ignore
 
     assert backend.input_shapes == [(2, 8), (2, 4), (2, 12)]
 
 
-def test_correctness_skips_value_checks_for_dynamic_boundary_samples():
+def test_correctness_skips_value_checks_for_dynamic_boundary_samples(tmp_path):
     """Dynamic boundary samples should only prove the backend executes those shapes."""
 
     class MockBackend:
@@ -191,12 +191,13 @@ def test_correctness_skips_value_checks_for_dynamic_boundary_samples():
         forward_signature=FORWARD_SIGNATURE,
     )
 
-    strategy.check_correctness(backend, "test_model", graph_spec, [recorded_sample])  # type: ignore
+    samples = make_sample_store([recorded_sample], tmp_path)
+    strategy.check_correctness(backend, "test_model", graph_spec, samples)  # type: ignore
 
     assert backend.input_shapes == [(2, 8), (2, 4), (2, 12)]
 
 
-def test_correctness_reports_dynamic_boundary_inference_failure():
+def test_correctness_reports_dynamic_boundary_inference_failure(tmp_path):
     """Dynamic boundary failures should be reported by the correctness layer."""
 
     class MockBackend:
@@ -224,12 +225,13 @@ def test_correctness_reports_dynamic_boundary_inference_failure():
         output_spec=output_spec,
         forward_signature=FORWARD_SIGNATURE,
     )
+    samples = make_sample_store([recorded_sample], tmp_path)
 
     with pytest.raises(
         CorrectnessDynamicShapeError,
         match="Dynamic shape correctness check failed.*min.*test_model.*mock_backend",
     ):
-        strategy.check_correctness(MockBackend(), "test_model", graph_spec, [recorded_sample])  # type: ignore
+        strategy.check_correctness(MockBackend(), "test_model", graph_spec, samples)  # type: ignore
 
 
 def test_correctness_extension_torch_eager_backend_with_nan(torch_device, tmp_path):
@@ -237,13 +239,14 @@ def test_correctness_extension_torch_eager_backend_with_nan(torch_device, tmp_pa
 
     module = ToyTorchModel()
     graph_spec = module.graph_spec()
-    data = module.samples(device=torch_device)
-    data[0][0][0][0] = float("nan")
+    samples = module.samples(device=torch_device)
+    samples[0][0][0][0] = float("nan")
+    samples = make_sample_store(samples, tmp_path)
 
     strategy = TuneStrategyTestCorrectness()
 
     with pytest.raises(CorrectnessValueError, match="contains NaN values"):
-        backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
+        backend = strategy.tune(module, "test_model", graph_spec, samples, torch_device, cache_dir=tmp_path)
         backend.deactivate()
 
 
@@ -251,15 +254,16 @@ def test_correctness_extension_torch_eager_backend_with_inf(mocker, torch_device
     """Test correctness extension with torch eager backend."""
     module = ToyTorchModel()
     graph_spec = module.graph_spec()
-    data = module.samples(device=torch_device)
-    data[0][0][0][0] = float("inf")
+    samples = module.samples(device=torch_device)
+    samples[0][0][0][0] = float("inf")
+    samples = make_sample_store(samples, tmp_path)
 
     mocker.patch.object(module, "forward", return_value=torch.tensor([float("inf")]))
 
     strategy = TuneStrategyTestCorrectness()
 
     with pytest.raises(CorrectnessValueError, match="contains infinity values"):
-        backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
+        backend = strategy.tune(module, "test_model", graph_spec, samples, torch_device, cache_dir=tmp_path)
         backend.deactivate()
 
 
@@ -267,14 +271,14 @@ def test_correctness_extension_torch_eager_backend_with_wrong_shapes(torch_devic
     """Test correctness extension with torch eager backend."""
     module = ToyTorchModel()
     graph_spec = module.graph_spec()
-    data = module.samples(device=torch_device, batch_sizes=[1])
+    samples = module.sample_store(tmp_path, device=torch_device, batch_sizes=[1])
 
     strategy = TuneStrategyTestCorrectness()
 
     with pytest.raises(
         CorrectnessTensorShapeError, match=r"Expected tensor output to have shape \[2, 5\] but got \[1, 5\]"
     ):
-        backend = strategy.tune(module, "test_model", graph_spec, data, torch_device, cache_dir=tmp_path)
+        backend = strategy.tune(module, "test_model", graph_spec, samples, torch_device, cache_dir=tmp_path)
         backend.deactivate()
 
 
@@ -291,6 +295,7 @@ def test_correctness_failure_is_appended_to_build_log(mocker, torch_device, tmp_
     strategy.backend_results = []
     mocker.patch.object(strategy, "check_correctness", side_effect=RuntimeError("correctness failed"))
     sample = ((torch.randn(2, 8),), {})
+    samples = make_sample_store([sample], tmp_path)
     graph_spec = GraphSpec(
         name="test_model",
         input_spec=_input_metadata(sample, batch_size=2),
@@ -303,7 +308,7 @@ def test_correctness_failure_is_appended_to_build_log(mocker, torch_device, tmp_
         module,
         "test_model",
         graph_spec,
-        [sample],
+        samples,
         torch_device,
         tmp_path,
     )

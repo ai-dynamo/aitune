@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """First Wins tune strategy."""
 
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +11,7 @@ import torch.nn as nn
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorJitBackend
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin, PerformanceValidationMixin
 from aitune.utils.logging import log
 
@@ -30,11 +29,11 @@ class FirstWinsStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ) -> Backend:
-        """Tunes given torch module witzh provided graph_spec and data."""
+        """Tune a torch module with the provided graph specification and samples."""
         log(
             "⏳ Executing strategy `%s` on module `%s` (graph: %s)",
             self.__class__.__name__,
@@ -44,7 +43,7 @@ class FirstWinsStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
         )
 
         for backend in self._backends:
-            built = self._build_validate_and_check_perf(backend, module, name, graph_spec, data, device, cache_dir)
+            built = self._build_validate_and_check_perf(backend, module, name, graph_spec, samples, device, cache_dir)
 
             if built is not None:
                 log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)

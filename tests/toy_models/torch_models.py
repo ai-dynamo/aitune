@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Toy model for unit tests."""
 
+from pathlib import Path
+
 import torch
 
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import Sample, SampleStore
 
 INPUT_SIZE = 32  # must be multiple of 16 for torchao tests
 HIDDEN_SIZE = 16
@@ -51,6 +53,16 @@ class ToyTorchModel(torch.nn.Module):
         if batch_sizes is None:
             batch_sizes = [2]
         return [((self._input_tensor(batch_size, device),), {}) for batch_size in batch_sizes]
+
+    def sample_store(
+        self,
+        cache_dir: Path,
+        batch_sizes: list[int] | None = None,
+        device: str = "cpu",
+        relative_path: str | Path = "samples",
+    ) -> SampleStore:
+        """Store generated samples for tuning tests."""
+        return SampleStore.from_samples(self.samples(batch_sizes=batch_sizes, device=device), cache_dir, relative_path)
 
     def graph_spec(self, batch_sizes: list[int] | None = None, device: str = "cpu") -> GraphSpec:
         graph_spec = None

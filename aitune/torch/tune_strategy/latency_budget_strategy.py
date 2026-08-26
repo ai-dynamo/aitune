@@ -3,13 +3,12 @@
 """Latency budget tune strategy."""
 
 from collections import defaultdict
-from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
 from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inference_events
 from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStrategy
@@ -94,11 +93,11 @@ class LatencyBudgetStrategy(ProfilingTuneStrategy):
         backend: Backend,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         profiling_cfg: ProfilingConfig,
     ) -> LatencyBudgetProfilingResult:
         """Profiles the backend and returns the max-throughput result within the latency budget."""
-        profiling_results = profile_backend(backend, name, graph_spec, data, profiling_cfg)
+        profiling_results = profile_backend(backend, name, graph_spec, samples, profiling_cfg)
         if profiling_results.status != ProfilingStatus.Status.SUCCESS:
             raise profiling_results.error or RuntimeError("Profiling failed")
 

@@ -14,7 +14,7 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore
 
 
 @dataclass
@@ -95,7 +95,7 @@ class TorchEagerBackend(Backend):
 
         return None
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Builds the model."""
         self._save_config(cache_dir)
         module.to(self._device)
@@ -103,7 +103,7 @@ class TorchEagerBackend(Backend):
         self._orig_module = module
         self._graph_spec = graph_spec
         if self._config.autocast_enabled:
-            self._required_casting_dtype = self._get_required_casting_dtype(module, data)
+            self._required_casting_dtype = self._get_required_casting_dtype(module, samples)
 
         # must be activated before returning the backend
         self._activate()

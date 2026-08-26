@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 from packaging.version import Version
 
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.utils.monitoring import annotate
 
 # Setup logger

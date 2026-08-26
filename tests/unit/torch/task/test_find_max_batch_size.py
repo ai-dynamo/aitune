@@ -26,9 +26,9 @@ def mock_profiling_config():
 
 def test_max_throughput_strategy_find_max_batch_size(mock_profiling_config, torch_device, tmp_path):
     model = ToyTorchModel()
-    sample = model.sample().to(torch_device)
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
     _, throughput, _ = find_max_batch_size(
-        model, "test", model.graph_spec(), [((sample,), {})], mock_profiling_config, torch_device, tmp_path
+        model, "test", model.graph_spec(), samples, mock_profiling_config, torch_device, tmp_path
     )
     assert throughput > 0
 

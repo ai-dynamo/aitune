@@ -16,7 +16,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample, SampleStore, ensure_sample_store
+from aitune.torch.module.sample_store import Sample, SampleStore
 
 logger = getLogger(__name__)
 
@@ -167,7 +167,7 @@ class TorchInductorJitBackend(Backend):
 
         return None
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Builds the model with torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
         self._save_config(cache_dir)
@@ -175,8 +175,8 @@ class TorchInductorJitBackend(Backend):
         module.to(self._device)
         self._orig_module = module
         if self._config.autocast_enabled:
-            self._required_casting_dtype = self._get_required_casting_dtype(module, data)
-        self._samples = ensure_sample_store(data, cache_dir)
+            self._required_casting_dtype = self._get_required_casting_dtype(module, samples)
+        self._samples = samples
         self._compile()
         self._activate()
         return self
@@ -282,7 +282,7 @@ class TorchInductorJitBackend(Backend):
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_OUTPUT_DTYPE: self._required_casting_dtype,
-            self.STATE_SAMPLES: self._samples.artifact if self._samples is not None else None,
+            self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
             self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
@@ -301,8 +301,8 @@ class TorchInductorJitBackend(Backend):
 
         backend = cls(config=config)
         backend._required_casting_dtype = state_dict[cls.STATE_OUTPUT_DTYPE]
-        samples_artifact = state_dict.get(cls.STATE_SAMPLES)
-        backend._samples = SampleStore(samples_artifact) if samples_artifact is not None else None
+        samples_state = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore.from_dict(samples_state) if samples_state is not None else None
         backend._data = state_dict.get(cls.STATE_DATA)
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)

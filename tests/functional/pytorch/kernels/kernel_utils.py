@@ -8,7 +8,7 @@ from typing import Any, Literal
 from aitune.torch.backend.kernels import KernelUtils
 from aitune.torch.backend.kernels.kernel_optimization_plan import KernelOptimizationPlan
 from aitune.torch.backend.kernels.kernel_provider import KernelProvider
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 
 
 class PreferProviderKernelUtils(KernelUtils):

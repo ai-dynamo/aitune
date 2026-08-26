@@ -4,8 +4,8 @@
 
 import itertools
 import logging
-import tempfile
 from collections import OrderedDict
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
@@ -19,9 +19,7 @@ from aitune.torch.dynamic_shapes import DynamicShapes
 from aitune.torch.module.forward_signature import ForwardInputPath, ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.module.sample_store import Sample as Sample
 from aitune.torch.module.sample_store import SampleStore
-from aitune.torch.utils.path_utils import sanitize_filename
 
 INPUT_METADATA_PREFIX = "input"
 OUTPUT_METADATA_PREFIX = "output"
@@ -38,6 +36,8 @@ class RecordingModule:
         name: str,
         config: AITuneConfig | None = None,
         dynamic_shapes: DynamicShapes | None = None,
+        *,
+        cache_dir_resolver: Callable[[], Path],
     ) -> None:
         """Initialize BaseModule.
 
@@ -46,6 +46,7 @@ class RecordingModule:
             name: name of the module.
             config: Configuration for the module, if not provided, global config is used.
             dynamic_shapes: Explicit input shape definitions.
+            cache_dir_resolver: Callable that resolves the cache directory for this module.
         """
         super().__init__()
         if not isinstance(module, torch.nn.Module):
@@ -57,12 +58,9 @@ class RecordingModule:
         self._forward_call = module.__call__
         self._forward_signature = ForwardSignature.from_callable(module.forward)
         self._dynamic_shapes = dynamic_shapes or {}
+        self._cache_dir_resolver = cache_dir_resolver
 
         self._samples: dict[SampleMetadata, SampleStore] = {}
-        # make temp directory to store samples, it has to be a field so that is not prematurely removed
-        tempdir_prefix = sanitize_filename(self._name)
-        self._temp_dir = tempfile.TemporaryDirectory(prefix=f"{tempdir_prefix}_")
-        self._samples_dir = Path(self._temp_dir.name)
         self._graph_specs: OrderedDict[SampleMetadata, GraphSpec] = OrderedDict()
         self._graphs_counter = itertools.count()
 
@@ -119,12 +117,15 @@ class RecordingModule:
                 forward_signature=self._forward_signature,
                 dynamic_shapes=dynamic_shapes or {},
             )
+            graph_cache_dir = self._cache_dir_resolver() / graph_name
+            # Samples must remain isolated because tuning writes backend artifacts
+            # alongside the samples directory in the graph cache directory.
             self._samples[inputs_metadata] = SampleStore.create(
-                self._samples_dir,
-                f"graph-{graph_name}",
-                owner=self._temp_dir,
+                graph_cache_dir,
+                "samples",
             )
 
+        # Graph metadata is updated for every sample; only persisted input payloads are capped.
         if len(self._samples[inputs_metadata]) < self._config.max_num_samples_stored:
             self._samples[inputs_metadata].append(inputs)
 

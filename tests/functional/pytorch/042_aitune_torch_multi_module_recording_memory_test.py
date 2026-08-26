@@ -8,6 +8,8 @@
 """Verify that recording samples for multiple modules has bounded GPU memory usage."""
 
 import gc
+import tempfile
+from pathlib import Path
 
 import torch
 
@@ -17,11 +19,22 @@ _NUM_MODULES = 6
 _SAMPLE_SIZE_BYTES = 8 * 1024 * 1024
 
 
-def test_multi_module_recording_does_not_retain_gpu_samples():
+def test_multi_module_recording_does_not_retain_gpu_samples(tmp_path):
     """Persisted samples do not keep a GPU-sized tensor alive per module."""
     device = torch.device("cuda")
     sample = torch.ones(_SAMPLE_SIZE_BYTES // torch.float32.itemsize, device=device)
-    recorders = [RecordingModule(torch.nn.Identity(), f"memory-test-{index}") for index in range(_NUM_MODULES)]
+
+    def module_cache_dir_resolver(index):
+        return lambda: tmp_path / f"module-{index}"
+
+    recorders = [
+        RecordingModule(
+            torch.nn.Identity(),
+            f"memory-test-{index}",
+            cache_dir_resolver=module_cache_dir_resolver(index),
+        )
+        for index in range(_NUM_MODULES)
+    ]
 
     gc.collect()
     torch.cuda.synchronize(device)
@@ -47,4 +60,5 @@ def test_multi_module_recording_does_not_retain_gpu_samples():
 
 
 if __name__ == "__main__":
-    test_multi_module_recording_does_not_retain_gpu_samples()
+    with tempfile.TemporaryDirectory() as cache_dir:
+        test_multi_module_recording_does_not_retain_gpu_samples(Path(cache_dir))

@@ -7,7 +7,6 @@ import pytest
 
 from aitune.torch import Module
 from aitune.torch.backend import TorchEagerBackend
-from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent
 from aitune.torch.task.profiling.measuring_stop_strategy import (
@@ -20,6 +19,7 @@ from aitune.torch.task.profiling.profiling_stop_strategy import (
     ThroughputSaturatedProfilingStopStrategy,
 )
 from tests.toy_models.torch_models import ToyTorchModel
+from tests.utilities.helpers import make_sample_store
 
 
 def new_event(
@@ -419,7 +419,7 @@ def test_profile_toy_model_no_batching():
 
 
 @pytest.mark.parametrize("batching", [True, False])
-def test_profile_backend(mocker, batching: bool):
+def test_profile_backend(mocker, batching: bool, tmp_path):
     class ModelWithCache(ToyTorchModel):
         def forward(self, x, cache=None):
             return super().forward(x)
@@ -451,7 +451,7 @@ def test_profile_backend(mocker, batching: bool):
         measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1, warmup_samples=1),
     )
 
-    samples = [((model.inputs(batch_sizes=[1])[0],), {"cache": []})]
+    samples = make_sample_store([((model.inputs(batch_sizes=[1])[0],), {"cache": []})], tmp_path)
     make_batch = mocker.spy(graph_spec, "make_batch")
     result = profile_backend(backend, "test_model", graph_spec, samples, profile_config)
 
@@ -460,18 +460,16 @@ def test_profile_backend(mocker, batching: bool):
     # Verify both calls produced results
     assert len(result.results.entries) > 0
     if batching:
-        assert all(
-            call.args[0] is samples[0][0] and call.args[1] is samples[0][1] for call in make_batch.call_args_list
-        )
+        assert [call.args[2] for call in make_batch.call_args_list] == [1, 2]
     else:
         make_batch.assert_not_called()
+    assert samples[0][1]["cache"] == []
 
 
 def test_profile_backend_excludes_sample_store_load_from_measurements(mocker, tmp_path):
     model = ToyTorchModel()
     graph_spec = model.graph_spec(batch_sizes=[1])
-    sample = ((model.inputs(batch_sizes=[1])[0],), {})
-    samples = SampleStore.from_samples([sample], tmp_path, "samples")
+    samples = model.sample_store(tmp_path, batch_sizes=[1])
     call_order = []
     original_load_sample = samples._load_sample
 

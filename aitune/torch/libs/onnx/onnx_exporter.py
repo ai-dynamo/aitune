@@ -14,7 +14,7 @@ import torch.nn as nn
 
 from aitune.torch.dynamic_shapes import DynamicDim
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.utils.shapes import build_dynamic_shapes, print_dynamic_shapes
 from aitune.torch.utils.tensor import format_tensor_name
 

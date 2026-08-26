@@ -7,7 +7,7 @@ from concurrent.futures import Future
 from dataclasses import dataclass
 
 from aitune.torch.backend.kernels.kernel_provider.kernel_provider import KernelProvider
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 
 
 @dataclass(frozen=True)

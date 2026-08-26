@@ -17,7 +17,7 @@ from aitune.torch.backend.torch_inductor_aot_backend import (
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 

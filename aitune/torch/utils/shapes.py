@@ -11,7 +11,7 @@ import torch
 from aitune.torch.dynamic_shapes import BatchDim, ShapeDefinition
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator, ObjectType
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -219,7 +219,7 @@ def build_dynamic_shapes(
     # torch.export requires every forward parameter to be present, including non-tensors.
     for key, value in forward_inputs.arguments.items():
         if key not in result:
-            result[key] = {} if isinstance(value, (dict, list, tuple)) else None
+            result[key] = {} if isinstance(value, dict | list | tuple) else None
 
     return result
 

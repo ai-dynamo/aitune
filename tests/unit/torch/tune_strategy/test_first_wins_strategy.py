@@ -11,6 +11,7 @@ import torch.nn as nn
 from aitune.torch import Module, tune
 from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from tests.toy_backends import BuildFailsBackend, SleepBackend
@@ -43,9 +44,9 @@ def mock_graph_spec():
 
 
 @pytest.fixture
-def mock_sample():
-    """Create a mock sample for testing."""
-    return ["this is a mock sample"]
+def mock_samples():
+    """Create a mock sample store for testing."""
+    return MagicMock(spec=SampleStore)
 
 
 def test_describe(mock_backend):
@@ -60,7 +61,7 @@ def test_describe(mock_backend):
     )
 
 
-def test_tune_success_first_backend(mock_backend, mock_module, mock_graph_spec, mock_sample, torch_device, tmp_path):
+def test_tune_success_first_backend(mock_backend, mock_module, mock_graph_spec, mock_samples, torch_device, tmp_path):
     """Test tune method when first backend succeeds."""
     # Setup
     first_backend = MagicMock(spec=Backend)
@@ -83,7 +84,7 @@ def test_tune_success_first_backend(mock_backend, mock_module, mock_graph_spec, 
     strategy.enable_correctness_check(False)
 
     # Execute
-    result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+    result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     # Verify
     assert result == mock_backend
@@ -91,7 +92,7 @@ def test_tune_success_first_backend(mock_backend, mock_module, mock_graph_spec, 
     backends[1].build.assert_not_called()
 
 
-def test_tune_success_second_backend(mock_backend, mock_module, mock_graph_spec, mock_sample, torch_device, tmp_path):
+def test_tune_success_second_backend(mock_backend, mock_module, mock_graph_spec, mock_samples, torch_device, tmp_path):
     """Test tune method when first backend fails but second succeeds."""
     # Setup
     first_backend = MagicMock(spec=Backend)
@@ -114,7 +115,7 @@ def test_tune_success_second_backend(mock_backend, mock_module, mock_graph_spec,
     strategy.enable_correctness_check(False)
 
     # Execute
-    result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_sample, torch_device, tmp_path)
+    result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     # Verify
     assert result == mock_backend
@@ -122,14 +123,13 @@ def test_tune_success_second_backend(mock_backend, mock_module, mock_graph_spec,
     second_backend.build.assert_called_once()
     mock_module.to.assert_called_once_with(torch_device)
 
-    # Ensure that the data passed to build() is a different object than the original [mock_sample]
-    # That is, each backend gets its own copy of the sample, not the original list, nor the same object
+    # Each backend shares the disk-backed store and loads transient samples as needed.
     for backend in backends:
-        build_data_args = [args[2] for args, kwargs in backend.build.call_args_list]
-        assert build_data_args[0] is not mock_sample  # different list instance
+        build_samples = [args[2] for args, kwargs in backend.build.call_args_list]
+        assert build_samples[0] is mock_samples
 
 
-def test_tune_all_backends_fail(mock_module, mock_graph_spec, mock_sample, torch_device, tmp_path):
+def test_tune_all_backends_fail(mock_module, mock_graph_spec, mock_samples, torch_device, tmp_path):
     """Test tune method when all backends fail."""
     # Setup
     backend1 = MagicMock(spec=Backend)
@@ -149,7 +149,7 @@ def test_tune_all_backends_fail(mock_module, mock_graph_spec, mock_sample, torch
 
     # Execute and verify
     with pytest.raises(RuntimeError) as exc_info:
-        strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+        strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     expected_error = f"There is no valid backend for a module: test_module, graph_spec: {mock_graph_spec}"
     assert str(exc_info.value) == expected_error
@@ -212,7 +212,9 @@ def test_first_wins_strategy_build_fails(torch_device, tmp_path):
     assert "TestOutOfMemoryException" in log_file.read_text()
 
 
-def test_first_wins_skips_slow_backend(mock_backend, mock_module, mock_graph_spec, mock_sample, torch_device, tmp_path):
+def test_first_wins_skips_slow_backend(
+    mock_backend, mock_module, mock_graph_spec, mock_samples, torch_device, tmp_path
+):
     """A backend slower than TorchEager baseline by >threshold is skipped."""
     from unittest.mock import patch
 
@@ -245,7 +247,7 @@ def test_first_wins_skips_slow_backend(mock_backend, mock_module, mock_graph_spe
         "aitune.torch.tune_strategy.mixin.performance_validation_mixin.find_max_throughput_for_backend",
         side_effect=[(4, 0.5, MagicMock()), (4, 2.0, MagicMock())],
     ):
-        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     assert result is fast_backend
     slow_backend.build.assert_called_once()
@@ -257,7 +259,7 @@ def test_first_wins_skips_slow_backend(mock_backend, mock_module, mock_graph_spe
 
 
 def test_first_wins_skips_perf_profiling_when_validation_disabled(
-    mock_backend, mock_module, mock_graph_spec, mock_sample, torch_device, tmp_path
+    mock_backend, mock_module, mock_graph_spec, mock_samples, torch_device, tmp_path
 ):
     """When performance validation is disabled, the first correct backend is returned without profiling."""
     from unittest.mock import patch
@@ -283,7 +285,7 @@ def test_first_wins_skips_perf_profiling_when_validation_disabled(
     with patch(
         "aitune.torch.tune_strategy.mixin.performance_validation_mixin.find_max_throughput_for_backend",
     ) as mock_profile:
-        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     assert result is slow_backend
     mock_profile.assert_not_called()

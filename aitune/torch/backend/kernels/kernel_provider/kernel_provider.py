@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, TypeVar
 
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 
 TYPE_KEY = "type"
 SDPA_FUNCTION = "scaled_dot_product_attention"  # type: ignore[assignment]

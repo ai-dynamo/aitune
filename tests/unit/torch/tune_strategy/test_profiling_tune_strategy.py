@@ -50,7 +50,8 @@ class _ControlledStrategy(ProfilingTuneStrategy):
         self.measure_value = measure_value
         self.enable_find_max_batch_size(False)
 
-    def _measure(self, backend, name, graph_spec, data, profiling_cfg):
+    def _measure(self, backend, name, graph_spec, samples, profiling_cfg):
+        del samples
         return _ControlledProfilingResult(metric_value=self.measure_value)
 
     def _is_better(self, result: BackendProfilingResult, other: BackendProfilingResult) -> bool:
@@ -209,9 +210,9 @@ def test_pre_tune_profiles_baseline_when_validation_enabled(torch_device, tmp_pa
     strategy.enable_correctness_check(False)
     model = ToyTorchModel().to(torch_device)
     graph_spec = model.graph_spec(batch_sizes=[1], device=torch_device)
-    data = [((model.sample().unsqueeze(0).to(torch_device),), {})]
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
-    strategy._pre_tune(model, "test", graph_spec, data, torch_device, tmp_path)
+    strategy._pre_tune(model, "test", graph_spec, samples, torch_device, tmp_path)
 
     assert strategy._baseline_result.metric == pytest.approx(5.0)
     assert isinstance(strategy._baseline_backend, TorchEagerBackend)
@@ -224,9 +225,9 @@ def test_pre_tune_skips_baseline_when_validation_disabled(torch_device, tmp_path
     strategy.enable_correctness_check(False)
     model = ToyTorchModel().to(torch_device)
     graph_spec = model.graph_spec(batch_sizes=[1], device=torch_device)
-    data = [((model.sample().unsqueeze(0).to(torch_device),), {})]
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
-    strategy._pre_tune(model, "test", graph_spec, data, torch_device, tmp_path)
+    strategy._pre_tune(model, "test", graph_spec, samples, torch_device, tmp_path)
 
     assert strategy._baseline_result is None
     assert strategy._baseline_backend is None
@@ -243,9 +244,9 @@ def test_pre_tune_resets_state_on_each_call(torch_device, tmp_path):
 
     model = ToyTorchModel().to(torch_device)
     graph_spec = model.graph_spec(batch_sizes=[1], device=torch_device)
-    data = [((model.sample().unsqueeze(0).to(torch_device),), {})]
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
-    strategy._pre_tune(model, "test", graph_spec, data, torch_device, tmp_path)
+    strategy._pre_tune(model, "test", graph_spec, samples, torch_device, tmp_path)
 
     assert strategy.perf_validation_results == []
     assert strategy._baseline_result.metric != 99.0

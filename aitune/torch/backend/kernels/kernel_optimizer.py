@@ -22,7 +22,7 @@ from aitune.torch.backend.kernels.module_function_kernel_profiler import (
     FunctionData,
     ModuleFunctionKernelProfiler,
 )
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from aitune.utils.env_vars import AITUNE_KERNEL_GENERATION_TIMEOUT
 from aitune.utils.validation import in_range
 

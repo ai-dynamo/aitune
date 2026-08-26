@@ -23,6 +23,7 @@ from aitune.torch.tune_strategy.latency_budget_strategy import (
 )
 from tests.toy_backends import SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
+from tests.utilities.helpers import make_sample_store
 
 
 @pytest.fixture
@@ -68,7 +69,7 @@ def test_latency_budget_must_be_positive(mock_backend):
         LatencyBudgetStrategy(latency_budget_ms=0, backends=[mock_backend])
 
 
-def test_measure_selects_highest_throughput_under_latency_budget(monkeypatch, mock_backend):
+def test_measure_selects_highest_throughput_under_latency_budget(monkeypatch, mock_backend, tmp_path):
     """_measure filters out batch sizes over budget and returns max remaining throughput."""
     strategy = LatencyBudgetStrategy(
         latency_budget_ms=20.0, backends=[mock_backend], profiling_config=_profiling_config()
@@ -88,7 +89,8 @@ def test_measure_selects_highest_throughput_under_latency_budget(monkeypatch, mo
 
     monkeypatch.setattr("aitune.torch.tune_strategy.latency_budget_strategy.profile_backend", mock_profile_backend)
 
-    result = strategy._measure(mock_backend, "test", MagicMock(), [], _profiling_config())
+    samples = make_sample_store([], tmp_path)
+    result = strategy._measure(mock_backend, "test", MagicMock(), samples, _profiling_config())
 
     assert result.selected_batch_size == 2
     assert result.throughput == pytest.approx(2 / 0.015)
@@ -100,7 +102,7 @@ def test_measure_selects_highest_throughput_under_latency_budget(monkeypatch, mo
     }
 
 
-def test_measure_raises_when_no_batch_size_satisfies_budget(monkeypatch, mock_backend):
+def test_measure_raises_when_no_batch_size_satisfies_budget(monkeypatch, mock_backend, tmp_path):
     """_measure raises if every profiled batch size exceeds the latency budget."""
     strategy = LatencyBudgetStrategy(
         latency_budget_ms=5.0, backends=[mock_backend], profiling_config=_profiling_config()
@@ -119,8 +121,9 @@ def test_measure_raises_when_no_batch_size_satisfies_budget(monkeypatch, mock_ba
 
     monkeypatch.setattr("aitune.torch.tune_strategy.latency_budget_strategy.profile_backend", mock_profile_backend)
 
+    samples = make_sample_store([], tmp_path)
     with pytest.raises(RuntimeError, match="No profile result satisfied latency budget"):
-        strategy._measure(mock_backend, "test", MagicMock(), [], _profiling_config())
+        strategy._measure(mock_backend, "test", MagicMock(), samples, _profiling_config())
 
 
 def test_latency_budget_profiling_stop_strategy_stops_after_budget_is_exceeded():
@@ -169,9 +172,10 @@ def test_latency_budget_strategy_selects_max_throughput_backend(torch_device, tm
     strategy.enable_correctness_check(False)
 
     model = ToyTorchModel().to(torch_device)
-    sample = model.sample().unsqueeze(0).to(torch_device)
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
-    def mock_measure(backend, name, graph_spec, data, profiling_cfg):
+    def mock_measure(backend, name, graph_spec, samples, profiling_cfg):
+        del samples
         return LatencyBudgetProfilingResult(
             selected_batch_size=1,
             throughput=100.0 if backend.sleep_time == lower_throughput.sleep_time else 200.0,
@@ -184,7 +188,7 @@ def test_latency_budget_strategy_selects_max_throughput_backend(torch_device, tm
         model,
         "test",
         model.graph_spec(batch_sizes=[1, 2], device=torch_device),
-        [((sample,), {})],
+        samples,
         torch_device,
         tmp_path,
     )
@@ -203,9 +207,10 @@ def test_latency_budget_strategy_raises_when_no_user_backend_satisfies_budget(to
     strategy.enable_correctness_check(False)
 
     model = ToyTorchModel().to(torch_device)
-    sample = model.sample().unsqueeze(0).to(torch_device)
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
-    def mock_measure(backend, name, graph_spec, data, profiling_cfg):
+    def mock_measure(backend, name, graph_spec, samples, profiling_cfg):
+        del samples
         if isinstance(backend, TorchEagerBackend):
             return LatencyBudgetProfilingResult(selected_batch_size=1, throughput=100.0, latency=10.0)
         raise RuntimeError("budget exceeded")
@@ -217,7 +222,7 @@ def test_latency_budget_strategy_raises_when_no_user_backend_satisfies_budget(to
             model,
             "test",
             model.graph_spec(batch_sizes=[1, 2], device=torch_device),
-            [((sample,), {})],
+            samples,
             torch_device,
             tmp_path,
         )

@@ -10,7 +10,7 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 
 _PATCH_FIND_MAX_THROUGHPUT = (
@@ -44,9 +44,9 @@ def mock_graph_spec():
 
 
 @pytest.fixture
-def mock_sample():
-    """Create a mock sample for testing."""
-    return MagicMock(spec=Sample)
+def mock_samples():
+    """Create a mock sample store for testing."""
+    return MagicMock(spec=SampleStore)
 
 
 def test_describe(mock_backend):
@@ -55,7 +55,7 @@ def test_describe(mock_backend):
     assert strategy.describe() == "name: One Backend Strategy\ndescription: Use only one backend\nbackend: mock_backend"
 
 
-def test_tune_success(mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path):
+def test_tune_success(mock_backend, mock_module, mock_graph_spec, torch_device, mock_samples, tmp_path):
     """Test tune method when backend succeeds."""
     # Setup
     strategy = OneBackendStrategy(mock_backend)
@@ -67,14 +67,14 @@ def test_tune_success(mock_backend, mock_module, mock_graph_spec, torch_device, 
     mock_backend.build.return_value = mock_backend
 
     # Execute
-    result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+    result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     # Verify
     assert result == mock_backend
     mock_backend.build.assert_called_once()
 
 
-def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path):
+def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_device, mock_samples, tmp_path):
     """Test tune method when backend fails."""
     # Setup
     strategy = OneBackendStrategy(mock_backend)
@@ -87,14 +87,14 @@ def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_de
 
     # Execute and verify
     with pytest.raises(Exception) as exc_info:
-        strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+        strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     assert str(exc_info.value) == "Backend failed"
     mock_backend.build.assert_called_once()
 
 
 def test_one_backend_falls_back_to_torch_eager_on_perf_failure(
-    mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path
+    mock_backend, mock_module, mock_graph_spec, torch_device, mock_samples, tmp_path
 ):
     """When backend fails performance gate, falls back to the TorchEager baseline."""
     sink = MagicMock()
@@ -115,7 +115,7 @@ def test_one_backend_falls_back_to_torch_eager_on_perf_failure(
 
     # candidate is 3× slower → speedup 0.33 → fails gate
     with patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 1.0, MagicMock())):
-        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     assert result is eager_fallback
     assert len(strategy.perf_validation_results) == 1
@@ -124,7 +124,7 @@ def test_one_backend_falls_back_to_torch_eager_on_perf_failure(
 
 
 def test_one_backend_returns_backend_when_perf_passes(
-    mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path
+    mock_backend, mock_module, mock_graph_spec, torch_device, mock_samples, tmp_path
 ):
     """When backend passes performance gate, returns the built backend."""
     strategy = OneBackendStrategy(mock_backend)
@@ -142,14 +142,14 @@ def test_one_backend_returns_backend_when_perf_passes(
 
     # candidate is 2× faster → speedup 2.0 → passes gate
     with patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 2.0, MagicMock())):
-        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     assert result is mock_backend
     assert strategy.perf_validation_results[0].passed is True
 
 
 def test_one_backend_skips_perf_profiling_when_validation_disabled(
-    mock_backend, mock_module, mock_graph_spec, torch_device, mock_sample, tmp_path
+    mock_backend, mock_module, mock_graph_spec, torch_device, mock_samples, tmp_path
 ):
     """When performance validation is disabled, no backend throughput check runs."""
     strategy = OneBackendStrategy(mock_backend)
@@ -167,7 +167,7 @@ def test_one_backend_skips_perf_profiling_when_validation_disabled(
     strategy._baseline_backend = eager_fallback
 
     with patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile:
-        result = strategy.tune(mock_module, "test_module", mock_graph_spec, [mock_sample], torch_device, tmp_path)
+        result = strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
 
     assert result is mock_backend
     mock_profile.assert_not_called()

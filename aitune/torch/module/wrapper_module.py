@@ -213,6 +213,7 @@ class Module(wrapt.CallableObjectProxy):
                     self.__wrapped__,
                     self._self_name,
                     dynamic_shapes=self._self_dynamic_shapes,
+                    cache_dir_resolver=self._module_cache_dir,
                 )
             else:
                 # continue with previous recording
@@ -313,16 +314,18 @@ class Module(wrapt.CallableObjectProxy):
 
             for strategy, graph_spec in zip(strategies, recording.graph_specs, strict=True):
                 cache_dir = self._create_graph_cache_dir(graph_spec)
-                data = recording.samples_for_graph_spec(graph_spec)
+                samples = recording.samples_for_graph_spec(graph_spec)
 
                 if dry_run:
-                    strategy.tune_dry_run(self.__wrapped__, self._self_name, graph_spec, data, device, cache_dir)
+                    strategy.tune_dry_run(self.__wrapped__, self._self_name, graph_spec, samples, device, cache_dir)
                     continue
 
                 with report_graph_tune(graph_spec, strategy) as graph_result:
                     try:
                         self._restore_original_forward()
-                        backend = strategy.tune(self.__wrapped__, self._self_name, graph_spec, data, device, cache_dir)
+                        backend = strategy.tune(
+                            self.__wrapped__, self._self_name, graph_spec, samples, device, cache_dir
+                        )
                         self._handle_backend_added_hooks()
                         backends[graph_spec.input_spec] = backend
                         graph_result["selected_backend"] = backend.describe()
@@ -342,9 +345,13 @@ class Module(wrapt.CallableObjectProxy):
 
     def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:
         """Create a cache directory for the graph."""
-        cache_dir = aitune_cache_dir() / self._self_name / graph_spec.name
+        cache_dir = self._module_cache_dir() / graph_spec.name
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
+
+    def _module_cache_dir(self) -> Path:
+        """Return the cache directory identified by the configured module name."""
+        return aitune_cache_dir() / self._self_name
 
     def _activate_wrapper(self):
         try:

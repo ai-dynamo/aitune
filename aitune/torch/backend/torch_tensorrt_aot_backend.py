@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """TorchTensorRT backend with AOT compilation and intermediate model save."""
 
-from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
@@ -14,7 +13,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.shapes import build_dynamic_shapes, prepare_export_sample, print_dynamic_shapes
@@ -157,7 +156,7 @@ class TorchTensorRTAotBackend(Backend):
         self,
         module: nn.Module,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         cache_dir: Path,
     ) -> Backend:
         """Build the model with TensorRT.
@@ -183,7 +182,7 @@ class TorchTensorRTAotBackend(Backend):
         # Set the device for the TensorRT backend compilation
         self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
 
-        args, kwargs = prepare_export_sample(data[0], graph_spec)
+        args, kwargs = prepare_export_sample(samples[0], graph_spec)
         args = tuple(a.to(self._device) if isinstance(a, torch.Tensor) else a for a in args)
         kwargs = {k: v.to(self._device) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
 

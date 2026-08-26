@@ -13,7 +13,7 @@ from typing import Any
 import torch
 
 from aitune.torch.backend.kernels.kernel_provider.kernel_provider import SDPA_FUNCTION, KernelProvider
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 
 logger = logging.getLogger(__name__)
 

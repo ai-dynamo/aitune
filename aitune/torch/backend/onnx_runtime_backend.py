@@ -3,7 +3,7 @@
 """ONNX Runtime backend."""
 
 import copy
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from logging import getLogger
@@ -21,7 +21,7 @@ from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.cuda.memory import memcpy_to_torch
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample, SampleStore, ensure_sample_store
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
 
@@ -154,12 +154,12 @@ class ONNXRuntimeBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Export the model to ONNX then load the session."""
         self._save_config(cache_dir)
         self._graph_spec = graph_spec
 
-        self._output_object = self._get_output_object(module=module, sample=data[0])
+        self._output_object = self._get_output_object(module=module, sample=samples[0])
 
         module = module.eval().to(self._device)
         self._onnx_model_artifact = ArtifactPath(cache_dir, "model_raw.onnx")
@@ -168,13 +168,13 @@ class ONNXRuntimeBackend(Backend):
             use_dynamo=self._config.use_dynamo,
             opset_version=self._config.opset_version,
         )
-        onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
+        onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
 
         data_file = Path(str(self._onnx_model_artifact.path) + ".data")
         if data_file.exists():
             self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=cache_dir)
 
-        self._samples = ensure_sample_store(data, cache_dir)
+        self._samples = samples
         offload(module, device="cpu")
         self._activate()
 
@@ -347,7 +347,7 @@ class ONNXRuntimeBackend(Backend):
             self.STATE_OUTPUT_OBJECT: self._output_object,
             self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
             self.STATE_DEVICE: self._device,
-            self.STATE_SAMPLES: self._samples.artifact if self._samples is not None else None,
+            self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
         }
         if self._onnx_data_artifact is not None:
             state[self.STATE_ONNX_DATA_PATH] = self._onnx_data_artifact
@@ -367,7 +367,7 @@ class ONNXRuntimeBackend(Backend):
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]
-        samples_artifact = state_dict.get(cls.STATE_SAMPLES)
-        backend._samples = SampleStore(samples_artifact) if samples_artifact is not None else None
+        samples_state = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore.from_dict(samples_state) if samples_state is not None else None
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend

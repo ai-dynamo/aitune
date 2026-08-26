@@ -3,7 +3,6 @@
 """Torch compile backend."""
 
 import gc
-from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
@@ -16,7 +15,7 @@ from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
 from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample, SampleStore, ensure_sample_store
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 
@@ -163,13 +162,13 @@ class TorchTensorRTJitBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Build the model with Torch compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
         self._save_config(cache_dir)
         module = module.eval()
         self._orig_module = module
-        self._samples = ensure_sample_store(data, cache_dir)
+        self._samples = samples
         self._compile()
 
         return self
@@ -259,7 +258,7 @@ class TorchTensorRTJitBackend(Backend):
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
-            self.STATE_SAMPLES: self._samples.artifact if self._samples is not None else None,
+            self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
             self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
@@ -277,8 +276,8 @@ class TorchTensorRTJitBackend(Backend):
         config = TorchTensorRTJitBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend = cls(config=config)
-        samples_artifact = state_dict.get(cls.STATE_SAMPLES)
-        backend._samples = SampleStore(samples_artifact) if samples_artifact is not None else None
+        samples_state = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore.from_dict(samples_state) if samples_state is not None else None
         backend._data = state_dict.get(cls.STATE_DATA)
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)

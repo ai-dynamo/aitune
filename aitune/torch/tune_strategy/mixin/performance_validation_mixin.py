@@ -6,8 +6,6 @@ import logging
 import shutil
 import sys
 import traceback
-from collections.abc import Sequence
-from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -17,7 +15,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import (
     ProfilingConfig,
@@ -109,12 +107,12 @@ class PerformanceValidationMixin(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
         """Runs pre-tune setup and profiles TorchEager when performance validation is enabled."""
-        super()._pre_tune(module, name, graph_spec, data, device, cache_dir)
+        super()._pre_tune(module, name, graph_spec, samples, device, cache_dir)
         self.perf_validation_results = []
         self._baseline_throughput = None
         self._baseline_backend = None
@@ -135,8 +133,10 @@ class PerformanceValidationMixin(TuneStrategy):
         baseline_cache_dir.mkdir(parents=True)
         try:
             backend = TorchEagerBackend()
-            backend = backend.build(module, graph_spec, deepcopy(data), device, baseline_cache_dir)
-            batch_size, throughput, _ = find_max_throughput_for_backend(backend, name, graph_spec, data, profiling_cfg)
+            backend = backend.build(module, graph_spec, samples, device, baseline_cache_dir)
+            batch_size, throughput, _ = find_max_throughput_for_backend(
+                backend, name, graph_spec, samples, profiling_cfg
+            )
 
             self._baseline_throughput = throughput
             self._baseline_backend = backend
@@ -162,7 +162,7 @@ class PerformanceValidationMixin(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
         *,
@@ -175,7 +175,7 @@ class PerformanceValidationMixin(TuneStrategy):
         (speedup below threshold).
         """
         built = self._build_and_validate_backend(
-            backend, module, name, graph_spec, data, device, cache_dir, raise_on_failure=raise_on_failure
+            backend, module, name, graph_spec, samples, device, cache_dir, raise_on_failure=raise_on_failure
         )
         if built is None:
             return None
@@ -191,7 +191,7 @@ class PerformanceValidationMixin(TuneStrategy):
         profiling_cfg = self._profiling_config_for_batch_size(self._resolved_batch_size, batching=True)
 
         try:
-            batch_size, throughput, _ = find_max_throughput_for_backend(built, name, graph_spec, data, profiling_cfg)
+            batch_size, throughput, _ = find_max_throughput_for_backend(built, name, graph_spec, samples, profiling_cfg)
         except Exception:
             log("⚠️ Performance profiling failed for %s, performance check skipped", description, sink=self._sink)
             return built
@@ -242,9 +242,9 @@ class PerformanceValidationMixin(TuneStrategy):
             batching=self.profiling_config.batching if batching is None else batching,
         )
 
-    def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, data: Sequence[Sample]):
+    def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, samples: SampleStore):
         """Emits a speedup line after tuning completes."""
-        super()._post_tune(backend, name, graph_spec, data)
+        super()._post_tune(backend, name, graph_spec, samples)
 
         if backend is None:
             return

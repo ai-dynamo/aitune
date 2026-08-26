@@ -31,7 +31,7 @@ from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.config import config as global_config
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
@@ -302,7 +302,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         optimization_profiles_dir.mkdir(parents=True, exist_ok=True)
         return optimization_profiles_dir / "model_optimization_profiles.json"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Build the TensorRT model.
 
         This method will export the module to ONNX and build a TensorRT engine from it using Polygraphy.
@@ -311,7 +311,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (Sequence[Sample]): The data of the model.
+            samples: Recorded samples for the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
 
         Returns:
@@ -323,16 +323,16 @@ class TensorRTBackend(Backend, TensorRTRunner):
         cuda_set_device(self._device)
         self._save_config(cache_dir)
 
-        self._output_object = self._get_output_object(module=module, sample=data[0])
+        self._output_object = self._get_output_object(module=module, sample=samples[0])
 
         if isinstance(self._config.quantization_config, TorchQuantizationConfig):
-            engine_path = self._build_modelopt_torch(module, graph_spec, data, cache_dir)
+            engine_path = self._build_modelopt_torch(module, graph_spec, samples, cache_dir)
         elif isinstance(self._config.quantization_config, ONNXQuantizationConfig):
-            engine_path = self._build_modelopt_onnx(module, graph_spec, data, cache_dir)
+            engine_path = self._build_modelopt_onnx(module, graph_spec, samples, cache_dir)
         elif isinstance(self._config.quantization_config, ONNXAutoCastConfig):
-            engine_path = self._build_modelopt_onnx_autocast(module, graph_spec, data, cache_dir)
+            engine_path = self._build_modelopt_onnx_autocast(module, graph_spec, samples, cache_dir)
         else:
-            engine_path = self._build_standard(module, graph_spec, data, cache_dir)
+            engine_path = self._build_standard(module, graph_spec, samples, cache_dir)
         self._engine_artifact = ArtifactPath.from_existing(engine_path, root=cache_dir)
 
         # Save optimization profiles after building the engine

@@ -6,7 +6,7 @@ import contextlib
 import json
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Sequence
+from collections.abc import Generator
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_backend_build
 from aitune.torch.utils.memory import release_transient_memory
 from aitune.utils.hashing import hash_string
@@ -190,7 +190,7 @@ class Backend(ABC):
         self,
         module: nn.Module,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
         log_file: Path | None = None,
@@ -211,7 +211,7 @@ class Backend(ABC):
                 try:
                     self._assert_device(device)
                     self._set_device(device)
-                    ready_backend = self._build(module, graph_spec, data, cache_dir)
+                    ready_backend = self._build(module, graph_spec, samples, cache_dir)
                     self.state = BackendState.ACTIVE
                     return ready_backend
                 except Exception as e:
@@ -347,7 +347,7 @@ class Backend(ABC):
         return self.state == BackendState.ACTIVE
 
     @abstractmethod
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> "Backend":
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> "Backend":
         """Build the model with the given arguments.
 
         After building, the backend should be activated.
@@ -356,7 +356,7 @@ class Backend(ABC):
             module: The module to build the backend on.
             name: The name of the backend.
             graph_spec: The graph specification of the backend.
-            data: The data to build the backend on.
+            samples: Recorded samples used to build the backend.
             cache_dir: The cache directory to store the backend artifacts.
         """
         ...
@@ -445,7 +445,7 @@ class DummyBackend(Backend):
         """Returns the description of the backend."""
         return "Dummy backend"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Build the model with the given arguments."""
         return self
 

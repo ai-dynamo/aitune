@@ -9,6 +9,7 @@ from aitune.torch import Module
 from aitune.torch.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.task.correctness import CorrectnessValueError
 from aitune.torch.task.profiling import (
@@ -78,16 +79,15 @@ def test_min_latency_strategy_selects_faster_backend(torch_device, tmp_path):
     strategy.enable_correctness_check(False)
 
     model = ToyTorchModel()
-    sample = model.sample().unsqueeze(0)
+    samples = model.sample_store(tmp_path, batch_sizes=[1])
 
-    def mock_measure(backend, name, graph_spec, data, profiling_cfg):
+    def mock_measure(backend, name, graph_spec, samples, profiling_cfg):
+        del samples
         return MinLatencyProfilingResult(latency=backend.sleep_time)
 
     strategy._measure = mock_measure
 
-    selected = strategy.tune(
-        model, "test", model.graph_spec(batch_sizes=[1, 2]), [((sample,), {})], torch_device, tmp_path
-    )
+    selected = strategy.tune(model, "test", model.graph_spec(batch_sizes=[1, 2]), samples, torch_device, tmp_path)
 
     assert isinstance(selected, SleepBackend)
     assert selected.sleep_time == faster.sleep_time
@@ -201,13 +201,13 @@ def test_min_latency_perf_validation_results_populated(torch_device, tmp_path):
     strategy.enable_correctness_check(False)
 
     model = ToyTorchModel().eval().to(torch_device)
-    sample = model.sample().unsqueeze(0).to(torch_device)
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
     strategy.tune(
         model,
         "test",
         model.graph_spec(batch_sizes=[1, 2], device=torch_device),
-        [((sample,), {})],
+        samples,
         torch_device,
         tmp_path,
     )
@@ -235,7 +235,7 @@ def test_min_latency_post_tune_emits_speedup_summary(torch_device, tmp_path):
         patch.object(strategy._logger, "isEnabledFor", return_value=False),
         patch.object(strategy._logger, "warning") as mock_warn,
     ):
-        strategy._post_tune(user_backend, "test", MagicMock(), [])
+        strategy._post_tune(user_backend, "test", MagicMock(), MagicMock(spec=SampleStore))
 
     mock_warn.assert_called()
     speedup_msgs = [c for c in mock_warn.call_args_list if "speedup:" in str(c).lower()]
@@ -257,7 +257,7 @@ def test_min_latency_post_tune_emits_baseline_selected_when_baseline_wins(mock_b
     strategy.perf_validation_results = []
 
     with patch.object(strategy._logger, "isEnabledFor", return_value=True):
-        strategy._post_tune(baseline, "test", MagicMock(), [])
+        strategy._post_tune(baseline, "test", MagicMock(), MagicMock(spec=SampleStore))
 
     sink.assert_called_once()
     msg = sink.call_args[0][0]

@@ -6,7 +6,6 @@ import hashlib
 import logging
 import random
 from collections import Counter, OrderedDict, deque
-from collections.abc import Sequence
 from enum import Enum
 from pathlib import Path
 from time import perf_counter
@@ -23,7 +22,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_data.report_models import ModuleInspectionReport
 from aitune.torch.tune_data.reporting import (
@@ -171,13 +170,13 @@ class PatchedModule:
                 ):
                     for graph_spec in recording.graph_specs:
                         cache_dir = self._create_graph_cache_dir(graph_spec.name)
-                        data = recording.samples_for_graph_spec(graph_spec)
+                        samples = recording.samples_for_graph_spec(graph_spec)
                         if config.dry_run:
-                            self._simulate_dry_run(strategy, current, graph_spec, data, device, cache_dir)
+                            self._simulate_dry_run(strategy, current, graph_spec, samples, device, cache_dir)
                         else:
                             with global_context:
                                 global_context.set(MODULE_CONTEXT_KEY, current.fq_name)
-                                backend = self._tune(strategy, current, graph_spec, data, device, cache_dir)
+                                backend = self._tune(strategy, current, graph_spec, samples, device, cache_dir)
                             backends[graph_spec.input_spec] = backend
                     if backends:
                         current._wrapper = TunedModule(
@@ -268,7 +267,7 @@ class PatchedModule:
         strategy: TuneStrategy,
         module: "PatchedModule",
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
@@ -279,7 +278,7 @@ class PatchedModule:
         This is done to simulate failures during JIT tuning to see how it would behave.
         """
         _to_hist(f"Tuning in dry-run module: {str(module)}")
-        strategy.tune_dry_run(module.__wrapped__, module._name, graph_spec, data, device, cache_dir)
+        strategy.tune_dry_run(module.__wrapped__, module._name, graph_spec, samples, device, cache_dir)
         if failure := random.random() < config.dry_run_failure_probability:
             raise RuntimeError(f"Tuning failed in dry-run mode with probability {failure:.2f}")
 
@@ -288,7 +287,7 @@ class PatchedModule:
         strategy: TuneStrategy,
         module: "PatchedModule",
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
@@ -296,10 +295,10 @@ class PatchedModule:
         with report_graph_tune(graph_spec, strategy) as graph_result:
             try:
                 if config.detect_graph_breaks:
-                    self._throw_if_has_graph_break(module, data)
+                    self._throw_if_has_graph_break(module, samples)
 
                 start = perf_counter()
-                backend = strategy.tune(module.__wrapped__, module._name, graph_spec, data, device, cache_dir)
+                backend = strategy.tune(module.__wrapped__, module._name, graph_spec, samples, device, cache_dir)
                 duration = perf_counter() - start
                 _to_hist(f"Tuning {module._name} took {duration:.2f}s")
                 graph_result["selected_backend"] = backend.describe()
@@ -362,7 +361,11 @@ class PatchedModule:
 
         self._fq_name = self._get_fully_qualified_name()
         self._update_state(ModuleState.RECORDING)
-        self._wrapper = RecordingModule(self.__wrapped__, self._name)
+        self._wrapper = RecordingModule(
+            self.__wrapped__,
+            self._name,
+            cache_dir_resolver=self._module_cache_dir,
+        )
         PatchedModule.stack.append(self)
         try:
             self._restore_original_forward()
@@ -427,9 +430,13 @@ class PatchedModule:
 
     def _create_graph_cache_dir(self, graph_spec_name: str) -> Path:
         """Create a cache directory for the graph."""
-        cache_dir = config.cache_dir / self._get_hierarchy_hash() / graph_spec_name
+        cache_dir = self._module_cache_dir() / graph_spec_name
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
+
+    def _module_cache_dir(self) -> Path:
+        """Return this module's cache directory."""
+        return config.cache_dir / self._get_hierarchy_hash()
 
     def _get_hierarchy_hash(self) -> str:
         """Get the hash of the module hierarchy.
@@ -596,13 +603,13 @@ class PatchedModule:
         """
         return PatchedModule.deferred_tuning_enabled and self._allowed_to_tune and self._call_count >= 1
 
-    def _throw_if_has_graph_break(self, module: "PatchedModule", data: Sequence[Sample]):
+    def _throw_if_has_graph_break(self, module: "PatchedModule", samples: SampleStore):
         """Throw if graph break is detected.
 
         Adds to history the duration of the checking.
         """
         detector = GraphBreakDetector()
-        args, kwargs = data[0]
+        args, kwargs = samples[0]
         start = perf_counter()
         detector.detect(module.__wrapped__, args, kwargs)
         duration = perf_counter() - start

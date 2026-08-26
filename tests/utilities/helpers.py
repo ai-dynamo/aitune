@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Helper functions and classes for testing."""
 
+from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -9,9 +11,19 @@ import pytest
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
 
 requires_cuda = pytest.mark.skipif(not is_cuda_available(), reason="CUDA is not available")
+
+
+def make_sample_store(
+    samples: Sequence[Sample],
+    cache_dir: Path,
+    relative_path: str | Path = "samples",
+) -> SampleStore:
+    """Persist manually constructed samples for tuning tests."""
+    return SampleStore.from_samples(samples, cache_dir, relative_path)
 
 
 def make_input_metadata(

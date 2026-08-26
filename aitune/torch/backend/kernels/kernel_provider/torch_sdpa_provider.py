@@ -9,7 +9,7 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 from torch.nn.functional import scaled_dot_product_attention
 
 from aitune.torch.backend.kernels.kernel_provider.kernel_provider import SDPA_FUNCTION, KernelProvider
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,6 @@ from unittest.mock import Mock
 
 import pytest
 import torch
-import torch.nn as nn
 
 from aitune.exceptions import AITuneError
 from aitune.torch.backend.torch_tensorrt_jit_backend import (
@@ -15,7 +14,7 @@ from aitune.torch.backend.torch_tensorrt_jit_backend import (
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import SampleStore
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -35,13 +34,13 @@ class TorchTensorRTTestConfig:
 
 
 @pytest.fixture
-def model(torch_device) -> nn.Module:
+def model(torch_device) -> ToyTorchModel:
     return ToyTorchModel().to(torch_device).eval()
 
 
 @pytest.fixture
-def sample_data(model, torch_device) -> list[Sample]:
-    return model.samples(device=torch_device)
+def sample_data(model, torch_device, tmp_path) -> SampleStore:
+    return model.sample_store(tmp_path, device=torch_device)
 
 
 @pytest.fixture
@@ -66,7 +65,11 @@ def backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, 
     torch_mod.compile = mocker.MagicMock(return_value=model)
 
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model,
+        graph_spec=_mock_graph_spec(),
+        samples=sample_data,
+        device=torch_device,
+        cache_dir=tmp_path,
     )
     backend = cast(TorchTensorRTJitBackend, backend)
     return torch_mod, backend
@@ -79,7 +82,7 @@ def test_torch_tensorrt_build_auto_dynamic_does_not_mutate_config(mocker, tmp_pa
 
     toy = ToyTorchModel().eval()
     graph_spec = toy.graph_spec(batch_sizes=[1, 2])
-    sample_data = toy.samples(batch_sizes=[1])
+    sample_data = toy.sample_store(tmp_path, batch_sizes=[1])
     compile_mock = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile", return_value=toy)
     config = TorchTensorRTJitBackendConfig(
         compile_config=TorchTensorRTTestConfig(workspace_size=1),
@@ -88,7 +91,13 @@ def test_torch_tensorrt_build_auto_dynamic_does_not_mutate_config(mocker, tmp_pa
     backend = TorchTensorRTJitBackend(config)
     original_key = backend.key()
 
-    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    backend.build(
+        toy,
+        graph_spec=graph_spec,
+        samples=sample_data,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
 
     assert backend._config.dynamic is None
     assert backend.key() == original_key
@@ -102,7 +111,7 @@ def test_torch_tensorrt_auto_dynamic_setting_is_restored_from_state_dict(mocker,
 
     toy = ToyTorchModel().eval()
     graph_spec = toy.graph_spec(batch_sizes=[1, 2])
-    sample_data = toy.samples(batch_sizes=[1])
+    sample_data = toy.sample_store(tmp_path, batch_sizes=[1])
     compile_mock = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile", return_value=toy)
     config = TorchTensorRTJitBackendConfig(
         compile_config=TorchTensorRTTestConfig(workspace_size=1),
@@ -110,7 +119,13 @@ def test_torch_tensorrt_auto_dynamic_setting_is_restored_from_state_dict(mocker,
     )
     backend = TorchTensorRTJitBackend(config)
 
-    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    backend.build(
+        toy,
+        graph_spec=graph_spec,
+        samples=sample_data,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
     state_dict = backend.to_dict()
 
     assert state_dict[TorchTensorRTJitBackend.STATE_CONFIG]["dynamic"] is None
@@ -133,7 +148,7 @@ def test_torch_tensorrt_build_preserves_explicit_dynamic_false(mocker, tmp_path)
 
     toy = ToyTorchModel().eval()
     graph_spec = toy.graph_spec(batch_sizes=[1, 2])
-    sample_data = toy.samples(batch_sizes=[1])
+    sample_data = toy.sample_store(tmp_path, batch_sizes=[1])
     compile_mock = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile", return_value=toy)
     config = TorchTensorRTJitBackendConfig(
         compile_config=TorchTensorRTTestConfig(workspace_size=1),
@@ -141,7 +156,13 @@ def test_torch_tensorrt_build_preserves_explicit_dynamic_false(mocker, tmp_path)
     )
     backend = TorchTensorRTJitBackend(config)
 
-    backend.build(toy, graph_spec=graph_spec, data=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    backend.build(
+        toy,
+        graph_spec=graph_spec,
+        samples=sample_data,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
 
     assert backend._config.dynamic is False
     assert compile_mock.call_args.kwargs["dynamic"] is False
@@ -182,7 +203,11 @@ def test_mock_build(torch_tensorrt_jit_backend, model, sample_data, torch_device
     torch_mod.compile = mocker.MagicMock(return_value=model)
 
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model,
+        graph_spec=_mock_graph_spec(),
+        samples=sample_data,
+        device=torch_device,
+        cache_dir=tmp_path,
     )
 
     assert backend is torch_tensorrt_jit_backend
@@ -233,7 +258,11 @@ def test_torch_compile_backend_infer_not_activated(
     torch_mod_backend.cuda.empty_cache = mocker.MagicMock()
 
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model,
+        graph_spec=_mock_graph_spec(),
+        samples=sample_data,
+        device=torch_device,
+        cache_dir=tmp_path,
     )
     backend = cast(TorchTensorRTJitBackend, backend)
 
@@ -259,7 +288,11 @@ def test_torch_compile_backend_deactivate(
 
     # Build, activate, and deactivate
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model,
+        graph_spec=_mock_graph_spec(),
+        samples=sample_data,
+        device=torch_device,
+        cache_dir=tmp_path,
     )
     backend.activate()
     backend.deactivate()
@@ -280,7 +313,11 @@ def test_torch_compile_backend_init(torch_tensorrt_jit_backend_config):
 @requires_cuda
 def test_torch_compile_backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path):
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model,
+        graph_spec=_mock_graph_spec(),
+        samples=sample_data,
+        device=torch_device,
+        cache_dir=tmp_path,
     )
     assert backend is torch_tensorrt_jit_backend
     assert backend._orig_module is model
@@ -291,7 +328,11 @@ def test_torch_compile_backend_build(torch_tensorrt_jit_backend, model, sample_d
 def test_torch_compile_backend_compile(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path):
     args, kwargs = sample_data[0]
     backend = torch_tensorrt_jit_backend.build(
-        model, graph_spec=_mock_graph_spec(), data=sample_data, device=torch_device, cache_dir=tmp_path
+        model,
+        graph_spec=_mock_graph_spec(),
+        samples=sample_data,
+        device=torch_device,
+        cache_dir=tmp_path,
     )
     backend.infer(*args, **kwargs)
 

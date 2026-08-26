@@ -126,7 +126,7 @@ def test_tensor_output(tmp_path):
 
     # Build with TensorRT
     backend = TensorRTBackend()
-    backend = backend.build(module=model, graph_spec=graph_spec, data=samples, device=device, cache_dir=tmp_path)
+    backend = backend.build(module=model, graph_spec=graph_spec, samples=samples, device=device, cache_dir=tmp_path)
     # Note: build() already calls activate() internally
 
     # Verify output is a tensor
@@ -149,7 +149,7 @@ def test_tuple_output(tmp_path):
 
     # Build with TensorRT
     backend = TensorRTBackend()
-    backend = backend.build(module=model, graph_spec=graph_spec, data=samples, device=device, cache_dir=tmp_path)
+    backend = backend.build(module=model, graph_spec=graph_spec, samples=samples, device=device, cache_dir=tmp_path)
     # Note: build() already calls activate() internally
 
     # Verify output is a tuple
@@ -175,7 +175,7 @@ def test_list_output(tmp_path):
 
     # Build with TensorRT
     backend = TensorRTBackend()
-    backend = backend.build(module=model, graph_spec=graph_spec, data=samples, device=device, cache_dir=tmp_path)
+    backend = backend.build(module=model, graph_spec=graph_spec, samples=samples, device=device, cache_dir=tmp_path)
     # Note: build() already calls activate() internally
 
     # Verify output is a list
@@ -201,7 +201,7 @@ def test_dict_output(tmp_path):
 
     # Build with TensorRT
     backend = TensorRTBackend()
-    backend = backend.build(module=model, graph_spec=graph_spec, data=samples, device=device, cache_dir=tmp_path)
+    backend = backend.build(module=model, graph_spec=graph_spec, samples=samples, device=device, cache_dir=tmp_path)
     # Note: build() already calls activate() internally
 
     # Verify output is a dictionary
@@ -238,7 +238,7 @@ def test_non_contiguous_input(tmp_path):
     backend = backend.build(
         module=model,
         graph_spec=graph_spec,
-        data=samples,
+        samples=samples,
         device=device,
         cache_dir=tmp_path,
     )
@@ -270,7 +270,7 @@ def test_cpu_input(tmp_path):
 
     # Build with TensorRT
     backend = TensorRTBackend()
-    backend = backend.build(module=model, graph_spec=graph_spec, data=samples, device=device, cache_dir=tmp_path)
+    backend = backend.build(module=model, graph_spec=graph_spec, samples=samples, device=device, cache_dir=tmp_path)
     # Note: build() already calls activate() internally
 
     # Infer with CPU tensor (should be automatically moved to CUDA)
@@ -306,7 +306,7 @@ def test_custom_object_output(tmp_path):
 
     # Build with TensorRT
     backend = TensorRTBackend()
-    backend = backend.build(module=model, graph_spec=graph_spec, data=samples, device=device, cache_dir=tmp_path)
+    backend = backend.build(module=model, graph_spec=graph_spec, samples=samples, device=device, cache_dir=tmp_path)
     # Note: build() already calls activate() internally
 
     # Infer with CPU tensor (should be automatically moved to CUDA)

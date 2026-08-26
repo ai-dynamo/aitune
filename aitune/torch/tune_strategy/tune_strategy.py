@@ -4,7 +4,7 @@
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -14,7 +14,7 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, DummyBackend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.correctness import (
     check_dynamic_shape_boundary_inference,
     check_inference_output_correctness,
@@ -61,12 +61,12 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
         """Performs tune dry run."""
-        self._describe(module, name, graph_spec, data, device, cache_dir, dry_run=True)
+        self._describe(module, name, graph_spec, samples, device, cache_dir, dry_run=True)
 
     def describe(self) -> str:
         """Describes what strategy is doing."""
@@ -77,27 +77,27 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ) -> Backend:
-        """Tunes given torch module with provided graph_spec and data."""
+        """Tune a torch module with the provided graph specification and samples."""
         self.backend_results = []
-        self._describe(module, name, graph_spec, data, device, cache_dir)
+        self._describe(module, name, graph_spec, samples, device, cache_dir)
         with Timer(name=f"Tune `{self.__class__.__name__}`", sink=self._sink):
-            self._pre_tune(module, name, graph_spec, data, device, cache_dir)
-            backend = self._tune(module, name, graph_spec, data, device, cache_dir)
-            self._post_tune(backend, name, graph_spec, data)
+            self._pre_tune(module, name, graph_spec, samples, device, cache_dir)
+            backend = self._tune(module, name, graph_spec, samples, device, cache_dir)
+            self._post_tune(backend, name, graph_spec, samples)
             return backend
 
-    def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, data: Sequence[Sample]):
+    def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, samples: SampleStore):
         """Check outputs for NaN/inf.
 
         Args:
             backend: The backend to check.
             name: The name of the module.
             graph_spec: The graph spec of the module.
-            data: The data to check.
+            samples: Recorded samples to check.
 
         Note:
             This method is should be called by the _tune method to check the correctness of the backend.
@@ -115,18 +115,18 @@ class TuneStrategy(ABC):
             )
             return
 
-        if not data:
+        if not samples:
             raise ValueError(f"Correctness check requires at least one sample for graph spec {graph_spec.name}.")
 
         self._logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
         check_inference_output_correctness(
-            data,
+            samples,
             graph_spec.output_spec,
             infer=backend.infer,
             name=f"{name}.{graph_spec.name}.{backend.describe()}",
         )
         check_dynamic_shape_boundary_inference(
-            data[0],
+            samples[0],
             graph_spec,
             infer=backend.infer,
             name=f"{name}.{graph_spec.name}.{backend.describe()}",
@@ -157,7 +157,7 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
         *,
@@ -173,7 +173,7 @@ class TuneStrategy(ABC):
             module: Module to tune.
             name: Module name.
             graph_spec: Graph specification.
-            data: Sample data.
+            samples: Recorded samples.
             device: Target device.
             cache_dir: Cache directory for this module/graph.
             raise_on_failure: If True, re-raise the original exception instead of returning None.
@@ -193,12 +193,10 @@ class TuneStrategy(ABC):
 
                 with control_output(log_file=log_file):
                     backend = deepcopy(backend)
-                    backend = backend.build(
-                        module, graph_spec, deepcopy(data), device, backend_cache_dir, log_file=log_file
-                    )
+                    backend = backend.build(module, graph_spec, samples, device, backend_cache_dir, log_file=log_file)
 
                 log("✅ backend built", depth=2, sink=self._sink)
-                self.check_correctness(backend, name, graph_spec, data)
+                self.check_correctness(backend, name, graph_spec, samples)
                 log("✅ backend validated", depth=2, sink=self._sink)
 
                 self.backend_results.append({"backend": description, "success": True})
@@ -221,14 +219,14 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
         """Pre-tune hook. Override to add custom logic before tuning."""
         return
 
-    def _post_tune(self, backend: Backend, name: str, graph_spec: GraphSpec, data: Sequence[Sample]):
+    def _post_tune(self, backend: Backend, name: str, graph_spec: GraphSpec, samples: SampleStore):
         """Post-tune hook. Override to add custom logic after tuning."""
         return
 
@@ -238,11 +236,11 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ) -> Backend:
-        """Tunes given torch module with provided graph_spec and data.
+        """Tune a torch module with the provided graph specification and samples.
 
         Note: each tuning operation should do a deep copy of a backend as tuning could be called multiple times for the
         same module i.e. if there are different graph specs
@@ -295,7 +293,7 @@ class TuneStrategy(ABC):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
         dry_run: bool = False,
@@ -315,7 +313,7 @@ class TuneStrategy(ABC):
         log("graph_spec:", depth=1, sink=self._sink)
         log("input_spec:\n %s", graph_spec.input_spec.describe(), depth=2, sink=self._sink)
         log("output_spec:\n %s", graph_spec.output_spec.describe(), depth=2, sink=self._sink)
-        log("num samples: %s", len(data), depth=1, sink=self._sink)
+        log("num samples: %s", len(samples), depth=1, sink=self._sink)
         log("device: %s", device, depth=1, sink=self._sink)
         log("cache_dir: %s", cache_dir, depth=1, sink=self._sink)
         log("strategy:", depth=1, sink=self._sink)
@@ -349,9 +347,9 @@ class DummyTuneStrategy(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
-        """Tunes given torch module with provided graph_spec and data."""
+        """Tune a torch module with the provided graph specification and samples."""
         return DummyBackend()

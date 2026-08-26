@@ -10,6 +10,7 @@ from aitune.torch import Module
 from aitune.torch.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.task.correctness import CorrectnessValueError
 from aitune.torch.task.profiling import (
@@ -124,9 +125,10 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
     strategy.enable_correctness_check(False)
 
     model = ToyTorchModel().to(torch_device)
-    sample = model.sample().unsqueeze(0).to(torch_device)  # as dataloader make batches, we need to unsqueeze the sample
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
-    def mock_measure(backend, name, graph_spec, data, profiling_cfg):
+    def mock_measure(backend, name, graph_spec, samples, profiling_cfg):
+        del samples
         return MaxThroughputProfilingResult(throughput=1.0 / backend.sleep_time, selected_batch_size=1)
 
     strategy._measure = mock_measure
@@ -135,7 +137,7 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
         model,
         "test",
         model.graph_spec(batch_sizes=[1, 2], device=torch_device),
-        [((sample,), {})],
+        samples,
         torch_device,
         tmp_path,
     )
@@ -152,6 +154,7 @@ def test_max_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_
     strategy.enable_correctness_check(False)
     model = ToyTorchModel().eval().to(torch_device)
     sample = model.sample().unsqueeze(0).to(torch_device)  # as dataloader make batches, we need to unsqueeze the sample
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
     graph_spec = model.graph_spec(batch_sizes=[1, 2, 4, 8], device=torch_device)
 
     # sanity heck that graph spec input_spec was updated with max batch size
@@ -159,7 +162,7 @@ def test_max_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_
     assert max_batch_args[0].shape[0] == 8
 
     # Run tuning to update graph spec with max batch size
-    strategy.tune(model, "test", graph_spec, [((sample,), {})], torch_device, cache_dir=tmp_path)
+    strategy.tune(model, "test", graph_spec, samples, torch_device, cache_dir=tmp_path)
 
     # Verify tensor specs were updated with max batch size info
     for tensor_spec in graph_spec.input_spec.tensor_specs:
@@ -318,13 +321,13 @@ def test_max_throughput_perf_validation_results_populated(torch_device, tmp_path
     strategy.enable_correctness_check(False)
 
     model = ToyTorchModel().eval().to(torch_device)
-    sample = model.sample().unsqueeze(0).to(torch_device)
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
     strategy.tune(
         model,
         "test",
         model.graph_spec(batch_sizes=[1, 2], device=torch_device),
-        [((sample,), {})],
+        samples,
         torch_device,
         tmp_path,
     )
@@ -351,13 +354,13 @@ def test_max_throughput_torcheager_excluded_from_selection_when_performance_vali
     strategy.enable_correctness_check(False)
 
     model = ToyTorchModel().eval().to(torch_device)
-    sample = model.sample().unsqueeze(0).to(torch_device)
+    samples = model.sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
     selected = strategy.tune(
         model,
         "test",
         model.graph_spec(batch_sizes=[1, 2], device=torch_device),
-        [((sample,), {})],
+        samples,
         torch_device,
         tmp_path,
     )
@@ -384,7 +387,7 @@ def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
         patch.object(strategy._logger, "isEnabledFor", return_value=False),
         patch.object(strategy._logger, "warning") as mock_warn,
     ):
-        strategy._post_tune(user_backend, "test", MagicMock(), [])
+        strategy._post_tune(user_backend, "test", MagicMock(), MagicMock(spec=SampleStore))
 
     mock_warn.assert_called()
     speedup_msgs = [c for c in mock_warn.call_args_list if "speedup:" in str(c).lower()]
@@ -406,7 +409,7 @@ def test_max_throughput_post_tune_emits_baseline_selected_when_baseline_wins(moc
     strategy.perf_validation_results = []
 
     with patch.object(strategy._logger, "isEnabledFor", return_value=True):
-        strategy._post_tune(baseline, "test", MagicMock(), [])
+        strategy._post_tune(baseline, "test", MagicMock(), MagicMock(spec=SampleStore))
 
     sink.assert_called_once()
     msg = sink.call_args[0][0]
@@ -431,7 +434,7 @@ def test_max_throughput_post_tune_silent_for_baseline_selected_when_info_disable
         patch.object(strategy._logger, "isEnabledFor", return_value=False),
         patch.object(strategy._logger, "warning") as mock_warn,
     ):
-        strategy._post_tune(baseline, "test", MagicMock(), [])
+        strategy._post_tune(baseline, "test", MagicMock(), MagicMock(spec=SampleStore))
 
     sink.assert_not_called()
     mock_warn.assert_not_called()

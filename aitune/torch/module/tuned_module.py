@@ -12,8 +12,8 @@ from aitune.torch.backend.backend import Backend
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
 from aitune.torch.module.forward_signature import ForwardSignature
-from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import Sample
 
 
 class TunedModule:

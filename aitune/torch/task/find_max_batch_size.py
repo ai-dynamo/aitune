@@ -4,7 +4,6 @@
 
 import logging
 from collections import defaultdict
-from collections.abc import Sequence
 from pathlib import Path
 
 import torch
@@ -13,7 +12,7 @@ import torch.nn as nn
 from aitune.torch.backend import TorchEagerBackend
 from aitune.torch.backend.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inference_events
 from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStrategy
@@ -30,7 +29,7 @@ def find_max_batch_size(
     module: nn.Module,
     name: str,
     graph_spec: GraphSpec,
-    data: Sequence[Sample],
+    samples: SampleStore,
     profiling_config: ProfilingConfig,
     device: torch.device,
     cache_dir: Path,
@@ -45,7 +44,7 @@ def find_max_batch_size(
         module: Model to find max batch size for.
         name: Name of the model.
         graph_spec: Graph spec of the model.
-        data: Data to profile.
+        samples: Recorded samples to profile.
         profiling_config: Profiling configuration.
         torch_backend: Backend to use for the find max batch size. If not provided, Torch Eager backend will be used.
         device: Device to use for the calculation.
@@ -55,15 +54,15 @@ def find_max_batch_size(
     backend_cache_dir = cache_dir / backend.key()
     log_file = _log_file(backend_cache_dir, "build.log")
     with control_output(log_file=log_file):
-        backend.build(module, graph_spec, data, device, backend_cache_dir)
-    return find_max_throughput_for_backend(backend, name, graph_spec, data, profiling_config)
+        backend.build(module, graph_spec, samples, device, backend_cache_dir)
+    return find_max_throughput_for_backend(backend, name, graph_spec, samples, profiling_config)
 
 
 def find_max_throughput_for_backend(
     backend: Backend,
     name: str,
     graph_spec: GraphSpec,
-    data: Sequence[Sample],
+    samples: SampleStore,
     profiling_config: ProfilingConfig,
 ) -> tuple[int, float, ProfilingResults]:
     """Profiles a backend to find the batch size that achieves maximum throughput.
@@ -72,7 +71,7 @@ def find_max_throughput_for_backend(
         module: Model to calculate maximum throughput for.
         name: Name of the model.
         graph_spec: Graph spec of the model.
-        data: Data to profile.
+        samples: Recorded samples to profile.
         profiling_config: Profiling configuration.
         backend: Backend to use for the calculation.
         device: Device to use for the calculation.
@@ -88,7 +87,7 @@ def find_max_throughput_for_backend(
         backend,
         name,
         graph_spec,
-        data,
+        samples,
         profiling_config,
     )
 

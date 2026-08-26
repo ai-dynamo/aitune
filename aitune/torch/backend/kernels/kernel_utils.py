@@ -10,8 +10,8 @@ import pandas as pd
 import torch
 import triton
 
-from aitune.torch.module.recording_module import Sample
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import Sample
 from aitune.torch.module.tensor_spec import InfoLevel
 
 

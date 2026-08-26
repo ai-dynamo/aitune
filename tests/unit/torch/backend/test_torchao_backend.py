@@ -24,9 +24,9 @@ from aitune.torch.backend.torchao_backend import (
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore
 from tests.toy_models.torch_models import HIDDEN_SIZE, ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_sample_store, requires_cuda
 
 INT8DQ_OUTPUT_SIZE = 8
 
@@ -40,16 +40,13 @@ class TorchAOInt8DQModel(ToyTorchModel):
 
 
 @pytest.fixture
-def model(torch_device) -> nn.Module:
+def model(torch_device) -> ToyTorchModel:
     return ToyTorchModel().to(torch_device).eval()
 
 
 @pytest.fixture
-def sample_data(model, torch_device) -> list[Sample]:
-    sample = model.sample()
-    args = (sample.to(torch_device).unsqueeze(0).repeat(32, 1),)
-    kwargs = {}
-    return [(args, kwargs)]
+def sample_data(model, torch_device, tmp_path) -> SampleStore:
+    return model.sample_store(tmp_path, batch_sizes=[32], device=torch_device)
 
 
 def sample_data_for_model(model, torch_device) -> list[Sample]:
@@ -79,7 +76,13 @@ def build_backend(backend, dtype, model, sample_data, torch_device, tmp_path):
     mock_graph_spec.input_spec.detected_dynamic_axis.return_value = False
     sample_data = move_to_dtype(sample_data, dtype)
     model.to(dtype)
-    return backend.build(model, mock_graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+    return backend.build(
+        model,
+        mock_graph_spec,
+        make_sample_store(sample_data, tmp_path),
+        device=torch_device,
+        cache_dir=tmp_path,
+    )
 
 
 def int8_weight_only_per_group_config(group_size: int) -> Int8WeightOnlyConfig:
@@ -217,14 +220,20 @@ def test_torchao_config_rejects_invalid_mode():
 def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
     model = ToyTorchModel().eval()
     graph_spec = model.graph_spec(batch_sizes=[1, 2])
-    sample_data = model.samples(batch_sizes=[1])
+    sample_data = model.sample_store(tmp_path, batch_sizes=[1])
     config = TorchAOBackendConfig(quantization="int8wo", dynamic=None)
     backend = TorchAOBackend(config=config)
     original_key = backend.key()
     compile_mock = mocker.patch("aitune.torch.backend.torchao_backend.torch.compile", return_value=model)
     mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
 
-    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    backend.build(
+        model,
+        graph_spec,
+        sample_data,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
 
     assert config.dynamic is None
     assert backend.key() == original_key
@@ -234,13 +243,19 @@ def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
 def test_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
     model = ToyTorchModel().eval()
     graph_spec = model.graph_spec(batch_sizes=[1, 2])
-    sample_data = model.samples(batch_sizes=[1])
+    sample_data = model.sample_store(tmp_path, batch_sizes=[1])
     config = TorchAOBackendConfig(quantization="int8wo", dynamic=None)
     backend = TorchAOBackend(config=config)
     compile_mock = mocker.patch("aitune.torch.backend.torchao_backend.torch.compile", return_value=model)
     mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
 
-    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    backend.build(
+        model,
+        graph_spec,
+        sample_data,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
     state_dict = backend.to_dict()
     loaded_backend = TorchAOBackend.from_dict(model, state_dict)
 

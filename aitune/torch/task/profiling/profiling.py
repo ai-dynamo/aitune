@@ -8,7 +8,7 @@ TODO: add support for additional out of module(this source) events
 """
 
 import logging
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Generator
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import Enum
@@ -19,7 +19,7 @@ import torch
 from aitune.torch.backend.backend import Backend
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inference_events
 
@@ -81,16 +81,16 @@ def profile_backend(
     backend: Backend,
     name: str,
     graph_spec: GraphSpec,
-    data: Sequence[Sample],
+    samples: SampleStore,
     profiling_config: ProfilingConfig,
 ) -> ProfilingStatus:
-    """Profile a backend with graph spec and data.
+    """Profile a backend with graph specification and recorded samples.
 
     Args:
         backend: Backend to profile.
         name: Name of the model.
         graph_spec: Graph spec of the model. Used to generate batch samples.
-        data: Data to profile. Only first sample is used to generate batch samples.
+        samples: Recorded samples. Only the first is used to generate batches.
         profiling_config: Profiling configuration.
 
     Returns:
@@ -104,7 +104,7 @@ def profile_backend(
     """
 
     def generator():
-        base_args, base_kwargs = data[0]
+        base_args, base_kwargs = samples[0]
         if profiling_config.batching:
             for batch_size in profiling_config.batch_sizes:
                 args, kwargs = graph_spec.make_batch(base_args, base_kwargs, batch_size)

@@ -13,8 +13,6 @@ import logging
 import shutil
 import traceback
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
-from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -35,7 +33,7 @@ from aitune.torch.backend import (
     TorchTensorRTJitBackend,
 )
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
@@ -132,7 +130,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         backend: Backend,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         profiling_cfg: ProfilingConfig,
     ) -> BackendProfilingResult:
         """Profiles the backend and returns its result."""
@@ -157,12 +155,12 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
         """Calls super()._pre_tune() (finds max batch size) then profiles TorchEager as baseline."""
-        super()._pre_tune(module, name, graph_spec, data, device, cache_dir)
+        super()._pre_tune(module, name, graph_spec, samples, device, cache_dir)
         self.perf_validation_results = []
         self._baseline_backend = None
         self._baseline_result = None
@@ -180,8 +178,8 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         baseline_cache_dir.mkdir(parents=True)
         try:
             backend = TorchEagerBackend()
-            backend = backend.build(module, graph_spec, deepcopy(data), device, baseline_cache_dir)
-            result = self._measure(backend, name, graph_spec, data, profiling_cfg)
+            backend = backend.build(module, graph_spec, samples, device, baseline_cache_dir)
+            result = self._measure(backend, name, graph_spec, samples, profiling_cfg)
             self._baseline_backend = backend
             self._baseline_result = result
             report_graph_baseline_metric(self._metric_label, result.metric)
@@ -200,11 +198,11 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ) -> Backend:
-        """Tunes given torch module with provided graph_spec and data."""
+        """Tune a torch module with the provided graph specification and samples."""
         log(
             "⏳ Executing strategy `%s` on module `%s` (graph: %s)",
             self.__class__.__name__,
@@ -215,7 +213,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         batching = graph_spec.input_spec.has_batch_axis() and graph_spec.get_max_batch_size() > 1
         max_batch_size = graph_spec.get_max_batch_size()
 
-        best = self._run_backends(module, name, graph_spec, data, device, cache_dir, batching, max_batch_size)
+        best = self._run_backends(module, name, graph_spec, samples, device, cache_dir, batching, max_batch_size)
         winner = self._resolve_winner(best)
         winner.backend.activate()
         log("🎯 Strategy %s execution finished:", self.__class__.__name__, sink=self._sink)
@@ -240,7 +238,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
         batching: bool,
@@ -251,12 +249,12 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
 
         for backend in self._backends:
             log_file = self._log_file(cache_dir / backend.key(), "build.log")
-            built = self._build_and_validate_backend(backend, module, name, graph_spec, data, device, cache_dir)
+            built = self._build_and_validate_backend(backend, module, name, graph_spec, samples, device, cache_dir)
             if built is None:
                 continue
             try:
                 result = self._measure(
-                    built, name, graph_spec, data, self._get_profiling_config(batching, max_batch_size)
+                    built, name, graph_spec, samples, self._get_profiling_config(batching, max_batch_size)
                 )
                 self.backend_results[-1].update(result.to_json_dict(self._metric_label))
                 report_backend_metric(self._metric_label, built.describe(), result.metric)
@@ -344,9 +342,9 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
             raise RuntimeError("No correct backend found")
         return best
 
-    def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, data: Sequence[Sample]):
+    def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, samples: SampleStore):
         """Emits a speedup line after tuning completes."""
-        super()._post_tune(backend, name, graph_spec, data)
+        super()._post_tune(backend, name, graph_spec, samples)
         if backend is None:
             return
         result = next(

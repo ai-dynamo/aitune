@@ -12,7 +12,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.task.profiling import (
@@ -38,7 +38,7 @@ _PATCH_FIND_MAX_THROUGHPUT = (
 class _ConcreteExtension(PerformanceValidationMixin, FindMaxBatchSizeMixin, TuneStrategy):
     """Minimal concrete subclass for unit testing (TuneStrategy is abstract)."""
 
-    def _tune(self, module, name, graph_spec, data, device, cache_dir):
+    def _tune(self, module, name, graph_spec, samples, device, cache_dir):
         raise NotImplementedError
 
     def _describe_parts(self):
@@ -86,7 +86,7 @@ def mock_graph_spec():
 
 @pytest.fixture
 def mock_data():
-    return [MagicMock(spec=Sample)]
+    return MagicMock(spec=SampleStore)
 
 
 @pytest.fixture

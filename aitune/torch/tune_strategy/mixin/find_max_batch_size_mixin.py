@@ -6,8 +6,6 @@ Looks for best batch size for the module using Torch Eager backend.
 """
 
 import traceback
-from collections.abc import Sequence
-from copy import deepcopy
 from pathlib import Path
 
 import torch
@@ -16,7 +14,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.utils.logging import control_output
@@ -52,7 +50,7 @@ class FindMaxBatchSizeMixin(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
@@ -64,13 +62,13 @@ class FindMaxBatchSizeMixin(TuneStrategy):
             try:
                 backend = self._find_max_batch_size_backend_class()
                 with control_output(log_file=build_log_file):
-                    backend.build(module, graph_spec, deepcopy(data), device, find_max_batch_size_cache_dir)
+                    backend.build(module, graph_spec, samples, device, find_max_batch_size_cache_dir)
 
                 max_batch_size, max_throughput, _ = find_max_throughput_for_backend(
                     backend,
                     name,
                     graph_spec,
-                    data,
+                    samples,
                     self.profiling_config,
                 )
                 self._logger.info(
@@ -79,7 +77,7 @@ class FindMaxBatchSizeMixin(TuneStrategy):
                     max_batch_size,
                     max_throughput,
                 )
-                graph_spec.update_max_batch_size(data[0], max_batch_size)
+                graph_spec.update_max_batch_size(samples[0], max_batch_size)
             except Exception:
                 error_log_file = self._log_file(find_max_batch_size_cache_dir, "error.log")
                 error_log_file.write_text(f"Build log file: {build_log_file}\n\nError:\n{traceback.format_exc()}")
@@ -91,10 +89,10 @@ class FindMaxBatchSizeMixin(TuneStrategy):
         module: nn.Module,
         name: str,
         graph_spec: GraphSpec,
-        data: Sequence[Sample],
+        samples: SampleStore,
         device: torch.device,
         cache_dir: Path,
     ):
         """Extends tune method to find max batch size."""
-        super()._pre_tune(module, name, graph_spec, data, device, cache_dir)
-        self.find_max_batch_size(module, name, graph_spec, data, device, cache_dir)
+        super()._pre_tune(module, name, graph_spec, samples, device, cache_dir)
+        self.find_max_batch_size(module, name, graph_spec, samples, device, cache_dir)

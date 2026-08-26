@@ -11,7 +11,7 @@ import torch.nn as nn
 from aitune.torch.backend.torch_eager import TorchEagerBackend, TorchEagerBackendConfig
 from aitune.torch.checkpoint.storage_tasks import TorchLoadTask, TorchSaveTask
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import Sample
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -46,7 +46,7 @@ def backend_build(backend, dtype, model, sample_data, tmp_path, device="cuda"):
     data = move_to_dtype(sample_data, dtype)
     mock_graph_spec = Mock(spec=GraphSpec)
     mock_graph_spec.name = "test"
-    backend = backend.build(model, graph_spec=mock_graph_spec, data=data, device=device, cache_dir=tmp_path)
+    backend = backend.build(model, graph_spec=mock_graph_spec, samples=data, device=device, cache_dir=tmp_path)
     return backend
 
 

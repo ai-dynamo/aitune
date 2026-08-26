@@ -13,7 +13,7 @@ from aitune.torch.backend import (
 )
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torchao_backend import TorchAOBackend
-from tests.utilities.helpers import make_graph_spec, requires_cuda
+from tests.utilities.helpers import make_graph_spec, make_sample_store, requires_cuda
 
 
 class Latch:
@@ -38,7 +38,8 @@ def build_backend(backend: Backend, torch_device: torch.device, tmp_path: Path):
     args = (x, Latch())
     kwargs = {}
     graph_spec = make_graph_spec(model.forward, (args, kwargs), x, name="test_model")
-    backend.build(model, graph_spec, [(args, kwargs)], device=torch_device, cache_dir=tmp_path)
+    samples = make_sample_store([(args, kwargs)], tmp_path)
+    backend.build(model, graph_spec, samples, device=torch_device, cache_dir=tmp_path)
 
 
 @requires_cuda

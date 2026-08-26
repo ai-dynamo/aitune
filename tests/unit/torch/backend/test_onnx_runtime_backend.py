@@ -17,7 +17,7 @@ from aitune.torch.backend.onnx_runtime_backend import (
     ONNXRuntimeBackendConfig,
 )
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.recording_module import Sample
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
@@ -55,8 +55,8 @@ def model(torch_device) -> nn.Module:
 
 
 @pytest.fixture
-def sample_data(torch_device) -> list[Sample]:
-    return ToyTorchModel().samples(batch_sizes=[1], device=torch_device)
+def sample_data(torch_device, tmp_path) -> SampleStore:
+    return ToyTorchModel().sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
 
 @pytest.fixture
@@ -235,7 +235,7 @@ def test_build_returns_active_backend(mock_onnx, backend, model, graph_spec, sam
 
 @requires_cuda
 def test_build_warms_up_execution_provider_with_recorded_samples(mock_onnx, backend, model, torch_device, tmp_path):
-    samples = model.samples(batch_sizes=[1, 2, 3], device=torch_device)
+    samples = model.sample_store(tmp_path, batch_sizes=[1, 2, 3], device=torch_device)
     graph_spec = model.graph_spec(batch_sizes=[1, 2, 3], device=torch_device)
 
     backend.build(model, graph_spec, samples, device=torch_device, cache_dir=tmp_path)
@@ -297,7 +297,7 @@ def test_build_dynamo_static_graph_no_dynamic_shapes(mock_onnx, mocker, torch_de
 
     toy = ToyTorchModel().to(torch_device)
     gs = toy.graph_spec(batch_sizes=[2], device=torch_device)
-    samples = toy.samples(batch_sizes=[2], device=torch_device)
+    samples = toy.sample_store(tmp_path, batch_sizes=[2], device=torch_device)
 
     ONNXRuntimeBackend().build(toy, gs, samples, device=torch_device, cache_dir=tmp_path)
     _, call_kwargs = export_mock.call_args
@@ -387,7 +387,7 @@ def test_to_dict_contains_required_keys(mock_onnx, backend, model, graph_spec, s
     assert state[ONNXRuntimeBackend.STATE_DEVICE] == torch_device
     assert ONNXRuntimeBackend.STATE_GRAPH_SPEC in state
     assert ONNXRuntimeBackend.STATE_OUTPUT_OBJECT in state
-    assert state[ONNXRuntimeBackend.STATE_SAMPLES] == backend._samples.artifact
+    assert state[ONNXRuntimeBackend.STATE_SAMPLES] == backend._samples.to_dict()
 
 
 @requires_cuda
