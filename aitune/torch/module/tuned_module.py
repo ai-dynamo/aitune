@@ -8,7 +8,7 @@ from typing import Any
 import torch
 
 from aitune.global_context import MODULE_CONTEXT_KEY, global_context
-from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.backend import Backend, BuildMode
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
 from aitune.torch.module.forward_signature import ForwardSignature
@@ -152,7 +152,7 @@ class TunedModule:
         is_any_jit = False
         for sample_metadata, backend in self._backends.items():
             backends_data.append((sample_metadata.to_dict(), backend.to_dict()))  # pytype: disable=attribute-error
-            if backend.is_jit:  # pytype: disable=attribute-error
+            if backend.build_mode == BuildMode.JUST_IN_TIME:
                 is_any_jit = True
 
         return {

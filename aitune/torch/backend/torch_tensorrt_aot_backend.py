@@ -114,8 +114,6 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
 class TorchTensorRTAotBackend(Backend):
     """Backend that compiles model using TensorRT."""
 
-    is_jit = False
-
     # State dictionary keys
     STATE_TYPE = "type"
     EXPORTED_MODEL_PATH_KEY = "exported_model_path"

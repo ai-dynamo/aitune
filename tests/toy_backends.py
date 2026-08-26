@@ -6,12 +6,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.backend import Backend, BuildMode
 from aitune.torch.module.sample_store import SampleStore
 
 
 class SleepBackend(Backend):
     """Backend that simulate an inference using sleep()."""
+
+    _build_mode = BuildMode.JUST_IN_TIME
 
     def __init__(self, sleep_time: float = 0.001):
         super().__init__()
@@ -40,9 +42,6 @@ class SleepBackend(Backend):
 
     def _deploy(self):
         pass
-
-    def is_jit(self) -> bool:
-        return True
 
     @property
     def name(self) -> str:

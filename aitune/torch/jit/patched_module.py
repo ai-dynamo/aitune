@@ -15,7 +15,7 @@ import torch
 import wrapt
 
 from aitune.global_context import MODULE_CONTEXT_KEY, global_context
-from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.backend import Backend, BuildMode
 from aitune.torch.config import config as global_config
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.module.graph_spec import GraphSpec
@@ -625,7 +625,7 @@ class PatchedModule:
         if not backends:
             return
 
-        if any(backend.is_jit for backend in backends.values()):
+        if any(backend.build_mode == BuildMode.JUST_IN_TIME for backend in backends.values()):
             return
 
         with annotate("Offloading module to meta device"):

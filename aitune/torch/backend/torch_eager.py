@@ -12,7 +12,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 
@@ -38,6 +38,8 @@ class TorchEagerBackend(Backend):
     and required code changes from the user.
     """
 
+    _build_mode = BuildMode.JUST_IN_TIME
+
     # State dictionary keys
     STATE_TYPE = "type"
     STATE_CONFIG = "config"
@@ -52,10 +54,6 @@ class TorchEagerBackend(Backend):
         self._orig_module = None
         self._graph_spec = None
         self._required_casting_dtype = None
-
-    def is_jit(self) -> bool:
-        """Returns True if the backend is a JIT backend."""
-        return True
 
     def key(self) -> str:
         """Returns the key of the backend."""

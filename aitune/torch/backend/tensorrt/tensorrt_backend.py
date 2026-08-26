@@ -191,8 +191,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
     engines for optimized inference.
     """
 
-    is_jit = False
-
     # State dictionary keys
     STATE_TYPE = "type"
     STATE_ENGINE_PATH = "engine_path"

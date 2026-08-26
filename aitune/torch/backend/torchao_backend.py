@@ -36,7 +36,7 @@ except ImportError:
     MX_FORMATS_AVAILABLE = False
 
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
@@ -202,7 +202,7 @@ class TorchAOBackend(Backend):
     If you would like to use customize quantization, you can pass in a quantization config.
     """
 
-    is_jit = True
+    _build_mode = BuildMode.JUST_IN_TIME
 
     # State dictionary keys
     STATE_TYPE = "type"

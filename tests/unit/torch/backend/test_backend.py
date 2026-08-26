@@ -10,8 +10,9 @@ from unittest.mock import Mock
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import BackendConfig, DummyBackend
+from aitune.torch.backend.backend import BackendConfig, BuildMode, DummyBackend
 from aitune.utils.hashing import hash_string
+from tests.toy_backends import SleepBackend
 
 
 @dataclass
@@ -59,6 +60,11 @@ def test_backend_build_releases_unused_memory(mocker, tmp_path):
 
     collect.assert_called_once()
     empty_cache.assert_called_once()
+
+
+def test_backend_exposes_build_mode():
+    assert DummyBackend().build_mode == BuildMode.AHEAD_OF_TIME
+    assert SleepBackend().build_mode == BuildMode.JUST_IN_TIME
 
 
 def test_backend_config_key():

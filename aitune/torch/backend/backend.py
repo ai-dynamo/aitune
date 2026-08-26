@@ -84,8 +84,7 @@ class BackendState(Enum):
         _deploy(): Deploys backend, changes state to DEPLOYED
         _infer(): Runs inference with the given arguments
 
-    and add one property:
-        is_jit - returns True if the backend is a JIT backend
+    Backends build ahead of time by default. JIT backends override ``_build_mode``.
     """
 
     INIT = "init"
@@ -93,6 +92,13 @@ class BackendState(Enum):
     ACTIVE = "active"
     CHECKPOINT_LOADED = "checkpoint_loaded"
     DEPLOYED = "deployed"
+
+
+class BuildMode(str, Enum):
+    """Timing used by a backend to build the tuned module."""
+
+    AHEAD_OF_TIME = "ahead_of_time"
+    JUST_IN_TIME = "just_in_time"
 
 
 @dataclass
@@ -164,6 +170,7 @@ class Backend(ABC):
 
     # Supported devices types
     _devices: ClassVar[list[str]] = ["cpu", "cuda"]
+    _build_mode: ClassVar[BuildMode] = BuildMode.AHEAD_OF_TIME
 
     def __init__(self):
         """Initialize the backend."""
@@ -333,13 +340,9 @@ class Backend(ABC):
         return self._device
 
     @property
-    @abstractmethod
-    def is_jit(self) -> bool:
-        """Returns True if the backend is a JIT backend.
-
-        This method ensures that the backend has this property defined.
-        """
-        ...
+    def build_mode(self) -> BuildMode:
+        """Return when the backend builds the tuned module."""
+        return self._build_mode
 
     @property
     def is_active(self) -> bool:
@@ -434,7 +437,6 @@ class Backend(ABC):
 class DummyBackend(Backend):
     """Dummy backend for testing purposes."""
 
-    is_jit = False
     _devices = ["cpu", "cuda"]
 
     def key(self) -> str:

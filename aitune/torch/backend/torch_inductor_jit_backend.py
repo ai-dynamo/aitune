@@ -13,7 +13,7 @@ from typing import Any, get_args
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
@@ -94,7 +94,7 @@ class TorchInductorJitBackendConfig(BackendConfig):
 class TorchInductorJitBackend(Backend):
     """Backend that does torch compilation with Inductor."""
 
-    is_jit = True
+    _build_mode = BuildMode.JUST_IN_TIME
 
     # State dictionary keys
     STATE_TYPE = "type"

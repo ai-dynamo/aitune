@@ -117,8 +117,6 @@ class ONNXRuntimeBackend(Backend):
         ait.load(model, "model.ait")
     """
 
-    is_jit = False
-
     # State dictionary keys
     STATE_TYPE = "type"
     STATE_ONNX_MODEL_PATH = "onnx_model_path"

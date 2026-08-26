@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 
 from aitune.exceptions import AITuneError
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode
 from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
@@ -116,7 +116,7 @@ class TorchTensorRTJitBackend(Backend):
     Backend does not use intermediate formats, and compiled model is not stored.
     """
 
-    is_jit = True
+    _build_mode = BuildMode.JUST_IN_TIME
 
     # State dictionary keys
     STATE_TYPE = "type"

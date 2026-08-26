@@ -12,7 +12,7 @@ from typing import Any, cast
 import torch
 import wrapt
 
-from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.backend import Backend, BuildMode
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
 from aitune.torch.dynamic_shapes import DynamicShapes, validate_dynamic_shape_definitions
@@ -514,7 +514,7 @@ class Module(wrapt.CallableObjectProxy):
         if not backends:
             return
 
-        if any(backend.is_jit for backend in backends.values()):
+        if any(backend.build_mode == BuildMode.JUST_IN_TIME for backend in backends.values()):
             return None
 
         with annotate("Offloading module to meta device"):

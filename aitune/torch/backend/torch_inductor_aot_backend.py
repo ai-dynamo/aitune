@@ -61,8 +61,6 @@ class TorchInductorAotBackend(Backend):
         ait.load(model, "model.ait")
     """
 
-    is_jit = False
-
     # State dictionary keys
     STATE_TYPE = "type"
     STATE_COMPILED_MODEL_PATH = "compiled_model_path"
