@@ -32,14 +32,22 @@ _cuda_profiler_primed = False
 
 
 def prime_cuda_profiler() -> None:
-    """Prime CUDA profiling with a throwaway first session."""
+    """Initialize Kineto/CUPTI with one discarded GPU-active session.
+
+    Some profiler combinations omit correlated CUDA activities from the first
+    session in a process. Running a real kernel exercises CUPTI's device
+    activity and CPU-to-GPU correlation paths; synchronizing keeps that work
+    inside the discarded capture. This process-level priming is separate from
+    the per-session throwaway kernel used by ``profile``.
+    """
     global _cuda_profiler_primed  # noqa: PLW0603
 
     if _cuda_profiler_primed:
         return
 
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]):
-        pass
+        torch.zeros(1, device="cuda").relu_()
+        torch.cuda.synchronize()
 
     _cuda_profiler_primed = True
 
@@ -126,7 +134,9 @@ class ModuleFunctionKernelProfiler:
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA is required to profile module and function kernel candidates.")
 
-        prime_cuda_profiler()  # required by some torch versions
+        # Discard the process's first profiler session before collecting model events; see the helper's rationale.
+        prime_cuda_profiler()
+
         if warmup_iterations:
             with torch.no_grad():
                 for _ in range(warmup_iterations):
@@ -139,6 +149,11 @@ class ModuleFunctionKernelProfiler:
             with self._record_functional_calls():
                 with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
                     with torch.no_grad():
+                        # Process-level priming above handles profiler stacks that lose the first complete session.
+                        # Some stacks additionally lose the first kernel of each later session, so sacrifice an
+                        # unattributed kernel here. If CUPTI captures it, _match_events_with_data ignores it because
+                        # it has no module/function parent.
+                        torch.zeros(1, device="cuda").relu_()
                         self._run_inference(function, data)
 
         torch.cuda.empty_cache()
