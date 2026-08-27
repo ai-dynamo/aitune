@@ -128,6 +128,7 @@ class TorchInductorJitBackend(Backend):
         # Kept only for loading checkpoints written before samples became disk-backed.
         self._data = None
         self._compile_dynamic = self._config.dynamic
+        self._infer_impl = self._infer_no_autocast
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -183,33 +184,26 @@ class TorchInductorJitBackend(Backend):
 
     def _compile(self):
         logger.info("Start compiling torch module.")
-        with (
-            torch.autocast(
-                device_type=str(self._device.type),
-                dtype=self._config.autocast_dtype,
-                enabled=self._config.autocast_enabled,
-            ),
-            torch.no_grad(),
-        ):
-            self._orig_module.to(self._device)
-            self._compiled_module = torch.compile(
-                self._orig_module,
-                fullgraph=self._config.fullgraph,
-                dynamic=self._compile_dynamic,
-                mode=self._config.mode,
-                options=self._config.options,
-            )
+        self._orig_module.to(self._device)
 
-            for args, kwargs in self._iter_samples():
-                self._compiled_module(*deepcopy(args), **deepcopy(kwargs))
+        self._compiled_module = torch.compile(
+            self._orig_module,
+            fullgraph=self._config.fullgraph,
+            dynamic=self._compile_dynamic,
+            mode=self._config.mode,
+            options=self._config.options,
+        )
+
+        self._select_infer_impl()
+        for args, kwargs in self._iter_samples():
+            self._infer_impl(*deepcopy(args), **deepcopy(kwargs))
         logger.info("Module has been compiled.")
 
     def _activate(self):
         """Activates backend."""
         if self._compiled_module is None:  # TBD pb: after introducing module states this should be changed
             self._compile()
-        if self._config.autocast_enabled:
-            self._infer = self._infer_with_autocast
+        self._select_infer_impl()
 
     def _infer_with_autocast(self, *args: Any, **kwargs: Any) -> Any:
         """Runs inference with the given arguments.
@@ -233,10 +227,8 @@ class TorchInductorJitBackend(Backend):
                     return res.to(self._required_casting_dtype)
         return res
 
-    def _infer(self, *args: Any, **kwargs: Any) -> Any:
+    def _infer_no_autocast(self, *args: Any, **kwargs: Any) -> Any:
         """Runs inference with the given arguments. Does not use autocast.
-
-        It can be replaced at runtime by _infer_with_autocast.
 
         Args:
             *args: inference arguments
@@ -247,6 +239,22 @@ class TorchInductorJitBackend(Backend):
         """
         with torch.no_grad():
             return self._compiled_module(*args, **kwargs)
+
+    def _select_infer_impl(self):
+        """Select the inference implementation based on configuration."""
+        self._infer_impl = self._infer_with_autocast if self._config.autocast_enabled else self._infer_no_autocast
+
+    def _infer(self, *args: Any, **kwargs: Any) -> Any:
+        """Run inference using the implementation selected for the configuration.
+
+        Args:
+            *args: inference arguments
+            **kwargs: inference keyword arguments
+
+        Returns:
+            Any: The result of the inference.
+        """
+        return self._infer_impl(*args, **kwargs)
 
     def _deactivate(self):
         """Deactivates backend."""

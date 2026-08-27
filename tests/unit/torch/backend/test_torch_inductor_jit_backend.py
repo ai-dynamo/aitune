@@ -93,6 +93,28 @@ def test_torch_inductor_build_keeps_sample_store_without_retaining_data(mocker, 
     assert TorchInductorJitBackend.STATE_DATA not in state
 
 
+def test_torch_inductor_warmup_uses_autocast_inference(mocker, tmp_path):
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1])
+    samples = toy.sample_store(tmp_path, batch_sizes=[1])
+    mocker.patch("aitune.torch.backend.torch_inductor_jit_backend.torch.compile", return_value=toy)
+    backend = TorchInductorJitBackend(
+        TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=torch.bfloat16)
+    )
+    mocker.patch.object(backend, "_get_required_casting_dtype", return_value=None)
+    infer_with_autocast = mocker.spy(backend, "_infer_with_autocast")
+
+    backend.build(
+        toy,
+        graph_spec=graph_spec,
+        samples=samples,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
+
+    infer_with_autocast.assert_called_once()
+
+
 def test_torch_inductor_loads_legacy_inline_samples(mocker, tmp_path):
     toy = ToyTorchModel().eval()
     graph_spec = toy.graph_spec(batch_sizes=[1])

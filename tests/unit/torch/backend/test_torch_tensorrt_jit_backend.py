@@ -104,6 +104,33 @@ def test_torch_tensorrt_build_auto_dynamic_does_not_mutate_config(mocker, tmp_pa
     assert compile_mock.call_args.kwargs["dynamic"] is True
 
 
+def test_torch_tensorrt_warmup_uses_autocast_inference(mocker, tmp_path):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
+    mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
+    autocast = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.autocast")
+
+    toy = ToyTorchModel().eval()
+    graph_spec = toy.graph_spec(batch_sizes=[1])
+    samples = toy.sample_store(tmp_path, batch_sizes=[1])
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile", return_value=toy)
+    config = TorchTensorRTJitBackendConfig(
+        compile_config=TorchTensorRTTestConfig(workspace_size=1),
+        autocast_enabled=True,
+        autocast_dtype=torch.bfloat16,
+    )
+
+    TorchTensorRTJitBackend(config).build(
+        toy,
+        graph_spec=graph_spec,
+        samples=samples,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
+
+    autocast.assert_called_once_with(device_type="cpu", dtype=torch.bfloat16, enabled=True)
+
+
 def test_torch_tensorrt_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
     mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
     mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")

@@ -153,6 +153,7 @@ class TorchTensorRTJitBackend(Backend):
         # Kept only for loading checkpoints written before samples became disk-backed.
         self._data = None
         self._compile_dynamic = self._config.dynamic
+        self._infer_impl = self._infer_no_autocast
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -175,7 +176,9 @@ class TorchTensorRTJitBackend(Backend):
 
     def _activate(self):
         """Activate backend."""
-        self._compile()
+        if self._compiled_module is None:  # TBD pb: after introducing module states this should be changed
+            self._compile()
+        self._select_infer_impl()
 
     def _compile(self):
         """Compile module with Torch compile."""
@@ -198,9 +201,29 @@ class TorchTensorRTJitBackend(Backend):
             dynamic=self._compile_dynamic,
         )
 
+        self._select_infer_impl()
         for args, kwargs in self._iter_samples():
-            self._compiled_module(*args, **kwargs)
+            self._infer_impl(*args, **kwargs)
         logger.info("Module has been compiled.")
+
+    def _infer_with_autocast(self, *args: Any, **kwargs: Any) -> Any:
+        """Run inference with autocast enabled."""
+        with torch.no_grad():
+            with torch.autocast(
+                device_type=str(self._device.type),
+                dtype=self._config.autocast_dtype,
+                enabled=True,
+            ):
+                return self._compiled_module(*args, **kwargs)
+
+    def _infer_no_autocast(self, *args: Any, **kwargs: Any) -> Any:
+        """Run inference without autocast."""
+        with torch.no_grad():
+            return self._compiled_module(*args, **kwargs)
+
+    def _select_infer_impl(self):
+        """Select the inference implementation based on configuration."""
+        self._infer_impl = self._infer_with_autocast if self._config.autocast_enabled else self._infer_no_autocast
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with TensorRT engine thought Torch compile.
@@ -218,13 +241,7 @@ class TorchTensorRTJitBackend(Backend):
         if not hasattr(self, "_compiled_module") or self._compiled_module is None:
             raise AITuneError("backend is not build. Please call build() first.")
 
-        with (
-            torch.autocast(
-                device_type=str(self._device), dtype=self._config.autocast_dtype, enabled=self._config.autocast_enabled
-            ),
-            torch.no_grad(),
-        ):
-            return self._compiled_module(*args, **kwargs)
+        return self._infer_impl(*args, **kwargs)
 
     def _deactivate(self):
         """Deactivate backend and cleanup."""
