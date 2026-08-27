@@ -76,7 +76,7 @@ jobs:
       - name: Install AITune test dependencies
         env:
           PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
-        run: python -m pip install --disable-pip-version-check -e . pytest
+        run: python -m pip install --disable-pip-version-check -e . pytest pytest-mock
 
       - name: Run representative AITune CUDA test
         shell: bash
