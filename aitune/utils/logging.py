@@ -16,6 +16,15 @@ from aitune.global_context import LIBRARY_LOGGING_KEY, global_context
 from aitune.utils.env_vars import CONSOLE_OUTPUT_ENABLE
 
 
+def write_exception_log(cache_dir: Path, exception: BaseException) -> Path:
+    """Write an exception traceback to a cache directory."""
+    error_log = cache_dir / "error.log"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    formatted_traceback = "".join(traceback.format_exception(exception))
+    error_log.write_text(formatted_traceback, encoding="utf-8")
+    return error_log
+
+
 def setup_logging(
     level: int | str | None = None,
     format_string: str = "%(asctime)s - %(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s",

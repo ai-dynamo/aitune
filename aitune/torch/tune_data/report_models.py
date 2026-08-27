@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import traceback as tb
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -12,27 +11,42 @@ from typing import Any
 from aitune.__version__ import __version__
 from aitune.torch.config import AITuneMode
 
+_EXCEPTION_MESSAGE_MAX_BYTES = 1024
+_TRUNCATION_MARKER = "\n... [truncated] ...\n"
+
 
 @dataclass(frozen=True)
 class ExceptionInfo:
-    """Serializable exception info (type/message/traceback)."""
+    """Minimal exception summary persisted in tuning telemetry."""
 
     type: str
     message: str
-    traceback: str
 
     @classmethod
     def from_exception(cls, exc: BaseException) -> ExceptionInfo:
         """Create a persisted exception record from a Python exception."""
-        traceback = "".join(tb.format_exception(type(exc), exc, exc.__traceback__))
         return cls(
             type=type(exc).__name__,
-            message=str(exc),
-            traceback=traceback,
+            message=_truncate_utf8_middle(str(exc), _EXCEPTION_MESSAGE_MAX_BYTES),
         )
 
 
-SCHEMA_VERSION = 3
+def _truncate_utf8_middle(text: str, max_bytes: int) -> str:
+    """Truncate text by encoded size while retaining failure context and root cause."""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+
+    marker = _TRUNCATION_MARKER.encode("utf-8")
+    retained_bytes = max_bytes - len(marker)
+    head_bytes = retained_bytes // 2
+    tail_bytes = retained_bytes - head_bytes
+    head = encoded[:head_bytes].decode("utf-8", errors="ignore")
+    tail = encoded[-tail_bytes:].decode("utf-8", errors="ignore")
+    return f"{head}{_TRUNCATION_MARKER}{tail}"
+
+
+SCHEMA_VERSION = 4
 
 
 @dataclass(kw_only=True)

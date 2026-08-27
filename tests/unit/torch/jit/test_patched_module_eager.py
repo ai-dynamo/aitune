@@ -236,6 +236,7 @@ def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback
     config.device = torch.device("cpu")
     config.detect_graph_breaks = False
     config.max_depth_level = 2
+    config.cache_dir = tmp_path / "jit-cache"
     config.strategy = ParentFailsStrategy()
 
     with prepare_for_jit_tuning():
@@ -252,6 +253,9 @@ def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback
     assert parent["module_class"].endswith("ParentWithChild")
     assert child["module_class"] == "torch.nn.modules.linear.Linear"
     assert child["allowed_to_tune"] is False
+    error_logs = list(config.cache_dir.glob("*/error.log"))
+    assert len(error_logs) == 1
+    assert "RuntimeError: parent tune failed" in error_logs[0].read_text()
 
 
 @requires_cuda

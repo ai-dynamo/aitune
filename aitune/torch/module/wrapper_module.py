@@ -135,6 +135,11 @@ class Module(wrapt.CallableObjectProxy):
         return self._self_name
 
     @property
+    def cache_dir(self) -> Path:
+        """Get the module cache directory."""
+        return self._module_cache_dir()
+
+    @property
     def device(self) -> torch.device:
         """Get the device of the module.
 
@@ -345,7 +350,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:
         """Create a cache directory for the graph."""
-        cache_dir = self._module_cache_dir() / graph_spec.name
+        cache_dir = self.cache_dir / graph_spec.name
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
 

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Test for tune function."""
 
+import logging
 from collections import Counter
 from unittest.mock import Mock
 
@@ -12,6 +13,7 @@ from torch.utils.data import Dataset
 from aitune.torch import tuning
 from aitune.torch.config import DEFAULT_DEVICE
 from aitune.torch.dataloader import DataLoaderFactory
+from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tuning import tune
 
@@ -139,3 +141,27 @@ def test_tune_disable_external_logging(mocker):
 
     # then
     spy_libraries_logging.assert_called_once_with(True)
+
+
+def test_tune_logs_full_exception_for_ignored_module(mocker, caplog, aitune_cache_dir):
+    mock_module = Mock()
+    mock_module.name = "transformer"
+    mock_module.cache_dir = aitune_cache_dir / "transformer"
+    mock_module.state = ModuleState.RECORDING
+    mock_module.tune.side_effect = RuntimeError("transformer tuning exploded")
+
+    mocker.patch.dict(MODULE_REGISTRY.modules, {"transformer": mock_module}, clear=True)
+    mocker.patch("aitune.torch.tuning.setup_logging")
+
+    with caplog.at_level(logging.ERROR, logger="aitune.torch.tuning"):
+        tune(mock_module, DummyDataset(size=1), batch_sizes=[1], disable_external_logging=False)
+
+    error_record = next(record for record in caplog.records if "raised an exception" in record.message)
+    assert isinstance(error_record.exc_info[1], RuntimeError)
+    assert "Traceback (most recent call last)" in caplog.text
+    assert "RuntimeError: transformer tuning exploded" in caplog.text
+
+    error_log = aitune_cache_dir / "transformer" / "error.log"
+    assert str(error_log) in error_record.message
+    assert "Traceback (most recent call last)" in error_log.read_text()
+    assert "RuntimeError: transformer tuning exploded" in error_log.read_text()

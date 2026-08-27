@@ -156,8 +156,18 @@ def test_serialize_enum():
 
 
 def test_serialize_dataclass():
-    info = ExceptionInfo(type="ValueError", message="bad", traceback="tb")
-    assert json_serialize({"exc": info}) == {"exc": {"type": "ValueError", "message": "bad", "traceback": "tb"}}
+    info = ExceptionInfo(type="ValueError", message="bad")
+    assert json_serialize({"exc": info}) == {"exc": {"type": "ValueError", "message": "bad"}}
+
+
+def test_exception_info_limits_large_exception_payloads():
+    message = "failure context\n" + "graph node 🔥\n" * 10_000 + "root cause"
+    info = ExceptionInfo.from_exception(RuntimeError(message))
+
+    assert info.message.startswith("failure context")
+    assert info.message.endswith("root cause")
+    assert "truncated" in info.message
+    assert len(info.message.encode("utf-8")) <= 1024
 
 
 # ---------------------------------------------------------------------------
@@ -187,8 +197,7 @@ def test_tune_run_captures_exception(enable_reporting):
 
     # then
     report = json.loads(enable_reporting.read_text())
-    assert report["exception"]["type"] == "RuntimeError"
-    assert report["exception"]["message"] == "boom"
+    assert report["exception"] == {"type": "RuntimeError", "message": "boom"}
 
 
 # ---------------------------------------------------------------------------

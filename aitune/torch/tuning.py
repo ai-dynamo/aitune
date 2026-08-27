@@ -21,7 +21,7 @@ from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import report_tune_run
 from aitune.torch.utils.cuda_utils import synchronize as cuda_synchronize
 from aitune.torch.utils.device import get_device
-from aitune.utils.logging import libraries_logging, setup_logging
+from aitune.utils.logging import libraries_logging, setup_logging, write_exception_log
 from aitune.utils.monitoring import annotate
 from aitune.utils.timer import Timer
 
@@ -94,7 +94,8 @@ def tune(
                     with global_context:
                         global_context.set(MODULE_CONTEXT_KEY, module.name)
                         module.tune(device=device, dry_run=dry_run)
-                except Exception:
+                except Exception as e:
+                    _log_module_tuning_exception(module, e)
                     # If ignore_failing_modules is False, we will raise the error and stop tuning.
                     if not ignore_failing_modules:
                         raise
@@ -225,3 +226,23 @@ def _clear_cache():
     if cache_dir.exists():
         shutil.rmtree(cache_dir)
         logger.info("🧹 Cleared cache directory: %s", cache_dir)
+
+
+def _write_module_error_log(module: Module, exception: Exception) -> Path | None:
+    """Persist a module-level tuning traceback in its rank-specific cache."""
+    error_log = module.cache_dir / "error.log"
+    try:
+        write_exception_log(module.cache_dir, exception)
+    except OSError:
+        logger.warning("Failed to write module tuning error log: %s", error_log, exc_info=True)
+        return None
+    return error_log
+
+
+def _log_module_tuning_exception(module: Module, exception: Exception) -> None:
+    """Log a module-level tuning exception to the console and cache."""
+    error_log = _write_module_error_log(module, exception)
+    if error_log is None:
+        logger.exception("Tuning module `%s` raised an exception", module.name)
+    else:
+        logger.exception("Tuning module `%s` raised an exception (log file: %s)", module.name, error_log)

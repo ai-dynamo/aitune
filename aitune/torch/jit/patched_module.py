@@ -36,6 +36,7 @@ from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.graph_break_detector import GraphBreakDetector
 from aitune.torch.utils.module import count_parameters, format_num_parameters, get_module_device, offload
 from aitune.utils.disk_space import raise_if_out_of_space
+from aitune.utils.logging import write_exception_log
 from aitune.utils.monitoring import annotate
 
 PRINT_HIERARCHY_HEADER = "JIT Tuning Hierarchy:"
@@ -198,6 +199,7 @@ class PatchedModule:
                     self._offload(backends)
 
             except Exception as e:
+                current._log_tuning_exception(e)
                 # Out-of-space errors must halt the process — the cache disk is full
                 # and silently falling back to eager would mask the real cause.
                 raise_if_out_of_space(e, path=global_config.cache_dir)
@@ -430,9 +432,31 @@ class PatchedModule:
 
     def _create_graph_cache_dir(self, graph_spec_name: str) -> Path:
         """Create a cache directory for the graph."""
-        cache_dir = self._module_cache_dir() / graph_spec_name
+        cache_dir = self.cache_dir / graph_spec_name
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
+
+    @property
+    def cache_dir(self) -> Path:
+        """Get the module cache directory."""
+        return self._module_cache_dir()
+
+    def _write_error_log(self, exception: Exception) -> Path | None:
+        """Persist a tuning traceback in this module's cache directory."""
+        error_log = self.cache_dir / "error.log"
+        try:
+            return write_exception_log(self.cache_dir, exception)
+        except OSError:
+            logging.getLogger(__name__).warning("Failed to write JIT tuning error log: %s", error_log, exc_info=True)
+            return None
+
+    def _log_tuning_exception(self, exception: Exception) -> None:
+        """Log a JIT tuning exception and persist its traceback."""
+        error_log = self._write_error_log(exception)
+        message = f"JIT tuning failed for {self.fq_name}"
+        if error_log is not None:
+            message = f"{message} (log file: {error_log})"
+        logging.getLogger(__name__).debug(message, exc_info=True)
 
     def _module_cache_dir(self) -> Path:
         """Return this module's cache directory."""
