@@ -30,7 +30,6 @@ jobs:
     timeout-minutes: 240
     container:
       image: nvcr.io/nvidia/pytorch:26.05-py3
-      options: --user 0
     env:
       EXPECTED_GPU_COUNT: ${{ matrix.expected_gpu_count }}
       EXPECTED_GPU_MODEL: ${{ matrix.expected_gpu_model }}
@@ -80,7 +79,31 @@ jobs:
         run: python -m pip install --disable-pip-version-check -e . pytest
 
       - name: Run representative AITune CUDA test
-        run: python -m pytest -q tests/functional/pytorch/039_aitune_torch_profile_cuda_test.py
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import pwd
+
+          uid = os.getuid()
+          try:
+              pwd.getpwuid(uid)
+          except KeyError:
+              # NGC images may omit the non-root UID enforced by the runner pod.
+              original_getpwuid = pwd.getpwuid
+
+              def getpwuid(query_uid):
+                  if query_uid == uid:
+                      fields = ("aitune", "x", uid, os.getgid(), "", os.environ["HOME"], "/bin/bash")
+                      return pwd.struct_passwd(fields)
+                  return original_getpwuid(query_uid)
+
+              pwd.getpwuid = getpwuid
+
+          import pytest
+
+          raise SystemExit(pytest.main(["-q", "tests/functional/pytorch/039_aitune_torch_profile_cuda_test.py"]))
+          PY
 
       - name: Run four-GPU NCCL test
         if: ${{ !cancelled() && matrix.expected_gpu_count == 4 }}
