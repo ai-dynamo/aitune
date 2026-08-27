@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Validate AITune GPU runners
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate-runner:
+    name: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: prod-aitune-tester-l40s-v1
+            expected_gpu_count: 1
+            expected_gpu_model: L40S
+          - runner: prod-aitune-tester-l40s-4-v1
+            expected_gpu_count: 4
+            expected_gpu_model: L40S
+          - runner: prod-aitune-tester-rtx-pro-4500-v1
+            expected_gpu_count: 1
+            expected_gpu_model: RTX PRO 4500
+          - runner: prod-aitune-tester-rtx-pro-4500-4-v1
+            expected_gpu_count: 4
+            expected_gpu_model: RTX PRO 4500
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    container:
+      image: nvidia/cuda:13.0.1-base-ubuntu24.04
+    env:
+      EXPECTED_GPU_COUNT: ${{ matrix.expected_gpu_count }}
+      EXPECTED_GPU_MODEL: ${{ matrix.expected_gpu_model }}
+    steps:
+      - name: Validate GPU allocation and scratch storage
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t gpu_names < <(nvidia-smi --query-gpu=name --format=csv,noheader)
+          printf 'Allocated GPUs (%s):\n' "${#gpu_names[@]}"
+          printf '  %s\n' "${gpu_names[@]}"
+
+          if [[ "${#gpu_names[@]}" -ne "${EXPECTED_GPU_COUNT}" ]]; then
+            printf 'Expected %s GPUs, found %s\n' "${EXPECTED_GPU_COUNT}" "${#gpu_names[@]}" >&2
+            exit 1
+          fi
+
+          for gpu_name in "${gpu_names[@]}"; do
+            if [[ "${gpu_name}" != *"${EXPECTED_GPU_MODEL}"* ]]; then
+              printf 'Expected GPU model containing %q, found %q\n' "${EXPECTED_GPU_MODEL}" "${gpu_name}" >&2
+              exit 1
+            fi
+          done
+
+          shm_kib=$(df -Pk /dev/shm | awk 'NR == 2 {print $2}')
+          if [[ "${shm_kib}" -lt $((17 * 1024 * 1024)) ]]; then
+            printf '/dev/shm is smaller than expected: %s KiB\n' "${shm_kib}" >&2
+            exit 1
+          fi
+
+          scratch_file="/scratch/ops-8406-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf 'AITune runner smoke test\n' > "${scratch_file}"
+          test -s "${scratch_file}"
+          rm -f "${scratch_file}"
+
+          nvidia-smi
+          nvidia-smi topo -m
+          df -h /dev/shm /scratch
