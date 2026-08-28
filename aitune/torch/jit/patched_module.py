@@ -172,13 +172,16 @@ class PatchedModule:
                     for graph_spec in recording.graph_specs:
                         cache_dir = self._create_graph_cache_dir(graph_spec.name)
                         samples = recording.samples_for_graph_spec(graph_spec)
-                        if config.dry_run:
-                            self._simulate_dry_run(strategy, current, graph_spec, samples, device, cache_dir)
-                        else:
-                            with global_context:
-                                global_context.set(MODULE_CONTEXT_KEY, current.fq_name)
-                                backend = self._tune(strategy, current, graph_spec, samples, device, cache_dir)
-                            backends[graph_spec.input_spec] = backend
+                        try:
+                            if config.dry_run:
+                                self._simulate_dry_run(strategy, current, graph_spec, samples, device, cache_dir)
+                            else:
+                                with global_context:
+                                    global_context.set(MODULE_CONTEXT_KEY, current.fq_name)
+                                    backend = self._tune(strategy, current, graph_spec, samples, device, cache_dir)
+                                backends[graph_spec.input_spec] = backend
+                        finally:
+                            samples.evict_page_cache()
                     if backends:
                         current._wrapper = TunedModule(
                             backends,

@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Disk-backed sequence of recorded module inputs."""
 
+import logging
+import os
+import sys
 from collections.abc import Generator, Iterator, Sequence
 from pathlib import Path
 from typing import Any, overload
@@ -13,6 +16,8 @@ from aitune.torch.checkpoint.artifact import ArtifactPath
 Sample = tuple[tuple, dict]
 
 _SAMPLE_FILE_TEMPLATE = "sample-{index:05d}.pt"
+
+logger = logging.getLogger(__name__)
 
 
 class SampleStore(Sequence[Sample]):
@@ -103,6 +108,33 @@ class SampleStore(Sequence[Sample]):
             finally:
                 # Consumers may retain the sample; the iterator does not.
                 del sample
+
+    def evict_page_cache(self) -> None:
+        """Ask Linux to discard cached pages for all persisted samples.
+
+        Sample files remain available for checkpointing or rebuilding. This is a
+        best-effort optimization and is a no-op when ``posix_fadvise`` is unavailable.
+        """
+        fadvise = getattr(os, "posix_fadvise", None)
+        dontneed = getattr(os, "POSIX_FADV_DONTNEED", None)
+        if sys.platform != "linux" or fadvise is None or dontneed is None:
+            return
+
+        for index in range(len(self)):
+            path = self._artifact.path / self._sample_filename(index)
+            fd = None
+            try:
+                fd = os.open(path, os.O_RDWR)
+                os.fsync(fd)
+                fadvise(fd, 0, 0, dontneed)
+            except OSError:
+                logger.debug("Failed to evict sample file from the page cache: %s", path, exc_info=True)
+            finally:
+                if fd is not None:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        logger.debug("Failed to close sample file after page-cache eviction: %s", path, exc_info=True)
 
     @staticmethod
     def _map_location(device: torch.device | None):

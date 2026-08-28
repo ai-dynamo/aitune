@@ -267,11 +267,12 @@ def test_tune_dry_run(module, torch_device):
     assert module.state == ModuleState.RECORDING
 
 
-def test_tune(module, torch_device):
+def test_tune(module, torch_device, mocker):
     mock_backend = Mock()
     mock_backend.describe.return_value = "mock backend description"
     strategy = Mock()
     strategy.tune.return_value = mock_backend
+    evict_page_cache = mocker.spy(SampleStore, "evict_page_cache")
     global_config.strict_mode = True
 
     with pytest.raises(ValueError, match="Module: 'demo-identity' has not recorded any samples. Cannot tune it."):
@@ -283,6 +284,7 @@ def test_tune(module, torch_device):
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
 
     stores = _assert_sample_stores(strategy.tune, [[((1,), {"a": 1})], [((2,), {"b": 2})]])
+    assert [mock_call.args[0] for mock_call in evict_page_cache.call_args_list] == stores
 
     assert strategy.tune.call_args_list == [
         call(
@@ -314,8 +316,19 @@ def test_tune(module, torch_device):
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,
         ),
     ]
-
     assert module.state == ModuleState.TUNED
+
+
+def test_tune_evicts_sample_page_cache_on_failure(module, torch_device, mocker):
+    strategy = Mock()
+    strategy.tune.side_effect = RuntimeError("tuning failed")
+    evict_page_cache = mocker.spy(SampleStore, "evict_page_cache")
+    module(1)
+
+    with pytest.raises(RuntimeError, match="tuning failed"):
+        module.tune(strategy=strategy, device=torch_device)
+
+    evict_page_cache.assert_called_once()
 
 
 def test_tune_with_provided_strategy(torch_device):

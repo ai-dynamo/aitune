@@ -321,22 +321,25 @@ class Module(wrapt.CallableObjectProxy):
                 cache_dir = self._create_graph_cache_dir(graph_spec)
                 samples = recording.samples_for_graph_spec(graph_spec)
 
-                if dry_run:
-                    strategy.tune_dry_run(self.__wrapped__, self._self_name, graph_spec, samples, device, cache_dir)
-                    continue
+                try:
+                    if dry_run:
+                        strategy.tune_dry_run(self.__wrapped__, self._self_name, graph_spec, samples, device, cache_dir)
+                        continue
 
-                with report_graph_tune(graph_spec, strategy) as graph_result:
-                    try:
-                        self._restore_original_forward()
-                        backend = strategy.tune(
-                            self.__wrapped__, self._self_name, graph_spec, samples, device, cache_dir
-                        )
-                        self._handle_backend_added_hooks()
-                        backends[graph_spec.input_spec] = backend
-                        graph_result["selected_backend"] = backend.describe()
-                    finally:
-                        self._proxy_forward()
-                        graph_result["strategy_results"] = strategy.backend_results
+                    with report_graph_tune(graph_spec, strategy) as graph_result:
+                        try:
+                            self._restore_original_forward()
+                            backend = strategy.tune(
+                                self.__wrapped__, self._self_name, graph_spec, samples, device, cache_dir
+                            )
+                            self._handle_backend_added_hooks()
+                            backends[graph_spec.input_spec] = backend
+                            graph_result["selected_backend"] = backend.describe()
+                        finally:
+                            self._proxy_forward()
+                            graph_result["strategy_results"] = strategy.backend_results
+                finally:
+                    samples.evict_page_cache()
 
             if not dry_run:
                 self._self_prev_recording = recording

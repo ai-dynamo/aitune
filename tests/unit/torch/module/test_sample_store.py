@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for disk-backed sample storage."""
 
+import os
 import shutil
+from unittest.mock import call
 
 import pytest
 import torch
@@ -35,6 +37,77 @@ def test_sample_store_iterator_loads_fresh_samples(tmp_path):
     reloaded_args, reloaded_kwargs = next(store.iter_samples())
     torch.testing.assert_close(reloaded_args[0], torch.tensor([1.0]))
     torch.testing.assert_close(reloaded_kwargs["value"], torch.tensor([2.0]))
+
+
+def test_sample_store_evicts_linux_page_cache(mocker, tmp_path):
+    store = SampleStore.create(tmp_path, "samples")
+    store.append(((torch.tensor([1.0]),), {}))
+    store.append(((torch.tensor([2.0]),), {}))
+    mocker.patch("aitune.torch.module.sample_store.sys.platform", "linux")
+    mocker.patch("aitune.torch.module.sample_store.os.POSIX_FADV_DONTNEED", 4, create=True)
+    open_file = mocker.patch("aitune.torch.module.sample_store.os.open", side_effect=[10, 11])
+    fsync = mocker.patch("aitune.torch.module.sample_store.os.fsync")
+    fadvise = mocker.patch("aitune.torch.module.sample_store.os.posix_fadvise", create=True)
+    close = mocker.patch("aitune.torch.module.sample_store.os.close")
+
+    store.evict_page_cache()
+
+    assert open_file.call_args_list == [
+        call(tmp_path / "samples" / "sample-00000.pt", os.O_RDWR),
+        call(tmp_path / "samples" / "sample-00001.pt", os.O_RDWR),
+    ]
+    assert fsync.call_args_list == [call(10), call(11)]
+    assert fadvise.call_args_list == [call(10, 0, 0, 4), call(11, 0, 0, 4)]
+    assert close.call_args_list == [call(10), call(11)]
+
+
+@pytest.mark.parametrize(
+    ("platform", "fadvise", "dontneed"),
+    [
+        ("darwin", object(), 4),
+        ("linux", None, 4),
+        ("linux", object(), None),
+    ],
+)
+def test_sample_store_skips_page_cache_eviction_when_unsupported(mocker, tmp_path, platform, fadvise, dontneed):
+    store = SampleStore.create(tmp_path, "samples")
+    store.append(((torch.tensor([1.0]),), {}))
+    mocker.patch("aitune.torch.module.sample_store.sys.platform", platform)
+    mocker.patch("aitune.torch.module.sample_store.os.posix_fadvise", fadvise, create=True)
+    mocker.patch("aitune.torch.module.sample_store.os.POSIX_FADV_DONTNEED", dontneed, create=True)
+    open_file = mocker.patch("aitune.torch.module.sample_store.os.open")
+
+    store.evict_page_cache()
+
+    open_file.assert_not_called()
+
+
+def test_sample_store_continues_page_cache_eviction_after_failure(mocker, tmp_path):
+    store = SampleStore.create(tmp_path, "samples")
+    store.append(((torch.tensor([1.0]),), {}))
+    store.append(((torch.tensor([2.0]),), {}))
+    mocker.patch("aitune.torch.module.sample_store.sys.platform", "linux")
+    mocker.patch("aitune.torch.module.sample_store.os.POSIX_FADV_DONTNEED", 4, create=True)
+    mocker.patch("aitune.torch.module.sample_store.os.open", side_effect=[10, 11])
+    fsync = mocker.patch("aitune.torch.module.sample_store.os.fsync", side_effect=[OSError, None])
+    fadvise = mocker.patch("aitune.torch.module.sample_store.os.posix_fadvise", create=True)
+    close = mocker.patch("aitune.torch.module.sample_store.os.close")
+
+    store.evict_page_cache()
+
+    assert fsync.call_args_list == [call(10), call(11)]
+    fadvise.assert_called_once_with(11, 0, 0, 4)
+    assert close.call_args_list == [call(10), call(11)]
+
+
+def test_sample_store_samples_remain_readable_after_page_cache_eviction(tmp_path):
+    store = SampleStore.create(tmp_path, "samples")
+    store.append(((torch.tensor([1.0]),), {}))
+    store.append(((torch.tensor([2.0]),), {}))
+
+    store.evict_page_cache()
+
+    assert [args[0].item() for args, _ in store] == [1.0, 2.0]
 
 
 def test_sample_store_create_removes_existing_samples(tmp_path):

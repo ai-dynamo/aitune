@@ -21,6 +21,7 @@ from aitune.torch.jit.patched_module import (
     PatchedModule,
 )
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_tune_run_end
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy, TuneStrategy
@@ -238,6 +239,7 @@ def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback
     config.max_depth_level = 2
     config.cache_dir = tmp_path / "jit-cache"
     config.strategy = ParentFailsStrategy()
+    evict_page_cache = mocker.spy(SampleStore, "evict_page_cache")
 
     with prepare_for_jit_tuning():
         model = ParentWithChild()
@@ -256,6 +258,7 @@ def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback
     error_logs = list(config.cache_dir.glob("*/error.log"))
     assert len(error_logs) == 1
     assert "RuntimeError: parent tune failed" in error_logs[0].read_text()
+    assert evict_page_cache.call_count >= 1
 
 
 @requires_cuda
