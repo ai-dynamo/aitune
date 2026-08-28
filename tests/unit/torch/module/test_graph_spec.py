@@ -80,6 +80,33 @@ def test_update_shapes_seen_updates_input_and_output_specs():
     assert graph_spec.output_spec.tensor_specs[0].max_shape == [4, 7]
 
 
+def test_graph_spec_tracks_post_call_input_metadata():
+    input_spec = _input_metadata((1, 3), (2, 5))
+    post_input_spec = _input_metadata((4, 3), (2, 5))
+    graph_spec = GraphSpec(
+        name="test_graph",
+        input_spec=input_spec,
+        output_spec=_output_metadata((1, 7)),
+        forward_signature=FORWARD_SIGNATURE,
+        post_input_spec=post_input_spec,
+    )
+
+    assert graph_spec.input_spec is input_spec
+    assert graph_spec.post_input_spec is post_input_spec
+
+
+def test_graph_spec_allows_missing_post_call_metadata():
+    input_spec = _input_metadata((1, 3), (2, 5))
+    graph_spec = GraphSpec(
+        name="test_graph",
+        input_spec=input_spec,
+        output_spec=_output_metadata((1, 7)),
+        forward_signature=FORWARD_SIGNATURE,
+    )
+
+    assert graph_spec.post_input_spec is None
+
+
 def test_make_batch_normalizes_call_and_resizes_inputs():
     graph_spec = _batching_graph_spec()
 

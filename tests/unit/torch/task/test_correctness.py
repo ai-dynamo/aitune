@@ -11,9 +11,11 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.task.correctness import (
     CorrectnessDynamicShapeError,
+    CorrectnessInputMutationError,
     CorrectnessTensorShapeError,
     _check_output_correctness,
     _check_output_tensor_shapes,
+    _check_post_input_metadata,
     _dynamic_shape_boundary_samples,
     check_dynamic_shape_boundary_inference,
     check_inference_output_correctness,
@@ -98,17 +100,75 @@ def test_private_check_output_correctness_sample_scalar_nan():
 def test_check_inference_output_correctness_deepcopies_inputs():
     """Recorded-sample correctness should not mutate stored samples."""
     cache = []
-    data = [((cache,), {"cache": cache})]
+    data = [((cache,), {"mask": cache})]
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2)
 
     def infer(*args, **kwargs):
         args[0].append("not important, should be discarded")
-        kwargs["cache"].append("not important, should be discarded")
+        kwargs["mask"].append("not important, should be discarded")
         return torch.zeros(2, 4)
 
-    check_inference_output_correctness(data, output_spec, infer=infer, name="test_model.mock_backend")
+    graph_spec = make_graph_spec(_input_metadata(data[0], batch_size=1), output_spec)
+    check_inference_output_correctness(data, graph_spec, infer=infer, name="test_model.mock_backend")
 
     assert cache == []
+
+
+def test_check_inference_correctness_accepts_matching_input_mutations():
+    def forward(x, cache, feat_idx):
+        return x
+
+    forward_signature = ForwardSignature.from_callable(forward)
+    sample = ((torch.zeros(2, 4), [None], [0]), {})
+    pre_call = make_input_metadata(forward_signature, sample, strict=True, batch_size=2)
+    post_sample = ((torch.zeros(2, 4), [torch.zeros(2, 3)], [1]), {})
+    post_call = make_input_metadata(forward_signature, post_sample, strict=True, batch_size=2)
+    graph_spec = GraphSpec(
+        name="test_model",
+        input_spec=pre_call,
+        output_spec=SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2),
+        forward_signature=forward_signature,
+        post_input_spec=post_call,
+    )
+
+    def infer(x, cache, feat_idx):
+        cache[0] = torch.ones(2, 3)
+        feat_idx[0] += 1
+        return x
+
+    check_inference_output_correctness([sample], graph_spec, infer=infer, name="test_model.matching_backend")
+
+
+def test_check_inference_correctness_rejects_missing_input_mutations():
+    def forward(x, cache, feat_idx):
+        return x
+
+    forward_signature = ForwardSignature.from_callable(forward)
+    sample = ((torch.zeros(2, 4), [None], [0]), {})
+    pre_call = make_input_metadata(forward_signature, sample, strict=True, batch_size=2)
+    post_sample = ((torch.zeros(2, 4), [torch.zeros(2, 3)], [1]), {})
+    post_call = make_input_metadata(forward_signature, post_sample, strict=True, batch_size=2)
+    graph_spec = GraphSpec(
+        name="test_model",
+        input_spec=pre_call,
+        output_spec=SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2),
+        forward_signature=forward_signature,
+        post_input_spec=post_call,
+    )
+
+    with pytest.raises(CorrectnessInputMutationError) as exc_info:
+        check_inference_output_correctness([sample], graph_spec, infer=forward, name="test_model.non_mutating_backend")
+
+    assert "Input mutations after executing test_model.non_mutating_backend do not match eager execution" in str(
+        exc_info.value
+    )
+
+
+def test_post_input_metadata_comparison_ignores_leaf_order():
+    expected = SampleMetadata.from_inputs({"first": 1, "second": 2}, strict=True)
+    actual = SampleMetadata.from_inputs({"second": 2, "first": 1}, strict=True)
+
+    _check_post_input_metadata(expected, actual, "test_model.mock_backend")
 
 
 def test_private_dynamic_shape_boundary_samples_resize_args_and_kwargs():

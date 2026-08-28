@@ -212,6 +212,11 @@ class SampleMetadata:
         return self._other_data
 
     @property
+    def strict(self) -> bool:
+        """Return whether non-tensor leaves are included in this metadata."""
+        return self._strict
+
+    @property
     def tensor_data(self) -> tuple[tuple[Locator, TensorSpec]]:
         """Get list of tensor data."""
         return self._tensor_data

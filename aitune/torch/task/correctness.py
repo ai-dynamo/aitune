@@ -22,6 +22,10 @@ class CorrectnessTensorShapeError(ValueError):
     """Error raised when tensor shapes do not match."""
 
 
+class CorrectnessInputMutationError(ValueError):
+    """Error raised when a backend does not reproduce eager input mutations."""
+
+
 class CorrectnessDynamicShapeError(ValueError):
     """Error raised when dynamic-shape boundary inference fails."""
 
@@ -64,31 +68,43 @@ def check_dynamic_shape_boundary_inference(
 
 def check_inference_output_correctness(
     data: Sequence[tuple[tuple, dict]],
-    output_spec: SampleMetadata,
+    graph_spec: GraphSpec,
     infer: Callable[..., Any],
     name: str,
 ):
-    """Check recorded-sample inference output correctness.
+    """Check recorded-sample output and post-call input correctness.
 
     Args:
         data: Recorded samples to run through inference.
-        output_spec: Recorded output metadata with expected output tensor shapes.
+        graph_spec: Recorded output metadata and pre/post-call input contract.
         infer: Inference callable to validate.
         name: Name of the module or backend being checked.
 
     Raises:
         CorrectnessValueError: If any output value is NaN or infinite.
         CorrectnessTensorShapeError: If inferred output tensor shapes do not match the expected metadata.
+        CorrectnessInputMutationError: If post-call inputs do not match eager execution.
 
     Returns:
         None.
     """
     for args, kwargs in data:
+        call_args, call_kwargs = copy.deepcopy((args, kwargs))
         with torch.no_grad():
-            outputs = infer(*copy.deepcopy(args), **copy.deepcopy(kwargs))
+            outputs = infer(*call_args, **call_kwargs)
         _check_output_correctness(outputs, name=f"{name}.output")
         outputs_metadata = SampleMetadata.from_outputs(outputs)
-        _check_output_tensor_shapes(output_spec, outputs_metadata)
+        _check_output_tensor_shapes(graph_spec.output_spec, outputs_metadata)
+
+        expected_post_inputs = graph_spec.post_input_spec
+        if expected_post_inputs is None:
+            continue
+        post_forward_inputs = graph_spec.forward_signature.normalize(call_args, call_kwargs)
+        post_inputs_metadata = SampleMetadata.from_inputs(
+            post_forward_inputs.arguments,
+            strict=expected_post_inputs.strict,
+        )
+        _check_post_input_metadata(expected_post_inputs, post_inputs_metadata, name)
 
 
 def _dynamic_shape_boundary_samples(sample: tuple[tuple, dict], graph_spec: GraphSpec) -> list[tuple[tuple, dict]]:
@@ -174,6 +190,38 @@ def _check_output_tensor_shapes(expected: SampleMetadata, actual: SampleMetadata
     if errors:
         raise CorrectnessTensorShapeError(
             f"{len(errors)} error(s) related to output tensor shapes:\n- " + "\n- ".join(errors)
+        )
+
+
+def _check_post_input_metadata(expected: SampleMetadata, actual: SampleMetadata, name: str) -> None:
+    """Check that a backend reproduces the eager module's observable input mutations.
+
+    Stateful modules may populate caches or advance indices through their inputs. A backend can
+    return a valid output while missing these mutations, causing later calls to fail. This check
+    compares tensor locations and shapes, plus non-tensor values as order-independent mappings.
+    Tensor contents are not compared when their location and shape remain unchanged.
+
+    Args:
+        expected: Input metadata recorded after eager execution.
+        actual: Input metadata captured after backend execution.
+        name: Qualified backend name included in correctness errors.
+
+    Raises:
+        CorrectnessInputMutationError: If post-call tensor metadata or non-tensor values differ.
+    """
+    try:
+        _check_output_tensor_shapes(expected, actual)
+    except CorrectnessTensorShapeError as exc:
+        raise CorrectnessInputMutationError(
+            f"Input mutations after executing {name} do not match eager execution: {exc}"
+        ) from exc
+
+    expected_other = dict(expected.other_data)
+    actual_other = dict(actual.other_data)
+    if expected_other != actual_other:
+        raise CorrectnessInputMutationError(
+            f"Input mutations after executing {name} do not match eager execution. "
+            f"Expected post-call values {expected_other!r}, got {actual_other!r}."
         )
 
 

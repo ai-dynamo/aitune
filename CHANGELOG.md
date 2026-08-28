@@ -15,6 +15,7 @@ title: "Changelog"
 - fix: validate ONNX Runtime execution providers during backend build
 - fix: preserve nested input structure for static and dynamic Torch Export and ONNX Dynamo shapes
 - fix: reduce memory usage in multi-module tuning by storing recorded samples on disk and loading them lazily during backend warmup
+- fix: reject backends that do not reproduce eager post-call input mutations such as cache population and index updates
 
 ## 0.5.0
 - feat: allow AOT modules to declare explicit dynamic input shapes

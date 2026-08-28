@@ -121,7 +121,7 @@ class TuneStrategy(ABC):
         self._logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
         check_inference_output_correctness(
             samples,
-            graph_spec.output_spec,
+            graph_spec,
             infer=backend.infer,
             name=f"{name}.{graph_spec.name}.{backend.describe()}",
         )

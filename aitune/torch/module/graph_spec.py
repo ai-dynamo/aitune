@@ -24,10 +24,11 @@ class GraphSpec:
 
     Attributes:
         name (str) - symbolic name of the graph
-        input_spec (SampleMetadata) - spec which describes the graph input
+        input_spec (SampleMetadata) - spec which describes the graph input before execution
         output_spec (SampleMetadata) - spec which describes the graph output
         forward_signature (ForwardSignature) - signature of the module's forward method
         dynamic_shapes (DynamicShapes) - explicit input shape definitions
+        post_input_spec (SampleMetadata) - spec which describes the graph input after execution
     """
 
     name: str
@@ -35,10 +36,21 @@ class GraphSpec:
     output_spec: SampleMetadata
     forward_signature: ForwardSignature
     dynamic_shapes: DynamicShapes = field(default_factory=dict)
+    post_input_spec: SampleMetadata | None = None
 
-    def update_shapes_seen(self, inputs_metadata: SampleMetadata, outputs_metadata: SampleMetadata):
-        """Update input spec with other input spec."""
+    def update_shapes_seen(
+        self,
+        inputs_metadata: SampleMetadata,
+        outputs_metadata: SampleMetadata,
+        post_inputs_metadata: SampleMetadata | None = None,
+    ):
+        """Update metadata observed before, during, and after another call."""
         self.input_spec.update_shapes_seen(inputs_metadata)
+        if post_inputs_metadata is not None:
+            if self.post_input_spec is None:
+                self.post_input_spec = post_inputs_metadata
+            else:
+                self.post_input_spec.update_shapes_seen(post_inputs_metadata)
         self.output_spec.update_shapes_seen(outputs_metadata)
 
     def make_batch(self, args: tuple, kwargs: dict[str, Any], batch_size: int) -> tuple[tuple, dict[str, Any]]:
@@ -119,6 +131,7 @@ class GraphSpec:
             "output_spec": self.output_spec,
             "forward_signature": self.forward_signature.to_dict(),
             "dynamic_shapes": self.dynamic_shapes,
+            "post_input_spec": self.post_input_spec,
         }
 
     @staticmethod
@@ -132,6 +145,7 @@ class GraphSpec:
             output_spec=data["output_spec"],
             forward_signature=ForwardSignature.from_dict(data["forward_signature"]),
             dynamic_shapes=data["dynamic_shapes"],
+            post_input_spec=data.get("post_input_spec"),
         )
 
     def __str__(self) -> str:

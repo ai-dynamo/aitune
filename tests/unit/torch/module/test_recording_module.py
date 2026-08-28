@@ -163,6 +163,34 @@ def test_recording_stores_original_args_and_kwargs(tmp_path):
     assert kwargs["cache"] == []
 
 
+def test_recording_tracks_input_metadata_before_and_after_call(tmp_path):
+    class Model(torch.nn.Module):
+        def forward(self, x, cache, feat_idx):
+            cache[0] = torch.ones(2, 3)
+            feat_idx[0] += 1
+            return x
+
+    config = AITuneConfig()
+    config.strict_mode = True
+    recording = RecordingModule(Model(), "test-module", config, cache_dir_resolver=lambda: tmp_path)
+
+    recording(torch.ones(1), [None], [0])
+
+    graph_spec = recording.graph_specs[0]
+    pre_other = {locator.path: value for locator, value in graph_spec.input_spec.other_data}
+    post_other = {locator.path: value for locator, value in graph_spec.post_input_spec.other_data}
+    post_tensors = {locator.path: spec for locator, spec in graph_spec.post_input_spec.tensor_data}
+
+    assert pre_other[("cache", 0)] is None
+    assert pre_other[("feat_idx", 0)] == 0
+    assert post_other[("feat_idx", 0)] == 1
+    assert post_tensors[("cache", 0)].shape == [2, 3]
+
+    stored_args, _ = recording.samples_for_graph_spec(graph_spec)[0]
+    assert stored_args[1] == [None]
+    assert stored_args[2] == [0]
+
+
 def test_recording_normalizes_equivalent_call_layouts(tmp_path):
     class Model(torch.nn.Module):
         def forward(self, x, y):

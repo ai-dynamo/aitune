@@ -82,8 +82,19 @@ class RecordingModule:
         sample_args, sample_kwargs = self._copy_inputs(forward_inputs.args, forward_inputs.kwargs)
         outputs = self._forward_call(*args, **kwargs)
         outputs_metadata = SampleMetadata.from_outputs(outputs, strict=self._config.strict_mode)
+        post_forward_inputs = self._forward_signature.normalize(args, kwargs)
+        post_inputs_metadata = SampleMetadata.from_inputs(
+            post_forward_inputs.arguments,
+            strict=self._config.strict_mode,
+        )
 
-        self.record_sample((sample_args, sample_kwargs), inputs_metadata, outputs_metadata, dynamic_shapes)
+        self.record_sample(
+            (sample_args, sample_kwargs),
+            inputs_metadata,
+            outputs_metadata,
+            dynamic_shapes=dynamic_shapes,
+            post_inputs_metadata=post_inputs_metadata,
+        )
 
         return outputs
 
@@ -98,13 +109,18 @@ class RecordingModule:
         return self._forward_signature
 
     def record_sample(
-        self, inputs, inputs_metadata, outputs_metadata, dynamic_shapes: DynamicShapes | None = None
+        self,
+        inputs,
+        inputs_metadata,
+        outputs_metadata,
+        dynamic_shapes: DynamicShapes | None = None,
+        post_inputs_metadata: SampleMetadata | None = None,
     ) -> None:
         """Record a sample from the module."""
         if inputs_metadata in self._graph_specs:
             # graphs share same hash but can have different min, max seen shapes
             graph_spec = self._graph_specs[inputs_metadata]
-            graph_spec.update_shapes_seen(inputs_metadata, outputs_metadata)
+            graph_spec.update_shapes_seen(inputs_metadata, outputs_metadata, post_inputs_metadata)
         else:
             # create a new graph spec for the sample metadata
             graph_name = f"{next(self._graphs_counter)}"
@@ -116,6 +132,7 @@ class RecordingModule:
                 output_spec=outputs_metadata,
                 forward_signature=self._forward_signature,
                 dynamic_shapes=dynamic_shapes or {},
+                post_input_spec=post_inputs_metadata,
             )
             graph_cache_dir = self._cache_dir_resolver() / graph_name
             # Samples must remain isolated because tuning writes backend artifacts
