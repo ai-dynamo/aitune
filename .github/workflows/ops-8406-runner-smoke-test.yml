@@ -5,26 +5,35 @@ name: Validate AITune runners
 
 on:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Runner class to validate
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - cpu
+          - gpu
 
 permissions:
   contents: read
 
 jobs:
   validate-cpu:
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'cpu' }}
     name: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: linux-amd64-cpu4
+          - runner: ops-8406-linux-amd64-cpu4
             expected_cpu: 4
-          - runner: linux-amd64-cpu16
+          - runner: ops-8406-linux-amd64-cpu16
             expected_cpu: 16
-          - runner: linux-amd64-cpu32
+          - runner: ops-8406-linux-amd64-cpu32
             expected_cpu: 32
-    runs-on:
-      group: Default
-      labels: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     env:
       EXPECTED_CPU: ${{ matrix.expected_cpu }}
@@ -63,6 +72,7 @@ jobs:
           df -h "${RUNNER_TEMP}"
 
   validate-rtx-8:
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'gpu' }}
     name: prod-aitune-tester-rtx-pro-4500-8-v1
     runs-on: prod-aitune-tester-rtx-pro-4500-8-v1
     timeout-minutes: 240
