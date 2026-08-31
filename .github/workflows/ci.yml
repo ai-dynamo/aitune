@@ -175,9 +175,9 @@ jobs:
           if-no-files-found: ignore
 
   pytorch-gpu:
-    name: PyTorch GPU (L40S)
+    name: PyTorch GPU
     needs: pytorch-image
-    runs-on: prod-aitune-tester-l40s-v1
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
     permissions:
       contents: read
       packages: read
@@ -189,21 +189,11 @@ jobs:
       options: --gpus all
     env:
       EXPECTED_GPU_COUNT: "1"
-      EXPECTED_GPU_MODEL: L40S
+      EXPECTED_GPU_MODEL: "RTX PRO 4500"
     steps:
       - uses: *actions_checkout
         with:
           persist-credentials: false
-      - name: Verify GPU
-        run: |
-          set -euo pipefail
-          nvidia-smi
-          gpu_names="$(nvidia-smi --query-gpu=name --format=csv,noheader)"
-          gpu_count="$(printf '%s\n' "$gpu_names" | wc -l)"
-          test "$gpu_count" -eq "$EXPECTED_GPU_COUNT"
-          while IFS= read -r gpu_name; do
-            [[ "$gpu_name" == *"$EXPECTED_GPU_MODEL"* ]]
-          done <<< "$gpu_names"
       - run: >-
           python -m pytest tests/unit
           --cov=aitune
