@@ -71,6 +71,37 @@ jobs:
           path: pytype.log
           if-no-files-found: ignore
 
+
+  license-headers:
+    name: License headers
+    runs-on: linux-amd64-cpu4
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_setup_uv
+        with:
+          python-version: *python_version
+      - run: |
+          TOOLS=.github/scripts/sanity
+          LICENSE_HEADER_TOOL="uv run --script $TOOLS/license_headers.py --path . --license-template $TOOLS/license_header.template"
+          $LICENSE_HEADER_TOOL --files "*.py"
+          $LICENSE_HEADER_TOOL --files "*.sh"
+          $LICENSE_HEADER_TOOL --files "*.md"
+          $LICENSE_HEADER_TOOL --files "*.yaml"
+          $LICENSE_HEADER_TOOL --files "*.yml"
+          $LICENSE_HEADER_TOOL --files "*.toml"
+          $LICENSE_HEADER_TOOL --files "*.html" --comment-style "<!--|| -->"
+          $LICENSE_HEADER_TOOL --files "*.css"  --comment-style "/*|| */"
+          $LICENSE_HEADER_TOOL --files "*.ini"
+          $LICENSE_HEADER_TOOL --files "*.pbtxt"
+          $LICENSE_HEADER_TOOL --files "Makefile"
+          $LICENSE_HEADER_TOOL --files ".gitignore"
+          $LICENSE_HEADER_TOOL --files ".flake8"
+          $LICENSE_HEADER_TOOL --files ".dockerignore"
+          $LICENSE_HEADER_TOOL --files ".editorconfig"
+
+
   wheel:
     name: Build wheel
     runs-on: linux-amd64-cpu4
