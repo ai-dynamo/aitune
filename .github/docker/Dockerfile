@@ -2,7 +2,6 @@
 ARG FROM_IMAGE=ubuntu:25.04
 FROM ${FROM_IMAGE}
 
-ARG AIT_EXTRAS=dev
 ARG ONNXRUNTIME_VERSION=1.16.2
 ARG FRAMEWORK_VERSION=25.10
 
@@ -18,24 +17,21 @@ ENV AIT_DIST_DIR=${AIT_DIR}/dist
 ENV AIT_TEST_DIR=${AIT_DIR}/tests
 ENV TMP_DIR="/tmp/ai-tune"
 
-COPY dist/*aitune*.whl ${AIT_DIST_DIR}/
-COPY dist/*aitune*.tar.gz ${AIT_DIST_DIR}/
-
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    export WHEEL_PATH=$(ls ${AIT_DIST_DIR}/*aitune*.whl) && \
-    pip install ${WHEEL_PATH} ${AIT_EXTRAS} --group test && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,source=dist,target=/aitune_dist \
+    export WHEEL_PATH=$(ls /aitune_dist/*aitune*.whl) && \
     mkdir -p ${TMP_DIR} && \
-    tar xf ${AIT_DIST_DIR}/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
+    tar xf /aitune_dist/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
     mv ${TMP_DIR}/examples ${AIT_DIR} && \
     mv ${TMP_DIR}/tests ${AIT_DIR} && \
+    (cd ${TMP_DIR} && pip install . --group test) && \
+    pip install --no-deps ${WHEEL_PATH} && \
     rm -rf ${TMP_DIR}
 
 ARG ADDITIONAL_PACKAGES
 ENV ADDITIONAL_PACKAGES=${ADDITIONAL_PACKAGES}
 RUN if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install $ADDITIONAL_PACKAGES; fi
-
-COPY tests ${AIT_TEST_DIR}
 
 WORKDIR ${AIT_DIR}
