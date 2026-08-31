@@ -14,6 +14,7 @@ from aitune.torch.config import config as global_config
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import Sample
+from aitune.torch.utils.module import move_module_to_device
 
 
 class TunedModule:
@@ -127,9 +128,8 @@ class TunedModule:
         backends = OrderedDict()
 
         if not state_dict[TunedModule.IS_ANY_JIT_KEY]:
-            module = module.to(
-                global_config.device_after_tuning
-            )  # no module needed, we can move to meta(default) device
+            # AOT backends do not need ordinary modules, so they can be moved to meta(default) device.
+            move_module_to_device(module, global_config.device_after_tuning)
 
         for sample_metadata_data, backend_data in state_dict[TunedModule.BACKENDS_KEY]:
             if backend_data[TunedModule.TYPE_KEY] not in backend_classes:

@@ -115,6 +115,22 @@ def test_build_returns_active_backend(mock_aoti, backend, model, graph_spec, sam
     assert backend._compiled_model_artifact == ArtifactPath(tmp_path, Path("model.pt2"))
 
 
+def test_build_delegates_placement_preserving_module_operations(mocker, tmp_path):
+    model = ToyTorchModel().eval()
+    move_module = mocker.patch("aitune.torch.backend.torch_inductor_aot_backend.move_module_to_device")
+    graph_spec = model.graph_spec(batch_sizes=[1])
+    sample_data = model.samples(batch_sizes=[1])
+    mocker.patch("torch.export.export", return_value=Mock())
+    mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
+    mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
+    offload_mock = mocker.patch("aitune.torch.backend.torch_inductor_aot_backend.offload")
+
+    TorchInductorAotBackend().build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    move_module.assert_called_once_with(model, torch.device("cpu"))
+    offload_mock.assert_called_once_with(model, device="cpu")
+
+
 @requires_cuda
 def test_build_calls_export_and_compile(
     mock_aoti, mocker, backend, model, graph_spec, sample_data, torch_device, tmp_path

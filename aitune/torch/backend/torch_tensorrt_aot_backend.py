@@ -10,13 +10,21 @@ from typing import Any, ClassVar, cast
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
+from aitune.torch.backend.backend import (
+    Backend,
+    BackendBuildStep,
+    BackendConfig,
+    BackendState,
+    BuildMode,
+    ExecutionMode,
+)
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.torch import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
+from aitune.torch.utils.module import move_module_to_device
 from aitune.torch.utils.tensor import format_tensor_name
 
 try:
@@ -82,7 +90,10 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
         """Describe the backend configuration. Display only changed fields."""
         other = self.__class__()
         compile_config_parts = self._get_changed_fields(
-            self.compile_config, other.compile_config, include=["enabled_precisions"]
+            self.compile_config,
+            other.compile_config,
+            exclude=["device"],
+            include=["enabled_precisions"],
         )
         parts = [f"compile_config=TorchTensorRTConfig({','.join(compile_config_parts)})"]
 
@@ -113,6 +124,9 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
 
 class TorchTensorRTAotBackend(Backend):
     """Backend that compiles model using TensorRT."""
+
+    _build_mode = BuildMode.AHEAD_OF_TIME
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU, ExecutionMode.MULTI_GPU})
 
     # State dictionary keys
     STATE_TYPE = "type"
@@ -173,7 +187,7 @@ class TorchTensorRTAotBackend(Backend):
         logger.info("Start compiling torch module with TensorRT.")
 
         model = module.eval()
-        model = model.to(self._device)
+        move_module_to_device(model, self._device)
 
         self._save_config(cache_dir)
 

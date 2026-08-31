@@ -11,6 +11,7 @@ import torch.nn as nn
 
 from aitune.torch.backend import TorchEagerBackend
 from aitune.torch.backend.backend import Backend
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling.config import ProfilingConfig
@@ -53,8 +54,9 @@ def find_max_batch_size(
     backend = TorchEagerBackend()
     backend_cache_dir = cache_dir / backend.key()
     log_file = _log_file(backend_cache_dir, "build.log")
-    with control_output(log_file=log_file):
-        backend.build(module, graph_spec, samples, device, backend_cache_dir)
+    with coordinator.raise_if_any_rank_fails("Building find-max-batch-size backend"):
+        with control_output(log_file=log_file):
+            backend.build(module, graph_spec, samples, device, backend_cache_dir)
     return find_max_throughput_for_backend(backend, name, graph_spec, samples, profiling_config)
 
 
@@ -91,13 +93,25 @@ def find_max_throughput_for_backend(
         profiling_config,
     )
 
-    if profiling_results.status != ProfilingStatus.Status.SUCCESS:
-        logger.debug("Profiling failed for %s", backend.describe(), exc_info=profiling_results.error)
-        raise profiling_results.error
+    local_error: Exception | None = None
+    throughput_per_batch_size = None
+    try:
+        if profiling_results.status != ProfilingStatus.Status.SUCCESS:
+            logger.debug("Profiling failed for %s", backend.describe(), exc_info=profiling_results.error)
+            raise profiling_results.error
 
-    throughput_per_batch_size = get_throughput_per_batch_size(
-        get_inference_events(profiling_results.results.entries), profiling_config.measurement_stop_strategy
-    )
+        throughput_per_batch_size = get_throughput_per_batch_size(
+            get_inference_events(profiling_results.results.entries), profiling_config.measurement_stop_strategy
+        )
+    except Exception as error:
+        local_error = error
+
+    outcome, gathered_throughputs = coordinator.collect_results(throughput_per_batch_size, local_error)
+    outcome.raise_if_failed(f"Processing profiling results for {backend.describe()}", local_error)
+    assert throughput_per_batch_size is not None
+    throughput_per_batch_size = _aggregate_throughput_per_batch_size([
+        dict(candidate) for candidate in gathered_throughputs
+    ])
 
     if len(throughput_per_batch_size) == 0:
         raise ValueError(f"No throughput data found for backend {backend.describe()}")
@@ -121,6 +135,21 @@ def get_throughput_per_batch_size(
         throughput_per_batch_size.append((batch_size, throughput))
 
     return sorted(throughput_per_batch_size, key=lambda x: x[1], reverse=True)
+
+
+def _aggregate_throughput_per_batch_size(
+    gathered_throughputs: list[dict[int, float]],
+) -> list[tuple[int, float]]:
+    """Return deterministic batch throughputs using the worst rank for each batch."""
+    batch_sizes = set(gathered_throughputs[0])
+    if any(set(candidate) != batch_sizes for candidate in gathered_throughputs[1:]):
+        details = ", ".join(f"rank {rank}: {sorted(candidate)}" for rank, candidate in enumerate(gathered_throughputs))
+        raise RuntimeError(f"Distributed profiled batch sizes differ across ranks: {details}")
+
+    aggregated = [
+        (batch_size, min(candidate[batch_size] for candidate in gathered_throughputs)) for batch_size in batch_sizes
+    ]
+    return sorted(aggregated, key=lambda result: (-result[1], result[0]))
 
 
 def _log_file(cache_dir: Path, filename: str) -> Path:

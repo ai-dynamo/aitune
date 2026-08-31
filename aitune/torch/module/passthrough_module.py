@@ -4,7 +4,7 @@
 
 from typing import Any
 
-from aitune.torch.module.locator import Locator
+from aitune.torch.utils.module import move_module_to_device, move_tensors_to_device
 
 
 class PassthroughModule:
@@ -28,7 +28,7 @@ class PassthroughModule:
         super().__init__()
         self._forward_call = module.__call__
         self._device = device
-        module.to(self._device)
+        move_module_to_device(module, self._device)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Native inference on wrapped module."""
@@ -37,9 +37,7 @@ class PassthroughModule:
 
     def _prepare_inputs(self, *args, **kwargs):
         """Prepare inputs for inplace inference and place them on the same device if are not."""
-        for locator, tensor in Locator.find_leaves(args, only_tensors=True):
-            args = locator.set_value(args, tensor.to(self._device))
-        for locator, tensor in Locator.find_leaves(kwargs, only_tensors=True):
-            kwargs = locator.set_value(kwargs, tensor.to(self._device))
-
-        return args, kwargs
+        return (
+            move_tensors_to_device(args, self._device),
+            move_tensors_to_device(kwargs, self._device),
+        )

@@ -14,6 +14,7 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
@@ -131,30 +132,42 @@ class PerformanceValidationMixin(TuneStrategy):
         baseline_cache_dir = cache_dir / "perf_validation_baseline"
         shutil.rmtree(baseline_cache_dir, ignore_errors=True)
         baseline_cache_dir.mkdir(parents=True)
+        backend = TorchEagerBackend()
+        local_error: Exception | None = None
+        batch_size = None
+        throughput = None
         try:
-            backend = TorchEagerBackend()
-            backend = backend.build(module, graph_spec, samples, device, baseline_cache_dir)
+            with coordinator.raise_if_any_rank_fails("Building performance validation baseline"):
+                backend = backend.build(module, graph_spec, samples, device, baseline_cache_dir)
             batch_size, throughput, _ = find_max_throughput_for_backend(
                 backend, name, graph_spec, samples, profiling_cfg
             )
-
-            self._baseline_throughput = throughput
-            self._baseline_backend = backend
-            report_graph_baseline_metric("throughput", throughput)
-            log(
-                "📊 Eager baseline: batch size=%s, throughput=%.2f samples/s",
-                batch_size,
-                throughput,
-                sink=self._sink,
-            )
-        except Exception:
+        except Exception as e:
+            local_error = e
             error_log = self._log_file(baseline_cache_dir, "error.log")
-            error_log.write_text(traceback.format_exc())
+            error_log.write_text("".join(traceback.format_exception(e)))
+
+        if not coordinator.outcome(local_error).succeeded:
+            if backend.is_active:
+                backend.deactivate()
             log(
                 "⚠️ Performance validation baseline failed (log: %s), performance check skipped",
-                error_log,
+                self._log_file(baseline_cache_dir, "error.log"),
                 sink=self._sink,
             )
+            return
+
+        assert batch_size is not None
+        assert throughput is not None
+        self._baseline_throughput = throughput
+        self._baseline_backend = backend
+        report_graph_baseline_metric("throughput", throughput)
+        log(
+            "📊 Eager baseline: batch size=%s, worst-rank throughput=%.2f samples/s",
+            batch_size,
+            throughput,
+            sink=self._sink,
+        )
 
     def _build_validate_and_check_perf(
         self,
@@ -190,11 +203,20 @@ class PerformanceValidationMixin(TuneStrategy):
         description = backend.describe()
         profiling_cfg = self._profiling_config_for_batch_size(self._resolved_batch_size, batching=True)
 
+        local_error: Exception | None = None
+        batch_size = None
+        throughput = None
         try:
             batch_size, throughput, _ = find_max_throughput_for_backend(built, name, graph_spec, samples, profiling_cfg)
-        except Exception:
+        except Exception as e:
+            local_error = e
+
+        if not coordinator.outcome(local_error).succeeded:
             log("⚠️ Performance profiling failed for %s, performance check skipped", description, sink=self._sink)
             return built
+
+        assert batch_size is not None
+        assert throughput is not None
 
         if self._baseline_throughput == 0:
             log("⚠️ Baseline throughput is 0 for %s, performance check skipped", description, sink=self._sink)

@@ -3,13 +3,21 @@
 """PyTorch module utilities for parameter counting, device management, and memory offloading."""
 
 import inspect
-from collections.abc import Callable
-from typing import Optional
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, Any, Optional
 
 import torch
 import torch.nn as nn
+from torch.distributed.tensor import DTensor
+from torch.nn.parallel import DistributedDataParallel
 
+from aitune.torch.integrations import is_integration_distributed_module
+from aitune.torch.module.locator import Locator
 from aitune.torch.utils.memory import cleanup_memory
+from aitune.utils.monitoring import annotate
+
+if TYPE_CHECKING:
+    from aitune.torch.backend.backend import Backend
 
 
 def format_num_parameters(num: int) -> str:
@@ -95,15 +103,68 @@ def get_module_device(module: nn.Module) -> Optional["torch.device"]:
         return None
 
 
+def is_distributed_module(module: nn.Module) -> bool:
+    """Return whether a module requires distributed backend execution.
+
+    DTensor state, modules implemented by ``torch.distributed``, and structures
+    recognized by enabled integrations are detected automatically.
+    """
+    if isinstance(module, DistributedDataParallel):
+        return True
+
+    tensors = (*module.parameters(recurse=True), *module.buffers(recurse=True))
+    if any(
+        isinstance(tensor, DTensor) or type(tensor).__module__.startswith("torch.distributed") for tensor in tensors
+    ):
+        return True
+
+    if any(type(child).__module__.startswith("torch.distributed") for child in module.modules()):
+        return True
+
+    return is_integration_distributed_module(module)
+
+
+def move_module_to_device(module: nn.Module, device: str | torch.device) -> None:
+    """Move an ordinary module while preserving distributed module placement."""
+    if not is_distributed_module(module):
+        module.to(device)
+
+
+def move_tensors_to_device(value: Any, device: str | torch.device) -> Any:
+    """Recursively move ordinary tensor leaves while preserving distributed tensors."""
+    for locator, tensor in Locator.find_leaves(value, only_tensors=True):
+        if isinstance(tensor, DTensor):
+            continue
+
+        value = locator.set_value(value, tensor.to(device))
+    return value
+
+
 def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
-    """Offload model to meta device and freeing all memory.
+    """Offload an ordinary module while preserving distributed placement.
 
     Args:
-        model: Model to offload and destroy
-        device: Device to offload to
+        model: Model to offload.
+        device: Device to offload to.
     """
-    # Step 1: Move model to meta device
-    model.to(device)
+    if is_distributed_module(model):
+        return
 
-    # Step 2: Memory cleanup
-    cleanup_memory()
+    with annotate("Offloading module"):
+        model.to(device)
+        cleanup_memory()
+
+
+def offload_after_tuning(
+    model: nn.Module,
+    backends: Iterable["Backend"],
+    device: str | torch.device,
+) -> None:
+    """Offload a tuned ordinary module when no selected backend builds just in time."""
+    from aitune.torch.backend.backend import BuildMode
+
+    backends = tuple(backends)
+    if not backends or any(backend.build_mode == BuildMode.JUST_IN_TIME for backend in backends):
+        return
+
+    offload(model, device=device)

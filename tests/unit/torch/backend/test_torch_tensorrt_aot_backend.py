@@ -12,6 +12,7 @@ from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
+    TorchTensorRTConfig,
     _save_compiled_model,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
@@ -28,6 +29,7 @@ from tests.utilities.helpers import make_graph_spec, requires_cuda, update_input
 @dataclass
 class TorchTensorRTTestConfig:
     workspace_size: int = 0
+    device: int = 0
 
 
 class SimpleModel(nn.Module):
@@ -169,6 +171,17 @@ def test_torch_tensorrt_aot_backend_config_describe():
     assert describe == "compile_config=TorchTensorRTConfig(),pickle_protocol=1"
 
 
+def test_torch_tensorrt_aot_description_omits_rank_local_device(mocker):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
+    backend = TorchTensorRTAotBackend(
+        TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig(workspace_size=1, device=3))
+    )
+
+    assert "device=" not in backend.describe()
+    assert "workspace_size=1" in backend.describe()
+
+
 @requires_cuda
 def test_mock_build(
     mocker,
@@ -239,6 +252,7 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     mock_torch_tensorrt.save = mocker.Mock(side_effect=_fake_torch_tensorrt_save)
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.get_cuda_device", return_value=0)
     mocker.patch.object(TorchTensorRTAotBackend, "_devices", ["cpu", "cuda"])
 
@@ -260,6 +274,27 @@ def test_mock_build_exports_bounded_dynamic_shapes(
         dtype=torch.float32,
         name=format_tensor_name("x", "input"),
     )
+
+
+def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
+    model = SimpleModel().eval()
+    move_module = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.move_module_to_device")
+    sample_data = [((torch.randn(1, 10),), {})]
+    graph_spec = _graph_spec_from_samples(model, sample_data)
+    mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.dynamo.compile.return_value = model
+    mock_torch_tensorrt.save.side_effect = _fake_torch_tensorrt_save
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.get_cuda_device", return_value=0)
+    mocker.patch.object(TorchTensorRTAotBackend, "_devices", ["cpu", "cuda"])
+    mocker.patch("torch.export.export", return_value=mocker.Mock())
+    backend = TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
+
+    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    move_module.assert_called_once_with(model, torch.device("cpu"))
 
 
 @requires_cuda
@@ -411,11 +446,9 @@ def test_tensorrt_aot_config_from_dict_defaults():
 
 
 def test_tensorrt_aot_config_from_dict_nested_compile_config_dict():
-    import aitune.torch.backend.torch_tensorrt_aot_backend as _mod
-
     data = {"compile_config": {"workspace_size": 2048}}
     config = TorchTensorRTAotBackendConfig.from_dict(data)
-    assert isinstance(config.compile_config, _mod.TorchTensorRTConfig)
+    assert isinstance(config.compile_config, TorchTensorRTConfig)
     assert config.compile_config.workspace_size == 2048
 
 

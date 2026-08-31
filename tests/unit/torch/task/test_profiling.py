@@ -14,7 +14,7 @@ from aitune.torch.task.profiling.measuring_stop_strategy import (
     StableWindowMeasuringStopStrategy,
 )
 from aitune.torch.task.profiling.metrics import get_throughput, is_throughput_saturated
-from aitune.torch.task.profiling.profiling import ProfilingStatus, profile, profile_backend
+from aitune.torch.task.profiling.profiling import ProfilingStatus, _run_profiling_batch_size, profile, profile_backend
 from aitune.torch.task.profiling.profiling_stop_strategy import (
     ThroughputSaturatedProfilingStopStrategy,
 )
@@ -418,6 +418,38 @@ def test_profile_toy_model_no_batching():
     assert len(result.results.entries) > 0
 
 
+def test_profiling_measurement_uses_rank_zero_stop_decision(mocker):
+    event = new_event(1, 100e6)
+    execution_order = []
+    profile_config = ProfilingConfig(
+        batch_sizes=[1],
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=10, warmup_samples=1),
+    )
+    barrier = mocker.patch(
+        "aitune.torch.task.profiling.profiling.coordinator.barrier",
+        side_effect=lambda: execution_order.append("barrier"),
+    )
+
+    def measure(*_args, **_kwargs):
+        execution_order.append("measurement")
+        return [event]
+
+    measurement = mocker.patch.object(
+        profile_config.measuring_strategy,
+        "do_measurement",
+        side_effect=measure,
+    )
+    decide = mocker.patch("aitune.torch.task.profiling.profiling.coordinator.decide_by_rank0", return_value=True)
+
+    results = _run_profiling_batch_size(1, lambda: None, ((), {}), profile_config, "model", "backend")
+
+    assert results == [event]
+    assert execution_order == ["barrier", "measurement"]
+    barrier.assert_called_once_with()
+    measurement.assert_called_once()
+    decide.assert_called_once_with(False)
+
+
 @pytest.mark.parametrize("batching", [True, False])
 def test_profile_backend(mocker, batching: bool, tmp_path):
     class ModelWithCache(ToyTorchModel):
@@ -428,6 +460,9 @@ def test_profile_backend(mocker, batching: bool, tmp_path):
     graph_spec = model.graph_spec(batch_sizes=[1])
 
     class MockBackend(TorchEagerBackend):
+        _build_mode = TorchEagerBackend._build_mode
+        _execution_modes = TorchEagerBackend._execution_modes
+
         def __init__(self, model):
             self.model = model
 
@@ -484,6 +519,9 @@ def test_profile_backend_excludes_sample_store_load_from_measurements(mocker, tm
     )
 
     class MockBackend(TorchEagerBackend):
+        _build_mode = TorchEagerBackend._build_mode
+        _execution_modes = TorchEagerBackend._execution_modes
+
         def infer(self, x):
             call_order.append("infer")
             return model(x)

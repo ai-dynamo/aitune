@@ -12,9 +12,10 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
+from aitune.torch.utils.module import move_module_to_device
 
 
 @dataclass
@@ -38,6 +39,7 @@ class TorchEagerBackend(Backend):
     and required code changes from the user.
     """
 
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU, ExecutionMode.MULTI_GPU})
     _build_mode = BuildMode.JUST_IN_TIME
 
     # State dictionary keys
@@ -96,7 +98,7 @@ class TorchEagerBackend(Backend):
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Builds the model."""
         self._save_config(cache_dir)
-        module.to(self._device)
+        move_module_to_device(module, self._device)
 
         self._orig_module = module
         self._graph_spec = graph_spec
@@ -156,7 +158,7 @@ class TorchEagerBackend(Backend):
 
     def _deploy(self):
         """Deploys the backend."""
-        self._orig_module.to(self._device)
+        move_module_to_device(self._orig_module, self._device)
         if self._config.autocast_enabled:
             self._infer = self._infer_with_autocast
 

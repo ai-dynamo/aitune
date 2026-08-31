@@ -171,6 +171,9 @@ def test_min_latency_strategy_fallback_to_baseline_when_all_user_backends_fail(t
 
 
 class _BuildFailsBackend(BuildFailsBackend):
+    _build_mode = BuildFailsBackend._build_mode
+    _execution_modes = BuildFailsBackend._execution_modes
+
     def __init__(self):
         super().__init__(RuntimeError)
 

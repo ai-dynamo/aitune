@@ -230,6 +230,9 @@ def test_max_throughput_strategy_stable_window(torch_device):
 
 
 class ActivateFailsBackend(SleepBackend):
+    _build_mode = SleepBackend._build_mode
+    _execution_modes = SleepBackend._execution_modes
+
     def __init__(self):
         super().__init__()
 
@@ -238,6 +241,9 @@ class ActivateFailsBackend(SleepBackend):
 
 
 class RuntimeErrorBuildFailsBackend(BuildFailsBackend):
+    _build_mode = BuildFailsBackend._build_mode
+    _execution_modes = BuildFailsBackend._execution_modes
+
     def __init__(self):
         super().__init__(RuntimeError)
 

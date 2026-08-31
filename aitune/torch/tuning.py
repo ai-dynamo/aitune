@@ -13,14 +13,14 @@ from aitune.global_context import BATCH_SIZE_KEY, MODULE_CONTEXT_KEY, global_con
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
-from aitune.torch.config import DEFAULT_DEVICE, AITuneMode, aitune_cache_dir
+from aitune.torch.config import AITuneMode, aitune_cache_dir
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
+from aitune.torch.distributed import coordinator, distributed_cache_dir
 from aitune.torch.module.tensor_spec import InfoLevel
 from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import report_tune_run
 from aitune.torch.utils.cuda_utils import synchronize as cuda_synchronize
-from aitune.torch.utils.device import get_device
 from aitune.utils.logging import libraries_logging, setup_logging, write_exception_log
 from aitune.utils.monitoring import annotate
 from aitune.utils.timer import Timer
@@ -36,7 +36,7 @@ def tune(
     dataset: DatasetLike | DataLoaderFactory | torch.Tensor,
     batch_sizes: list[int] | None = None,
     max_num_batches_per_batch_size: int | None = None,
-    device: str | torch.device | None = DEFAULT_DEVICE,
+    device: str | torch.device | None = None,
     dry_run: bool = False,
     disable_external_logging: bool = False,
     clear_cache: bool = False,
@@ -68,12 +68,14 @@ def tune(
             _clear_cache()
 
         with libraries_logging(disable_external_logging):
-            # Convert device to torch.device
-            if device is not None:
-                device = get_device(device)
-
             # Validate batch sizes
             batch_sizes = _validate_and_normalize_batch_sizes(batch_sizes)
+
+            module_names = list(MODULE_REGISTRY.modules)
+            coordinator.verify_equal(
+                (module_names, batch_sizes, max_num_batches_per_batch_size, dry_run, ignore_failing_modules),
+                "AOT tuning plan",
+            )
 
             for batch_size, args, kwargs in samples_generator(dataset, batch_sizes, max_num_batches_per_batch_size):
                 with global_context:
@@ -90,26 +92,29 @@ def tune(
 
                 logger.info("════════════════════════════════════════════════════════════════")
                 logger.info("🎯 Tuning module: `%s` (all graphs)", module.name)
+                local_error: Exception | None = None
                 try:
                     with global_context:
                         global_context.set(MODULE_CONTEXT_KEY, module.name)
                         module.tune(device=device, dry_run=dry_run)
                 except Exception as e:
+                    local_error = e
                     _log_module_tuning_exception(module, e)
-                    # If ignore_failing_modules is False, we will raise the error and stop tuning.
-                    if not ignore_failing_modules:
-                        raise
 
-                    # If ignore_failing_modules is True, we use original forward for this module and continue tuning the next module.
-                    logger.info("⚠️ Tuning module: `%s` failed", module.name)
-                    module.enable_passthrough()
+                outcome = coordinator.outcome(local_error)
+                if outcome.succeeded:
+                    logger.info("✅ Tuning module: `%s` (all graphs) completed.", module.name)
                     continue
 
-                logger.info("✅ Tuning module: `%s` (all graphs) completed.", module.name)
+                module.enable_passthrough(force=module.state == ModuleState.TUNED)
+                logger.info("⚠️ Tuning module: `%s` failed", module.name)
+                if not ignore_failing_modules:
+                    outcome.raise_if_failed(f"Tuning module {module.name}", local_error)
 
             # Activate the backends after tuning for inference
             if not dry_run:
                 _activate_tuned_modules()
+            coordinator.barrier()
 
 
 def save(
@@ -222,7 +227,7 @@ def _describe_module(module: Module):
 
 def _clear_cache():
     """Clear the cache."""
-    cache_dir = aitune_cache_dir()
+    cache_dir = distributed_cache_dir(aitune_cache_dir())
     if cache_dir.exists():
         shutil.rmtree(cache_dir)
         logger.info("🧹 Cleared cache directory: %s", cache_dir)

@@ -307,7 +307,7 @@ config.strict_mode = True
 
 # Enable/disable HuggingFace integrations
 config.enable_transformers_integration = True
-config.enable_diffusers_integration = False
+config.enable_diffusers_integration = True
 ```
 
 ### Backend-Specific Configuration

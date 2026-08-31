@@ -19,6 +19,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_backend_build
 from aitune.torch.utils.memory import release_transient_memory
+from aitune.torch.utils.module import is_distributed_module
 from aitune.utils.hashing import hash_string
 from aitune.utils.monitoring import annotate, with_backend_context
 from aitune.utils.serialization import json_serialize
@@ -84,7 +85,7 @@ class BackendState(Enum):
         _deploy(): Deploys backend, changes state to DEPLOYED
         _infer(): Runs inference with the given arguments
 
-    Backends build ahead of time by default. JIT backends override ``_build_mode``.
+    Every backend must explicitly declare its supported execution modes and build mode.
     """
 
     INIT = "init"
@@ -92,6 +93,13 @@ class BackendState(Enum):
     ACTIVE = "active"
     CHECKPOINT_LOADED = "checkpoint_loaded"
     DEPLOYED = "deployed"
+
+
+class ExecutionMode(str, Enum):
+    """Execution topologies supported by a backend."""
+
+    SINGLE_GPU = "single_gpu"
+    MULTI_GPU = "multi_gpu"
 
 
 class BuildMode(str, Enum):
@@ -170,7 +178,28 @@ class Backend(ABC):
 
     # Supported devices types
     _devices: ClassVar[list[str]] = ["cpu", "cuda"]
-    _build_mode: ClassVar[BuildMode] = BuildMode.AHEAD_OF_TIME
+    _execution_modes: ClassVar[frozenset[ExecutionMode]]
+    _build_mode: ClassVar[BuildMode]
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        """Require each backend subclass to declare its execution and build modes."""
+        super().__init_subclass__(**kwargs)
+        required_modes = ("_execution_modes", "_build_mode")
+        missing_modes = [name for name in required_modes if name not in cls.__dict__]
+        if missing_modes:
+            missing = ", ".join(missing_modes)
+            raise TypeError(f"{cls.__name__} must explicitly define {missing}")
+
+        execution_modes = cls.__dict__["_execution_modes"]
+        if (
+            not isinstance(execution_modes, frozenset)
+            or not execution_modes
+            or not all(isinstance(mode, ExecutionMode) for mode in execution_modes)
+        ):
+            raise TypeError(f"{cls.__name__}._execution_modes must be a non-empty frozenset of ExecutionMode values")
+
+        if not isinstance(cls.__dict__["_build_mode"], BuildMode):
+            raise TypeError(f"{cls.__name__}._build_mode must be a BuildMode value")
 
     def __init__(self):
         """Initialize the backend."""
@@ -217,13 +246,25 @@ class Backend(ABC):
             with report_backend_build(self, log_file=log_file):
                 try:
                     self._assert_device(device)
+                    self._assert_execution_mode(module)
                     self._set_device(device)
                     ready_backend = self._build(module, graph_spec, samples, cache_dir)
                     self.state = BackendState.ACTIVE
                     return ready_backend
                 except Exception as e:
-                    self._logger.error("Failed to build backend(%s): %s", self.__class__.__name__, e, exc_info=True)
-                    raise e
+                    self._logger.error(
+                        "Failed to build backend(%s): %s",
+                        self.__class__.__name__,
+                        e,
+                        exc_info=True,
+                    )
+                    raise
+
+    def _assert_execution_mode(self, module: nn.Module) -> None:
+        """Reject the module execution mode when the backend does not support it."""
+        execution_mode = ExecutionMode.MULTI_GPU if is_distributed_module(module) else ExecutionMode.SINGLE_GPU
+        if execution_mode not in self._execution_modes:
+            raise RuntimeError(f"Backend {self.name} does not support {execution_mode.value} execution")
 
     @annotate(color="cyan")
     def activate(self):
@@ -438,6 +479,8 @@ class DummyBackend(Backend):
     """Dummy backend for testing purposes."""
 
     _devices = ["cpu", "cuda"]
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
+    _build_mode = BuildMode.AHEAD_OF_TIME
 
     def key(self) -> str:
         """Returns the key of the backend."""

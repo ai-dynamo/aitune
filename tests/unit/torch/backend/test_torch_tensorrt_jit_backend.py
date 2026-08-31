@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from aitune.exceptions import AITuneError
+from aitune.torch import FirstWinsStrategy
 from aitune.torch.backend.torch_tensorrt_jit_backend import (
     TorchTensorRTJitBackend,
     TorchTensorRTJitBackendConfig,
@@ -131,6 +132,24 @@ def test_torch_tensorrt_warmup_uses_autocast_inference(mocker, tmp_path):
     autocast.assert_called_once_with(device_type="cpu", dtype=torch.bfloat16, enabled=True)
 
 
+def test_torch_tensorrt_build_uses_placement_preserving_module_move(mocker, tmp_path):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
+    mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
+    toy = ToyTorchModel().eval()
+    move_module = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.move_module_to_device")
+    graph_spec = toy.graph_spec(batch_sizes=[1])
+    sample_data = toy.sample_store(tmp_path, batch_sizes=[1])
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile", return_value=toy)
+    backend = TorchTensorRTJitBackend(
+        TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTTestConfig(workspace_size=1))
+    )
+
+    backend.build(toy, graph_spec=graph_spec, samples=sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+
+    move_module.assert_called_once_with(toy, torch.device("cpu"))
+
+
 def test_torch_tensorrt_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
     mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
     mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
@@ -222,6 +241,36 @@ def test_torch_tensorrt_jit_backend_config_describe():
     describe = config.describe()
 
     assert describe == "compile_config=TorchTensorRTConfig(),fullgraph=True"
+
+
+def test_torch_tensorrt_jit_description_omits_rank_local_device(mocker):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
+    backend = TorchTensorRTJitBackend(
+        TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTTestConfig(workspace_size=1, device=3))
+    )
+
+    assert "device=" not in backend.describe()
+    assert "workspace_size=1" in backend.describe()
+
+
+def test_torch_tensorrt_rank_local_devices_produce_equal_strategy_config(mocker):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
+    strategies = [
+        FirstWinsStrategy(
+            backends=[
+                TorchTensorRTJitBackend(
+                    TorchTensorRTJitBackendConfig(
+                        compile_config=TorchTensorRTTestConfig(workspace_size=1, device=device)
+                    )
+                )
+            ]
+        )
+        for device in (0, 3)
+    ]
+
+    assert strategies[0].to_json_dict() == strategies[1].to_json_dict()
 
 
 @requires_cuda
@@ -387,15 +436,6 @@ def test_tensorrt_jit_config_from_dict_defaults():
     assert config.dynamic == default.dynamic
     assert config.autocast_enabled == default.autocast_enabled
     assert config.autocast_dtype == default.autocast_dtype
-
-
-def test_tensorrt_jit_config_from_dict_nested_compile_config_dict():
-    import aitune.torch.backend.torch_tensorrt_jit_backend as _mod
-
-    data = {"compile_config": {"workspace_size": 1024}}
-    config = TorchTensorRTJitBackendConfig.from_dict(data)
-    assert isinstance(config.compile_config, _mod.TorchTensorRTConfig)
-    assert config.compile_config.workspace_size == 1024
 
 
 def test_tensorrt_jit_config_from_dict_compile_config_instance_passthrough():

@@ -205,5 +205,8 @@ def dump_metrics(metrics: pd.DataFrame):
     else:
         date_time = datetime.now().strftime("%Y%m%d_%H%M%S")
         metrics_file = f"hardware_metrics_{date_time}.csv"
+    from aitune.torch.distributed import distributed_output_path
+
+    metrics_file = distributed_output_path(metrics_file)
     metrics.to_csv(metrics_file, index=False)
     logging.info("Dumped hardware metrics to CSV file: %s", metrics_file)

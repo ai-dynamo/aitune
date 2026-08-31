@@ -8,12 +8,14 @@ import pytest
 
 from aitune.torch.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.distributed import DistributedOutcome
 from aitune.torch.task.profiling import (
     ModelExecutionTimeMeasuringStrategy,
     NumStepsMeasuringStopStrategy,
     ProfilingConfig,
 )
 from aitune.torch.task.profiling.profiling_stop_strategy import AllSamplesProfilingStopStrategy
+from aitune.torch.tune_strategy.latency_budget_strategy import LatencyBudgetProfilingResult
 from aitune.torch.tune_strategy.profiling_tune_strategy import (
     BackendPerfResult,
     BackendProfilingResult,
@@ -197,6 +199,30 @@ def test_record_perf_result_passed_false_when_slower_than_baseline(strategy):
 
     assert strategy.perf_validation_results[0].passed is False
     assert strategy.perf_validation_results[0].speedup == pytest.approx(0.5)
+
+
+def test_aggregate_result_uses_worst_rank_metric(strategy):
+    result = strategy._aggregate_result([
+        _ControlledProfilingResult(metric_value=5.0),
+        _ControlledProfilingResult(metric_value=3.0),
+    ])
+
+    assert result.metric == 3.0
+
+
+def test_measure_distributed_collects_result_and_error_once(strategy, mocker):
+    coordinator = mocker.patch("aitune.torch.tune_strategy.profiling_tune_strategy.coordinator")
+    gathered_results = [
+        LatencyBudgetProfilingResult(selected_batch_size=4, throughput=12.0, latency=3.0),
+        LatencyBudgetProfilingResult(selected_batch_size=4, throughput=10.0, latency=5.0),
+    ]
+    coordinator.collect_results.return_value = (DistributedOutcome((None, None)), gathered_results)
+    strategy._measure = mocker.Mock(return_value=gathered_results[0])
+
+    result = strategy._measure_distributed(mocker.Mock(), "test", mocker.Mock(), [], _profiling_config())
+
+    assert result == LatencyBudgetProfilingResult(selected_batch_size=4, throughput=10.0, latency=5.0)
+    coordinator.collect_results.assert_called_once_with(gathered_results[0], None)
 
 
 # ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Module for tuning JIT models."""
 
+from aitune.torch.distributed import coordinator
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patcher import Patcher
 from aitune.torch.utils.memory import cleanup_memory
@@ -12,5 +13,6 @@ def deferred():
     if config.mode != JITMode.TUNE_DEFERRED:
         raise ValueError(f"tune.deferred() requires JITMode.TUNE_DEFERRED, but current mode is {config.mode.value}")
 
-    cleanup_memory()
-    Patcher.enable_tune_deferred()
+    with coordinator.raise_if_any_rank_fails("Enabling deferred JIT tuning"):
+        cleanup_memory()
+        Patcher.enable_tune_deferred()

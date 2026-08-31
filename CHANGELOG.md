@@ -6,6 +6,9 @@ title: "Changelog"
 # Changelog
 
 ## 0.6.0 (unreleased)
+
+- feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
+- feat: forward-signature preservation for bound, decorated, and wrapped `partial`/`partialmethod` callables
 - feat: introduce explicit backend artifacts declaration
 - feat: add `ModuleFunctionKernelProfiler` API for attributing CUDA kernels to module-scoped `torch.nn.functional` calls
 - feat: add the experimental `KernelOptimizer` API with Torch SDPA, SageAttention, and FlashAttention-4 providers and serializable provider runtime plans
@@ -16,6 +19,9 @@ title: "Changelog"
 - fix: preserve nested input structure for static and dynamic Torch Export and ONNX Dynamo shapes
 - fix: reduce memory usage in multi-module tuning by storing recorded samples on disk and loading them lazily during backend warmup
 - fix: reject backends that do not reproduce eager post-call input mutations such as cache population and index updates
+- fix: Torch-TensorRT JIT configurations are portable across CUDA devices and ranks
+- fix: configured autocast is applied consistently during JIT warmup and inference
+- breaking change: custom backends now use `BuildMode` and must explicitly opt into multi-GPU execution
 
 ## 0.5.0
 - feat: allow AOT modules to declare explicit dynamic input shapes

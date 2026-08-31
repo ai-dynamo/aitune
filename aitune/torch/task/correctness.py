@@ -4,12 +4,13 @@
 
 import copy
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
 import numpy as np
 import torch
 
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 
@@ -54,20 +55,21 @@ def check_dynamic_shape_boundary_inference(
     for boundary_name, (args, kwargs) in zip(
         ("min", "max"), _dynamic_shape_boundary_samples(sample, graph_spec), strict=False
     ):
-        try:
-            with torch.no_grad():
-                outputs = infer(*copy.deepcopy(args), **copy.deepcopy(kwargs))
-        except Exception as exc:
-            raise CorrectnessDynamicShapeError(
-                f"Dynamic shape correctness check failed with {boundary_name} input shapes for {name}: "
-                f"{exc.__class__.__name__}: {exc}"
-            ) from exc
-        outputs_metadata = SampleMetadata.from_outputs(outputs)
-        _check_output_tensor_shapes(graph_spec.output_spec, outputs_metadata)
+        with coordinator.raise_if_any_rank_fails(f"Dynamic shape correctness check ({boundary_name})"):
+            try:
+                with torch.no_grad():
+                    outputs = infer(*copy.deepcopy(args), **copy.deepcopy(kwargs))
+            except Exception as exc:
+                raise CorrectnessDynamicShapeError(
+                    f"Dynamic shape correctness check failed with {boundary_name} input shapes for {name}: "
+                    f"{exc.__class__.__name__}: {exc}"
+                ) from exc
+            outputs_metadata = SampleMetadata.from_outputs(outputs)
+            _check_output_tensor_shapes(graph_spec.output_spec, outputs_metadata)
 
 
 def check_inference_output_correctness(
-    data: Sequence[tuple[tuple, dict]],
+    data: Iterable[tuple[tuple, dict]],
     graph_spec: GraphSpec,
     infer: Callable[..., Any],
     name: str,
@@ -88,23 +90,24 @@ def check_inference_output_correctness(
     Returns:
         None.
     """
-    for args, kwargs in data:
-        call_args, call_kwargs = copy.deepcopy((args, kwargs))
-        with torch.no_grad():
-            outputs = infer(*call_args, **call_kwargs)
-        _check_output_correctness(outputs, name=f"{name}.output")
-        outputs_metadata = SampleMetadata.from_outputs(outputs)
-        _check_output_tensor_shapes(graph_spec.output_spec, outputs_metadata)
+    for sample_index, (args, kwargs) in enumerate(data):
+        with coordinator.raise_if_any_rank_fails(f"Inference correctness check (sample {sample_index})"):
+            call_args, call_kwargs = copy.deepcopy((args, kwargs))
+            with torch.no_grad():
+                outputs = infer(*call_args, **call_kwargs)
+            _check_output_correctness(outputs, name=f"{name}.output")
+            outputs_metadata = SampleMetadata.from_outputs(outputs)
+            _check_output_tensor_shapes(graph_spec.output_spec, outputs_metadata)
 
-        expected_post_inputs = graph_spec.post_input_spec
-        if expected_post_inputs is None:
-            continue
-        post_forward_inputs = graph_spec.forward_signature.normalize(call_args, call_kwargs)
-        post_inputs_metadata = SampleMetadata.from_inputs(
-            post_forward_inputs.arguments,
-            strict=expected_post_inputs.strict,
-        )
-        _check_post_input_metadata(expected_post_inputs, post_inputs_metadata, name)
+            expected_post_inputs = graph_spec.post_input_spec
+            if expected_post_inputs is None:
+                continue
+            post_forward_inputs = graph_spec.forward_signature.normalize(call_args, call_kwargs)
+            post_inputs_metadata = SampleMetadata.from_inputs(
+                post_forward_inputs.arguments,
+                strict=expected_post_inputs.strict,
+            )
+            _check_post_input_metadata(expected_post_inputs, post_inputs_metadata, name)
 
 
 def _dynamic_shape_boundary_samples(sample: tuple[tuple, dict], graph_spec: GraphSpec) -> list[tuple[tuple, dict]]:

@@ -16,7 +16,7 @@ import onnxruntime
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.cuda.memory import memcpy_to_torch
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
@@ -116,6 +116,9 @@ class ONNXRuntimeBackend(Backend):
         # later
         ait.load(model, "model.ait")
     """
+
+    _build_mode = BuildMode.AHEAD_OF_TIME
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
 
     # State dictionary keys
     STATE_TYPE = "type"

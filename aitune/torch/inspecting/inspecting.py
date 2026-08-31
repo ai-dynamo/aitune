@@ -3,12 +3,14 @@
 """Inspecting and patching modules."""
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from logging import getLogger
+from typing import Any
 
 import torch
 
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, ensure_enough_samples, samples_generator
+from aitune.torch.distributed import coordinator
 from aitune.torch.inspecting.module_info import InspectedModulesInfo
 from aitune.torch.inspecting.module_inspector import ModuleInspector
 from aitune.torch.utils.cuda_utils import synchronize
@@ -49,48 +51,61 @@ def inspect(
     logger.info("Inspecting object searching for executed nn.Module members.")
     model_inspector = ModuleInspector(min_depth=min_depth, max_depth=max_depth)
     model_inspector.inspect(obj)
+    try:
+        # If no inference function is provided, use the obj
+        if inference_function is None:
+            inference_function = obj
 
-    # If no inference function is provided, use the obj
-    if inference_function is None:
-        inference_function = obj
+        dataset = ensure_enough_samples(dataset, max(number_of_iterations, warmup_iterations))
 
-    dataset = ensure_enough_samples(dataset, max(number_of_iterations, warmup_iterations))
+        # Warmup, run the model on a few samples, to make sure the model is compiled and the cache is warm
+        _warmup(inference_function, dataset, warmup_iterations)
+        _reset_total_execution_time(model_inspector)
 
-    # Warmup, run the model on a few samples, to make sure the model is compiled and the cache is warm
-    _warmup(inference_function, dataset, warmup_iterations)
-    _reset_total_execution_time(model_inspector)
+        # Run the model on the dataset for the number of iterations
+        total_execution_time = 0.0
+        for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
+            total_execution_time += _run_inference(inference_function, args, kwargs)
 
-    # Run the model on the dataset for the number of iterations
-    total_execution_time = 0.0
-    for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
-        synchronize()
-        start_time = time.perf_counter()
-        with torch.no_grad():
-            inference_function(*args, **kwargs)
-        synchronize()
-        end_time = time.perf_counter()
-        total_execution_time += end_time - start_time
+        modules = model_inspector.get_modules()
+        inspection_plan = tuple(
+            (
+                module.object_path,
+                f"{module.module_type.__module__}.{module.module_type.__qualname__}",
+                module.execution_count,
+            )
+            for module in modules
+        )
+        coordinator.verify_equal(inspection_plan, "inspection plan")
 
-    modules = model_inspector.get_modules()
+        logger.info("Inspection done. Found %d candidate modules for tuning.", len(modules))
 
-    logger.info("Inspection done. Found %d candidate modules for tuning.", len(modules))
+        inspected_modules_info = InspectedModulesInfo(total_execution_time, number_of_iterations)
+        for module in modules:
+            inspected_modules_info.add_module(module)
 
-    inspected_modules_info = InspectedModulesInfo(total_execution_time, number_of_iterations)
-    for module in modules:
-        inspected_modules_info.add_module(module)
-
-    model_inspector.reset()
-
-    return inspected_modules_info
+        return inspected_modules_info
+    finally:
+        model_inspector.reset()
 
 
 def _warmup(obj: Callable, dataset: DatasetLike | DataLoaderFactory | torch.Tensor, number_of_iterations: int):
     """Warmup the model by running it on a few samples."""
     for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
-        synchronize()
+        _run_inference(obj, args, kwargs)
+
+
+def _run_inference(obj: Callable, args: Sequence[Any], kwargs: dict[str, Any]) -> float:
+    """Run one complete inference in lockstep across distributed ranks."""
+    coordinator.barrier()
+    synchronize()
+    start_time = time.perf_counter()
+    with coordinator.raise_if_any_rank_fails("Inspection inference"):
         with torch.no_grad():
             obj(*args, **kwargs)
         synchronize()
+    coordinator.barrier()
+    return time.perf_counter() - start_time
 
 
 def _reset_total_execution_time(inspector: ModuleInspector):

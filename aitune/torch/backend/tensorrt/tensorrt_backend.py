@@ -19,7 +19,14 @@ from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
 from aitune.exceptions import AITuneUserInputError
-from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
+from aitune.torch.backend.backend import (
+    Backend,
+    BackendBuildStep,
+    BackendConfig,
+    BackendState,
+    BuildMode,
+    ExecutionMode,
+)
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCast, ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig, ONNXQuantizer
 from aitune.torch.backend.tensorrt.tensorrt_builder import TensorRTBuilder
@@ -190,6 +197,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
     It handles the process of exporting models to ONNX and then converting them to TensorRT
     engines for optimized inference.
     """
+
+    _build_mode = BuildMode.AHEAD_OF_TIME
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
 
     # State dictionary keys
     STATE_TYPE = "type"

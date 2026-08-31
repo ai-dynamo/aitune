@@ -96,6 +96,33 @@ def test_correctness_is_idempotent(tmp_path):
     assert len(cache) == 0, "cache should be empty"
 
 
+def test_correctness_loads_samples_on_backend_device(mocker, tmp_path):
+    """Correctness should remap recorded CUDA samples to the backend device."""
+
+    class MockBackend:
+        device = torch.device("cuda:1")
+
+        def infer(self, value):
+            return value
+
+        def describe(self):
+            return "mock_backend"
+
+    sample = ((torch.zeros(2, 4),), {})
+    samples = make_sample_store([sample], tmp_path)
+    iter_samples = mocker.spy(samples, "iter_samples")
+    graph_spec = GraphSpec(
+        name="test_model",
+        input_spec=_input_metadata(sample, batch_size=2),
+        output_spec=SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2),
+        forward_signature=FORWARD_SIGNATURE,
+    )
+
+    TuneStrategyTestCorrectness().check_correctness(MockBackend(), "test_model", graph_spec, samples)  # type: ignore
+
+    assert iter_samples.call_args_list == [mocker.call(torch.device("cuda:1")), mocker.call(torch.device("cuda:1"))]
+
+
 def test_correctness_requires_at_least_one_sample(tmp_path):
     """Correctness validation should not pass without recorded samples."""
 

@@ -11,7 +11,6 @@ import torch
 from torch.utils.data import Dataset
 
 from aitune.torch import tuning
-from aitune.torch.config import DEFAULT_DEVICE
 from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
@@ -37,6 +36,7 @@ def test_tune(mocker, dry_run):
     dataset = DummyDataset()
     batch_sizes = [1, 2, 4]
     max_batches = 2
+    device = "cpu"
 
     mocker.patch.dict(MODULE_REGISTRY.modules, {"test_module": mock_module}, clear=True)
     mocker.patch("aitune.torch.tuning._describe_module")
@@ -47,13 +47,14 @@ def test_tune(mocker, dry_run):
         dataset,
         batch_sizes=batch_sizes,
         max_num_batches_per_batch_size=max_batches,
+        device=device,
         dry_run=dry_run,
         disable_external_logging=False,
     )
 
     # then
     assert mock_module.call_count > 0
-    mock_module.tune.assert_called_once_with(dry_run=dry_run, device=torch.device(DEFAULT_DEVICE))
+    mock_module.tune.assert_called_once_with(dry_run=dry_run, device=device)
 
     batch_size_counter = Counter()
     for args, _ in mock_module.call_args_list:
@@ -88,7 +89,7 @@ def test_tune_with_cache_clear(mocker, clear_cache):
 
     # then
     assert mock_module.call_count > 0
-    mock_module.tune.assert_called_once_with(dry_run=False, device=torch.device(DEFAULT_DEVICE))
+    mock_module.tune.assert_called_once_with(dry_run=False, device=None)
 
     assert spy_clear_cache.call_count == (1 if clear_cache else 0)
 
@@ -163,5 +164,37 @@ def test_tune_logs_full_exception_for_ignored_module(mocker, caplog, aitune_cach
 
     error_log = aitune_cache_dir / "transformer" / "error.log"
     assert str(error_log) in error_record.message
+    assert "Traceback (most recent call last)" in error_log.read_text()
+    assert "RuntimeError: transformer tuning exploded" in error_log.read_text()
+
+
+def test_tune_logs_and_raises_for_non_ignored_module(mocker, caplog, aitune_cache_dir):
+    mock_module = Mock()
+    mock_module.name = "transformer"
+    mock_module.cache_dir = aitune_cache_dir / "transformer"
+    mock_module.state = ModuleState.RECORDING
+    tuning_error = RuntimeError("transformer tuning exploded")
+    mock_module.tune.side_effect = tuning_error
+
+    mocker.patch.dict(MODULE_REGISTRY.modules, {"transformer": mock_module}, clear=True)
+    mocker.patch("aitune.torch.tuning.setup_logging")
+
+    with caplog.at_level(logging.ERROR, logger="aitune.torch.tuning"):
+        with pytest.raises(RuntimeError, match="transformer tuning exploded") as raised:
+            tune(
+                mock_module,
+                DummyDataset(size=1),
+                batch_sizes=[1],
+                disable_external_logging=False,
+                ignore_failing_modules=False,
+            )
+
+    assert raised.value is tuning_error
+    mock_module.enable_passthrough.assert_called_once_with(force=False)
+    assert "Traceback (most recent call last)" in caplog.text
+    assert "RuntimeError: transformer tuning exploded" in caplog.text
+
+    error_log = aitune_cache_dir / "transformer" / "error.log"
+    assert str(error_log) in caplog.text
     assert "Traceback (most recent call last)" in error_log.read_text()
     assert "RuntimeError: transformer tuning exploded" in error_log.read_text()

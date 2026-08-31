@@ -4,12 +4,23 @@
 """Unit tests for PyTorch module utilities."""
 
 import gc
+from collections import UserDict
 
 import pytest
 import torch
 import torch.nn as nn
+from torch.nn.parallel import DistributedDataParallel
 
-from aitune.torch.utils.module import count_parameters, format_num_parameters, offload
+from aitune.torch.backend.backend import BuildMode
+from aitune.torch.utils.module import (
+    count_parameters,
+    format_num_parameters,
+    is_distributed_module,
+    move_module_to_device,
+    move_tensors_to_device,
+    offload,
+    offload_after_tuning,
+)
 from tests.utilities.helpers import requires_cuda
 
 
@@ -36,6 +47,79 @@ def test_format_num_parameters(num_params, expected):
     result = format_num_parameters(num_params)
 
     assert result == expected
+
+
+def test_ordinary_module_is_not_distributed():
+    assert not is_distributed_module(nn.Linear(2, 2))
+
+
+def test_distributed_module_uses_enabled_integration_detector(mocker):
+    detector = mocker.patch("aitune.torch.utils.module.is_integration_distributed_module", return_value=True)
+    module = nn.Linear(2, 2)
+
+    assert is_distributed_module(module)
+    detector.assert_called_once_with(module)
+
+
+def test_distributed_module_detects_dtensor_parameters(mocker):
+    module = nn.Linear(2, 2)
+    mocker.patch("aitune.torch.utils.module.DTensor", nn.Parameter)
+
+    assert is_distributed_module(module)
+
+
+def test_distributed_module_detects_distributed_children():
+    distributed_identity = type("DistributedIdentity", (nn.Identity,), {"__module__": "torch.distributed.test"})
+    module = nn.Sequential(distributed_identity())
+
+    assert is_distributed_module(module)
+
+
+def test_distributed_module_detects_distributed_data_parallel():
+    module = object.__new__(DistributedDataParallel)
+
+    assert is_distributed_module(module)
+
+
+def test_move_module_moves_ordinary_module():
+    module = nn.Linear(2, 2)
+
+    move_module_to_device(module, torch.device("meta"))
+
+    assert next(module.parameters()).device.type == "meta"
+
+
+def test_move_module_preserves_distributed_module_placement(mocker):
+    module = nn.Linear(2, 2)
+    mocker.patch("aitune.torch.utils.module.is_distributed_module", return_value=True)
+
+    move_module_to_device(module, torch.device("meta"))
+
+    assert next(module.parameters()).device.type == "cpu"
+
+
+def test_move_tensors_preserves_dtensor_placement(mocker):
+    tensor = torch.ones(2)
+    mocker.patch("aitune.torch.utils.module.DTensor", torch.Tensor)
+
+    result = move_tensors_to_device(({"tensor": tensor},), torch.device("meta"))
+
+    assert result[0]["tensor"] is tensor
+
+
+def test_move_tensors_moves_nested_ordinary_tensors():
+    result = move_tensors_to_device(({"tensor": torch.ones(2)},), torch.device("meta"))
+
+    assert result[0]["tensor"].device.type == "meta"
+
+
+def test_move_tensors_moves_tensors_in_user_dict():
+    value = UserDict({"tensor": torch.ones(2)})
+
+    result = move_tensors_to_device(value, torch.device("meta"))
+
+    assert result is value
+    assert result["tensor"].device.type == "meta"
 
 
 @pytest.fixture
@@ -74,6 +158,37 @@ def test_offload_moves_to_cpu_device(simple_model, device):
     # Verify all parameters are now CPU tensors
     for param in simple_model.parameters():
         assert param.device.type == "cpu"
+
+
+def test_offload_after_tuning_offloads_aot_module(mocker):
+    model = mocker.Mock(spec=nn.Module)
+    backend = mocker.Mock(build_mode=BuildMode.AHEAD_OF_TIME)
+    offload_mock = mocker.patch("aitune.torch.utils.module.offload")
+
+    offload_after_tuning(model, [backend], device="cpu")
+
+    offload_mock.assert_called_once_with(model, device="cpu")
+
+
+def test_offload_after_tuning_skips_jit_module(mocker):
+    model = mocker.Mock(spec=nn.Module)
+    backend = mocker.Mock(build_mode=BuildMode.JUST_IN_TIME)
+    offload_mock = mocker.patch("aitune.torch.utils.module.offload")
+
+    offload_after_tuning(model, [backend], device="meta")
+
+    offload_mock.assert_not_called()
+
+
+def test_offload_preserves_distributed_module_placement(mocker):
+    model = mocker.Mock(spec=nn.Module)
+    mocker.patch("aitune.torch.utils.module.is_distributed_module", return_value=True)
+    cleanup = mocker.patch("aitune.torch.utils.module.cleanup_memory")
+
+    offload(model, device="meta")
+
+    model.to.assert_not_called()
+    cleanup.assert_not_called()
 
 
 @requires_cuda

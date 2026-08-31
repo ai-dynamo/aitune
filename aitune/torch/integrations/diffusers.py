@@ -2,18 +2,21 @@
 # SPDX-License-Identifier: Apache-2.0
 """Diffusers integrations."""
 
-try:
-    import diffusers
-    import torch
-    from diffusers.models.normalization import RMSNorm as DiffuserRMSNorm
-    from packaging.version import Version
+import torch
 
-    if Version(diffusers.__version__) >= Version("0.35"):
-        # For diffusers>=0.35 models use RMSNorm which is not support on ONNX Trace path as is limited to opset 20.
-        # Patching RMSNorm for using Diffusers version fix that issue making models working with trace path.
-        # WAR adapted from ModelOpt which faced similar issue:
-        # https://github.com/NVIDIA/Model-Optimizer/blob/2b8defc14b601491bb1479117181048912e6fdfc/examples/diffusers/quantization/diffusion_trt.py#L27
-        torch.nn.RMSNorm = DiffuserRMSNorm
-        torch.nn.modules.normalization.RMSNorm = DiffuserRMSNorm
+try:
+    from diffusers import ContextParallelConfig
+
+    from aitune.torch.integrations import register_distributed_module_detector
+
+    def _is_context_parallel_module(module: torch.nn.Module) -> bool:
+        for child in module.modules():
+            parallel_config = getattr(child, "_parallel_config", None)
+            context_parallel_config = getattr(parallel_config, "context_parallel_config", parallel_config)
+            if isinstance(context_parallel_config, ContextParallelConfig):
+                return True
+        return False
+
+    register_distributed_module_detector("diffusers_context_parallel", _is_context_parallel_module)
 except ImportError:
     pass

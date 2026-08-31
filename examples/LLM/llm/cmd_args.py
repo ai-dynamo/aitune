@@ -11,16 +11,18 @@ def get_tune_parser():
     parser.add_argument(
         "--model_id",
         type=str,
-        default="microsoft/Phi-3-mini-4k-instruct",
+        default="Qwen/Qwen3-0.6B",
         help="Model ID to load from Hugging Face Hub",
     )
     parser.add_argument(
         "--cache",
         type=str,
         default="static",
-        choices=["dynamic", "static"],
+        choices=["no_cache", "dynamic", "static"],
         help="Cache implementation type",
     )
+    parser.add_argument("--multi-gpu", action="store_true", help="Use Transformers native tensor parallelism")
+    parser.add_argument("--max-new-tokens", type=int, default=512, help="Number of tokens to generate")
     return parser
 
 
@@ -57,7 +59,7 @@ def get_benchmark_parser():
     parser.add_argument(
         "--model_id",
         type=str,
-        default="microsoft/Phi-3-mini-4k-instruct",
+        default="Qwen/Qwen3-0.6B",
         help="Model ID to load from Hugging Face Hub",
     )
     parser.add_argument(
@@ -105,7 +107,7 @@ def get_benchmark_all_parser():
     parser.add_argument(
         "--model_id",
         type=str,
-        default="microsoft/Phi-3-mini-4k-instruct",
+        default="Qwen/Qwen3-0.6B",
         help="Model ID to load from Hugging Face Hub",
     )
     parser.add_argument(

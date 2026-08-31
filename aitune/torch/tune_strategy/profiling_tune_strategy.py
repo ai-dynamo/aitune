@@ -32,6 +32,7 @@ from aitune.torch.backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTJitBackend,
 )
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
@@ -150,6 +151,52 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         """Formats a metric value with its unit, e.g. ``12.34 samples/s``."""
         return f"{format(value, self._value_fmt)} {self._metric_unit}"
 
+    def _aggregate_result(
+        self,
+        gathered_results: list[BackendProfilingResult],
+    ) -> BackendProfilingResult:
+        """Aggregate profiling results into a deterministic distributed result."""
+        result = gathered_results[0]
+        batch_sizes = [candidate.selected_batch_size for candidate in gathered_results]
+        if any(batch_size != batch_sizes[0] for batch_size in batch_sizes[1:]):
+            details = ", ".join(f"rank {rank}: {batch_size!r}" for rank, batch_size in enumerate(batch_sizes))
+            raise RuntimeError(f"Distributed selected profiling batch size differs across ranks: {details}")
+
+        updates = {}
+        if hasattr(result, "throughput"):
+            updates["throughput"] = min(candidate.throughput for candidate in gathered_results)
+        if hasattr(result, "latency"):
+            updates["latency"] = max(candidate.latency for candidate in gathered_results)
+        if updates:
+            return replace(result, **updates)
+
+        worst = gathered_results[0]
+        for candidate in gathered_results[1:]:
+            if self._is_better(worst, candidate):
+                worst = candidate
+        return worst
+
+    def _measure_distributed(
+        self,
+        backend: Backend,
+        name: str,
+        graph_spec: GraphSpec,
+        samples: SampleStore,
+        profiling_cfg: ProfilingConfig,
+    ) -> BackendProfilingResult | None:
+        """Measure locally and return an aggregated result only if every rank succeeds."""
+        local_error: Exception | None = None
+        result: BackendProfilingResult | None = None
+        try:
+            result = self._measure(backend, name, graph_spec, samples, profiling_cfg)
+        except Exception as e:
+            local_error = e
+        outcome, gathered_results = coordinator.collect_results(result, local_error)
+        if not outcome.succeeded:
+            return None
+        assert result is not None
+        return self._aggregate_result(gathered_results)
+
     def _pre_tune(
         self,
         module: nn.Module,
@@ -176,22 +223,35 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         baseline_cache_dir = cache_dir / "baseline"
         shutil.rmtree(baseline_cache_dir, ignore_errors=True)
         baseline_cache_dir.mkdir(parents=True)
+        local_error: Exception | None = None
+        backend = TorchEagerBackend()
+        result: BackendProfilingResult | None = None
         try:
-            backend = TorchEagerBackend()
-            backend = backend.build(module, graph_spec, samples, device, baseline_cache_dir)
+            with coordinator.raise_if_any_rank_fails("Building TorchEager baseline"):
+                backend = backend.build(module, graph_spec, samples, device, baseline_cache_dir)
             result = self._measure(backend, name, graph_spec, samples, profiling_cfg)
-            self._baseline_backend = backend
-            self._baseline_result = result
-            report_graph_baseline_metric(self._metric_label, result.metric)
-            log("📊 TorchEager baseline: %s", self._fmt(result.metric), sink=self._sink)
-        except Exception:
+        except Exception as e:
+            local_error = e
             error_log = self._log_file(baseline_cache_dir, "error.log")
-            error_log.write_text(traceback.format_exc())
+            error_log.write_text("".join(traceback.format_exception(e)))
+
+        outcome, gathered_results = coordinator.collect_results(result, local_error)
+        if not outcome.succeeded:
+            if backend.is_active:
+                backend.deactivate()
             log(
                 "⚠️ TorchEager baseline failed (log: %s), performance check skipped",
-                error_log,
+                self._log_file(baseline_cache_dir, "error.log"),
                 sink=self._sink,
             )
+            return
+
+        assert result is not None
+        result = self._aggregate_result(gathered_results)
+        self._baseline_backend = backend
+        self._baseline_result = result
+        report_graph_baseline_metric(self._metric_label, result.metric)
+        log("📊 TorchEager baseline: %s", self._fmt(result.metric), sink=self._sink)
 
     def _tune(
         self,
@@ -252,10 +312,20 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
             built = self._build_and_validate_backend(backend, module, name, graph_spec, samples, device, cache_dir)
             if built is None:
                 continue
+            result = self._measure_distributed(
+                built,
+                name,
+                graph_spec,
+                samples,
+                self._get_profiling_config(batching, max_batch_size),
+            )
+            if result is None:
+                if built.is_active:
+                    built.deactivate()
+                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
+                continue
+
             try:
-                result = self._measure(
-                    built, name, graph_spec, samples, self._get_profiling_config(batching, max_batch_size)
-                )
                 self.backend_results[-1].update(result.to_json_dict(self._metric_label))
                 report_backend_metric(self._metric_label, built.describe(), result.metric)
                 batch_size = result.selected_batch_size

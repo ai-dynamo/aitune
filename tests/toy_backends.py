@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from aitune.torch.backend.backend import Backend, BuildMode
+from aitune.torch.backend.backend import Backend, BuildMode, ExecutionMode
 from aitune.torch.module.sample_store import SampleStore
 
 
@@ -14,6 +14,7 @@ class SleepBackend(Backend):
     """Backend that simulate an inference using sleep()."""
 
     _build_mode = BuildMode.JUST_IN_TIME
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
 
     def __init__(self, sleep_time: float = 0.001):
         super().__init__()
@@ -61,6 +62,9 @@ class BuildFailsBackend(SleepBackend):
     Args:
         exception_class: The exception class to raise on build.
     """
+
+    _build_mode = BuildMode.JUST_IN_TIME
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
 
     def __init__(self, exception_class: type[Exception]):
         super().__init__()

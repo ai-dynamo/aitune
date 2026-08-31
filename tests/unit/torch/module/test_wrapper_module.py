@@ -16,6 +16,7 @@ from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
+from aitune.torch.distributed import resolve_tuning_device
 from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
@@ -99,6 +100,18 @@ def test_init():
     assert module._self_prev_recording is None
     assert module._self_orig_forward is not None
     assert module._self_proxy_forward is not None
+
+
+def test_deploy_wrapper_coordinates_deployment(mocker, module):
+    wrapper = Mock()
+    module._self_wrapper = wrapper
+    coordinated = mocker.patch("aitune.torch.module.wrapper_module.coordinator.raise_if_any_rank_fails")
+    device = torch.device("cpu")
+
+    module._deploy_wrapper(device)
+
+    coordinated.assert_called_once_with(f"Deploying module {TEST_MODULE_NAME}")
+    wrapper.deploy.assert_called_once_with(device=device)
 
 
 def test_module_registration():
@@ -230,6 +243,7 @@ def test_tune_dry_run(module, torch_device):
     module(1, a=1)
     module(2, b=2)
     module.tune(strategy=strategy, dry_run=True, device=torch_device)
+    tuning_device = resolve_tuning_device(torch_device, module.__wrapped__)
 
     stores = _assert_sample_stores(strategy.tune_dry_run, [[((1,), {"a": 1})], [((2,), {"b": 2})]])
 
@@ -245,7 +259,7 @@ def test_tune_dry_run(module, torch_device):
                 post_input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
             ),
             stores[0],
-            torch_device,
+            tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[0].name,
         ),
         call(
@@ -259,12 +273,27 @@ def test_tune_dry_run(module, torch_device):
                 post_input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
             ),
             stores[1],
-            torch_device,
+            tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,
         ),
     ])
 
     assert module.state == ModuleState.RECORDING
+
+
+def test_tune_resolves_unspecified_device_with_module_context(mocker):
+    wrapped_module = torch.nn.Identity()
+    module = Module(wrapped_module, TEST_MODULE_NAME)
+    strategy = Mock()
+    module(1)
+    resolve_device = mocker.patch(
+        "aitune.torch.module.wrapper_module.resolve_tuning_device",
+        return_value=torch.device("cuda:1"),
+    )
+
+    module.tune(strategy=strategy, dry_run=True)
+
+    resolve_device.assert_called_once_with(None, wrapped_module)
 
 
 def test_tune(module, torch_device, mocker):
@@ -282,6 +311,7 @@ def test_tune(module, torch_device, mocker):
     module(1, a=1)
     module(2, b=2)
     module.tune(strategy=strategy, dry_run=False, device=torch_device)
+    tuning_device = resolve_tuning_device(torch_device, module.__wrapped__)
 
     stores = _assert_sample_stores(strategy.tune, [[((1,), {"a": 1})], [((2,), {"b": 2})]])
     assert [mock_call.args[0] for mock_call in evict_page_cache.call_args_list] == stores
@@ -298,7 +328,7 @@ def test_tune(module, torch_device, mocker):
                 post_input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
             ),
             stores[0],
-            torch_device,
+            tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[0].name,
         ),
         call(
@@ -312,7 +342,7 @@ def test_tune(module, torch_device, mocker):
                 post_input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
             ),
             stores[1],
-            torch_device,
+            tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,
         ),
     ]
@@ -366,8 +396,13 @@ def test_tune_with_list_of_strategies(torch_device):
     module(2)
     module(3)
 
-    with pytest.raises(RuntimeError, match="Not enough strategies for multi-graph. Expected at least 3, got 2."):
+    with pytest.raises(
+        RuntimeError, match="Not enough strategies for multi-graph. Expected at least 3, got 2."
+    ) as exc_info:
         module.tune(dry_run=False, device=torch_device)
+    assert "Captured graph specs:" in str(exc_info.value)
+    for index, graph_spec in enumerate(module.graph_specs):
+        assert f"Graph spec {index}:\n{graph_spec}" in str(exc_info.value)
 
 
 def test_tune_with_dict_of_strategies(torch_device):

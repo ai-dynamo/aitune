@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 import torch
 
+from aitune.torch.distributed import DistributedOutcome
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patched_module import (
     PRINT_HIERARCHY_HEADER,
@@ -43,8 +44,13 @@ def mock_trt_backend():
     """Create a mock TensorRT backend for testing."""
     mock_backend = Mock()
     mock_backend.name = "MockTensorRTBackend"
-    mock_backend.build.return_value = mock_backend
     mock_backend.key.return_value = "MockTensorRTBackend"
+
+    def build(_module, _graph_spec, _samples, device, _cache_dir, **_kwargs):
+        mock_backend.device = device
+        return mock_backend
+
+    mock_backend.build.side_effect = build
     strategy = FirstWinsStrategy(backends=[mock_backend])
     strategy.enable_performance_validation(False)
     config.strategy = strategy
@@ -78,6 +84,38 @@ def test_jit_deferred_call_arms_tuning_until_next_forward():
 
     assert PatchedModule.heads[0]._state == ModuleState.TUNED
     assert PatchedModule.heads[0]._call_count == 2
+
+
+def test_jit_deferred_synchronizes_after_arming(mocker):
+    """Every rank is armed before tune.deferred() returns to the next forward."""
+    config.mode = JITMode.TUNE_DEFERRED
+    events = []
+    mocker.patch("aitune.torch.jit.tune.cleanup_memory", side_effect=lambda: events.append("cleanup"))
+    mocker.patch.object(Patcher, "enable_tune_deferred", side_effect=lambda: events.append("arm"))
+
+    def outcome(error):
+        events.append("outcome")
+        return DistributedOutcome((error,))
+
+    mocker.patch("aitune.torch.jit.tune.coordinator.outcome", side_effect=outcome)
+
+    jit_deferred()
+
+    assert events == ["cleanup", "arm", "outcome"]
+
+
+def test_jit_deferred_propagates_activation_failure(mocker):
+    """A local activation failure is collected and raised on every rank."""
+    config.mode = JITMode.TUNE_DEFERRED
+    error = RuntimeError("cleanup failed")
+    mocker.patch("aitune.torch.jit.tune.cleanup_memory", side_effect=error)
+    enable = mocker.patch.object(Patcher, "enable_tune_deferred")
+
+    with pytest.raises(RuntimeError, match="cleanup failed") as raised:
+        jit_deferred()
+
+    assert raised.value is error
+    enable.assert_not_called()
 
 
 def test_patcher_enable_tune_deferred_false_disarms_tuning():

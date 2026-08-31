@@ -12,12 +12,13 @@ import torch
 import torch.nn as nn
 
 from aitune.exceptions import AITuneError
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
+from aitune.torch.utils.module import move_module_to_device
 
 try:
     import torch_tensorrt
@@ -117,6 +118,7 @@ class TorchTensorRTJitBackend(Backend):
     """
 
     _build_mode = BuildMode.JUST_IN_TIME
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU, ExecutionMode.MULTI_GPU})
 
     # State dictionary keys
     STATE_TYPE = "type"
@@ -185,7 +187,7 @@ class TorchTensorRTJitBackend(Backend):
         logger.info("Start compiling torch module.")
         torch._dynamo.reset()
 
-        self._orig_module.to(self._device)
+        move_module_to_device(self._orig_module, self._device)
 
         compile_options = asdict(self._config.compile_config)
         if self._device.type == "cuda":

@@ -3,9 +3,11 @@
 
 """Unit tests for FirstWinsStrategy."""
 
+from contextlib import contextmanager
 from unittest.mock import MagicMock
 
 import pytest
+import torch
 import torch.nn as nn
 
 from aitune.torch import Module, tune
@@ -156,8 +158,82 @@ def test_tune_all_backends_fail(mock_module, mock_graph_spec, mock_samples, torc
     assert mock_module.to.call_count == 2  # Called after each failed backend
 
 
+def test_failed_backend_preserves_distributed_module_placement(mocker, mock_graph_spec, mock_samples, tmp_path):
+    module = nn.Linear(2, 2)
+    mocker.patch("aitune.torch.utils.module.is_distributed_module", return_value=True)
+    to_spy = MagicMock(wraps=module.to)
+    module.to = to_spy
+    backend = MagicMock(spec=Backend)
+    backend.name = "backend"
+    backend.describe.return_value = "backend"
+    backend.__deepcopy__ = lambda _, memo=None: backend
+    backend.build.side_effect = RuntimeError("Backend failed")
+    strategy = FirstWinsStrategy([backend])
+    strategy.backend_results = []
+    strategy.enable_correctness_check(False)
+
+    result = strategy._build_and_validate_backend(
+        backend,
+        module,
+        "test_module",
+        mock_graph_spec,
+        mock_samples,
+        torch.device("cpu"),
+        tmp_path,
+    )
+
+    assert result is None
+    to_spy.assert_not_called()
+
+
+def test_locally_successful_backend_is_rejected_when_another_rank_fails(
+    mock_module,
+    mock_graph_spec,
+    mock_samples,
+    torch_device,
+    tmp_path,
+    mocker,
+):
+    backend = MagicMock(spec=Backend)
+    backend.name = "backend"
+    backend.describe.return_value = "backend"
+    backend.__deepcopy__ = lambda _, memo=None: backend
+    backend.build.return_value = backend
+    backend.is_active = True
+    coordinator = mocker.patch("aitune.torch.tune_strategy.tune_strategy.coordinator")
+
+    @contextmanager
+    def remote_build_failure(*_args, **_kwargs):
+        yield
+        raise RuntimeError("Building backend failed on rank 1")
+
+    coordinator.raise_if_any_rank_fails.side_effect = remote_build_failure
+    strategy = FirstWinsStrategy([backend])
+    strategy.backend_results = []
+    strategy.enable_correctness_check(False)
+    correctness = mocker.spy(strategy, "check_correctness")
+
+    result = strategy._build_and_validate_backend(
+        backend,
+        mock_module,
+        "test_module",
+        mock_graph_spec,
+        mock_samples,
+        torch_device,
+        tmp_path,
+    )
+
+    assert result is None
+    backend.deactivate.assert_called_once()
+    correctness.assert_not_called()
+    assert strategy.backend_results == [{"backend": "backend", "success": False}]
+
+
 class InferenceFailsBackend(SleepBackend):
     """Backend that fails on inference."""
+
+    _build_mode = SleepBackend._build_mode
+    _execution_modes = SleepBackend._execution_modes
 
     def _infer(self, *args, **kwargs):
         raise RuntimeError("Inference failed")

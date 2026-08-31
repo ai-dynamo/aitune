@@ -306,12 +306,25 @@ To write a custom backend, extend the `Backend` base class and `BackendConfig` d
 - `to_dict()` - Serializes backend state; includes `ArtifactPath` objects for files or directories to bundle in
   checkpoints.
 - `from_dict()` - Reconstructs a backend instance from the serialized state.
-- `is_jit` - Boolean property indicating whether the backend is of just-in-time type. This information helps AITune manage resources as just-in-time backends require the original torch module for activation. Otherwise, the original module can be offloaded to system memory.
 - `_build()` - Builds backend artifacts for a specific module/graph and returns a ready backend.
 - `_activate()` - Loads/initializes the backend for inference after it was inactive or checkpoint-loaded.
 - `_deactivate()` - Releases runtime resources and makes the backend inactive.
 - `_deploy()` - Finalizes the backend for deployment; after this it cannot change state.
 - `_infer()` - Executes inference with the backend for the provided inputs.
+
+Every custom backend must declare its supported execution modes and build mode. Include `ExecutionMode.SINGLE_GPU` for
+ordinary modules and `ExecutionMode.MULTI_GPU` when the backend can preserve distributed module execution. If
+activation compiles or otherwise requires the original PyTorch module, declare the backend as just-in-time so AITune
+retains that module:
+
+```python
+from aitune.torch.backend import Backend, BuildMode, ExecutionMode
+
+
+class CustomJitBackend(Backend):
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
+    _build_mode = BuildMode.JUST_IN_TIME
+```
 
 For serialization with `ait.load` and `ait.save`, the `to_dict` and `from_dict` methods are used. Anything placed in
 the dictionary will be saved and restored as checkpoint state. Files and directories are copied only when explicitly

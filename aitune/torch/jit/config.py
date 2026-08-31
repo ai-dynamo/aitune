@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from aitune.torch.config import DEFAULT_DEVICE
 from aitune.torch.utils.device import get_device
 from aitune.utils.env_vars import AITUNE_JIT_CACHE_DIR as _AITUNE_JIT_CACHE_DIR
 
@@ -32,9 +31,7 @@ class Config:
     mode: JITMode = JITMode.TUNE_EAGER
     dry_run: bool = False  # whether to perform dry-run tuning
     dry_run_failure_probability: float = 0.2  # probability of failure in dry-run mode to imitate tuning failure
-    device: str | torch.device | None = (
-        DEFAULT_DEVICE  # device to perform tuning on, if None, the device will use module device
-    )
+    device: str | torch.device | None = None  # use the existing module or rank-local device when unspecified
 
     min_samples: int = 1  # minimum number of samples recorded before tuning
     batch_axis_required: bool = True  # if True, the batch axis must detected in the input data
@@ -52,7 +49,8 @@ class Config:
 
     def __post_init__(self):
         """Post init."""
-        self.device = get_device(self.device)
+        if self.device is not None:
+            self.device = get_device(self.device)
 
     def resolve_strategy(self) -> "TuneStrategy":
         """Return the tune strategy to use for JIT tuning.

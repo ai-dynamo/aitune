@@ -14,7 +14,7 @@ from pathlib import Path
 import timm
 import torch
 
-from aitune.torch.backend.torch_tensorrt_jit_backend import (
+from aitune.torch.backend import (
     TorchTensorRTConfig,
     TorchTensorRTJitBackend,
     TorchTensorRTJitBackendConfig,

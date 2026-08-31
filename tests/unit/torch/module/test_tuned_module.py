@@ -9,6 +9,7 @@ import pytest
 import torch
 
 from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.torch_inductor_aot_backend import TorchInductorAotBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import AITuneConfig
 from aitune.torch.module.forward_signature import ForwardSignature
@@ -136,3 +137,26 @@ def test_serialization():
     assert new_module._forward_signature == signature
     assert len(new_module._backends) == len(module._backends)
     assert all(k1 == k2 for k1, k2 in zip(new_module._backends.keys(), module._backends.keys(), strict=False))
+
+
+def test_deserialize_aot_preserves_distributed_module_placement(mocker):
+    """AOT deserialization must not offload an application-placed distributed module to meta."""
+    signature = ForwardSignature.from_callable(lambda x: x)
+    metadata = SampleMetadata.from_inputs(signature.normalize((torch.randn(2),), {}).arguments, strict=True)
+    backend = TorchInductorAotBackend()
+    backend._compiled_model_artifact = Mock()
+    backend._device = torch.device("cuda:0")
+    tuned_module = TunedModule(
+        backends=OrderedDict({metadata: backend}),
+        check_graph=True,
+        module_name="test",
+        forward_signature=signature,
+    )
+    module = torch.nn.Linear(2, 2)
+    # The module starts on CPU; treating it as distributed makes that placement application-managed, so AOT
+    # deserialization must preserve it instead of applying the ordinary-module meta offload.
+    mocker.patch("aitune.torch.utils.module.is_distributed_module", return_value=True)
+
+    TunedModule.from_dict(module, tuned_module.to_dict())
+
+    assert next(module.parameters()).device.type == "cpu"

@@ -6,7 +6,9 @@ from unittest.mock import Mock
 
 import torch
 
+from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
+from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.patcher import Patcher, jit_reset, patch_for_jit_tuning, prepare_for_jit_tuning
 
 
@@ -26,6 +28,19 @@ def test_jit_reset():
     torch.nn.Linear(10, 5)
     assert len(Patcher._patched_modules) == 0
     assert len(Patcher._intercepted_classes) == 0
+
+
+def test_eager_jit_tunes_when_ready(mocker):
+    jit_config.mode = JITMode.TUNE_EAGER
+    tune = mocker.patch.object(PatchedModule, "tune")
+
+    with prepare_for_jit_tuning():
+        module = torch.nn.Linear(2, 2)
+
+    with torch.no_grad():
+        module(torch.ones(1, 2))
+
+    tune.assert_called_once_with()
 
 
 def test_prepare_for_tuning():

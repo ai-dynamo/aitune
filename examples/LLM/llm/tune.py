@@ -1,25 +1,49 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Tune ResNet model."""
+"""Tune a causal language model on one or multiple GPUs."""
 
 import logging
 from logging import basicConfig
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import pipeline as create_text_pipeline
 
 from aitune.torch import Module, OneBackendStrategy
-from aitune.torch import tune as aitune
-from aitune.torch.backend import TorchEagerBackend, TorchInductorJitBackend, TorchInductorJitBackendConfig
+from aitune.torch import tune as aitune_tune
+from aitune.torch.backend import (
+    TorchEagerBackend,
+    TorchInductorJitBackend,
+    TorchInductorJitBackendConfig,
+)
 from llm.cmd_args import get_tune_parser
+from llm.distributed import initialize as initialize_distributed
+from llm.distributed import is_rank_zero
+from llm.distributed import shutdown as shutdown_distributed
 
 
-def get_model_and_tokenizer(model_id="microsoft/Phi-3-mini-4k-instruct"):
-    """Get the model and tokenizer."""
-    model = AutoModelForCausalLM.from_pretrained(model_id, dtype="auto", trust_remote_code=False)
+def get_model_and_tokenizer(model_id="Qwen/Qwen3-0.6B", multi_gpu=False):
+    """Load a model and tokenizer for single-GPU or native-TP execution."""
+    model_args = {"dtype": "auto", "trust_remote_code": False}
+    if multi_gpu:
+        model_args["tp_plan"] = "auto"
+    model = AutoModelForCausalLM.from_pretrained(model_id, **model_args)
     tokenizer = AutoTokenizer.from_pretrained(model_id, padding_side="left")
-    tokenizer.pad_token = tokenizer.eos_token  # some models does not have it set
-    return model.to("cuda"), tokenizer
+    tokenizer.pad_token = tokenizer.eos_token  # Some causal models do not define a padding token.
+    if not multi_gpu:
+        model = model.to("cuda")
+    return model, tokenizer
+
+
+def generation_options(cache: str, max_new_tokens: int) -> dict:
+    """Return the generation options shared by reference, tuning, and tuned runs."""
+    return {
+        "do_sample": False,
+        "disable_compile": True,
+        "cache_implementation": None if cache == "no_cache" else cache,
+        "use_cache": cache != "no_cache",
+        "max_new_tokens": max_new_tokens,
+    }
 
 
 def print_conversation(output, title="CONVERSATION OUTPUT"):
@@ -37,90 +61,97 @@ def print_conversation(output, title="CONVERSATION OUTPUT"):
         print(f"{role}: {content}\n")
 
 
-def tune_model(model, tokenizer, cache="static"):
+def tune_model(model, tokenizer, cache="static", max_new_tokens=20):
     """Tune the model.
 
-    There are different strategies to tune the model depending on the cache implementation:
-    - Dynamic cache: is not compile friendly and is ignored, hence we can't distinguish between prefill and decode phases.
-    - Static cache: For prefill phase we have to use torch eager backend because torch.compile would trigger every time
-    as the prompt sequence length changes. However for decode phase we can use torch inductor backend as there is
-    always static sequence length = 1 and static cache is torch.compile friendly.
+    The selected strategies reflect how each cache mode changes generation. Dynamic cache stays in TorchEager. Static
+    cache uses TorchEager for variable-length prefill and TorchInductor for single-token decode. Generation without a
+    cache uses TorchInductor for its recorded graph.
 
     Args:
         model: The model to tune.
         tokenizer: The tokenizer to use.
         cache: The cache implementation to use.
+        max_new_tokens: Number of tokens generated while tuning.
 
     Returns:
         The tuned model.
 
     """
-    if cache == "dynamic":
+    if cache == "no_cache":
         model = Module(
             model,
             model.__class__.__name__,
-            strategy=OneBackendStrategy(TorchEagerBackend()).enable_find_max_batch_size(
-                False
-            ),  # just one strategy, there is no prefill/decode distinction
+            strategy=OneBackendStrategy(TorchInductorJitBackend()).enable_find_max_batch_size(False),
+        )
+    elif cache == "dynamic":
+        model = Module(
+            model,
+            model.__class__.__name__,
+            strategy=OneBackendStrategy(TorchEagerBackend()).enable_find_max_batch_size(False),
         )
     elif cache == "static":
         model = Module(
             model,
             model.__class__.__name__,
             strategies=[
-                OneBackendStrategy(TorchEagerBackend()).enable_find_max_batch_size(False),  # for prefill phase
+                # Prefill has a variable prompt length.
+                OneBackendStrategy(TorchEagerBackend()).enable_find_max_batch_size(False),
+                # Decode has a single-token input and a compile-friendly static cache.
                 OneBackendStrategy(
                     TorchInductorJitBackend(TorchInductorJitBackendConfig(mode="reduce-overhead"))
-                ).enable_find_max_batch_size(False),  # for decode phase
+                ).enable_find_max_batch_size(False),
             ],
         )
 
-    generate_args = {
-        "do_sample": False,
-        "disable_compile": True,
-        "cache_implementation": cache,
-        "use_cache": True,
-    }
+    generate_args = generation_options(cache, max_new_tokens)
 
-    def pipe(messages):
+    def run_generation(messages):
         inputs = tokenizer(messages, return_tensors="pt", padding=True)
         inputs = {k: v.to("cuda") for k, v in inputs.items()}
         with torch.no_grad():
             return model.generate(**inputs, **generate_args)
 
-    aitune(pipe, ["2+2?", "How big is the universe?"], batch_sizes=[1, 2], device="cuda", dry_run=False)
+    aitune_tune(
+        run_generation,
+        ["2+2?", "How big is the universe?"],
+        batch_sizes=[1, 2],
+        device="cuda",
+        dry_run=False,
+    )
     return model
 
 
+def run_example(args) -> None:
+    """Run the example while owning its distributed and model lifecycles."""
+    initialize_distributed(args.multi_gpu)
+    try:
+        generate_args = generation_options(args.cache, args.max_new_tokens)
+        messages = [{"role": "user", "content": "How big is the universe?"}]
+
+        # Establish the reference output before AITune wraps the model.
+        model, tokenizer = get_model_and_tokenizer(args.model_id, args.multi_gpu)
+        original_pipeline = create_text_pipeline("text-generation", model=model, tokenizer=tokenizer)
+        original_output = original_pipeline(messages, **generate_args)
+
+        # Tune a fresh model, then repeat the same generation for comparison.
+        model, tokenizer = get_model_and_tokenizer(args.model_id, args.multi_gpu)
+        tuned_model = tune_model(model, tokenizer, args.cache, args.max_new_tokens)
+        tuned_pipeline = create_text_pipeline("text-generation", model=tuned_model, tokenizer=tokenizer)
+        tuned_output = tuned_pipeline(messages, **generate_args)
+
+        if is_rank_zero():
+            print_conversation(original_output, title="Original model output")
+            print_conversation(tuned_output, title="Tuned model output")
+    finally:
+        shutdown_distributed()
+
+
 def main():
-    """Entry point for the script."""
+    """Initialize distributed execution, run the example, and release its resources."""
     basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     args = get_tune_parser().parse_args()
-
-    generate_args = {
-        "do_sample": False,  # make deterministic
-        "disable_compile": True,
-        "cache_implementation": args.cache,
-        "use_cache": True,
-        "max_new_tokens": 512,
-    }
-    messages = [
-        {
-            "role": "user",
-            "content": "How big is the universe?",
-        }
-    ]
-    model, tokenizer = get_model_and_tokenizer(args.model_id)
-    pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
-    original_output = pipe(messages, **generate_args)
-
-    model, tokenizer = get_model_and_tokenizer(args.model_id)
-    tuned_model = tune_model(model, tokenizer, args.cache)
-    pipe = pipeline("text-generation", model=tuned_model, tokenizer=tokenizer)
-    tuned_output = pipe(messages, **generate_args)
-
-    print_conversation(original_output, title="Original model output")
-    print_conversation(tuned_output, title="Tuned model output")
+    run_example(args)
 
 
 if __name__ == "__main__":

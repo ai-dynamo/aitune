@@ -8,6 +8,7 @@ import pathlib
 
 from openai import OpenAI
 
+from ..defaults import DEFAULT_IMAGE_SIZE, DEFAULT_PROMPT
 from ..model import MODEL_NAME
 
 
@@ -16,8 +17,8 @@ def main() -> None:
     parser.add_argument("--protocol", type=str.lower, choices=("http", "https"), default="http")
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--prompt", default="A futuristic cityscape at night")
-    parser.add_argument("--size", default="1024x1024")
+    parser.add_argument("--prompt", default=DEFAULT_PROMPT)
+    parser.add_argument("--size", default=f"{DEFAULT_IMAGE_SIZE[0]}x{DEFAULT_IMAGE_SIZE[1]}")
     parser.add_argument("--output", default="output.png")
     args = parser.parse_args()
 

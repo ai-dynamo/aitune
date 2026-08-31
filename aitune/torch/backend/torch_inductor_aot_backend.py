@@ -11,12 +11,19 @@ import nvtx
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendBuildStep, BackendConfig, BackendState
+from aitune.torch.backend.backend import (
+    Backend,
+    BackendBuildStep,
+    BackendConfig,
+    BackendState,
+    BuildMode,
+    ExecutionMode,
+)
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.torch import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
-from aitune.torch.utils.module import offload
+from aitune.torch.utils.module import move_module_to_device, offload
 
 logger = getLogger(__name__)
 
@@ -61,6 +68,9 @@ class TorchInductorAotBackend(Backend):
         ait.load(model, "model.ait")
     """
 
+    _build_mode = BuildMode.AHEAD_OF_TIME
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU, ExecutionMode.MULTI_GPU})
+
     # State dictionary keys
     STATE_TYPE = "type"
     STATE_COMPILED_MODEL_PATH = "compiled_model_path"
@@ -89,7 +99,8 @@ class TorchInductorAotBackend(Backend):
         """Export and compile the model with AOT Inductor, then load the runner."""
         self._save_config(cache_dir)
 
-        module = module.eval().to(self._device)
+        module = module.eval()
+        move_module_to_device(module, self._device)
 
         with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
             exported = TorchExporter().export(module, samples[0], graph_spec, device=self._device).exported_program
@@ -105,8 +116,8 @@ class TorchInductorAotBackend(Backend):
             result["compiled_model_size_bytes"] = self._compiled_model_artifact.path.stat().st_size
         logger.info("AOT Inductor compilation complete with package path %s.", self._compiled_model_artifact)
 
-        # The compiled artifact is self-contained; offload the original module to CPU
-        # to free GPU memory now that the runner is loaded.
+        # The compiled artifact is self-contained; offload the original module
+        # before loading the runner to reduce peak GPU memory.
         offload(module, device="cpu")
 
         self._activate()

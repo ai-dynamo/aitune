@@ -18,6 +18,7 @@ import torch
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling.config import ProfilingConfig
@@ -148,7 +149,10 @@ def _profile(
 
             profiling_results.entries += new_entries
 
-            if profiling_stop_strategy.should_stop(get_inference_events(new_entries)):
+            local_should_stop = False
+            with coordinator.raise_if_any_rank_fails("Profiling stop decision"):
+                local_should_stop = profiling_stop_strategy.should_stop(get_inference_events(new_entries))
+            if coordinator.decide_by_rank0(local_should_stop):
                 break
 
         return ProfilingStatus(status=ProfilingStatus.Status.SUCCESS, results=profiling_results)
@@ -167,33 +171,42 @@ def _run_profiling_batch_size(
 ) -> list[ProfilingResultEvent] | None:
     entries = []
     measurement_stop_strategy = deepcopy(profiling_config.measurement_stop_strategy)
-    try:
-        while True:
+    coordinator.barrier()
+    while True:
+        local_error: Exception | None = None
+        local_should_stop = False
+        new_entries: list[ProfilingResultEvent] | None = None
+        try:
             # make call idempotent (no side effects) since model can be stateful like LLM KV cache
             new_entries = profiling_config.measuring_strategy.do_measurement(
                 batch_size, model, deepcopy(sample), backend_details=backend_details, model_name=model_name
             )
-            entries += new_entries
+            local_should_stop = measurement_stop_strategy.should_stop(get_inference_events(new_entries))
+        except torch.OutOfMemoryError as error:
+            local_error = error
+            logger.warning(
+                "Out of memory error while profiling %s with backend %s and batch size %d",
+                model_name,
+                backend_details,
+                batch_size,
+            )
+        except Exception as error:
+            local_error = error
+            logger.warning(
+                "Error while profiling %s with backend %s and batch size %d: %s",
+                model_name,
+                backend_details,
+                batch_size,
+                error,
+            )
 
-            if measurement_stop_strategy.should_stop(get_inference_events(new_entries)):
-                break
-    except torch.OutOfMemoryError:
-        logger.warning(
-            "Out of memory error while profiling %s with backend %s and batch size %d",
-            model_name,
-            backend_details,
-            batch_size,
-        )
-        return None
-    except Exception as e:
-        logger.warning(
-            "Error while profiling %s with backend %s and batch size %d: %s",
-            model_name,
-            backend_details,
-            batch_size,
-            e,
-        )
-        return None
+        if not coordinator.outcome(local_error).succeeded:
+            return None
+
+        assert new_entries is not None
+        entries += new_entries
+        if coordinator.decide_by_rank0(local_should_stop):
+            break
 
     # Note: keeping and returning all entries
     return entries

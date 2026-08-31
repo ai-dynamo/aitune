@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Tune Flux model."""
+"""Inspect and tune a FLUX pipeline on one or multiple GPUs."""
 
 import os
 from logging import basicConfig, getLogger
@@ -15,16 +15,24 @@ from aitune.torch.backend import (
     TorchAOBackend,
     TorchAOBackendConfig,
     TorchInductorJitBackend,
-    TorchQuantizationConfig,
+    TorchInductorJitBackendConfig,
+    TorchTensorRTConfig,
+    TorchTensorRTJitBackend,
+    TorchTensorRTJitBackendConfig,
 )
 from flux.cmd_args import parse_args
+from flux.context_parallel import ContextParallelMode
+from flux.defaults import DEFAULT_BATCH_SIZE
+from flux.distributed import distributed_output_path, is_rank_zero, synchronize
+from flux.distributed import initialize as initialize_distributed
+from flux.distributed import shutdown as shutdown_distributed
 from flux.model import get_pipeline
 
 logger = getLogger(__name__)
 
 
 def filter_fn(mod, fqn):
-    """Filter function for Flux.
+    """Select large transformer linear layers for TorchAO quantization.
 
     Adapter from:
     - Source code: https://github.com/sayakpaul/diffusers-blackwell-quants/blob/9fefb0744ca6eef03d558728f4ee74304978da76/benchmark.py#L194
@@ -45,64 +53,44 @@ def filter_fn(mod, fqn):
     return True
 
 
-def _nvfp4_strategy():
-    strategy_nvfp4 = ait.FirstWinsStrategy(
+def _transformer_strategy(
+    sizes: list[tuple[int, int]],
+    multi_gpu=False,
+    quantization=False,
+):
+    dynamic = len(sizes) > 1
+    backends = []
+    if quantization:
+        backends = [
+            TorchAOBackend(config=TorchAOBackendConfig(quantization="nvfp4dq", filter_fn=filter_fn)),
+            TorchAOBackend(config=TorchAOBackendConfig(quantization="fp8dq", filter_fn=filter_fn)),
+        ]
+
+    backends += [
+        TorchTensorRTJitBackend(
+            config=TorchTensorRTJitBackendConfig(
+                dynamic=dynamic,
+                compile_config=TorchTensorRTConfig(
+                    use_distributed_mode_trace=multi_gpu, min_block_size=50, truncate_double=True
+                ),
+            )
+        ),
+        TorchInductorJitBackend(config=TorchInductorJitBackendConfig(dynamic=dynamic)),
+    ]
+
+    strategy = ait.MaxThroughputStrategy(backends=backends)
+    return strategy
+
+
+def _pipeline_strategy():
+    """Compare backends used by tunable modules outside the transformer."""
+    return ait.MaxThroughputStrategy(
         backends=[
-            TorchAOBackend(TorchAOBackendConfig(quantization="nvfp4dq", filter_fn=filter_fn)),
-            TensorRTBackend(
-                TensorRTBackendConfig(
-                    quantization_config=TorchQuantizationConfig(
-                        quantization_config="FP8_DEFAULT_CFG",
-                        device="cuda",
-                    ),
-                )
-            ),
-            TensorRTBackend(
-                TensorRTBackendConfig(
-                    quantization_config=TorchQuantizationConfig(
-                        quantization_config="FP8_DEFAULT_CFG",
-                        device="cuda",
-                    ),
-                    use_dynamo=False,
-                )
-            ),
-            TorchAOBackend(TorchAOBackendConfig(quantization="fp8dq")),
-            TensorRTBackend(TensorRTBackendConfig(use_dynamo=True)),
-            TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
+            TensorRTBackend(),
+            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
             TorchInductorJitBackend(),
         ]
     )
-
-    return strategy_nvfp4
-
-
-def _fp8_strategy():
-    strategy_fp8 = ait.FirstWinsStrategy(
-        backends=[
-            TensorRTBackend(
-                TensorRTBackendConfig(
-                    quantization_config=TorchQuantizationConfig(
-                        quantization_config="FP8_DEFAULT_CFG",
-                        device="cuda",
-                    ),
-                )
-            ),
-            TensorRTBackend(
-                TensorRTBackendConfig(
-                    quantization_config=TorchQuantizationConfig(
-                        quantization_config="FP8_DEFAULT_CFG",
-                        device="cuda",
-                    ),
-                    use_dynamo=False,
-                )
-            ),
-            TorchAOBackend(TorchAOBackendConfig(quantization="fp8dq")),
-            TensorRTBackend(TensorRTBackendConfig(use_dynamo=True)),
-            TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorJitBackend(),
-        ]
-    )
-    return strategy_fp8
 
 
 def tune_model(
@@ -113,26 +101,30 @@ def tune_model(
     guidance_scale,
     max_sequence_length,
     tuned_model_path,
-    batch_sizes=None,
+    multi_gpu=False,
+    context_parallel=ContextParallelMode.ULYSSES,
+    quantization=False,
 ):
-    """Tune the Flux model.
+    """Inspect, tune, and save the FLUX pipeline.
 
     Args:
-        model_name: HuggingFace model name or path
-        prompt: Text prompt for image generation
-        sizes: List of (height, width) tuples
-        steps: Number of inference steps
-        guidance_scale: Guidance scale
-        max_sequence_length: Maximum sequence length
-        tuned_model_path: Path to save the tuned model
-        batch_sizes: List of batch sizes to tune
+        model_name: Hugging Face model name or path.
+        prompt: Text prompt for image generation.
+        sizes: List of ``(width, height)`` tuples.
+        steps: Number of inference steps.
+        guidance_scale: Guidance scale.
+        max_sequence_length: Maximum sequence length.
+        tuned_model_path: Path used to save the tuned model.
+        multi_gpu: Whether to use Diffusers context parallelism.
+        context_parallel: Context-parallel attention mode.
+        quantization: Whether to include TorchAO quantization backends for the transformer.
     """
-    pipe = get_pipeline(model_name=model_name)
+    pipeline = get_pipeline(model_name=model_name, multi_gpu=multi_gpu, context_parallel=context_parallel)
 
-    def call_wrapper(*args, **kwargs):
-        for height, width in sizes:
+    def run_pipeline(*args, **kwargs):
+        for width, height in sizes:
             print(f"Generating image with height={height} and width={width}")  # noqa: T201
-            pipe(
+            pipeline(
                 *args,
                 height=height,
                 width=width,
@@ -140,52 +132,54 @@ def tune_model(
                 guidance_scale=guidance_scale,
                 max_sequence_length=max_sequence_length,
                 generator=torch.Generator("cpu").manual_seed(0),
+                output_type="pil" if is_rank_zero() else "pt",
                 **kwargs,
             )
 
     input_data = [{"prompt": prompt}]
 
-    # Inspect pipeline to get modules
+    # Inspect the end-to-end pipeline to discover tunable modules.
     modules_info = ait.inspect(
-        pipe,
+        pipeline,
         input_data,
-        inference_function=call_wrapper,
+        inference_function=run_pipeline,
         number_of_iterations=1,
         warmup_iterations=2,
     )
     modules_info.describe()
 
-    # Define strategy with NVFP4 support
-    strategy_nvfp4 = _nvfp4_strategy()
-    strategy_nvfp4.enable_find_max_batch_size(enable=False)
+    transformer_strategy = _transformer_strategy(sizes=sizes, multi_gpu=multi_gpu, quantization=quantization)
+    transformer_strategy.enable_find_max_batch_size(enable=False)
 
-    # Define strategy with FP8 support
-    strategy_fp8 = _fp8_strategy()
-    strategy_fp8.enable_find_max_batch_size(enable=False)
+    default_strategy = _pipeline_strategy()
+    default_strategy.enable_find_max_batch_size(enable=False)
 
-    # Wrap all modules except transformer with fp8 strategy
+    # Leave all modules except the transformer unquantized.
     modules = [m for m in modules_info.get_modules() if m.name != "transformer"]
-    pipe = ait.wrap(pipe, modules, strategy=strategy_fp8)
+    pipeline = ait.wrap(pipeline, modules, strategy=default_strategy)
 
-    # Wrap transformer separately with nvfp4 strategy
-    pipe.transformer = ait.module.Module(pipe.transformer, name="transformer", strategy=strategy_nvfp4)
+    # Tune the transformer separately so quantization can be enabled independently.
+    pipeline.transformer = ait.module.Module(
+        pipeline.transformer,
+        name="transformer",
+        strategy=transformer_strategy,
+    )
 
-    # First do a dry run for testing
-    logger.info("Tuning module: %s", model_name)
-    ait.tune(call_wrapper, input_data, batch_sizes=[1] if batch_sizes is None else batch_sizes)
+    # Record the generation workload and tune every wrapped module.
+    logger.info("Tuning pipeline: %s", model_name)
+    ait.tune(run_pipeline, input_data, batch_sizes=[DEFAULT_BATCH_SIZE])
     logger.info("Tuning completed.")
 
-    ait.save(pipe, tuned_model_path)
+    if multi_gpu:
+        tuned_model_path = distributed_output_path(tuned_model_path)
+    ait.save(pipeline, tuned_model_path)
     logger.info("Model saved to %s", tuned_model_path)
     relocated_path = copy_checkpoint_to_tmp(tuned_model_path)
     logger.info("Checkpoint copied to %s", relocated_path)
 
 
-def main():
-    """Entry point for the script."""
-    log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
-    basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
-    args = parse_args()
+def run_example(args) -> None:
+    """Inspect, tune, and save the configured FLUX pipeline."""
     tune_model(
         model_name=args.model_name,
         prompt=args.prompt,
@@ -194,7 +188,23 @@ def main():
         guidance_scale=args.guidance_scale,
         max_sequence_length=args.max_sequence_length,
         tuned_model_path=args.tuned_model_path,
+        multi_gpu=args.multi_gpu,
+        context_parallel=args.context_parallel,
+        quantization=args.quantization,
     )
+    synchronize()
+
+
+def main():
+    """Initialize distributed execution, run the example, and release its resources."""
+    log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
+    basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
+    args = parse_args()
+    initialize_distributed(args.multi_gpu)
+    try:
+        run_example(args)
+    finally:
+        shutdown_distributed()
 
 
 if __name__ == "__main__":

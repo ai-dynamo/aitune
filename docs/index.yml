@@ -26,6 +26,8 @@ navigation:
         path: ../docs/guides/jit_tuning.md
       - page: Just-in-time Inspect
         path: ../docs/guides/jit_inspect.md
+      - page: Multi-GPU Integration
+        path: ../docs/guides/multi_gpu.md
       - section: Backends
         contents:
           - page: TensorRT Backend

@@ -12,12 +12,12 @@ requires-python = ">=3.10, <3.13"
 dependencies = [
     "aitune",
     "aitune-examples-common",
-    "diffusers>=0.25.0,<0.35",
+    "diffusers>=0.36,<0.38",
+    "pillow",
+    "protobuf",
+    "sentencepiece",
     "torch>=2.0.0",
     "transformers<5",
-    "pillow",
-    "sentencepiece",
-    "protobuf",
 ]
 
 [project.optional-dependencies]
@@ -54,6 +54,12 @@ include = ["flux"]
 flux = ["**/*"]
 
 [tool.aitune]
+docker_image = "nvcr.io/nvidia/pytorch:26.06-py3"
+variants = [
+    { arguments = { "multi-gpu" = false, "quantization" = false } },
+    { arguments = { "multi-gpu" = false, "quantization" = true } },
+    { arguments = { "multi-gpu" = true, "context-parallel" = "ulysses", "quantization" = false }, additional_tags = ["gpu/4"], launcher = "torchrun", processes = 4 },
+]
 additional_tags = ["gpu/sm/120"]
 use_gated_hf_token = true
 allow_failure = true

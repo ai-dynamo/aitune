@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+# ruff: noqa: A005
 """Logging configuration for the AITune package."""
 
 import contextlib
@@ -57,6 +58,12 @@ def setup_logging(
         log_file: Optional file path to write logs to
         capture_warnings: If True, warnings will be captured and displayed
     """
+    from aitune.torch.distributed import distributed_context
+
+    context = distributed_context()
+    if context.is_multi_process:
+        format_string = f"[rank={context.rank},local_rank={context.local_rank}] {format_string}"
+
     # Configure root logger
     root_logger = logging.getLogger()
     log_file = Path(log_file) if log_file else None
@@ -199,7 +206,7 @@ def log_exception_details(
         exception: The exception that was caught
         message: Custom error message describing the context
         level: Logging level to use (default: ERROR)
-        reraise: Whether to re-raise the exception after logging (default: True)
+        reraise: Whether to re-raise the exception after logging (default: False)
         reraise_as: Optional exception to raise instead of the original (default: None)
 
     Raises:
@@ -217,15 +224,11 @@ def log_exception_details(
                 reraise_as=RuntimeError(f"Operation failed: {e}")
             )
     """
-    # Log the main error message with error icon
-    logger.log(level, "❌ %s", message)
-
-    # Log exception type and details with info icons
-    logger.log(level, "🔍 Exception type: %s", type(exception).__name__)
-    logger.log(level, "💬 Exception details: %s", str(exception))
-
-    # Log full traceback with stack trace icon
-    logger.log(level, "📋 Full traceback:\n%s", traceback.format_exc())
+    if logger.isEnabledFor(level):
+        logger.log(level, "❌ %s", message)
+        logger.log(level, "🔍 Exception type: %s", type(exception).__name__)
+        logger.log(level, "💬 Exception details: %s", exception)
+        logger.log(level, "📋 Full traceback:\n%s", "".join(traceback.format_exception(exception)))
 
     # Re-raise if requested
     if reraise:

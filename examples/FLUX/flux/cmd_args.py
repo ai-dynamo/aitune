@@ -4,6 +4,16 @@
 
 import argparse
 
+from flux.context_parallel import ContextParallelMode
+from flux.defaults import (
+    DEFAULT_GUIDANCE_SCALE,
+    DEFAULT_IMAGE_SIZE,
+    DEFAULT_INFERENCE_STEPS,
+    DEFAULT_MAX_SEQUENCE_LENGTH,
+    DEFAULT_MODEL_NAME,
+    DEFAULT_PROMPT,
+)
+
 
 def parse_sizes(sizes_str: str) -> list[tuple[int, int]]:
     """Parse sizes string into list of width and height tuples.
@@ -44,14 +54,12 @@ def parse_sizes(sizes_str: str) -> list[tuple[int, int]]:
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Tune Flux model")
-    parser.add_argument(
-        "--model-name", type=str, default="black-forest-labs/FLUX.1-dev", help="HuggingFace model name or path"
-    )
+    parser = argparse.ArgumentParser(description="Tune or run a FLUX pipeline")
+    parser.add_argument("--model-name", type=str, default=DEFAULT_MODEL_NAME, help="Hugging Face model name or path")
     parser.add_argument(
         "--prompt",
         type=str,
-        default="A futuristic cityscape with neon lights and flying cars",
+        default=DEFAULT_PROMPT,
         help="Text prompt for image generation",
     )
     parser.add_argument(
@@ -63,25 +71,25 @@ def parse_args():
     parser.add_argument(
         "--sizes",
         type=parse_sizes,
-        default=[(512, 512), (1024, 1024)],
-        help="Image dimensions as space-separated width,height pairs (e.g., '128,128 256,256' or '512,512')",
+        default=[DEFAULT_IMAGE_SIZE],
+        help="Image dimensions as space-separated width,height pairs (default: '1024,1024')",
     )
     parser.add_argument(
         "--steps",
         type=int,
-        default=28,
+        default=DEFAULT_INFERENCE_STEPS,
         help="Number of inference steps",
     )
     parser.add_argument(
         "--guidance-scale",
         type=float,
-        default=3.5,
+        default=DEFAULT_GUIDANCE_SCALE,
         help="Guidance scale",
     )
     parser.add_argument(
         "--max-sequence-length",
         type=int,
-        default=128,
+        default=DEFAULT_MAX_SEQUENCE_LENGTH,
         help="Maximum sequence length",
     )
     parser.add_argument(
@@ -89,6 +97,19 @@ def parse_args():
         type=str,
         default="flux-dev.ait",
         help="Path to save the tuned model",
+    )
+    parser.add_argument("--multi-gpu", action="store_true", help="Use Diffusers context parallelism")
+    parser.add_argument(
+        "--quantization",
+        action="store_true",
+        help="Include TorchAO NVFP4 and FP8 transformer backends during tuning",
+    )
+    parser.add_argument(
+        "--context-parallel",
+        type=ContextParallelMode,
+        choices=ContextParallelMode,
+        default=ContextParallelMode.ULYSSES,
+        help="Context-parallel attention mode for multi-GPU execution",
     )
 
     args = parser.parse_args()

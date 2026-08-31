@@ -121,17 +121,21 @@ class InspectedModulesInfo:
             limit: Maximum number of modules to return.
 
         Returns:
-            List of ModuleInfo objects.
+            List of ModuleInfo objects in discovery order by default. When filtering by execution ratio or limiting the
+            result count, modules are ordered by descending execution time.
         """
         if min_execution_ratio is not None:
             validation.in_range(min_execution_ratio, min_value=0, max_value=1)
 
         modules = []
-        sorted_modules = sorted(
-            self._modules.values(),
-            key=lambda x: (-x.total_execution_time, x.name or ""),  # Negative for reverse=True, empty string for None
-        )
-        for module in sorted_modules:
+        candidate_modules = self._modules.values()
+        if min_execution_ratio is not None or limit is not None:
+            candidate_modules = sorted(
+                candidate_modules,
+                key=lambda x: (-x.total_execution_time, x.name or ""),
+            )
+
+        for module in candidate_modules:
             if min_execution_ratio is None or (
                 module.total_execution_time / self._total_execution_time >= min_execution_ratio
             ):

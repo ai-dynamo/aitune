@@ -4,7 +4,6 @@
 
 import gc
 from collections.abc import Sequence
-from copy import deepcopy
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
@@ -13,10 +12,11 @@ from typing import Any, get_args
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
+from aitune.torch.utils.module import move_module_to_device
 
 logger = getLogger(__name__)
 
@@ -95,6 +95,7 @@ class TorchInductorJitBackend(Backend):
     """Backend that does torch compilation with Inductor."""
 
     _build_mode = BuildMode.JUST_IN_TIME
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU, ExecutionMode.MULTI_GPU})
 
     # State dictionary keys
     STATE_TYPE = "type"
@@ -138,7 +139,7 @@ class TorchInductorJitBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _get_required_casting_dtype(self, module: nn.Module, data: Sequence[Sample]) -> torch.dtype | None:
+    def _get_required_casting_dtype(self, module: nn.Module, samples: Sequence[Sample]) -> torch.dtype | None:
         """Get the required casting dtype of the module by running a sample inference with and without autocast.
 
         If the dtype of the output is different with and without autocast, return the dtype of the output without autocast.
@@ -146,7 +147,7 @@ class TorchInductorJitBackend(Backend):
 
         Args:
             module (nn.Module): The module to get the dtype from.
-            data (Sequence[Sample]): List of sample inputs to run through the module.
+            samples (Sequence[Sample]): Sample inputs to run through the module.
 
         Returns:
             torch.dtype: The required casting dtype. Returns None if no casting is required.
@@ -157,11 +158,11 @@ class TorchInductorJitBackend(Backend):
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
-                args, kwargs = deepcopy(data[0])
+                args, kwargs = samples[0]
                 autocast_result = module(*args, **kwargs)
 
             if isinstance(autocast_result, torch.Tensor):
-                args, kwargs = deepcopy(data[0])
+                args, kwargs = samples[0]
                 orig_result = module(*args, **kwargs)
                 if orig_result.dtype != autocast_result.dtype:
                     return orig_result.dtype
@@ -173,7 +174,7 @@ class TorchInductorJitBackend(Backend):
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
         self._save_config(cache_dir)
 
-        module.to(self._device)
+        move_module_to_device(module, self._device)
         self._orig_module = module
         if self._config.autocast_enabled:
             self._required_casting_dtype = self._get_required_casting_dtype(module, samples)
@@ -184,7 +185,7 @@ class TorchInductorJitBackend(Backend):
 
     def _compile(self):
         logger.info("Start compiling torch module.")
-        self._orig_module.to(self._device)
+        move_module_to_device(self._orig_module, self._device)
 
         self._compiled_module = torch.compile(
             self._orig_module,
@@ -196,7 +197,7 @@ class TorchInductorJitBackend(Backend):
 
         self._select_infer_impl()
         for args, kwargs in self._iter_samples():
-            self._infer_impl(*deepcopy(args), **deepcopy(kwargs))
+            self._infer_impl(*args, **kwargs)
         logger.info("Module has been compiled.")
 
     def _activate(self):

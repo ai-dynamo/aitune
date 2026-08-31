@@ -8,21 +8,13 @@ from typing import Any
 
 import torch
 import torch.nn as nn
-from torch.utils._pytree import tree_map_only
 
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
+from aitune.torch.utils.module import move_tensors_to_device
 from aitune.torch.utils.shapes import build_dynamic_shapes, log_dynamic_shapes, prepare_export_sample
 
 logger = logging.getLogger(__name__)
-
-
-def _move_to_device(value, device):
-    return tree_map_only(
-        torch.Tensor,
-        lambda tensor: tensor.to(device),
-        value,
-    )
 
 
 @dataclass(frozen=True)
@@ -69,7 +61,7 @@ class TorchExporter:
         """
         prepared_sample = prepare_export_sample(sample, graph_spec)
         if device is not None:
-            prepared_sample = _move_to_device(prepared_sample, device)
+            prepared_sample = move_tensors_to_device(prepared_sample, device)
         args, kwargs = prepared_sample
         dynamic_shapes = build_dynamic_shapes(prepared_sample, graph_spec, use_auto=self.use_auto)
         log_dynamic_shapes(dynamic_shapes)

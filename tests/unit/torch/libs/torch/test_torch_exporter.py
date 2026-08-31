@@ -38,6 +38,25 @@ def test_export_moves_nested_tensor_leaves_to_device(mocker):
     assert result.sample[1] == {}
 
 
+def test_export_preserves_distributed_tensor_placement(mocker):
+    """Device preparation must not move distributed tensor leaves."""
+    model = dict(TOY_EXPORT_MODELS)["simple"]().eval()
+    sample = model.samples(batch_sizes=[2])[0]
+    graph_spec = model.graph_spec(batch_sizes=[2])
+    tensor = sample[0][0]
+    # Treat the sample tensor as a DTensor to verify that export preserves its application-managed placement instead
+    # of moving it to the requested device.
+    mocker.patch("aitune.torch.utils.module.DTensor", torch.Tensor)
+    export = mocker.patch("torch.export.export")
+
+    result = TorchExporter(strict=False).export(model, sample, graph_spec, device="meta")
+
+    prepared_tensor = export.call_args.args[1][0]
+    assert prepared_tensor.device == tensor.device
+    assert prepared_tensor is not tensor
+    assert result.sample[0][0] is prepared_tensor
+
+
 @pytest.mark.parametrize(
     ("model_name", "model_factory"), TOY_EXPORT_MODELS, ids=[name for name, _ in TOY_EXPORT_MODELS]
 )

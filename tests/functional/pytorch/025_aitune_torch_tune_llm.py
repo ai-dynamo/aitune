@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # /// script
-# dependencies = ["transformers"]
+# dependencies = ["transformers>=5.1,<6"]
 # scope = "always"
 # allow_failure = true
+# use_gated_hf_token = true
 # [environment]
 # TQDM_DISABLE=1
 # ///
@@ -21,7 +22,7 @@ from aitune.torch import tune as aitune
 from aitune.torch.backend import TorchEagerBackend, TorchInductorJitBackend
 
 
-def get_model_and_tokenizer(model_id="Qwen/Qwen2.5-0.5B-Instruct"):
+def get_model_and_tokenizer(model_id="Qwen/Qwen3.5-0.8B"):
     """Get the model and tokenizer."""
     model = AutoModelForCausalLM.from_pretrained(model_id, dtype="auto", trust_remote_code=False)
     tokenizer = AutoTokenizer.from_pretrained(model_id, padding_side="left")

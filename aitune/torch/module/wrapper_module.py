@@ -12,9 +12,10 @@ from typing import Any, cast
 import torch
 import wrapt
 
-from aitune.torch.backend.backend import Backend, BuildMode
+from aitune.torch.backend.backend import Backend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
+from aitune.torch.distributed import coordinator, distributed_cache_dir, resolve_tuning_device
 from aitune.torch.dynamic_shapes import DynamicShapes, validate_dynamic_shape_definitions
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
@@ -28,8 +29,11 @@ from aitune.torch.tune_strategy.tune_strategy import (
     DummyTuneStrategy,
     TuneStrategy,
 )
-from aitune.torch.utils.module import count_parameters, get_module_device, offload
-from aitune.utils.monitoring import annotate
+from aitune.torch.utils.module import (
+    count_parameters,
+    get_module_device,
+    offload_after_tuning,
+)
 
 logger = getLogger(__name__)
 
@@ -287,7 +291,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def tune(
         self,
-        device: torch.device | None = None,
+        device: str | torch.device | None = None,
         strategy: TuneStrategy | None = None,
         dry_run: bool = False,
     ):
@@ -310,7 +314,7 @@ class Module(wrapt.CallableObjectProxy):
             module_name=self._self_name,
             num_parameters=count_parameters(self.__wrapped__),
         ):
-            device = device or self._self_device
+            device = resolve_tuning_device(device, self.__wrapped__)
 
             recording = cast(RecordingModule, self._self_wrapper)
             recording.validate_dynamic_shape_paths_recorded()
@@ -349,7 +353,7 @@ class Module(wrapt.CallableObjectProxy):
                     module_name=self._self_name,
                     forward_signature=recording.forward_signature,
                 )
-                self._offload(backends)
+                offload_after_tuning(self.__wrapped__, backends.values(), device=global_config.device_after_tuning)
 
     def _create_graph_cache_dir(self, graph_spec: GraphSpec) -> Path:
         """Create a cache directory for the graph."""
@@ -359,7 +363,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def _module_cache_dir(self) -> Path:
         """Return the cache directory identified by the configured module name."""
-        return aitune_cache_dir() / self._self_name
+        return distributed_cache_dir(aitune_cache_dir()) / self._self_name
 
     def _activate_wrapper(self):
         try:
@@ -383,7 +387,8 @@ class Module(wrapt.CallableObjectProxy):
             # revert original forward for deployment which may result in jit compilation
             self._restore_original_forward()
             wrapper = cast(TunedModule, self._self_wrapper)
-            wrapper.deploy(device=device)
+            with coordinator.raise_if_any_rank_fails(f"Deploying module {self._self_name}"):
+                wrapper.deploy(device=device)
         finally:
             self._proxy_forward()
 
@@ -494,9 +499,13 @@ class Module(wrapt.CallableObjectProxy):
 
         if self._self_strategy_list:
             if len(self._self_strategy_list) < len(graph_specs):
+                graph_specs_description = "\n\n".join(
+                    f"Graph spec {index}:\n{graph_spec}" for index, graph_spec in enumerate(graph_specs)
+                )
                 raise RuntimeError(
                     "Not enough strategies for multi-graph. "
-                    f"Expected at least {len(graph_specs)}, got {len(self._self_strategy_list)}."
+                    f"Expected at least {len(graph_specs)}, got {len(self._self_strategy_list)}.\n"
+                    f"Captured graph specs:\n{graph_specs_description}"
                 )
             return self._self_strategy_list
 
@@ -516,17 +525,6 @@ class Module(wrapt.CallableObjectProxy):
             return [DummyTuneStrategy()] * len(graph_specs)
 
         raise RuntimeError("No strategy provided. Cannot tune module.")
-
-    def _offload(self, backends: OrderedDict[SampleMetadata, Backend]):
-        """Offload the module to the meta device only if no JIT backends are used."""
-        if not backends:
-            return
-
-        if any(backend.build_mode == BuildMode.JUST_IN_TIME for backend in backends.values()):
-            return None
-
-        with annotate("Offloading module to meta device"):
-            offload(self.__wrapped__, device=global_config.device_after_tuning)
 
 
 def get_object_name(obj: Any) -> str:

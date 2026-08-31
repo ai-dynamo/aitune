@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
 from aitune.torch.config import AITuneMode, config
+from aitune.torch.distributed import distributed_output_path
 from aitune.torch.dynamic_shapes import dynamic_shapes_to_json
 from aitune.torch.tune_data.report_models import (
     BackendBuildReport,
@@ -47,7 +48,12 @@ def _flush_active_report(path: Path | None = None) -> Path | None:
     report = _active_report.get()
     if report is None:
         return None
-    out = path if path is not None else config.tuning_data_output_path
+    if path is not None:
+        out = Path(path)
+    elif config.uses_default_tuning_data_output_path:
+        out = distributed_output_path(config.tuning_data_output_path)
+    else:
+        out = config.tuning_data_output_path
     try:
         report.aitune_config = snapshot_config(report.mode)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -70,8 +76,9 @@ def snapshot_tuning_data(path: Path | None = None) -> Path | None:
     """Flush the current in-progress tuning report to disk immediately.
 
     Args:
-        path: Destination file. Falls back to ``config.tuning_data_output_path``
-            (or ``AITUNE_TUNING_DATA_PATH`` env var) when not provided.
+        path: Exact destination file. Falls back to ``config.tuning_data_output_path``
+            (or ``AITUNE_TUNING_DATA_PATH`` env var) when not provided. Explicit paths
+            are not modified for distributed execution.
 
     Returns:
         Path the report was written to, or ``None`` if no run is active or the

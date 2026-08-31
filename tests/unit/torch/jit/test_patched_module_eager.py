@@ -56,7 +56,11 @@ def mock_trt_backend():
     mock_backend.describe.return_value = "MockTensorRTBackend"
     mock_backend.key.return_value = "MockTensorRTBackend"
 
-    mock_backend.build.return_value = mock_backend
+    def build(_module, _graph_spec, _samples, device, _cache_dir, **_kwargs):
+        mock_backend.device = device
+        return mock_backend
+
+    mock_backend.build.side_effect = build
 
     strategy = FirstWinsStrategy(backends=[mock_backend])
     strategy.enable_performance_validation(False)
@@ -208,6 +212,8 @@ def test_jit_eager_accumulates_inspection_details_for_multiple_top_modules(mocke
 def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback(mocker, tmp_path):
     """Fallback tuning should not refresh inspection details from child attempts."""
 
+    tune_calls = []
+
     class ParentWithChild(torch.nn.Module):
         def __init__(self):
             super().__init__()
@@ -224,6 +230,7 @@ def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback
             return {}
 
         def _tune(self, module, name, graph_spec, data, device, cache_dir):
+            tune_calls.append((module.__class__.__name__, cache_dir))
             if module.__class__.__name__ == "ParentWithChild":
                 raise RuntimeError("parent tune failed")
             return DummyBackend()
@@ -239,6 +246,7 @@ def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback
     config.max_depth_level = 2
     config.cache_dir = tmp_path / "jit-cache"
     config.strategy = ParentFailsStrategy()
+    offload_after_tuning = mocker.patch("aitune.torch.jit.patched_module.offload_after_tuning")
     evict_page_cache = mocker.spy(SampleStore, "evict_page_cache")
 
     with prepare_for_jit_tuning():
@@ -258,6 +266,9 @@ def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback
     error_logs = list(config.cache_dir.glob("*/error.log"))
     assert len(error_logs) == 1
     assert "RuntimeError: parent tune failed" in error_logs[0].read_text()
+    assert [module_name for module_name, _ in tune_calls] == ["ParentWithChild", "Linear"]
+    assert tune_calls[0][1] != tune_calls[1][1]
+    assert isinstance(offload_after_tuning.call_args.args[0], torch.nn.Linear)
     assert evict_page_cache.call_count >= 1
 
 
@@ -577,6 +588,7 @@ def test_jit_tuning_backend_added_hooks():
             return {"type": "test_strategy_which_adds_hooks"}
 
     config.strategy = TestStrategyWhichAddsHooks()
+    config.device = "cpu"
     config.min_parameters = -1
 
     with prepare_for_jit_tuning():

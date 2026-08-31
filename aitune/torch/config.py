@@ -14,7 +14,6 @@ from aitune.utils.env_vars import AITUNE_DIFFUSERS_INTEGRATION, AITUNE_TRANSFORM
 DEFAULT_MIN_NUM_SAMPLES = 100
 DEFAULT_MAX_NUM_SAMPLES_STORED = 1  # you can set infinity if you want to store/use all samples
 
-DEFAULT_DEVICE = "cuda:0"
 DEFAULT_DEVICE_AFTER_TUNING = "meta"
 DEFAULT_TUNING_DATA_OUTPUT_PATH = _AITUNE_CACHE_DIR / "tuning_data" / "report.json"
 
@@ -50,9 +49,9 @@ class AITuneConfig:
         self._min_num_samples: int = DEFAULT_MIN_NUM_SAMPLES
         self.max_num_samples_stored: int | float = DEFAULT_MAX_NUM_SAMPLES_STORED
         self.device_after_tuning: str = DEFAULT_DEVICE_AFTER_TUNING
-        self._tuning_data_output_path: Path = (
-            Path(TUNING_DATA_PATH) if TUNING_DATA_PATH is not None else DEFAULT_TUNING_DATA_OUTPUT_PATH
-        )
+        # ``None`` preserves whether AITune selected the path. Explicit paths, including
+        # AITUNE_TUNING_DATA_PATH, must be used verbatim in distributed runs.
+        self._tuning_data_output_path: Path | None = Path(TUNING_DATA_PATH) if TUNING_DATA_PATH is not None else None
         self.strict_mode: bool = True
         self.enable_diffusers_integration: bool = AITUNE_DIFFUSERS_INTEGRATION
         self.enable_transformers_integration: bool = AITUNE_TRANSFORMERS_INTEGRATION
@@ -82,16 +81,23 @@ class AITuneConfig:
     @property
     def tuning_data_output_path(self) -> Path:
         """Get the output path for tuning data."""
-        return self._tuning_data_output_path
+        return self._tuning_data_output_path or DEFAULT_TUNING_DATA_OUTPUT_PATH
 
     @tuning_data_output_path.setter
     def tuning_data_output_path(self, output_path: str | Path) -> None:
         """Set the output path for tuning data."""
         self._tuning_data_output_path = Path(output_path)
 
+    @property
+    def uses_default_tuning_data_output_path(self) -> bool:
+        """Return whether AITune selected the tuning data output path."""
+        return self._tuning_data_output_path is None
+
     def to_dict(self) -> dict[str, Any]:
         """Return all configuration attributes keyed by their public name."""
-        return {k.lstrip("_"): v for k, v in vars(self).items()}
+        result = {k.lstrip("_"): v for k, v in vars(self).items()}
+        result["tuning_data_output_path"] = self.tuning_data_output_path
+        return result
 
 
 config = AITuneConfig()

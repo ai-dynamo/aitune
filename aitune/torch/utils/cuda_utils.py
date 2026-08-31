@@ -31,7 +31,7 @@ def is_available():
 
 
 def synchronize():
-    """Synchronize all CUDA devices if available."""
+    """Synchronize the current CUDA device if available."""
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 

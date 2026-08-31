@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import torch
 
+from aitune.torch.distributed import DistributedOutcome
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -169,6 +170,23 @@ def test_post_input_metadata_comparison_ignores_leaf_order():
     actual = SampleMetadata.from_inputs({"second": 2, "first": 1}, strict=True)
 
     _check_post_input_metadata(expected, actual, "test_model.mock_backend")
+
+
+def test_check_inference_output_correctness_stops_after_remote_failure(mocker):
+    infer = mocker.Mock(return_value=torch.zeros(2, 4))
+    mocker.patch(
+        "aitune.torch.task.correctness.coordinator.outcome",
+        return_value=DistributedOutcome((None, "RuntimeError('remote failure')")),
+    )
+    data = [((torch.zeros(2, 4),), {}), ((torch.zeros(2, 4),), {})]
+    input_spec = _input_metadata(data[0], batch_size=2)
+    output_spec = SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2)
+    graph_spec = make_graph_spec(input_spec, output_spec)
+
+    with pytest.raises(RuntimeError, match=r"sample 0.*ranks \[1\]"):
+        check_inference_output_correctness(data, graph_spec, infer=infer, name="test_model.mock_backend")
+
+    infer.assert_called_once()
 
 
 def test_private_dynamic_shape_boundary_samples_resize_args_and_kwargs():

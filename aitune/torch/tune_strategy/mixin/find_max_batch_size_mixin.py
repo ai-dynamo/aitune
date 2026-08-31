@@ -13,6 +13,7 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
@@ -59,10 +60,13 @@ class FindMaxBatchSizeMixin(TuneStrategy):
             self._logger.info("🚀 Finding max batch size for %s", name)
             find_max_batch_size_cache_dir = cache_dir / "find_max_batch_size"
             build_log_file = self._log_file(find_max_batch_size_cache_dir, "build.log")
+            max_batch_size = None
+            max_throughput = None
             try:
-                backend = self._find_max_batch_size_backend_class()
-                with control_output(log_file=build_log_file):
-                    backend.build(module, graph_spec, samples, device, find_max_batch_size_cache_dir)
+                with coordinator.raise_if_any_rank_fails("Building find-max-batch-size backend"):
+                    backend = self._find_max_batch_size_backend_class()
+                    with control_output(log_file=build_log_file):
+                        backend.build(module, graph_spec, samples, device, find_max_batch_size_cache_dir)
 
                 max_batch_size, max_throughput, _ = find_max_throughput_for_backend(
                     backend,
@@ -71,18 +75,22 @@ class FindMaxBatchSizeMixin(TuneStrategy):
                     samples,
                     self.profiling_config,
                 )
-                self._logger.info(
-                    "✅ Max batch size for %s is %d with throughput %.2f samples/s",
-                    name,
-                    max_batch_size,
-                    max_throughput,
-                )
-                graph_spec.update_max_batch_size(samples[0], max_batch_size)
-            except Exception:
+            except Exception as e:
                 error_log_file = self._log_file(find_max_batch_size_cache_dir, "error.log")
-                error_log_file.write_text(f"Build log file: {build_log_file}\n\nError:\n{traceback.format_exc()}")
+                formatted_traceback = "".join(traceback.format_exception(e))
+                error_log_file.write_text(f"Build log file: {build_log_file}\n\nError:\n{formatted_traceback}")
                 self._logger.info("⚠️ Finding max batch size for `%s` failed (log file: %s)", name, error_log_file)
                 raise
+
+            assert max_batch_size is not None
+            assert max_throughput is not None
+            self._logger.info(
+                "✅ Distributed max batch size for %s is %d with worst-rank throughput %.2f samples/s",
+                name,
+                max_batch_size,
+                max_throughput,
+            )
+            graph_spec.update_max_batch_size(samples[0], max_batch_size)
 
     def _pre_tune(
         self,

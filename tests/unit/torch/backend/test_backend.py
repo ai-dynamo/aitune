@@ -7,10 +7,11 @@ import json
 from dataclasses import dataclass, field
 from unittest.mock import Mock
 
+import pytest
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import BackendConfig, BuildMode, DummyBackend
+from aitune.torch.backend.backend import BackendConfig, BuildMode, DummyBackend, ExecutionMode
 from aitune.utils.hashing import hash_string
 from tests.toy_backends import SleepBackend
 
@@ -51,6 +52,66 @@ class BackendTestConfigWithDefaults(BackendConfig):
         return ["name", "enabled"]  # Always include these fields
 
 
+class MultiGpuOnlySleepBackend(SleepBackend):
+    """Test backend supporting only multi-GPU execution."""
+
+    _build_mode = BuildMode.JUST_IN_TIME
+    _execution_modes = frozenset({ExecutionMode.MULTI_GPU})
+
+
+class AllExecutionModesSleepBackend(SleepBackend):
+    """Test backend supporting single- and multi-GPU execution."""
+
+    _build_mode = BuildMode.JUST_IN_TIME
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU, ExecutionMode.MULTI_GPU})
+
+
+def test_sleep_backend_declares_single_gpu_execution():
+    assert SleepBackend._execution_modes == frozenset({ExecutionMode.SINGLE_GPU})
+
+
+def test_backend_exposes_build_mode():
+    assert SleepBackend().build_mode == BuildMode.JUST_IN_TIME
+
+
+def test_backend_requires_explicit_build_mode():
+    with pytest.raises(TypeError, match="MissingBuildModeBackend must explicitly define _build_mode"):
+
+        class MissingBuildModeBackend(DummyBackend):
+            _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
+
+
+def test_backend_requires_explicit_execution_modes():
+    with pytest.raises(TypeError, match="MissingExecutionModesBackend must explicitly define _execution_modes"):
+
+        class MissingExecutionModesBackend(DummyBackend):
+            _build_mode = BuildMode.AHEAD_OF_TIME
+
+
+def test_backend_rejects_unsupported_multi_gpu_execution(mocker):
+    module = nn.Linear(2, 2)
+    mocker.patch("aitune.torch.backend.backend.is_distributed_module", return_value=True)
+
+    with pytest.raises(RuntimeError, match="does not support multi_gpu execution"):
+        SleepBackend()._assert_execution_mode(module)
+
+
+def test_multi_gpu_only_backend_rejects_single_gpu_execution(mocker):
+    module = nn.Linear(2, 2)
+    mocker.patch("aitune.torch.backend.backend.is_distributed_module", return_value=False)
+
+    with pytest.raises(RuntimeError, match="does not support single_gpu execution"):
+        MultiGpuOnlySleepBackend()._assert_execution_mode(module)
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+def test_backend_accepts_declared_execution_modes(mocker, distributed):
+    module = nn.Linear(2, 2)
+    mocker.patch("aitune.torch.backend.backend.is_distributed_module", return_value=distributed)
+
+    AllExecutionModesSleepBackend()._assert_execution_mode(module)
+
+
 def test_backend_build_releases_unused_memory(mocker, tmp_path):
     collect = mocker.patch("aitune.torch.utils.memory.gc.collect")
     mocker.patch("aitune.torch.utils.memory.torch.cuda.is_available", return_value=True)
@@ -60,11 +121,6 @@ def test_backend_build_releases_unused_memory(mocker, tmp_path):
 
     collect.assert_called_once()
     empty_cache.assert_called_once()
-
-
-def test_backend_exposes_build_mode():
-    assert DummyBackend().build_mode == BuildMode.AHEAD_OF_TIME
-    assert SleepBackend().build_mode == BuildMode.JUST_IN_TIME
 
 
 def test_backend_config_key():

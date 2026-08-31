@@ -12,7 +12,7 @@ from pathlib import Path
 import timm
 import torch
 
-from aitune.torch.backend.torch_tensorrt_aot_backend import (
+from aitune.torch.backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
     TorchTensorRTConfig,

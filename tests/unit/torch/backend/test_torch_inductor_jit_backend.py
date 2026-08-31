@@ -72,6 +72,21 @@ def test_torch_inductor_build_auto_dynamic_does_not_mutate_config(mocker, tmp_pa
     assert compile_mock.call_args.kwargs["dynamic"] is True
 
 
+def test_torch_inductor_build_uses_placement_preserving_module_move(mocker, tmp_path):
+    toy = ToyTorchModel().eval()
+    move_module = mocker.patch("aitune.torch.backend.torch_inductor_jit_backend.move_module_to_device")
+    graph_spec = toy.graph_spec(batch_sizes=[1])
+    sample_data = toy.sample_store(tmp_path, batch_sizes=[1])
+    mocker.patch("aitune.torch.backend.torch_inductor_jit_backend.torch.compile", return_value=toy)
+
+    TorchInductorJitBackend().build(
+        toy, graph_spec=graph_spec, samples=sample_data, device=torch.device("cpu"), cache_dir=tmp_path
+    )
+
+    assert move_module.call_count == 2
+    move_module.assert_called_with(toy, torch.device("cpu"))
+
+
 def test_torch_inductor_build_keeps_sample_store_without_retaining_data(mocker, tmp_path):
     toy = ToyTorchModel().eval()
     graph_spec = toy.graph_spec(batch_sizes=[1])

@@ -3,6 +3,7 @@
 
 """Unit tests for OneBackendStrategy."""
 
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -72,6 +73,37 @@ def test_tune_success(mock_backend, mock_module, mock_graph_spec, torch_device, 
     # Verify
     assert result == mock_backend
     mock_backend.build.assert_called_once()
+
+
+def test_tune_coordinates_extension_hooks(
+    mocker, mock_backend, mock_module, mock_graph_spec, torch_device, mock_samples, tmp_path
+):
+    """Test pre- and post-tune extension hooks run within coordinated failure boundaries."""
+    operations = []
+
+    @contextmanager
+    def record_operation(operation):
+        operations.append(operation)
+        yield
+
+    coordinator = mocker.patch("aitune.torch.tune_strategy.tune_strategy.coordinator")
+    coordinator.raise_if_any_rank_fails.side_effect = record_operation
+    strategy = OneBackendStrategy(mock_backend)
+    strategy._describe = MagicMock()
+    strategy._pre_tune = MagicMock()
+    strategy._post_tune = MagicMock()
+    strategy.enable_find_max_batch_size(False)
+    strategy.enable_correctness_check(False)
+    mock_backend.__deepcopy__ = lambda _, memo=None: mock_backend
+    mock_backend.build.return_value = mock_backend
+
+    strategy.tune(mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path)
+
+    assert operations == ["Pre-tuning test_module", "Building backend mock_backend", "Post-tuning test_module"]
+    strategy._pre_tune.assert_called_once_with(
+        mock_module, "test_module", mock_graph_spec, mock_samples, torch_device, tmp_path
+    )
+    strategy._post_tune.assert_called_once_with(mock_backend, "test_module", mock_graph_spec, mock_samples)
 
 
 def test_tune_backend_fails(mock_backend, mock_module, mock_graph_spec, torch_device, mock_samples, tmp_path):

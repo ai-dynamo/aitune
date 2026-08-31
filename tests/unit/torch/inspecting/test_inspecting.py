@@ -5,7 +5,9 @@ import pytest
 import torch
 import torch.nn as nn
 
+from aitune.torch.distributed import DistributedOutcome
 from aitune.torch.inspecting import inspect
+from aitune.torch.inspecting.inspecting import _run_inference
 from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo
 
 TEST_NUMBER_OF_ITERATIONS = 10
@@ -79,6 +81,40 @@ def test_inspect_simple_model(simple_model, sample_dataset):
     assert any(info.forward_called for info in modules)
     assert any(info.execution_count > 0 for info in modules)
     assert any(info.total_execution_time > 0 for info in modules)
+
+
+def test_inspect_synchronizes_complete_inference_calls(mocker, simple_model, sample_dataset):
+    """Test that inspection synchronizes ranks around complete model calls."""
+    barrier = mocker.patch("aitune.torch.inspecting.inspecting.coordinator.barrier")
+    verify_equal = mocker.patch("aitune.torch.inspecting.inspecting.coordinator.verify_equal")
+
+    modules_info = inspect(simple_model, sample_dataset, number_of_iterations=3, warmup_iterations=2)
+
+    assert barrier.call_count == 2 * (3 + 2)
+    modules = modules_info.get_modules()
+    inspection_plan = tuple(
+        (
+            module.object_path,
+            f"{module.module_type.__module__}.{module.module_type.__qualname__}",
+            module.execution_count,
+        )
+        for module in modules
+    )
+    verify_equal.assert_called_once_with(inspection_plan, "inspection plan")
+
+
+def test_inspection_inference_coordinates_failures(mocker):
+    error = RuntimeError("inference failed")
+    outcome = mocker.patch(
+        "aitune.torch.inspecting.inspecting.coordinator.outcome",
+        return_value=DistributedOutcome(("RuntimeError",)),
+    )
+    mocker.patch("aitune.torch.inspecting.inspecting.coordinator.barrier")
+
+    with pytest.raises(RuntimeError, match="inference failed"):
+        _run_inference(mocker.Mock(side_effect=error), (), {})
+
+    outcome.assert_called_once_with(error)
 
 
 def test_inspect_nested_model(nested_model, sample_dataset):
@@ -339,6 +375,44 @@ def test_get_modules_after_inspection(custom_object, sample_dataset):
     for idx in [1, 2]:
         assert executed_modules[idx].name in ["linear2", "relu"]
         assert executed_modules[idx].execution_count == TEST_NUMBER_OF_ITERATIONS
+
+
+def test_get_modules_preserves_discovery_order_by_default():
+    """Test getting modules without filtering preserves discovery order."""
+    modules_info = InspectedModulesInfo(total_execution_time=1.0, number_of_batches=1)
+    for name, execution_time in [("first", 0.1), ("second", 0.3), ("third", 0.2)]:
+        modules_info.add_module(
+            ModuleInfo(
+                module=nn.ReLU(),
+                name=name,
+                execution_count=1,
+                total_execution_time=execution_time,
+                object_path=name,
+            )
+        )
+
+    executed_modules = modules_info.get_modules()
+
+    assert [module.name for module in executed_modules] == ["first", "second", "third"]
+
+
+def test_get_modules_with_limit_orders_by_execution_time():
+    """Test limiting modules selects the modules with the highest execution time."""
+    modules_info = InspectedModulesInfo(total_execution_time=1.0, number_of_batches=1)
+    for name, execution_time in [("first", 0.1), ("second", 0.3), ("third", 0.2)]:
+        modules_info.add_module(
+            ModuleInfo(
+                module=nn.ReLU(),
+                name=name,
+                execution_count=1,
+                total_execution_time=execution_time,
+                object_path=name,
+            )
+        )
+
+    executed_modules = modules_info.get_modules(limit=2)
+
+    assert [module.name for module in executed_modules] == ["second", "third"]
 
 
 def test_get_modules_with_min_execution_ratio():

@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, DummyBackend
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.correctness import (
@@ -25,7 +26,7 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
     ThroughputSaturatedProfilingStopStrategy,
 )
-from aitune.torch.utils.module import count_parameters
+from aitune.torch.utils.module import count_parameters, move_module_to_device
 from aitune.utils.logging import control_output, log, log_to_file
 from aitune.utils.timer import Timer
 
@@ -83,11 +84,17 @@ class TuneStrategy(ABC):
     ) -> Backend:
         """Tune a torch module with the provided graph specification and samples."""
         self.backend_results = []
+        coordinator.verify_equal(
+            (name, graph_spec.name, self.to_json_dict()),
+            "tuning request",
+        )
         self._describe(module, name, graph_spec, samples, device, cache_dir)
         with Timer(name=f"Tune `{self.__class__.__name__}`", sink=self._sink):
-            self._pre_tune(module, name, graph_spec, samples, device, cache_dir)
+            with coordinator.raise_if_any_rank_fails(f"Pre-tuning {name}"):
+                self._pre_tune(module, name, graph_spec, samples, device, cache_dir)
             backend = self._tune(module, name, graph_spec, samples, device, cache_dir)
-            self._post_tune(backend, name, graph_spec, samples)
+            with coordinator.raise_if_any_rank_fails(f"Post-tuning {name}"):
+                self._post_tune(backend, name, graph_spec, samples)
             return backend
 
     def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, samples: SampleStore):
@@ -119,14 +126,15 @@ class TuneStrategy(ABC):
             raise ValueError(f"Correctness check requires at least one sample for graph spec {graph_spec.name}.")
 
         self._logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
+        correctness_device = getattr(backend, "device", None)
         check_inference_output_correctness(
-            samples,
+            samples.iter_samples(correctness_device),
             graph_spec,
             infer=backend.infer,
             name=f"{name}.{graph_spec.name}.{backend.describe()}",
         )
         check_dynamic_shape_boundary_inference(
-            samples[0],
+            next(samples.iter_samples(correctness_device)),
             graph_spec,
             infer=backend.infer,
             name=f"{name}.{graph_spec.name}.{backend.describe()}",
@@ -186,33 +194,44 @@ class TuneStrategy(ABC):
         log_file = self._log_file(backend_cache_dir, "build.log")
         log_to_file(log_file, f"Backend: {description}")
 
+        coordinator.verify_equal(description, "backend candidate")
+        local_error: Exception | None = None
+        built_backend = backend
+
         with Timer(sink=self._sink, depth=2):
+            log("🤖 backend: %s", description, sink=self._sink)
+            log("🔄 in progress...please wait", depth=2, sink=self._sink)
             try:
-                log("🤖 backend: %s", description, sink=self._sink)
-                log("🔄 in progress...please wait", depth=2, sink=self._sink)
-
-                with control_output(log_file=log_file):
-                    backend = deepcopy(backend)
-                    backend = backend.build(module, graph_spec, samples, device, backend_cache_dir, log_file=log_file)
-
+                with coordinator.raise_if_any_rank_fails(f"Building backend {description}"):
+                    with control_output(log_file=log_file):
+                        built_backend = deepcopy(backend)
+                        built_backend = built_backend.build(
+                            module,
+                            graph_spec,
+                            samples,
+                            device,
+                            backend_cache_dir,
+                            log_file=log_file,
+                        )
                 log("✅ backend built", depth=2, sink=self._sink)
-                self.check_correctness(backend, name, graph_spec, samples)
+                self.check_correctness(built_backend, name, graph_spec, samples)
                 log("✅ backend validated", depth=2, sink=self._sink)
-
-                self.backend_results.append({"backend": description, "success": True})
-                return backend
-
             except Exception as e:
-                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
-                log_to_file(log_file, "Backend build or validation failed", exception=e)
+                local_error = e
 
-                self.backend_results.append({"backend": description, "success": False})
-                if raise_on_failure:
-                    raise
-                if backend.is_active:
-                    backend.deactivate()
-                module.to(device)  # move module back to device as failed backend could move it to cpu
-                return None
+            self.backend_results.append({"backend": description, "success": local_error is None})
+            if local_error is None:
+                return built_backend
+
+            log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
+            log_to_file(log_file, "Backend build or validation failed", exception=local_error)
+            if built_backend.is_active:
+                built_backend.deactivate()
+            # A failed backend may leave an ordinarily placed module on CPU.
+            move_module_to_device(module, device)
+            if raise_on_failure:
+                raise local_error
+            return None
 
     def _pre_tune(
         self,

@@ -49,6 +49,7 @@ Shows tuning of the FLUX text-to-image model, demonstrating advanced diffusion m
 - **Use Case**: Optimizing state-of-the-art text-to-image models
 - **Key Features**:
   - Advanced diffusion model tuning
+  - Single-GPU and Diffusers context-parallel execution
   - High-quality image generation
   - Efficient inference pipeline tuning
 - **More Info**:
@@ -127,15 +128,16 @@ Demonstrates tuning of E5Large model for text embedding tasks.
 Demonstrates tuning of Large Language Models for text generation tasks. This example shows how to optimize LLMs for efficient inference with KV cache support.
 
 - **Location**: [`LLM`](./LLM/README.md)
-- **Model**: Microsoft Phi-3-mini-4k-instruct from HuggingFace
+- **Model**: Qwen3.5-0.8B from HuggingFace
 - **Use Case**: Optimizing LLMs for text generation and inference
 - **Key Features**:
   - LLM model tuning with AITune
+  - Single-GPU and Transformers native tensor-parallel execution
   - Static and dynamic KV cache optimization
   - Prefill and decode phase optimization
   - HuggingFace integration
 - **More Info**:
-  - https://huggingface.co/microsoft/Phi-3-mini-4k-instruct
+  - https://huggingface.co/Qwen/Qwen3.5-0.8B
 
 ## JIT Tuning
 

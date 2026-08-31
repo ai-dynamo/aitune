@@ -72,6 +72,9 @@ import aitune.torch as ait
 ait.config.tuning_data_output_path = "/tmp/aitune-report.json"
 ```
 
+In distributed runs, AITune adds the rank to its default report filename. Paths supplied through the environment,
+configuration, or `snapshot_tuning_data(path)` are used exactly as provided, so assign a distinct path on each rank.
+
 You can also snapshot telemetry during a long-running process:
 
 ```python
@@ -125,7 +128,7 @@ See [Performance Profile](../guides/advanced/performance_profile.md) for the ful
 | `AITUNE_HARDWARE_METRICS=1` | Collect hardware metrics during annotated regions |
 | `AITUNE_HARDWARE_METRICS_PATH` | Override the hardware metrics CSV output path |
 | `AITUNE_TRANSFORMERS_INTEGRATION` | Enable or disable Transformers integration, defaulting to enabled |
-| `AITUNE_DIFFUSERS_INTEGRATION` | Enable or disable Diffusers integration, defaulting to disabled |
+| `AITUNE_DIFFUSERS_INTEGRATION` | Enable or disable Diffusers integration, defaulting to enabled |
 | `AITUNE_INSPECT_DEBUG=1` | Enable verbose AOT inspect traversal diagnostics |
 | `AITUNE_INSPECT_DEBUG_RAISE=1` | Raise inspect traversal errors instead of ignoring them |
 

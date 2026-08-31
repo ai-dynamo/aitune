@@ -14,7 +14,7 @@ try:
 except ImportError:
     PerGroup = None
 
-from aitune.torch.backend.backend import BackendState
+from aitune.torch.backend.backend import BackendState, ExecutionMode
 from aitune.torch.backend.torchao_backend import (
     MX_FORMATS_AVAILABLE,
     MXFP8DQ_BLOCK_SIZE_DIVISIBILITY,
@@ -97,6 +97,10 @@ def test_torchao_config_key():
     key2 = config.key()
 
     assert key1 == key2
+
+
+def test_torchao_supports_single_and_multi_gpu_execution():
+    assert TorchAOBackend._execution_modes == frozenset({ExecutionMode.SINGLE_GPU, ExecutionMode.MULTI_GPU})
 
 
 def test_torchao_config_key_includes_compile_options():
@@ -226,6 +230,7 @@ def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
     original_key = backend.key()
     compile_mock = mocker.patch("aitune.torch.backend.torchao_backend.torch.compile", return_value=model)
     mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
+    move_module_mock = mocker.patch("aitune.torch.backend.torchao_backend.move_module_to_device")
 
     backend.build(
         model,
@@ -238,6 +243,7 @@ def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
     assert config.dynamic is None
     assert backend.key() == original_key
     assert compile_mock.call_args.kwargs["dynamic"] is True
+    move_module_mock.assert_called_once_with(model, "cpu")
 
 
 def test_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):

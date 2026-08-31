@@ -3,12 +3,13 @@
 """Tests for the report-building reporting."""
 
 import json
+from importlib import import_module
 from unittest.mock import MagicMock
 
 import pytest
 
 from aitune.__version__ import __version__
-from aitune.torch.config import AITuneConfig, AITuneMode
+from aitune.torch.config import DEFAULT_TUNING_DATA_OUTPUT_PATH, AITuneConfig, AITuneMode
 from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.tune_data.report_models import SCHEMA_VERSION, ExceptionInfo, ModuleInspectionReport
 from aitune.torch.tune_data.reporting import (
@@ -70,11 +71,12 @@ def test_snapshot_config_declarative_mode(mocker):
     assert result["min_num_samples"] == 50
     assert result["max_num_samples_stored"] == 2
     assert result["strict_mode"] is False
-    assert result["enable_diffusers_integration"] is False
+    assert result["enable_diffusers_integration"] is True
     assert result["enable_transformers_integration"] is True
     assert result["device_after_tuning"] == "meta"
     assert "cache_dir" in result
     assert "tuning_data_output_path" in result
+    assert result["tuning_data_output_path"] == str(real_config.tuning_data_output_path)
     assert not any(k.startswith("_") for k in result)
 
 
@@ -580,6 +582,87 @@ def test_snapshot_tuning_data_custom_path(tmp_path):
     assert custom_path.exists()
     report = json.loads(custom_path.read_text())
     assert report["mode"] == "JIT"
+
+    report_tune_run_end()
+
+
+def test_snapshot_tuning_data_custom_path_is_not_rank_qualified(mocker, tmp_path):
+    # given
+    custom_path = tmp_path / "custom" / "report.json"
+    distributed_output_path = mocker.patch("aitune.torch.tune_data.reporting.distributed_output_path")
+    report_tune_run_start(AITuneMode.JIT)
+
+    # when
+    result = snapshot_tuning_data(custom_path)
+
+    # then
+    assert result == custom_path
+    assert custom_path.exists()
+    distributed_output_path.assert_not_called()
+
+    report_tune_run_end()
+
+
+def test_configured_tuning_data_path_is_not_rank_qualified(mocker, tmp_path):
+    # given
+    configured_path = tmp_path / "configured" / "report.json"
+    real_config = AITuneConfig()
+    real_config.tuning_data_output_path = configured_path
+    mocker.patch("aitune.torch.tune_data.reporting.config", real_config)
+    distributed_output_path = mocker.patch("aitune.torch.tune_data.reporting.distributed_output_path")
+    report_tune_run_start(AITuneMode.JIT)
+
+    # when
+    result = snapshot_tuning_data()
+
+    # then
+    assert result == configured_path
+    assert configured_path.exists()
+    distributed_output_path.assert_not_called()
+
+    report_tune_run_end()
+
+
+def test_environment_tuning_data_path_is_not_rank_qualified(mocker, tmp_path):
+    # given
+    environment_path = tmp_path / "environment" / "report.json"
+    config_module = import_module("aitune.torch.config")
+    mocker.patch.object(config_module, "TUNING_DATA_PATH", str(environment_path))
+    real_config = AITuneConfig()
+    mocker.patch("aitune.torch.tune_data.reporting.config", real_config)
+    distributed_output_path = mocker.patch("aitune.torch.tune_data.reporting.distributed_output_path")
+    report_tune_run_start(AITuneMode.JIT)
+
+    # when
+    result = snapshot_tuning_data()
+
+    # then
+    assert result == environment_path
+    assert environment_path.exists()
+    distributed_output_path.assert_not_called()
+
+    report_tune_run_end()
+
+
+def test_default_tuning_data_path_is_rank_qualified(mocker, tmp_path):
+    # given
+    rank_path = tmp_path / "report.rank-2-of-4.json"
+    config_module = import_module("aitune.torch.config")
+    mocker.patch.object(config_module, "TUNING_DATA_PATH", None)
+    real_config = AITuneConfig()
+    mocker.patch("aitune.torch.tune_data.reporting.config", real_config)
+    distributed_output_path = mocker.patch(
+        "aitune.torch.tune_data.reporting.distributed_output_path", return_value=rank_path
+    )
+    report_tune_run_start(AITuneMode.JIT)
+
+    # when
+    result = snapshot_tuning_data()
+
+    # then
+    assert result == rank_path
+    distributed_output_path.assert_called_with(DEFAULT_TUNING_DATA_OUTPUT_PATH)
+    assert rank_path.exists()
 
     report_tune_run_end()
 

@@ -23,12 +23,27 @@ echo "Waiting for the frontend to start..."
 sleep 2 # wait for the frontend to start
 
 echo "Starting the backend..."
-python -m flux.dynamo.backend & # (2) start the backend in the background
+BACKEND_RANK_ZERO_PID_FILE=$(mktemp -t aitune-flux-dynamo-rank-zero.XXXXXX)
+export AITUNE_DYNAMO_RANK_ZERO_PID_FILE="$BACKEND_RANK_ZERO_PID_FILE"
+torchrun --standalone --nproc-per-node=gpu --module flux.dynamo.backend & # (2) start one backend rank per GPU
 
 BACKEND_PID=$!
 echo "Backend PID: $BACKEND_PID"
 
-trap "kill -9 $FRONTEND_PID; kill -9 $BACKEND_PID" EXIT
+cleanup() {
+  if [[ -s "$BACKEND_RANK_ZERO_PID_FILE" ]]; then
+    read -r BACKEND_RANK_ZERO_PID < "$BACKEND_RANK_ZERO_PID_FILE"
+    kill "$BACKEND_RANK_ZERO_PID" 2>/dev/null || true
+  else
+    kill "$BACKEND_PID" 2>/dev/null || true
+  fi
+  wait "$BACKEND_PID" 2>/dev/null || true
+
+  kill "$FRONTEND_PID" 2>/dev/null || true
+  wait "$FRONTEND_PID" 2>/dev/null || true
+  rm -f "$BACKEND_RANK_ZERO_PID_FILE"
+}
+trap cleanup EXIT
 
 echo "Waiting for the backend to start..."
 sleep 2
@@ -49,4 +64,4 @@ for i in {1..5}; do
   sleep 2
 done
 
-python -m flux.dynamo.client --prompt "A futuristic cityscape at night" # (3) run the test script
+python -m flux.dynamo.client # (3) run the test script with the shared defaults
