@@ -21,10 +21,11 @@ env:
   UV_VERSION: 0.11.8
   UV_PYTHON: &python_version "3.10"
 
-  _ACTIONS_CHECKOUT_VERSION: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  _ACTIONS_SETUP_PYTHON_VERSION: &actions_setup_python actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-  _ACTIONS_DOWNLOAD_ARTIFACT_VERSION: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-  _ACTIONS_UPLOAD_ARTIFACT_VERSION: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  _ACTIONS_SETUP_PYTHON: &actions_setup_python actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+  _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+  _ACTIONS_DOWNLOAD_ARTIFACT: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+  _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
 
 defaults:
   run:
