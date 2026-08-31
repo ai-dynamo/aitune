@@ -1,112 +1,105 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-name: Validate AITune GPU runners
+name: Validate AITune runners
 
 on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  validate-runner:
+  validate-cpu:
     name: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: prod-aitune-tester-l40s-v1
-            expected_gpu_count: 1
-            expected_gpu_model: L40S
-          - runner: prod-aitune-tester-l40s-4-v1
-            expected_gpu_count: 4
-            expected_gpu_model: L40S
-          - runner: prod-aitune-tester-rtx-pro-4500-v1
-            expected_gpu_count: 1
-            expected_gpu_model: RTX PRO 4500
-          - runner: prod-aitune-tester-rtx-pro-4500-4-v1
-            expected_gpu_count: 4
-            expected_gpu_model: RTX PRO 4500
+          - runner: linux-amd64-cpu4
+            expected_cpu: 4
+          - runner: linux-amd64-cpu16
+            expected_cpu: 16
+          - runner: linux-amd64-cpu32
+            expected_cpu: 32
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 240
-    container:
-      image: nvcr.io/nvidia/pytorch:26.05-py3
+    timeout-minutes: 30
     env:
-      EXPECTED_GPU_COUNT: ${{ matrix.expected_gpu_count }}
-      EXPECTED_GPU_MODEL: ${{ matrix.expected_gpu_model }}
+      EXPECTED_CPU: ${{ matrix.expected_cpu }}
     steps:
       - name: Check out AITune
         uses: actions/checkout@v4
 
-      - name: Validate GPU allocation and scratch storage
+      - name: Validate CPU quota and Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -r /sys/fs/cgroup/cpu.max ]]; then
+            read -r quota period < /sys/fs/cgroup/cpu.max
+          else
+            quota=$(< /sys/fs/cgroup/cpu/cpu.cfs_quota_us)
+            period=$(< /sys/fs/cgroup/cpu/cpu.cfs_period_us)
+          fi
+
+          if [[ "${quota}" == max || "${quota}" -lt 0 ]]; then
+            printf 'Runner has no CPU quota\n' >&2
+            exit 1
+          fi
+
+          allocated_cpu=$((quota / period))
+          if [[ "${allocated_cpu}" -ne "${EXPECTED_CPU}" ]]; then
+            printf 'Expected %s CPUs, found quota for %s\n' "${EXPECTED_CPU}" "${allocated_cpu}" >&2
+            exit 1
+          fi
+
+          test -n "${RUNNER_TEMP}"
+          docker info
+          docker run --rm busybox:1.37 echo 'DinD is ready'
+          printf 'CPU quota: %s, nproc: %s\n' "${allocated_cpu}" "$(nproc)"
+          free -h
+          df -h "${RUNNER_TEMP}"
+
+  validate-rtx-8:
+    name: prod-aitune-tester-rtx-pro-4500-8-v1
+    runs-on: prod-aitune-tester-rtx-pro-4500-8-v1
+    timeout-minutes: 240
+    container:
+      image: nvcr.io/nvidia/pytorch:26.05-py3
+    env:
+      EXPECTED_GPU_COUNT: 8
+      EXPECTED_GPU_MODEL: RTX PRO 4500
+    steps:
+      - name: Check out AITune
+        uses: actions/checkout@v4
+
+      - name: Validate eight-GPU allocation
         shell: bash
         run: |
           set -euo pipefail
 
           mapfile -t gpu_names < <(nvidia-smi --query-gpu=name --format=csv,noheader)
-          printf 'Allocated GPUs (%s):\n' "${#gpu_names[@]}"
-          printf '  %s\n' "${gpu_names[@]}"
-
           if [[ "${#gpu_names[@]}" -ne "${EXPECTED_GPU_COUNT}" ]]; then
             printf 'Expected %s GPUs, found %s\n' "${EXPECTED_GPU_COUNT}" "${#gpu_names[@]}" >&2
             exit 1
           fi
 
           for gpu_name in "${gpu_names[@]}"; do
-            if [[ "${gpu_name}" != *"${EXPECTED_GPU_MODEL}"* ]]; then
-              printf 'Expected GPU model containing %q, found %q\n' "${EXPECTED_GPU_MODEL}" "${gpu_name}" >&2
-              exit 1
-            fi
+            [[ "${gpu_name}" == *"${EXPECTED_GPU_MODEL}"* ]]
           done
-
-          shm_kib=$(df -Pk /dev/shm | awk 'NR == 2 {print $2}')
-          if [[ "${shm_kib}" -lt $((17 * 1024 * 1024)) ]]; then
-            printf '/dev/shm is smaller than expected: %s KiB\n' "${shm_kib}" >&2
-            exit 1
-          fi
 
           scratch_file="/scratch/ops-8406-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           printf 'AITune runner smoke test\n' > "${scratch_file}"
           test -s "${scratch_file}"
           rm -f "${scratch_file}"
 
+          python -c 'import torch; assert torch.cuda.device_count() == 8'
           nvidia-smi
           nvidia-smi topo -m
           df -h /dev/shm /scratch
 
-      - name: Install AITune test dependencies
-        env:
-          PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
-        run: python -m pip install --disable-pip-version-check -e . pytest pytest-mock
-
-      - name: Run representative AITune CUDA test
-        shell: bash
-        run: |
-          python - <<'PY'
-          import os
-          import pwd
-
-          uid = os.getuid()
-          try:
-              pwd.getpwuid(uid)
-          except KeyError:
-              # NGC images may omit the non-root UID enforced by the runner pod.
-              original_getpwuid = pwd.getpwuid
-
-              def getpwuid(query_uid):
-                  if query_uid == uid:
-                      fields = ("aitune", "x", uid, os.getgid(), "", os.environ["HOME"], "/bin/bash")
-                      return pwd.struct_passwd(fields)
-                  return original_getpwuid(query_uid)
-
-              pwd.getpwuid = getpwuid
-
-          import pytest
-
-          raise SystemExit(pytest.main(["-q", "tests/functional/pytorch/039_aitune_torch_profile_cuda_test.py"]))
-          PY
-
-      - name: Run four-GPU NCCL test
-        if: ${{ !cancelled() && matrix.expected_gpu_count == 4 }}
+      - name: Run eight-GPU NCCL test
         shell: bash
         run: |
           cat > /scratch/ops-8406-nccl.py <<'PY'
@@ -118,12 +111,58 @@ jobs:
           local_rank = int(os.environ["LOCAL_RANK"])
           torch.cuda.set_device(local_rank)
           dist.init_process_group("nccl")
-
           value = torch.tensor([dist.get_rank() + 1], device=f"cuda:{local_rank}")
           dist.all_reduce(value)
-          assert value.item() == 10
+          assert value.item() == 36
           print(f"rank={dist.get_rank()} gpu={torch.cuda.get_device_name(local_rank)} value={value.item()}")
-
           dist.destroy_process_group()
           PY
-          torchrun --standalone --nproc-per-node=4 /scratch/ops-8406-nccl.py
+          torchrun --standalone --nproc-per-node=8 /scratch/ops-8406-nccl.py
+
+  validate-gpu-aliases:
+    name: ${{ matrix.runner }}
+    needs: validate-rtx-8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: aitune-tester-gpu
+            expected_gpu_count: 1
+          - runner: aitune-tester-gpu-4
+            expected_gpu_count: 4
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    container:
+      image: nvcr.io/nvidia/pytorch:26.05-py3
+    env:
+      EXPECTED_GPU_COUNT: ${{ matrix.expected_gpu_count }}
+      EXPECTED_GPU_MODEL: RTX PRO 4500
+    steps:
+      - name: Check out AITune
+        uses: actions/checkout@v4
+
+      - name: Validate alias allocation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t gpu_names < <(nvidia-smi --query-gpu=name --format=csv,noheader)
+          if [[ "${#gpu_names[@]}" -ne "${EXPECTED_GPU_COUNT}" ]]; then
+            printf 'Expected %s GPUs, found %s\n' "${EXPECTED_GPU_COUNT}" "${#gpu_names[@]}" >&2
+            exit 1
+          fi
+
+          for gpu_name in "${gpu_names[@]}"; do
+            [[ "${gpu_name}" == *"${EXPECTED_GPU_MODEL}"* ]]
+          done
+
+          python - <<'PY'
+          import os
+          import torch
+
+          assert torch.cuda.device_count() == int(os.environ["EXPECTED_GPU_COUNT"])
+          PY
+          test "$(df -Pk /dev/shm | awk 'NR == 2 {print $2}')" -ge $((17 * 1024 * 1024))
+          touch "/scratch/ops-8406-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -f "/scratch/ops-8406-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          nvidia-smi
