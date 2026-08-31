@@ -112,7 +112,7 @@ jobs:
           path: dist
       - run: uv sync --frozen --group test --extra torch29
       - run: uv pip install --reinstall --no-deps dist/*.whl
-      - run: uv run pytest tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
+      - run: uv run pytest -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
       - if: always()
         uses: *actions_upload_artifact
         with:
@@ -166,7 +166,7 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
-      - run: python -m pytest tests/unit --junitxml=pytorch-cpu.test-report.xml
+      - run: python -m pytest -n auto tests/unit --junitxml=pytorch-cpu.test-report.xml
       - if: always()
         uses: *actions_upload_artifact
         with:
