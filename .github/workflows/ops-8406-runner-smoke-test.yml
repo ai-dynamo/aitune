@@ -4,7 +4,6 @@
 name: Validate AITune runners
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -23,7 +22,9 @@ jobs:
             expected_cpu: 16
           - runner: linux-amd64-cpu32
             expected_cpu: 32
-    runs-on: ${{ matrix.runner }}
+    runs-on:
+      group: Default
+      labels: ${{ matrix.runner }}
     timeout-minutes: 30
     env:
       EXPECTED_CPU: ${{ matrix.expected_cpu }}
