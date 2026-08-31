@@ -21,7 +21,7 @@ env:
   UV_VERSION: 0.11.8
   UV_PYTHON: &python_version "3.10"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:25.10-py3
-  PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+  PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/${{ github.repository }}:${{ github.sha }}
 
   _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   _ACTIONS_SETUP_PYTHON: &actions_setup_python actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -158,7 +158,7 @@ jobs:
       contents: read
       packages: read
     container:
-      image: ${{ env.PYTORCH_CI_IMAGE }}
+      image: *pytorch_ci_image
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -182,7 +182,7 @@ jobs:
       contents: read
       packages: read
     container:
-      image: ${{ env.PYTORCH_CI_IMAGE }}
+      image: *pytorch_ci_image
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
