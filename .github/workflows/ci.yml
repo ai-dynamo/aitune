@@ -91,7 +91,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - python-version: ["3.10", "3.11", "3.12", "3.13"]
+          - python-version: "3.10"
+          - python-version: "3.11"
+          - python-version: "3.12"
+          - python-version: "3.13"
     steps:
       - uses: *actions_checkout
         with:
@@ -99,6 +102,10 @@ jobs:
       - uses: *actions_setup_uv
         with:
           python-version: ${{ matrix.python-version }}
+      - uses: *actions_download_artifact
+        with:
+          name: dist
+          path: dist
       - run: uv sync --frozen --group test --extra torch29
       - run: uv pip install --reinstall --no-deps dist/*.whl
       - run: uv run pytest tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
