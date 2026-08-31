@@ -84,6 +84,31 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  pythons-cpu:
+    name: Pythons CPU
+    needs: wheel
+    runs-on: linux-amd64-cpu4
+    strategy:
+      matrix:
+        include:
+          - python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_setup_uv
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --frozen --group test --extra torch29
+      - run: uv pip install --reinstall --no-deps dist/*.whl
+      - run: uv run pytest tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
+      - if: always()
+        uses: *actions_upload_artifact
+        with:
+          name: python-cpu-test-report
+          path: python-cpu.test-report.xml
+          if-no-files-found: ignore
+
   pytorch-cpu:
     name: PyTorch CPU
     needs: wheel
