@@ -27,11 +27,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ops-8406-linux-amd64-cpu4
+          - runner: linux-amd64-cpu4
             expected_cpu: 4
-          - runner: ops-8406-linux-amd64-cpu16
+          - runner: linux-amd64-cpu16
             expected_cpu: 16
-          - runner: ops-8406-linux-amd64-cpu32
+          - runner: linux-amd64-cpu32
             expected_cpu: 32
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
