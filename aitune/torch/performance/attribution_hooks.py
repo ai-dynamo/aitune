@@ -7,7 +7,7 @@ from __future__ import annotations
 import functools
 import inspect
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
@@ -19,6 +19,10 @@ from aitune.torch.performance.context import (
     UNTUNED_MODULE_REGION_PREFIX,
 )
 from aitune.torch.performance.utils import _qualified_type_name
+
+if TYPE_CHECKING:
+    from torch.utils.hooks import RemovableHandle
+
 
 # State is stored as a per-module attribute, which is process-wide (not thread-local).
 # Safe because PyTorch inference is sequential at the Python level (GIL) and concurrent
@@ -302,7 +306,7 @@ class _RegionInstaller:
 
     def __init__(self, targets: list[_RegionTarget]) -> None:
         self._targets = targets
-        self._handles: list[torch.utils.hooks.RemovableHandle] = []
+        self._handles: list[RemovableHandle] = []
         # (underlying_module, method_name, original_callable, was_instance_attr_before_patch)
         self._method_wraps: list[tuple[nn.Module, str, Any, bool]] = []
 
