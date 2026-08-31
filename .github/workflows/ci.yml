@@ -147,7 +147,7 @@ jobs:
           push: true
           build-args: |
             FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
-            AIT_EXTRAS=pytest pytest-mock pytest-cov
+            ADDITIONAL_PACKAGES=pytest
           tags: ${{ env.PYTORCH_CI_IMAGE }}
 
   pytorch-cpu:
