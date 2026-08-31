@@ -117,7 +117,7 @@ jobs:
         uses: *actions_upload_artifact
         with:
           name: python-cpu-test-report
-          path: python-cpu.test-report.xml
+          path: python-*.test-report.xml
           if-no-files-found: ignore
 
   pytorch-image:
