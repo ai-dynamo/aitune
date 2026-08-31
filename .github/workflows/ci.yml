@@ -39,10 +39,9 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
-      - uses: *actions_setup_python
+      - uses: *actions_setup_uv
         with:
           python-version: *python_version
-      - run: python -m pip install "uv==${UV_VERSION}"
       - run: uv sync --frozen --group dev
       - run: uv run pre-commit run --all-files
 
@@ -54,10 +53,9 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
-      - uses: *actions_setup_python
+      - uses: *actions_setup_uv
         with:
           python-version: *python_version
-      - run: python -m pip install "uv==${UV_VERSION}"
       - run: uv sync --frozen --group dev --group test
       - run: |
           set -o pipefail
@@ -76,10 +74,9 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
-      - uses: *actions_setup_python
+      - uses: *actions_setup_uv
         with:
           python-version: *python_version
-      - run: python -m pip install "uv==${UV_VERSION}"
       - run: uv build
       - uses: *actions_upload_artifact
         with:
@@ -95,14 +92,13 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
-      - uses: *actions_setup_python
+      - uses: *actions_setup_uv
         with:
           python-version: *python_version
       - uses: *actions_download_artifact
         with:
           name: dist
           path: dist
-      - run: python -m pip install "uv==${UV_VERSION}"
       - run: uv sync --frozen --group test --extra torch29
       - run: uv pip install --reinstall --no-deps dist/*.whl
       - run: uv run pytest tests/unit --junitxml=pytorch-cpu.test-report.xml
@@ -124,7 +120,7 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
-      - uses: *actions_setup_python
+      - uses: *actions_setup_uv
         with:
           python-version: *python_version
       - uses: *actions_download_artifact
@@ -141,7 +137,6 @@ jobs:
           while IFS= read -r gpu_name; do
             [[ "$gpu_name" == *"$EXPECTED_GPU_MODEL"* ]]
           done <<< "$gpu_names"
-      - run: python -m pip install "uv==${UV_VERSION}"
       - run: uv sync --frozen --group test --extra torch29
       - run: uv pip install --reinstall --no-deps dist/*.whl
       - run: uv run pytest tests/unit --cov=aitune --cov-report=xml:coverage.xml --junitxml=pytorch-gpu.test-report.xml
