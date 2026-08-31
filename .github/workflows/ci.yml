@@ -30,6 +30,7 @@ env:
   _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
   _ACTIONS_DOCKER_LOGIN: &actions_docker_login docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
   _ACTIONS_DOCKER_BUILD_PUSH: &actions_docker_build_push docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+  _ACTIONS_SETUP_NODE: &actions_setup_node actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
 
 defaults:
   run:
@@ -99,7 +100,6 @@ jobs:
           $LICENSE_HEADER_TOOL --files ".dockerignore"
           $LICENSE_HEADER_TOOL --files ".editorconfig"
 
-
   packages-python:
     name: Packages licenses
     runs-on: linux-amd64-cpu4
@@ -116,6 +116,18 @@ jobs:
           TOOLS=.github/scripts/sanity
           uv run python $TOOLS/license_packages.py
 
+  check-docs:
+    name: Check docs
+    runs-on: linux-amd64-cpu4
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_setup_node
+        with:
+          node-version: "25"
+      - run: npm install -g fern-api
+      - run: make docs
 
   wheel:
     name: Build wheel
@@ -253,3 +265,4 @@ jobs:
             coverage.xml
             pytorch-gpu.test-report.xml
           if-no-files-found: ignore
+
