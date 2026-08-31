@@ -146,4 +146,4 @@ navigation:
       - page: Contributing
         path: ../CONTRIBUTING.md
       - page: License
-        path: ../LICENSE
+        path: ../LICENSE.md
