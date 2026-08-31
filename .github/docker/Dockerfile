@@ -25,9 +25,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     export WHEEL_PATH=$(ls ${AIT_DIST_DIR}/*aitune*.whl) && \
-    pip install ${WHEEL_PATH} ${AIT_EXTRAS} && \
+    pip install ${WHEEL_PATH} ${AIT_EXTRAS} --group test && \
     mkdir -p ${TMP_DIR} && \
-    tar xvf ${AIT_DIST_DIR}/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
+    tar xf ${AIT_DIST_DIR}/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
     mv ${TMP_DIR}/examples ${AIT_DIR} && \
     mv ${TMP_DIR}/tests ${AIT_DIR} && \
     rm -rf ${TMP_DIR}
