@@ -85,7 +85,7 @@ def test_save_compiled_model_without_retracing(mocker, tmp_path: Path):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
     module = mocker.Mock(spec=nn.Module)
 
-    _save_compiled_model(module, tmp_path / "model.pt", dynamic_shapes=None, pickle_protocol=5)
+    _save_compiled_model(module, tmp_path / "model.pt", sample=((), {}), dynamic_shapes=None, pickle_protocol=5)
 
     mock_torch_tensorrt.save.assert_called_once_with(
         module,
@@ -99,9 +99,10 @@ def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
     mock_torch_tensorrt.save.side_effect = [RuntimeError("direct save failed"), None]
     module = mocker.Mock(spec=nn.Module)
+    sample = ((mocker.sentinel.input,), {"output_hidden_states": True})
     dynamic_shapes = {"x": {0: mocker.sentinel.batch}}
 
-    _save_compiled_model(module, tmp_path / "model.pt", dynamic_shapes=dynamic_shapes, pickle_protocol=5)
+    _save_compiled_model(module, tmp_path / "model.pt", sample, dynamic_shapes=dynamic_shapes, pickle_protocol=5)
 
     assert mock_torch_tensorrt.save.call_args_list == [
         mocker.call(
@@ -114,6 +115,8 @@ def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path
             module,
             (tmp_path / "model.pt").as_posix(),
             retrace=True,
+            arg_inputs=sample[0],
+            kwarg_inputs=sample[1],
             dynamic_shapes=dynamic_shapes,
             pickle_protocol=5,
         ),

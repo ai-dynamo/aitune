@@ -21,7 +21,7 @@ from aitune.torch.backend.backend import (
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.torch import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.module import move_module_to_device
@@ -255,6 +255,7 @@ class TorchTensorRTAotBackend(Backend):
             _save_compiled_model(
                 trt_model_compiled,
                 self._exported_model_artifact.path,
+                export_result.sample,
                 export_result.dynamic_shapes,
                 self._config.pickle_protocol,
             )
@@ -333,6 +334,7 @@ class TorchTensorRTAotBackend(Backend):
 def _save_compiled_model(
     module: nn.Module,
     path: Path,
+    sample: Sample,
     dynamic_shapes: dict[str, Any] | None,
     pickle_protocol: int,
 ) -> None:
@@ -350,10 +352,13 @@ def _save_compiled_model(
             "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
             exc_info=True,
         )
+        args, kwargs = sample
         torch_tensorrt.save(
             module,
             path.as_posix(),
             retrace=True,
+            arg_inputs=args,
+            kwarg_inputs=kwargs or None,
             dynamic_shapes=dynamic_shapes,
             pickle_protocol=pickle_protocol,
         )
