@@ -258,7 +258,8 @@ jobs:
   pytorch-gpu:
     name: PyTorch GPU
     needs: pytorch-image
-    runs-on: linux-amd64-gpu-rtxpro6000-latest-1 # prod-aitune-tester-rtx-pro-4500-v1
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 40
     permissions:
       contents: read
       packages: read
