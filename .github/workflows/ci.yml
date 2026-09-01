@@ -20,6 +20,8 @@ env:
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_VERSION: 0.11.8
   UV_PYTHON: &python_version "3.10"
+  NODE_VERSION: &node_version "25"
+  FERN_VERSION: &fern_version "5.110.0"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:25.10-py3
   PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/${{ github.repository }}:${{ github.sha }}
 
@@ -111,7 +113,7 @@ jobs:
         with:
           python-version: *python_version
       - run: uv sync --frozen --group dev --group test --group doc
-      - run: uv pip install pip-licenses toml
+      - run: uv pip install pip-licenses==5.5.5 toml==0.10.2
       - run: |
           TOOLS=.github/scripts/sanity
           uv run python $TOOLS/license_packages.py
@@ -125,8 +127,9 @@ jobs:
           persist-credentials: false
       - uses: *actions_setup_node
         with:
-          node-version: "25"
-      - run: npm install -g fern-api
+          node-version: *node_version
+      - run: npm install -g fern-api@${{ env.FERN_VERSION }}
+ 
       - run: make docs
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
@@ -177,8 +180,8 @@ jobs:
       - if: always()
         uses: *actions_upload_artifact
         with:
-          name: python-cpu-test-report
-          path: python-*.test-report.xml
+          name: python-cpu-test-report-${{ matrix.python-version }}
+          path: python-${{ matrix.python-version }}.test-report.xml
           if-no-files-found: ignore
 
   pytorch-image:
