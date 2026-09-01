@@ -21,18 +21,18 @@ env:
   UV_VERSION: 0.11.8
   UV_PYTHON: &python_version "3.10"
   NODE_VERSION: &node_version "25"
-  FERN_VERSION: &fern_version "5.110.0"
+  FERN_VERSION: "5.110.0"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:25.10-py3
   PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/${{ github.repository }}:${{ github.sha }}
 
   _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  _ACTIONS_SETUP_PYTHON: &actions_setup_python actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
   _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
   _ACTIONS_DOWNLOAD_ARTIFACT: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
   _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
   _ACTIONS_DOCKER_LOGIN: &actions_docker_login docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
   _ACTIONS_DOCKER_BUILD_PUSH: &actions_docker_build_push docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
   _ACTIONS_SETUP_NODE: &actions_setup_node actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+  _ACTIONS_DEPENDENCY_REVIEW: &actions_dependency_review actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
 
 defaults:
   run:
@@ -118,6 +118,23 @@ jobs:
           TOOLS=.github/scripts/sanity
           uv run python $TOOLS/license_packages.py
 
+  dependency-review:
+    name: Dependency Review
+    runs-on: linux-amd64-cpu4
+    permissions:
+      pull-requests: write
+    steps:
+      - name: 'Checkout Repository'
+        uses: *actions_checkout
+      - name: 'Dependency Review'
+        uses: *actions_dependency_review
+        with:
+          base-ref: main
+          head-ref: ${{ github.ref }}
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
+          
   check-docs:
     name: Check docs
     runs-on: linux-amd64-cpu4
