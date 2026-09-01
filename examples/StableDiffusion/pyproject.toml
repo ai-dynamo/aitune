@@ -14,7 +14,7 @@ dependencies = [
     "aitune-examples-common",
     "diffusers>=0.25.0,<0.35",
     "torch>=2.0.0",
-    "transformers<5",
+    "transformers<6",
     "pillow",
     "sentencepiece",
     "protobuf",
