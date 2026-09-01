@@ -11,7 +11,7 @@ import torch
 
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, ensure_enough_samples, samples_generator
 from aitune.torch.distributed import coordinator
-from aitune.torch.inspecting.module_info import InspectedModulesInfo
+from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo
 from aitune.torch.inspecting.module_inspector import ModuleInspector
 from aitune.torch.utils.cuda_utils import synchronize
 from aitune.utils.logging import setup_logging
@@ -45,6 +45,10 @@ def inspect(
         max_depth: Maximum depth of the modules to inspect
     Returns:
         InspectedModulesInfo object.
+
+    Note:
+        In distributed execution, rank zero's module order and timings are applied to every rank so subsequent
+        execution-based filtering selects modules consistently.
     """
     setup_logging(format_string=LOG_FORMAT)
 
@@ -68,15 +72,7 @@ def inspect(
             total_execution_time += _run_inference(inference_function, args, kwargs)
 
         modules = model_inspector.get_modules()
-        inspection_plan = tuple(
-            (
-                module.object_path,
-                f"{module.module_type.__module__}.{module.module_type.__qualname__}",
-                module.execution_count,
-            )
-            for module in modules
-        )
-        coordinator.verify_equal(inspection_plan, "inspection plan")
+        total_execution_time, modules = _synchronize_inspection_result(total_execution_time, modules)
 
         logger.info("Inspection done. Found %d candidate modules for tuning.", len(modules))
 
@@ -113,3 +109,53 @@ def _reset_total_execution_time(inspector: ModuleInspector):
     for module in inspector.get_modules():
         module.total_execution_time = 0.0
         module.execution_count = 0
+
+
+def _synchronize_inspection_result(
+    total_execution_time: float,
+    modules: list[ModuleInfo],
+) -> tuple[float, list[ModuleInfo]]:
+    """Order local modules and apply timings using rank zero's inspection result."""
+    local_result = (
+        total_execution_time,
+        tuple(
+            (
+                module.object_path,
+                f"{module.module_type.__module__}.{module.module_type.__qualname__}",
+                module.execution_count,
+                module.total_execution_time,
+            )
+            for module in modules
+        ),
+    )
+    rank_zero_total, rank_zero_records = coordinator.broadcast_from_rank0(local_result)
+
+    synchronized_modules = []
+    with coordinator.raise_if_any_rank_fails("Synchronizing inspection result"):
+        modules_by_path = {module.object_path: module for module in modules}
+        rank_zero_paths = tuple(path for path, _, _, _ in rank_zero_records)
+        local_paths = set(modules_by_path)
+        authoritative_paths = set(rank_zero_paths)
+        if local_paths != authoritative_paths:
+            missing = tuple(path for path in rank_zero_paths if path not in local_paths)
+            unexpected = tuple(
+                module.object_path for module in modules if module.object_path not in authoritative_paths
+            )
+            raise RuntimeError(
+                f"Local inspection modules differ from rank zero: missing={missing!r}, unexpected={unexpected!r}"
+            )
+
+        for path, module_type, execution_count, execution_time in rank_zero_records:
+            module = modules_by_path[path]
+            local_module_type = f"{module.module_type.__module__}.{module.module_type.__qualname__}"
+            local_signature = (local_module_type, module.execution_count)
+            rank_zero_signature = (module_type, execution_count)
+            if local_signature != rank_zero_signature:
+                raise RuntimeError(
+                    f"Local inspection module {path!r} differs from rank zero: "
+                    f"local={local_signature!r}, rank zero={rank_zero_signature!r}"
+                )
+            module.total_execution_time = execution_time
+            synchronized_modules.append(module)
+
+    return rank_zero_total, synchronized_modules

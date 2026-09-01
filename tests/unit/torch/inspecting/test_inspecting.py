@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from aitune.torch.distributed import DistributedOutcome
 from aitune.torch.inspecting import inspect
-from aitune.torch.inspecting.inspecting import _run_inference
+from aitune.torch.inspecting.inspecting import _run_inference, _synchronize_inspection_result
 from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo
 
 TEST_NUMBER_OF_ITERATIONS = 10
@@ -86,21 +86,27 @@ def test_inspect_simple_model(simple_model, sample_dataset):
 def test_inspect_synchronizes_complete_inference_calls(mocker, simple_model, sample_dataset):
     """Test that inspection synchronizes ranks around complete model calls."""
     barrier = mocker.patch("aitune.torch.inspecting.inspecting.coordinator.barrier")
-    verify_equal = mocker.patch("aitune.torch.inspecting.inspecting.coordinator.verify_equal")
+    broadcast = mocker.patch(
+        "aitune.torch.inspecting.inspecting.coordinator.broadcast_from_rank0",
+        side_effect=lambda value: value,
+    )
 
     modules_info = inspect(simple_model, sample_dataset, number_of_iterations=3, warmup_iterations=2)
 
     assert barrier.call_count == 2 * (3 + 2)
     modules = modules_info.get_modules()
-    inspection_plan = tuple(
-        (
-            module.object_path,
-            f"{module.module_type.__module__}.{module.module_type.__qualname__}",
-            module.execution_count,
-        )
-        for module in modules
-    )
-    verify_equal.assert_called_once_with(inspection_plan, "inspection plan")
+    broadcast.assert_called_once_with((
+        modules_info._total_execution_time,
+        tuple(
+            (
+                module.object_path,
+                f"{module.module_type.__module__}.{module.module_type.__qualname__}",
+                module.execution_count,
+                module.total_execution_time,
+            )
+            for module in modules
+        ),
+    ))
 
 
 def test_inspection_inference_coordinates_failures(mocker):
@@ -115,6 +121,41 @@ def test_inspection_inference_coordinates_failures(mocker):
         _run_inference(mocker.Mock(side_effect=error), (), {})
 
     outcome.assert_called_once_with(error)
+
+
+def test_inspection_uses_rank_zero_order_and_timings_for_selection(mocker):
+    modules = [
+        ModuleInfo(module=nn.ReLU(), name="first", object_path="first", execution_count=1, total_execution_time=0.9),
+        ModuleInfo(module=nn.ReLU(), name="second", object_path="second", execution_count=1, total_execution_time=0.1),
+    ]
+    module_type = "torch.nn.modules.activation.ReLU"
+    broadcast = mocker.patch(
+        "aitune.torch.inspecting.inspecting.coordinator.broadcast_from_rank0",
+        return_value=(1.0, (("second", module_type, 1, 0.8), ("first", module_type, 1, 0.2))),
+    )
+
+    total_execution_time, synchronized_modules = _synchronize_inspection_result(2.0, modules)
+    modules_info = InspectedModulesInfo(total_execution_time, number_of_batches=1)
+    for module in synchronized_modules:
+        modules_info.add_module(module)
+
+    assert [module.name for module in modules_info.get_modules()] == ["second", "first"]
+    assert [module.name for module in modules_info.get_modules(limit=1)] == ["second"]
+    assert [module.name for module in modules_info.get_modules(min_execution_ratio=0.5)] == ["second"]
+    broadcast.assert_called_once_with((2.0, (("first", module_type, 1, 0.9), ("second", module_type, 1, 0.1))))
+
+
+def test_inspection_rejects_modules_that_do_not_match_rank_zero(mocker):
+    modules = [
+        ModuleInfo(module=nn.ReLU(), name="local", object_path="local", execution_count=1, total_execution_time=0.1)
+    ]
+    mocker.patch(
+        "aitune.torch.inspecting.inspecting.coordinator.broadcast_from_rank0",
+        return_value=(1.0, (("remote", "torch.nn.modules.activation.ReLU", 1, 0.1),)),
+    )
+
+    with pytest.raises(RuntimeError, match="modules differ from rank zero"):
+        _synchronize_inspection_result(1.0, modules)
 
 
 def test_inspect_nested_model(nested_model, sample_dataset):

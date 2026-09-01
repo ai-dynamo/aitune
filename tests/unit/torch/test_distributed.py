@@ -43,12 +43,14 @@ def _distributed_worker(rank: int, world_size: int, rendezvous_path: str, result
         context = distributed_context()
         coordinator = DistributedCoordinator(context)
         outcome = coordinator.outcome(None if rank == 0 else RuntimeError("rank failure"))
+        inspection_order = coordinator.broadcast_from_rank0(("encoder", "decoder") if rank == 0 else None)
         result = (
             context.rank,
             context.world_size,
             outcome.succeeded,
             outcome.failed_ranks,
             coordinator.collect(float(rank + 1)),
+            inspection_order,
         )
         coordinator.barrier()
         (Path(result_dir) / f"rank-{rank}.txt").write_text(repr(result))
@@ -195,6 +197,21 @@ def test_coordinator_broadcasts_rank_zero_decision(mocker):
     broadcast_mock.assert_called_once_with([True], src=0)
 
 
+def test_coordinator_broadcasts_rank_zero_value(mocker):
+    context = DistributedContext(rank=1, local_rank=1, world_size=2, torch_distributed_initialized=True)
+
+    def broadcast(value, src):
+        assert src == 0
+        value[0] = ("encoder", "decoder")
+
+    broadcast_mock = mocker.patch("aitune.torch.distributed.dist.broadcast_object_list", side_effect=broadcast)
+
+    value = DistributedCoordinator(context).broadcast_from_rank0(("local",))
+
+    assert value == ("encoder", "decoder")
+    broadcast_mock.assert_called_once_with([("encoder", "decoder")], src=0)
+
+
 def test_distributed_outcome_preserves_local_error():
     local_error = ValueError("local failure")
     outcome = DistributedOutcome(("ValueError", None))
@@ -295,4 +312,7 @@ def test_coordinator_with_application_initialized_process_group(tmp_path):
 
     results = [ast.literal_eval((tmp_path / f"rank-{rank}.txt").read_text()) for rank in range(2)]
 
-    assert results == [(0, 2, False, (1,), [1.0, 2.0]), (1, 2, False, (1,), [1.0, 2.0])]
+    assert results == [
+        (0, 2, False, (1,), [1.0, 2.0], ("encoder", "decoder")),
+        (1, 2, False, (1,), [1.0, 2.0], ("encoder", "decoder")),
+    ]

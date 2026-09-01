@@ -172,12 +172,16 @@ class DistributedCoordinator:
 
     def decide_by_rank0(self, rank_zero_decision: bool) -> bool:
         """Broadcast rank zero's control-flow decision to every rank."""
+        return bool(self.broadcast_from_rank0(rank_zero_decision))
+
+    def broadcast_from_rank0(self, rank_zero_value: Any) -> Any:
+        """Broadcast a small control-plane value from rank zero to every rank."""
         context = self._current_context()
         if not context.is_multi_process:
-            return rank_zero_decision
-        decision = [rank_zero_decision if context.rank == 0 else None]
-        dist.broadcast_object_list(decision, src=0)
-        return bool(decision[0])
+            return rank_zero_value
+        value = [rank_zero_value if context.rank == 0 else None]
+        dist.broadcast_object_list(value, src=0)
+        return value[0]
 
     def verify_equal(self, value: Any, description: str) -> None:
         """Raise when ranks do not report the same control-plane value."""
