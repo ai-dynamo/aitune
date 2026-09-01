@@ -129,11 +129,11 @@ jobs:
         with:
           node-version: *node_version
       - run: npm install -g fern-api@${{ env.FERN_VERSION }}
- 
+
       - run: make docs
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
- 
+
 
   wheel:
     name: Build wheel
