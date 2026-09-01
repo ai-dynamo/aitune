@@ -11,8 +11,8 @@ permissions:
 
 jobs:
   validate-rtx-8:
-    name: prod-aitune-tester-rtx-pro-4500-8-v1
-    runs-on: prod-aitune-tester-rtx-pro-4500-8-v1
+    name: stg-aitune-tester-rtx-pro-4500-8-v1
+    runs-on: stg-aitune-tester-rtx-pro-4500-8-v1
     timeout-minutes: 240
     container:
       image: nvcr.io/nvidia/pytorch:26.05-py3
@@ -75,14 +75,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: prod-aitune-tester-rtx-pro-4500-v1
+          - runner: stg-aitune-tester-rtx-pro-4500-v1
             expected_gpu_count: 1
-          - runner: prod-aitune-tester-rtx-pro-4500-4-v1
-            expected_gpu_count: 4
-          - runner: aitune-tester-gpu
+          - runner: stg-aitune-tester-gpu
             expected_gpu_count: 1
-          - runner: aitune-tester-gpu-4
+          - runner: arc-014-canary-1gpu
+            expected_gpu_count: 1
+          - runner: stg-aitune-tester-rtx-pro-4500-4-v1
             expected_gpu_count: 4
+          - runner: stg-aitune-tester-gpu-4
+            expected_gpu_count: 4
+          - runner: arc-014-canary-4gpu
+            expected_gpu_count: 4
+          - runner: arc-014-canary-8gpu
+            expected_gpu_count: 8
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     container:
