@@ -1,78 +1,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-name: Validate AITune runners
+name: Validate AITune GPU runners
 
 on:
   workflow_dispatch:
-    inputs:
-      scope:
-        description: Runner class to validate
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - cpu
-          - gpu
 
 permissions:
   contents: read
 
 jobs:
-  validate-cpu:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'cpu' }}
-    name: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: linux-amd64-cpu4
-            expected_cpu: 4
-          - runner: linux-amd64-cpu16
-            expected_cpu: 16
-          - runner: linux-amd64-cpu32
-            expected_cpu: 32
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
-    env:
-      EXPECTED_CPU: ${{ matrix.expected_cpu }}
-    steps:
-      - name: Check out AITune
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Validate CPU quota and Docker
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ -r /sys/fs/cgroup/cpu.max ]]; then
-            read -r quota period < /sys/fs/cgroup/cpu.max
-          else
-            quota=$(< /sys/fs/cgroup/cpu/cpu.cfs_quota_us)
-            period=$(< /sys/fs/cgroup/cpu/cpu.cfs_period_us)
-          fi
-
-          if [[ "${quota}" == max || "${quota}" -lt 0 ]]; then
-            printf 'Runner has no CPU quota\n' >&2
-            exit 1
-          fi
-
-          allocated_cpu=$((quota / period))
-          if [[ "${allocated_cpu}" -ne "${EXPECTED_CPU}" ]]; then
-            printf 'Expected %s CPUs, found quota for %s\n' "${EXPECTED_CPU}" "${allocated_cpu}" >&2
-            exit 1
-          fi
-
-          test -n "${RUNNER_TEMP}"
-          docker info
-          docker run --rm busybox:1.37 echo 'DinD is ready'
-          printf 'CPU quota: %s, nproc: %s\n' "${allocated_cpu}" "$(nproc)"
-          free -h
-          df -h "${RUNNER_TEMP}"
-
   validate-rtx-8:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'gpu' }}
     name: prod-aitune-tester-rtx-pro-4500-8-v1
     runs-on: prod-aitune-tester-rtx-pro-4500-8-v1
     timeout-minutes: 240
@@ -130,13 +68,17 @@ jobs:
           PY
           torchrun --standalone --nproc-per-node=8 /scratch/ops-8406-nccl.py
 
-  validate-gpu-aliases:
+  validate-gpu-labels:
     name: ${{ matrix.runner }}
     needs: validate-rtx-8
     strategy:
       fail-fast: false
       matrix:
         include:
+          - runner: prod-aitune-tester-rtx-pro-4500-v1
+            expected_gpu_count: 1
+          - runner: prod-aitune-tester-rtx-pro-4500-4-v1
+            expected_gpu_count: 4
           - runner: aitune-tester-gpu
             expected_gpu_count: 1
           - runner: aitune-tester-gpu-4
@@ -152,7 +94,7 @@ jobs:
       - name: Check out AITune
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Validate alias allocation
+      - name: Validate GPU allocation
         shell: bash
         run: |
           set -euo pipefail
