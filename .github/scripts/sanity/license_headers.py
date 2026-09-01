@@ -45,8 +45,8 @@ def main(argv=None):
     parser.add_argument("--path", required=True, help="Path from which files should be checked")
     parser.add_argument("--files", default="*/**", help="Filenames or pattern that should be checked")
     parser.add_argument("--license-template", default=DEFAULT_LICENSE_TEMPLATE, help="License file template")
-    parser.add_argument("--top-lines-count", default=5, help="Number of top lines to check")
-    parser.add_argument("--fuzzy-ratio-cut-off", type=int, default=85)
+    parser.add_argument("--top-lines-count", type=int, default=5, help="Number of top lines to check")
+    parser.add_argument("--fuzzy-ratio-cut-off", type=int, default=85, help="Fuzzy ratio cutoff")
     parser.add_argument(
         "--comment-style",
         default="#",
