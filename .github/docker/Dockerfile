@@ -1,5 +1,5 @@
 #syntax=docker/dockerfile:1.3
-ARG FROM_IMAGE=ubuntu:25.04
+ARG FROM_IMAGE=nvcr.io/nvidia/pytorch:25.10-py3
 FROM ${FROM_IMAGE}
 
 ARG ONNXRUNTIME_VERSION=1.16.2
