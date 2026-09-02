@@ -145,5 +145,3 @@ navigation:
         path: ../docs/known_issues.md
       - page: Contributing
         path: ../CONTRIBUTING.md
-      - page: License
-        path: ../LICENSE

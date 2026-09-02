@@ -32,6 +32,8 @@ redirects:
     destination: "/aitune"
   - source: "/aitune/dev/index.html"
     destination: "/aitune/dev"
+  - source: "/aitune/resources/license"
+    destination: "https://github.com/ai-dynamo/aitune/blob/main/LICENSE"
 
 navbar-links:
   - type: github

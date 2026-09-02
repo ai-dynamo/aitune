@@ -47,8 +47,8 @@ repos:
         pass_filenames: false
         files: ^(pyproject\.toml|uv\.lock)$
 
-  # - repo: https://github.com/thlorenz/doctoc
-  #   rev: v2.2.0
-  #   hooks:
-  #     - id: doctoc
-  #       args: [ --github, --update-only ]
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
