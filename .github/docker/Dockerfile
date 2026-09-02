@@ -5,13 +5,6 @@ FROM ${FROM_IMAGE}
 ARG ONNXRUNTIME_VERSION=1.16.2
 ARG FRAMEWORK_VERSION=25.10
 
-ENV UV_SYSTEM_PYTHON=true
-ENV UV_BREAK_SYSTEM_PACKAGES=1
-ENV UV_CONSTRAINT=""
-
-ENV PIP_BREAK_SYSTEM_PACKAGES=1
-ENV PIP_CONSTRAINT=""
-
 ENV AIT_DIR="/opt/ai-tune"
 ENV AIT_DIST_DIR=${AIT_DIR}/dist
 ENV AIT_TEST_DIR=${AIT_DIR}/tests
@@ -26,12 +19,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     tar xf /aitune_dist/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
     mv ${TMP_DIR}/examples ${AIT_DIR} && \
     mv ${TMP_DIR}/tests ${AIT_DIR} && \
-    (cd ${TMP_DIR} && pip install . --group test) && \
-    pip install --no-deps ${WHEEL_PATH} && \
+    (cd ${TMP_DIR} && pip install . --group test --break-system-packages) && \
+    pip install --no-deps ${WHEEL_PATH} --break-system-packages && \
     rm -rf ${TMP_DIR}
 
 ARG ADDITIONAL_PACKAGES
 ENV ADDITIONAL_PACKAGES=${ADDITIONAL_PACKAGES}
 RUN if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install $ADDITIONAL_PACKAGES; fi
+
+
+RUN chown -R ubuntu:ubuntu ${AIT_DIR} && chmod -R ug+rw ${AIT_DIR}
+USER ubuntu
 
 WORKDIR ${AIT_DIR}
