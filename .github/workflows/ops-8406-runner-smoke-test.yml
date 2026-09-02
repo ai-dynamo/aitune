@@ -1,0 +1,127 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Validate AITune GPU runners
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-rtx-8:
+    name: stg-aitune-tester-rtx-pro-4500-8-v1
+    runs-on: stg-aitune-tester-rtx-pro-4500-8-v1
+    timeout-minutes: 240
+    container:
+      image: nvcr.io/nvidia/pytorch:26.05-py3
+    env:
+      EXPECTED_GPU_COUNT: 8
+      EXPECTED_GPU_MODEL: RTX PRO 4500
+    steps:
+      - name: Check out AITune
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate eight-GPU allocation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t gpu_names < <(nvidia-smi --query-gpu=name --format=csv,noheader)
+          if [[ "${#gpu_names[@]}" -ne "${EXPECTED_GPU_COUNT}" ]]; then
+            printf 'Expected %s GPUs, found %s\n' "${EXPECTED_GPU_COUNT}" "${#gpu_names[@]}" >&2
+            exit 1
+          fi
+
+          for gpu_name in "${gpu_names[@]}"; do
+            [[ "${gpu_name}" == *"${EXPECTED_GPU_MODEL}"* ]]
+          done
+
+          scratch_file="/scratch/ops-8406-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf 'AITune runner smoke test\n' > "${scratch_file}"
+          test -s "${scratch_file}"
+          rm -f "${scratch_file}"
+
+          python -c 'import torch; assert torch.cuda.device_count() == 8'
+          nvidia-smi
+          nvidia-smi topo -m
+          df -h /dev/shm /scratch
+
+      - name: Run eight-GPU NCCL test
+        shell: bash
+        run: |
+          cat > /scratch/ops-8406-nccl.py <<'PY'
+          import os
+
+          import torch
+          import torch.distributed as dist
+
+          local_rank = int(os.environ["LOCAL_RANK"])
+          torch.cuda.set_device(local_rank)
+          dist.init_process_group("nccl")
+          value = torch.tensor([dist.get_rank() + 1], device=f"cuda:{local_rank}")
+          dist.all_reduce(value)
+          assert value.item() == 36
+          print(f"rank={dist.get_rank()} gpu={torch.cuda.get_device_name(local_rank)} value={value.item()}")
+          dist.destroy_process_group()
+          PY
+          torchrun --standalone --nproc-per-node=8 /scratch/ops-8406-nccl.py
+
+  validate-gpu-labels:
+    name: ${{ matrix.runner }}
+    needs: validate-rtx-8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: stg-aitune-tester-rtx-pro-4500-v1
+            expected_gpu_count: 1
+          - runner: stg-aitune-tester-gpu
+            expected_gpu_count: 1
+          - runner: arc-014-canary-1gpu
+            expected_gpu_count: 1
+          - runner: stg-aitune-tester-rtx-pro-4500-4-v1
+            expected_gpu_count: 4
+          - runner: stg-aitune-tester-gpu-4
+            expected_gpu_count: 4
+          - runner: arc-014-canary-4gpu
+            expected_gpu_count: 4
+          - runner: arc-014-canary-8gpu
+            expected_gpu_count: 8
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    container:
+      image: nvcr.io/nvidia/pytorch:26.05-py3
+    env:
+      EXPECTED_GPU_COUNT: ${{ matrix.expected_gpu_count }}
+      EXPECTED_GPU_MODEL: RTX PRO 4500
+    steps:
+      - name: Check out AITune
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate GPU allocation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t gpu_names < <(nvidia-smi --query-gpu=name --format=csv,noheader)
+          if [[ "${#gpu_names[@]}" -ne "${EXPECTED_GPU_COUNT}" ]]; then
+            printf 'Expected %s GPUs, found %s\n' "${EXPECTED_GPU_COUNT}" "${#gpu_names[@]}" >&2
+            exit 1
+          fi
+
+          for gpu_name in "${gpu_names[@]}"; do
+            [[ "${gpu_name}" == *"${EXPECTED_GPU_MODEL}"* ]]
+          done
+
+          python - <<'PY'
+          import os
+          import torch
+
+          assert torch.cuda.device_count() == int(os.environ["EXPECTED_GPU_COUNT"])
+          PY
+          test "$(df -Pk /dev/shm | awk 'NR == 2 {print $2}')" -ge $((17 * 1024 * 1024))
+          touch "/scratch/ops-8406-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -f "/scratch/ops-8406-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          nvidia-smi
