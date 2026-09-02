@@ -28,7 +28,11 @@ ENV ADDITIONAL_PACKAGES=${ADDITIONAL_PACKAGES}
 RUN if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install $ADDITIONAL_PACKAGES; fi
 
 
-RUN chown -R ubuntu:ubuntu ${AIT_DIR} && chmod -R ug+rw ${AIT_DIR}
-USER ubuntu
+# Create user and group with UID/GID 1001 for GitHub Actions runner compatibility
+RUN groupadd -g 1001 runner && useradd -m -u 1001 -g 1001 runner \
+    && chown -R runner:runner ${AIT_DIR} \
+    && chmod -R ug+rw ${AIT_DIR}
+
+USER runner
 
 WORKDIR ${AIT_DIR}
