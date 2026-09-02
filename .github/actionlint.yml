@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# https://github.com/rhysd/actionlint/blob/v1.7.12/docs/config.md#configuration-file
+
+self-hosted-runner:
+  labels:
+    - prod-aitune-tester-rtx-pro-4500-v1
+    - prod-aitune-tester-rtx-pro-4500-4-v1
+    - prod-aitune-tester-rtx-pro-4500-8-v1
+    - linux-amd64-cpu4
+    - linux-amd64-cpu8
+    - linux-amd64-cpu16
+    - linux-amd64-cpu32
+    - linux-arm64-cpu4
+    - linux-arm64-cpu8
+    - linux-arm64-cpu16
+    - linux-arm64-cpu32
+    - windows-amd64-cpu4
+    - windows-amd64-cpu8
+    - windows-amd64-cpu16
+    - windows-amd64-cpu32
+
+    - linux-amd64-cpu32m
+    - linux-arm64-cpu32m
+    - windows-amd64-cpu32m
+
+    - linux-arm64-gpu-a100-earliest-1
+    - linux-arm64-gpu-a100-latest-1
+    - linux-amd64-gpu-rtxpro6000-latest-1
+    - windows-amd64-gpu-rtxpro6000-earliest-1
+    - windows-amd64-gpu-rtxpro6000-latest-1
+    - wsl-amd64-gpu-rtxpro6000-earliest-1
+    - wsl-amd64-gpu-rtxpro6000-latest-1
