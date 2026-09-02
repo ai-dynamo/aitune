@@ -63,9 +63,11 @@ jobs:
         with:
           python-version: *python_version
       - run: uv sync --frozen --group dev --group test
-      - run: |
+      - name: Pytype checker
+        run: |
           set -o pipefail
           uv run pytype --keep-going -j auto aitune tests examples | tee pytype.log
+
       - if: always()
         uses: *actions_upload_artifact
         with:
@@ -83,7 +85,8 @@ jobs:
       - uses: *actions_setup_uv
         with:
           python-version: *python_version
-      - run: |
+      - name: Check license headers
+        run: |
           TOOLS=.github/scripts/sanity
           LICENSE_HEADER_TOOL="uv run --script $TOOLS/license_headers.py --path . --license-template $TOOLS/license_header.template"
           $LICENSE_HEADER_TOOL --files "*.py"
@@ -114,7 +117,8 @@ jobs:
           python-version: *python_version
       - run: uv sync --frozen --group dev --group test --group doc
       - run: uv pip install pip-licenses==5.5.5 toml==0.10.2
-      - run: |
+      - name: Check package licenses
+        run: |
           TOOLS=.github/scripts/sanity
           uv run python $TOOLS/license_packages.py
 
@@ -266,9 +270,6 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    env:
-      EXPECTED_GPU_COUNT: "1"
-      EXPECTED_GPU_MODEL: "RTX PRO 4500"
     steps:
       - uses: *actions_checkout
         with:
