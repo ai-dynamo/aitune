@@ -158,6 +158,18 @@ jobs:
             --scripts-path tests/functional/dynamo \
             --github-output "$GITHUB_OUTPUT"
 
+      - name: Display generated functional matrix
+        if: always()
+        run: |
+          echo "### Functional Matrix" >> $GITHUB_STEP_SUMMARY
+          echo "| ID | Path | Kind | Docker Image | Runner | Test Number |" >> $GITHUB_STEP_SUMMARY
+          echo "|----|------|------|--------------|--------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.generate.outputs.matrix }}" | jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.docker_image) | \(.runner) | \(.test_number) |"' >> $GITHUB_STEP_SUMMARY
+     
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Total matrix items: ${{ steps.generate.outputs.matrix_count }}" >> $GITHUB_STEP_SUMMARY
+   
+
         # --scripts-path tests/functional/pytorch \
         # --scripts-path tests/functional/pytorch/kernels \
         # --scripts-path tests/functional/pytorch/jit \
@@ -204,6 +216,7 @@ jobs:
           fi
       - name: Run functional job
         run: |
+          python -m pip install pydantic tomli
           ls dist/
           ls dist/aitune-*.whl
 
