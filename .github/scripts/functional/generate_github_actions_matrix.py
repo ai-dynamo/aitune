@@ -25,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from extract_script_metadata import (
     DEFAULT_DOCKER_IMAGE,
     FunctionalTestConfig,
-    FunctionalVariantConfig,
     Scope,
     get_scope,
 )
@@ -111,7 +110,7 @@ def _make_script_entries(
     return jobs
 
 
-def _make_project_jobs(
+def _make_project_entries(
     namespace: str,
     project: Path,
     config: FunctionalTestConfig,
@@ -183,7 +182,7 @@ def generate_matrix(
 
     for namespace, project in get_projects(projects_paths):
         config = FunctionalTestConfig.from_project(project, example_default_scope, default_docker_image)
-        matrix.extend(_make_project_jobs(namespace, project, config, requested_example_scope))
+        matrix.extend(_make_project_entries(namespace, project, config, requested_example_scope))
 
     return matrix
 
@@ -258,7 +257,7 @@ def main() -> None:
         write_github_output(args.github_output, matrix)
 
     if args.stdout:
-        print(json.dumps(matrix, indent=2))
+        print(json.dumps(matrix, indent=2))  # noqa: T201
 
 
 if __name__ == "__main__":
