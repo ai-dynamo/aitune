@@ -204,7 +204,7 @@ select = [
     "CPY",
     "G004"
 ]
-ignore = ["E266", "E501", "N818"]
+ignore = ["D420", "D421", "E266", "E501", "N818"]
 exclude = ["**/*.ipynb"]
 
 [tool.ruff.lint.per-file-ignores]
