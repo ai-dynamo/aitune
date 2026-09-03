@@ -177,9 +177,10 @@ jobs:
         include: ${{ fromJSON(needs.generate-functional-matrix.outputs.matrix) }}
     container:
       image: ubuntu:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      # credentials:
+      #   username: ${{ github.actor }}
+      #   password: ${{ secrets.GITHUB_TOKEN }}
+    env: ${{ fromJSON(matrix.environment) }}
     steps:
       - uses: *actions_checkout
         with:
