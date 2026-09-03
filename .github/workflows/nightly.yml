@@ -182,6 +182,9 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
+      - uses: *actions_setup_uv
+        with:
+          python-version: *python_version
       - uses: *actions_download_artifact
         with:
           name: dist
