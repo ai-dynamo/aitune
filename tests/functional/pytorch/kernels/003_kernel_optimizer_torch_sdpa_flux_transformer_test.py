@@ -52,7 +52,6 @@ def test_torch_sdpa_in_tiny_flux(dtype: torch.dtype = torch.bfloat16) -> None:
         CountingKernelProvider(TorchSDPAKernelProvider(SDPBackend.FLASH_ATTENTION)),
     ]
     optimizer = KernelOptimizer(
-        top_k=5,
         kernel_providers=providers,
         kernel_utils=PreferProviderKernelUtils(),
     )

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Kernel optimizer based on module function kernel profiling."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import Future, as_completed
 from dataclasses import dataclass, field
 from itertools import chain
@@ -27,6 +27,8 @@ from aitune.utils.env_vars import AITUNE_KERNEL_GENERATION_TIMEOUT
 from aitune.utils.validation import in_range
 
 logger = getLogger(__name__)
+
+_PROFILE_SUMMARY_LIMIT = 100
 
 KernelSource = KernelProvider | KernelGenerator
 KernelSourceType = TypeVar("KernelSourceType", KernelProvider, KernelGenerator)
@@ -64,7 +66,7 @@ class _GenerationTask:
 
 
 class KernelOptimizer:
-    """Profiles and replaces top-k ``torch.nn.functional`` kernels in a module.
+    """Profiles and replaces eligible ``torch.nn.functional`` kernels in a module.
 
     ``make_plan(function, data, module=...)`` profiles forwards, starts asynchronous
     generators, benchmarks static providers while generation runs, collects and
@@ -75,7 +77,6 @@ class KernelOptimizer:
         self,
         kernel_providers: KernelProvider | list[KernelProvider] | None = None,
         kernel_generators: KernelGenerator | list[KernelGenerator] | None = None,
-        top_k: int = 5,
         kernel_profiler_factory: Callable[..., ModuleFunctionKernelProfiler] = ModuleFunctionKernelProfiler,
         kernel_utils: KernelUtils | None = None,
         provider_min_time_share_percent: float = 0.0,
@@ -89,14 +90,13 @@ class KernelOptimizer:
             kernel_generators: asynchronous kernel generators. A single generator
                 is normalized to a list. Generators are submitted before any
                 static provider is evaluated.
-            top_k: the number of top kernels to optimize, default is 5
             kernel_profiler_factory: factory used to create the module function kernel profiler. The default is
                 ``ModuleFunctionKernelProfiler``. It receives ``function_names`` supported by kernel providers or
                 kernel generators.
             kernel_utils: the kernel utilities to use, default is KernelUtils
             provider_min_time_share_percent: minimum percentage of total profiled kernel time that a function must
                 account for before static providers are evaluated for it. Must be between 0 and 100. The default of
-                0 preserves evaluation for every supported function in the top-k.
+                0 preserves evaluation for every supported function in the profile summary.
             generator_min_time_share_percent: minimum percentage of total profiled kernel time that a function must
                 account for before generators are submitted for it. Must be between 0 and 100. The default of 10
                 limits generation to functions with a significant profiling share.
@@ -118,7 +118,6 @@ class KernelOptimizer:
 
         self.kernel_providers = kernel_providers
         self.kernel_generators = kernel_generators
-        self.top_k = top_k
         self.provider_min_time_share_percent = provider_min_time_share_percent
         self.generator_min_time_share_percent = generator_min_time_share_percent
         self.generation_timeout = generation_timeout
@@ -128,11 +127,11 @@ class KernelOptimizer:
     def make_plan(
         self,
         function: Callable,
-        data: list[Sample] | None = None,
+        data: Sequence[Sample] | None = None,
         *,
         module: nn.Module | None = None,
     ) -> KernelOptimizationPlan:
-        """Optimize a module by replacing the top-k kernels with the best ones.
+        """Optimize a module by replacing eligible kernels with the best ones.
 
         Args:
             function: the function to run inference with
@@ -165,9 +164,9 @@ class KernelOptimizer:
         if profiling_df.empty:
             logger.info("No kernel candidates found.")
             return KernelOptimizationPlan()
-        summary_df = kernel_profiler.describe_results(profiling_df, function_data, self.top_k)
+        summary_df = kernel_profiler.describe_results(profiling_df, function_data, _PROFILE_SUMMARY_LIMIT)
 
-        top_k_functions = summary_df["function_name"].tolist()
+        profiled_functions = summary_df["function_name"].tolist()
         provider_function_names = self._select_source_functions(
             summary_df,
             self.kernel_providers,
@@ -180,7 +179,7 @@ class KernelOptimizer:
         )
         self._log_summary(summary_df, provider_function_names, generator_function_names)
 
-        return self._make_plan(function_data, top_k_functions, provider_function_names, generator_function_names)
+        return self._make_plan(function_data, profiled_functions, provider_function_names, generator_function_names)
 
     def _supported_function_names(self) -> set[str]:
         """Return function names supported by providers or generators."""
@@ -196,7 +195,7 @@ class KernelOptimizer:
         sources: list[KernelSourceType],
         min_time_share_percent: float,
     ) -> list[str]:
-        """Select top-k functions supported by a source and meeting its time-share threshold."""
+        """Select functions supported by a source and meeting its time-share threshold."""
         supported_functions = {function for source in sources for function in self._supported_functions(source)}
         selected = summary_df["function_name"].isin(supported_functions) & summary_df["time_spent_pct"].ge(
             min_time_share_percent
@@ -232,7 +231,7 @@ class KernelOptimizer:
     def _make_plan(
         self,
         function_data: dict[str, FunctionData],
-        top_k_functions: list[str],
+        profiled_functions: list[str],
         provider_functions: list[str],
         generator_functions: list[str],
     ) -> KernelOptimizationPlan:
@@ -245,9 +244,9 @@ class KernelOptimizer:
 
         Args:
             function_data: Collected input samples for each supported function.
-            top_k_functions: Globally selected top-k functions in profiling order.
-            provider_functions: Top-k functions selected for static providers.
-            generator_functions: Top-k functions selected for asynchronous generators.
+            profiled_functions: Profiled functions in descending kernel-time order.
+            provider_functions: Profiled functions selected for static providers.
+            generator_functions: Profiled functions selected for asynchronous generators.
 
         Returns:
             A runtime plan containing the fastest providers that outperform their baselines.
@@ -255,7 +254,7 @@ class KernelOptimizer:
         selected_functions = set(provider_functions) | set(generator_functions)
         searches = self._prepare_searches(
             function_data,
-            [function for function in top_k_functions if function in selected_functions],
+            [function for function in profiled_functions if function in selected_functions],
         )
         generation_tasks = self._submit_generation_tasks(searches, generator_functions)
         self._evaluate_provider_candidates(searches, provider_functions)
@@ -272,11 +271,11 @@ class KernelOptimizer:
     def _prepare_searches(
         self,
         function_data: dict[str, FunctionData],
-        top_k_functions: list[str],
+        profiled_functions: list[str],
     ) -> dict[str, _FunctionSearch]:
         """Prepare each selected function's samples exactly once."""
         searches = {}
-        for func_name in top_k_functions:
+        for func_name in profiled_functions:
             unique_samples, benchmark_samples = self._prepare_provider_samples(function_data[func_name])
             searches[func_name] = _FunctionSearch(
                 real_function=getattr(F, func_name),

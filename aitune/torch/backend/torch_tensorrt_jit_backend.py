@@ -168,7 +168,6 @@ class TorchTensorRTJitBackend(Backend):
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Build the model with Torch compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
-        self._save_config(cache_dir)
         module = module.eval()
         self._orig_module = module
         self._samples = samples
@@ -263,12 +262,6 @@ class TorchTensorRTJitBackend(Backend):
         if self._data is not None:
             return iter(self._data)
         raise RuntimeError("Backend has no warmup data. Please call build() first.")
-
-    def _save_config(self, cache_dir: Path):
-        """Store the backend configuration to a file."""
-        config_path = cache_dir / "config.json"
-        self._config.to_json(config_path)
-        logger.info("Config saved to %s", config_path)
 
     def to_dict(self):
         """Returns the state_dict of the backend."""

@@ -172,8 +172,6 @@ class TorchInductorJitBackend(Backend):
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Builds the model with torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
-        self._save_config(cache_dir)
-
         move_module_to_device(module, self._device)
         self._orig_module = module
         if self._config.autocast_enabled:
@@ -275,12 +273,6 @@ class TorchInductorJitBackend(Backend):
         if self._data is not None:
             return iter(self._data)
         raise RuntimeError("Backend has no warmup data. Please call build() first.")
-
-    def _save_config(self, cache_dir: Path):
-        """Store the backend configuration to a file."""
-        config_path = cache_dir / "config.json"
-        self._config.to_json(config_path)
-        logger.info("Config saved to %s", config_path)
 
     def to_dict(self):
         """Returns the state_dict of the backend."""

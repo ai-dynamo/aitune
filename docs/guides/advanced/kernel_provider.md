@@ -14,6 +14,11 @@ plan format may change in future releases.
 providers, and returns a plan containing only candidates that are faster than the original PyTorch functions. The plan
 can be activated directly, without wrapping the module in an AITune backend.
 
+Use [`KernelOptimizerBackend`](../backends/kernel_optimizer_backend.md) instead when AITune should own provider
+selection, apply the selected plan while building another backend, and save the resulting plan or compiled artifact in
+an AITune checkpoint. The direct API documented on this page is useful when the application should manage the plan and
+its runtime explicitly.
+
 Use the direct optimizer when you want to:
 
 - optimize individual functional calls without compiling the complete module;
@@ -39,7 +44,7 @@ The optimizer:
 
 1. profiles the supplied inference callable and collects representative inputs for functions supported by configured
    providers or generators;
-2. ranks all observed functional calls by CUDA kernel time and keeps the global `top_k`;
+2. ranks observed functional calls by CUDA kernel time, summarizing up to 100 functions;
 3. submits eligible asynchronous generators before evaluating static providers;
 4. calls `prepare()` on compatible static providers to derive the state required for inference;
 5. validates every prepared or generated provider against the original PyTorch function under `torch.no_grad()`;
@@ -50,8 +55,8 @@ An unavailable optional runtime or a failing candidate is isolated and skipped w
 SageAttention and FlashAttention-4 load their runtime functions lazily during provider inference; `prepare()` only derives
 an inference plan from the representative samples.
 
-Because `top_k` is applied before filtering for functions supported by the configured providers and generators, increase
-it when the target function is not among the most expensive calls in the workload.
+Static providers and generators are considered only when the function meets their configured minimum profiled time
+share. The 100-function summary limit is an internal safety bound rather than a user-facing tuning option.
 
 ## Direct optimizer example
 
@@ -85,7 +90,6 @@ sample = tuple(
 data = [(sample, {})]
 
 optimizer = KernelOptimizer(
-    top_k=5,
     kernel_providers=[
         TorchSDPAKernelProvider(SDPBackend.MATH),
         TorchSDPAKernelProvider(SDPBackend.EFFICIENT_ATTENTION),
@@ -297,7 +301,6 @@ The most relevant `KernelOptimizer` options are:
 
 | Option | Default | Meaning |
 |---|---:|---|
-| `top_k` | `5` | Number of globally most expensive functional calls considered for optimization. |
 | `kernel_providers` | `[]` | Static providers to prepare, validate, and benchmark. A single provider is accepted. |
 | `provider_min_time_share_percent` | `0.0` | Minimum share of total profiled kernel time required before evaluating static providers for a function. |
 | `kernel_generators` | `[]` | Asynchronous kernel generators evaluated alongside static providers. A single generator is accepted. |

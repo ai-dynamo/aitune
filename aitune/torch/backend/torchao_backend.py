@@ -248,8 +248,6 @@ class TorchAOBackend(Backend):
         """Builds the model with torchao quantization and torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
 
-        self._save_config(cache_dir)
-
         self._orig_module = module
         self._samples = samples
         self._do_torchao_quantization()
@@ -282,10 +280,6 @@ class TorchAOBackend(Backend):
         self._samples = None
         self._data = None
         gc.collect()
-
-    def _save_config(self, cache_dir: Path):
-        """Store the backend configuration to a file."""
-        self._config.to_json(cache_dir / "config.json")
 
     def to_dict(self):
         """Returns the state_dict of the backend."""

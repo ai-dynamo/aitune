@@ -121,6 +121,18 @@ def test_backend_build_releases_unused_memory(mocker, tmp_path):
 
     collect.assert_called_once()
     empty_cache.assert_called_once()
+    assert not (tmp_path / "config.json").exists()
+
+
+def test_backend_build_saves_available_config(tmp_path):
+    config = BackendTestConfig(name="saved-backend", enabled=False)
+    backend = DummyBackend()
+    backend._config = config
+
+    backend.build(nn.Identity(), Mock(), [], torch.device("cpu"), tmp_path)
+
+    with open(tmp_path / "config.json") as config_file:
+        assert json.load(config_file) == config.to_dict()
 
 
 def test_backend_config_key():

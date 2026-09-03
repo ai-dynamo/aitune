@@ -97,7 +97,6 @@ class TorchEagerBackend(Backend):
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Builds the model."""
-        self._save_config(cache_dir)
         move_module_to_device(module, self._device)
 
         self._orig_module = module
@@ -161,11 +160,6 @@ class TorchEagerBackend(Backend):
         move_module_to_device(self._orig_module, self._device)
         if self._config.autocast_enabled:
             self._infer = self._infer_with_autocast
-
-    def _save_config(self, cache_dir: Path):
-        """Store the backend configuration to a file."""
-        config_path = cache_dir / "config.json"
-        self._config.to_json(config_path)
 
     def to_dict(self):
         """Returns the state_dict of the backend."""

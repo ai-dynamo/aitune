@@ -189,8 +189,6 @@ class TorchTensorRTAotBackend(Backend):
         model = module.eval()
         move_module_to_device(model, self._device)
 
-        self._save_config(cache_dir)
-
         # Set the device for the TensorRT backend compilation
         self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
 
@@ -293,12 +291,6 @@ class TorchTensorRTAotBackend(Backend):
     def _deploy(self):
         """Deploys the backend."""
         self._activate()
-
-    def _save_config(self, cache_dir: Path):
-        """Store the backend configuration to a file."""
-        config_path = cache_dir / "config.json"
-        self._config.to_json(config_path)
-        logger.info("Config saved to %s", config_path)
 
     def _create_exported_model_artifact(self, cache_dir: Path) -> ArtifactPath:
         """Create the exported model artifact.

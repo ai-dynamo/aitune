@@ -54,7 +54,11 @@ class KernelProvider(ABC):
 
     @property
     def name(self) -> str:
-        """Return the kernel provider name."""
+        """Kernel provider name.
+
+        Note: this name can be used to generate a unique identifier. If your provider has configuration options,
+        override this method to return a unique identifier for a specific configuration.
+        """
         return self.__class__.__name__
 
     def __repr__(self) -> str:

@@ -67,7 +67,6 @@ def test_kernel_optimizer_flash_attention4():
 
     provider = CountingKernelProvider(FlashAttention4KernelProvider())
     optimizer = KernelOptimizer(
-        top_k=5,
         kernel_providers=[provider],
         kernel_utils=PreferProviderKernelUtils(),
     )

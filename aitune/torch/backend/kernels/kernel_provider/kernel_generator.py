@@ -45,6 +45,15 @@ class KernelGenerator(ABC):
         """Return a human-readable kernel generator description."""
         ...
 
+    @property
+    def name(self) -> str:
+        """Kernel generator name.
+
+        Note: this name can be used to generate a unique identifier. If your generator has configuration options,
+        override this method to return a unique identifier for a specific configuration.
+        """
+        return self.__class__.__name__
+
     @abstractmethod
     def supports_functions(self) -> list[str]:
         """List the PyTorch function names supported by the generator."""

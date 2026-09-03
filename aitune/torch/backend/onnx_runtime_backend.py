@@ -157,7 +157,6 @@ class ONNXRuntimeBackend(Backend):
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Export the model to ONNX then load the session."""
-        self._save_config(cache_dir)
         self._graph_spec = graph_spec
 
         self._output_object = self._get_output_object(module=module, sample=samples[0])
@@ -330,12 +329,6 @@ class ONNXRuntimeBackend(Backend):
         """Deploy backend."""
         self._activate()
         self._samples = None
-
-    def _save_config(self, cache_dir: Path):
-        """Store the backend configuration to a file."""
-        config_path = cache_dir / "config.json"
-        self._config.to_json(config_path)
-        logger.info("Config saved to %s", config_path)
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""

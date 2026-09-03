@@ -232,6 +232,7 @@ class MockKernelProfiler(ModuleFunctionKernelProfiler):
         self.function = None
         self.data = None
         self.module = None
+        self.describe_top_k = None
         self.__class__.instances.append(self)
 
     def profile(self, function, data=None, *, module=None, warmup_iterations=3):
@@ -240,6 +241,10 @@ class MockKernelProfiler(ModuleFunctionKernelProfiler):
         self.data = data
         self.module = module
         return self.profiling_df, self.function_data
+
+    def describe_results(self, profiling_df, function_data, top_k=10):
+        self.describe_top_k = top_k
+        return super().describe_results(profiling_df, function_data, top_k)
 
 
 def test_summary_logs_all_columns(caplog):
@@ -505,7 +510,7 @@ def test_generator_min_time_share_includes_function_at_threshold():
     assert generator.submit_calls == [("linear", [sample])]
 
 
-def test_top_k_is_selected_before_source_support_filtering():
+def test_make_plan_uses_safe_profile_summary_limit():
     sample = ((torch.tensor([1.0]), torch.tensor([2.0]), torch.tensor([3.0])), {})
     provider = MockKernelProvider(F.linear)
     profiling_df = pd.DataFrame([
@@ -515,7 +520,6 @@ def test_top_k_is_selected_before_source_support_filtering():
     function_data = {"linear": [(1, sample)]}
     optimizer = KernelOptimizer(
         kernel_providers=[provider],
-        top_k=1,
         kernel_utils=MockKernelUtils(),
         kernel_profiler_factory=partial(
             MockKernelProfiler,
@@ -526,7 +530,8 @@ def test_top_k_is_selected_before_source_support_filtering():
 
     optimizer.make_plan(ReluModule())
 
-    assert provider.prepare_calls == []
+    assert MockKernelProfiler.instances[-1].describe_top_k == 100
+    assert provider.prepare_calls == [[sample]]
 
 
 def test_select_best_candidate_returns_none_without_candidates():
@@ -651,7 +656,6 @@ def test_make_plan_multiple_linear_layer_model():
 
     optimizer = KernelOptimizer(
         kernel_providers=[mock_provider],
-        top_k=2,
         kernel_utils=mock_kernel_utils,
     )  # type: ignore
 

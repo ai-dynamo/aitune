@@ -18,6 +18,7 @@ import wrapt
 from torch.autograd.profiler import FunctionEvent
 from torch.profiler import ProfilerActivity, profile, record_function
 
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.exact_sample_metadata import ExactSampleMetadata
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_store import Sample
@@ -134,14 +135,22 @@ class ModuleFunctionKernelProfiler:
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA is required to profile module and function kernel candidates.")
 
+        sample_count = 1 if data is None else len(data)
+        coordinator.verify_equal(
+            sample_count,
+            "kernel profiler sample count",
+        )
+
         # Discard the process's first profiler session before collecting model events; see the helper's rationale.
-        prime_cuda_profiler()
+        with coordinator.raise_if_any_rank_fails("Priming CUDA profiler"):
+            prime_cuda_profiler()
 
         if warmup_iterations:
-            with torch.no_grad():
-                for _ in range(warmup_iterations):
-                    self._run_inference(function, data)
-            torch.cuda.synchronize()
+            with coordinator.raise_if_any_rank_fails("Warming up module function kernel profiler"):
+                with torch.no_grad():
+                    for _ in range(warmup_iterations):
+                        self._run_inference(function, data)
+                torch.cuda.synchronize()
 
         self._initialize()
 
@@ -153,8 +162,10 @@ class ModuleFunctionKernelProfiler:
                         # Some stacks additionally lose the first kernel of each later session, so sacrifice an
                         # unattributed kernel here. If CUPTI captures it, _match_events_with_data ignores it because
                         # it has no module/function parent.
-                        torch.zeros(1, device="cuda").relu_()
-                        self._run_inference(function, data)
+                        with coordinator.raise_if_any_rank_fails("Preparing module function kernel profiler"):
+                            torch.zeros(1, device="cuda").relu_()
+                        with coordinator.raise_if_any_rank_fails("Profiling module functions"):
+                            self._run_inference(function, data)
 
         torch.cuda.empty_cache()
 

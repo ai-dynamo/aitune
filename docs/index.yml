@@ -36,6 +36,8 @@ navigation:
             path: ../docs/guides/backends/tensorrt_optimization_profiles.md
           - page: ONNXRuntime Backend
             path: ../docs/guides/backends/onnx_runtime_backend.md
+          - page: Kernel Optimizer Backend
+            path: ../docs/guides/backends/kernel_optimizer_backend.md
           - page: Torch-TensorRT Backend (JIT)
             path: ../docs/guides/backends/torch_tensorrt_jit_backend.md
           - page: Torch-TensorRT Backend (AOT)
@@ -122,6 +124,8 @@ navigation:
             path: ../docs/api/aitune/aitune/torch/backend/torch_inductor_jit_backend.mdx
           - page: Torch Inductor AOT Backend
             path: ../docs/api/aitune/aitune/torch/backend/torch_inductor_aot_backend.mdx
+          - page: Kernel Optimizer Backend
+            path: ../docs/api/aitune/aitune/torch/backend/kernel_optimizer_backend.mdx
       - section: Tuning Strategies API
         contents:
           - page: FirstWinsStrategy

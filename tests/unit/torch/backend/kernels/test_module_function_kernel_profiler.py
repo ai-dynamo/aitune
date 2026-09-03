@@ -3,6 +3,8 @@
 
 """Tests for module_function_kernel_profiler helpers."""
 
+from unittest.mock import call
+
 import pandas as pd
 import pytest
 import torch
@@ -162,6 +164,27 @@ def test_profile_rejects_negative_warmup_iterations():
 
     with pytest.raises(ValueError, match="warmup_iterations must be greater than or equal to 0"):
         profiler.profile(nn.Identity(), warmup_iterations=-1)
+
+
+@requires_cuda
+def test_profile_coordinates_distributed_execution(mocker):
+    verify_equal = mocker.patch("aitune.torch.backend.kernels.module_function_kernel_profiler.coordinator.verify_equal")
+    coordinate_failures = mocker.patch(
+        "aitune.torch.backend.kernels.module_function_kernel_profiler.coordinator.raise_if_any_rank_fails"
+    )
+    profiler = ModuleFunctionKernelProfiler()
+    module = nn.Identity().to("cuda")
+    data = [((torch.randn(1, device="cuda"),), {})]
+
+    profiler.profile(module, data, warmup_iterations=1)
+
+    verify_equal.assert_called_once_with(1, "kernel profiler sample count")
+    assert coordinate_failures.call_args_list == [
+        call("Priming CUDA profiler"),
+        call("Warming up module function kernel profiler"),
+        call("Preparing module function kernel profiler"),
+        call("Profiling module functions"),
+    ]
 
 
 def test_nearest_parent_label_no_cpu_parent():

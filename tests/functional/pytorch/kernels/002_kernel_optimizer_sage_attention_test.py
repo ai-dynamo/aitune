@@ -66,7 +66,6 @@ def test_kernel_optimizer_attention():
     net = AttentionModule()
     data = [(get_sample(torch.float16), {})]
     optimizer = KernelOptimizer(
-        top_k=5,
         kernel_providers=provider,
         kernel_utils=PreferProviderKernelUtils(),
     )

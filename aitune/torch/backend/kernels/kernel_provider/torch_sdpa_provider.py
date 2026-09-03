@@ -32,7 +32,7 @@ class TorchSDPAKernelProvider(KernelProvider):
 
     @property
     def name(self) -> str:
-        """Return a human-readable provider name."""
+        """Human-readable provider name."""
         return f"PyTorch SDPA {self.backend.name}"
 
     def _prepare(self, samples: list[Sample]) -> bool:

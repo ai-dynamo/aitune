@@ -233,10 +233,6 @@ class Backend(ABC):
     ) -> "Backend":
         """Build the model with the given arguments.
 
-        Building a backend should be idempotent i.e. do not cause side effects. A model is not necessarily pure
-        functional and can have an internal state (like kv cache for LLMs). That is why build can call a sample of
-        inputs at most once so that subsequent calls have exact same state as the first call for the given sample.
-
         After building, the backend should be activated.
         """
         if self.state != BackendState.INIT:
@@ -248,6 +244,7 @@ class Backend(ABC):
                     self._assert_device(device)
                     self._assert_execution_mode(module)
                     self._set_device(device)
+                    self._save_config(cache_dir)
                     ready_backend = self._build(module, graph_spec, samples, cache_dir)
                     self.state = BackendState.ACTIVE
                     return ready_backend
@@ -462,6 +459,15 @@ class Backend(ABC):
 
         if self._device is None:
             raise ValueError("Device is not set. Please set the device before deploying.")
+
+    def _save_config(self, cache_dir: Path) -> None:
+        """Store backend configuration metadata when configuration is available."""
+        if self._config is None:
+            return
+
+        config_path = cache_dir / "config.json"
+        self._config.to_json(config_path)
+        self._logger.info("Config saved to %s", config_path)
 
     @property
     def _logger(self) -> logging.Logger:

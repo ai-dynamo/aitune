@@ -329,8 +329,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._graph_spec = graph_spec
 
         cuda_set_device(self._device)
-        self._save_config(cache_dir)
-
         self._output_object = self._get_output_object(module=module, sample=samples[0])
 
         if isinstance(self._config.quantization_config, TorchQuantizationConfig):
@@ -815,12 +813,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
         with torch.no_grad():
             output_object = module(*args, **kwargs)
         return copy.deepcopy(output_object)
-
-    def _save_config(self, cache_dir: Path):
-        """Store the backend configuration to a file."""
-        config_path = cache_dir / "config.json"
-        self._config.to_json(config_path)
-        logger.info("Config saved to %s", config_path)
 
     def _save_trt_optimization_profiles(self, optimization_profiles: list[Profile], cache_dir: Path) -> Path:
         """Save the TensorRT optimization profiles to a file."""

@@ -97,8 +97,6 @@ class TorchInductorAotBackend(Backend):
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Export and compile the model with AOT Inductor, then load the runner."""
-        self._save_config(cache_dir)
-
         module = module.eval()
         move_module_to_device(module, self._device)
 
@@ -151,12 +149,6 @@ class TorchInductorAotBackend(Backend):
     def _deploy(self):
         """Deploy backend."""
         self._activate()
-
-    def _save_config(self, cache_dir: Path):
-        """Store the backend configuration to a file."""
-        config_path = cache_dir / "config.json"
-        self._config.to_json(config_path)
-        logger.info("Config saved to %s", config_path)
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""
