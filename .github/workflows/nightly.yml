@@ -1,0 +1,228 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: Nightly CI
+
+on:
+  push:
+    branches:
+      - "kn/gha_ci_nightly"
+  # schedule:
+  #   - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      example_scope:
+        description: Example scope (L0-L3)
+        required: false
+        default: L1
+        type: choice
+        options:
+          - L0
+          - L1
+          - L2
+          - L3
+      skip_main_ci:
+        description: "Opt-out of running main CI (provide required artifacts and image manually)"
+        required: false
+        type: boolean
+        default: false
+      dist_run_id:
+        description: "dist artifact run ID (required if skip_main_ci=true)"
+        required: false
+      pytorch_image:
+        description: "SHA-tagged PyTorch CI image (required if skip_main_ci=true)"
+        required: false
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
+  UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
+  UV_VERSION: 0.12.8
+  UV_PYTHON: &uv_python "3.12"
+  TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:25.10-py3
+  PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+  _ACTIONS_DOWNLOAD_ARTIFACT: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+  _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # wheel:
+  #   name: Build wheel
+  #   runs-on: linux-amd64-cpu4
+  #   outputs:
+  #     run_id: ${{ github.run_id }}
+  #   steps:
+  #     - uses: *actions_checkout
+  #       with:
+  #         persist-credentials: false
+  #     - uses: *actions_setup_uv
+  #       with:
+  #         python-version: *python_version
+  #     - run: uv build
+  #     - uses: *actions_upload_artifact
+  #       with:
+  #         name: dist
+  #         path: dist/
+  #         if-no-files-found: error
+
+  # pytorch-image:
+  #   name: Build PyTorch image
+  #   needs: wheel
+  #   runs-on: linux-amd64-cpu4
+  #   outputs:
+  #     image: ${{ steps.image.outputs.image }}
+  #   permissions:
+  #     contents: read
+  #     packages: write
+  #   steps:
+  #     - uses: *actions_checkout
+  #       with:
+  #         persist-credentials: false
+  #     - uses: *actions_download_artifact
+  #       with:
+  #         name: dist
+  #         path: dist
+  #     - uses: *actions_docker_login
+  #       with:
+  #         registry: ghcr.io
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
+  #     - uses: *actions_docker_build_push
+  #       with:
+  #         context: .
+  #         file: .github/docker/Dockerfile
+  #         push: true
+  #         build-args: |
+  #           FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
+  #           ADDITIONAL_PACKAGES=pytest
+  #         tags: ${{ env.PYTORCH_CI_IMAGE }}
+  #     - id: image
+  #       run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
+
+  # main-ci-vars:
+  #   name: Main CI Variables (pytorch_image and dist_run_id)
+  #   runs-on: linux-amd64-cpu4
+  #   needs: ${{ inputs.skip_main_ci && fromJSON('[]') || 'main-ci' }}
+  #   outputs:
+  #     pytorch_image: ${{ steps.set-vars.outputs.pytorch_image }}
+  #     dist_run_id: ${{ steps.set-vars.outputs.dist_run_id }}
+  #   steps:
+  #     - id: set-vars
+  #       run: |
+  #         if [[ "${{ inputs.skip_main_ci }}" == 'true' ]]; then
+  #           if [[ -z "${{ inputs.pytorch_image }}" || -z "${{ inputs.dist_run_id }}" ]]; then
+  #             echo "Both dist_run_id and pytorch_image must be provided when skip_main_ci=true" >&2
+  #             exit 1
+  #           fi
+  #           echo "pytorch_image=${{ inputs.pytorch_image }}" >> $GITHUB_OUTPUT
+  #           echo "dist_run_id=${{ inputs.dist_run_id }}" >> $GITHUB_OUTPUT
+  #         else
+  #           echo "pytorch_image=${{ needs.main-ci.outputs.pytorch_image }}" >> $GITHUB_OUTPUT
+  #           echo "dist_run_id=${{ needs.main-ci.outputs.dist_run_id }}" >> $GITHUB_OUTPUT
+  #         fi
+
+  generate-functional-matrix:
+    name: Generate functional matrix
+    # needs: [wheel, pytorch-image]
+    runs-on: linux-amd64-cpu4
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+      matrix_count: ${{ steps.generate.outputs.matrix_count }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_setup_uv
+        with:
+          python-version: *uv_python
+      - name: Generate functional matrix
+        id: generate
+        env:
+          AITUNE_TEST_SCOPE: L0
+          AITUNE_EXAMPLE_SCOPE: ${{ github.event.inputs.example_scope || 'L1' }}
+        run: |
+          uv run --script .github/scripts/functional/generate_github_actions_matrix.py \
+            --default-docker-image "${{ env.PYTORCH_CI_IMAGE }}" \
+            --scripts-path tests/functional/dynamo \
+            --github-output "$GITHUB_OUTPUT"
+
+        # --scripts-path tests/functional/pytorch \
+        # --scripts-path tests/functional/pytorch/kernels \
+        # --scripts-path tests/functional/pytorch/jit \
+        # --scripts-path tests/functional/dataloader \
+        # --projects-path examples \
+
+  functional:
+    name: ${{ matrix.id }}
+    needs: generate-functional-matrix
+    if: needs.generate-functional-matrix.outputs.matrix_count != '0'
+    runs-on: linux-amd64-cpu4
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    continue-on-error: ${{ matrix.allow_failure }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.generate-functional-matrix.outputs.matrix) }}
+    container:
+      image: ubuntu:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_download_artifact
+        with:
+          name: dist
+          path: dist
+          run-id: ${{ needs.main-ci-vars.outputs.dist_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure Hugging Face credentials
+        run: |
+          if [[ "${{ matrix.use_gated_hf_token }}" == "true" ]]; then
+            echo "HF_TOKEN=${{ secrets.GATED_HF_TOKEN }}" >> "$GITHUB_ENV"
+            echo "HF_ENDPOINT=${{ secrets.GATED_HF_ENDPOINT }}" >> "$GITHUB_ENV"
+          else
+            echo "HF_TOKEN=${{ secrets.HF_TOKEN }}" >> "$GITHUB_ENV"
+          fi
+      - name: Run functional job
+        run: |
+          ls dist/
+          ls dist/aitune-*.whl
+
+          echo "Running functional job ${{ matrix.id }}"
+          echo "Docker image: ${{ matrix.docker_image }}"
+          echo "Runner: ${{ matrix.runner }}"
+          echo "Kind: ${{ matrix.kind }}"
+          echo "Path: ${{ matrix.path }}"
+          echo "Test number: ${{ matrix.test_number }}"
+
+          uv run --script .github/scripts/functional/extract_script_metadata.py ${{ matrix.path }} | tee script_metadata.json
+
+
+
+      - if: always()
+        uses: *actions_upload_artifact
+        with:
+          name: functional-${{ matrix.id }}
+          path: |
+            artifacts/**
+            .cache/aitune/**/*.log
+            .cache/aitune.jit/**/*.log
+            hardware_metrics.csv
+            script_metadata.json
+          if-no-files-found: ignore
+     
