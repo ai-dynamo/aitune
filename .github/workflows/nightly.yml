@@ -58,24 +58,24 @@ defaults:
     shell: bash
 
 jobs:
-  # wheel:
-  #   name: Build wheel
-  #   runs-on: linux-amd64-cpu4
-  #   outputs:
-  #     run_id: ${{ github.run_id }}
-  #   steps:
-  #     - uses: *actions_checkout
-  #       with:
-  #         persist-credentials: false
-  #     - uses: *actions_setup_uv
-  #       with:
-  #         python-version: *python_version
-  #     - run: uv build
-  #     - uses: *actions_upload_artifact
-  #       with:
-  #         name: dist
-  #         path: dist/
-  #         if-no-files-found: error
+  wheel:
+    name: Build wheel
+    runs-on: linux-amd64-cpu4
+    outputs:
+      run_id: ${{ github.run_id }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_setup_uv
+        with:
+          python-version: *python_version
+      - run: uv build
+      - uses: *actions_upload_artifact
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
 
   # pytorch-image:
   #   name: Build PyTorch image
@@ -135,7 +135,7 @@ jobs:
 
   generate-functional-matrix:
     name: Generate functional matrix
-    # needs: [wheel, pytorch-image]
+    needs: wheel # [wheel, pytorch-image]
     runs-on: linux-amd64-cpu4
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
@@ -166,7 +166,7 @@ jobs:
 
   functional:
     name: ${{ matrix.id }}
-    needs: generate-functional-matrix
+    needs: [wheel, generate-functional-matrix]
     if: needs.generate-functional-matrix.outputs.matrix_count != '0'
     runs-on: linux-amd64-cpu4
     timeout-minutes: ${{ matrix.timeout_minutes }}
@@ -189,7 +189,7 @@ jobs:
         with:
           name: dist
           path: dist
-          run-id: ${{ needs.main-ci-vars.outputs.dist_run_id }}
+          run-id: ${{ needs.wheel.outputs.dist_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Configure Hugging Face credentials
         run: |
