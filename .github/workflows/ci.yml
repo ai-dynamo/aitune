@@ -42,6 +42,8 @@ jobs:
   lint:
     name: Lint
     runs-on: linux-amd64-cpu4
+    env:
+      SKIP: no-commit-to-branch
     steps:
       - uses: *actions_checkout
         with:
