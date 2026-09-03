@@ -5,7 +5,7 @@ name: PR and Main CI
 on:
   push:
     branches:
-      - "pull-request/[0-9]+"
+      - "pull-request/x[0-9]+"
   workflow_dispatch:
 
 permissions:
