@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -50,13 +51,21 @@ def _command(path: Path, kind: str, entry: FunctionalVariantConfig) -> list[str]
     return [sys.executable, "-m", module, *arguments]
 
 
-def _install_dist() -> None:
+def _run_command(command: list[str], verbose: bool, dry_run: bool, **kwargs: Any) -> None:
+    if verbose:
+        print(f"+ {shlex.join(command)}", flush=True)
+    if not dry_run:
+        subprocess.run(command, check=True, **kwargs)
+
+
+def _install_dist(verbose: bool = False, dry_run: bool = False) -> None:
     wheels = sorted(Path("dist").glob("*.whl"))
     if not wheels:
         raise FileNotFoundError("no wheel found in dist/")
-    subprocess.run(
+    _run_command(
         [sys.executable, "-m", "pip", "install", *(str(wheel) for wheel in wheels)],
-        check=True,
+        verbose,
+        dry_run,
     )
 
 
@@ -65,19 +74,26 @@ def _install_dependencies(
     kind: str,
     config: FunctionalTestConfig,
     is_custom_docker_image: bool,
+    verbose: bool,
+    dry_run: bool,
 ) -> None:
     if is_custom_docker_image:
-        _install_dist()
+        _install_dist(verbose, dry_run)
     if kind == "project":
-        subprocess.run(
+        _run_command(
             [sys.executable, "-m", "pip", "install", "--editable", str(path)],
-            check=True,
+            verbose,
+            dry_run,
         )
         return
     if config.dependencies:
-        subprocess.run([sys.executable, "-m", "pip", "install", *config.dependencies], check=True)
+        _run_command(
+            [sys.executable, "-m", "pip", "install", *config.dependencies],
+            verbose,
+            dry_run,
+        )
     for install in config.pip_install:
-        subprocess.run(
+        _run_command(
             [
                 sys.executable,
                 "-m",
@@ -86,11 +102,19 @@ def _install_dependencies(
                 *install.get("flags", []),
                 *install.get("packages", []),
             ],
-            check=True,
+            verbose,
+            dry_run,
         )
 
 
-def run(path: Path, kind: str, test_number: int, is_custom_docker_image: bool = False) -> None:
+def run(
+    path: Path,
+    kind: str,
+    test_number: int,
+    is_custom_docker_image: bool = False,
+    verbose: bool = False,
+    dry_run: bool = False,
+) -> None:
     """Run one zero-based entry from a functional script or example project."""
     config = _load_config(path, kind)
     try:
@@ -99,10 +123,11 @@ def run(path: Path, kind: str, test_number: int, is_custom_docker_image: bool = 
         raise ValueError(f"entry {test_number} does not exist for {path}") from exc
 
     env = os.environ | {"AITUNE_CONSOLE_OUTPUT": "1"} | config.environment
-    _install_dependencies(path, kind, config, is_custom_docker_image)
-    subprocess.run(
+    _install_dependencies(path, kind, config, is_custom_docker_image, verbose, dry_run)
+    _run_command(
         _command(path, kind, entry),
-        check=True,
+        verbose,
+        dry_run,
         cwd=path if kind == "project" else None,
         env=env,
     )
@@ -115,13 +140,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--kind", choices=("script", "project"), required=True)
     parser.add_argument("--test-number", type=int, required=True)
     parser.add_argument("--is-custom-docker-image", type=json.loads, default=False)
+    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
 
 def main() -> None:
     """Run the selected functional matrix entry."""
     args = parse_args()
-    run(args.path, args.kind, args.test_number, args.is_custom_docker_image)
+    run(args.path, args.kind, args.test_number, args.is_custom_docker_image, args.verbose, args.dry_run)
 
 
 if __name__ == "__main__":
