@@ -22,11 +22,17 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from metadata import DEFAULT_DOCKER_IMAGE, FunctionalTestConfig, Scope, get_scope  # noqa: E402
+from metadata import (  # noqa: E402
+    DEFAULT_DOCKER_IMAGE,
+    FunctionalTestConfig,
+    FunctionalVariantConfig,
+    Scope,
+    get_runner,
+    get_scope,
+)
 
 logger = logging.getLogger("generate")
 
-DEFAULT_RUNNER = "prod-aitune-tester-rtx-pro-4500-v1"
 DEFAULT_TIMEOUT_MINUTES = 40
 
 
@@ -59,16 +65,19 @@ def _matrix_entry(
     kind: str,
     path: str,
     config: FunctionalTestConfig,
+    variant: FunctionalVariantConfig,
     requested_scope: Scope,
+    default_docker_image: str = DEFAULT_DOCKER_IMAGE,
 ) -> dict[str, Any]:
     should_run = config.scope.in_scope(requested_scope) if config.scope is not None else True
     docker_image = config.docker_image or DEFAULT_DOCKER_IMAGE
-    runner = config.runner or DEFAULT_RUNNER
+    runner = variant.runner or config.runner or get_runner([*config.tags, *variant.tags])
 
     return {
         "id": entry_id,
         "test_number": test_number,
         "docker_image": docker_image,
+        "is_custom_docker_image": docker_image != default_docker_image,
         "runner": runner,
         "environment": json.dumps(_environment_for_job(config)),
         "kind": kind,
@@ -84,12 +93,13 @@ def _make_script_entries(
     script: Path,
     config: FunctionalTestConfig,
     requested_scope: Scope,
+    default_docker_image: str = DEFAULT_DOCKER_IMAGE,
 ) -> list[dict[str, Any]]:
     if config.skip:
         return []
 
     jobs: list[dict[str, Any]] = []
-    for index, _ in enumerate(config.entries, start=1):
+    for index, variant in enumerate(config.entries, start=1):
         jobs.append(
             _matrix_entry(
                 entry_id=f"{namespace}_{script.stem}_{index:03d}",
@@ -97,7 +107,9 @@ def _make_script_entries(
                 kind="script",
                 path=script.as_posix(),
                 config=config,
+                variant=variant,
                 requested_scope=requested_scope,
+                default_docker_image=default_docker_image,
             )
         )
     return jobs
@@ -108,13 +120,14 @@ def _make_project_entries(
     project: Path,
     config: FunctionalTestConfig,
     requested_scope: Scope,
+    default_docker_image: str = DEFAULT_DOCKER_IMAGE,
 ) -> list[dict[str, Any]]:
     if config.skip:
         return []
 
     parent_dir = project.parent
     jobs: list[dict[str, Any]] = []
-    for index, _ in enumerate(config.entries, start=1):
+    for index, variant in enumerate(config.entries, start=1):
         jobs.append(
             _matrix_entry(
                 entry_id=f"{namespace}_{parent_dir.name}_inference_{index:03d}",
@@ -122,7 +135,9 @@ def _make_project_entries(
                 kind="project",
                 path=parent_dir.as_posix(),
                 config=config,
+                variant=variant,
                 requested_scope=requested_scope,
+                default_docker_image=default_docker_image,
             )
         )
     return jobs
@@ -168,11 +183,11 @@ def generate_matrix(
     matrix: list[dict[str, Any]] = []
     for namespace, script in get_scripts(script_paths):
         config = FunctionalTestConfig.from_script(script, default_scope, default_docker_image)
-        matrix.extend(_make_script_entries(namespace, script, config, requested_test_scope))
+        matrix.extend(_make_script_entries(namespace, script, config, requested_test_scope, default_docker_image))
 
     for namespace, project in get_projects(projects_paths):
         config = FunctionalTestConfig.from_project(project, example_default_scope, default_docker_image)
-        matrix.extend(_make_project_entries(namespace, project, config, requested_example_scope))
+        matrix.extend(_make_project_entries(namespace, project, config, requested_example_scope, default_docker_image))
 
     return matrix
 

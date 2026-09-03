@@ -50,7 +50,24 @@ def _command(path: Path, kind: str, entry: FunctionalVariantConfig) -> list[str]
     return [sys.executable, "-m", module, *arguments]
 
 
-def _install_dependencies(path: Path, kind: str, config: FunctionalTestConfig) -> None:
+def _install_dist() -> None:
+    wheels = sorted(Path("dist").glob("*.whl"))
+    if not wheels:
+        raise FileNotFoundError("no wheel found in dist/")
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", *(str(wheel) for wheel in wheels)],
+        check=True,
+    )
+
+
+def _install_dependencies(
+    path: Path,
+    kind: str,
+    config: FunctionalTestConfig,
+    is_custom_docker_image: bool,
+) -> None:
+    if is_custom_docker_image:
+        _install_dist()
     if kind == "project":
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "--editable", str(path)],
@@ -73,7 +90,7 @@ def _install_dependencies(path: Path, kind: str, config: FunctionalTestConfig) -
         )
 
 
-def run(path: Path, kind: str, test_number: int) -> None:
+def run(path: Path, kind: str, test_number: int, is_custom_docker_image: bool = False) -> None:
     """Run one zero-based entry from a functional script or example project."""
     config = _load_config(path, kind)
     try:
@@ -82,7 +99,7 @@ def run(path: Path, kind: str, test_number: int) -> None:
         raise ValueError(f"entry {test_number} does not exist for {path}") from exc
 
     env = os.environ | {"AITUNE_CONSOLE_OUTPUT": "1"} | config.environment
-    _install_dependencies(path, kind, config)
+    _install_dependencies(path, kind, config, is_custom_docker_image)
     subprocess.run(
         _command(path, kind, entry),
         check=True,
@@ -97,13 +114,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("path", type=Path)
     parser.add_argument("--kind", choices=("script", "project"), required=True)
     parser.add_argument("--test-number", type=int, required=True)
+    parser.add_argument("--is-custom-docker-image", type=json.loads, default=False)
     return parser.parse_args()
 
 
 def main() -> None:
     """Run the selected functional matrix entry."""
     args = parse_args()
-    run(args.path, args.kind, args.test_number)
+    run(args.path, args.kind, args.test_number, args.is_custom_docker_image)
 
 
 if __name__ == "__main__":
