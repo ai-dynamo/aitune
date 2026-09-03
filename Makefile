@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-.PHONY: clean clean-build clean-pyc clean-docs clean-test clean-notebooks docs docs-serve lint test coverage release dist install install-dev install-dev-deps help
+.PHONY: clean clean-build clean-pyc clean-docs clean-test clean-notebooks docs docs-serve lint test coverage release dist install install-dev install-dev-deps help validate-functional
 .DEFAULT_GOAL := help
 
 define BROWSER_PYSCRIPT
@@ -78,6 +78,10 @@ docs-serve: docs ## serve Fern docs locally
 lint: ## check style with pre-commit and pytype
 	pre-commit run --all-files
 	pytype aitune tests -j auto
+	$(MAKE) validate-functional
+
+validate-functional: ## validate PEP-723 / [tool.aitune] metadata for functional tests and examples
+	uv run --script .github/scripts/functional/validate_scripts_metadata.py
 
 
 test: ## run tests on
