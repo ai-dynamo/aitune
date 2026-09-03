@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from extract_script_metadata import FunctionalTestConfig  # noqa: E402
+from metadata import FunctionalTestConfig  # noqa: E402
 from pydantic import ValidationError  # noqa: E402
 
 try:
@@ -22,7 +22,7 @@ try:
 except ImportError:
     import tomli as tomllib  # pytype: disable=import-error
 
-logger = logging.getLogger("validate_scripts_metadata")
+logger = logging.getLogger("validate")
 
 DEFAULT_SCRIPTS_ROOT = Path("tests/functional")
 DEFAULT_PROJECTS_ROOT = Path("examples")
@@ -51,7 +51,7 @@ def _validate_one(path: Path) -> str | None:
 
 
 def validate(scripts: list[Path], projects: list[Path]) -> int:
-    """Validate functional-test scripts and example projects. Returns error count."""
+    """Validate functional-test metadata and return the error count."""
     failures = [error for path in [*scripts, *projects] if (error := _validate_one(path))]
     for error in failures:
         print(error, file=sys.stderr)  # noqa: T201

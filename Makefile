@@ -81,7 +81,7 @@ lint: ## check style with pre-commit and pytype
 	$(MAKE) validate-functional
 
 validate-functional: ## validate PEP-723 / [tool.aitune] metadata for functional tests and examples
-	uv run --script .github/scripts/functional/validate_scripts_metadata.py
+	uv run --script tests/functional/scripts/validate.py
 
 
 test: ## run tests on

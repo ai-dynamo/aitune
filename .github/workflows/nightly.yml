@@ -150,7 +150,7 @@ jobs:
           AITUNE_TEST_SCOPE: L0
           AITUNE_EXAMPLE_SCOPE: ${{ github.event.inputs.example_scope || 'L1' }}
         run: |
-          uv run --script .github/scripts/functional/generate_github_actions_matrix.py \
+          uv run --script tests/functional/scripts/generate.py \
             --default-docker-image "${{ env.PYTORCH_CI_IMAGE }}" \
             --scripts-path tests/functional/dynamo \
             --github-output "$GITHUB_OUTPUT"
@@ -211,7 +211,12 @@ jobs:
           echo "Path: ${{ matrix.path }}"
           echo "Test number: ${{ matrix.test_number }}"
 
-          uv run --script .github/scripts/functional/extract_script_metadata.py ${{ matrix.path }} | tee script_metadata.json
+          python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
+
+          python tests/functional/scripts/execute.py \
+            "${{ matrix.path }}" \
+            --kind "${{ matrix.kind }}" \
+            --test-number "${{ matrix.test_number }}"
 
       - if: always()
         uses: *actions_upload_artifact

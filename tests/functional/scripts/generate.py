@@ -22,14 +22,9 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from extract_script_metadata import (
-    DEFAULT_DOCKER_IMAGE,
-    FunctionalTestConfig,
-    Scope,
-    get_scope,
-)
+from metadata import DEFAULT_DOCKER_IMAGE, FunctionalTestConfig, Scope, get_scope  # noqa: E402
 
-logger = logging.getLogger("generate_github_actions_matrix")
+logger = logging.getLogger("generate")
 
 DEFAULT_RUNNER = "prod-aitune-tester-rtx-pro-4500-v1"
 DEFAULT_TIMEOUT_MINUTES = 40
@@ -70,7 +65,7 @@ def _matrix_entry(
     docker_image = config.docker_image or DEFAULT_DOCKER_IMAGE
     runner = config.runner or DEFAULT_RUNNER
 
-    entry: dict[str, Any] = {
+    return {
         "id": entry_id,
         "test_number": test_number,
         "docker_image": docker_image,
@@ -82,7 +77,6 @@ def _matrix_entry(
         "timeout_minutes": _timeout_to_minutes(config.timeout),
         "use_gated_hf_token": config.use_gated_hf_token,
     }
-    return entry
 
 
 def _make_script_entries(
@@ -96,11 +90,10 @@ def _make_script_entries(
 
     jobs: list[dict[str, Any]] = []
     for index, _ in enumerate(config.entries, start=1):
-        entry_id = f"{namespace}_{script.stem}_{index:03d}"
         jobs.append(
             _matrix_entry(
-                entry_id=entry_id,
-                test_number=index - 1,  # zero-based index for GitHub Actions matrix
+                entry_id=f"{namespace}_{script.stem}_{index:03d}",
+                test_number=index - 1,
                 kind="script",
                 path=script.as_posix(),
                 config=config,
@@ -120,15 +113,12 @@ def _make_project_entries(
         return []
 
     parent_dir = project.parent
-    name = parent_dir.name
-
     jobs: list[dict[str, Any]] = []
     for index, _ in enumerate(config.entries, start=1):
-        entry_id = f"{namespace}_{name}_inference_{index:03d}"
         jobs.append(
             _matrix_entry(
-                entry_id=entry_id,
-                test_number=index - 1,  # zero-based index for GitHub Actions matrix
+                entry_id=f"{namespace}_{parent_dir.name}_inference_{index:03d}",
+                test_number=index - 1,
                 kind="project",
                 path=parent_dir.as_posix(),
                 config=config,
@@ -199,12 +189,7 @@ def write_github_output(path: str | Path, matrix: list[dict[str, Any]]) -> None:
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-o",
-        "--output-json",
-        type=str,
-        help="Write the matrix JSON to a file.",
-    )
+    parser.add_argument("-o", "--output-json", help="Write the matrix JSON to a file.")
     parser.add_argument(
         "-s",
         "--scripts-path",
@@ -225,16 +210,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-scope-env", default="AITUNE_TEST_SCOPE")
     parser.add_argument("--example-scope-env", default="AITUNE_EXAMPLE_SCOPE")
     parser.add_argument("--github-output", help="Path to the GitHub Actions output file.")
-    parser.add_argument(
-        "--stdout",
-        action="store_true",
-        help="Print the generated matrix JSON to stdout.",
-    )
+    parser.add_argument("--stdout", action="store_true", help="Print the generated matrix JSON to stdout.")
     return parser.parse_args()
 
 
 def main() -> None:
-    """Main entrypoint for matrix generation script."""
+    """Generate the requested matrix outputs."""
     logging.basicConfig(level=logging.INFO)
     args = parse_args()
     matrix = generate_matrix(
@@ -252,10 +233,8 @@ def main() -> None:
 
     if args.output_json:
         Path(args.output_json).write_text(json.dumps(matrix, indent=2), encoding="utf-8")
-
     if args.github_output:
         write_github_output(args.github_output, matrix)
-
     if args.stdout:
         print(json.dumps(matrix, indent=2))  # noqa: T201
 

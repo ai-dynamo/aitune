@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
-logger = logging.getLogger("extract_script_metadata")
+logger = logging.getLogger("metadata")
 
 DEFAULT_DOCKER_IMAGE = "nvcr.io/nvidia/pytorch:25.10-py3"
 
@@ -109,9 +109,9 @@ class FunctionalTestConfig(BaseModel):
 
     @property
     def entries(self) -> list[FunctionalVariantConfig]:
-        """Get all job entries for the test or project, depending on the presence of arguments and variants.
+        """Get all job entries for the test or project.
 
-        Always returns at least one entry - the default entry with no arguments.
+        Always returns at least one entry: the default entry with no arguments.
         """
         if not self.arguments and not self.variants:
             return [FunctionalVariantConfig()]
