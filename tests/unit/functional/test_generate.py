@@ -8,6 +8,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GENERATOR = REPO_ROOT / "tests/functional/scripts/generate.py"
 
@@ -66,7 +68,7 @@ def test_environment_defaults_include_console_output() -> None:
     assert json.loads(jobs[0]["environment"])["AITUNE_CONSOLE_OUTPUT"] == "1"
 
 
-def test_additional_tags_are_ignored_but_runner_is_fixed() -> None:
+def test_unknown_tags_use_default_runner() -> None:
     jobs = generate._make_script_entries(
         "pytorch",
         REPO_ROOT / "tests/functional/pytorch/039_aitune_torch_profile_cuda_test.py",
@@ -75,6 +77,47 @@ def test_additional_tags_are_ignored_but_runner_is_fixed() -> None:
     )
 
     assert jobs[0]["runner"] == "prod-aitune-tester-rtx-pro-4500-v1"
+
+
+@pytest.mark.parametrize(
+    ("tags", "expected"),
+    [
+        (["gpu"], "prod-aitune-tester-rtx-pro-4500-v1"),
+        (["sm120"], "prod-aitune-tester-rtx-pro-4500-v1"),
+        (["gpu/sm/120"], "prod-aitune-tester-rtx-pro-4500-v1"),
+        (["anything"], "prod-aitune-tester-rtx-pro-4500-v1"),
+        (["gpu/2"], "prod-aitune-tester-rtx-pro-4500-4-v1"),
+        (["gpu/4"], "prod-aitune-tester-rtx-pro-4500-4-v1"),
+        (["gpu/8"], "prod-aitune-tester-rtx-pro-4500-8-v1"),
+    ],
+)
+def test_tags_map_to_runners(tags: list[str], expected: str) -> None:
+    assert generate.get_runner(tags) == expected
+
+
+def test_variant_runner_tag_overrides_test_tag() -> None:
+    jobs = generate._make_script_entries(
+        "pytorch",
+        REPO_ROOT / "tests/functional/pytorch/039_aitune_torch_profile_cuda_test.py",
+        _config({
+            "additional_tags": ["gpu/sm/120"],
+            "variants": [{"additional_tags": ["gpu/4"]}],
+        }),
+        Scope.ALWAYS,
+    )
+
+    assert jobs[0]["runner"] == "prod-aitune-tester-rtx-pro-4500-4-v1"
+
+
+def test_custom_docker_image_is_marked_for_wheel_install() -> None:
+    jobs = generate._make_script_entries(
+        "pytorch",
+        REPO_ROOT / "tests/functional/pytorch/039_aitune_torch_profile_cuda_test.py",
+        _config({"docker_image": "custom:image"}),
+        Scope.ALWAYS,
+    )
+
+    assert jobs[0]["is_custom_docker_image"] is True
 
 
 def test_generate_matrix_respects_example_scope(monkeypatch, tmp_path: Path) -> None:
@@ -127,7 +170,12 @@ def test_generate_matrix_from_repository_is_valid_json_and_under_limit() -> None
     assert len(matrix) <= 256
     assert len(payload) < 1_000_000
     for entry in matrix:
-        assert entry["runner"] == "prod-aitune-tester-rtx-pro-4500-v1"
+        assert entry["runner"] in {
+            "prod-aitune-tester-rtx-pro-4500-v1",
+            "prod-aitune-tester-rtx-pro-4500-4-v1",
+            "prod-aitune-tester-rtx-pro-4500-8-v1",
+        }
+        assert isinstance(entry["is_custom_docker_image"], bool)
         json.loads(entry["environment"])
 
 

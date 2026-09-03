@@ -20,6 +20,15 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 logger = logging.getLogger("metadata")
 
 DEFAULT_DOCKER_IMAGE = "nvcr.io/nvidia/pytorch:25.10-py3"
+DEFAULT_RUNNER = "prod-aitune-tester-rtx-pro-4500-v1"
+RUNNERS_BY_TAG = {
+    "gpu": DEFAULT_RUNNER,
+    "sm120": DEFAULT_RUNNER,
+    "gpu/sm/120": DEFAULT_RUNNER,
+    "gpu/2": "prod-aitune-tester-rtx-pro-4500-4-v1",
+    "gpu/4": "prod-aitune-tester-rtx-pro-4500-4-v1",
+    "gpu/8": "prod-aitune-tester-rtx-pro-4500-8-v1",
+}
 
 try:
     import tomllib
@@ -57,6 +66,11 @@ def get_scope(metadata: dict[str, Any], default_scope: str = "L0") -> Scope:
     except KeyError:
         pass
     raise ValueError(f"Invalid scope: {scope}")
+
+
+def get_runner(tags: list[str]) -> str:
+    """Get the runner for the most specific tag, defaulting to one GPU."""
+    return next((RUNNERS_BY_TAG[tag] for tag in reversed(tags) if tag in RUNNERS_BY_TAG), DEFAULT_RUNNER)
 
 
 def read_script_metadata(script: str, path: Path | None = None) -> dict[str, Any]:

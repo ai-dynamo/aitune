@@ -50,8 +50,11 @@ env:
 
   _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+  _ACTIONS_SETUP_PYTHON: &actions_setup_python actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
   _ACTIONS_DOWNLOAD_ARTIFACT: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
   _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+  _ACTIONS_DOCKER_LOGIN: &actions_docker_login docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+  _ACTIONS_DOCKER_BUILD_PUSH: &actions_docker_build_push docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
 
 defaults:
   run:
@@ -75,39 +78,39 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  # pytorch-image:
-  #   name: Build PyTorch image
-  #   needs: wheel
-  #   runs-on: linux-amd64-cpu4
-  #   outputs:
-  #     image: ${{ steps.image.outputs.image }}
-  #   permissions:
-  #     contents: read
-  #     packages: write
-  #   steps:
-  #     - uses: *actions_checkout
-  #       with:
-  #         persist-credentials: false
-  #     - uses: *actions_download_artifact
-  #       with:
-  #         name: dist
-  #         path: dist
-  #     - uses: *actions_docker_login
-  #       with:
-  #         registry: ghcr.io
-  #         username: ${{ github.actor }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
-  #     - uses: *actions_docker_build_push
-  #       with:
-  #         context: .
-  #         file: .github/docker/Dockerfile
-  #         push: true
-  #         build-args: |
-  #           FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
-  #           ADDITIONAL_PACKAGES=pytest
-  #         tags: ${{ env.PYTORCH_CI_IMAGE }}
-  #     - id: image
-  #       run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
+  pytorch-image:
+    name: Build PyTorch image
+    needs: wheel
+    runs-on: linux-amd64-cpu4
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_download_artifact
+        with:
+          name: dist
+          path: dist
+      - uses: *actions_docker_login
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: *actions_docker_build_push
+        with:
+          context: .
+          file: .github/docker/Dockerfile
+          push: true
+          build-args: |
+            FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
+            ADDITIONAL_PACKAGES=pytest
+          tags: ${{ env.PYTORCH_CI_IMAGE }}
+      - id: image
+        run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
 
   # main-ci-vars:
   #   name: Main CI Variables (pytorch_image and dist_run_id)
@@ -165,7 +168,7 @@ jobs:
     name: ${{ matrix.id }}
     needs: [wheel, generate-functional-matrix]
     if: needs.generate-functional-matrix.outputs.matrix_count != '0'
-    runs-on: linux-amd64-cpu4
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
     continue-on-error: ${{ matrix.allow_failure }}
     strategy:
@@ -173,16 +176,16 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.generate-functional-matrix.outputs.matrix) }}
     container:
-      image: ubuntu:latest
-      # credentials:
-      #   username: ${{ github.actor }}
-      #   password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ matrix.docker_image }}
     env: ${{ fromJSON(matrix.environment) }}
     steps:
       - uses: *actions_checkout
         with:
           persist-credentials: false
       - uses: *actions_setup_uv
+        with:
+          python-version: *python_version
+      - uses: *actions_setup_python
         with:
           python-version: *python_version
       - uses: *actions_download_artifact
@@ -216,7 +219,8 @@ jobs:
           python tests/functional/scripts/execute.py \
             "${{ matrix.path }}" \
             --kind "${{ matrix.kind }}" \
-            --test-number "${{ matrix.test_number }}"
+            --test-number "${{ matrix.test_number }}" \
+            --is-custom-docker-image "${{ matrix.is_custom_docker_image }}"
 
       - if: always()
         uses: *actions_upload_artifact

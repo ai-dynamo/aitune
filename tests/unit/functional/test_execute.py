@@ -40,10 +40,16 @@ def test_run_script_selects_entry_and_installs_dependencies(mocker: MockerFixtur
 """.lstrip(),
         encoding="utf-8",
     )
-    run = mocker.patch.object(execute.subprocess, "run")
+    calls: list[str] = []
+    run = mocker.patch.object(
+        execute.subprocess, "run", side_effect=lambda *_args, **_kwargs: calls.append("pip/script")
+    )
+    install_dist = mocker.patch.object(execute, "_install_dist", side_effect=lambda: calls.append("dist"))
 
-    execute.run(script, "script", 1)
+    execute.run(script, "script", 1, is_custom_docker_image=True)
 
+    install_dist.assert_called_once_with()
+    assert calls[0] == "dist"
     assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "demo"]
     assert run.call_args_list[1].args[0] == [
         sys.executable,
@@ -55,6 +61,18 @@ def test_run_script_selects_entry_and_installs_dependencies(mocker: MockerFixtur
     ]
     assert run.call_args_list[2].args[0] == [sys.executable, str(script), '--name="second"']
     assert run.call_args_list[2].kwargs["env"]["AITUNE_CONSOLE_OUTPUT"] == "1"
+
+
+def test_install_dist_installs_wheels_with_dependencies(mocker: MockerFixture) -> None:
+    mocker.patch.object(execute.Path, "glob", return_value=[Path("dist/aitune.whl")])
+    run = mocker.patch.object(execute.subprocess, "run")
+
+    execute._install_dist()
+
+    run.assert_called_once_with(
+        [sys.executable, "-m", "pip", "install", "dist/aitune.whl"],
+        check=True,
+    )
 
 
 def test_run_project_uses_variant_launcher(mocker: MockerFixture, tmp_path: Path) -> None:
