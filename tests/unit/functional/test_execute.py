@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import importlib.util
+import shlex
 import sys
 from pathlib import Path
 
+from pytest import CaptureFixture
 from pytest_mock import MockerFixture
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -44,11 +46,11 @@ def test_run_script_selects_entry_and_installs_dependencies(mocker: MockerFixtur
     run = mocker.patch.object(
         execute.subprocess, "run", side_effect=lambda *_args, **_kwargs: calls.append("pip/script")
     )
-    install_dist = mocker.patch.object(execute, "_install_dist", side_effect=lambda: calls.append("dist"))
+    install_dist = mocker.patch.object(execute, "_install_dist", side_effect=lambda *_args: calls.append("dist"))
 
     execute.run(script, "script", 1, is_custom_docker_image=True)
 
-    install_dist.assert_called_once_with()
+    install_dist.assert_called_once_with(False, False)
     assert calls[0] == "dist"
     assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "demo"]
     assert run.call_args_list[1].args[0] == [
@@ -119,3 +121,26 @@ variants = [
     ]
     assert run.call_args_list[1].kwargs["cwd"] == project
     assert run.call_args_list[1].kwargs["env"]["OUTPUT"] == "artifact"
+
+
+def test_run_verbose_dry_run_prints_without_executing(
+    mocker: MockerFixture,
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    script = tmp_path / "001_test.py"
+    script.write_text(
+        """
+# /// script
+# arguments = [{name = "demo"}]
+# ///
+""".lstrip(),
+        encoding="utf-8",
+    )
+    run = mocker.patch.object(execute.subprocess, "run")
+
+    execute.run(script, "script", 0, verbose=True, dry_run=True)
+
+    run.assert_not_called()
+    command = [sys.executable, str(script), '--name="demo"']
+    assert capsys.readouterr().out == f"+ {shlex.join(command)}\n"
