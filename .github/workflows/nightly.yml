@@ -216,7 +216,6 @@ jobs:
           fi
       - name: Run functional job
         run: |
-          python -m venv .venv --system-site-packages
           ls dist/
           ls dist/aitune-*.whl
 
@@ -227,9 +226,9 @@ jobs:
           echo "Path: ${{ matrix.path }}"
           echo "Test number: ${{ matrix.test_number }}"
 
-          .venv/bin/python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
+          python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
 
-          .venv/bin/python tests/functional/scripts/execute.py \
+          python tests/functional/scripts/execute.py \
             "${{ matrix.path }}" \
             --kind "${{ matrix.kind }}" \
             --test-number "${{ matrix.test_number }}" \
