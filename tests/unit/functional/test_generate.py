@@ -43,6 +43,17 @@ def test_scope_filtering_marks_out_of_scope_jobs_as_allow_failure() -> None:
     assert len(jobs) == 0
 
 
+def test_skipped_project_does_not_generate_jobs() -> None:
+    jobs = generate._make_project_entries(
+        "examples",
+        Path("examples/Demo/pyproject.toml"),
+        _config({"skip": True}),
+        Scope.ALWAYS,
+    )
+
+    assert jobs == []
+
+
 def test_script_arguments_expand_to_multiple_jobs() -> None:
     jobs = generate._make_script_entries(
         "pytorch",
