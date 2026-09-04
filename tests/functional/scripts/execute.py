@@ -79,19 +79,14 @@ def _install_dependencies(
 ) -> None:
     if is_custom_docker_image:
         _install_dist(verbose, dry_run)
-    if kind == "project":
-        _run_command(
-            [sys.executable, "-m", "pip", "install", "--editable", str(path)],
-            verbose,
-            dry_run,
-        )
-        return
+
     if config.dependencies:
         _run_command(
             [sys.executable, "-m", "pip", "install", *config.dependencies],
             verbose,
             dry_run,
         )
+
     for install in config.pip_install:
         _run_command(
             [
@@ -102,6 +97,13 @@ def _install_dependencies(
                 *install.get("flags", []),
                 *install.get("packages", []),
             ],
+            verbose,
+            dry_run,
+        )
+
+    if kind == "project":
+        _run_command(
+            [sys.executable, "-m", "pip", "install", "--editable", str(path)],
             verbose,
             dry_run,
         )
