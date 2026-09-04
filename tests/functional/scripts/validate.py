@@ -39,10 +39,17 @@ def collect_projects(roots: list[Path]) -> list[Path]:
     return sorted(project for root in roots for project in root.glob("*/pyproject.toml"))
 
 
-def _validate_one(path: Path) -> str | None:
+def validate_one(path: Path) -> str | None:
+    """Validate one functional-test script or example project."""
     try:
         if path.name == "pyproject.toml":
-            FunctionalTestConfig.from_project(path)
+            config = FunctionalTestConfig.from_project(path)
+            if not config.skip:
+                project = tomllib.loads(path.read_text(encoding="utf-8"))
+                scripts = project.get("project", {}).get("scripts", {})
+                missing_scripts = sorted({"tune", "inference"} - scripts.keys())
+                if missing_scripts:
+                    raise ValueError(f"missing [project.scripts] entries: {', '.join(missing_scripts)}")
         else:
             FunctionalTestConfig.from_script(path)
     except (ValidationError, ValueError, tomllib.TOMLDecodeError) as exc:
@@ -52,7 +59,7 @@ def _validate_one(path: Path) -> str | None:
 
 def validate(scripts: list[Path], projects: list[Path]) -> int:
     """Validate functional-test metadata and return the error count."""
-    failures = [error for path in [*scripts, *projects] if (error := _validate_one(path))]
+    failures = [error for path in [*scripts, *projects] if (error := validate_one(path))]
     for error in failures:
         print(error, file=sys.stderr)  # noqa: T201
     print(f"validated {len(scripts)} scripts, {len(projects)} projects, {len(failures)} errors")  # noqa: T201

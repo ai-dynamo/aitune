@@ -167,7 +167,7 @@ jobs:
             echo "| ID | Path | Kind | Docker Image | Runner | Test Number |"
             echo "|----|------|------|--------------|--------|-------------|"
             jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.docker_image) | \(.runner) | \(.test_number) |"' jobs.json
-            echo "" 
+            echo ""
           } >> $GITHUB_STEP_SUMMARY
 
         # --scripts-path tests/functional/pytorch \
