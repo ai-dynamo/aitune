@@ -274,30 +274,26 @@ def test_performance_validation_enabled_by_default():
     """Performance validation is enabled by default for backwards-compatible behavior."""
     ext = _ConcreteExtension()
 
-    assert ext._performance_validation_enabled is True
-    assert ext.performance_validation_mode is PerformanceValidationMode.ENFORCED
+    assert ext.performance_validation_mode is PerformanceValidationMode.ENABLED
 
 
-def test_enable_performance_validation_returns_self_and_sets_flag():
-    """enable_performance_validation toggles baseline profiling and performance checks."""
+def test_enable_performance_validation_accepts_enum_string_and_boolean():
+    """The public method accepts all modes and retains boolean compatibility."""
     ext = _ConcreteExtension()
 
-    assert ext.enable_performance_validation() is ext
-    assert ext._performance_validation_enabled is True
+    assert ext.enable_performance_validation(PerformanceValidationMode.DIAGNOSTIC) is ext
+    assert ext.performance_validation_mode is PerformanceValidationMode.DIAGNOSTIC
+
+    assert ext.enable_performance_validation("enabled") is ext
+    assert ext.performance_validation_mode is PerformanceValidationMode.ENABLED
 
     assert ext.enable_performance_validation(False) is ext
-    assert ext._performance_validation_enabled is False
     assert ext.performance_validation_mode is PerformanceValidationMode.DISABLED
+    assert ext.enable_performance_validation(True) is ext
+    assert ext.performance_validation_mode is PerformanceValidationMode.ENABLED
 
-
-def test_set_performance_validation_mode_accepts_enum_and_string():
-    """The three-state configuration accepts public enum members and their serialized values."""
-    ext = _ConcreteExtension(performance_validation_mode="diagnostic")
-
-    assert ext.performance_validation_mode is PerformanceValidationMode.DIAGNOSTIC
-    assert ext._performance_validation_enabled is True
-    assert ext.set_performance_validation_mode(PerformanceValidationMode.ENFORCED) is ext
-    assert ext.performance_validation_mode is PerformanceValidationMode.ENFORCED
+    assert ext.enable_performance_validation() is ext
+    assert ext.performance_validation_mode is PerformanceValidationMode.ENABLED
 
 
 def test_pre_tune_does_not_profile_baseline_when_performance_validation_disabled(
@@ -502,7 +498,8 @@ def test_check_perf_diagnostic_mode_records_slow_backend_without_rejecting(
     mock_module, mock_graph_spec, mock_data, mock_backend, torch_device, tmp_path
 ):
     """Diagnostic mode records a failed comparison but returns the correct backend."""
-    ext = _ConcreteExtension(performance_validation_mode=PerformanceValidationMode.DIAGNOSTIC)
+    ext = _ConcreteExtension()
+    ext.enable_performance_validation(PerformanceValidationMode.DIAGNOSTIC)
     ext._baseline_throughput = 100.0
     ext._resolved_batch_size = 4
 

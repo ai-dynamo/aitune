@@ -9,7 +9,6 @@ from aitune.torch.tune_strategy.mixin import (
     FindMaxBatchSizeMixin,
     PerformanceValidationMixin,
 )
-from aitune.torch.tune_strategy.mixin.performance_validation_config_mixin import PerformanceValidationConfigMixin
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tune_strategy.profiling_tune_strategy import ProfilingTuneStrategy
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
@@ -17,11 +16,8 @@ from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
 def test_strategy_mixins_are_tune_strategy_base_classes():
     assert issubclass(FindMaxBatchSizeMixin, TuneStrategy)
-    assert issubclass(PerformanceValidationConfigMixin, TuneStrategy)
     assert issubclass(PerformanceValidationMixin, TuneStrategy)
-    assert issubclass(PerformanceValidationMixin, PerformanceValidationConfigMixin)
     assert not issubclass(PerformanceValidationMixin, FindMaxBatchSizeMixin)
-    assert issubclass(ProfilingTuneStrategy, PerformanceValidationConfigMixin)
     assert issubclass(FirstWinsStrategy, PerformanceValidationMixin)
     assert issubclass(FirstWinsStrategy, FindMaxBatchSizeMixin)
     assert issubclass(FirstWinsStrategy, TuneStrategy)
@@ -52,14 +48,11 @@ def test_strategy_mro_orders_colliding_hooks():
     assert max_throughput_mro.count(TuneStrategy) == 1
 
 
-def test_performance_validation_configuration_is_shared():
+def test_performance_validation_configuration_is_owned_by_strategy_families():
     members = {
         "enable_performance_validation",
-        "set_performance_validation_mode",
         "performance_validation_mode",
-        "_performance_validation_enabled",
     }
 
-    assert members <= PerformanceValidationConfigMixin.__dict__.keys()
-    assert members.isdisjoint(PerformanceValidationMixin.__dict__)
-    assert members.isdisjoint(ProfilingTuneStrategy.__dict__)
+    assert members <= PerformanceValidationMixin.__dict__.keys()
+    assert members <= ProfilingTuneStrategy.__dict__.keys()

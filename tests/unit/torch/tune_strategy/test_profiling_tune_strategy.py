@@ -79,15 +79,11 @@ def strategy():
     return _ControlledStrategy(backends=[SleepBackend()], profiling_config=_profiling_config())
 
 
-def test_performance_validation_mode_is_initialized_by_shared_mixin():
-    strategy = _ControlledStrategy(
-        backends=[SleepBackend()],
-        profiling_config=_profiling_config(),
-        performance_validation_mode="diagnostic",
-    )
+def test_performance_validation_mode_is_configured_by_shared_mixin():
+    strategy = _ControlledStrategy(backends=[SleepBackend()], profiling_config=_profiling_config())
+    strategy.enable_performance_validation(PerformanceValidationMode.DIAGNOSTIC)
 
     assert strategy.performance_validation_mode is PerformanceValidationMode.DIAGNOSTIC
-    assert strategy._performance_validation_enabled is True
 
 
 # ---------------------------------------------------------------------------
@@ -126,12 +122,11 @@ def test_resolve_winner_diagnostic_mode_keeps_best_user_backend_when_slower(stra
     best = _TuneCandidate(backend=MagicMock(spec=Backend), result=_ControlledProfilingResult(metric_value=0.5))
     strategy._baseline_result = _ControlledProfilingResult(metric_value=1.0)
     strategy._baseline_backend = baseline
-    strategy.set_performance_validation_mode(PerformanceValidationMode.DIAGNOSTIC)
+    strategy.enable_performance_validation(PerformanceValidationMode.DIAGNOSTIC)
 
     result = strategy._resolve_winner(best)
 
     assert result is best
-    assert strategy._performance_validation_enabled is True
 
 
 def test_resolve_winner_diagnostic_mode_uses_baseline_when_no_backend_succeeds(strategy):
@@ -139,7 +134,7 @@ def test_resolve_winner_diagnostic_mode_uses_baseline_when_no_backend_succeeds(s
     baseline = MagicMock(spec=Backend)
     strategy._baseline_result = _ControlledProfilingResult(metric_value=1.0)
     strategy._baseline_backend = baseline
-    strategy.set_performance_validation_mode(PerformanceValidationMode.DIAGNOSTIC)
+    strategy.enable_performance_validation(PerformanceValidationMode.DIAGNOSTIC)
 
     result = strategy._resolve_winner(None)
 
@@ -172,7 +167,7 @@ def test_resolve_winner_returns_baseline_when_no_backends_succeed(strategy):
 
 def test_resolve_winner_raises_when_no_backends_and_validation_disabled(strategy):
     """No backends succeeded and validation is disabled → RuntimeError."""
-    strategy._performance_validation_enabled = False
+    strategy.enable_performance_validation(PerformanceValidationMode.DISABLED)
     strategy._baseline_result = None
     strategy._baseline_backend = None
 

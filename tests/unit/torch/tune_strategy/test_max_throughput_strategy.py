@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from aitune.torch import Module
+from aitune.torch import Module, PerformanceValidationMode
 from aitune.torch.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
@@ -83,7 +83,7 @@ def test_performance_validation_toggle_returns_self_and_sets_flag(mock_backend):
     """Performance validation can be disabled with the common toggle."""
     strategy = MaxThroughputStrategy([mock_backend])
     assert strategy.enable_performance_validation(False) is strategy
-    assert strategy._performance_validation_enabled is False
+    assert strategy.performance_validation_mode is PerformanceValidationMode.DISABLED
     assert len(strategy._backends) == 1
     assert not any(isinstance(b, TorchEagerBackend) for b in strategy._backends)
 

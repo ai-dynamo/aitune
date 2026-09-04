@@ -3,10 +3,10 @@
 """Max throughput tune strategy.
 
 1. Finds max batch size.
-2. Profiles TorchEager as a throughput baseline when performance validation is enabled.
+2. Profiles TorchEager as a throughput baseline unless performance validation is disabled.
 3. Runs all user-provided backends with the same sweep.
-4. Returns the backend with max throughput; falls back to TorchEager when
-   performance validation is enabled and no user backend beats the baseline.
+4. Returns the user backend with max throughput; in enabled mode, falls back to
+   TorchEager when no user backend beats the baseline.
 """
 
 from dataclasses import dataclass
@@ -35,10 +35,10 @@ class MaxThroughputProfilingResult(BackendProfilingResult):
 class MaxThroughputStrategy(ProfilingTuneStrategy):
     """Searches and selects the backend with max throughput.
 
-    TorchEager is profiled in _pre_tune as a throughput baseline when performance validation is enabled
-    (not injected into the backends list). When validation is enabled, the strategy falls back to
-    TorchEager when no user-provided backend beats it. When disabled, the best user-provided backend
-    wins and the strategy raises if all user backends fail.
+    TorchEager is profiled in _pre_tune as a throughput baseline unless performance validation is disabled
+    (not injected into the backends list). In enabled mode, the strategy falls back to TorchEager when no
+    user-provided backend beats it. In diagnostic or disabled mode, the best user-provided backend wins,
+    and the strategy raises if all user backends fail.
     """
 
     _title = "Max Throughput Strategy"

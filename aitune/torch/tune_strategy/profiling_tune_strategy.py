@@ -38,7 +38,6 @@ from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
-from aitune.torch.tune_strategy.mixin.performance_validation_config_mixin import PerformanceValidationConfigMixin
 from aitune.torch.tune_strategy.mixin.performance_validation_mixin import fmt_speedup_msg
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.utils.logging import log
@@ -81,7 +80,7 @@ class BackendPerfResult:
     passed: bool
 
 
-class ProfilingTuneStrategy(PerformanceValidationConfigMixin, FindMaxBatchSizeMixin):
+class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
     """Base class for strategies that select a backend by a profiled metric.
 
     Subclasses set ``_title``, ``_description``, ``_metric_label`` (e.g. "throughput"),
@@ -89,7 +88,7 @@ class ProfilingTuneStrategy(PerformanceValidationConfigMixin, FindMaxBatchSizeMi
     and implement :meth:`_measure`, :meth:`_is_better`, and :meth:`_speedup`.
 
     TorchEager is profiled in ``_pre_tune`` as a baseline (not injected into the backends
-    list) unless performance validation is disabled. In enforced mode (default), the
+    list) unless performance validation is disabled. In enabled mode (default), the
     strategy falls back to TorchEager when no user-provided backend beats it. In diagnostic
     mode, the eager comparison is reported but does not affect selection. In disabled mode,
     eager profiling and comparison are skipped.
@@ -105,7 +104,6 @@ class ProfilingTuneStrategy(PerformanceValidationConfigMixin, FindMaxBatchSizeMi
         self,
         backends: list[Backend] | None = None,
         profiling_config: ProfilingConfig | None = None,
-        performance_validation_mode: PerformanceValidationMode | str = PerformanceValidationMode.ENFORCED,
         **kwargs: Any,
     ):
         """Initializes strategy.
@@ -113,20 +111,35 @@ class ProfilingTuneStrategy(PerformanceValidationConfigMixin, FindMaxBatchSizeMi
         Args:
             backends: List of backends to tune.
             profiling_config: Profiling configuration shared by strategy profiling tasks.
-            performance_validation_mode: Whether to disable validation, collect diagnostics only, or enforce
-                the comparison with eager. Defaults to enforced.
             kwargs: Additional arguments passed to the parent class (e.g. ``sink``).
         """
-        super().__init__(
-            profiling_config=profiling_config,
-            performance_validation_mode=performance_validation_mode,
-            **kwargs,
-        )
+        super().__init__(profiling_config=profiling_config, **kwargs)
         self._backends = backends if backends is not None else self._default_backends()
+        self._performance_validation_mode = PerformanceValidationMode.ENABLED
 
         self.perf_validation_results: list[BackendPerfResult] = []
         self._baseline_backend: Backend | None = None
         self._baseline_result: BackendProfilingResult | None = None
+
+    def enable_performance_validation(
+        self, mode: PerformanceValidationMode | str | bool = PerformanceValidationMode.ENABLED
+    ) -> "ProfilingTuneStrategy":
+        """Set how eager-baseline performance data affects backend selection.
+
+        Args:
+            mode: ``ENABLED`` applies the eager comparison as a selection gate, ``DIAGNOSTIC`` records the
+                comparison without affecting selection, and ``DISABLED`` skips eager-baseline profiling.
+                For compatibility, ``True`` maps to ``ENABLED`` and ``False`` maps to ``DISABLED``.
+        """
+        if isinstance(mode, bool):
+            mode = PerformanceValidationMode.ENABLED if mode else PerformanceValidationMode.DISABLED
+        self._performance_validation_mode = PerformanceValidationMode(mode)
+        return self
+
+    @property
+    def performance_validation_mode(self) -> PerformanceValidationMode:
+        """Return the configured performance validation mode."""
+        return self._performance_validation_mode
 
     @abstractmethod
     def _measure(
@@ -215,7 +228,7 @@ class ProfilingTuneStrategy(PerformanceValidationConfigMixin, FindMaxBatchSizeMi
         self._baseline_backend = None
         self._baseline_result = None
 
-        if not self._performance_validation_enabled:
+        if self._performance_validation_mode is PerformanceValidationMode.DISABLED:
             log("⚠️ Performance validation against TorchEager baseline is disabled.", sink=self._sink)
             return
 
@@ -395,7 +408,7 @@ class ProfilingTuneStrategy(PerformanceValidationConfigMixin, FindMaxBatchSizeMi
             and (
                 best is None
                 or (
-                    self._performance_validation_mode is PerformanceValidationMode.ENFORCED
+                    self._performance_validation_mode is PerformanceValidationMode.ENABLED
                     and not self._is_better(best.result, self._baseline_result)
                 )
             )

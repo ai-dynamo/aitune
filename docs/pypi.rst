@@ -653,10 +653,8 @@ limitations (e.g., ONNX export for TensorRT, graph breaks in Torch Inductor, uns
 Strategies control how AITune handles this.
 
 Strategies also validate performance against a Torch eager baseline. Use
-``strategy.set_performance_validation_mode(ait.PerformanceValidationMode.DIAGNOSTIC)`` to collect baseline and
-backend metrics without letting the comparison affect selection. Use
-``strategy.enable_performance_validation(False)`` to skip eager-baseline profiling, comparison, and speedup
-reporting. Profiling strategies still profile candidate backends to select a winner.
+``strategy.enable_performance_validation(False)`` when you want to keep a correct backend regardless of speed
+and skip baseline profiling, candidate performance checks, and speedup reporting.
 
 FirstWinsStrategy
 ~~~~~~~~~~~~~~~~~

@@ -22,8 +22,8 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
 )
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
-from aitune.torch.tune_strategy.mixin.performance_validation_config_mixin import PerformanceValidationConfigMixin
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
+from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.utils.logging import log
 
 
@@ -64,17 +64,17 @@ class PerformanceValidationMixinResult:
     passed: bool
 
 
-class PerformanceValidationMixin(PerformanceValidationConfigMixin):
+class PerformanceValidationMixin(TuneStrategy):
     """TuneStrategy mixin that validates each backend against a TorchEager throughput baseline.
 
     Unless performance validation is disabled, profiles TorchEager during _pre_tune with the strategy profiling
     config narrowed to the resolved batch size (from graph_spec.get_max_batch_size()) to establish a baseline.
     For every candidate backend, profiles with the same task-local profiling config and appends a
-    PerformanceValidationMixinResult. In enforced mode, backends with speedup below the configured threshold
+    PerformanceValidationMixinResult. In enabled mode, backends with speedup below the configured threshold
     are rejected. Diagnostic mode records the same results without affecting backend selection.
 
     Note:
-        min_speedup_threshold_percent defaults to 1.0, requiring a measurable 1% speedup when validation is enforced.
+        min_speedup_threshold_percent defaults to 1.0, requiring a measurable 1% speedup in enabled mode.
         Performance validation is enabled by default.
     """
 
@@ -82,25 +82,43 @@ class PerformanceValidationMixin(PerformanceValidationConfigMixin):
         self,
         *args,
         min_speedup_threshold_percent: float = 1.0,
-        performance_validation_mode: PerformanceValidationMode | str = PerformanceValidationMode.ENFORCED,
         **kwargs,
     ):
         """Initialize performance validation defaults.
 
         Args:
             *args: Positional arguments forwarded through cooperative multiple inheritance.
-            min_speedup_threshold_percent: Required relative speedup, in percent, when validation is enforced.
+            min_speedup_threshold_percent: Required relative speedup, in percent, in enabled mode.
                 Defaults to 1.0.
-            performance_validation_mode: Whether to disable validation, collect diagnostics only, or enforce
-                the comparison with eager. Defaults to enforced.
             **kwargs: Keyword arguments forwarded through cooperative multiple inheritance.
         """
-        super().__init__(*args, performance_validation_mode=performance_validation_mode, **kwargs)
+        super().__init__(*args, **kwargs)
+        self._performance_validation_mode = PerformanceValidationMode.ENABLED
         self.min_speedup_threshold_percent = min_speedup_threshold_percent
         self.perf_validation_results: list[PerformanceValidationMixinResult] = []
         self._baseline_throughput: float | None = None
         self._baseline_backend: Backend | None = None
         self._resolved_batch_size: int | None = None
+
+    def enable_performance_validation(
+        self, mode: PerformanceValidationMode | str | bool = PerformanceValidationMode.ENABLED
+    ) -> "PerformanceValidationMixin":
+        """Set how eager-baseline performance data affects backend selection.
+
+        Args:
+            mode: ``ENABLED`` applies the eager comparison as a selection gate, ``DIAGNOSTIC`` records the
+                comparison without affecting selection, and ``DISABLED`` skips eager-baseline profiling.
+                For compatibility, ``True`` maps to ``ENABLED`` and ``False`` maps to ``DISABLED``.
+        """
+        if isinstance(mode, bool):
+            mode = PerformanceValidationMode.ENABLED if mode else PerformanceValidationMode.DISABLED
+        self._performance_validation_mode = PerformanceValidationMode(mode)
+        return self
+
+    @property
+    def performance_validation_mode(self) -> PerformanceValidationMode:
+        """Return the configured performance validation mode."""
+        return self._performance_validation_mode
 
     def _pre_tune(
         self,
@@ -118,7 +136,7 @@ class PerformanceValidationMixin(PerformanceValidationConfigMixin):
         self._baseline_backend = None
         self._resolved_batch_size = None
 
-        if not self._performance_validation_enabled:
+        if self._performance_validation_mode is PerformanceValidationMode.DISABLED:
             log("⚠️ Performance validation against eager baseline is disabled.", sink=self._sink)
             return
 
@@ -199,7 +217,7 @@ class PerformanceValidationMixin(PerformanceValidationConfigMixin):
             return None
 
         if (
-            not self._performance_validation_enabled
+            self._performance_validation_mode is PerformanceValidationMode.DISABLED
             or self._baseline_throughput is None
             or self._resolved_batch_size is None
         ):
@@ -256,7 +274,7 @@ class PerformanceValidationMixin(PerformanceValidationConfigMixin):
             sink=self._sink,
         )
 
-        if not passed and self._performance_validation_mode is PerformanceValidationMode.ENFORCED:
+        if not passed and self._performance_validation_mode is PerformanceValidationMode.ENABLED:
             return None
 
         return built

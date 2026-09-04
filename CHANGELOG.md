@@ -10,7 +10,7 @@ title: "Changelog"
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
 - feat: add the experimental `KernelOptimizerBackend` for selecting functional kernel providers before building a delegate JIT or AOT backend
 - feat: add the experimental `KernelOptimizer` API with Torch SDPA, SageAttention, and FlashAttention-4 providers and serializable provider runtime plans
-- feat: add `PerformanceValidationMode` with `DISABLED`, `DIAGNOSTIC`, and `ENFORCED` modes, including diagnostic-only eager comparison and backward-compatible boolean control
+- feat: extend `enable_performance_validation` with `ENABLED`, `DIAGNOSTIC`, and `DISABLED` modes, including diagnostic-only eager comparison and positional boolean compatibility
 - feat: add `ModuleFunctionKernelProfiler` API for attributing CUDA kernels to module-scoped `torch.nn.functional` calls
 - feat: introduce explicit backend artifacts declaration
 - feat: forward-signature preservation for bound, decorated, and wrapped `partial`/`partialmethod` callables
@@ -23,6 +23,7 @@ title: "Changelog"
 - fix: validate ONNX Runtime execution providers during backend build
 - fix: surface rejected TensorRT optimization profiles, input shapes, and tensor addresses
 - fix: normalize backend device and configuration descriptions
+- breaking change: rename `enable_performance_validation(enable=...)` to `enable_performance_validation(mode=...)`
 - breaking change: custom backends now use `BuildMode` and must explicitly opt into multi-GPU execution
 
 ## 0.5.0

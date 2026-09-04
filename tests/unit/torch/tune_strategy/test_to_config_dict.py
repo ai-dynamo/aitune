@@ -38,7 +38,7 @@ def test_first_wins_strategy_to_json_dict():
     result = strategy.to_json_dict()
 
     assert result["backends"] == ["BackendA", "BackendB"]
-    assert result["performance_validation_mode"] == "enforced"
+    assert result["performance_validation_mode"] == "enabled"
     _assert_strategy_profiling_defaults(result)
 
 
@@ -50,7 +50,7 @@ def test_one_backend_strategy_to_json_dict():
     result = strategy.to_json_dict()
 
     assert result["backend"] == "SingleBackend"
-    assert result["performance_validation_mode"] == "enforced"
+    assert result["performance_validation_mode"] == "enabled"
     _assert_strategy_profiling_defaults(result)
 
 

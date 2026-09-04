@@ -9,11 +9,11 @@ class PerformanceValidationMode(str, Enum):
     """Controls eager-baseline profiling and its effect on backend selection.
 
     Attributes:
-        DISABLED: Skip eager-baseline profiling and comparison.
+        ENABLED: Profile performance and reject or fall back from backends that do not beat eager.
         DIAGNOSTIC: Profile and report performance without using the eager comparison for selection.
-        ENFORCED: Profile performance and reject or fall back from backends that do not beat eager.
+        DISABLED: Skip eager-baseline profiling and comparison.
     """
 
-    DISABLED = "disabled"
+    ENABLED = "enabled"
     DIAGNOSTIC = "diagnostic"
-    ENFORCED = "enforced"
+    DISABLED = "disabled"

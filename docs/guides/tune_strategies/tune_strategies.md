@@ -29,33 +29,11 @@ Because of these differences, a backend that fails on one model may succeed on a
 
 ## Performance Validation
 
-Strategies validate both correctness and performance before accepting a tuned backend. When performance validation is enabled, AITune profiles a `TorchEagerBackend` baseline at the resolved batch size, then profiles each correctness-passing backend against that baseline.
+Strategies validate both correctness and performance before accepting a tuned backend. By default, AITune profiles a
+`TorchEagerBackend` baseline and avoids selecting an optimization that does not improve performance.
 
-For `OneBackendStrategy` and `FirstWinsStrategy`, baseline validation is enforced by default. A backend is rejected when its throughput is below `1 + min_speedup_ratio` relative to Torch eager; the default threshold is 1%, so a backend must be at least 1.01x faster to pass. `FirstWinsStrategy` then tries the next backend. `OneBackendStrategy` falls back to the profiled `TorchEagerBackend` when its single backend is correct but not faster.
-
-Use diagnostic mode to collect the eager baseline, backend throughput, and speedup without allowing the comparison to affect backend selection:
-
-```python
-from aitune.torch import PerformanceValidationMode
-
-strategy.set_performance_validation_mode(PerformanceValidationMode.DIAGNOSTIC)
-```
-
-Performance validation has three modes:
-
-- `ENFORCED` (default): collect metrics and use the eager comparison as a selection gate.
-- `DIAGNOSTIC`: collect the same metrics but do not reject or fall back from a backend based on them.
-- `DISABLED`: skip eager-baseline profiling, comparison, and speedup reporting. Profiling strategies still profile candidate backends to select a winner.
-
-The existing boolean API remains available as a shorthand for enforced or disabled mode:
-
-```python
-strategy.enable_performance_validation(False)
-```
-
-`MaxThroughputStrategy` also profiles Torch eager as a baseline. In enforced mode, it falls back to Torch eager if no user-provided backend beats the baseline. In diagnostic mode, it records the comparison while selecting the fastest successful user backend independently of eager. When disabled with `enable_performance_validation(False)`, the Torch eager baseline is skipped.
-
-`MinLatencyStrategy` works the same way but selects by minimum latency instead of maximum throughput. `LatencyBudgetStrategy` selects by maximum throughput after filtering out profiled batch sizes whose latency exceeds the configured budget. Use `enable_performance_validation(False)` to disable baseline comparison.
+Most users do not need to configure this behavior. For diagnostic analytics or to skip the eager comparison, see
+[Performance Validation](../advanced/tuning_workflow.md#performance-validation).
 
 ## Choosing a Strategy
 
@@ -168,7 +146,9 @@ ait.tune(model, input_data)
 
 ## MaxThroughputStrategy
 
-Tries all backends, profiles their performance, and selects the fastest backend that beats the Torch eager baseline.
+Tries all backends, profiles their performance, and by default selects the fastest backend that beats the Torch eager
+baseline or falls back to eager. Advanced performance-validation modes can make selection independent of eager; see
+[Performance Validation](../advanced/tuning_workflow.md#performance-validation).
 
 ### Usage
 

@@ -30,10 +30,10 @@ class MinLatencyProfilingResult(BackendProfilingResult):
 class MinLatencyStrategy(ProfilingTuneStrategy):
     """Searches and selects the backend with minimum latency at batch size 1.
 
-    TorchEager is profiled in _pre_tune as a latency baseline when baseline validation is enabled
-    (not injected into the backends list). When validation is enabled, the strategy falls back to
-    TorchEager when no user-provided backend beats it. When disabled, the best user-provided backend
-    wins and the strategy raises if all user backends fail.
+    TorchEager is profiled in _pre_tune as a latency baseline unless performance validation is disabled
+    (not injected into the backends list). In enabled mode, the strategy falls back to TorchEager when no
+    user-provided backend beats it. In diagnostic or disabled mode, the best user-provided backend wins,
+    and the strategy raises if all user backends fail.
     """
 
     _title = "Min Latency Strategy"
