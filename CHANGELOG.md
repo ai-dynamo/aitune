@@ -7,6 +7,7 @@ title: "Changelog"
 
 ## 0.6.0 (unreleased)
 
+- feat: add diagnostic performance validation that reports eager comparisons without affecting backend selection
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
 - feat: forward-signature preservation for bound, decorated, and wrapped `partial`/`partialmethod` callables
 - feat: introduce explicit backend artifacts declaration
