@@ -180,7 +180,7 @@ jobs:
     name: ${{ matrix.id }}
     needs: [wheel, pytorch-image, generate-functional-matrix]
     if: needs.generate-functional-matrix.outputs.matrix_count != '0'
-    runs-on: linux-amd64-cpu4                 # ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
     continue-on-error: ${{ matrix.allow_failure }}
     strategy:
@@ -216,7 +216,7 @@ jobs:
           fi
       - name: Run functional job
         run: |
-          python -m pip install pydantic tomli
+          python -m venv .venv --system-site-packages
           ls dist/
           ls dist/aitune-*.whl
 
@@ -227,9 +227,9 @@ jobs:
           echo "Path: ${{ matrix.path }}"
           echo "Test number: ${{ matrix.test_number }}"
 
-          python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
+          .venv/bin/python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
 
-          python tests/functional/scripts/execute.py \
+          .venv/bin/python tests/functional/scripts/execute.py \
             "${{ matrix.path }}" \
             --kind "${{ matrix.kind }}" \
             --test-number "${{ matrix.test_number }}" \
