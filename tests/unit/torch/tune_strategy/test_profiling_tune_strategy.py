@@ -79,6 +79,17 @@ def strategy():
     return _ControlledStrategy(backends=[SleepBackend()], profiling_config=_profiling_config())
 
 
+def test_performance_validation_mode_is_initialized_by_shared_mixin():
+    strategy = _ControlledStrategy(
+        backends=[SleepBackend()],
+        profiling_config=_profiling_config(),
+        performance_validation_mode="diagnostic",
+    )
+
+    assert strategy.performance_validation_mode is PerformanceValidationMode.DIAGNOSTIC
+    assert strategy._performance_validation_enabled is True
+
+
 # ---------------------------------------------------------------------------
 # _resolve_winner
 # ---------------------------------------------------------------------------

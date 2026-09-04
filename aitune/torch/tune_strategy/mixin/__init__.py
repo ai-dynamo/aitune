@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """TuneStrategy-specific mixins.
 
-Mixins should augment tune lifecycle hooks instead of implementing _tune method.
+Mixins should augment strategy configuration or tune lifecycle hooks instead of implementing _tune method.
 """
 
 from aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin import (

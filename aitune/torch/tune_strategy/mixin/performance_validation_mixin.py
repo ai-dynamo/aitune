@@ -22,8 +22,8 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
 )
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
+from aitune.torch.tune_strategy.mixin.performance_validation_config_mixin import PerformanceValidationConfigMixin
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
-from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.utils.logging import log
 
 
@@ -64,7 +64,7 @@ class PerformanceValidationMixinResult:
     passed: bool
 
 
-class PerformanceValidationMixin(TuneStrategy):
+class PerformanceValidationMixin(PerformanceValidationConfigMixin):
     """TuneStrategy mixin that validates each backend against a TorchEager throughput baseline.
 
     Unless performance validation is disabled, profiles TorchEager during _pre_tune with the strategy profiling
@@ -95,45 +95,12 @@ class PerformanceValidationMixin(TuneStrategy):
                 the comparison with eager. Defaults to enforced.
             **kwargs: Keyword arguments forwarded through cooperative multiple inheritance.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, performance_validation_mode=performance_validation_mode, **kwargs)
         self.min_speedup_threshold_percent = min_speedup_threshold_percent
-        self._performance_validation_mode = PerformanceValidationMode(performance_validation_mode)
         self.perf_validation_results: list[PerformanceValidationMixinResult] = []
         self._baseline_throughput: float | None = None
         self._baseline_backend: Backend | None = None
         self._resolved_batch_size: int | None = None
-
-    def enable_performance_validation(self, enable: bool = True) -> "PerformanceValidationMixin":
-        """Enable enforced validation or disable performance profiling entirely.
-
-        This compatibility method maps ``True`` to :attr:`PerformanceValidationMode.ENFORCED` and ``False``
-        to :attr:`PerformanceValidationMode.DISABLED`. Use :meth:`set_performance_validation_mode` to collect
-        diagnostic metrics without enforcing the eager comparison.
-        """
-        self._performance_validation_enabled = enable
-        return self
-
-    def set_performance_validation_mode(self, mode: PerformanceValidationMode | str) -> "PerformanceValidationMixin":
-        """Set how eager-baseline performance data affects backend selection."""
-        self._performance_validation_mode = PerformanceValidationMode(mode)
-        return self
-
-    @property
-    def performance_validation_mode(self) -> PerformanceValidationMode:
-        """Return the configured performance validation mode."""
-        return self._performance_validation_mode
-
-    @property
-    def _performance_validation_enabled(self) -> bool:
-        """Return whether eager and candidate performance profiling is enabled."""
-        return self._performance_validation_mode is not PerformanceValidationMode.DISABLED
-
-    @_performance_validation_enabled.setter
-    def _performance_validation_enabled(self, enable: bool) -> None:
-        """Map the legacy boolean flag to disabled or enforced mode."""
-        self._performance_validation_mode = (
-            PerformanceValidationMode.ENFORCED if enable else PerformanceValidationMode.DISABLED
-        )
 
     def _pre_tune(
         self,

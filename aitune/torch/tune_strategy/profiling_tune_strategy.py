@@ -38,6 +38,7 @@ from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
+from aitune.torch.tune_strategy.mixin.performance_validation_config_mixin import PerformanceValidationConfigMixin
 from aitune.torch.tune_strategy.mixin.performance_validation_mixin import fmt_speedup_msg
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.utils.logging import log
@@ -80,7 +81,7 @@ class BackendPerfResult:
     passed: bool
 
 
-class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
+class ProfilingTuneStrategy(PerformanceValidationConfigMixin, FindMaxBatchSizeMixin):
     """Base class for strategies that select a backend by a profiled metric.
 
     Subclasses set ``_title``, ``_description``, ``_metric_label`` (e.g. "throughput"),
@@ -116,40 +117,16 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
                 the comparison with eager. Defaults to enforced.
             kwargs: Additional arguments passed to the parent class (e.g. ``sink``).
         """
-        super().__init__(profiling_config=profiling_config, **kwargs)
+        super().__init__(
+            profiling_config=profiling_config,
+            performance_validation_mode=performance_validation_mode,
+            **kwargs,
+        )
         self._backends = backends if backends is not None else self._default_backends()
-        self._performance_validation_mode = PerformanceValidationMode(performance_validation_mode)
 
         self.perf_validation_results: list[BackendPerfResult] = []
         self._baseline_backend: Backend | None = None
         self._baseline_result: BackendProfilingResult | None = None
-
-    def enable_performance_validation(self, enable: bool = True) -> "ProfilingTuneStrategy":
-        """Enable enforced validation or disable eager-baseline profiling entirely."""
-        self._performance_validation_enabled = enable
-        return self
-
-    def set_performance_validation_mode(self, mode: PerformanceValidationMode | str) -> "ProfilingTuneStrategy":
-        """Set how eager-baseline performance data affects backend selection."""
-        self._performance_validation_mode = PerformanceValidationMode(mode)
-        return self
-
-    @property
-    def performance_validation_mode(self) -> PerformanceValidationMode:
-        """Return the configured performance validation mode."""
-        return self._performance_validation_mode
-
-    @property
-    def _performance_validation_enabled(self) -> bool:
-        """Return whether eager-baseline profiling is enabled."""
-        return self._performance_validation_mode is not PerformanceValidationMode.DISABLED
-
-    @_performance_validation_enabled.setter
-    def _performance_validation_enabled(self, enable: bool) -> None:
-        """Map the legacy boolean flag to disabled or enforced mode."""
-        self._performance_validation_mode = (
-            PerformanceValidationMode.ENFORCED if enable else PerformanceValidationMode.DISABLED
-        )
 
     @abstractmethod
     def _measure(
