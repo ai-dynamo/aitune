@@ -156,18 +156,18 @@ jobs:
           uv run --script tests/functional/scripts/generate.py \
             --default-docker-image "${{ env.PYTORCH_CI_IMAGE }}" \
             --scripts-path tests/functional/dynamo \
-            --github-output "$GITHUB_OUTPUT"
+            --github-output "$GITHUB_OUTPUT" \
+            --output-json jobs.json
 
       - name: Display generated functional matrix
         if: always()
         run: |
           echo "### Functional Matrix" >> $GITHUB_STEP_SUMMARY
+          echo -ne "\nTotal matrix items: ${{ steps.generate.outputs.matrix_count }}\n\n" >> $GITHUB_STEP_SUMMARY
           echo "| ID | Path | Kind | Docker Image | Runner | Test Number |" >> $GITHUB_STEP_SUMMARY
           echo "|----|------|------|--------------|--------|-------------|" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.generate.outputs.matrix }}" | jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.docker_image) | \(.runner) | \(.test_number) |"' >> $GITHUB_STEP_SUMMARY
-     
+          jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.docker_image) | \(.runner) | \(.test_number) |"' jobs.json >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Total matrix items: ${{ steps.generate.outputs.matrix_count }}" >> $GITHUB_STEP_SUMMARY
    
 
         # --scripts-path tests/functional/pytorch \
