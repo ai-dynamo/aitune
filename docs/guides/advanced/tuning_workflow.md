@@ -152,7 +152,7 @@ For each module, each graph is tuned separately, i.e., a strategy is called for 
 
 - Strategy tries to build a backend or backends and select the best one
 - Each backend is validated against outputs, i.e., tensor shapes, values, NaNs (not a number)
-- Strategies also profile a Torch eager baseline and reject or fall back from correct backends that do not beat the baseline. Use `strategy.set_performance_validation_mode(ait.PerformanceValidationMode.DIAGNOSTIC)` to collect comparison metrics without affecting selection, or `strategy.enable_performance_validation(False)` to skip performance profiling and reporting.
+- Strategies also profile a Torch eager baseline and reject or fall back from correct backends that do not beat the baseline. Use `strategy.set_performance_validation_mode(ait.PerformanceValidationMode.DIAGNOSTIC)` to collect comparison metrics without affecting selection, or `strategy.enable_performance_validation(False)` to skip eager-baseline profiling, comparison, and speedup reporting. Profiling strategies still profile candidate backends to select a winner.
 
 ### 4. Strategy Execution
 

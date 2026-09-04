@@ -10,7 +10,7 @@ title: "Changelog"
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
 - feat: add the experimental `KernelOptimizerBackend` for selecting functional kernel providers before building a delegate JIT or AOT backend
 - feat: add the experimental `KernelOptimizer` API with Torch SDPA, SageAttention, and FlashAttention-4 providers and serializable provider runtime plans
-- feat: add diagnostic performance validation that reports eager comparisons without affecting backend selection
+- feat: add `PerformanceValidationMode` with `DISABLED`, `DIAGNOSTIC`, and `ENFORCED` modes, including diagnostic-only eager comparison and backward-compatible boolean control
 - feat: add `ModuleFunctionKernelProfiler` API for attributing CUDA kernels to module-scoped `torch.nn.functional` calls
 - feat: introduce explicit backend artifacts declaration
 - feat: forward-signature preservation for bound, decorated, and wrapped `partial`/`partialmethod` callables

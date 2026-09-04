@@ -655,7 +655,8 @@ Strategies control how AITune handles this.
 Strategies also validate performance against a Torch eager baseline. Use
 ``strategy.set_performance_validation_mode(ait.PerformanceValidationMode.DIAGNOSTIC)`` to collect baseline and
 backend metrics without letting the comparison affect selection. Use
-``strategy.enable_performance_validation(False)`` to skip performance profiling and reporting entirely.
+``strategy.enable_performance_validation(False)`` to skip eager-baseline profiling, comparison, and speedup
+reporting. Profiling strategies still profile candidate backends to select a winner.
 
 FirstWinsStrategy
 ~~~~~~~~~~~~~~~~~

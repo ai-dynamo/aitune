@@ -45,7 +45,7 @@ Performance validation has three modes:
 
 - `ENFORCED` (default): collect metrics and use the eager comparison as a selection gate.
 - `DIAGNOSTIC`: collect the same metrics but do not reject or fall back from a backend based on them.
-- `DISABLED`: skip eager baseline profiling, candidate performance checks, and speedup reporting.
+- `DISABLED`: skip eager-baseline profiling, comparison, and speedup reporting. Profiling strategies still profile candidate backends to select a winner.
 
 The existing boolean API remains available as a shorthand for enforced or disabled mode:
 
