@@ -38,6 +38,7 @@ def test_first_wins_strategy_to_json_dict():
     result = strategy.to_json_dict()
 
     assert result["backends"] == ["BackendA", "BackendB"]
+    assert result["performance_validation_mode"] == "enforced"
     _assert_strategy_profiling_defaults(result)
 
 
@@ -49,6 +50,7 @@ def test_one_backend_strategy_to_json_dict():
     result = strategy.to_json_dict()
 
     assert result["backend"] == "SingleBackend"
+    assert result["performance_validation_mode"] == "enforced"
     _assert_strategy_profiling_defaults(result)
 
 
@@ -63,6 +65,7 @@ def test_max_throughput_strategy_to_json_dict():
     result = strategy.to_json_dict()
 
     assert result["backends"] == ["BackendA", "BackendB"]
+    assert result["performance_validation_mode"] == "disabled"
     _assert_strategy_profiling_defaults(result)
 
 
@@ -77,5 +80,6 @@ def test_latency_budget_strategy_to_json_dict():
     result = strategy.to_json_dict()
 
     assert result["backends"] == ["BackendA", "BackendB"]
+    assert result["performance_validation_mode"] == "disabled"
     assert result["latency_budget_ms"] == 50.0
     _assert_strategy_profiling_defaults(result)

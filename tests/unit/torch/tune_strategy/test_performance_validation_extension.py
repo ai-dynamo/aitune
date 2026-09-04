@@ -26,6 +26,7 @@ from aitune.torch.tune_strategy.mixin.performance_validation_mixin import (
     PerformanceValidationMixin,
 )
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
+from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.tuning import tune
 from tests.toy_backends import SleepBackend
@@ -274,6 +275,7 @@ def test_performance_validation_enabled_by_default():
     ext = _ConcreteExtension()
 
     assert ext._performance_validation_enabled is True
+    assert ext.performance_validation_mode is PerformanceValidationMode.ENFORCED
 
 
 def test_enable_performance_validation_returns_self_and_sets_flag():
@@ -285,6 +287,17 @@ def test_enable_performance_validation_returns_self_and_sets_flag():
 
     assert ext.enable_performance_validation(False) is ext
     assert ext._performance_validation_enabled is False
+    assert ext.performance_validation_mode is PerformanceValidationMode.DISABLED
+
+
+def test_set_performance_validation_mode_accepts_enum_and_string():
+    """The three-state configuration accepts public enum members and their serialized values."""
+    ext = _ConcreteExtension(performance_validation_mode="diagnostic")
+
+    assert ext.performance_validation_mode is PerformanceValidationMode.DIAGNOSTIC
+    assert ext._performance_validation_enabled is True
+    assert ext.set_performance_validation_mode(PerformanceValidationMode.ENFORCED) is ext
+    assert ext.performance_validation_mode is PerformanceValidationMode.ENFORCED
 
 
 def test_pre_tune_does_not_profile_baseline_when_performance_validation_disabled(
@@ -482,6 +495,28 @@ def test_check_perf_appends_result_and_returns_none_when_gate_rejects(
 
     assert result is None
     assert len(ext.perf_validation_results) == 1
+    assert ext.perf_validation_results[0].passed is False
+
+
+def test_check_perf_diagnostic_mode_records_slow_backend_without_rejecting(
+    mock_module, mock_graph_spec, mock_data, mock_backend, torch_device, tmp_path
+):
+    """Diagnostic mode records a failed comparison but returns the correct backend."""
+    ext = _ConcreteExtension(performance_validation_mode=PerformanceValidationMode.DIAGNOSTIC)
+    ext._baseline_throughput = 100.0
+    ext._resolved_batch_size = 4
+
+    with (
+        patch.object(ext, "_build_and_validate_backend", return_value=mock_backend),
+        patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 50.0, MagicMock())),
+    ):
+        result = ext._build_validate_and_check_perf(
+            mock_backend, mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path
+        )
+
+    assert result is mock_backend
+    assert len(ext.perf_validation_results) == 1
+    assert ext.perf_validation_results[0].speedup == 0.5
     assert ext.perf_validation_results[0].passed is False
 
 
@@ -722,3 +757,10 @@ def test_extension_classes_exported_from_package():
 
     assert PerformanceValidationMixinResult is not None
     assert PerformanceValidationMixin is not None
+
+
+def test_performance_validation_mode_exported_from_public_torch_api():
+    """PerformanceValidationMode is available from the primary public API."""
+    from aitune.torch import PerformanceValidationMode as PublicPerformanceValidationMode
+
+    assert PublicPerformanceValidationMode is PerformanceValidationMode

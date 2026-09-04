@@ -81,5 +81,6 @@ class OneBackendStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
         """Returns config dict for one backend strategy."""
         return {
             "backend": self._backend.describe(),
+            "performance_validation_mode": self._performance_validation_mode.value,
             "profiling_config": self._profiling_config_to_json_dict(),
         }

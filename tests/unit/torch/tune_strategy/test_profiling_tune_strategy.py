@@ -16,6 +16,7 @@ from aitune.torch.task.profiling import (
 )
 from aitune.torch.task.profiling.profiling_stop_strategy import AllSamplesProfilingStopStrategy
 from aitune.torch.tune_strategy.latency_budget_strategy import LatencyBudgetProfilingResult
+from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.torch.tune_strategy.profiling_tune_strategy import (
     BackendPerfResult,
     BackendProfilingResult,
@@ -106,6 +107,32 @@ def test_resolve_winner_falls_back_to_baseline_when_best_is_slower(strategy):
 
     assert result.backend is baseline
     assert result.result.metric == 1.0
+
+
+def test_resolve_winner_diagnostic_mode_keeps_best_user_backend_when_slower(strategy):
+    """Diagnostic mode reports the eager comparison without using it for selection."""
+    baseline = MagicMock(spec=Backend)
+    best = _TuneCandidate(backend=MagicMock(spec=Backend), result=_ControlledProfilingResult(metric_value=0.5))
+    strategy._baseline_result = _ControlledProfilingResult(metric_value=1.0)
+    strategy._baseline_backend = baseline
+    strategy.set_performance_validation_mode(PerformanceValidationMode.DIAGNOSTIC)
+
+    result = strategy._resolve_winner(best)
+
+    assert result is best
+    assert strategy._performance_validation_enabled is True
+
+
+def test_resolve_winner_diagnostic_mode_uses_baseline_when_no_backend_succeeds(strategy):
+    """Diagnostic mode can use eager when no user backend is available, without comparing performance."""
+    baseline = MagicMock(spec=Backend)
+    strategy._baseline_result = _ControlledProfilingResult(metric_value=1.0)
+    strategy._baseline_backend = baseline
+    strategy.set_performance_validation_mode(PerformanceValidationMode.DIAGNOSTIC)
+
+    result = strategy._resolve_winner(None)
+
+    assert result.backend is baseline
 
 
 def test_resolve_winner_falls_back_to_baseline_when_best_ties(strategy):

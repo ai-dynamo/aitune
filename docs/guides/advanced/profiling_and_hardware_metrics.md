@@ -14,7 +14,7 @@ NVTX and hardware metrics are disabled by default to avoid overhead in productio
 
 ## Tuning Telemetry
 
-AITune records structured tuning telemetry during every run. The report captures backend build results, selected backends, and failure details. When performance validation is enabled, it also captures graph-level baseline throughput and backend throughput.
+AITune records structured tuning telemetry during every run. The report captures backend build results, selected backends, and failure details. In `DIAGNOSTIC` and `ENFORCED` performance validation modes, it also captures graph-level baseline throughput and backend throughput.
 
 By default, the report is written to:
 

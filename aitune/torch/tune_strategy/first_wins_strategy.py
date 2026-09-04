@@ -73,5 +73,6 @@ class FirstWinsStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
         """Returns config dict for first wins strategy."""
         return {
             "backends": [backend.describe() for backend in self._backends],
+            "performance_validation_mode": self._performance_validation_mode.value,
             "profiling_config": self._profiling_config_to_json_dict(),
         }

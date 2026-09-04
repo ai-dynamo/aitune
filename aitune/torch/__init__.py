@@ -18,6 +18,7 @@ from aitune.torch.tune_strategy import (
     MaxThroughputStrategy,
     MinLatencyStrategy,
     OneBackendStrategy,
+    PerformanceValidationMode,
     TuneStrategy,
 )
 from aitune.torch.tune_data.reporting import snapshot_tuning_data
@@ -49,6 +50,7 @@ __all__ = [
     "LatencyBudgetStrategy",
     "MaxThroughputStrategy",
     "MinLatencyStrategy",
+    "PerformanceValidationMode",
     "LocalTorchStorage",
     "DataLoaderFactory",
     "patch_for_jit_tuning",

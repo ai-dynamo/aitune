@@ -39,6 +39,7 @@ from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from aitune.torch.tune_strategy.mixin.performance_validation_mixin import fmt_speedup_msg
+from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.utils.logging import log
 
 
@@ -87,10 +88,10 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
     and implement :meth:`_measure`, :meth:`_is_better`, and :meth:`_speedup`.
 
     TorchEager is profiled in ``_pre_tune`` as a baseline (not injected into the backends
-    list). When performance validation is enabled (default), the strategy falls back to
-    TorchEager when no user-provided backend beats it. When disabled, the best
-    user-provided backend wins regardless of speed, and the strategy raises if all user
-    backends fail.
+    list) unless performance validation is disabled. In enforced mode (default), the
+    strategy falls back to TorchEager when no user-provided backend beats it. In diagnostic
+    mode, the eager comparison is reported but does not affect selection. In disabled mode,
+    eager profiling and comparison are skipped.
     """
 
     _title: str = ""
@@ -103,6 +104,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         self,
         backends: list[Backend] | None = None,
         profiling_config: ProfilingConfig | None = None,
+        performance_validation_mode: PerformanceValidationMode | str = PerformanceValidationMode.ENFORCED,
         **kwargs: Any,
     ):
         """Initializes strategy.
@@ -110,20 +112,44 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         Args:
             backends: List of backends to tune.
             profiling_config: Profiling configuration shared by strategy profiling tasks.
+            performance_validation_mode: Whether to disable validation, collect diagnostics only, or enforce
+                the comparison with eager. Defaults to enforced.
             kwargs: Additional arguments passed to the parent class (e.g. ``sink``).
         """
         super().__init__(profiling_config=profiling_config, **kwargs)
         self._backends = backends if backends is not None else self._default_backends()
-        self._performance_validation_enabled: bool = True
+        self._performance_validation_mode = PerformanceValidationMode(performance_validation_mode)
 
         self.perf_validation_results: list[BackendPerfResult] = []
         self._baseline_backend: Backend | None = None
         self._baseline_result: BackendProfilingResult | None = None
 
     def enable_performance_validation(self, enable: bool = True) -> "ProfilingTuneStrategy":
-        """Enables or disables baseline validation."""
+        """Enable enforced validation or disable eager-baseline profiling entirely."""
         self._performance_validation_enabled = enable
         return self
+
+    def set_performance_validation_mode(self, mode: PerformanceValidationMode | str) -> "ProfilingTuneStrategy":
+        """Set how eager-baseline performance data affects backend selection."""
+        self._performance_validation_mode = PerformanceValidationMode(mode)
+        return self
+
+    @property
+    def performance_validation_mode(self) -> PerformanceValidationMode:
+        """Return the configured performance validation mode."""
+        return self._performance_validation_mode
+
+    @property
+    def _performance_validation_enabled(self) -> bool:
+        """Return whether eager-baseline profiling is enabled."""
+        return self._performance_validation_mode is not PerformanceValidationMode.DISABLED
+
+    @_performance_validation_enabled.setter
+    def _performance_validation_enabled(self, enable: bool) -> None:
+        """Map the legacy boolean flag to disabled or enforced mode."""
+        self._performance_validation_mode = (
+            PerformanceValidationMode.ENFORCED if enable else PerformanceValidationMode.DISABLED
+        )
 
     @abstractmethod
     def _measure(
@@ -215,6 +241,12 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         if not self._performance_validation_enabled:
             log("⚠️ Performance validation against TorchEager baseline is disabled.", sink=self._sink)
             return
+
+        if self._performance_validation_mode is PerformanceValidationMode.DIAGNOSTIC:
+            log(
+                "ℹ️ Performance validation is diagnostic-only; eager comparison will not affect backend selection.",
+                sink=self._sink,
+            )
 
         batching = graph_spec.input_spec.has_batch_axis() and graph_spec.get_max_batch_size() > 1
         max_batch_size = graph_spec.get_max_batch_size()
@@ -380,10 +412,16 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
     def _resolve_winner(self, best: _TuneCandidate | None) -> _TuneCandidate:
         """Returns the winning candidate, falling back to the TorchEager baseline when appropriate."""
         use_baseline = (
-            self._performance_validation_enabled
+            self._performance_validation_mode is not PerformanceValidationMode.DISABLED
             and self._baseline_backend is not None
             and self._baseline_result is not None
-            and (best is None or not self._is_better(best.result, self._baseline_result))
+            and (
+                best is None
+                or (
+                    self._performance_validation_mode is PerformanceValidationMode.ENFORCED
+                    and not self._is_better(best.result, self._baseline_result)
+                )
+            )
         )
         if use_baseline:
             if best is not None and best.backend.is_active:
@@ -478,5 +516,6 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
         """Returns config dict for the strategy."""
         return {
             "backends": [b.describe() for b in self._backends],
+            "performance_validation_mode": self._performance_validation_mode.value,
             "profiling_config": self._profiling_config_to_json_dict(),
         }
