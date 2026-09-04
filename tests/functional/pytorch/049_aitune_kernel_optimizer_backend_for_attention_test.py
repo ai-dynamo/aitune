@@ -140,7 +140,7 @@ def test_kernel_optimizer_backend_for_attention(delegate_backend: Backend):
     assert isinstance(selected_providers[0], SageAttentionKernelProvider)
     if built_backend.build_mode is BuildMode.JUST_IN_TIME:
         assert built_backend._runtime is not None
-        assert built_backend._runtime.plan.providers == selected_providers
+        assert built_backend._runtime.plan.to_dict() == selected_plans[0].to_dict()
     else:
         assert built_backend._runtime is None
     torch.testing.assert_close(actual, expected, rtol=1e-2, atol=1e-2)

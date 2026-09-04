@@ -40,6 +40,15 @@ class _CallableProvider(KernelProvider):
         raise NotImplementedError
 
 
+class _RuntimePreparingProvider(_CallableProvider):
+    def __init__(self, function_name: str, function: Callable):
+        super().__init__(function_name, function)
+        self.load_runtime_dependencies_calls = 0
+
+    def _load_runtime_dependencies(self) -> None:
+        self.load_runtime_dependencies_calls += 1
+
+
 class _ReluModule(nn.Module):
     def forward(self, value):
         return F.relu(value)
@@ -58,6 +67,14 @@ class _IntrospectingReluModule(nn.Module):
 def _runtime(module: nn.Module, provider: KernelProvider):
     plan = KernelOptimizationPlan((provider,))
     return KernelProviderRuntime(module, plan)
+
+
+def test_runtime_prepares_provider_dependencies_during_initialization():
+    provider = _RuntimePreparingProvider("relu", F.relu)
+
+    _runtime(_ReluModule(), provider)
+
+    assert provider.load_runtime_dependencies_calls == 1
 
 
 def test_runtime_activate_and_deactivate_are_idempotent():

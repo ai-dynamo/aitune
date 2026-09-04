@@ -2,12 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the SageAttention kernel provider."""
 
+from copy import deepcopy
 from types import MethodType, SimpleNamespace
 
 import pytest
 import torch
+import torch.nn.functional as F  # noqa: N812
 
 import aitune.torch.backend.kernels.kernel_provider.sage_attention_provider as sage_attention_provider_module
+from aitune.torch.backend.kernels.kernel_optimization_plan import KernelOptimizationPlan
 from aitune.torch.backend.kernels.kernel_provider import KernelProviderState, SageAttentionKernelProvider
 
 
@@ -20,12 +23,23 @@ class _FakeSageAttentionBackend:
         return torch.empty_like(q).contiguous()
 
 
+@pytest.fixture(autouse=True)
+def clear_import_cache():
+    sage_attention_provider_module._import_sageattention.cache_clear()
+    yield
+    sage_attention_provider_module._import_sageattention.cache_clear()
+
+
 def _hnd_view():
     return torch.randn(2, 17, 4, 8).transpose(1, 2)
 
 
 def test_sage_attention_provider_name_and_supported_function(monkeypatch):
-    monkeypatch.setattr(sage_attention_provider_module, "_sageattention_version", lambda: "v2.2.0")
+    monkeypatch.setattr(
+        sage_attention_provider_module,
+        "import_module",
+        lambda _module_name: SimpleNamespace(__version__="2.2.0"),
+    )
     provider = SageAttentionKernelProvider()
 
     assert provider.supported_function == "scaled_dot_product_attention"
@@ -37,56 +51,51 @@ def test_sage_attention_provider_name_when_runtime_cannot_be_imported(monkeypatc
     def missing_runtime(_module_name):
         raise ImportError
 
-    version = sage_attention_provider_module._sageattention_version
-    version.cache_clear()
     monkeypatch.setattr(sage_attention_provider_module, "import_module", missing_runtime)
 
-    try:
-        assert SageAttentionKernelProvider().name == "Sage Attention cannot be imported"
-    finally:
-        version.cache_clear()
+    assert SageAttentionKernelProvider().name == "Sage Attention cannot be imported"
 
 
 def test_sage_attention_provider_name_uses_runtime_version(monkeypatch):
-    version = sage_attention_provider_module._sageattention_version
-    version.cache_clear()
     monkeypatch.setattr(
         sage_attention_provider_module,
         "import_module",
         lambda _module_name: SimpleNamespace(__version__="2.2.0"),
     )
 
-    try:
-        assert SageAttentionKernelProvider().name == "Sage Attention v2.2.0"
-    finally:
-        version.cache_clear()
+    assert SageAttentionKernelProvider().name == "Sage Attention v2.2.0"
+
+
+def test_provider_can_be_deepcopied_after_name_loads_dependency(monkeypatch):
+    monkeypatch.setattr(
+        sage_attention_provider_module,
+        "import_module",
+        lambda _module_name: SimpleNamespace(__version__="2.2.0"),
+    )
+    provider = SageAttentionKernelProvider()
+
+    assert provider.name == "Sage Attention v2.2.0"
+
+    copied = deepcopy(provider)
+
+    assert copied.name == provider.name
 
 
 def test_sage_attention_provider_name_uses_package_version(monkeypatch):
-    version = sage_attention_provider_module._sageattention_version
-    version.cache_clear()
     monkeypatch.setattr(sage_attention_provider_module, "import_module", lambda _module_name: SimpleNamespace())
     monkeypatch.setattr(sage_attention_provider_module, "pkg_version", lambda _package_name: "2.1.1")
 
-    try:
-        assert SageAttentionKernelProvider().name == "Sage Attention v2.1.1"
-    finally:
-        version.cache_clear()
+    assert SageAttentionKernelProvider().name == "Sage Attention v2.1.1"
 
 
 def test_sage_attention_provider_name_when_package_version_is_unknown(monkeypatch):
     def missing_package(_package_name):
         raise sage_attention_provider_module.PackageNotFoundError
 
-    version = sage_attention_provider_module._sageattention_version
-    version.cache_clear()
     monkeypatch.setattr(sage_attention_provider_module, "import_module", lambda _module_name: SimpleNamespace())
     monkeypatch.setattr(sage_attention_provider_module, "pkg_version", missing_package)
 
-    try:
-        assert SageAttentionKernelProvider().name == "Sage Attention unknown version"
-    finally:
-        version.cache_clear()
+    assert SageAttentionKernelProvider().name == "Sage Attention unknown version"
 
 
 @pytest.mark.parametrize("backend", [None, SimpleNamespace(), SimpleNamespace(sageattn=None)])
@@ -133,6 +142,59 @@ def test_backend_returns_and_caches_the_runtime_function(monkeypatch):
     assert runtime_function.__self__ is backend
     assert provider._backend is runtime_function
     assert imports == ["sageattention"]
+
+
+def test_load_runtime_dependencies_caches_backend_before_inference(monkeypatch):
+    backend = _FakeSageAttentionBackend()
+    imports = []
+
+    def import_backend(module_name):
+        imports.append(module_name)
+        return backend
+
+    monkeypatch.setattr(sage_attention_provider_module, "import_module", import_backend)
+    provider = SageAttentionKernelProvider()
+
+    provider._load_runtime_dependencies()
+    provider._load_runtime_dependencies()
+
+    runtime_function = provider._backend
+    assert isinstance(runtime_function, MethodType)
+    assert runtime_function.__self__ is backend
+    assert imports == ["sageattention"]
+
+
+def test_runtime_loads_sageattention_before_strict_export(monkeypatch):
+    class AttentionModule(torch.nn.Module):
+        def forward(self, query, key, value):
+            return F.scaled_dot_product_attention(query, key, value)
+
+    def sageattn(query, key, value, **_kwargs):
+        return query + key + value
+
+    imports = []
+
+    def import_backend(module_name):
+        imports.append(module_name)
+        return SimpleNamespace(sageattn=sageattn)
+
+    monkeypatch.setattr(sage_attention_provider_module, "import_module", import_backend)
+    provider = SageAttentionKernelProvider.from_dict({
+        "type": "SageAttentionKernelProvider",
+        "needs_kwargs_mapping": False,
+        "use_diffusers_native_hnd_view": False,
+    })
+    module = AttentionModule()
+    plan = KernelOptimizationPlan((provider,))
+    query = torch.randn(1, 1, 4, 8)
+
+    with plan.apply(module):
+        imports_before_export = list(imports)
+        exported = torch.export.export(module, (query, query, query), strict=True)
+
+    assert imports_before_export == ["sageattention"]
+    assert imports == imports_before_export
+    torch.testing.assert_close(exported.module()(query, query, query), query + query + query)
 
 
 def test_prepare_rejects_empty_or_inconsistent_samples():

@@ -106,6 +106,7 @@ class _RecordingJitDelegate(Backend):
         self.module = None
         self.sample = None
         self.cache_dir = None
+        self.build_output = None
         self.activate_calls = 0
         self.deactivate_calls = 0
         self.deploy_calls = 0
@@ -120,7 +121,7 @@ class _RecordingJitDelegate(Backend):
         self.module = module
         self.sample = samples[0]
         self.cache_dir = cache_dir
-        self.module(*self.sample[0], **self.sample[1])
+        self.build_output = self.module(*self.sample[0], **self.sample[1])
         return self
 
     def _activate(self):
@@ -316,23 +317,32 @@ def test_build_makes_plan_and_builds_delegate(tmp_path):
     assert isinstance(delegate, _RecordingJitDelegate)
     assert delegate.module is original_module
     assert delegate.cache_dir == tmp_path / "build" / "delegate_backend"
-    assert selected_provider.calls == 1
+    synchronized_provider = backend._runtime.plan.providers[0]
+    assert isinstance(synchronized_provider, _ReluProvider)
+    assert synchronized_provider is not selected_provider
+    assert selected_provider.calls == 0
+    assert synchronized_provider.calls == 1
     assert backend._runtime.is_active
+    assert backend._build_results == [
+        {
+            "detailed_build_info": {
+                "local_optimization_plan": plan.to_dict(),
+                "synchronized_plan": plan.to_dict(),
+            }
+        },
+    ]
 
 
 def test_synchronize_plan_restores_rank_zero_plan_on_nonzero_rank(mocker):
     local_plan, local_provider = _prepared_plan(increment=20.0)
     rank_zero_plan, _ = _prepared_plan(increment=10.0)
-    mocker.patch(
-        "aitune.torch.backend.kernel_optimizer_backend.distributed_context",
-        return_value=mocker.Mock(is_multi_process=True, rank=1),
-    )
+    backend = _backend(_RecordingJitDelegate(), _PlanOptimizer(local_plan))
     broadcast = mocker.patch(
         "aitune.torch.backend.kernel_optimizer_backend.coordinator.broadcast_from_rank0",
         return_value=rank_zero_plan.to_dict(),
     )
 
-    synchronized_plan = KernelOptimizerBackend._synchronize_plan(local_plan)
+    synchronized_plan = backend._synchronize_plan(local_plan)
 
     assert synchronized_plan is not local_plan
     synchronized_provider = synchronized_plan.providers[0]
@@ -340,20 +350,25 @@ def test_synchronize_plan_restores_rank_zero_plan_on_nonzero_rank(mocker):
     assert synchronized_provider.increment == 10.0
     assert synchronized_provider is not local_provider
     broadcast.assert_called_once_with(local_plan.to_dict())
+    assert backend._build_results == [
+        {
+            "detailed_build_info": {
+                "local_optimization_plan": local_plan.to_dict(),
+                "synchronized_plan": rank_zero_plan.to_dict(),
+            }
+        },
+    ]
 
 
 def test_synchronize_plan_broadcasts_and_restores_rank_zero_state(mocker):
     plan, provider = _prepared_plan(increment=10.0)
-    mocker.patch(
-        "aitune.torch.backend.kernel_optimizer_backend.distributed_context",
-        return_value=mocker.Mock(is_multi_process=True, rank=0),
-    )
+    backend = _backend(_RecordingJitDelegate(), _PlanOptimizer(plan))
     broadcast = mocker.patch(
         "aitune.torch.backend.kernel_optimizer_backend.coordinator.broadcast_from_rank0",
         side_effect=lambda value: value,
     )
 
-    synchronized_plan = KernelOptimizerBackend._synchronize_plan(plan)
+    synchronized_plan = backend._synchronize_plan(plan)
 
     assert synchronized_plan is not plan
     assert synchronized_plan.providers[0] is not provider
@@ -362,45 +377,51 @@ def test_synchronize_plan_broadcasts_and_restores_rank_zero_state(mocker):
 
 
 def test_jit_inference_uses_active_selected_provider(tmp_path):
-    plan, selected_provider = _prepared_plan()
+    plan, _ = _prepared_plan()
     backend = _backend(_RecordingJitDelegate(), _PlanOptimizer(plan))
     _, sample, _ = _build(backend, tmp_path)
-    selected_provider.calls = 0
+    synchronized_provider = backend._runtime.plan.providers[0]
+    synchronized_provider.calls = 0
     original_relu = F.relu
 
     output = backend.infer(*sample[0], **sample[1])
 
     torch.testing.assert_close(output, torch.tensor([10.0, 11.0]))
-    assert selected_provider.calls == 1
+    assert synchronized_provider.calls == 1
     assert F.relu is original_relu
     assert backend._runtime.is_active
 
 
 def test_aot_backend_discards_runtime_after_delegate_build(tmp_path):
-    plan, selected_provider = _prepared_plan()
+    plan, _ = _prepared_plan()
     backend = _backend(_RecordingAotDelegate(), _PlanOptimizer(plan))
 
     _, sample, _ = _build(backend, tmp_path)
+    delegate = backend._delegate_backend
     output = backend.infer(*sample[0], **sample[1])
 
+    assert isinstance(delegate, _RecordingAotDelegate)
+    torch.testing.assert_close(delegate.build_output, torch.tensor([10.0, 11.0]))
     torch.testing.assert_close(output, torch.tensor([0.0, 1.0]))
-    assert selected_provider.calls == 1
     assert backend._runtime is None
 
 
 def test_deactivation_and_reactivation_update_runtime(tmp_path):
-    plan, selected_provider = _prepared_plan()
+    plan, _ = _prepared_plan()
     backend = _backend(_RecordingJitDelegate(), _PlanOptimizer(plan))
     _build(backend, tmp_path)
-    selected_provider.calls = 0
+    delegate = backend._delegate_backend
+    synchronized_provider = backend._runtime.plan.providers[0]
+    synchronized_provider.calls = 0
 
     backend.deactivate()
     assert not backend._runtime.is_active
 
     backend.activate()
 
-    assert selected_provider.calls == 1
-    assert backend._delegate_backend.deactivate_calls == 1
+    assert synchronized_provider.calls == 1
+    assert isinstance(delegate, _RecordingJitDelegate)
+    assert delegate.deactivate_calls == 1
     assert backend._runtime.is_active
 
 
