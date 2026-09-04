@@ -227,8 +227,7 @@ jobs:
             --kind "${{ matrix.kind }}" \
             --test-number "${{ matrix.test_number }}" \
             --is-custom-docker-image "${{ matrix.is_custom_docker_image }}" \
-            --verbose \
-            --dry-run
+            --verbose
 
       - if: always()
         uses: *actions_upload_artifact
