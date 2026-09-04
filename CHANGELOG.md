@@ -7,22 +7,22 @@ title: "Changelog"
 
 ## 0.6.0 (unreleased)
 
-- feat: add diagnostic performance validation that reports eager comparisons without affecting backend selection
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
-- feat: forward-signature preservation for bound, decorated, and wrapped `partial`/`partialmethod` callables
-- feat: introduce explicit backend artifacts declaration
-- feat: add `ModuleFunctionKernelProfiler` API for attributing CUDA kernels to module-scoped `torch.nn.functional` calls
-- feat: add the experimental `KernelOptimizer` API with Torch SDPA, SageAttention, and FlashAttention-4 providers and serializable provider runtime plans
 - feat: add the experimental `KernelOptimizerBackend` for selecting functional kernel providers before building a delegate JIT or AOT backend
-- fix: preserve forward signatures across callable wrappers and AOT inspection instrumentation
-- fix: normalize backend device and configuration descriptions
-- fix: surface rejected TensorRT optimization profiles, input shapes, and tensor addresses
-- fix: validate ONNX Runtime execution providers during backend build
-- fix: preserve nested input structure for static and dynamic Torch Export and ONNX Dynamo shapes
-- fix: reduce memory usage in multi-module tuning by storing recorded samples on disk and loading them lazily during backend warmup
+- feat: add the experimental `KernelOptimizer` API with Torch SDPA, SageAttention, and FlashAttention-4 providers and serializable provider runtime plans
+- feat: add diagnostic performance validation that reports eager comparisons without affecting backend selection
+- feat: add `ModuleFunctionKernelProfiler` API for attributing CUDA kernels to module-scoped `torch.nn.functional` calls
+- feat: introduce explicit backend artifacts declaration
+- feat: forward-signature preservation for bound, decorated, and wrapped `partial`/`partialmethod` callables
 - fix: reject backends that do not reproduce eager post-call input mutations such as cache population and index updates
+- fix: reduce memory usage in multi-module tuning by storing recorded samples on disk and loading them lazily during backend warmup
+- fix: preserve nested input structure for static and dynamic Torch Export and ONNX Dynamo shapes
 - fix: Torch-TensorRT JIT configurations are portable across CUDA devices and ranks
 - fix: configured autocast is applied consistently during JIT warmup and inference
+- fix: preserve forward signatures across callable wrappers and AOT inspection instrumentation
+- fix: validate ONNX Runtime execution providers during backend build
+- fix: surface rejected TensorRT optimization profiles, input shapes, and tensor addresses
+- fix: normalize backend device and configuration descriptions
 - breaking change: custom backends now use `BuildMode` and must explicitly opt into multi-GPU execution
 
 ## 0.5.0
