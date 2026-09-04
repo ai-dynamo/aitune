@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import re
 import sys
@@ -39,16 +40,21 @@ DEFAULT_TIMEOUT_MINUTES = 40
 def _timeout_to_minutes(timeout: str | None) -> int:
     if not timeout:
         return DEFAULT_TIMEOUT_MINUTES
-    total_minutes = 0
-    for amount, unit in re.findall(r"(\d+)\s*([hms])", timeout.lower()):
-        value = int(amount)
-        if unit == "h":
-            total_minutes += value * 60
-        elif unit == "m":
-            total_minutes += value
-        elif unit == "s":
-            total_minutes += max(1, value // 60)
-    return total_minutes or DEFAULT_TIMEOUT_MINUTES
+    m = re.fullmatch(r"\s*(\d+)\s*([hms])\s*", timeout.lower())
+    if not m:
+        return DEFAULT_TIMEOUT_MINUTES
+
+    value, unit = int(m.group(1)), m.group(2)
+    if unit == "h":
+        total_seconds = value * 3600
+    elif unit == "m":
+        total_seconds = value * 60
+    elif unit == "s":
+        total_seconds = value
+    else:
+        total_seconds = 0
+
+    return math.ceil(total_seconds / 60) if total_seconds else DEFAULT_TIMEOUT_MINUTES
 
 
 def _environment_for_job(config: FunctionalTestConfig) -> dict[str, str]:
@@ -69,7 +75,6 @@ def _matrix_entry(
     requested_scope: Scope,
     default_docker_image: str = DEFAULT_DOCKER_IMAGE,
 ) -> dict[str, Any]:
-    should_run = config.scope.in_scope(requested_scope) if config.scope is not None else True
     docker_image = config.docker_image or DEFAULT_DOCKER_IMAGE
     runner = variant.runner or config.runner or get_runner([*config.tags, *variant.tags])
 
@@ -82,7 +87,7 @@ def _matrix_entry(
         "environment": json.dumps(_environment_for_job(config)),
         "kind": kind,
         "path": path,
-        "allow_failure": config.allow_failure or not should_run,
+        "allow_failure": config.allow_failure,
         "timeout_minutes": _timeout_to_minutes(config.timeout),
         "use_gated_hf_token": config.use_gated_hf_token,
     }
@@ -96,6 +101,10 @@ def _make_script_entries(
     default_docker_image: str = DEFAULT_DOCKER_IMAGE,
 ) -> list[dict[str, Any]]:
     if config.skip:
+        return []
+
+    should_run = config.scope.in_scope(requested_scope) if config.scope is not None else True
+    if not should_run:
         return []
 
     jobs: list[dict[str, Any]] = []
@@ -123,6 +132,10 @@ def _make_project_entries(
     default_docker_image: str = DEFAULT_DOCKER_IMAGE,
 ) -> list[dict[str, Any]]:
     if config.skip:
+        return []
+
+    should_run = config.scope.in_scope(requested_scope) if config.scope is not None else True
+    if not should_run:
         return []
 
     parent_dir = project.parent

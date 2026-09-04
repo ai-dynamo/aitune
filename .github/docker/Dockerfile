@@ -34,4 +34,3 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 USER runner
 
 WORKDIR ${AIT_DIR}
- 

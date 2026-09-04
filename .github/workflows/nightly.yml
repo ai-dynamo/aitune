@@ -50,7 +50,6 @@ env:
 
   _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-  _ACTIONS_SETUP_PYTHON: &actions_setup_python actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
   _ACTIONS_DOWNLOAD_ARTIFACT: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
   _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
   _ACTIONS_DOCKER_LOGIN: &actions_docker_login docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -162,13 +161,14 @@ jobs:
       - name: Display generated functional matrix
         if: always()
         run: |
-          echo "### Functional Matrix" >> $GITHUB_STEP_SUMMARY
-          echo -ne "\nTotal matrix items: ${{ steps.generate.outputs.matrix_count }}\n\n" >> $GITHUB_STEP_SUMMARY
-          echo "| ID | Path | Kind | Docker Image | Runner | Test Number |" >> $GITHUB_STEP_SUMMARY
-          echo "|----|------|------|--------------|--------|-------------|" >> $GITHUB_STEP_SUMMARY
-          jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.docker_image) | \(.runner) | \(.test_number) |"' jobs.json >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-   
+          {
+            echo "### Functional Matrix"
+            echo -ne "\nTotal matrix items: ${{ steps.generate.outputs.matrix_count }}\n\n"
+            echo "| ID | Path | Kind | Docker Image | Runner | Test Number |"
+            echo "|----|------|------|--------------|--------|-------------|"
+            jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.docker_image) | \(.runner) | \(.test_number) |"' jobs.json
+            echo "" 
+          } >> $GITHUB_STEP_SUMMARY
 
         # --scripts-path tests/functional/pytorch \
         # --scripts-path tests/functional/pytorch/kernels \
@@ -200,26 +200,8 @@ jobs:
           path: dist
           # run-id: ${{ needs.wheel.outputs.dist_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Configure Hugging Face credentials
-        run: |
-          if [[ "${{ matrix.use_gated_hf_token }}" == "true" ]]; then
-            echo "HF_TOKEN=${{ secrets.GATED_HF_TOKEN }}" >> "$GITHUB_ENV"
-            echo "HF_ENDPOINT=${{ secrets.GATED_HF_ENDPOINT }}" >> "$GITHUB_ENV"
-          else
-            echo "HF_TOKEN=${{ secrets.HF_TOKEN }}" >> "$GITHUB_ENV"
-          fi
       - name: Run functional job
         run: |
-          ls dist/
-          ls dist/aitune-*.whl
-
-          echo "Running functional job ${{ matrix.id }}"
-          echo "Docker image: ${{ matrix.docker_image }}"
-          echo "Runner: ${{ matrix.runner }}"
-          echo "Kind: ${{ matrix.kind }}"
-          echo "Path: ${{ matrix.path }}"
-          echo "Test number: ${{ matrix.test_number }}"
-
           python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
 
           python tests/functional/scripts/execute.py \
