@@ -40,19 +40,16 @@ DEFAULT_TIMEOUT_MINUTES = 40
 def _timeout_to_minutes(timeout: str | None) -> int:
     if not timeout:
         return DEFAULT_TIMEOUT_MINUTES
-    m = re.fullmatch(r"\s*(\d+)\s*([hms])\s*", timeout.lower())
-    if not m:
-        return DEFAULT_TIMEOUT_MINUTES
 
-    value, unit = int(m.group(1)), m.group(2)
-    if unit == "h":
-        total_seconds = value * 3600
-    elif unit == "m":
-        total_seconds = value * 60
-    elif unit == "s":
-        total_seconds = value
-    else:
-        total_seconds = 0
+    total_seconds = 0
+    for value, unit in re.findall(r"\s*(\d+)\s*([hms])\s*", timeout.lower()):
+        value = int(value)
+        if unit == "h":
+            total_seconds += value * 3600
+        elif unit == "m":
+            total_seconds += value * 60
+        elif unit == "s":
+            total_seconds += value
 
     return math.ceil(total_seconds / 60) if total_seconds else DEFAULT_TIMEOUT_MINUTES
 

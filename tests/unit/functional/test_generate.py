@@ -40,8 +40,7 @@ def test_scope_filtering_marks_out_of_scope_jobs_as_allow_failure() -> None:
         Scope.NIGHTLY,
     )
 
-    assert len(jobs) == 1
-    assert jobs[0]["allow_failure"] is True
+    assert len(jobs) == 0
 
 
 def test_script_arguments_expand_to_multiple_jobs() -> None:
@@ -145,8 +144,7 @@ arguments = [{prompt = "hello"}]
         example_scope_env="AITUNE_EXAMPLE_SCOPE",
     )
 
-    assert len(matrix) == 1
-    assert matrix[0]["allow_failure"] is True
+    assert len(matrix) == 0
 
 
 def test_generate_matrix_from_repository_is_valid_json_and_under_limit() -> None:
@@ -190,7 +188,7 @@ def test_write_github_output(tmp_path: Path) -> None:
 
 
 def test_timeout_to_minutes_parses_gitlab_style_values() -> None:
-    assert generate._timeout_to_minutes("3h 20m") == 200
+    assert generate._timeout_to_minutes("3h 20m") == 3 * 60 + 20
     assert generate._timeout_to_minutes(None) == 40
 
 

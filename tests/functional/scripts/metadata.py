@@ -30,6 +30,8 @@ RUNNERS_BY_TAG = {
     "gpu/8": "prod-aitune-tester-rtx-pro-4500-8-v1",
 }
 
+RUNNER_TAG_PRIORITY = ("gpu/8", "gpu/4", "gpu/2", "gpu/sm/120", "sm120", "gpu")
+
 try:
     import tomllib
 except ImportError:
@@ -70,7 +72,8 @@ def get_scope(metadata: dict[str, Any], default_scope: str = "L0") -> Scope:
 
 def get_runner(tags: list[str]) -> str:
     """Get the runner for the most specific tag, defaulting to one GPU."""
-    return next((RUNNERS_BY_TAG[tag] for tag in reversed(tags) if tag in RUNNERS_BY_TAG), DEFAULT_RUNNER)
+    tag_set = set(tags)
+    return next((RUNNERS_BY_TAG[tag] for tag in RUNNER_TAG_PRIORITY if tag in tag_set), DEFAULT_RUNNER)
 
 
 def read_script_metadata(script: str, path: Path | None = None) -> dict[str, Any]:
