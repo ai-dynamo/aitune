@@ -126,6 +126,7 @@ def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path
 @pytest.fixture
 def mock_torch_tensorrt(mocker, model: SimpleModel):
     mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
     mock_torch_tensorrt.save = mocker.Mock(side_effect=_fake_torch_tensorrt_save)
 
@@ -217,6 +218,10 @@ def test_mock_build(
         name=format_tensor_name(locator.path, "input"),
     )
     mock_torch_tensorrt.dynamo.compile.assert_called_once()
+    mock_torch_tensorrt.logging.warnings.assert_called_once_with()
+    warning_context = mock_torch_tensorrt.logging.warnings.return_value
+    warning_context.__enter__.assert_called_once_with()
+    warning_context.__exit__.assert_called_once()
     # Pin the pipeline shape: the ExportedProgram from torch.export.export must be
     # forwarded as the first positional arg to torch_tensorrt.dynamo.compile.
     assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is sentinel_exported
@@ -251,6 +256,7 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     if dynamic_shapes is not None:
         graph_spec.dynamic_shapes = dynamic_shapes
     mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
     mock_torch_tensorrt.save = mocker.Mock(side_effect=_fake_torch_tensorrt_save)
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
@@ -277,6 +283,10 @@ def test_mock_build_exports_bounded_dynamic_shapes(
         dtype=torch.float32,
         name=format_tensor_name("x", "input"),
     )
+    mock_torch_tensorrt.logging.warnings.assert_called_once_with()
+    warning_context = mock_torch_tensorrt.logging.warnings.return_value
+    warning_context.__enter__.assert_called_once_with()
+    warning_context.__exit__.assert_called_once()
 
 
 def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
@@ -285,6 +295,7 @@ def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
     sample_data = [((torch.randn(1, 10),), {})]
     graph_spec = _graph_spec_from_samples(model, sample_data)
     mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile.return_value = model
     mock_torch_tensorrt.save.side_effect = _fake_torch_tensorrt_save
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
@@ -373,7 +384,7 @@ def test_full_run_simple_model(
 ):
     backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
-    assert backend._exported_model_artifact == ArtifactPath(tmp_path, Path("exported_model.pt"))
+    assert backend._exported_model_artifact == ArtifactPath(tmp_path, Path("exported_model.pt2"))
     assert backend._exported_model_artifact.path.exists()
 
     args, kwargs = sample_data[0]

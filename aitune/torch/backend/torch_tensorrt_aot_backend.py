@@ -18,6 +18,7 @@ from aitune.torch.backend.backend import (
     BuildMode,
     ExecutionMode,
 )
+from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.torch import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
@@ -241,12 +242,13 @@ class TorchTensorRTAotBackend(Backend):
 
         with self._track_build_step(TorchTensorRTAotBuildStep.TORCHTRT_COMPILE):
             logger.info("Compile model with Torch-TensorRT.")
-            trt_model_compiled = torch_tensorrt.dynamo.compile(
-                exported,
-                inputs=input_signature,
-                kwarg_inputs=kwarg_inputs,
-                **asdict(self._config.compile_config),
-            )
+            with torch_tensorrt_warnings(torch_tensorrt):
+                trt_model_compiled = torch_tensorrt.dynamo.compile(
+                    exported,
+                    inputs=input_signature,
+                    kwarg_inputs=kwarg_inputs,
+                    **asdict(self._config.compile_config),
+                )
 
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
@@ -298,7 +300,7 @@ class TorchTensorRTAotBackend(Backend):
         In order to avoid name clashes we create a unique path for each model and graph spec.
         """
         cache_dir.mkdir(parents=True, exist_ok=True)
-        return ArtifactPath(cache_dir, "exported_model.pt")
+        return ArtifactPath(cache_dir, "exported_model.pt2")
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""

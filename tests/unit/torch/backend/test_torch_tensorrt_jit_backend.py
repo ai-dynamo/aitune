@@ -39,6 +39,14 @@ def model(torch_device) -> ToyTorchModel:
     return ToyTorchModel().to(torch_device).eval()
 
 
+@pytest.fixture(autouse=True)
+def mock_torch_tensorrt_logging(mocker):
+    mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch_tensorrt", mock_torch_tensorrt)
+    return mock_torch_tensorrt.logging.warnings
+
+
 @pytest.fixture
 def sample_data(model, torch_device, tmp_path) -> SampleStore:
     return model.sample_store(tmp_path, device=torch_device)
@@ -105,7 +113,7 @@ def test_torch_tensorrt_build_auto_dynamic_does_not_mutate_config(mocker, tmp_pa
     assert compile_mock.call_args.kwargs["dynamic"] is True
 
 
-def test_torch_tensorrt_warmup_uses_autocast_inference(mocker, tmp_path):
+def test_torch_tensorrt_warmup_uses_autocast_inference(mocker, tmp_path, mock_torch_tensorrt_logging):
     mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
     mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
     mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
@@ -130,6 +138,10 @@ def test_torch_tensorrt_warmup_uses_autocast_inference(mocker, tmp_path):
     )
 
     autocast.assert_called_once_with(device_type="cpu", dtype=torch.bfloat16, enabled=True)
+    mock_torch_tensorrt_logging.assert_called_once_with()
+    warning_context = mock_torch_tensorrt_logging.return_value
+    warning_context.__enter__.assert_called_once_with()
+    warning_context.__exit__.assert_called_once()
 
 
 def test_torch_tensorrt_build_uses_placement_preserving_module_move(mocker, tmp_path):

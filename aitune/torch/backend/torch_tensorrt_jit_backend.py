@@ -13,6 +13,7 @@ import torch.nn as nn
 
 from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
+from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
 from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
@@ -194,17 +195,18 @@ class TorchTensorRTJitBackend(Backend):
         else:
             compile_options.pop("device", None)
 
-        self._compiled_module = torch.compile(
-            self._orig_module,
-            backend="torch_tensorrt",
-            options=compile_options,
-            fullgraph=self._config.fullgraph,
-            dynamic=self._compile_dynamic,
-        )
+        with torch_tensorrt_warnings(torch_tensorrt):
+            self._compiled_module = torch.compile(
+                self._orig_module,
+                backend="torch_tensorrt",
+                options=compile_options,
+                fullgraph=self._config.fullgraph,
+                dynamic=self._compile_dynamic,
+            )
 
-        self._select_infer_impl()
-        for args, kwargs in self._iter_samples():
-            self._infer_impl(*args, **kwargs)
+            self._select_infer_impl()
+            for args, kwargs in self._iter_samples():
+                self._infer_impl(*args, **kwargs)
         logger.info("Module has been compiled.")
 
     def _infer_with_autocast(self, *args: Any, **kwargs: Any) -> Any:
