@@ -4,10 +4,11 @@
 
 import logging
 from collections.abc import Callable
-from functools import cached_property, lru_cache
+from functools import cache, cached_property
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
+from types import ModuleType
 from typing import Any
 
 import torch
@@ -24,20 +25,13 @@ _RUNTIME_UNAVAILABLE_MESSAGE = (
 )
 
 
-@lru_cache(maxsize=1)
-def _sageattention_version() -> str:
-    """Return the installed SageAttention version."""
+@cache
+def _import_sageattention() -> ModuleType | None:
+    """Import and cache the optional SageAttention module."""
     try:
-        sageattention = import_module("sageattention")
+        return import_module("sageattention")
     except ImportError:
-        return "cannot be imported"
-    version = getattr(sageattention, "__version__", None)
-    if version is not None:
-        return f"v{version}"
-    try:
-        return f"v{pkg_version('sageattention')}"
-    except PackageNotFoundError:
-        return "unknown version"
+        return None
 
 
 class SageAttentionKernelProvider(KernelProvider):
@@ -50,14 +44,28 @@ class SageAttentionKernelProvider(KernelProvider):
         self.use_diffusers_native_hnd_view = False
 
     @cached_property
+    def _version(self) -> str:
+        """Resolve the SageAttention version once."""
+        module = _import_sageattention()
+        if module is None:
+            return "cannot be imported"
+
+        version = getattr(module, "__version__", None)
+        if version is not None:
+            return f"v{version}"
+        try:
+            return f"v{pkg_version('sageattention')}"
+        except PackageNotFoundError:
+            return "unknown version"
+
+    @cached_property
     def _backend(self) -> Callable[..., Any]:
         """Load and validate the SageAttention runtime function lazily."""
-        try:
-            backend = import_module("sageattention")
-        except ImportError as error:
-            raise RuntimeError(_RUNTIME_UNAVAILABLE_MESSAGE) from error
+        module = _import_sageattention()
+        if module is None:
+            raise RuntimeError(_RUNTIME_UNAVAILABLE_MESSAGE)
 
-        sageattn = getattr(backend, "sageattn", None)
+        sageattn = getattr(module, "sageattn", None)
         if not callable(sageattn):
             raise RuntimeError(_RUNTIME_UNAVAILABLE_MESSAGE)
         return sageattn
@@ -70,7 +78,12 @@ class SageAttentionKernelProvider(KernelProvider):
     @property
     def name(self) -> str:
         """Return a human-readable provider name."""
-        return f"Sage Attention {_sageattention_version()}"
+        return f"Sage Attention {self._version}"
+
+    def _load_runtime_dependencies(self) -> None:
+        """Load SageAttention dependencies before graph capture."""
+        _ = self._version
+        _ = self._backend
 
     def _prepare(self, samples: list[Sample]) -> bool:
         """Select one inference plan for all representative samples."""

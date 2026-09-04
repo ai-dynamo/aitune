@@ -20,7 +20,7 @@ from aitune.torch.backend.kernels.kernel_optimization_plan import KernelOptimiza
 from aitune.torch.backend.kernels.kernel_optimizer import KernelOptimizer
 from aitune.torch.backend.kernels.kernel_provider import KernelGenerator, KernelProvider
 from aitune.torch.backend.kernels.kernel_provider_runtime import KernelProviderRuntime
-from aitune.torch.distributed import coordinator, distributed_context
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.module import move_module_to_device
@@ -206,8 +206,10 @@ class KernelOptimizerBackend(Backend):
 
         return self
 
-    @staticmethod
-    def _synchronize_plan(plan: KernelOptimizationPlan) -> KernelOptimizationPlan:
+    def _synchronize_plan(
+        self,
+        plan: KernelOptimizationPlan,
+    ) -> KernelOptimizationPlan:
         """Apply rank zero's serialized optimization plan to every distributed worker.
 
         Ranks can have slightly different plans due to timing variations of the providers.
@@ -221,17 +223,21 @@ class KernelOptimizerBackend(Backend):
         Returns:
             The synchronized plan.
         """
-        context = distributed_context()
-        if not context.is_multi_process:
-            return plan
-
         with coordinator.raise_if_any_rank_fails("Serializing kernel optimization plans"):
-            plan_state = plan.to_dict()
+            local_plan_state = plan.to_dict()
 
-        rank_zero_plan_state = coordinator.broadcast_from_rank0(plan_state)
+        rank_zero_plan_state = coordinator.broadcast_from_rank0(local_plan_state)
         with coordinator.raise_if_any_rank_fails("Restoring rank-zero kernel optimization plan"):
             synchronized_plan = KernelOptimizationPlan.from_dict(rank_zero_plan_state)
 
+        self._build_results.append(
+            {
+                "detailed_build_info": {
+                    "local_optimization_plan": local_plan_state,
+                    "synchronized_plan": rank_zero_plan_state,
+                }
+            },
+        )
         return synchronized_plan
 
     def _create_optimizer(self) -> KernelOptimizer:

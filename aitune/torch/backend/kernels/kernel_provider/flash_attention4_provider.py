@@ -4,10 +4,11 @@
 
 import logging
 from collections.abc import Callable
-from functools import cached_property, lru_cache
+from functools import cache, cached_property
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
+from types import ModuleType
 from typing import Any
 
 import torch
@@ -22,24 +23,13 @@ _KEYWORD_QKV = "keyword_qkv"
 _RUNTIME_UNAVAILABLE_MESSAGE = "FlashAttention-4 is not available. Install it with `pip install --pre flash-attn-4`."
 
 
-@lru_cache(maxsize=1)
-def _flash_attention4_version() -> str:
-    """Return the installed FlashAttention-4 version."""
+@cache
+def _import_flash_attention4() -> ModuleType | None:
+    """Import and cache the optional FlashAttention-4 module."""
     try:
-        backend = import_module("flash_attn.cute")
+        return import_module("flash_attn.cute")
     except ImportError:
-        return "cannot be imported"
-
-    version = getattr(backend, "__version__", None)
-    if version is not None and version != "0.0.0":
-        return f"v{version}"
-
-    for package_name in ("flash-attn-4", "fa4"):
-        try:
-            return f"v{pkg_version(package_name)}"
-        except PackageNotFoundError:
-            pass
-    return "unknown version"
+        return None
 
 
 class FlashAttention4KernelProvider(KernelProvider):
@@ -53,14 +43,31 @@ class FlashAttention4KernelProvider(KernelProvider):
         self.copy_free_layout = False
 
     @cached_property
+    def _version(self) -> str:
+        """Resolve the FlashAttention-4 version once."""
+        module = _import_flash_attention4()
+        if module is None:
+            return "cannot be imported"
+
+        version = getattr(module, "__version__", None)
+        if version is not None and version != "0.0.0":
+            return f"v{version}"
+
+        for package_name in ("flash-attn-4", "fa4"):
+            try:
+                return f"v{pkg_version(package_name)}"
+            except PackageNotFoundError:
+                pass
+        return "unknown version"
+
+    @cached_property
     def _backend(self) -> Callable[..., Any]:
         """Load and validate the FlashAttention-4 runtime function lazily."""
-        try:
-            backend = import_module("flash_attn.cute")
-        except ImportError as error:
-            raise RuntimeError(_RUNTIME_UNAVAILABLE_MESSAGE) from error
+        module = _import_flash_attention4()
+        if module is None:
+            raise RuntimeError(_RUNTIME_UNAVAILABLE_MESSAGE)
 
-        flash_attn_func = getattr(backend, "flash_attn_func", None)
+        flash_attn_func = getattr(module, "flash_attn_func", None)
         if not callable(flash_attn_func):
             raise RuntimeError(_RUNTIME_UNAVAILABLE_MESSAGE)
         return flash_attn_func
@@ -73,7 +80,12 @@ class FlashAttention4KernelProvider(KernelProvider):
     @property
     def name(self) -> str:
         """Return a human-readable provider name."""
-        return f"FlashAttention-4 {_flash_attention4_version()}"
+        return f"FlashAttention-4 {self._version}"
+
+    def _load_runtime_dependencies(self) -> None:
+        """Load FlashAttention-4 dependencies before graph capture."""
+        _ = self._version
+        _ = self._backend
 
     def _prepare(self, samples: list[Sample]) -> bool:
         """Select one inference plan for all representative samples."""

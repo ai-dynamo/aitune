@@ -3,6 +3,7 @@
 """Tests for the FlashAttention-4 kernel provider."""
 
 import logging
+from copy import deepcopy
 from types import MethodType, SimpleNamespace
 
 import pytest
@@ -21,6 +22,13 @@ class _FakeFlashAttention4Backend:
         return torch.empty_like(q), None
 
 
+@pytest.fixture(autouse=True)
+def clear_import_cache():
+    flash_attention4_provider_module._import_flash_attention4.cache_clear()
+    yield
+    flash_attention4_provider_module._import_flash_attention4.cache_clear()
+
+
 def _qkv(*, copy_free_layout: bool, query_heads: int = 4, key_value_heads: int = 4):
     if copy_free_layout:
         query = torch.randn(2, 17, query_heads, 8).transpose(1, 2)
@@ -34,7 +42,11 @@ def _qkv(*, copy_free_layout: bool, query_heads: int = 4, key_value_heads: int =
 
 
 def test_flash_attention4_provider_name_and_supported_function(monkeypatch):
-    monkeypatch.setattr(flash_attention4_provider_module, "_flash_attention4_version", lambda: "v4.0.0b27")
+    monkeypatch.setattr(
+        flash_attention4_provider_module,
+        "import_module",
+        lambda _module_name: SimpleNamespace(__version__="4.0.0b27"),
+    )
     provider = FlashAttention4KernelProvider()
 
     assert provider.supported_function == "scaled_dot_product_attention"
@@ -46,29 +58,34 @@ def test_flash_attention4_provider_name_when_runtime_cannot_be_imported(monkeypa
     def missing_runtime(_module_name):
         raise ImportError
 
-    version = flash_attention4_provider_module._flash_attention4_version
-    version.cache_clear()
     monkeypatch.setattr(flash_attention4_provider_module, "import_module", missing_runtime)
 
-    try:
-        assert FlashAttention4KernelProvider().name == "FlashAttention-4 cannot be imported"
-    finally:
-        version.cache_clear()
+    assert FlashAttention4KernelProvider().name == "FlashAttention-4 cannot be imported"
 
 
 def test_flash_attention4_provider_name_uses_runtime_version(monkeypatch):
-    version = flash_attention4_provider_module._flash_attention4_version
-    version.cache_clear()
     monkeypatch.setattr(
         flash_attention4_provider_module,
         "import_module",
         lambda _module_name: SimpleNamespace(__version__="4.0.0b27"),
     )
 
-    try:
-        assert FlashAttention4KernelProvider().name == "FlashAttention-4 v4.0.0b27"
-    finally:
-        version.cache_clear()
+    assert FlashAttention4KernelProvider().name == "FlashAttention-4 v4.0.0b27"
+
+
+def test_provider_can_be_deepcopied_after_name_loads_dependency(monkeypatch):
+    monkeypatch.setattr(
+        flash_attention4_provider_module,
+        "import_module",
+        lambda _module_name: SimpleNamespace(__version__="4.0.0b27"),
+    )
+    provider = FlashAttention4KernelProvider()
+
+    assert provider.name == "FlashAttention-4 v4.0.0b27"
+
+    copied = deepcopy(provider)
+
+    assert copied.name == provider.name
 
 
 def test_flash_attention4_provider_name_uses_fallback_package_version(monkeypatch):
@@ -80,8 +97,6 @@ def test_flash_attention4_provider_name_uses_fallback_package_version(monkeypatc
             raise flash_attention4_provider_module.PackageNotFoundError
         return "4.0.0b26"
 
-    version = flash_attention4_provider_module._flash_attention4_version
-    version.cache_clear()
     monkeypatch.setattr(
         flash_attention4_provider_module,
         "import_module",
@@ -89,26 +104,18 @@ def test_flash_attention4_provider_name_uses_fallback_package_version(monkeypatc
     )
     monkeypatch.setattr(flash_attention4_provider_module, "pkg_version", package_version)
 
-    try:
-        assert FlashAttention4KernelProvider().name == "FlashAttention-4 v4.0.0b26"
-        assert requested_packages == ["flash-attn-4", "fa4"]
-    finally:
-        version.cache_clear()
+    assert FlashAttention4KernelProvider().name == "FlashAttention-4 v4.0.0b26"
+    assert requested_packages == ["flash-attn-4", "fa4"]
 
 
 def test_flash_attention4_provider_name_when_package_version_is_unknown(monkeypatch):
     def missing_package(_package_name):
         raise flash_attention4_provider_module.PackageNotFoundError
 
-    version = flash_attention4_provider_module._flash_attention4_version
-    version.cache_clear()
     monkeypatch.setattr(flash_attention4_provider_module, "import_module", lambda _module_name: SimpleNamespace())
     monkeypatch.setattr(flash_attention4_provider_module, "pkg_version", missing_package)
 
-    try:
-        assert FlashAttention4KernelProvider().name == "FlashAttention-4 unknown version"
-    finally:
-        version.cache_clear()
+    assert FlashAttention4KernelProvider().name == "FlashAttention-4 unknown version"
 
 
 @pytest.mark.parametrize("backend", [None, SimpleNamespace(), SimpleNamespace(flash_attn_func=None)])
@@ -142,6 +149,26 @@ def test_backend_returns_and_caches_the_runtime_function(monkeypatch):
     assert isinstance(runtime_function, MethodType)
     assert runtime_function.__self__ is backend
     assert provider._backend is runtime_function
+    assert imports == ["flash_attn.cute"]
+
+
+def test_load_runtime_dependencies_caches_backend_before_inference(monkeypatch):
+    backend = _FakeFlashAttention4Backend()
+    imports = []
+
+    def import_backend(module_name):
+        imports.append(module_name)
+        return backend
+
+    monkeypatch.setattr(flash_attention4_provider_module, "import_module", import_backend)
+    provider = FlashAttention4KernelProvider()
+
+    provider._load_runtime_dependencies()
+    provider._load_runtime_dependencies()
+
+    runtime_function = provider._backend
+    assert isinstance(runtime_function, MethodType)
+    assert runtime_function.__self__ is backend
     assert imports == ["flash_attn.cute"]
 
 

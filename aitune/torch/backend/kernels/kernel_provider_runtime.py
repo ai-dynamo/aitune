@@ -21,6 +21,8 @@ class KernelProviderRuntime:
         """Initialize runtime state without running kernel optimization."""
         self.module = module
         self.plan = plan
+        for provider in plan.providers:
+            provider._load_runtime_dependencies()
         self._provider_functions = {
             id(provider): self._create_provider_function(provider) for provider in plan.providers
         }

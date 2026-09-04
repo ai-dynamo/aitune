@@ -54,11 +54,12 @@ def torch_device():
 
 
 @pytest.fixture(autouse=True)
-def jit_cleanup():
+def jit_cleanup(tmp_path):
     """Reset patcher state and jit_config before and after each test."""
     jit_reset()
     _reset_tuning_report_context()
     jit_config.reset_to_defaults()
+    jit_config.cache_dir = tmp_path / "aitune_jit_cache"
     try:
         yield
     finally:

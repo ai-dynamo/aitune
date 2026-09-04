@@ -83,6 +83,17 @@ class KernelProvider(ABC):
         self.state = KernelProviderState.READY
         return True
 
+    def _load_runtime_dependencies(self) -> None:
+        """Load and cache dependencies before runtime execution and graph capture.
+
+        :class:`KernelProviderRuntime` calls this hook before a delegate backend executes
+        the module. Providers with lazily imported dependencies should override this
+        method and cache them here. Otherwise, their first import may occur inside a
+        ``torch.compile`` or ``torch.export`` graph capture, where Dynamo cannot trace
+        ``importlib`` and fails on the skipped ``_gcd_import`` function.
+        """
+        return None
+
     @abstractmethod
     def _prepare(self, samples: list[Sample]) -> bool:
         """Validate samples and populate the state required for inference."""
