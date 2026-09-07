@@ -63,7 +63,7 @@ def _install_dist(verbose: bool = False, dry_run: bool = False) -> None:
     if not wheels:
         raise FileNotFoundError("no wheel found in dist/")
     _run_command(
-        [sys.executable, "-m", "pip", "install", *(str(wheel) for wheel in wheels)],
+        [sys.executable, "-m", "pip", "install", str(wheels[0])],
         verbose,
         dry_run,
     )
@@ -79,6 +79,12 @@ def _install_dependencies(
 ) -> None:
     if is_custom_docker_image:
         _install_dist(verbose, dry_run)
+
+    _run_command(
+        [sys.executable, "-m", "pip", "install", "--group", "functional-test"],
+        verbose,
+        dry_run,
+    )
 
     if config.dependencies:
         _run_command(
@@ -107,6 +113,28 @@ def _install_dependencies(
             verbose,
             dry_run,
         )
+
+    # After all installs, save the current dependencies to a requirements file for debugging
+    _run_command(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "freeze",
+            "--all",
+            "--disable-pip-version-check",
+            "--no-python-version-warning",
+            "--no-input",
+            "--local",
+            "--quiet",
+            "-r",
+            "/dev/null",
+            ">",
+            "functional_test_requirements.txt",
+        ],
+        verbose,
+        dry_run,
+    )
 
 
 def run(
