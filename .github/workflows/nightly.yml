@@ -5,7 +5,7 @@ name: Nightly CI
 on:
   push:
     branches:
-      - "kn/gha_ci_nightly"
+      - "pull-request/[0-9]+"
   # schedule:
   #   - cron: "0 2 * * *"
   workflow_dispatch:
@@ -154,6 +154,10 @@ jobs:
         run: |
           uv run --script tests/functional/scripts/generate.py \
             --default-docker-image "${{ env.PYTORCH_CI_IMAGE }}" \
+            --scripts-path tests/functional/pytorch \
+            --scripts-path tests/functional/pytorch/kernels \
+            --scripts-path tests/functional/pytorch/jit \
+            --scripts-path tests/functional/dataloader \
             --scripts-path tests/functional/dynamo \
             --github-output "$GITHUB_OUTPUT" \
             --output-json jobs.json
@@ -170,17 +174,14 @@ jobs:
             echo ""
           } >> $GITHUB_STEP_SUMMARY
 
-        # --scripts-path tests/functional/pytorch \
-        # --scripts-path tests/functional/pytorch/kernels \
-        # --scripts-path tests/functional/pytorch/jit \
-        # --scripts-path tests/functional/dataloader \
+
         # --projects-path examples \
 
   functional:
     name: ${{ matrix.id }}
     needs: [wheel, pytorch-image, generate-functional-matrix]
     if: needs.generate-functional-matrix.outputs.matrix_count != '0'
-    runs-on: linux-amd64-gpu-rtxpro6000-latest-1 # ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
     continue-on-error: ${{ matrix.allow_failure }}
     strategy:
