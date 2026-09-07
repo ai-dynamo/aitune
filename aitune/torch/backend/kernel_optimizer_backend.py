@@ -3,11 +3,12 @@
 """Composite backend applying kernel providers before delegating execution."""
 
 import gc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import torch.nn as nn
+from torch.nn.attention import SDPBackend
 
 from aitune.torch.backend.backend import (
     Backend,
@@ -18,14 +19,29 @@ from aitune.torch.backend.backend import (
 )
 from aitune.torch.backend.kernels.kernel_optimization_plan import KernelOptimizationPlan
 from aitune.torch.backend.kernels.kernel_optimizer import KernelOptimizer
-from aitune.torch.backend.kernels.kernel_provider import KernelGenerator, KernelProvider
+from aitune.torch.backend.kernels.kernel_provider import (
+    FlashAttention4KernelProvider,
+    KernelGenerator,
+    KernelProvider,
+    TorchSDPAKernelProvider,
+)
 from aitune.torch.backend.kernels.kernel_provider_runtime import KernelProviderRuntime
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.module import move_module_to_device
 from aitune.utils.env_vars import AITUNE_KERNEL_GENERATION_TIMEOUT
 from aitune.utils.validation import in_range
+
+
+def _default_kernel_providers() -> list[KernelProvider]:
+    """Create the built-in attention providers used by the default backend."""
+    return [
+        TorchSDPAKernelProvider(SDPBackend.FLASH_ATTENTION),
+        TorchSDPAKernelProvider(SDPBackend.CUDNN_ATTENTION),
+        FlashAttention4KernelProvider(),
+    ]
 
 
 @dataclass
@@ -37,14 +53,15 @@ class KernelOptimizerBackendConfig(BackendConfig):
     it can serialize optimization plan instead of this configuration object.
 
     Args:
-        kernel_providers: Static providers considered during kernel optimization.
+        kernel_providers: Static providers considered during kernel optimization. Defaults to PyTorch Flash
+            Attention, PyTorch cuDNN Attention, and FlashAttention-4 providers.
         kernel_generators: Asynchronous generators considered during kernel optimization.
         provider_min_time_share_percent: Minimum profiled time share required for static providers.
         generator_min_time_share_percent: Minimum profiled time share required for dynamic generators.
         generation_timeout: Maximum seconds to wait for submitted generators.
     """
 
-    kernel_providers: KernelProvider | list[KernelProvider] | None = None
+    kernel_providers: KernelProvider | list[KernelProvider] | None = field(default_factory=_default_kernel_providers)
     kernel_generators: KernelGenerator | list[KernelGenerator] | None = None
     provider_min_time_share_percent: float = 0.0
     generator_min_time_share_percent: float = 10.0
@@ -150,18 +167,20 @@ class KernelOptimizerBackend(Backend):
 
     def __init__(
         self,
-        config: KernelOptimizerBackendConfig,
-        delegate_backend: Backend,
+        config: KernelOptimizerBackendConfig | None = None,
+        delegate_backend: Backend | None = None,
     ) -> None:
         """Initialize the composite backend.
 
         Args:
-            config: Kernel providers, generators, and selection thresholds used before the delegate builds.
-            delegate_backend: Backend that compiles or executes the module after provider selection.
+            config: Kernel providers, generators, and selection thresholds used before the delegate builds. Defaults
+                to :class:`KernelOptimizerBackendConfig` with its built-in attention providers.
+            delegate_backend: Backend that compiles or executes the module after provider selection. Defaults to
+                :class:`TorchInductorJitBackend`.
         """
         super().__init__()
-        self._config = config
-        self._delegate_backend = delegate_backend
+        self._config = config if config is not None else KernelOptimizerBackendConfig()
+        self._delegate_backend = delegate_backend if delegate_backend is not None else TorchInductorJitBackend()
         self._runtime: KernelProviderRuntime | None = None
         self._adopt_delegate_modes()
 

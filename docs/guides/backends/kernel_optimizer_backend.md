@@ -18,20 +18,15 @@ providers without compiling a module, use [`KernelOptimizer` directly](../advanc
 
 ## Quick start
 
-This example evaluates SageAttention for scaled dot-product attention and builds the optimized module with Torch
-Inductor JIT:
+By default, the backend evaluates PyTorch Flash Attention, PyTorch cuDNN Attention, and FlashAttention-4 for scaled
+dot-product attention, then builds the optimized module with Torch Inductor JIT:
 
 ```python
 import torch
 import torch.nn.functional as F
 
 from aitune.torch import Module
-from aitune.torch.backend import (
-    KernelOptimizerBackend,
-    KernelOptimizerBackendConfig,
-    TorchInductorJitBackend,
-)
-from aitune.torch.backend.kernels.kernel_provider import SageAttentionKernelProvider
+from aitune.torch.backend import KernelOptimizerBackend
 from aitune.torch.tune_strategy import OneBackendStrategy
 
 
@@ -40,12 +35,7 @@ class Attention(torch.nn.Module):
         return F.scaled_dot_product_attention(query, key, value)
 
 
-backend = KernelOptimizerBackend(
-    config=KernelOptimizerBackendConfig(
-        kernel_providers=SageAttentionKernelProvider(),
-    ),
-    delegate_backend=TorchInductorJitBackend(),
-)
+backend = KernelOptimizerBackend()
 strategy = OneBackendStrategy(backend)
 model = Module(Attention().eval().cuda(), "attention", strategy=strategy)
 
@@ -58,21 +48,26 @@ model.tune(device=torch.device("cuda"))
 output = model(*sample)
 ```
 
-CUDA is required for profiling, candidate validation, benchmarking, and GPU delegate builds. Optional providers also
-require their runtime packages.
+CUDA is required for profiling, candidate validation, benchmarking, and GPU delegate builds. FlashAttention-4 is
+evaluated when its optional runtime package is installed; an unavailable or unsupported provider does not prevent the
+remaining candidates from being evaluated.
 
 ## Configuration
 
-`KernelOptimizerBackendConfig` accepts static providers, asynchronous generators, or both. At least one provider or
-generator is required.
+`KernelOptimizerBackendConfig` accepts static providers, asynchronous generators, or both. When the configuration is
+omitted, the default static attention providers are used. An explicitly configured backend requires at least one
+provider or generator.
 
 | Option | Default | Description |
 |---|---:|---|
-| `kernel_providers` | `None` | One `KernelProvider` or a list of static providers to evaluate. |
+| `kernel_providers` | PyTorch Flash, PyTorch cuDNN, FlashAttention-4 | One `KernelProvider` or a list of static providers to evaluate. |
 | `kernel_generators` | `None` | One `KernelGenerator` or a list of asynchronous generators to submit. |
 | `provider_min_time_share_percent` | `0.0` | Minimum percentage of profiled CUDA time required before evaluating static providers for a function. |
 | `generator_min_time_share_percent` | `10.0` | Minimum percentage of profiled CUDA time required before submitting generators for a function. |
 | `generation_timeout` | `21600.0` | Maximum time, in seconds, to wait for generated candidates. The default comes from `AITUNE_KERNEL_GENERATION_TIMEOUT`. |
+
+`KernelOptimizerBackend()` uses `TorchInductorJitBackend()` as its default delegate. Pass `config` or
+`delegate_backend` explicitly to customize either part of the composite backend.
 
 The optimizer validates candidate outputs and benchmarks valid candidates against the original PyTorch function. A
 provider enters the plan only when it supports all representative samples, passes correctness validation, and is
