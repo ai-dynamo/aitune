@@ -97,6 +97,53 @@ def test_to_from_dict(simple_sample, strict):
     assert str(metadata) == str(result)
 
 
+def test_flatten_and_unflatten_tensors_preserve_structure():
+    first = torch.ones(2)
+    second = torch.ones(3)
+    value = {"first": first, "nested": ["static", second]}
+    metadata = SampleMetadata.from_inputs(value)
+
+    flattened = metadata.flatten_tensors(value)
+    replacements = (torch.zeros(2), torch.zeros(3))
+    result = metadata.unflatten_tensors(replacements, value)
+
+    assert flattened[0] is first
+    assert flattened[1] is second
+    assert result["nested"][0] == "static"
+    assert result["first"] is replacements[0]
+    assert result["nested"][1] is replacements[1]
+    assert value["first"] is first
+    assert value["nested"][0] == "static"
+    assert value["nested"][1] is second
+
+
+def test_unflatten_tensors_isolates_mutable_non_tensor_branches():
+    value = {"tensor": torch.ones(2), "metadata": {"items": []}}
+    metadata = SampleMetadata.from_inputs(value)
+
+    result = metadata.unflatten_tensors(torch.zeros(2), value)
+    result["metadata"]["items"].append("updated")
+
+    assert value["metadata"] == {"items": []}
+
+
+def test_tensor_free_template_does_not_copy_tensor_subclasses():
+    class NonDeepcopyTensor(torch.Tensor):
+        def __deepcopy__(self, memo):
+            raise AssertionError("tensor must not be deep-copied")
+
+    value = {
+        "tensor": torch.ones(2).as_subclass(NonDeepcopyTensor),
+        "metadata": {"items": []},
+    }
+    metadata = SampleMetadata.from_outputs(value)
+
+    result = metadata.without_tensors(value)
+
+    assert result == {"tensor": None, "metadata": {"items": []}}
+    assert result["metadata"] is not value["metadata"]
+
+
 def test_make_batch():
     # the following tensors should not be modified
     constant_tensor = torch.ones(2, 2)

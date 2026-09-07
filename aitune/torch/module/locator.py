@@ -5,7 +5,7 @@
 import dataclasses
 import itertools
 from collections import UserDict
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from enum import IntEnum
 from functools import cache, cached_property
 from typing import ClassVar
@@ -133,6 +133,10 @@ class Locator:
         """Yield (accessor, ObjectType) tuples for each step in the path."""
         return iter(self._access_path)
 
+    def is_prefix_of(self, other: "Locator") -> bool:
+        """Return whether this path contains ``other``."""
+        return self._access_path == other._access_path[: self.depth]
+
     @cached_property
     def display_path(self) -> str:
         """Format the locator as a Python-like access path."""
@@ -195,9 +199,9 @@ class Locator:
         if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
             setattr(obj, accessor, value)
         elif isinstance(obj, tuple):
-            obj = list(obj)
-            obj[accessor] = value  # type: ignore
-            obj = tuple(obj)
+            items = list(obj)
+            items[accessor] = value  # type: ignore
+            obj = type(obj)(*items) if hasattr(obj, "_fields") else type(obj)(items)
             if i > 0:  # we have to modify parent with changed child reference
                 parent_locator = Locator(self._access_path[:i], self._is_output)
                 return parent_locator.set_value(root, obj)
@@ -206,6 +210,53 @@ class Locator:
         else:
             obj[accessor] = value  # type: ignore
         return root
+
+    @staticmethod
+    def set_values(obj: object, replacements: Iterable[tuple["Locator", object]]) -> object:
+        """Replace several values while rebuilding each immutable tuple only once."""
+        return Locator._set_values_at_depth(obj, tuple(replacements), 0)
+
+    @staticmethod
+    def _set_values_at_depth(
+        current: object,
+        replacements: tuple[tuple["Locator", object], ...],
+        depth: int,
+    ) -> object:
+        """Apply replacements below one container."""
+        for locator, value in replacements:
+            if locator.depth == depth:
+                return value
+
+        children: dict[tuple[int | str, ObjectType], list[tuple[Locator, object]]] = {}
+        for locator, value in replacements:
+            step = locator._access_path[depth]
+            children.setdefault(step, []).append((locator, value))
+
+        tuple_items = list(current) if isinstance(current, tuple) else None
+        target = current if tuple_items is None else tuple_items
+        for (accessor, obj_type), child_replacements in children.items():
+            child = Locator._get_child(target, accessor, obj_type)
+            child = Locator._set_values_at_depth(child, tuple(child_replacements), depth + 1)
+            Locator._set_child(target, accessor, obj_type, child)
+
+        if tuple_items is None:
+            return current
+        return type(current)(*tuple_items) if hasattr(current, "_fields") else type(current)(tuple_items)
+
+    @staticmethod
+    def _get_child(container: object, accessor: int | str, obj_type: ObjectType) -> object:
+        """Read a child using its recorded access kind."""
+        if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
+            return getattr(container, accessor)
+        return container[accessor]  # type: ignore[index]
+
+    @staticmethod
+    def _set_child(container: object, accessor: int | str, obj_type: ObjectType, value: object) -> None:
+        """Update a child using its recorded access kind."""
+        if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
+            setattr(container, accessor, value)
+        else:
+            container[accessor] = value  # type: ignore[index]
 
     @staticmethod
     def _iter_sequence(current: list | tuple):

@@ -226,6 +226,54 @@ class SampleMetadata:
         """Get list of tensor specs."""
         return [ts for _, ts in self._tensor_data]
 
+    def flatten_tensors(self, value: Any) -> tuple[torch.Tensor, ...]:
+        """Read tensors from a value in the stable order recorded by this metadata."""
+        tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
+        for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
+            if not isinstance(tensor, torch.Tensor):
+                raise TypeError(f"Recorded tensor path {locator} resolved to {type(tensor).__name__}, not a tensor.")
+        return tensors
+
+    def unflatten_tensors(
+        self,
+        tensors: Any,
+        template: Any,
+        preserved_values: tuple[tuple[Locator, Any], ...] = (),
+    ) -> Any:
+        """Rebuild a structured value from flat tensors and an isolated template."""
+        if len(self._tensor_data) == 1 and isinstance(tensors, torch.Tensor):
+            tensors = (tensors,)
+        else:
+            tensors = tuple(tensors)
+        if len(tensors) != len(self._tensor_data):
+            raise ValueError(f"Expected {len(self._tensor_data)} tensors, got {len(tensors)}.")
+
+        for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
+            if not isinstance(tensor, torch.Tensor):
+                raise TypeError(f"Recorded tensor path {locator} received {type(tensor).__name__}, not a tensor.")
+
+        tensor_memo = {}
+        for locator, _ in self._tensor_data:
+            if any(alias_locator.is_prefix_of(locator) for alias_locator, _ in preserved_values):
+                continue
+            current_value = locator.get_value(template)
+            if isinstance(current_value, torch.Tensor):
+                tensor_memo[id(current_value)] = current_value
+        result = copy.deepcopy(template, tensor_memo)
+
+        tensor_replacements = (
+            (locator, tensor)
+            for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True)
+            if not any(alias_locator.is_prefix_of(locator) for alias_locator, _ in preserved_values)
+        )
+        return Locator.set_values(result, (*preserved_values, *tensor_replacements))
+
+    def without_tensors(self, value: Any, preserved_values: tuple[Any, ...] = ()) -> Any:
+        """Copy a structure while replacing tensors and explicitly preserved values with ``None``."""
+        memo = {id(tensor): None for tensor in self.flatten_tensors(value)}
+        memo.update({id(preserved): None for preserved in preserved_values})
+        return copy.deepcopy(value, memo)
+
     @staticmethod
     def from_inputs(inputs: dict[str, Any], strict: bool = False, batch_size: int | None = None) -> "SampleMetadata":
         """Create SampleMetadata from inputs keyed by forward parameter name.

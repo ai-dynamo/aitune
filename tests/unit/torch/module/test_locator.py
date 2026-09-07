@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import dataclasses
-from collections import UserDict
+from collections import UserDict, namedtuple
 
 import torch
 
@@ -257,6 +257,26 @@ def test_set_value_nested_list():
     third_locator, _ = results[2]
     new_obj = third_locator.set_value(new_obj, -3)
     assert new_obj == [-1, [-2, -3]]
+
+
+def test_set_values_replaces_multiple_values_below_the_same_tuple():
+    obj = {"values": (1, {"nested": (2, 3)})}
+    replacements = tuple((locator, -value) for locator, value in Locator.find_leaves(obj))
+
+    result = Locator.set_values(obj, replacements)
+
+    assert result == {"values": (-1, {"nested": (-2, -3)})}
+
+
+def test_set_values_preserves_namedtuple_type():
+    Pair = namedtuple("Pair", ("first", "second"))
+    original = Pair(1, 2)
+    replacements = tuple((locator, -value) for locator, value in Locator.find_leaves(original))
+
+    result = Locator.set_values(original, replacements)
+
+    assert result == Pair(-1, -2)
+    assert isinstance(result, Pair)
 
 
 def test_set_value_tuple():
