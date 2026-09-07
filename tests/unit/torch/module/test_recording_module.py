@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit test for recording module."""
 
+import functools
 from unittest.mock import Mock
 
 import pytest
@@ -161,6 +162,33 @@ def test_recording_stores_original_args_and_kwargs(tmp_path):
     args, kwargs = samples[0]
     assert args[0] == []
     assert kwargs["cache"] == []
+
+
+def test_recording_preserves_keyword_call_layout(tmp_path):
+    """Samples must remain valid for wrappers that require keyword-only invocation at runtime."""
+
+    def require_kwargs(forward):
+        @functools.wraps(forward)
+        def wrapper(self, *args, **kwargs):
+            if args:
+                raise TypeError("All arguments must be passed by kwargs only for typed methods")
+            return forward(self, **kwargs)
+
+        return wrapper
+
+    class Model(torch.nn.Module):
+        @require_kwargs
+        def forward(self, x):
+            return x
+
+    recording = RecordingModule(Model(), "test-module", cache_dir_resolver=lambda: tmp_path)
+    recording(x=torch.ones(1))
+
+    sample = recording.samples_for_graph_spec(recording.graph_specs[0])[0]
+    args, kwargs = sample
+    assert args == ()
+    assert set(kwargs) == {"x"}
+    torch.testing.assert_close(recording._module(*args, **kwargs), torch.ones(1))
 
 
 def test_recording_tracks_input_metadata_before_and_after_call(tmp_path):

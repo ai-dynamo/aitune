@@ -210,6 +210,22 @@ def test_private_dynamic_shape_boundary_samples_resize_args_and_kwargs():
     assert max_sample[1]["mask"].shape == torch.Size([2, 12])
 
 
+def test_private_dynamic_shape_boundary_samples_preserve_keyword_call_layout():
+    kwargs = {
+        "x": torch.randn(2, 8),
+        "mask": torch.randn(2, 8),
+    }
+    input_spec = _input_metadata(((), kwargs), batch_size=2)
+    input_spec.update_shapes_seen(
+        _input_metadata(((), {"x": torch.randn(2, 12), "mask": torch.randn(2, 12)}), batch_size=2)
+    )
+
+    samples = _dynamic_shape_boundary_samples(((), kwargs), make_graph_spec(input_spec))
+
+    assert all(args == () for args, _ in samples)
+    assert all(set(sample_kwargs) == {"x", "mask"} for _, sample_kwargs in samples)
+
+
 def test_private_dynamic_shape_boundary_samples_returns_empty_for_static_shapes():
     """Static input specs should not add boundary correctness samples."""
     args = (torch.randn(2, 6),)

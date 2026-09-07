@@ -69,8 +69,7 @@ class TunedModule:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run the call through the tuned module."""
-        forward_inputs = self._forward_signature.normalize(args, kwargs)
-        sample = (forward_inputs.args, forward_inputs.kwargs)
+        sample = (args, kwargs)
         with global_context:
             global_context.set(MODULE_CONTEXT_KEY, self._module_name)
             output = self._backend_func(sample)

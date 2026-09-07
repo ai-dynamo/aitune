@@ -54,10 +54,11 @@ class GraphSpec:
         self.output_spec.update_shapes_seen(outputs_metadata)
 
     def make_batch(self, args: tuple, kwargs: dict[str, Any], batch_size: int) -> tuple[tuple, dict[str, Any]]:
-        """Return a normalized call resized to the specified batch size."""
+        """Return a call resized to the specified batch size while preserving its argument layout."""
+        call_layout = self.forward_signature.capture_call_layout(args, kwargs)
         forward_inputs = self.forward_signature.normalize(args, kwargs)
         forward_inputs.arguments = self.input_spec.make_batch(forward_inputs.arguments, batch_size)
-        return forward_inputs.args, forward_inputs.kwargs
+        return call_layout.restore(forward_inputs.arguments)
 
     def update_max_batch_size(self, sample: tuple[tuple, dict], max_batch_size: int) -> None:
         """Update input metadata with the specified maximum batch size."""
