@@ -366,7 +366,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         return self
 
     def _build_modelopt_torch(
-        self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path
+        self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
     ) -> Path:
         """Build the TensorRT model  ModelOpt torch quantization.
 
@@ -376,7 +376,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (Sequence[Sample]): The data of the model.
+            samples: Recorded samples for the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
 
         """
@@ -386,7 +386,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 torch_quantizer = TorchQuantizer()
                 module = torch_quantizer.quantize(
                     module=module,
-                    sample=data[0],
+                    sample=samples[0],
                     config=self._config.quantization_config,
                 )
 
@@ -399,7 +399,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     opset_version=self._config.opset_version,
                     output_path=onnx_path_quantized,
                 )
-                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
+                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
                 result["onnx_size_bytes"] = onnx_path_quantized.stat().st_size
 
             with annotate("build: Offloading model to cpu device"):
@@ -410,7 +410,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
-                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, samples=samples)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path_quantized,
@@ -434,7 +434,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             raise e
 
     def _build_modelopt_onnx(
-        self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path
+        self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
     ) -> Path:
         """Build the TensorRT model ModelOpt ONNX quantization.
 
@@ -444,7 +444,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (Sequence[Sample]): The data of the model.
+            samples: Recorded samples for the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
@@ -459,7 +459,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     output_path=onnx_path,
                 )
 
-                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
+                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
                 result["onnx_size_bytes"] = onnx_path.stat().st_size
 
             with annotate("build: Offloading model to cpu device"):
@@ -477,7 +477,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     input_onnx_path=onnx_path,
                     output_path=onnx_path_quantized,
                     config=self._config.quantization_config,
-                    samples=data,
+                    samples=samples,
                     graph_spec=graph_spec,
                 )
                 result["onnx_size_bytes"] = onnx_path_quantized.stat().st_size
@@ -487,7 +487,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
-                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, samples=samples)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path_quantized,
@@ -511,7 +511,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             raise e
 
     def _build_modelopt_onnx_autocast(
-        self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path
+        self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
     ) -> Path:
         """Build the TensorRT model.
 
@@ -521,7 +521,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (Sequence[Sample]): The data of the model.
+            samples: Recorded samples for the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
@@ -536,7 +536,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     output_path=onnx_path,
                 )
 
-                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
+                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
                 result["onnx_size_bytes"] = onnx_path.stat().st_size
 
             with annotate("build: Offloading model to cpu device"):
@@ -553,7 +553,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     input_onnx_path=onnx_path,
                     output_path=onnx_path_autocasted,
                     config=self._config.quantization_config,
-                    samples=data,
+                    samples=samples,
                     graph_spec=graph_spec,
                 )
                 result["onnx_size_bytes"] = onnx_path_autocasted.stat().st_size
@@ -563,7 +563,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
-                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, samples=samples)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path_autocasted,
@@ -587,7 +587,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             raise e
 
     def _build_standard(
-        self, module: nn.Module, graph_spec: GraphSpec, data: Sequence[Sample], cache_dir: Path
+        self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
     ) -> Path:
         """Build the TensorRT model.
 
@@ -597,7 +597,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             module (nn.Module): The module to build the TensorRT model for.
             name (str): The name of the model.
             graph_spec (GraphSpec): The graph spec of the model.
-            data (Sequence[Sample]): The data of the model.
+            samples: Recorded samples for the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
@@ -612,7 +612,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     output_path=onnx_path,
                 )
 
-                onnx_exporter.export(module=module, sample=data[0], graph_spec=graph_spec)
+                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
                 result["onnx_size_bytes"] = onnx_path.stat().st_size
 
             with annotate("build: Offloading model to cpu device"):
@@ -623,7 +623,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
-                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, data=data)
+                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, samples=samples)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path,
@@ -1000,7 +1000,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         raise RuntimeError("No TensorRT optimization profile matches the input shapes")
 
-    def get_profiles(self, graph_spec: GraphSpec, data: Sequence[Sample]) -> list[Profile]:
+    def get_profiles(self, graph_spec: GraphSpec, samples: Sequence[Sample]) -> list[Profile]:
         """Create profiles from samples or from graph_spec.
 
         If self._config.profiles is a list, return the user provided profiles.
@@ -1011,7 +1011,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         Args:
             graph_spec: Input graph spec
-            data: List of samples
+            samples: Recorded samples for the model.
+
         Returns:
             List of The Polygraphy Profile objects
         """
@@ -1046,7 +1047,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         logger.info("Creating profiles from samples used for tuning")
 
         # Create a profile
-        for idx, sample in enumerate(data):
+        for idx, sample in enumerate(samples):
             profile = TensorRTProfile()
             args, kwargs = sample
             forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)

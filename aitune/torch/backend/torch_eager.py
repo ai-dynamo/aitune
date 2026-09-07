@@ -65,7 +65,7 @@ class TorchEagerBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _get_required_casting_dtype(self, module: nn.Module, data: Sequence[Sample]) -> torch.dtype | None:
+    def _get_required_casting_dtype(self, module: nn.Module, samples: Sequence[Sample]) -> torch.dtype | None:
         """Get the required casting dtype of the module by running a sample inference with and without autocast.
 
         If the dtype of the output is different with and without autocast, return the dtype of the output without autocast.
@@ -73,7 +73,7 @@ class TorchEagerBackend(Backend):
 
         Args:
             module (nn.Module): The module to get the dtype from.
-            data (Sequence[Sample]): List of sample inputs to run through the module.
+            samples: Recorded samples for the model.
 
         Returns:
             torch.dtype: The required casting dtype. Returns None if no casting is required.
@@ -84,11 +84,11 @@ class TorchEagerBackend(Backend):
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
-                args, kwargs = deepcopy(data[0])
+                args, kwargs = deepcopy(samples[0])
                 autocast_result = self._orig_module(*args, **kwargs)
 
             if isinstance(autocast_result, torch.Tensor):
-                args, kwargs = deepcopy(data[0])
+                args, kwargs = deepcopy(samples[0])
                 orig_result = self._orig_module(*args, **kwargs)
                 if orig_result.dtype != autocast_result.dtype:
                     return orig_result.dtype

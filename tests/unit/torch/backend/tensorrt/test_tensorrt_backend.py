@@ -646,7 +646,7 @@ def test_get_profiles_single_profile():
     update_input_spec(backend._graph_spec, ((torch.randn(2, IN_FEATURES),), {}))
     update_input_spec(backend._graph_spec, ((torch.randn(4, IN_FEATURES),), {}))
 
-    profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=[])
+    profiles = backend.get_profiles(graph_spec=backend._graph_spec, samples=[])
     assert len(profiles) == 1
 
     pr = profiles[0]
@@ -664,7 +664,7 @@ def test_get_profiles_uses_explicit_shape_range():
         "x": (BatchDim("batch", min=1, opt=2, max=8), IN_FEATURES),
     }
 
-    profile = backend.get_profiles(graph_spec=backend._graph_spec, data=[])[0]
+    profile = backend.get_profiles(graph_spec=backend._graph_spec, samples=[])[0]
 
     input_name = format_tensor_name("x", "input")
     assert profile[input_name].min == (1, IN_FEATURES)
@@ -683,7 +683,7 @@ def test_get_profiles_rejects_explicit_shapes_with_user_profiles():
     }
 
     with pytest.raises(AITuneUserInputError, match="cannot be provided together"):
-        backend.get_profiles(graph_spec=graph_spec, data=[])
+        backend.get_profiles(graph_spec=graph_spec, samples=[])
 
 
 def test_get_profiles_uses_backend_safe_compound_names():
@@ -694,7 +694,7 @@ def test_get_profiles_uses_backend_safe_compound_names():
     backend = TensorRTBackend()
     backend._graph_spec = make_graph_spec(nested_input, sample, nested_input(**sample[1]))
 
-    profile = backend.get_profiles(graph_spec=backend._graph_spec, data=[])[0]
+    profile = backend.get_profiles(graph_spec=backend._graph_spec, samples=[])[0]
 
     assert profile[format_tensor_name(("inner", "a"), "input")].min == (1, IN_FEATURES)
 
@@ -741,7 +741,7 @@ def test_get_profiles_multiple_profiles(global_config_max_num_samples_all):
 
     profiles = backend.get_profiles(
         graph_spec=backend._graph_spec,
-        data=[
+        samples=[
             ((torch.randn(1, IN_FEATURES),), {}),
             ((torch.randn(8, IN_FEATURES),), {}),
         ],
@@ -777,7 +777,7 @@ def test_get_profiles_multiple_profiles_with_kwargs(global_config_max_num_sample
     )
     update_input_spec(backend._graph_spec, samples[1], batch_size=8)
 
-    profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=samples)
+    profiles = backend.get_profiles(graph_spec=backend._graph_spec, samples=samples)
     assert len(profiles) == 2
 
     x_name = format_tensor_name("x", "input")
@@ -815,7 +815,7 @@ def test_get_profiles_with_user_provided_profiles():
         ((torch.randn(1, IN_FEATURES),), {}),
         (torch.randn(1, OUT_FEATURES),),
     )
-    profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=[])
+    profiles = backend.get_profiles(graph_spec=backend._graph_spec, samples=[])
     assert len(profiles) == 1
     input_name = format_tensor_name("x", "input")
     assert profiles[0][input_name].min == (1, IN_FEATURES)
@@ -835,7 +835,7 @@ def test_get_profiles_rejects_unknown_user_profile_input():
     )
 
     with pytest.raises(AITuneUserInputError, match="unknown"):
-        backend.get_profiles(graph_spec=graph_spec, data=[])
+        backend.get_profiles(graph_spec=graph_spec, samples=[])
 
 
 def test_get_profiles_rejects_missing_user_profile_input():
@@ -851,7 +851,7 @@ def test_get_profiles_rejects_missing_user_profile_input():
 
     missing_name = format_tensor_name("arg", "input")
     with pytest.raises(AITuneUserInputError, match=missing_name):
-        backend.get_profiles(graph_spec=graph_spec, data=[])
+        backend.get_profiles(graph_spec=graph_spec, samples=[])
 
 
 def test_save_and_load_trt_optimization_profiles(tmp_path, global_config_max_num_samples_all):
@@ -867,7 +867,7 @@ def test_save_and_load_trt_optimization_profiles(tmp_path, global_config_max_num
         ((torch.randn(1, IN_FEATURES),), {"input_tensor": torch.randn(1, IN_FEATURES)}),
         ((torch.randn(8, IN_FEATURES),), {"input_tensor": torch.randn(8, IN_FEATURES)}),
     ]
-    profiles = backend.get_profiles(graph_spec=backend._graph_spec, data=samples)
+    profiles = backend.get_profiles(graph_spec=backend._graph_spec, samples=samples)
     assert len(profiles) == 2
 
     trt_optimization_profiles_path = backend._save_trt_optimization_profiles(profiles, tmp_path)
