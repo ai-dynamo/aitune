@@ -36,6 +36,7 @@ from aitune.torch.backend.tensorrt.torch_output_allocator import TorchOutputAllo
 from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig, TorchQuantizer
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.config import config as global_config
+from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
@@ -272,6 +273,17 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
+    def _timing_cache_path(self) -> Path | None:
+        """Return a timing cache path that is safe for this process."""
+        if self._config.timing_cache is None:
+            return None
+
+        timing_cache = Path(self._config.timing_cache)
+        resolved_path = distributed_output_path(timing_cache)
+        if resolved_path != timing_cache:
+            logger.info("Using rank-isolated TensorRT timing cache: %s", resolved_path)
+        return resolved_path
+
     def _prepare_onnx_model_path(self, cache_dir: Path, suffix: str = "") -> Path:
         """Prepare the ONNX model path.
 
@@ -406,7 +418,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     workspace_size=self._config.workspace_size,
                     optimization_level=self._config.optimization_level,
                     compatibility_level=self._config.compatibility_level,
-                    timing_cache=self._config.timing_cache,
+                    timing_cache=self._timing_cache_path(),
                     profiles=self._trt_optimization_profiles,
                     enable_tf32=self._config.enable_tf32,
                 )
@@ -483,7 +495,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     workspace_size=self._config.workspace_size,
                     optimization_level=self._config.optimization_level,
                     compatibility_level=self._config.compatibility_level,
-                    timing_cache=self._config.timing_cache,
+                    timing_cache=self._timing_cache_path(),
                     profiles=self._trt_optimization_profiles,
                     enable_tf32=self._config.enable_tf32,
                 )
@@ -559,7 +571,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     workspace_size=self._config.workspace_size,
                     optimization_level=self._config.optimization_level,
                     compatibility_level=self._config.compatibility_level,
-                    timing_cache=self._config.timing_cache,
+                    timing_cache=self._timing_cache_path(),
                     profiles=self._trt_optimization_profiles,
                     enable_tf32=self._config.enable_tf32,
                 )
@@ -619,7 +631,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     workspace_size=self._config.workspace_size,
                     optimization_level=self._config.optimization_level,
                     compatibility_level=self._config.compatibility_level,
-                    timing_cache=self._config.timing_cache,
+                    timing_cache=self._timing_cache_path(),
                     profiles=self._trt_optimization_profiles,
                     enable_tf32=self._config.enable_tf32,
                 )

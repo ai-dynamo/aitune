@@ -14,6 +14,7 @@ import torch.nn as nn
 from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
+from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
@@ -166,6 +167,20 @@ class TorchTensorRTJitBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
+    def _compile_settings(self) -> dict[str, Any]:
+        """Copy compile settings and isolate the timing cache by rank."""
+        settings = asdict(self._config.compile_config)
+        timing_cache_path = settings.get("timing_cache_path")
+        if not timing_cache_path:
+            return settings
+
+        timing_cache = Path(timing_cache_path)
+        resolved_path = distributed_output_path(timing_cache)
+        if resolved_path != timing_cache:
+            logger.info("Using rank-isolated Torch-TensorRT timing cache: %s", resolved_path)
+        settings["timing_cache_path"] = resolved_path.as_posix()
+        return settings
+
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Build the model with Torch compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
@@ -189,7 +204,7 @@ class TorchTensorRTJitBackend(Backend):
 
         move_module_to_device(self._orig_module, self._device)
 
-        compile_options = asdict(self._config.compile_config)
+        compile_options = self._compile_settings()
         if self._device.type == "cuda":
             compile_options["device"] = get_cuda_device(self._device)
         else:

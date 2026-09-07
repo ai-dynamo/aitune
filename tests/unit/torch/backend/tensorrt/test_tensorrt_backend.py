@@ -165,6 +165,26 @@ def test_tensorrt_backend_init_with_custom_parameters():
     assert backend._outputs is None
 
 
+def test_tensorrt_timing_cache_path_is_rank_isolated(mocker, tmp_path):
+    timing_cache = tmp_path / "timing.cache"
+    isolated_cache = tmp_path / "timing.rank-2-of-4.cache"
+    resolve = mocker.patch(
+        "aitune.torch.backend.tensorrt.tensorrt_backend.distributed_output_path",
+        return_value=isolated_cache,
+    )
+    backend = TensorRTBackend(TensorRTBackendConfig(timing_cache=timing_cache))
+
+    assert backend._timing_cache_path() == isolated_cache
+    resolve.assert_called_once_with(timing_cache)
+
+
+def test_tensorrt_timing_cache_remains_disabled_by_default(mocker):
+    resolve = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.distributed_output_path")
+
+    assert TensorRTBackend()._timing_cache_path() is None
+    resolve.assert_not_called()
+
+
 @requires_cuda
 def test_tensorrt_backend_build(mock_tensorrt_components, tmp_path):
     """Test the build method."""

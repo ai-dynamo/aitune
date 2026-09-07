@@ -32,6 +32,12 @@ class TorchTensorRTTestConfig:
     device: int = 0
 
 
+@dataclass
+class TorchTensorRTTimingCacheTestConfig:
+    timing_cache_path: str
+    device: int = 0
+
+
 class SimpleModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -184,6 +190,28 @@ def test_torch_tensorrt_aot_description_omits_rank_local_device(mocker):
 
     assert "device=" not in backend.describe()
     assert "workspace_size=1" in backend.describe()
+
+
+def test_torch_tensorrt_timing_cache_path_is_rank_isolated(mocker, tmp_path):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
+    timing_cache = tmp_path / "timing_cache.bin"
+    isolated_cache = tmp_path / "timing_cache.rank-2-of-4.bin"
+    resolve = mocker.patch(
+        "aitune.torch.backend.torch_tensorrt_aot_backend.distributed_output_path",
+        return_value=isolated_cache,
+    )
+    backend = TorchTensorRTAotBackend(
+        TorchTensorRTAotBackendConfig(
+            compile_config=TorchTensorRTTimingCacheTestConfig(timing_cache.as_posix()),
+        )
+    )
+
+    settings = backend._compile_settings()
+
+    assert settings["timing_cache_path"] == isolated_cache.as_posix()
+    resolve.assert_called_once_with(timing_cache)
+    assert backend._config.compile_config.timing_cache_path == timing_cache.as_posix()
 
 
 @requires_cuda

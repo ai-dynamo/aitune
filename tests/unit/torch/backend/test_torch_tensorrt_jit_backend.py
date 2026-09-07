@@ -34,6 +34,12 @@ class TorchTensorRTTestConfig:
     device: int = 0
 
 
+@dataclass
+class TorchTensorRTTimingCacheTestConfig:
+    timing_cache_path: str
+    device: int = 0
+
+
 @pytest.fixture
 def model(torch_device) -> ToyTorchModel:
     return ToyTorchModel().to(torch_device).eval()
@@ -111,6 +117,28 @@ def test_torch_tensorrt_build_auto_dynamic_does_not_mutate_config(mocker, tmp_pa
     assert backend._config.dynamic is None
     assert backend.key() == original_key
     assert compile_mock.call_args.kwargs["dynamic"] is True
+
+
+def test_torch_tensorrt_timing_cache_path_is_rank_isolated(mocker, tmp_path):
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
+    timing_cache = tmp_path / "timing_cache.bin"
+    isolated_cache = tmp_path / "timing_cache.rank-2-of-4.bin"
+    resolve = mocker.patch(
+        "aitune.torch.backend.torch_tensorrt_jit_backend.distributed_output_path",
+        return_value=isolated_cache,
+    )
+    backend = TorchTensorRTJitBackend(
+        TorchTensorRTJitBackendConfig(
+            compile_config=TorchTensorRTTimingCacheTestConfig(timing_cache.as_posix()),
+        )
+    )
+
+    settings = backend._compile_settings()
+
+    assert settings["timing_cache_path"] == isolated_cache.as_posix()
+    resolve.assert_called_once_with(timing_cache)
+    assert backend._config.compile_config.timing_cache_path == timing_cache.as_posix()
 
 
 def test_torch_tensorrt_warmup_uses_autocast_inference(mocker, tmp_path, mock_torch_tensorrt_logging):

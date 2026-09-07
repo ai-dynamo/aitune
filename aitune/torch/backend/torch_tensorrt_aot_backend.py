@@ -20,6 +20,7 @@ from aitune.torch.backend.backend import (
 )
 from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
 from aitune.torch.checkpoint.artifact import ArtifactPath
+from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.torch import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
@@ -165,6 +166,20 @@ class TorchTensorRTAotBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
+    def _compile_settings(self) -> dict[str, Any]:
+        """Copy compile settings and isolate the timing cache by rank."""
+        settings = asdict(self._config.compile_config)
+        timing_cache_path = settings.get("timing_cache_path")
+        if not timing_cache_path:
+            return settings
+
+        timing_cache = Path(timing_cache_path)
+        resolved_path = distributed_output_path(timing_cache)
+        if resolved_path != timing_cache:
+            logger.info("Using rank-isolated Torch-TensorRT timing cache: %s", resolved_path)
+        settings["timing_cache_path"] = resolved_path.as_posix()
+        return settings
+
     def _build(
         self,
         module: nn.Module,
@@ -247,7 +262,7 @@ class TorchTensorRTAotBackend(Backend):
                     exported,
                     inputs=input_signature,
                     kwarg_inputs=kwarg_inputs,
-                    **asdict(self._config.compile_config),
+                    **self._compile_settings(),
                 )
 
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
