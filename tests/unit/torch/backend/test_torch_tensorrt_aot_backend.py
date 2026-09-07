@@ -7,6 +7,7 @@ from typing import cast
 import pytest
 import torch
 import torch.nn as nn
+from torch._export.verifier import SpecViolationError
 
 from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.torch_tensorrt_aot_backend import (
@@ -89,6 +90,7 @@ def _fake_torch_tensorrt_save(model, path, **kwargs):
 
 def test_save_compiled_model_without_retracing(mocker, tmp_path: Path):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     module = mocker.Mock(spec=nn.Module)
 
     _save_compiled_model(module, tmp_path / "model.pt", sample=((), {}), dynamic_shapes=None, pickle_protocol=5)
@@ -103,7 +105,8 @@ def test_save_compiled_model_without_retracing(mocker, tmp_path: Path):
 
 def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path: Path):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
-    mock_torch_tensorrt.save.side_effect = [RuntimeError("direct save failed"), None]
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.save.side_effect = [SpecViolationError("direct save failed"), None]
     module = mocker.Mock(spec=nn.Module)
     sample = ((mocker.sentinel.input,), {"output_hidden_states": True})
     dynamic_shapes = {"x": {0: mocker.sentinel.batch}}
@@ -129,12 +132,26 @@ def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path
     ]
 
 
+def test_save_compiled_model_does_not_retrace_after_oserror(mocker, tmp_path: Path):
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.save.side_effect = OSError("disk full")
+    module = mocker.Mock(spec=nn.Module)
+
+    with pytest.raises(OSError, match="disk full"):
+        _save_compiled_model(module, tmp_path / "model.pt", sample=((), {}), dynamic_shapes=None, pickle_protocol=5)
+
+    mock_torch_tensorrt.save.assert_called_once()
+
+
 @pytest.fixture
 def mock_torch_tensorrt(mocker, model: SimpleModel):
     mock_torch_tensorrt = mocker.Mock()
     mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
     mock_torch_tensorrt.save = mocker.Mock(side_effect=_fake_torch_tensorrt_save)
+    mock_torch_tensorrt.load.return_value.module.return_value = model
 
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
     return mock_torch_tensorrt
@@ -246,6 +263,8 @@ def test_mock_build(
         name=format_tensor_name(locator.path, "input"),
     )
     mock_torch_tensorrt.dynamo.compile.assert_called_once()
+    mock_torch_tensorrt.load.assert_called_once_with((tmp_path / "exported_model.pt2").as_posix())
+    assert active_backend._opt_module is model
     mock_torch_tensorrt.logging.warnings.assert_called_once_with()
     warning_context = mock_torch_tensorrt.logging.warnings.return_value
     warning_context.__enter__.assert_called_once_with()
@@ -285,8 +304,10 @@ def test_mock_build_exports_bounded_dynamic_shapes(
         graph_spec.dynamic_shapes = dynamic_shapes
     mock_torch_tensorrt = mocker.Mock()
     mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
     mock_torch_tensorrt.save = mocker.Mock(side_effect=_fake_torch_tensorrt_save)
+    mock_torch_tensorrt.load.return_value.module.return_value = model
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
@@ -324,8 +345,10 @@ def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
     graph_spec = _graph_spec_from_samples(model, sample_data)
     mock_torch_tensorrt = mocker.Mock()
     mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile.return_value = model
     mock_torch_tensorrt.save.side_effect = _fake_torch_tensorrt_save
+    mock_torch_tensorrt.load.return_value.module.return_value = model
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt", mock_torch_tensorrt)
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
@@ -363,6 +386,12 @@ def test_mock_infer(
     mocker.patch(
         "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.dynamo.compile",
         return_value=model,
+    )
+    loaded = mocker.Mock()
+    loaded.module.return_value = model
+    mocker.patch(
+        "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.load",
+        return_value=loaded,
     )
 
     backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)

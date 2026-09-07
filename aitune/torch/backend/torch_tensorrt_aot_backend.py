@@ -9,6 +9,7 @@ from typing import Any, ClassVar, cast
 
 import torch
 import torch.nn as nn
+from torch._export.verifier import SpecViolationError
 
 from aitune.torch.backend.backend import (
     Backend,
@@ -18,7 +19,7 @@ from aitune.torch.backend.backend import (
     BuildMode,
     ExecutionMode,
 )
-from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
+from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_errors, torch_tensorrt_warnings
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.torch import TorchExporter
@@ -276,14 +277,18 @@ class TorchTensorRTAotBackend(Backend):
             )
             result["compiled_model_size_bytes"] = self._exported_model_artifact.path.stat().st_size
 
-        logger.info("Module has been compiled and saved with TensorRT.")
-        self._opt_module = trt_model_compiled
+        # Validate the same persisted artifact that production will load.
+        del trt_model_compiled
+        self._activate()
+        logger.info("Module has been compiled, saved, and reloaded with TensorRT.")
         return self
 
     def _activate(self):
         """Load compiled module."""
         exported_model_artifact = cast(ArtifactPath, self._exported_model_artifact)
-        self._opt_module = torch_tensorrt.load(exported_model_artifact.path.as_posix()).module().to(self._device)
+        with torch_tensorrt_errors(torch_tensorrt):
+            loaded = torch_tensorrt.load(exported_model_artifact.path.as_posix())
+            self._opt_module = loaded.module().to(self._device)
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with TensorRT engine.
@@ -347,28 +352,30 @@ def _save_compiled_model(
     dynamic_shapes: dict[str, Any] | None,
     pickle_protocol: int,
 ) -> None:
-    """Save a compiled graph, retrying with re-export when direct serialization fails."""
+    """Save a compiled graph and retry a known export error with retracing."""
     try:
-        torch_tensorrt.save(
-            module,
-            path.as_posix(),
-            retrace=False,
-            pickle_protocol=pickle_protocol,
-        )
+        with torch_tensorrt_errors(torch_tensorrt):
+            torch_tensorrt.save(
+                module,
+                path.as_posix(),
+                retrace=False,
+                pickle_protocol=pickle_protocol,
+            )
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
-    except Exception:
+    except SpecViolationError:
         logger.warning(
             "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
             exc_info=True,
         )
         args, kwargs = sample
-        torch_tensorrt.save(
-            module,
-            path.as_posix(),
-            retrace=True,
-            arg_inputs=args,
-            kwarg_inputs=kwargs or None,
-            dynamic_shapes=dynamic_shapes,
-            pickle_protocol=pickle_protocol,
-        )
+        with torch_tensorrt_errors(torch_tensorrt):
+            torch_tensorrt.save(
+                module,
+                path.as_posix(),
+                retrace=True,
+                arg_inputs=args,
+                kwarg_inputs=kwargs or None,
+                dynamic_shapes=dynamic_shapes,
+                pickle_protocol=pickle_protocol,
+            )
         logger.info("Saved the Torch-TensorRT artifact using the retracing fallback.")
