@@ -56,6 +56,31 @@ class TuneStrategyTestCorrectness(TuneStrategy):
         return {}
 
 
+def _mock_backend_validation_context(mocker, tmp_path):
+    backend = mocker.MagicMock()
+    backend.describe.return_value = "mock_backend"
+    backend.key.return_value = "mock_backend_key"
+    backend.__deepcopy__ = lambda _, memo=None: backend
+    backend.build.return_value = backend
+    backend.is_active = False
+    module = mocker.MagicMock()
+
+    def print_sink(message, *args):
+        print(message % args if args else message)
+
+    strategy = TuneStrategyTestCorrectness(sink=print_sink)
+    strategy.backend_results = []
+    sample = ((torch.randn(2, 8),), {})
+    samples = make_sample_store([sample], tmp_path)
+    graph_spec = GraphSpec(
+        name="test_model",
+        input_spec=_input_metadata(sample, batch_size=2),
+        output_spec=SampleMetadata.from_outputs(torch.randn(2, 8), batch_size=2),
+        forward_signature=FORWARD_SIGNATURE,
+    )
+    return backend, module, strategy, samples, graph_spec
+
+
 def test_correctness_extension_torch_eager_backend(torch_device, tmp_path):
     """Test correctness extension with torch eager backend."""
     module = ToyTorchModel()
@@ -309,26 +334,11 @@ def test_correctness_extension_torch_eager_backend_with_wrong_shapes(torch_devic
         backend.deactivate()
 
 
-def test_correctness_failure_is_appended_to_build_log(mocker, torch_device, tmp_path):
-    """Validation failures after build should be written to the backend build log."""
-    backend = mocker.MagicMock()
-    backend.describe.return_value = "mock_backend"
-    backend.key.return_value = "mock_backend_key"
-    backend.__deepcopy__ = lambda _, memo=None: backend
-    backend.build.return_value = backend
-    backend.is_active = False
-    module = mocker.MagicMock()
-    strategy = TuneStrategyTestCorrectness()
-    strategy.backend_results = []
-    mocker.patch.object(strategy, "check_correctness", side_effect=RuntimeError("correctness failed"))
-    sample = ((torch.randn(2, 8),), {})
-    samples = make_sample_store([sample], tmp_path)
-    graph_spec = GraphSpec(
-        name="test_model",
-        input_spec=_input_metadata(sample, batch_size=2),
-        output_spec=SampleMetadata.from_outputs(torch.randn(2, 8), batch_size=2),
-        forward_signature=FORWARD_SIGNATURE,
-    )
+def test_correctness_failure_is_written_to_console_and_build_log(mocker, capfd, caplog, torch_device, tmp_path):
+    """Validation failures should be written to both console output and the backend build log."""
+    mocker.patch("aitune.utils.logging.CONSOLE_OUTPUT_ENABLE", True)
+    backend, module, strategy, samples, graph_spec = _mock_backend_validation_context(mocker, tmp_path)
+    mocker.patch.object(strategy, "_check_correctness", side_effect=RuntimeError("correctness failed"))
 
     result = strategy._build_and_validate_backend(
         backend,
@@ -341,7 +351,75 @@ def test_correctness_failure_is_appended_to_build_log(mocker, torch_device, tmp_
     )
 
     assert result is None
+    console_text = "".join(capfd.readouterr())
     log_text = (tmp_path / "mock_backend_key" / "build.log").read_text(encoding="utf-8")
-    assert "Backend build or validation failed" in log_text
-    assert "Exception type: RuntimeError" in log_text
-    assert "Exception details: correctness failed" in log_text
+    assert "backend built" in console_text
+    assert "backend validation failed" in console_text
+    for expected in (
+        "Failed to validate backend(",
+        "correctness failed",
+        "Traceback (most recent call last):",
+        "RuntimeError: correctness failed",
+    ):
+        assert expected in caplog.text
+        assert expected in log_text
+
+
+def test_build_failure_is_not_logged_again_by_strategy(mocker, capfd, torch_device, tmp_path):
+    """Build diagnostics captured from a backend should not be repeated by the strategy."""
+    mocker.patch("aitune.utils.logging.CONSOLE_OUTPUT_ENABLE", True)
+    backend, module, strategy, samples, graph_spec = _mock_backend_validation_context(mocker, tmp_path)
+
+    def fail_build(*args, **kwargs):
+        print("compiler build error")
+        raise RuntimeError("build failed")
+
+    backend.build.side_effect = fail_build
+
+    result = strategy._build_and_validate_backend(
+        backend,
+        module,
+        "test_model",
+        graph_spec,
+        samples,
+        torch_device,
+        tmp_path,
+    )
+
+    assert result is None
+    console_text = "".join(capfd.readouterr())
+    log_text = (tmp_path / "mock_backend_key" / "build.log").read_text(encoding="utf-8")
+    assert console_text.count("compiler build error") == 1
+    assert log_text.count("compiler build error") == 1
+    assert "backend build failed" in console_text
+    assert "Failed to validate backend" not in console_text
+    assert "Failed to validate backend" not in log_text
+
+
+def test_status_remains_on_console_when_backend_output_is_disabled(mocker, capfd, torch_device, tmp_path):
+    """Progress stays visible while backend and correctness details are written only to the build log."""
+    mocker.patch("aitune.utils.logging.CONSOLE_OUTPUT_ENABLE", False)
+    backend, module, strategy, samples, graph_spec = _mock_backend_validation_context(mocker, tmp_path)
+    backend.build.side_effect = lambda *args, **kwargs: (print("backend details"), backend)[1]
+    backend.is_active = True
+    mocker.patch.object(strategy, "check_correctness", side_effect=lambda *args: print("correctness details"))
+
+    result = strategy._build_and_validate_backend(
+        backend,
+        module,
+        "test_model",
+        graph_spec,
+        samples,
+        torch_device,
+        tmp_path,
+    )
+
+    assert result is backend
+    console_text = "".join(capfd.readouterr())
+    log_text = (tmp_path / "mock_backend_key" / "build.log").read_text(encoding="utf-8")
+    assert "backend built" in console_text
+    assert "backend validated" in console_text
+    assert "backend details" not in console_text
+    assert "correctness details" not in console_text
+    assert "backend details" in log_text
+    assert "correctness details" in log_text

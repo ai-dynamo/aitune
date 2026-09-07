@@ -7,6 +7,7 @@ import torch.nn.functional as F  # noqa: N812
 from torch.nn.attention import SDPBackend
 
 from aitune.torch.backend.kernels.kernel_provider import KernelProviderState, TorchSDPAKernelProvider
+from tests.utilities.helpers import requires_cuda
 
 
 def test_torch_sdpa_provider_prepare_and_serialization_round_trip():
@@ -27,12 +28,13 @@ def test_torch_sdpa_provider_prepare_and_serialization_round_trip():
     assert restored.backend is SDPBackend.MATH
 
 
-def test_torch_sdpa_provider_is_callable_on_cpu():
-    query = torch.randn(2, 4, 8, 16)
-    key = torch.randn(2, 4, 8, 16)
-    value = torch.randn(2, 4, 8, 16)
+@requires_cuda
+def test_torch_sdpa_flash_provider_is_callable(torch_device):
+    query = torch.randn(2, 4, 8, 16, dtype=torch.float16, device=torch_device)
+    key = torch.randn(2, 4, 8, 16, dtype=torch.float16, device=torch_device)
+    value = torch.randn(2, 4, 8, 16, dtype=torch.float16, device=torch_device)
     sample = ((query, key, value), {})
-    provider = TorchSDPAKernelProvider(SDPBackend.MATH)
+    provider = TorchSDPAKernelProvider(SDPBackend.FLASH_ATTENTION)
 
     assert provider.prepare([sample]) is True
 

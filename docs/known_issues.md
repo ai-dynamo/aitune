@@ -25,8 +25,14 @@ title: "Known Issues and Limitations"
 - **Distributed checkpoints.** Multi-GPU tuning produces rank-local artifacts. Loading with a different world size or
   rank topology is not supported, and AITune does not currently package distributed artifacts into one portable
   checkpoint.
+- **Kernel providers with strict Torch Export on PyTorch 2.9.** PyTorch 2.9 strict export cannot capture the forward
+  hooks that temporarily replace `torch.nn.functional` kernels and can fail with a guard-export assertion. This is a
+  generic limitation affecting every kernel provider, including SageAttention, when `KernelOptimizerBackend` uses a
+  `TorchInductorAotBackend` delegate. Use PyTorch 2.10 or later, or on PyTorch 2.9 choose a delegate that does not rely
+  on strict Torch Export, such as a JIT delegate.
 - **SageAttention V1 with a Torch-TensorRT AOT delegate.** The SageAttention package on PyPI provides a Triton-based V1
   implementation that the Torch-TensorRT AOT export and serialization path cannot reliably package. When using
-  `KernelOptimizerBackend` with `SageAttentionKernelProvider`, use a Torch Inductor JIT or AOT delegate, or use a
-  Torch-TensorRT JIT delegate when partial compilation with PyTorch fallback is acceptable. See the
+  `KernelOptimizerBackend` with `SageAttentionKernelProvider`, use a Torch Inductor JIT delegate, a Torch Inductor AOT
+  delegate with PyTorch 2.10 or later, or a Torch-TensorRT JIT delegate when partial compilation with PyTorch fallback
+  is acceptable. See the
   [Kernel Optimizer Backend Guide](guides/backends/kernel_optimizer_backend.md#sageattention-v1-and-torch-tensorrt).

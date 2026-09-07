@@ -10,6 +10,7 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
+from torch.nn.attention import SDPBackend
 
 from aitune.torch.backend.backend import Backend, BackendState, BuildMode, ExecutionMode
 from aitune.torch.backend.kernel_optimizer_backend import (
@@ -18,10 +19,13 @@ from aitune.torch.backend.kernel_optimizer_backend import (
 )
 from aitune.torch.backend.kernels.kernel_optimization_plan import KernelOptimizationPlan
 from aitune.torch.backend.kernels.kernel_provider import (
+    FlashAttention4KernelProvider,
     KernelGenerationResult,
     KernelGenerator,
     KernelProvider,
+    TorchSDPAKernelProvider,
 )
+from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from tests.utilities.helpers import make_sample_store
 
 
@@ -203,19 +207,52 @@ def _build(backend, tmp_path):
     return module, sample, samples
 
 
-def test_config_requires_and_normalizes_kernel_sources():
+def test_config_defaults_to_attention_providers():
+    first_config = KernelOptimizerBackendConfig()
+    second_config = KernelOptimizerBackendConfig()
+    first_providers = first_config.kernel_providers
+    second_providers = second_config.kernel_providers
+
+    assert isinstance(first_providers, list)
+    assert isinstance(second_providers, list)
+    assert [type(provider) for provider in first_providers] == [
+        TorchSDPAKernelProvider,
+        TorchSDPAKernelProvider,
+        FlashAttention4KernelProvider,
+    ]
+    flash_provider, cudnn_provider, _ = first_providers
+    assert isinstance(flash_provider, TorchSDPAKernelProvider)
+    assert isinstance(cudnn_provider, TorchSDPAKernelProvider)
+    assert flash_provider.backend is SDPBackend.FLASH_ATTENTION
+    assert cudnn_provider.backend is SDPBackend.CUDNN_ATTENTION
+    assert first_providers is not second_providers
+    provider_pairs = zip(first_providers, second_providers, strict=True)
+    assert all(first is not second for first, second in provider_pairs)
+
+
+def test_config_requires_and_normalizes_explicit_kernel_sources():
     with pytest.raises(ValueError, match="At least one kernel provider or generator must be provided"):
-        KernelOptimizerBackendConfig()
+        KernelOptimizerBackendConfig(kernel_providers=None)
 
     provider = _ReluProvider()
     provider_config = KernelOptimizerBackendConfig(kernel_providers=provider)
     generator = _ReluGenerator()
-    generator_config = KernelOptimizerBackendConfig(kernel_generators=generator)
+    generator_config = KernelOptimizerBackendConfig(kernel_providers=None, kernel_generators=generator)
 
     assert provider_config.kernel_providers == [provider]
     assert provider_config.kernel_generators == []
     assert generator_config.kernel_providers == []
     assert generator_config.kernel_generators == [generator]
+
+
+def test_backend_defaults_to_default_config_and_torch_inductor_jit_delegate():
+    first_backend = KernelOptimizerBackend()
+    second_backend = KernelOptimizerBackend()
+
+    assert isinstance(first_backend._config, KernelOptimizerBackendConfig)
+    assert isinstance(first_backend._delegate_backend, TorchInductorJitBackend)
+    assert first_backend._config is not second_backend._config
+    assert first_backend._delegate_backend is not second_backend._delegate_backend
 
 
 @pytest.mark.parametrize(

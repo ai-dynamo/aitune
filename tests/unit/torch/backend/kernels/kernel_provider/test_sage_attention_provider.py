@@ -13,6 +13,8 @@ import aitune.torch.backend.kernels.kernel_provider.sage_attention_provider as s
 from aitune.torch.backend.kernels.kernel_optimization_plan import KernelOptimizationPlan
 from aitune.torch.backend.kernels.kernel_provider import KernelProviderState, SageAttentionKernelProvider
 
+TORCH_MAJOR_MINOR = tuple(int(component) for component in torch.__version__.split(".")[:2])
+
 
 class _FakeSageAttentionBackend:
     def __init__(self):
@@ -164,7 +166,21 @@ def test_load_runtime_dependencies_caches_backend_before_inference(monkeypatch):
     assert imports == ["sageattention"]
 
 
-def test_runtime_loads_sageattention_before_strict_export(monkeypatch):
+@pytest.mark.parametrize(
+    "strict",
+    (
+        pytest.param(False, id="non-strict"),
+        pytest.param(
+            True,
+            id="strict",
+            marks=pytest.mark.skipif(
+                TORCH_MAJOR_MINOR == (2, 9),
+                reason="PyTorch 2.9 strict export cannot capture hooks that patch torch.nn.functional",
+            ),
+        ),
+    ),
+)
+def test_runtime_loads_sageattention_before_export(monkeypatch, strict):
     class AttentionModule(torch.nn.Module):
         def forward(self, query, key, value):
             return F.scaled_dot_product_attention(query, key, value)
@@ -190,7 +206,7 @@ def test_runtime_loads_sageattention_before_strict_export(monkeypatch):
 
     with plan.apply(module):
         imports_before_export = list(imports)
-        exported = torch.export.export(module, (query, query, query), strict=True)
+        exported = torch.export.export(module, (query, query, query), strict=strict)
 
     assert imports_before_export == ["sageattention"]
     assert imports == imports_before_export
