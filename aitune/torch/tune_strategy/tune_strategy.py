@@ -114,6 +114,19 @@ class TuneStrategy(ABC):
         Raises:
             CorrectnessCheckError: if the backend fails any check.
         """
+        try:
+            self._check_correctness(backend, name, graph_spec, samples)
+        except Exception as e:
+            self._logger.error(
+                "Failed to validate backend(%s): %s",
+                backend.__class__.__name__,
+                e,
+                exc_info=True,
+            )
+            raise
+
+    def _check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, samples: SampleStore) -> None:
+        """Run correctness checks for a built backend."""
         if not self._enable_correctness_check:
             self._logger.debug(
                 "Correctness check is disabled for %s and graph spec %s",
@@ -196,6 +209,7 @@ class TuneStrategy(ABC):
 
         coordinator.verify_equal(description, "backend candidate")
         local_error: Exception | None = None
+        failure_phase: str | None = None
         built_backend = backend
 
         with Timer(sink=self._sink, depth=2):
@@ -213,18 +227,25 @@ class TuneStrategy(ABC):
                             backend_cache_dir,
                             log_file=log_file,
                         )
-                log("✅ backend built", depth=2, sink=self._sink)
-                self.check_correctness(built_backend, name, graph_spec, samples)
-                log("✅ backend validated", depth=2, sink=self._sink)
             except Exception as e:
                 local_error = e
+                failure_phase = "build"
+            else:
+                log("✅ backend built", depth=2, sink=self._sink)
+                try:
+                    with control_output(log_file=log_file):
+                        self.check_correctness(built_backend, name, graph_spec, samples)
+                except Exception as e:
+                    local_error = e
+                    failure_phase = "validation"
+                else:
+                    log("✅ backend validated", depth=2, sink=self._sink)
 
             self.backend_results.append({"backend": description, "success": local_error is None})
             if local_error is None:
                 return built_backend
 
-            log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
-            log_to_file(log_file, "Backend build or validation failed", exception=local_error)
+            log("❌ backend %s failed (log file: %s)", failure_phase, log_file, depth=2, sink=self._sink)
             if built_backend.is_active:
                 built_backend.deactivate()
             # A failed backend may leave an ordinarily placed module on CPU.
