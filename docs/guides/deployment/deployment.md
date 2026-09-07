@@ -78,6 +78,9 @@ Install the Dynamo extra:
 uv pip install "aitune[dynamo]"
 ```
 
+The `"audio"` modality requires NVIDIA Dynamo 1.1 or later and serves text-to-speech requests through
+`/v1/audio/speech`. Automatic speech recognition is not currently exposed by this worker API.
+
 For local development without etcd/NATS, set `DYN_DISCOVERY_BACKEND=file` before starting any Dynamo process.
 
 ### Quick Start — Embedding Model
@@ -122,7 +125,7 @@ import aitune.dynamo as dyn
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `type` | `str` | required | Modality: `"embedding"`, `"image"`, or `"video"` |
+| `type` | `str` | required | Modality: `"embedding"`, `"image"`, `"video"`, or `"audio"` (TTS) |
 | `model_path` | `str` | required | HuggingFace model ID or local path |
 | `mapping` | `Callable \| None` | `None` | Adapter `fn(request) -> dict` unpacked as `**kwargs` into the user function. Required when passing an `nn.Module`. |
 | `namespace` | `str` | `"aitune"` | Dynamo service namespace |
@@ -131,12 +134,14 @@ import aitune.dynamo as dyn
 | `enable_nats` | `bool` | `False` | Enable NATS JetStream for KV-cache events |
 | `model_name` | `str \| None` | `None` | Name advertised to the frontend. Defaults to `model_path`. |
 
-#### `dynamo_worker(model_or_fn, config)`
+#### `dynamo_worker(model_or_fn, config, *, setup=None, warmup=None)`
 
 Functional API. Validates config, starts the Dynamo runtime, and blocks until shutdown.
 
 - **`model_or_fn`**: any callable, or a `torch.nn.Module` (requires `config.mapping`)
 - **`config`**: `DynamoWorkerConfig`
+- **`setup`**: optional rank-local initialization callback
+- **`warmup`**: optional warmup callback run only after setup succeeds on every rank
 
 #### `DynamoWorker` (class-based API)
 
@@ -161,16 +166,35 @@ MyEmbeddingWorker().run()
 ```
 
 Override `on_ready(runtime, endpoint)` for post-startup work such as custom `register_model` calls.
+Override `warmup()` to run model warmup after `setup()` succeeds on every rank and before endpoint registration.
+
+### Multi-GPU Workers
+
+Use the same `DynamoWorker` API for local and multi-GPU models. Initialize the application-owned process group and
+construct the rank-local model before calling `run()` or `dynamo_worker()` on every rank. AITune starts the Dynamo
+endpoint only on rank 0, serializes and broadcasts incoming requests, executes the request on every rank, and returns
+only rank 0's response.
+
+For rank-local initialization that may fail, pass it through `setup=` and put any collective model warmup in
+`warmup=`. AITune exchanges setup failures across the process group before allowing any rank to start warmup or
+register the endpoint.
+
+The worker does not initialize or destroy the process group and does not add inference barriers or CUDA
+synchronization. The application remains responsible for device placement, model sharding or context parallelism,
+and process-group teardown after the worker returns. An initialized multi-rank process group represents one collective
+model worker. Deploy independent model replicas as separate worker groups or pods.
 
 ### Modality Types
 
 | `type` | Request field | Expected return type | Example |
 |---|---|---|---|
 | `"embedding"` | `request.input` (str or list[str]) | `np.ndarray` or `torch.Tensor` of shape `(n, dim)` | E5Large, BGE |
-| `"image"` | `request.prompt` (str) | `bytes` (PNG/JPEG) or base64 str | FLUX, Stable Diffusion |
-| `"video"` | `request.prompt` (str) | video bytes | — |
+| `"image"` | `request.prompt` (str) | PNG or JPEG `bytes` | FLUX, Stable Diffusion |
+| `"video"` | `request.prompt` (str) | MP4 bytes | — |
+| `"audio"` | `request.input` (str) | WAV bytes | Qwen3-TTS |
 
-If your function returns a plain `dict`, it is forwarded to the runtime as-is (no auto-packing).
+Audio bytes are automatically packed as WAV output. To serve another audio codec, return a fully formed Dynamo response
+`dict`. Plain dictionaries are forwarded to the runtime as-is for every modality.
 
 ### Serving with `run_dynamo.sh`
 

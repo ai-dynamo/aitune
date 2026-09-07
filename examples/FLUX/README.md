@@ -142,7 +142,8 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 ./run_dynamo.sh
 
 `run_dynamo.sh` starts the Dynamo frontend and one backend rank per visible GPU, waits for the model endpoint, sends one
 OpenAI-compatible image request, saves the response to `output.png`, and shuts everything down. Rank 0 owns the Dynamo
-endpoint and broadcasts each request to the follower ranks so all GPUs participate.
+endpoint. AITune's `DynamoWorker` detects the initialized process group and coordinates each request across the
+follower ranks so all GPUs participate.
 
 Use the same visible GPU count for tuning and serving. The script is a functional deployment example, not a permanent
 server. It processes one request at a time, matching the batch-size-1 profiles produced during tuning.

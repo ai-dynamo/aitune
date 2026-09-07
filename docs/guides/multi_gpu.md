@@ -106,5 +106,16 @@ forwards; the application and model continue to own inference collectives.
 
 Distributed checkpoint packaging is not yet part of this integration. Live-tuned artifacts remain rank-local.
 
+## Dynamo serving
+
+`aitune.dynamo.DynamoWorker` uses the same application-owned process group as the model. Its default automatic mode
+starts one Dynamo endpoint on rank 0 and turns the remaining ranks into collective followers. Rank 0 serializes and
+broadcasts each request, all ranks execute it, and only rank 0 returns a response. This is suitable for tensor- and
+context-parallel models that require every rank to enter inference in the same order.
+
+AITune coordinates worker stop but leaves process-group destruction to the application after the worker returns. It
+does not impose inference barriers, CUDA synchronization, or forced process termination. An initialized multi-rank
+process group represents one collective model worker; deploy independent replicas as separate worker groups or pods.
+
 For complete applications, see the [LLM example](../../examples/LLM/README.md) for Transformers native tensor
 parallelism and the [Flux example](../../examples/FLUX/README.md) for Diffusers context parallelism.
