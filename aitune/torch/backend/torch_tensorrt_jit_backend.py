@@ -199,7 +199,7 @@ class TorchTensorRTJitBackend(Backend):
 
     def _compile(self):
         """Compile module with Torch compile."""
-        logger.info("Start compiling torch module.")
+        logger.info("Start compiling torch module with torch.compile(backend='torch_tensorrt').")
         torch._dynamo.reset()
 
         move_module_to_device(self._orig_module, self._device)

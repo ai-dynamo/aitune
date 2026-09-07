@@ -201,7 +201,7 @@ class TorchTensorRTAotBackend(Backend):
         Workaround pending a ``dynamic_shapes`` passthrough on ``torch_tensorrt.compile``;
         revert to ``torch_tensorrt.compile(...)`` once that lands upstream.
         """
-        logger.info("Start compiling torch module with TensorRT.")
+        logger.info("Start compiling torch module with Torch-TensorRT using torch_tensorrt.dynamo.compile.")
 
         model = module.eval()
         move_module_to_device(model, self._device)
