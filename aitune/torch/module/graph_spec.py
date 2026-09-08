@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Contains GraphSpec which represents a graph specification."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicShapes, ShapeDefinition
-from aitune.torch.module.forward_contract import ForwardContract, InputMutation
+from aitune.torch.module.forward_contract import ForwardContract, InputMutation, TensorMutationPolicy
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -70,6 +70,22 @@ class GraphSpec:
             format_tensor_name(mutation.locator.path, "state") for mutation in self.extra_tensor_mutations()
         )
         return user_names + state_names
+
+    def restore_outputs(
+        self,
+        flat_outputs: Any,
+        arguments: dict[str, Any],
+        tensor_mutation_policies: Mapping[int, TensorMutationPolicy] | None = None,
+    ) -> Any:
+        """Rebuild module outputs and apply recorded input changes."""
+        if self.forward_contract is None:
+            raise RuntimeError("Graph specification has no recorded forward contract.")
+        return self.forward_contract.restore_outputs(
+            flat_outputs,
+            arguments,
+            self.output_spec,
+            tensor_mutation_policies,
+        )
 
     def make_batch(self, args: tuple, kwargs: dict[str, Any], batch_size: int) -> tuple[tuple, dict[str, Any]]:
         """Return a call resized to the specified batch size while preserving its argument layout."""

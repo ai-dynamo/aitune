@@ -97,10 +97,14 @@ def test_adapter_appends_mutated_tensor_state_to_graph_outputs():
     )
     adapter = TensorExportAdapter(module, sample, graph_spec)
 
-    result, updated_state = adapter(x, state)
+    flat_outputs = adapter(x, state)
+    runtime_state = torch.zeros(2)
+    arguments = graph_spec.forward_signature.normalize((x, [runtime_state]), {}).arguments
+    result = graph_spec.restore_outputs(flat_outputs, arguments)
 
     torch.testing.assert_close(result, x * 2)
-    torch.testing.assert_close(updated_state, x)
+    assert arguments["state"][0] is runtime_state
+    torch.testing.assert_close(runtime_state, x)
     assert graph_spec.output_names() == (
         format_tensor_name((), "output"),
         format_tensor_name(("state", 0), "state"),
