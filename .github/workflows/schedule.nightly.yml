@@ -46,7 +46,7 @@ env:
   UV_VERSION: 0.12.8
   UV_PYTHON: &python_version "3.12"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
-  # PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }} 
+  # PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
   PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/ai-dynamo/aitune:82eb49ab9301930fdafcb772404d8538d0b011bc
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
@@ -149,8 +149,46 @@ jobs:
             FROM_IMAGE=nvcr.io/nvidia/pytorch:${{ matrix.torch_ci_image_base }}
           tags: ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}
       - id: image
-        run: echo "image=ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }} >> "$GITHUB_OUTPUT"
-    
+        run: echo "image=ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}" >> "$GITHUB_OUTPUT"
+
+  create-cuda-base-images:
+    name: Create AITune images from CUDA images
+    runs-on: linux-amd64-cpu4
+    timeout-minutes: 45
+    needs: wheel
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda_ci_image_base:
+            - 12.9.2-devel-ubuntu24.04
+            - 13.0.3-devel-ubuntu24.04
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_download_artifact
+        with:
+          name: dist
+          path: dist
+      - uses: *actions_docker_login
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: *actions_docker_build_push
+        with:
+          context: .
+          file: .github/docker/Dockerfile
+          push: true
+          build-args: |
+            FROM_IMAGE=nvcr.io/nvidia/cuda:${{ matrix.cuda_ci_image_base }}
+          tags: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}
+      - id: image
+        run: echo "image=ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}" >> "$GITHUB_OUTPUT"
+
   pytorch-image:
     name: Build PyTorch image
     needs: wheel
