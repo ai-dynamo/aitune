@@ -6,7 +6,13 @@ from copy import deepcopy
 
 import torch
 
-from aitune.torch.module.forward_contract import ForwardContractCapture, InputMutationKind
+from aitune.torch.module.forward_contract import (
+    ForwardContract,
+    ForwardContractCapture,
+    InputMutation,
+    InputMutationKind,
+    TensorMutationPolicy,
+)
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.sample_metadata import SampleMetadata
 
@@ -67,3 +73,55 @@ def test_capture_detects_inference_tensor_mutation_without_a_version_counter():
         contract = _capture(UpdateState(), (torch.ones(2), torch.zeros(2)))
 
     assert [mutation.kind for mutation in contract.input_mutations] == [InputMutationKind.COPY_TENSOR]
+
+
+def test_restore_applies_input_mutations_and_rebuilds_output():
+    arguments = {
+        "copied": [torch.zeros(2)],
+        "replaced": [torch.zeros(2)],
+        "step": [0],
+    }
+    input_spec = SampleMetadata.from_inputs(arguments, strict=True)
+    locators = {locator.path: locator for locator, _ in (*input_spec.tensor_data, *input_spec.other_data)}
+    output_spec = SampleMetadata.from_outputs({"result": torch.zeros(2), "label": "recorded"}, strict=True)
+    replacement = torch.full((2,), 3.0)
+    contract = ForwardContract(
+        output_template={"result": None, "label": "recorded"},
+        input_mutations=(
+            InputMutation(locators[("copied", 0)], InputMutationKind.COPY_TENSOR, output_index=1),
+            InputMutation(locators[("replaced", 0)], InputMutationKind.REPLACE_TENSOR, output_index=2),
+            InputMutation(locators[("step", 0)], InputMutationKind.REPLACE_CONSTANT, value=1),
+        ),
+    )
+    original_copied = arguments["copied"][0]
+
+    result = contract.restore_outputs((torch.ones(2), torch.full((2,), 2.0), replacement), arguments, output_spec)
+
+    assert result["label"] == "recorded"
+    torch.testing.assert_close(result["result"], torch.ones(2))
+    assert arguments["copied"][0] is original_copied
+    torch.testing.assert_close(original_copied, torch.full((2,), 2.0))
+    assert arguments["replaced"][0] is replacement
+    assert arguments["step"] == [1]
+
+
+def test_restore_can_replace_a_tensor_normally_copied_into_the_input():
+    original = torch.zeros(2)
+    arguments = {"state": [original]}
+    locator = SampleMetadata.from_inputs(arguments).tensor_data[0][0]
+    output_spec = SampleMetadata.from_outputs(torch.zeros(2))
+    replacement = torch.ones(2)
+    contract = ForwardContract(
+        output_template=None,
+        input_mutations=(InputMutation(locator, InputMutationKind.COPY_TENSOR, output_index=1),),
+    )
+
+    contract.restore_outputs(
+        (torch.zeros(2), replacement),
+        arguments,
+        output_spec,
+        tensor_mutation_policies={1: TensorMutationPolicy.REPLACE_INPUT},
+    )
+
+    assert arguments["state"][0] is replacement
+    assert arguments["state"][0] is not original

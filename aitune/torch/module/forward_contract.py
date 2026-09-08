@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
@@ -23,6 +24,13 @@ class InputMutationKind(str, Enum):
     REPLACE_CONSTANT = "replace_constant"
 
 
+class TensorMutationPolicy(str, Enum):
+    """How a backend result should update a changed input tensor."""
+
+    PRESERVE_INPUT = "preserve_input"
+    REPLACE_INPUT = "replace_input"
+
+
 @dataclass(frozen=True)
 class InputMutation:
     """One observable input change made by a module call."""
@@ -39,6 +47,53 @@ class ForwardContract:
 
     output_template: Any
     input_mutations: tuple[InputMutation, ...] = ()
+
+    def extra_tensor_mutations(self, user_output_count: int) -> tuple[InputMutation, ...]:
+        """Return tensor changes represented by additional graph outputs."""
+        return tuple(
+            mutation
+            for mutation in self.input_mutations
+            if mutation.output_index is not None and mutation.output_index >= user_output_count
+        )
+
+    def restore_outputs(
+        self,
+        flat_outputs: Any,
+        arguments: dict[str, Any],
+        output_spec: SampleMetadata,
+        tensor_mutation_policies: Mapping[int, TensorMutationPolicy] | None = None,
+    ) -> Any:
+        """Apply input changes and rebuild the structured module output."""
+        flat_outputs = (flat_outputs,) if isinstance(flat_outputs, torch.Tensor) else tuple(flat_outputs)
+        user_output_count = len(output_spec.tensor_data)
+        expected_output_count = user_output_count + len(self.extra_tensor_mutations(user_output_count))
+        if len(flat_outputs) != expected_output_count:
+            raise ValueError(f"Expected {expected_output_count} flat outputs, got {len(flat_outputs)}.")
+
+        for mutation in self.input_mutations:
+            if mutation.kind == InputMutationKind.REPLACE_CONSTANT:
+                arguments = mutation.locator.set_value(arguments, deepcopy(mutation.value))
+                continue
+
+            if mutation.output_index is None:
+                raise RuntimeError(f"Tensor mutation at {mutation.locator} has no corresponding flat output.")
+            value = flat_outputs[mutation.output_index]
+            policy = (tensor_mutation_policies or {}).get(
+                mutation.output_index,
+                TensorMutationPolicy.PRESERVE_INPUT,
+            )
+            if mutation.kind == InputMutationKind.COPY_TENSOR and policy == TensorMutationPolicy.PRESERVE_INPUT:
+                target = mutation.locator.get_value(arguments)
+                if not isinstance(target, torch.Tensor):
+                    raise TypeError(
+                        f"Tensor mutation target {mutation.locator} resolved to {type(target).__name__}, not a tensor."
+                    )
+                if target is not value:
+                    target.copy_(value)
+            else:
+                arguments = mutation.locator.set_value(arguments, value)
+
+        return output_spec.unflatten_tensors(flat_outputs[:user_output_count], self.output_template)
 
 
 @dataclass(frozen=True)
