@@ -26,11 +26,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     tar xf /aitune_dist/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
     mv ${TMP_DIR}/examples ${AIT_DIR} && \
     mv ${TMP_DIR}/tests ${AIT_DIR} && \
-    (python -m pip install --upgrade pip --break-system-packages) && \
+    python -m ensurepip --upgrade && \
     (cd ${TMP_DIR} && pip install . --group test --break-system-packages) && \
-    pip install --no-deps ${WHEEL_PATH} --break-system-packages && \
+    pip install --no-deps ${WHEEL_PATH} --break-system-packages&& \
     rm -rf ${TMP_DIR} && \
-    pip install pydantic tomli && \
+    pip install pydantic tomli --break-system-packages && \
     if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install $ADDITIONAL_PACKAGES; fi && \
     groupadd -g 1001 runner && useradd -m -u 1001 -g 1001 runner && \
     chown -R runner:runner ${AIT_DIR} && \
