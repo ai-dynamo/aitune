@@ -89,7 +89,7 @@ jobs:
           if-no-files-found: error
 
   create-base-images:
-    name: Create AITune images from NVCR PyTorch images
+    name: NVCR PyTorch ${{ matrix.torch_ci_image_base }} based AITune image
     runs-on: linux-amd64-cpu4
     timeout-minutes: 45
     needs: wheel
@@ -125,7 +125,7 @@ jobs:
         run: echo "image=ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}" >> "$GITHUB_OUTPUT"
 
   create-cuda-base-images:
-    name: Create AITune images from CUDA images
+    name: ${{ matrix.cuda_ci_image_base }} based AITune image
     runs-on: linux-amd64-cpu4
     timeout-minutes: 45
     needs: wheel
@@ -258,6 +258,59 @@ jobs:
       - run: python -c "import tensorrt; print(tensorrt.__version__)"
       - run: python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
       - run: pytest
+
+  pytorch-gpu-cuda-python-matrix:
+    name: CUDA ${{ matrix.variant.uv_torch_backend }} Python ${{ matrix.python_version }} ${{ matrix.variant.aitune_extras }}
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.10", "3.11", "3.12"]
+        variant:
+          - uv_torch_backend: cu128
+            cuda_image: 12.9.2-devel-ubuntu24.04
+            aitune_extras: torch29
+            extra_packages: nvidia-cuda-runtime-cu13==0.0.0a0
+          - uv_torch_backend: cu128
+            cuda_image: 12.9.2-devel-ubuntu24.04
+            aitune_extras: torch211
+            extra_packages: nvidia-cuda-runtime-cu13==0.0.0a0
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch29
+            extra_packages: ""
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch210
+            extra_packages: ""
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch211
+            extra_packages: ""
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch212
+            extra_packages: ""
+    container:
+      image: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.variant.cuda_image }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_setup_uv
+        with:
+          python-version: ${{ matrix.python_version }}
+          version: ${{ env.UV_VERSION }}
+      - run: nvidia-smi
+      - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }}]" --group test ${{ matrix.variant.extra_packages }}
+      - run: uv pip list
+      - run: uv run python -c "import sys; print(sys.version)"
+      - run: uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
+      - run: uv run python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
+      - run: uv run python -c "import tensorrt; print(tensorrt.__version__)"
+      - run: uv run python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+      - run: uv run python -m pytest
 
   generate-functional-matrix:
     name: Generate functional matrix
