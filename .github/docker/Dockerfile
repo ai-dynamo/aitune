@@ -20,18 +20,16 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=dist,target=/aitune_dist \
-    if [ -n "$ADDITIONAL_APT_PACKAGES" ]; then apt-get update && apt-get install -y --no-install-recommends $ADDITIONAL_APT_PACKAGES; fi && \
     export WHEEL_PATH=$(ls /aitune_dist/*aitune*.whl) && \
     mkdir -p ${TMP_DIR} && \
     tar xf /aitune_dist/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
     mv ${TMP_DIR}/examples ${AIT_DIR} && \
     mv ${TMP_DIR}/tests ${AIT_DIR} && \
-    python -m ensurepip --upgrade && \
     (cd ${TMP_DIR} && pip install . --group test --break-system-packages) && \
-    pip install --no-deps ${WHEEL_PATH} --break-system-packages&& \
+    pip install --no-deps ${WHEEL_PATH} --break-system-packages && \
     rm -rf ${TMP_DIR} && \
     pip install pydantic tomli --break-system-packages && \
-    if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install $ADDITIONAL_PACKAGES; fi && \
+    if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install --break-system-packages $ADDITIONAL_PACKAGES; fi && \
     groupadd -g 1001 runner && useradd -m -u 1001 -g 1001 runner && \
     chown -R runner:runner ${AIT_DIR} && \
     chmod -R ug+rw ${AIT_DIR}
