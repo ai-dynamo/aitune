@@ -18,7 +18,7 @@ from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models.torch_models import ToyTorchModel
-from tests.utilities.helpers import make_graph_spec, requires_cuda, update_input_spec
+from tests.utilities.helpers import make_graph_spec, make_recorded_graph_spec, requires_cuda, update_input_spec
 
 # Constants for testing
 IN_FEATURES = 32
@@ -228,7 +228,6 @@ def test_tensorrt_state_marks_runtime_artifacts_but_not_timing_cache(tmp_path):
     )
     sample = ((torch.randn(1, 4),), {})
     backend._graph_spec = make_graph_spec(_single_input, sample, sample[0][0])
-    backend._output_object = torch.randn(1, 4)
 
     state_dict = backend.to_dict()
 
@@ -296,7 +295,8 @@ def test_tensorrt_backend_prepare_inputs(mocker):
     backend._engine_info.input_names = [x_name]
     backend._graph_spec = make_graph_spec(_single_input, sample, sample)
 
-    prepared_inputs = backend._prepare_inputs((test_tensor,), {})
+    arguments = backend._graph_spec.forward_signature.normalize((test_tensor,), {}).arguments
+    prepared_inputs = backend._prepare_inputs(arguments)
     assert torch.equal(prepared_inputs[x_name], test_tensor)
 
     # case 2: single kwarg only
@@ -305,7 +305,8 @@ def test_tensorrt_backend_prepare_inputs(mocker):
     backend._engine_info.input_names = [x_name]
     backend._graph_spec = make_graph_spec(_single_input, sample, sample)
 
-    prepared_inputs = backend._prepare_inputs((), {"x": test_tensor})
+    arguments = backend._graph_spec.forward_signature.normalize((), {"x": test_tensor}).arguments
+    prepared_inputs = backend._prepare_inputs(arguments)
     assert torch.equal(prepared_inputs[x_name], test_tensor)
 
     # case 3: single arg and single kwarg
@@ -315,9 +316,34 @@ def test_tensorrt_backend_prepare_inputs(mocker):
     backend._engine_info.input_names = [arg_name, x_name]
     backend._graph_spec = make_graph_spec(_two_inputs, sample, sample)
 
-    prepared_inputs = backend._prepare_inputs((test_tensor,), {"x": test_tensor})
+    arguments = backend._graph_spec.forward_signature.normalize((test_tensor,), {"x": test_tensor}).arguments
+    prepared_inputs = backend._prepare_inputs(arguments)
     assert torch.equal(prepared_inputs[arg_name], test_tensor)
     assert torch.equal(prepared_inputs[x_name], test_tensor)
+
+
+def test_prepare_outputs_applies_mutable_tensor_and_scalar_state(mocker):
+    class StatefulDecoder(torch.nn.Module):
+        def forward(self, x, cache, index):
+            cache[0] = x + 1
+            index[0] += 1
+            return x * 2
+
+    model = StatefulDecoder().eval()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [None], [0]), {}), strict=True)
+    backend = TensorRTBackend()
+    backend._graph_spec = graph_spec
+    backend._output_allocator = mocker.Mock(outputs=dict(zip(graph_spec.output_names(), (x * 2, x + 1), strict=True)))
+    cache = [None]
+    index = [0]
+    arguments = graph_spec.forward_signature.normalize((x, cache, index), {}).arguments
+
+    result = backend._prepare_outputs_for_return(arguments)
+
+    torch.testing.assert_close(result, x * 2)
+    torch.testing.assert_close(cache[0], x + 1)
+    assert index == [1]
 
 
 @requires_cuda
@@ -337,7 +363,7 @@ def test_backend_inference_returns_copy_of_tensors(tmp_path):
     model.eval()
     x = torch.tensor([[1, 1]], device=device)
     args, kwargs = (x,), {}
-    graph_spec = make_graph_spec(model.forward, (args, kwargs), x)
+    graph_spec = make_recorded_graph_spec(model, (args, kwargs))
 
     backend = TensorRTBackend()
     backend = backend.build(model, graph_spec, [(args, kwargs)], device=device, cache_dir=tmp_path)
@@ -366,7 +392,7 @@ def test_backend_handle_args_kwargs(tmp_path, use_dynamo):
     x = torch.tensor([[1, 1]], device=device)
     y = torch.tensor([[1, 1]], device=device)
     args, kwargs = (x,), {"y": y}
-    graph_spec = make_graph_spec(model.forward, (args, kwargs), (x, y))
+    graph_spec = make_recorded_graph_spec(model, (args, kwargs))
 
     config = TensorRTBackendConfig(use_dynamo=use_dynamo)
     backend = TensorRTBackend(config=config)
@@ -958,6 +984,8 @@ def test_set_input_tensors_rejects_invalid_address(mocker):
 
 def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
     backend = TensorRTBackend()
+    backend._graph_spec = mocker.MagicMock()
+    backend._graph_spec.forward_signature.normalize.return_value.arguments = {}
     backend._context = mocker.MagicMock()
     backend._context.execute_async_v3.return_value = True
     backend._cuda_stream = mocker.MagicMock()
