@@ -20,7 +20,7 @@ from aitune.torch.backend.backend import (
     ExecutionMode,
 )
 from aitune.torch.checkpoint.artifact import ArtifactPath
-from aitune.torch.libs.torch import TorchExporter
+from aitune.torch.libs.exporting import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.module import move_module_to_device, offload
