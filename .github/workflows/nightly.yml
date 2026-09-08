@@ -119,6 +119,7 @@ jobs:
     name: Create AITune images from NVCR PyTorch images
     runs-on: linux-amd64-cpu4
     timeout-minutes: 45
+    needs: wheel
     strategy:
       fail-fast: false
       matrix:
