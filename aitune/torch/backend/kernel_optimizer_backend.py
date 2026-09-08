@@ -20,6 +20,8 @@ from aitune.torch.backend.backend import (
 from aitune.torch.backend.kernels.kernel_optimization_plan import KernelOptimizationPlan
 from aitune.torch.backend.kernels.kernel_optimizer import KernelOptimizer
 from aitune.torch.backend.kernels.kernel_provider import (
+    DiffusersAttentionBackend,
+    DiffusersAttentionKernelProvider,
     FlashAttention4KernelProvider,
     KernelGenerator,
     KernelProvider,
@@ -38,9 +40,11 @@ from aitune.utils.validation import in_range
 def _default_kernel_providers() -> list[KernelProvider]:
     """Create the built-in attention providers used by the default backend."""
     return [
-        TorchSDPAKernelProvider(SDPBackend.FLASH_ATTENTION),
         TorchSDPAKernelProvider(SDPBackend.CUDNN_ATTENTION),
-        FlashAttention4KernelProvider(),
+        # Flash Attention
+        TorchSDPAKernelProvider(SDPBackend.FLASH_ATTENTION),  # v2
+        DiffusersAttentionKernelProvider(DiffusersAttentionBackend.FLASH_3_HUB),  # v3
+        FlashAttention4KernelProvider(),  # v4
     ]
 
 

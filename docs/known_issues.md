@@ -30,6 +30,9 @@ title: "Known Issues and Limitations"
   generic limitation affecting every kernel provider, including SageAttention, when `KernelOptimizerBackend` uses a
   `TorchInductorAotBackend` delegate. Use PyTorch 2.10 or later, or on PyTorch 2.9 choose a delegate that does not rely
   on strict Torch Export, such as a JIT delegate.
+- **Diffusers attention dispatcher backend compatibility.** `DiffusersAttentionBackend.SAGE` requires SageAttention
+  2 or later and does not work with SageAttention V1. `DiffusersAttentionBackend.SAGE_HUB` and
+  `DiffusersAttentionBackend.FLASH_4_HUB` currently do not work because of internal Diffusers issues.
 - **SageAttention V1 with a Torch-TensorRT AOT delegate.** The SageAttention package on PyPI provides a Triton-based V1
   implementation that the Torch-TensorRT AOT export and serialization path cannot reliably package. When using
   `KernelOptimizerBackend` with `SageAttentionKernelProvider`, use a Torch Inductor JIT delegate, a Torch Inductor AOT

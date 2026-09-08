@@ -114,6 +114,7 @@ AITune includes the following static providers:
 | Provider | Runtime dependency | Purpose |
 |---|---|---|
 | `TorchSDPAKernelProvider` | PyTorch | Runs SDPA under a selected `torch.nn.attention.SDPBackend`. |
+| `DiffusersAttentionKernelProvider` | `diffusers>=0.35.0`; Hub backends also require `kernels>=0.12` | Runs compatible 4D SDPA calls through a selected Diffusers attention dispatcher backend. |
 | `SageAttentionKernelProvider` | `sageattention` | Runs compatible SDPA calls with SageAttention. |
 | `FlashAttention4KernelProvider` | `flash-attn-4` | Runs compatible 4D SDPA calls with FlashAttention-4, including supported GQA and MQA layouts. |
 
@@ -145,6 +146,38 @@ optimizer = KernelOptimizer(
 Providers specialize their inference plans from representative samples. Inconsistent or unsupported sample plans can
 cause `prepare()` to return `False`; runtime and correctness failures reject the candidate before it can enter the
 selected plan.
+
+### Diffusers attention dispatcher
+
+`DiffusersAttentionKernelProvider` exposes Diffusers attention dispatcher implementations as kernel candidates. Create
+one provider for each backend that should be evaluated:
+
+```python
+from aitune.torch.backend.kernels.kernel_provider import (
+    DiffusersAttentionBackend,
+    DiffusersAttentionKernelProvider,
+)
+
+providers = [
+    DiffusersAttentionKernelProvider(DiffusersAttentionBackend.FLASH),
+    DiffusersAttentionKernelProvider(DiffusersAttentionBackend.SAGE),
+    DiffusersAttentionKernelProvider(DiffusersAttentionBackend.XFORMERS),
+]
+```
+
+`DiffusersAttentionBackend` lists the dispatcher implementations compatible with SDPA replacement. Their availability
+and optional dependencies depend on the installed Diffusers version. See the
+[Diffusers attention backend documentation](https://huggingface.co/docs/diffusers/en/optimization/attention_backends)
+for the current list. The provider converts PyTorch SDPA's 4D HND layout to the NHD layout expected by the Diffusers
+dispatcher and converts its output back to HND.
+
+Hub-backed implementations, whose enum names end in `_HUB`, download their kernels from the Hugging Face Hub and
+require `kernels>=0.12` in addition to Diffusers. Non-Hub implementations do not depend on the `kernels` package.
+
+The Diffusers `native`, `_native_cudnn`, `_native_efficient`, `_native_flash`, and `_native_math` implementations call
+`torch.nn.functional.scaled_dot_product_attention` themselves and therefore cannot replace that function without
+recursion. They are intentionally omitted from `DiffusersAttentionBackend`; use `TorchSDPAKernelProvider` for those
+PyTorch SDPA backends instead.
 
 ## Provider interface and lifecycle
 
