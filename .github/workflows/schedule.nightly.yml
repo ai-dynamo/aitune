@@ -46,7 +46,7 @@ env:
   UV_VERSION: 0.12.8
   UV_PYTHON: &python_version "3.12"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
-  PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+  PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/${{ github.repository }}:${{ github.sha }}
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
   # plugin. RTX runners have no EFA provider, so OFI initialization fails and
@@ -87,32 +87,6 @@ jobs:
           name: dist
           path: dist/
           if-no-files-found: error
-
-  test-4-rank-sanity:
-    name: Test 4-rank sanity
-    runs-on: prod-aitune-tester-rtx-pro-4500-4-v1
-    timeout-minutes: 15
-    container:
-      image: *pytorch_ci_image
-    env:
-      NCCL_DEBUG: INFO
-      NCCL_DEBUG_SUBSYS: INIT,NET,GRAPH
-      UCX_LOG_LEVEL: info
-    steps:
-      - uses: *actions_checkout
-        with:
-          persist-credentials: false
-      - run: nvidia-smi
-      - run: nvidia-smi -L
-      - run: nvidia-smi topo -m
-      - run: |
-          python -c "import sys; print(sys.version)"
-          python -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA version:', torch.version.cuda)"
-          python -c "import torch; print('CUDA is available:', torch.cuda.is_available()); torch.cuda.init()"
-          python -c "import torch; print('CUDA devices:', torch.cuda.device_count())"
-          python -c "import tensorrt; print('TensorRT version:', tensorrt.__version__)"
-          python -c "import torch_tensorrt; print('Torch-TensorRT version:', torch_tensorrt.__version__)"
-      - run: python .github/scripts/nccl_4_rank_sanity.py
 
   create-base-images:
     name: Create AITune images from NVCR PyTorch images
@@ -216,6 +190,8 @@ jobs:
           context: .
           file: .github/docker/Dockerfile
           push: true
+          labels: |
+            org.opencontainers.image.description="AITune container for nightly testing based on PyTorch ${{ env.TORCH_CI_IMAGE }}"
           build-args: |
             FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
           tags: ${{ env.PYTORCH_CI_IMAGE }}
@@ -328,6 +304,35 @@ jobs:
 
 
         # --projects-path examples \
+
+
+  test-4-rank-sanity:
+    name: Test 4-rank sanity
+    runs-on: prod-aitune-tester-rtx-pro-4500-4-v1
+    needs: pytorch-image
+    timeout-minutes: 15
+    container:
+      image: *pytorch_ci_image
+    env:
+      NCCL_DEBUG: INFO
+      NCCL_DEBUG_SUBSYS: INIT,NET,GRAPH
+      UCX_LOG_LEVEL: info
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - run: nvidia-smi
+      - run: nvidia-smi -L
+      - run: nvidia-smi topo -m
+      - run: |
+          python -c "import sys; print(sys.version)"
+          python -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA version:', torch.version.cuda)"
+          python -c "import torch; print('CUDA is available:', torch.cuda.is_available()); torch.cuda.init()"
+          python -c "import torch; print('CUDA devices:', torch.cuda.device_count())"
+          python -c "import tensorrt; print('TensorRT version:', tensorrt.__version__)"
+          python -c "import torch_tensorrt; print('Torch-TensorRT version:', torch_tensorrt.__version__)"
+      - run: python .github/scripts/nccl_4_rank_sanity.py
+
 
   functional:
     name: ${{ matrix.id }}
