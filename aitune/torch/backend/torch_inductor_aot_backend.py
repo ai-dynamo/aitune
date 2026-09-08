@@ -11,6 +11,7 @@ import nvtx
 import torch
 import torch.nn as nn
 
+from aitune.records import PT2Artifact
 from aitune.torch.backend.backend import (
     Backend,
     BackendBuildStep,
@@ -22,8 +23,9 @@ from aitune.torch.backend.backend import (
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.torch import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.module import move_module_to_device, offload
+from aitune.torch.utils.pt2_artifact import PT2CallContract, PT2CallContractState, create_pt2_artifact
 
 logger = getLogger(__name__)
 
@@ -75,6 +77,8 @@ class TorchInductorAotBackend(Backend):
     STATE_TYPE = "type"
     STATE_COMPILED_MODEL_PATH = "compiled_model_path"
     STATE_DEVICE = "device"
+    STATE_GRAPH_SPEC = "graph_spec"
+    STATE_PT2_CALL_CONTRACT = "pt2_call_contract"
 
     def __init__(self, config: TorchInductorAotBackendConfig | None = None):
         """Initialize TorchInductorAotBackend.
@@ -86,6 +90,10 @@ class TorchInductorAotBackend(Backend):
         self._config = config or TorchInductorAotBackendConfig()
         self._compiled_model_artifact: ArtifactPath | None = None
         self._runner = None
+        self._graph_spec: GraphSpec | None = None
+        self._pt2_call_contract: PT2CallContract | None = None
+        self._artifact: PT2Artifact | None = None
+        self._artifact_error: str | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -95,13 +103,24 @@ class TorchInductorAotBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
+    def artifact(self) -> PT2Artifact:
+        """Return the deployable AOTInductor package and its ordinal tensor contract."""
+        if self._artifact is None:
+            detail = f": {self._artifact_error}" if self._artifact_error else ""
+            raise RuntimeError(f"PT2 artifact is not available until the backend has built or deployed{detail}")
+        return self._artifact
+
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Export and compile the model with AOT Inductor, then load the runner."""
+        self._graph_spec = graph_spec
         module = module.eval()
         move_module_to_device(module, self._device)
 
         with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
-            exported = TorchExporter().export(module, samples[0], graph_spec, device=self._device).exported_program
+            export_result = TorchExporter().export(module, samples[0], graph_spec, device=self._device)
+            exported = export_result.exported_program
+
+        self._capture_call_contract(module, export_result.sample)
 
         with self._track_build_step(TorchInductorAotBuildStep.AOT_COMPILE) as result:
             self._compiled_model_artifact = ArtifactPath(cache_dir, "model.pt2")
@@ -121,12 +140,41 @@ class TorchInductorAotBackend(Backend):
         self._activate()
         return self
 
+    def _capture_call_contract(self, module: nn.Module, sample: Sample) -> None:
+        """Capture PT2 tensor ordering without changing backend build success."""
+        try:
+            args, kwargs = sample
+            with torch.no_grad():
+                output = module(*args, **kwargs)
+            self._pt2_call_contract = PT2CallContract.capture(cast(GraphSpec, self._graph_spec), sample, output)
+            self._artifact_error = None
+        except (RuntimeError, TypeError, ValueError) as error:
+            self._artifact_error = str(error)
+            logger.info("PT2 package will not be available for deployment: %s", error)
+
     def _activate(self):
         """Load the compiled model from disk."""
         compiled_model_artifact = cast(ArtifactPath, self._compiled_model_artifact)
         logger.debug("Loading compiled AOT Inductor runner from %s.", compiled_model_artifact)
         device_index = self._device.index if self._device.index is not None else 0
         self._runner = torch._inductor.aoti_load_package(str(compiled_model_artifact.path), device_index=device_index)
+        if self._artifact is None and self._pt2_call_contract is not None:
+            self._capture_artifact()
+
+    def _capture_artifact(self) -> None:
+        """Capture publication metadata without changing backend activation success."""
+        try:
+            if self._compiled_model_artifact is None or self._graph_spec is None or self._pt2_call_contract is None:
+                raise RuntimeError("PT2 artifact requires a compiled package, graph specification, and call contract")
+            self._artifact = create_pt2_artifact(
+                self._graph_spec,
+                self._compiled_model_artifact.path,
+                self._pt2_call_contract,
+            )
+            self._artifact_error = None
+        except (OSError, RuntimeError, ValueError) as error:
+            self._artifact_error = str(error)
+            logger.info("PT2 package is not available for deployment: %s", error)
 
     @nvtx.annotate(message="TorchInductorAotBackend.infer", domain="AITune", color="orange")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
@@ -152,12 +200,16 @@ class TorchInductorAotBackend(Backend):
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""
-        if self._compiled_model_artifact is None:
+        if self._compiled_model_artifact is None or self._graph_spec is None:
             raise RuntimeError("Backend has not been built yet. Please call build() first.")
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_COMPILED_MODEL_PATH: self._compiled_model_artifact,
             self.STATE_DEVICE: self._device,
+            self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
+            self.STATE_PT2_CALL_CONTRACT: (
+                self._pt2_call_contract.to_dict() if self._pt2_call_contract is not None else None
+            ),
         }
 
     @classmethod
@@ -169,5 +221,8 @@ class TorchInductorAotBackend(Backend):
         backend = cls()
         backend._compiled_model_artifact = state_dict[cls.STATE_COMPILED_MODEL_PATH]
         backend._device = state_dict[cls.STATE_DEVICE]
+        backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
+        contract: PT2CallContractState | None = state_dict[cls.STATE_PT2_CALL_CONTRACT]
+        backend._pt2_call_contract = PT2CallContract.from_dict(contract) if contract is not None else None
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend
