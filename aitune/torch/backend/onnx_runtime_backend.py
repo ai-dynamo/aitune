@@ -244,14 +244,11 @@ class ONNXRuntimeBackend(Backend):
     def _prepare_outputs(self, outputs: dict[str, torch.Tensor], arguments: dict[str, Any]) -> Any:
         """Rebuild user outputs and apply input changes returned by ONNX Runtime."""
         graph_spec = cast(GraphSpec, self._graph_spec)
-        forward_contract = graph_spec.forward_contract
-        if forward_contract is None:
-            raise RuntimeError("Graph specification has no recorded forward contract.")
         flat_outputs = tuple(outputs[name] for name in graph_spec.output_names())
         # ORT owns output buffers, so changed tensor leaves must install the returned tensors.
         mutation_policies = {
             mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
-            for mutation in forward_contract.input_mutations
+            for mutation in graph_spec.forward_contract.input_mutations
             if mutation.output_index is not None
         }
         return graph_spec.restore_outputs(flat_outputs, arguments, tensor_mutation_policies=mutation_policies)

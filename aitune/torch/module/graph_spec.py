@@ -38,9 +38,9 @@ class GraphSpec:
     input_spec: SampleMetadata
     output_spec: SampleMetadata
     forward_signature: ForwardSignature
+    forward_contract: ForwardContract
     dynamic_shapes: DynamicShapes = field(default_factory=dict)
     post_input_spec: SampleMetadata | None = None
-    forward_contract: ForwardContract | None = None
 
     def update_shapes_seen(
         self,
@@ -59,8 +59,6 @@ class GraphSpec:
 
     def extra_tensor_mutations(self) -> tuple[InputMutation, ...]:
         """Return changed input tensors appended to the graph outputs."""
-        if self.forward_contract is None:
-            return ()
         return self.forward_contract.extra_tensor_mutations(len(self.output_spec.tensor_data))
 
     def output_names(self) -> tuple[str, ...]:
@@ -78,8 +76,6 @@ class GraphSpec:
         tensor_mutation_policies: Mapping[int, TensorMutationPolicy] | None = None,
     ) -> Any:
         """Rebuild module outputs and apply recorded input changes."""
-        if self.forward_contract is None:
-            raise RuntimeError("Graph specification has no recorded forward contract.")
         return self.forward_contract.restore_outputs(
             flat_outputs,
             arguments,
@@ -180,9 +176,9 @@ class GraphSpec:
             input_spec=data["input_spec"],
             output_spec=data["output_spec"],
             forward_signature=ForwardSignature.from_dict(data["forward_signature"]),
+            forward_contract=data["forward_contract"],
             dynamic_shapes=data["dynamic_shapes"],
             post_input_spec=data.get("post_input_spec"),
-            forward_contract=data.get("forward_contract"),
         )
 
     def __str__(self) -> str:

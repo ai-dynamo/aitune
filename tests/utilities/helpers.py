@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 import torch
 
-from aitune.torch.module.forward_contract import ForwardContractCapture
+from aitune.torch.module.forward_contract import ForwardContract, ForwardContractCapture
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -53,11 +53,13 @@ def make_graph_spec(
 ) -> GraphSpec:
     """Create a graph specification for a forward call."""
     forward_signature = ForwardSignature.from_callable(forward)
+    output_spec = SampleMetadata.from_outputs(output, strict=strict, batch_size=batch_size)
     return GraphSpec(
         name=name,
         input_spec=make_input_metadata(forward_signature, sample, strict=strict, batch_size=batch_size),
-        output_spec=SampleMetadata.from_outputs(output, strict=strict, batch_size=batch_size),
+        output_spec=output_spec,
         forward_signature=forward_signature,
+        forward_contract=ForwardContract(output_spec.without_tensors(output)),
     )
 
 

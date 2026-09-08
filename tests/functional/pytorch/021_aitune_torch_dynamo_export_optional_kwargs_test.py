@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
+from aitune.torch.module.forward_contract import ForwardContract
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -51,11 +52,13 @@ def _make_graph_spec(model: nn.Module, sample: tuple[tuple, dict], output: torch
     args, kwargs = sample
     forward_signature = ForwardSignature.from_callable(model.forward)
     forward_inputs = forward_signature.normalize(args, kwargs)
+    output_spec = SampleMetadata.from_outputs(output, batch_size=batch_size)
     return GraphSpec(
         name="test_graph",
         input_spec=SampleMetadata.from_inputs(forward_inputs.arguments, batch_size=batch_size),
-        output_spec=SampleMetadata.from_outputs(output, batch_size=batch_size),
+        output_spec=output_spec,
         forward_signature=forward_signature,
+        forward_contract=ForwardContract(output_spec.without_tensors(output)),
     )
 
 

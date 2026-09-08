@@ -836,11 +836,10 @@ class TensorRTBackend(Backend, TensorRTRunner):
         # Get outputs from the allocator (already properly shaped by TensorRT)
         outputs = self._output_allocator.outputs
         outputs.update(self._aliased_outputs)
-        forward_contract = self._graph_spec.forward_contract
-        if forward_contract is None:
-            raise RuntimeError("Graph specification has no recorded forward contract.")
         mutation_output_indices = {
-            mutation.output_index for mutation in forward_contract.input_mutations if mutation.output_index is not None
+            mutation.output_index
+            for mutation in self._graph_spec.forward_contract.input_mutations
+            if mutation.output_index is not None
         }
         flat_outputs = tuple(
             outputs.pop(name)
@@ -854,7 +853,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         )
         mutation_policies = {
             mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
-            for mutation in forward_contract.input_mutations
+            for mutation in self._graph_spec.forward_contract.input_mutations
             if mutation.output_index is not None
         }
         result = self._graph_spec.restore_outputs(

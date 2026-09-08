@@ -145,6 +145,7 @@ class ToyTorchConditionalModel(torch.nn.Module):
                     input_spec=input_metadata,
                     output_spec=output_metadata,
                     forward_signature=forward_signature,
+                    forward_contract=ForwardContract(output_metadata.without_tensors(_output)),
                 )
             else:
                 graph_spec.update_shapes_seen(input_metadata, output_metadata)
