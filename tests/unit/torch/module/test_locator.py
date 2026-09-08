@@ -202,6 +202,23 @@ def test_find_leaves_registered_user_type():
         Locator.unregister_user_type(UserType)
 
 
+def test_find_leaves_exposes_registered_state_only_during_mutation_capture():
+    obj = UserType(1)
+    obj.tensor = torch.tensor(2)
+    try:
+        Locator.register_user_type(UserType, only_tensors=True, mutation_fields=("value",))
+
+        regular_leaves = {locator.path: value for locator, value in Locator.find_leaves(obj)}
+        mutation_leaves = {
+            locator.path: value for locator, value in Locator.find_leaves(obj, include_mutation_fields=True)
+        }
+
+        assert regular_leaves == {"tensor": obj.tensor}
+        assert mutation_leaves == {"tensor": obj.tensor, "value": 1}
+    finally:
+        Locator.unregister_user_type(UserType)
+
+
 def test_find_leaves_ignored_type():
     obj = UserType(1)
     # check type is found if not ignored

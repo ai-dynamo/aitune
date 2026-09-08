@@ -90,6 +90,7 @@ class Locator:
     """
 
     _user_types: ClassVar[dict[type, bool]] = dict[type, bool]()
+    _mutation_fields: ClassVar[dict[type, frozenset[str]]] = {}
     _ignored_types: ClassVar[set[type]] = set()
 
     def __init__(self, access_path: tuple[tuple[int | str, ObjectType], ...], is_output: bool = False):
@@ -345,13 +346,22 @@ class Locator:
         return parent_only_tensors
 
     @staticmethod
+    @cache
+    def _resolve_mutation_fields(obj_type: type) -> frozenset[str]:
+        """Return non-tensor fields that mutation capture should observe."""
+        return Locator._mutation_fields.get(obj_type, frozenset())
+
+    @staticmethod
     def is_traversable(value: object) -> bool:
         """Return whether this locator can visit children of ``value``."""
         return Locator._get_iter_handler(type(value)) is not None
 
     @staticmethod
     def find_leaves(
-        obj: object, only_tensors: bool = False, is_output: bool = False
+        obj: object,
+        only_tensors: bool = False,
+        is_output: bool = False,
+        include_mutation_fields: bool = False,
     ) -> Generator[tuple["Locator", object], None, None]:
         """Walks the object and yields locators and their leaf values.
 
@@ -362,6 +372,7 @@ class Locator:
             obj: The object to walk.
             only_tensors: Whether to only return tensors.
             is_output: Whether the locators point into forward outputs.
+            include_mutation_fields: Whether to include registered non-tensor mutation fields.
 
         Yields:
             A tuple of (locator, value) where locator is the path to the leaf and value is the leaf value.
@@ -384,11 +395,12 @@ class Locator:
 
         child_only_tensors = Locator._resolve_only_tensors(type(obj), only_tensors)
 
-        stack = [(iter_handler(obj), child_only_tensors)]
+        mutation_fields = Locator._resolve_mutation_fields(type(obj)) if include_mutation_fields else frozenset()
+        stack = [(iter_handler(obj), child_only_tensors, mutation_fields)]
         path = []
 
         while stack:
-            parent_iter, current_only_tensors = stack[-1]
+            parent_iter, current_only_tensors, current_mutation_fields = stack[-1]
             try:
                 # Get next child
                 accessor, value, obj_type = next(parent_iter)
@@ -402,10 +414,17 @@ class Locator:
                 if child_iter_handler:
                     # It is a container, push to stack
                     next_only_tensors = Locator._resolve_only_tensors(type(value), current_only_tensors)
-                    stack.append((child_iter_handler(value), next_only_tensors))
+                    next_mutation_fields = (
+                        Locator._resolve_mutation_fields(type(value)) if include_mutation_fields else frozenset()
+                    )
+                    stack.append((child_iter_handler(value), next_only_tensors, next_mutation_fields))
                 else:
                     # It is a leaf
-                    if not current_only_tensors or isinstance(value, torch.Tensor):
+                    if (
+                        not current_only_tensors
+                        or isinstance(value, torch.Tensor)
+                        or accessor in current_mutation_fields
+                    ):
                         yield Locator(tuple(path), is_output), value
                     path.pop()
 
@@ -431,19 +450,27 @@ class Locator:
                 stack.append((Locator((*locator._access_path, (accessor, obj_type)), is_output), child))
 
     @staticmethod
-    def register_user_type(cls: type, only_tensors: bool = False):
+    def register_user_type(
+        cls: type,
+        only_tensors: bool = False,
+        mutation_fields: tuple[str, ...] = (),
+    ):
         """Register a user type."""
         Locator._user_types[cls] = only_tensors
+        Locator._mutation_fields[cls] = frozenset(mutation_fields)
         Locator.unignore_type(cls)
         Locator._get_iter_handler.cache_clear()
         Locator._resolve_only_tensors.cache_clear()
+        Locator._resolve_mutation_fields.cache_clear()
 
     @staticmethod
     def unregister_user_type(cls: type):
         """Unregister a user type."""
         Locator._user_types.pop(cls, None)
+        Locator._mutation_fields.pop(cls, None)
         Locator._get_iter_handler.cache_clear()
         Locator._resolve_only_tensors.cache_clear()
+        Locator._resolve_mutation_fields.cache_clear()
 
     @staticmethod
     def ignore_type(cls: type):

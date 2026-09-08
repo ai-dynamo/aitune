@@ -7,10 +7,19 @@ try:
 
     from aitune.torch.module.locator import Locator
 
+    initialization_fields = (
+        "device",
+        "dtype",
+        "head_dim",
+        "is_initialized",
+        "max_batch_size",
+        "num_heads",
+    )
+
     # enable static cache support
     Locator.register_user_type(StaticCache, only_tensors=True)
-    Locator.register_user_type(StaticLayer, only_tensors=True)
-    Locator.register_user_type(StaticSlidingWindowLayer, only_tensors=True)
+    Locator.register_user_type(StaticLayer, only_tensors=True, mutation_fields=initialization_fields)
+    Locator.register_user_type(StaticSlidingWindowLayer, only_tensors=True, mutation_fields=initialization_fields)
     # disable inspection of dynamic cache as it is not supported by neither jit nor aot backends
     # the only exception is TorchEagerBackend as it is basically passthrough with some dtype casts
     Locator.ignore_type(DynamicCache)

@@ -148,7 +148,7 @@ class ForwardContractCapture:
         """Capture input leaves immediately before forward executes."""
         return cls({
             locator: _snapshot_leaf(locator, value, snapshot_arguments)
-            for locator, value in Locator.find_leaves(arguments)
+            for locator, value in Locator.find_leaves(arguments, include_mutation_fields=True)
         })
 
     def after_call(
@@ -165,7 +165,13 @@ class ForwardContractCapture:
         next_output_index = len(output_tensors)
         mutations = []
 
-        for locator, value in Locator.find_leaves(arguments):
+        after = dict(Locator.find_leaves(arguments, include_mutation_fields=True))
+        locators = dict.fromkeys((*after, *self._before))
+        for locator in locators:
+            try:
+                value = locator.get_value(arguments)
+            except (AttributeError, IndexError, KeyError, TypeError):
+                continue
             kind = _mutation_kind(self._before.get(locator), value)
             if kind is None:
                 continue
