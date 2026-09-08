@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import importlib.util
-import shlex
 import sys
 from pathlib import Path
 
@@ -62,7 +61,7 @@ def test_run_script_selects_entry_and_installs_dependencies(mocker: MockerFixtur
         "--pre",
         "extra",
     ]
-    assert run.call_args_list[3].args[0][:4] == [sys.executable, '-m', 'pip', 'freeze']
+    assert run.call_args_list[3].args[0][:4] == [sys.executable, "-m", "pip", "freeze"]
     assert run.call_args_list[4].args[0] == [sys.executable, str(script), '--name="second"']
     assert run.call_args_list[4].kwargs["env"]["AITUNE_CONSOLE_OUTPUT"] == "1"
 
@@ -102,7 +101,7 @@ variants = [
     run = mocker.patch.object(execute.subprocess, "run")
 
     execute.run(project, "project", 0)
-    
+
     assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "--group", "functional-test"]
     assert run.call_args_list[1].args[0] == [
         sys.executable,
@@ -112,7 +111,7 @@ variants = [
         "--editable",
         str(project),
     ]
-    assert run.call_args_list[2].args[0][:4] == [sys.executable, '-m', 'pip', 'freeze']
+    assert run.call_args_list[2].args[0][:4] == [sys.executable, "-m", "pip", "freeze"]
     assert run.call_args_list[3].args[0] == [
         sys.executable,
         "-m",
@@ -147,6 +146,6 @@ def test_run_verbose_dry_run_prints_without_executing(
 
     run.assert_not_called()
     out = capsys.readouterr().out
-    
+
     assert "pip install --group functional-test" in out
     assert "pip freeze --all" in out
