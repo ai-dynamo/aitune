@@ -4,5 +4,12 @@
 
 from aitune.torch.libs.exporting.preparation import TensorExportPreparation, prepare_tensor_export
 from aitune.torch.libs.exporting.tensor_export_adapter import TensorExportAdapter
+from aitune.torch.libs.exporting.torch_exporter import TorchExporter, TorchExportResult
 
-__all__ = ["TensorExportAdapter", "TensorExportPreparation", "prepare_tensor_export"]
+__all__ = [
+    "TensorExportAdapter",
+    "TensorExportPreparation",
+    "TorchExporter",
+    "TorchExportResult",
+    "prepare_tensor_export",
+]
