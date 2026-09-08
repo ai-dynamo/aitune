@@ -119,6 +119,38 @@ def test_variant_runner_tag_overrides_test_tag() -> None:
     assert jobs[0]["runner"] == "prod-aitune-tester-rtx-pro-4500-4-v1"
 
 
+def test_only_tags_keeps_matching_config_and_variant_tags() -> None:
+    variant_jobs = generate._make_script_entries(
+        "pytorch",
+        Path("test.py"),
+        _config({
+            "variants": [
+                {"additional_tags": ["gpu/4"]},
+                {"additional_tags": ["gpu/8"]},
+                {"additional_tags": ["gpu/16"]},
+            ],
+        }),
+        Scope.ALWAYS,
+        only_tags={"gpu/4", "gpu/8"},
+    )
+    config_jobs = generate._make_script_entries(
+        "pytorch",
+        Path("test.py"),
+        _config({"additional_tags": ["gpu/4"]}),
+        Scope.ALWAYS,
+        only_tags={"gpu/4", "gpu/8"},
+    )
+
+    assert [job["test_number"] for job in variant_jobs] == [0, 1]
+    assert len(config_jobs) == 1
+
+
+def test_parse_args_accepts_comma_separated_only_tags(monkeypatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["generate.py", "--only-tags", "gpu/4, gpu/8"])
+
+    assert generate.parse_args().only_tags == {"gpu/4", "gpu/8"}
+
+
 def test_custom_docker_image_is_marked_for_wheel_install() -> None:
     jobs = generate._make_script_entries(
         "pytorch",

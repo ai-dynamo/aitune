@@ -96,6 +96,7 @@ def _make_script_entries(
     config: FunctionalTestConfig,
     requested_scope: Scope,
     default_docker_image: str = DEFAULT_DOCKER_IMAGE,
+    only_tags: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     if config.skip:
         return []
@@ -106,6 +107,8 @@ def _make_script_entries(
 
     jobs: list[dict[str, Any]] = []
     for index, variant in enumerate(config.entries, start=1):
+        if only_tags and only_tags.isdisjoint([*config.tags, *variant.tags]):
+            continue
         jobs.append(
             _matrix_entry(
                 entry_id=f"{namespace}_{script.stem}_{index:03d}",
@@ -127,6 +130,7 @@ def _make_project_entries(
     config: FunctionalTestConfig,
     requested_scope: Scope,
     default_docker_image: str = DEFAULT_DOCKER_IMAGE,
+    only_tags: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     if config.skip:
         return []
@@ -138,6 +142,8 @@ def _make_project_entries(
     parent_dir = project.parent
     jobs: list[dict[str, Any]] = []
     for index, variant in enumerate(config.entries, start=1):
+        if only_tags and only_tags.isdisjoint([*config.tags, *variant.tags]):
+            continue
         jobs.append(
             _matrix_entry(
                 entry_id=f"{namespace}_{parent_dir.name}_inference_{index:03d}",
@@ -183,6 +189,7 @@ def generate_matrix(
     example_default_scope: str,
     test_scope_env: str,
     example_scope_env: str,
+    only_tags: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Generate full GitHub Actions job matrix for tests and examples."""
     requested_test_scope = get_scope({"scope": os.environ.get(test_scope_env, default_scope)})
@@ -193,11 +200,29 @@ def generate_matrix(
     matrix: list[dict[str, Any]] = []
     for namespace, script in get_scripts(script_paths):
         config = FunctionalTestConfig.from_script(script, default_scope, default_docker_image)
-        matrix.extend(_make_script_entries(namespace, script, config, requested_test_scope, default_docker_image))
+        matrix.extend(
+            _make_script_entries(
+                namespace,
+                script,
+                config,
+                requested_test_scope,
+                default_docker_image,
+                only_tags,
+            )
+        )
 
     for namespace, project in get_projects(projects_paths):
         config = FunctionalTestConfig.from_project(project, example_default_scope, default_docker_image)
-        matrix.extend(_make_project_entries(namespace, project, config, requested_example_scope, default_docker_image))
+        matrix.extend(
+            _make_project_entries(
+                namespace,
+                project,
+                config,
+                requested_example_scope,
+                default_docker_image,
+                only_tags,
+            )
+        )
 
     return matrix
 
@@ -234,6 +259,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--example-default-scope", default="L1")
     parser.add_argument("--test-scope-env", default="AITUNE_TEST_SCOPE")
     parser.add_argument("--example-scope-env", default="AITUNE_EXAMPLE_SCOPE")
+    parser.add_argument(
+        "--only-tags",
+        type=lambda value: {tag.strip() for tag in value.split(",") if tag.strip()},
+        help="Generate only jobs matching any comma-separated tag.",
+    )
     parser.add_argument("--github-output", help="Path to the GitHub Actions output file.")
     parser.add_argument("--stdout", action="store_true", help="Print the generated matrix JSON to stdout.")
     return parser.parse_args()
@@ -251,6 +281,7 @@ def main() -> None:
         example_default_scope=args.example_default_scope,
         test_scope_env=args.test_scope_env,
         example_scope_env=args.example_scope_env,
+        only_tags=args.only_tags,
     )
     logger.info("Generated %d matrix jobs", len(matrix))
     if len(matrix) > 256:

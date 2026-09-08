@@ -159,6 +159,7 @@ jobs:
             --scripts-path tests/functional/dataloader \
             --scripts-path tests/functional/dynamo \
             --github-output "$GITHUB_OUTPUT" \
+            --only-tags gpu/4,gpu/8 \
             --output-json jobs.json
 
       - name: Display generated functional matrix
@@ -200,6 +201,7 @@ jobs:
           path: dist
           # run-id: ${{ needs.wheel.outputs.dist_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: nvidia-smi
       - name: Run functional job
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
