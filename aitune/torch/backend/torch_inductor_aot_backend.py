@@ -75,6 +75,7 @@ class TorchInductorAotBackend(Backend):
     STATE_TYPE = "type"
     STATE_COMPILED_MODEL_PATH = "compiled_model_path"
     STATE_DEVICE = "device"
+    STATE_GRAPH_SPEC = "graph_spec"
 
     def __init__(self, config: TorchInductorAotBackendConfig | None = None):
         """Initialize TorchInductorAotBackend.
@@ -86,6 +87,7 @@ class TorchInductorAotBackend(Backend):
         self._config = config or TorchInductorAotBackendConfig()
         self._compiled_model_artifact: ArtifactPath | None = None
         self._runner = None
+        self._graph_spec: GraphSpec | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -99,6 +101,7 @@ class TorchInductorAotBackend(Backend):
         """Export and compile the model with AOT Inductor, then load the runner."""
         module = module.eval()
         move_module_to_device(module, self._device)
+        self._graph_spec = graph_spec
 
         with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
             exported = TorchExporter().export(module, samples[0], graph_spec, device=self._device).exported_program
@@ -139,8 +142,12 @@ class TorchInductorAotBackend(Backend):
         Returns:
             Any: The result of the inference.
         """
+        graph_spec = cast(GraphSpec, self._graph_spec)
         with torch.no_grad():
-            return self._runner(*args, **kwargs)
+            forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
+            flat_inputs = graph_spec.input_spec.flatten_tensors(forward_inputs.arguments)
+            flat_outputs = self._runner(*flat_inputs)
+            return graph_spec.restore_outputs(flat_outputs, forward_inputs.arguments)
 
     def _deactivate(self):
         """Deactivate backend."""
@@ -152,12 +159,13 @@ class TorchInductorAotBackend(Backend):
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""
-        if self._compiled_model_artifact is None:
+        if self._compiled_model_artifact is None or self._graph_spec is None:
             raise RuntimeError("Backend has not been built yet. Please call build() first.")
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_COMPILED_MODEL_PATH: self._compiled_model_artifact,
             self.STATE_DEVICE: self._device,
+            self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
         }
 
     @classmethod
@@ -169,5 +177,6 @@ class TorchInductorAotBackend(Backend):
         backend = cls()
         backend._compiled_model_artifact = state_dict[cls.STATE_COMPILED_MODEL_PATH]
         backend._device = state_dict[cls.STATE_DEVICE]
+        backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend

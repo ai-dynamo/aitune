@@ -19,7 +19,7 @@ from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
 from tests.toy_models import ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_recorded_graph_spec, requires_cuda
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -216,6 +216,27 @@ def test_to_dict_before_build_raises():
         TorchInductorAotBackend().to_dict()
 
 
+def test_infer_restores_mutable_structured_inputs(mocker):
+    class StatefulDecoder(nn.Module):
+        def forward(self, x, cache):
+            cache[0] = x + 1
+            return x * 2
+
+    model = StatefulDecoder()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [None]), {}), strict=True)
+    backend = TorchInductorAotBackend()
+    backend._graph_spec = graph_spec
+    backend._runner = mocker.Mock(return_value=(x * 2, x + 1))
+    cache = [None]
+
+    result = backend._infer(x, cache)
+
+    backend._runner.assert_called_once_with(x)
+    torch.testing.assert_close(result, x * 2)
+    torch.testing.assert_close(cache[0], x + 1)
+
+
 @requires_cuda
 def test_to_dict_contains_required_keys(mock_aoti, backend, model, graph_spec, sample_data, torch_device, tmp_path):
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
@@ -223,19 +244,22 @@ def test_to_dict_contains_required_keys(mock_aoti, backend, model, graph_spec, s
     assert state[TorchInductorAotBackend.STATE_TYPE] == "TorchInductorAotBackend"
     assert state[TorchInductorAotBackend.STATE_COMPILED_MODEL_PATH] == ArtifactPath(tmp_path, Path("model.pt2"))
     assert state[TorchInductorAotBackend.STATE_DEVICE] == torch_device
+    assert state[TorchInductorAotBackend.STATE_GRAPH_SPEC] == graph_spec.to_dict()
 
 
 @requires_cuda
-def test_from_dict_restores_state(tmp_path, torch_device):
+def test_from_dict_restores_state(tmp_path, torch_device, graph_spec):
     compiled_artifact = ArtifactPath(tmp_path, "model.pt2")
     state = {
         TorchInductorAotBackend.STATE_TYPE: "TorchInductorAotBackend",
         TorchInductorAotBackend.STATE_COMPILED_MODEL_PATH: compiled_artifact,
         TorchInductorAotBackend.STATE_DEVICE: torch_device,
+        TorchInductorAotBackend.STATE_GRAPH_SPEC: graph_spec.to_dict(),
     }
     restored = TorchInductorAotBackend.from_dict(None, state)
     assert restored._compiled_model_artifact == compiled_artifact
     assert restored._device == torch_device
+    assert restored._graph_spec == graph_spec
     assert restored.state == BackendState.CHECKPOINT_LOADED
 
 

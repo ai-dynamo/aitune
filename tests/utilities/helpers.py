@@ -3,11 +3,14 @@
 """Helper functions and classes for testing."""
 
 from collections.abc import Sequence
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
 
+from aitune.torch.module.forward_contract import ForwardContractCapture
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -55,6 +58,34 @@ def make_graph_spec(
         input_spec=make_input_metadata(forward_signature, sample, strict=strict, batch_size=batch_size),
         output_spec=SampleMetadata.from_outputs(output, strict=strict, batch_size=batch_size),
         forward_signature=forward_signature,
+    )
+
+
+def make_recorded_graph_spec(
+    module: torch.nn.Module,
+    sample: Sample,
+    *,
+    name: str = "test_graph",
+    strict: bool = False,
+    batch_size: int | None = None,
+) -> GraphSpec:
+    """Create graph metadata and a forward contract from one observed call."""
+    args, kwargs = deepcopy(sample)
+    forward_signature = ForwardSignature.from_callable(module.forward)
+    forward_inputs = forward_signature.normalize(args, kwargs)
+    input_spec = SampleMetadata.from_inputs(forward_inputs.arguments, strict=strict, batch_size=batch_size)
+    contract_capture = ForwardContractCapture.before_call(forward_inputs.arguments)
+    with torch.no_grad():
+        output = module(*args, **kwargs)
+    output_spec = SampleMetadata.from_outputs(output, strict=strict, batch_size=batch_size)
+    post_input_spec = SampleMetadata.from_inputs(forward_inputs.arguments, strict=strict, batch_size=batch_size)
+    return GraphSpec(
+        name=name,
+        input_spec=input_spec,
+        output_spec=output_spec,
+        forward_signature=forward_signature,
+        post_input_spec=post_input_spec,
+        forward_contract=contract_capture.after_call(forward_inputs.arguments, output, output_spec),
     )
 
 
