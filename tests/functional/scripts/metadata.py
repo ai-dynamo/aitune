@@ -19,7 +19,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger("metadata")
 
-DEFAULT_DOCKER_IMAGE = "nvcr.io/nvidia/pytorch:25.10-py3"
+DEFAULT_DOCKER_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
 DEFAULT_RUNNER = "prod-aitune-tester-rtx-pro-4500-v1"
 RUNNERS_BY_TAG = {
     "gpu": DEFAULT_RUNNER,

@@ -49,12 +49,23 @@ env:
   # PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }} 
   PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/ai-dynamo/aitune:82eb49ab9301930fdafcb772404d8538d0b011bc
 
+  # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
+  # plugin. RTX runners have no EFA provider, so OFI initialization fails and
+  # NCCL segfaults during process-group creation. Use NCCL's built-in Socket
+  # transport for this single-node, 4xGPU sanity check.
+  # fix for error: Segmentation fault: address not mapped to object at address (nil)
+  NCCL_NET_PLUGIN: none
+  NCCL_NET: Socket
+
+  # Actions version pins
   _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
   _ACTIONS_DOWNLOAD_ARTIFACT: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
   _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
   _ACTIONS_DOCKER_LOGIN: &actions_docker_login docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
   _ACTIONS_DOCKER_BUILD_PUSH: &actions_docker_build_push docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+
+
 
 defaults:
   run:
@@ -88,8 +99,6 @@ jobs:
       NCCL_DEBUG: INFO
       NCCL_DEBUG_SUBSYS: INIT,NET,GRAPH
       UCX_LOG_LEVEL: info
-      NCCL_NET_PLUGIN: none
-      NCCL_NET: Socket
     steps:
       - uses: *actions_checkout
         with:
@@ -106,38 +115,70 @@ jobs:
           python -c "import torch_tensorrt; print('Torch-TensorRT version:', torch_tensorrt.__version__)"
       - run: python .github/scripts/nccl_4_rank_sanity.py
 
-  # pytorch-image:
-  #   name: Build PyTorch image
-  #   needs: wheel
-  #   runs-on: linux-amd64-cpu4
-  #   outputs:
-  #     image: ${{ steps.image.outputs.image }}
-  #   permissions:
-  #     contents: read
-  #     packages: write
-  #   steps:
-  #     - uses: *actions_checkout
-  #       with:
-  #         persist-credentials: false
-  #     - uses: *actions_download_artifact
-  #       with:
-  #         name: dist
-  #         path: dist
-  #     - uses: *actions_docker_login
-  #       with:
-  #         registry: ghcr.io
-  #         username: ${{ github.actor }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
-  #     - uses: *actions_docker_build_push
-  #       with:
-  #         context: .
-  #         file: .github/docker/Dockerfile
-  #         push: true
-  #         build-args: |
-  #           FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
-  #         tags: ${{ env.PYTORCH_CI_IMAGE }}
-  #     - id: image
-  #       run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
+  create-base-images:
+    name: Create AITune images from NVCR PyTorch images
+    runs-on: linux-amd64-cpu4
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        torch_ci_image_base: [25.08-py3, 25.10-py3, 26.01-py3, 26.03-py3, 26.05-py3, 26.06-py3]
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_download_artifact
+        with:
+          name: dist
+          path: dist
+      - uses: *actions_docker_login
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: *actions_docker_build_push
+        with:
+          context: .
+          file: .github/docker/Dockerfile
+          push: true
+          build-args: |
+            FROM_IMAGE=nvcr.io/nvidia/pytorch:${{ matrix.torch_ci_image_base }}
+          tags: ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}
+      - id: image
+        run: echo "image=ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }} >> "$GITHUB_OUTPUT"
+    
+  pytorch-image:
+    name: Build PyTorch image
+    needs: wheel
+    runs-on: linux-amd64-cpu4
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_download_artifact
+        with:
+          name: dist
+          path: dist
+      - uses: *actions_docker_login
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: *actions_docker_build_push
+        with:
+          context: .
+          file: .github/docker/Dockerfile
+          push: true
+          build-args: |
+            FROM_IMAGE=nvcr.io/nvidia/pytorch:26.06-py3
+          tags: ghcr.io/ai-dynamo/aitune:26.06-py3
+      - id: image
+        run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
 
   # main-ci-vars:
   #   name: Main CI Variables (pytorch_image and dist_run_id)
@@ -161,44 +202,45 @@ jobs:
   #           echo "dist_run_id=${{ needs.main-ci.outputs.dist_run_id }}" >> $GITHUB_OUTPUT
   #         fi
 
-  # pytorch-gpu-nvcr-container:
-  #   name: PyTorch GPU ${{ matrix.torch_ci_image }}
-  #   runs-on: prod-aitune-tester-rtx-pro-4500-v1
-  #   timeout-minutes: 45
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       include:
-  #         - torch_ci_image: nvcr.io/nvidia/pytorch:25.08-py3
-  #           extra_packages: "numpy<2.0"
-  #         - torch_ci_image: nvcr.io/nvidia/pytorch:25.10-py3
-  #           extra_packages: ""
-  #         - torch_ci_image: nvcr.io/nvidia/pytorch:26.01-py3
-  #           extra_packages: ""
-  #         - torch_ci_image: nvcr.io/nvidia/pytorch:26.03-py3
-  #           extra_packages: ""
-  #         - torch_ci_image: nvcr.io/nvidia/pytorch:26.05-py3
-  #           extra_packages: ""
-  #         - torch_ci_image: nvcr.io/nvidia/pytorch:26.06-py3
-  #           extra_packages: ""
-  #   container:
-  #     image: ${{ matrix.torch_ci_image }}
-  #     options: -u 1000
-  #   env:
-  #     EXTRA_PACKAGES: ${{ matrix.extra_packages }}
-  #   steps:
-  #     - uses: *actions_checkout
-  #       with:
-  #         persist-credentials: false
-  #     - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
-  #     - run: pip list
-  #     - run: nvidia-smi
-  #     - run: python -c "import sys; print(sys.version)"
-  #     - run: python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
-  #     - run: python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
-  #     - run: python -c "import tensorrt; print(tensorrt.__version__)"
-  #     - run: python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
-  #     - run: pytest
+  pytorch-gpu-nvcr-container:
+    name: PyTorch GPU ${{ matrix.torch_ci_image }}
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 45
+    needs: create-base-images
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.08-py3
+            extra_packages: "numpy<2.0"
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.10-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.01-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.03-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.05-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.06-py3
+            extra_packages: ""
+    container:
+      image: ${{ matrix.torch_ci_image }}
+      options: -u 1000
+    env:
+      EXTRA_PACKAGES: ${{ matrix.extra_packages }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
+      - run: pip list
+      - run: nvidia-smi
+      - run: python -c "import sys; print(sys.version)"
+      - run: python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
+      - run: python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
+      - run: python -c "import tensorrt; print(tensorrt.__version__)"
+      - run: python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+      - run: pytest
 
   generate-functional-matrix:
     name: Generate functional matrix
@@ -273,8 +315,6 @@ jobs:
       - name: Run functional job
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          NCCL_NET_PLUGIN: none
-          NCCL_NET: Socket
         run: |
           python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
 
