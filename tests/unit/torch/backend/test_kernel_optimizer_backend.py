@@ -19,6 +19,8 @@ from aitune.torch.backend.kernel_optimizer_backend import (
 )
 from aitune.torch.backend.kernels.kernel_optimization_plan import KernelOptimizationPlan
 from aitune.torch.backend.kernels.kernel_provider import (
+    DiffusersAttentionBackend,
+    DiffusersAttentionKernelProvider,
     FlashAttention4KernelProvider,
     KernelGenerationResult,
     KernelGenerator,
@@ -218,13 +220,16 @@ def test_config_defaults_to_attention_providers():
     assert [type(provider) for provider in first_providers] == [
         TorchSDPAKernelProvider,
         TorchSDPAKernelProvider,
+        DiffusersAttentionKernelProvider,
         FlashAttention4KernelProvider,
     ]
-    flash_provider, cudnn_provider, _ = first_providers
-    assert isinstance(flash_provider, TorchSDPAKernelProvider)
+    cudnn_provider, flash_provider, flash_3_provider, _ = first_providers
     assert isinstance(cudnn_provider, TorchSDPAKernelProvider)
-    assert flash_provider.backend is SDPBackend.FLASH_ATTENTION
     assert cudnn_provider.backend is SDPBackend.CUDNN_ATTENTION
+    assert isinstance(flash_provider, TorchSDPAKernelProvider)
+    assert flash_provider.backend is SDPBackend.FLASH_ATTENTION
+    assert isinstance(flash_3_provider, DiffusersAttentionKernelProvider)
+    assert flash_3_provider.backend is DiffusersAttentionBackend.FLASH_3_HUB
     assert first_providers is not second_providers
     provider_pairs = zip(first_providers, second_providers, strict=True)
     assert all(first is not second for first, second in provider_pairs)

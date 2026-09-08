@@ -21,19 +21,22 @@ import torch.nn.functional as F  # noqa: N812
 from packaging.version import Version
 
 from aitune.torch.backend.kernels import KernelOptimizer
-from aitune.torch.backend.kernels.kernel_provider import SageAttentionKernelProvider
+from aitune.torch.backend.kernels.kernel_provider import (
+    KernelProvider,
+    SageAttentionKernelProvider,
+)
 
 # These tests run both as pytest modules and as standalone scripts in CI or manually.
 # Standalone execution adds this directory, rather than the repository root, to sys.path.
 if __package__:
-    from .kernel_utils import (
+    from .kernel_utils_for_test import (
         CountingKernelProvider,
         PreferProviderKernelUtils,
         assert_provider_was_used,
         selected_counting_provider,
     )
 else:
-    from kernel_utils import (
+    from kernel_utils_for_test import (
         CountingKernelProvider,
         PreferProviderKernelUtils,
         assert_provider_was_used,
@@ -59,9 +62,9 @@ class AttentionModule(torch.nn.Module):
         return F.scaled_dot_product_attention(q, k, v, enable_gqa=False)
 
 
-def test_kernel_optimizer_attention():
+def test_kernel_optimizer_attention(provider: KernelProvider):
     pytest.importorskip("sageattention")
-    provider = CountingKernelProvider(SageAttentionKernelProvider())
+    provider = CountingKernelProvider(provider)
 
     net = AttentionModule()
     data = [(get_sample(torch.float16), {})]
@@ -88,4 +91,10 @@ def test_kernel_optimizer_attention():
 
 if __name__ == "__main__":
     basicConfig(level=logging.INFO, format="%(message)s", force=True)
-    test_kernel_optimizer_attention()
+
+    for provider in [
+        SageAttentionKernelProvider(),
+        # DiffusersAttentionKernelProvider(DiffusersAttentionBackend.SAGE),  # not working with v1
+        # DiffusersAttentionKernelProvider(DiffusersAttentionBackend.SAGE_HUB),  # not working
+    ]:
+        test_kernel_optimizer_attention(provider=provider)

@@ -9,6 +9,7 @@
 """Functional test for KernelOptimizerBackend with an attention provider."""
 
 import logging
+import sys
 from logging import basicConfig
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -36,9 +37,10 @@ from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 # This test runs both as a pytest module and as a standalone script in CI or manually.
 # Standalone execution adds this directory, rather than the repository root, to sys.path.
 if __package__:
-    from .kernels.kernel_utils import PreferProviderKernelUtils
+    from .kernels.kernel_utils_for_test import PreferProviderKernelUtils
 else:
-    from kernels.kernel_utils import PreferProviderKernelUtils
+    sys.path.insert(0, str(Path(__file__).parent / "kernels"))
+    from kernel_utils_for_test import PreferProviderKernelUtils
 
 
 def get_sample(dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
