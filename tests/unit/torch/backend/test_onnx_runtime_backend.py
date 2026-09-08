@@ -20,7 +20,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_recorded_graph_spec, requires_cuda
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -315,6 +315,47 @@ def test_infer_calls_session_and_returns_tensor(
     assert isinstance(output, torch.Tensor)
 
 
+def test_infer_restores_mutable_state_with_ort_owned_tensor(mocker):
+    class StatefulDecoder(nn.Module):
+        def forward(self, x, cache):
+            cache[0].add_(x)
+            return x * 2
+
+    model = StatefulDecoder()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [torch.zeros(2)]), {}), strict=True)
+    backend = ONNXRuntimeBackend()
+    backend._graph_spec = graph_spec
+    backend._session = mocker.Mock()
+    input_names = [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
+    session_inputs = [mocker.Mock() for _ in input_names]
+    for session_input, name in zip(session_inputs, input_names, strict=True):
+        session_input.name = name
+    backend._session.get_inputs.return_value = session_inputs
+    io_binding = backend._session.io_binding.return_value
+    bind_inputs = mocker.patch.object(backend, "_bind_inputs")
+    mocker.patch.object(backend, "_bind_outputs")
+    returned_state = torch.full((2,), 3.0)
+    mocker.patch.object(
+        backend,
+        "_collect_outputs",
+        return_value=dict(zip(graph_spec.output_names(), (x * 2, returned_state), strict=True)),
+    )
+    original_state = torch.zeros(2)
+    cache = [original_state]
+
+    result = backend._infer(x, cache)
+
+    bind_inputs.assert_called_once_with(
+        io_binding,
+        dict(zip(input_names, (x, original_state), strict=True)),
+    )
+    backend._session.run_with_iobinding.assert_called_once_with(io_binding)
+    torch.testing.assert_close(result, x * 2)
+    assert cache[0] is returned_state
+    torch.testing.assert_close(original_state, torch.zeros(2))
+
+
 @requires_cuda
 def test_infer_binds_cuda_inputs_via_pointer(
     mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
@@ -386,7 +427,6 @@ def test_to_dict_contains_required_keys(mock_onnx, backend, model, graph_spec, s
     assert state[ONNXRuntimeBackend.STATE_ONNX_MODEL_PATH] == ArtifactPath(tmp_path, Path("model_raw.onnx"))
     assert state[ONNXRuntimeBackend.STATE_DEVICE] == torch_device
     assert ONNXRuntimeBackend.STATE_GRAPH_SPEC in state
-    assert ONNXRuntimeBackend.STATE_OUTPUT_OBJECT in state
     assert state[ONNXRuntimeBackend.STATE_SAMPLES] == backend._samples.to_dict()
 
 
@@ -394,8 +434,6 @@ def test_to_dict_contains_required_keys(mock_onnx, backend, model, graph_spec, s
 def test_from_dict_restores_state(tmp_path, torch_device):
     toy = ToyTorchModel().to(torch_device)
     real_graph_spec = toy.graph_spec(batch_sizes=[1, 2], device=torch_device)
-    dummy_output = torch.zeros(1, 5)
-
     config = ONNXRuntimeBackendConfig()
     onnx_artifact = ArtifactPath(tmp_path, "model_raw.onnx")
     state = {
@@ -404,13 +442,11 @@ def test_from_dict_restores_state(tmp_path, torch_device):
         ONNXRuntimeBackend.STATE_DEVICE: torch_device,
         ONNXRuntimeBackend.STATE_CONFIG: config.to_dict(),
         ONNXRuntimeBackend.STATE_GRAPH_SPEC: real_graph_spec.to_dict(),
-        ONNXRuntimeBackend.STATE_OUTPUT_OBJECT: dummy_output,
     }
     restored = ONNXRuntimeBackend.from_dict(None, state)
     assert restored._onnx_model_artifact == onnx_artifact
     assert restored._device == torch_device
     assert restored._graph_spec is not None
-    assert restored._output_object is not None
     assert restored.state == BackendState.CHECKPOINT_LOADED
 
 
