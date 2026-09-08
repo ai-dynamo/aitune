@@ -263,6 +263,7 @@ jobs:
     name: CUDA ${{ matrix.variant.uv_torch_backend }} Python ${{ matrix.python_version }} ${{ matrix.variant.aitune_extras }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
+    needs: create-cuda-base-images
     strategy:
       fail-fast: false
       matrix:
