@@ -88,12 +88,14 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
+      - run: nvidia-smi
       - run: |
+          python -c "import sys; print(sys.version)"
           python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
           python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
           python -c "import tensorrt; print(tensorrt.__version__)"
           python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
-          python .github/scripts/nccl_4_rank_sanity.py
+      - run: python .github/scripts/nccl_4_rank_sanity.py
 
   # pytorch-image:
   #   name: Build PyTorch image

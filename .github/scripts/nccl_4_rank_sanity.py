@@ -17,7 +17,7 @@ TIMEOUT_SECONDS = 300
 
 def _run_worker() -> None:
     """Create the rank-local NCCL communicator and verify one collective."""
-    print(f"Running worker on rank {dist.get_rank()}", flush=True)
+    print("Running worker", flush=True)
     local_rank = int(os.environ["LOCAL_RANK"])
     device = torch.device("cuda", local_rank)
     torch.cuda.set_device(device)
