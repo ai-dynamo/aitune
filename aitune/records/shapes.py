@@ -7,55 +7,47 @@ from dataclasses import dataclass
 from aitune.records.dtypes import DType
 
 
+def _validate_declared_shape(shape: tuple[int | str | None, ...]) -> None:
+    """Validate static and symbolic dimensions."""
+    if not isinstance(shape, tuple):
+        raise ValueError(f"BoundedTensorSpec.shape must be a tuple, got {shape!r}")
+
+    for index, dimension in enumerate(shape):
+        if isinstance(dimension, bool):
+            raise ValueError(
+                f"BoundedTensorSpec.shape[{index}] must be a positive integer, symbolic name, or None, "
+                f"got {dimension!r}"
+            )
+        if isinstance(dimension, int) and dimension <= 0:
+            raise ValueError(f"BoundedTensorSpec.shape[{index}] must be positive, got {dimension!r}")
+        if isinstance(dimension, str) and not dimension:
+            raise ValueError(f"BoundedTensorSpec.shape[{index}] must not be an empty symbolic name")
+        if not isinstance(dimension, int | str) and dimension is not None:
+            raise ValueError(
+                f"BoundedTensorSpec.shape[{index}] must be a positive integer, symbolic name, or None, "
+                f"got {dimension!r}"
+            )
+
+
+def _validate_bound(name: str, label: str, shape: tuple[int, ...], rank: int) -> None:
+    """Validate one concrete shape bound."""
+    if not isinstance(shape, tuple):
+        raise ValueError(f"BoundedTensorSpec.{label}_shape must be a tuple, got {shape!r}")
+    if len(shape) != rank:
+        raise ValueError(f"{label}_shape for {name!r} must have rank {rank}, got {len(shape)}")
+    for index, value in enumerate(shape):
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise ValueError(f"{label} size for axis {index} must be a positive integer, got {value!r}")
+
+
 @dataclass(frozen=True, slots=True)
-class TensorSpec:
-    """Describe one tensor in an executable interface.
+class BoundedTensorSpec:
+    """Describe one tensor over the shape range established by tuning.
 
     Integer dimensions are fixed, strings are symbolic dimensions, and ``None``
-    is an unnamed dynamic dimension. The specification contains only information
-    declared by the executable; concrete bounds belong to :class:`TunedTensorSpec`.
-
-    Args:
-        name: Tensor name used by the executable.
-        dtype: Tensor element type.
-        shape: Static and dynamic dimensions declared by the executable.
-    """
-
-    name: str
-    dtype: DType
-    shape: tuple[int | str | None, ...]
-
-    def __post_init__(self) -> None:
-        """Validate the tensor name and declared dimensions."""
-        if not isinstance(self.name, str) or not self.name:
-            raise ValueError("TensorSpec.name must be a non-empty string")
-
-        if not isinstance(self.shape, tuple):
-            raise ValueError(f"TensorSpec.shape must be a tuple, got {self.shape!r}")
-
-        for index, dimension in enumerate(self.shape):
-            if isinstance(dimension, bool):
-                raise ValueError(
-                    f"TensorSpec.shape[{index}] must be a positive integer, symbolic name, or None, got {dimension!r}"
-                )
-            if isinstance(dimension, int):
-                if dimension <= 0:
-                    raise ValueError(f"TensorSpec.shape[{index}] must be positive, got {dimension!r}")
-            elif isinstance(dimension, str):
-                if not dimension:
-                    raise ValueError(f"TensorSpec.shape[{index}] must not be an empty symbolic name")
-            elif dimension is not None:
-                raise ValueError(
-                    f"TensorSpec.shape[{index}] must be a positive integer, symbolic name, or None, got {dimension!r}"
-                )
-
-
-@dataclass(frozen=True, slots=True)
-class TunedTensorSpec(TensorSpec):
-    """Describe one tensor over the shape range AITune selected for an artifact.
-
-    ``batch_axis`` is ``None`` when tuning did not identify a logical request
-    batch axis.
+    is an unnamed dynamic dimension. Concrete minimum and maximum shapes record
+    the domain AITune validated for the artifact. ``batch_axis`` is ``None`` when
+    tuning did not identify a logical request batch axis.
 
     Args:
         name: Tensor name used by the executable.
@@ -66,26 +58,28 @@ class TunedTensorSpec(TensorSpec):
         batch_axis: Logical batch-axis index, or ``None`` when unknown.
     """
 
+    name: str
+    dtype: DType
+    shape: tuple[int | str | None, ...]
     min_shape: tuple[int, ...]
     max_shape: tuple[int, ...]
     batch_axis: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate concrete bounds against the static specification."""
-        TensorSpec.__post_init__(self)
+        """Validate the tensor declaration and its concrete bounds."""
+        if not isinstance(self.name, str) or not self.name:
+            raise ValueError("BoundedTensorSpec.name must be a non-empty string")
+        if not isinstance(self.dtype, DType):
+            raise ValueError(f"BoundedTensorSpec.dtype must be a DType, got {self.dtype!r}")
+
+        _validate_declared_shape(self.shape)
         rank = len(self.shape)
-        if len(self.min_shape) != rank or len(self.max_shape) != rank:
-            raise ValueError(
-                f"Tuned tensor specification for {self.name!r} must have rank {rank}, "
-                f"got min_shape rank {len(self.min_shape)} and max_shape rank {len(self.max_shape)}"
-            )
+        _validate_bound(self.name, "minimum", self.min_shape, rank)
+        _validate_bound(self.name, "maximum", self.max_shape, rank)
 
         for index, (declared, minimum, maximum) in enumerate(
             zip(self.shape, self.min_shape, self.max_shape, strict=True)
         ):
-            for label, value in (("minimum", minimum), ("maximum", maximum)):
-                if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
-                    raise ValueError(f"{label} size for axis {index} must be a positive integer, got {value!r}")
             if minimum > maximum:
                 raise ValueError(
                     f"Axis {index} of {self.name!r} must satisfy min <= max, got min={minimum}, max={maximum}"
@@ -99,35 +93,6 @@ class TunedTensorSpec(TensorSpec):
             not isinstance(self.batch_axis, int) or isinstance(self.batch_axis, bool) or not 0 <= self.batch_axis < rank
         ):
             raise ValueError(f"batch_axis must be a valid axis for {self.name!r}, got {self.batch_axis!r}")
-
-    @classmethod
-    def from_spec(
-        cls,
-        spec: TensorSpec,
-        *,
-        min_shape: tuple[int, ...],
-        max_shape: tuple[int, ...],
-        batch_axis: int | None = None,
-    ) -> "TunedTensorSpec":
-        """Add tuning results to an existing tensor specification.
-
-        Args:
-            spec: Static tensor specification.
-            min_shape: Smallest shape AITune selected for the artifact.
-            max_shape: Largest shape AITune selected for the artifact.
-            batch_axis: Logical batch-axis index, or ``None`` when unknown.
-
-        Returns:
-            A tuned tensor specification.
-        """
-        return cls(
-            name=spec.name,
-            dtype=spec.dtype,
-            shape=spec.shape,
-            min_shape=min_shape,
-            max_shape=max_shape,
-            batch_axis=batch_axis,
-        )
 
     @property
     def min_batch_size(self) -> int | None:
