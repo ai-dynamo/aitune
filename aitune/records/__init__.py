@@ -47,14 +47,16 @@ concrete bounds and batch interpretation established by tuning.
     8
 """
 
-from aitune.records.artifact import (
+from aitune.records.artifacts import (
     Artifact,
     ArtifactFile,
     ArtifactIntegrityError,
     ONNXArtifact,
     ONNXExecutionProvider,
     PT2Artifact,
+    TensorRTOptimizationProfile,
     TensorRTPlanArtifact,
+    TensorRTProfileInput,
 )
 from aitune.records.dtypes import DType
 from aitune.records.shapes import BoundedTensorSpec
@@ -68,5 +70,7 @@ __all__ = [
     "ONNXArtifact",
     "ONNXExecutionProvider",
     "PT2Artifact",
+    "TensorRTOptimizationProfile",
     "TensorRTPlanArtifact",
+    "TensorRTProfileInput",
 ]

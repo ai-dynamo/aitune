@@ -8,7 +8,7 @@ import json
 import logging
 from collections import OrderedDict
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, cast
@@ -19,6 +19,8 @@ from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
 from aitune.exceptions import AITuneUserInputError
+from aitune.records import TensorRTOptimizationProfile, TensorRTPlanArtifact, TensorRTProfileInput
+from aitune.torch.artifact import bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
     BackendBuildStep,
@@ -43,6 +45,7 @@ from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
+from aitune.utils.hashing import hash_file
 from aitune.utils.monitoring import annotate
 
 G_LOGGER.use_python_logging_system = True
@@ -253,6 +256,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._trt_optimization_profiles_artifact: ArtifactPath | None = None
         self._output_object = None
         self._graph_spec = None
+        self._artifact: TensorRTPlanArtifact | None = None
+        self._artifact_error: str | None = None
 
         # runtime variables
         self._output_allocator = None
@@ -272,6 +277,13 @@ class TensorRTBackend(Backend, TensorRTRunner):
     def describe(self) -> str:
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
+
+    def artifact(self) -> TensorRTPlanArtifact:
+        """Return the TensorRT plan and runtime contract captured during activation."""
+        if self._artifact is None:
+            detail = f": {self._artifact_error}" if self._artifact_error else ""
+            raise RuntimeError(f"TensorRT artifact is not available until the backend has built or deployed{detail}")
+        return self._artifact
 
     def _timing_cache_path(self) -> Path | None:
         """Return a timing cache path that is safe for this process."""
@@ -763,6 +775,82 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         # Load optimization profiles
         self._trt_optimization_profiles = self._load_trt_optimization_profiles(optimization_profiles_artifact.path)
+        if self._artifact is None:
+            self._capture_artifact()
+
+    def _capture_artifact(self) -> None:
+        """Capture publication metadata without changing backend tuning success."""
+        try:
+            self._artifact = self._create_artifact()
+            self._artifact_error = None
+        except (OSError, RuntimeError, ValueError) as error:
+            self._artifact_error = str(error)
+            logger.info("TensorRT plan is not available for publication: %s", error)
+
+    def _create_artifact(self) -> TensorRTPlanArtifact:
+        """Create an artifact from the active engine and recorded shape bounds."""
+        if (
+            self._engine_artifact is None
+            or self._graph_spec is None
+            or self._input_names is None
+            or self._output_names is None
+        ):
+            raise RuntimeError("TensorRT artifact requires an engine, active runtime, and graph specification")
+
+        profiles = self._artifact_profiles()
+        inputs = bounded_tensor_specs(self._graph_spec, "input", recorded_names=self._input_names)
+        inputs = tuple(
+            replace(
+                input_spec,
+                min_shape=tuple(
+                    min(profile.inputs[index].min_shape[axis] for profile in profiles)
+                    for axis in range(len(input_spec.min_shape))
+                ),
+                max_shape=tuple(
+                    max(profile.inputs[index].max_shape[axis] for profile in profiles)
+                    for axis in range(len(input_spec.max_shape))
+                ),
+            )
+            for index, input_spec in enumerate(inputs)
+        )
+        engine_path = self._engine_artifact.path
+        return TensorRTPlanArtifact(
+            inputs=inputs,
+            outputs=bounded_tensor_specs(self._graph_spec, "output", recorded_names=self._output_names),
+            path=engine_path,
+            fingerprint=hash_file(engine_path),
+            optimization_profiles=profiles,
+            use_cuda_graphs=self._config.use_cuda_graphs,
+        )
+
+    def _artifact_profiles(self) -> tuple[TensorRTOptimizationProfile, ...]:
+        """Translate the engine's TensorRT profiles into deployment records."""
+        if not self._trt_optimization_profiles or self._input_names is None:
+            raise RuntimeError("TensorRT artifact requires its optimization profiles")
+
+        result = []
+        for profile in self._trt_optimization_profiles:
+            unknown_names = set(profile) - set(self._input_names)
+            missing_names = set(self._input_names) - set(profile)
+            if unknown_names or missing_names:
+                raise ValueError(
+                    f"TensorRT profile inputs do not match the engine (missing: {sorted(missing_names)}, "
+                    f"unknown: {sorted(unknown_names)})"
+                )
+            result.append(
+                TensorRTOptimizationProfile(
+                    inputs=tuple(
+                        TensorRTProfileInput(
+                            name=name,
+                            min_shape=tuple(profile[name][0]),
+                            opt_shape=tuple(profile[name][1]),
+                            max_shape=tuple(profile[name][2]),
+                        )
+                        for name in self._input_names
+                    )
+                )
+            )
+        return tuple(result)
 
     def _deactivate(self):
         """Deactivate the TensorRT engine."""

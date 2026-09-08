@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Durable references to tuned files that publishers can consume."""
+"""Common durable artifact references and integrity handling."""
 
 import hashlib
 import os
@@ -8,7 +8,6 @@ import string
 import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 
 from aitune.records.shapes import BoundedTensorSpec
@@ -221,47 +220,3 @@ class Artifact:
             f"The {type(self).__name__} cannot be read at {path}. "
             f"The AITune cache may have been cleared or changed. Cause: {error}"
         )
-
-
-@dataclass(frozen=True, kw_only=True)
-class TensorRTPlanArtifact(Artifact):
-    """A serialized TensorRT plan produced by tuning.
-
-    Args:
-        optimization_profile_count: Number of profiles stored in the plan.
-        use_cuda_graphs: Whether the selected AITune runtime used CUDA graphs.
-    """
-
-    optimization_profile_count: int = 1
-    use_cuda_graphs: bool = False
-
-    def __post_init__(self) -> None:
-        """Validate TensorRT-specific runtime metadata."""
-        super().__post_init__()
-        if self.optimization_profile_count < 1:
-            raise ValueError("A TensorRT plan must contain at least one optimization profile")
-
-
-class ONNXExecutionProvider(str, Enum):
-    """ONNX Runtime execution provider selected during tuning."""
-
-    CUDA = "cuda"
-    TENSORRT = "tensorrt"
-
-
-@dataclass(frozen=True, kw_only=True)
-class ONNXArtifact(Artifact):
-    """An ONNX model finalized as a tuning result for ONNX Runtime."""
-
-    execution_provider: ONNXExecutionProvider = ONNXExecutionProvider.CUDA
-
-
-@dataclass(frozen=True, kw_only=True)
-class PT2Artifact(Artifact):
-    """An AOTInductor package consumable by Triton's ``torch_aoti`` backend.
-
-    Args:
-        structured_call: Whether the package embeds structured inputs or outputs.
-    """
-
-    structured_call: bool

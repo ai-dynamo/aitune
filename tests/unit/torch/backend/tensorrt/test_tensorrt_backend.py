@@ -10,6 +10,13 @@ import torch
 from polygraphy.backend.trt import Profile
 
 from aitune.exceptions import AITuneUserInputError
+from aitune.records import (
+    BoundedTensorSpec,
+    DType,
+    TensorRTOptimizationProfile,
+    TensorRTPlanArtifact,
+    TensorRTProfileInput,
+)
 from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.tensorrt_backend import ProfileMode, TensorRTBackend, TensorRTBackendConfig
@@ -216,6 +223,143 @@ def test_tensorrt_backend_build(mock_tensorrt_components, tmp_path):
 
     # Verify backend is properly initialized
     assert backend is not None
+
+
+@requires_cuda
+def test_tensorrt_backend_build_exposes_the_final_engine_interface(mock_tensorrt_components, tmp_path):
+    _, _, mock_runtime = mock_tensorrt_components
+    runtime = mock_runtime.return_value
+    context, bindings, _, _, engine_info = runtime.create_execution_context.return_value
+    engine_info.input_names = ["input_x"]
+    engine_info.output_names = ["output"]
+    runtime.create_execution_context.return_value = (
+        context,
+        bindings,
+        ["input_x"],
+        ["output"],
+        engine_info,
+    )
+    model = ToyTorchModel().to("cuda").eval()
+    graph_spec = model.graph_spec(batch_sizes=[1, 2, 4], device="cuda")
+    first_profile = TensorRTProfile().add_input_shape("x", (1, IN_FEATURES), (2, IN_FEATURES), (2, IN_FEATURES))
+    second_profile = TensorRTProfile().add_input_shape("x", (3, IN_FEATURES), (3, IN_FEATURES), (4, IN_FEATURES))
+
+    backend = TensorRTBackend(
+        TensorRTBackendConfig(use_cuda_graphs=True, profiles=[first_profile, second_profile])
+    ).build(
+        model,
+        graph_spec,
+        model.samples(device="cuda"),
+        device=torch.device("cuda"),
+        cache_dir=tmp_path,
+    )
+
+    artifact = backend.artifact()
+
+    assert isinstance(artifact, TensorRTPlanArtifact)
+    assert artifact.inputs == (
+        BoundedTensorSpec(
+            name="input_x",
+            dtype=DType.FLOAT32,
+            min_shape=(1, IN_FEATURES),
+            max_shape=(4, IN_FEATURES),
+            batch_axis=0,
+        ),
+    )
+    assert artifact.outputs == (
+        BoundedTensorSpec(
+            name="output",
+            dtype=DType.FLOAT32,
+            min_shape=(1, OUT_FEATURES),
+            max_shape=(4, OUT_FEATURES),
+            batch_axis=0,
+        ),
+    )
+    assert artifact.path == tmp_path / "tensorrt/model.plan"
+    assert artifact.optimization_profile_count == 2
+    assert artifact.optimization_profiles == (
+        TensorRTOptimizationProfile(
+            inputs=(
+                TensorRTProfileInput(
+                    name="input_x",
+                    min_shape=(1, IN_FEATURES),
+                    opt_shape=(2, IN_FEATURES),
+                    max_shape=(2, IN_FEATURES),
+                ),
+            )
+        ),
+        TensorRTOptimizationProfile(
+            inputs=(
+                TensorRTProfileInput(
+                    name="input_x",
+                    min_shape=(3, IN_FEATURES),
+                    opt_shape=(3, IN_FEATURES),
+                    max_shape=(4, IN_FEATURES),
+                ),
+            )
+        ),
+    )
+    assert artifact.use_cuda_graphs
+    artifact.verify()
+
+
+@requires_cuda
+def test_artifact_metadata_failure_does_not_fail_tensorrt_build(mock_tensorrt_components, mocker, tmp_path):
+    model = ToyTorchModel().to("cuda").eval()
+    backend = TensorRTBackend()
+    mocker.patch.object(backend, "_create_artifact", side_effect=ValueError("unsupported interface"))
+
+    backend.build(
+        model,
+        model.graph_spec(device="cuda"),
+        model.samples(device="cuda"),
+        device=torch.device("cuda"),
+        cache_dir=tmp_path,
+    )
+
+    assert backend.is_active
+    with pytest.raises(RuntimeError, match="unsupported interface"):
+        backend.artifact()
+
+
+@requires_cuda
+def test_checkpoint_loaded_backend_reconstructs_tensorrt_artifact(mock_tensorrt_components, tmp_path):
+    _, _, mock_runtime = mock_tensorrt_components
+    runtime = mock_runtime.return_value
+    context, bindings, _, _, engine_info = runtime.create_execution_context.return_value
+    engine_info.input_names = ["input_x"]
+    engine_info.output_names = ["output"]
+    runtime.create_execution_context.return_value = (
+        context,
+        bindings,
+        ["input_x"],
+        ["output"],
+        engine_info,
+    )
+    model = ToyTorchModel().to("cuda").eval()
+    backend = TensorRTBackend().build(
+        model,
+        model.graph_spec(device="cuda"),
+        model.samples(device="cuda"),
+        device=torch.device("cuda"),
+        cache_dir=tmp_path,
+    )
+    restored = TensorRTBackend.from_dict(model, backend.to_dict())
+
+    restored.deploy(torch.device("cuda"))
+
+    assert restored.artifact().optimization_profiles == (
+        TensorRTOptimizationProfile(
+            inputs=(
+                TensorRTProfileInput(
+                    name="input_x",
+                    min_shape=(BATCH_SIZE, IN_FEATURES),
+                    opt_shape=(BATCH_SIZE, IN_FEATURES),
+                    max_shape=(BATCH_SIZE, IN_FEATURES),
+                ),
+            )
+        ),
+    )
 
 
 def test_tensorrt_state_marks_runtime_artifacts_but_not_timing_cache(tmp_path):

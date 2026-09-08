@@ -13,9 +13,11 @@ from aitune.records import (
     ONNXArtifact,
     ONNXExecutionProvider,
     PT2Artifact,
+    TensorRTOptimizationProfile,
     TensorRTPlanArtifact,
+    TensorRTProfileInput,
 )
-from aitune.records.artifact import ArtifactIntegrityError
+from aitune.records.artifacts import ArtifactIntegrityError
 
 INPUTS = (
     BoundedTensorSpec(
@@ -33,6 +35,18 @@ OUTPUTS = (
         min_shape=(1, 8, 768),
         max_shape=(8, 512, 768),
         batch_axis=0,
+    ),
+)
+PROFILES = (
+    TensorRTOptimizationProfile(
+        inputs=(
+            TensorRTProfileInput(
+                name="input_ids",
+                min_shape=(1, 8),
+                opt_shape=(4, 256),
+                max_shape=(8, 512),
+            ),
+        )
     ),
 )
 
@@ -171,7 +185,7 @@ def test_artifact_formats_preserve_runtime_requirements(tmp_path):
         outputs=OUTPUTS,
         path=path,
         fingerprint=fingerprint,
-        optimization_profile_count=2,
+        optimization_profiles=PROFILES + PROFILES,
         use_cuda_graphs=True,
     )
     onnx = ONNXArtifact(
@@ -194,9 +208,48 @@ def test_artifact_formats_preserve_runtime_requirements(tmp_path):
     assert pt2.structured_call is True
 
 
+def test_tensorrt_profile_rejects_an_optimum_outside_its_bounds():
+    with pytest.raises(ValueError, match="min <= opt <= max"):
+        TensorRTProfileInput(
+            name="input_ids",
+            min_shape=(1, 8),
+            opt_shape=(9, 256),
+            max_shape=(8, 512),
+        )
+
+
+def test_tensorrt_plan_requires_profiles_to_match_its_inputs(tmp_path):
+    path, fingerprint = _write_artifact(tmp_path)
+    wrong_profile = TensorRTOptimizationProfile(
+        inputs=(
+            TensorRTProfileInput(
+                name="tokens",
+                min_shape=(1, 8),
+                opt_shape=(4, 256),
+                max_shape=(8, 512),
+            ),
+        )
+    )
+
+    with pytest.raises(ValueError, match="must match the artifact input order"):
+        TensorRTPlanArtifact(
+            inputs=INPUTS,
+            outputs=OUTPUTS,
+            path=path,
+            fingerprint=fingerprint,
+            optimization_profiles=(wrong_profile,),
+        )
+
+
 def test_artifact_refuses_changed_or_missing_bytes(tmp_path):
     path, fingerprint = _write_artifact(tmp_path, b"plan")
-    artifact = TensorRTPlanArtifact(inputs=INPUTS, outputs=OUTPUTS, path=path, fingerprint=fingerprint)
+    artifact = TensorRTPlanArtifact(
+        inputs=INPUTS,
+        outputs=OUTPUTS,
+        path=path,
+        fingerprint=fingerprint,
+        optimization_profiles=PROFILES,
+    )
     artifact.verify()
 
     path.write_bytes(b"changed")
@@ -210,7 +263,13 @@ def test_artifact_refuses_changed_or_missing_bytes(tmp_path):
 
 def test_export_file_copies_only_verified_bytes(tmp_path):
     path, fingerprint = _write_artifact(tmp_path / "cache", b"plan")
-    artifact = TensorRTPlanArtifact(inputs=INPUTS, outputs=OUTPUTS, path=path, fingerprint=fingerprint)
+    artifact = TensorRTPlanArtifact(
+        inputs=INPUTS,
+        outputs=OUTPUTS,
+        path=path,
+        fingerprint=fingerprint,
+        optimization_profiles=PROFILES,
+    )
     destination = tmp_path / "repository" / "model.plan"
 
     assert artifact.export_file(destination).read_bytes() == b"plan"
