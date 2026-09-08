@@ -8,6 +8,7 @@ from typing import Any
 import torch
 
 from aitune.global_context import MODULE_CONTEXT_KEY, global_context
+from aitune.records import Artifact
 from aitune.torch.backend.backend import Backend, BuildMode
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
@@ -115,6 +116,22 @@ class TunedModule:
         """Deactivates the module backends."""
         for backend in self._backends.values():
             backend.deactivate()
+
+    def artifact(self) -> Artifact:
+        """Return the artifact for a module backed by one compiled graph.
+
+        Returns:
+            The artifact produced by the module's backend.
+
+        Raises:
+            RuntimeError: If the module dispatches between multiple compiled graphs.
+        """
+        if len(self._backends) != 1:
+            raise RuntimeError(
+                f"Module {self._module_name!r} has {len(self._backends)} compiled graphs; "
+                "a single deployable artifact is not available"
+            )
+        return next(iter(self._backends.values())).artifact()
 
     def deploy(self, device: torch.device | None):
         """Deploys the module backends."""

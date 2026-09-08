@@ -15,6 +15,7 @@ from typing import Any, ClassVar
 import torch
 import torch.nn as nn
 
+from aitune.records import Artifact
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_backend_build
@@ -329,6 +330,17 @@ class Backend(ABC):
             raise RuntimeError(f"Cannot run inference, backend {self.name} should be activated first")
 
         return self._infer(*args, **kwargs)
+
+    def artifact(self) -> Artifact:
+        """Return the deployable artifact produced by this backend.
+
+        Returns:
+            The backend's finalized artifact.
+
+        Raises:
+            RuntimeError: If this backend does not produce an independently deployable artifact.
+        """
+        raise RuntimeError(f"Backend {self.name} does not produce a deployable artifact")
 
     @abstractmethod
     def key(self) -> str:

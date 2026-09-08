@@ -102,6 +102,19 @@ def test_init():
     assert module._self_proxy_forward is not None
 
 
+def test_artifact_is_available_only_from_a_tuned_module(module):
+    with pytest.raises(RuntimeError, match="is not tuned"):
+        module.artifact()
+
+    expected = object()
+    tuned_module = Mock(spec=TunedModule)
+    tuned_module.artifact.return_value = expected
+    module._self_state = ModuleState.TUNED
+    module._self_wrapper = tuned_module
+
+    assert module.artifact() is expected
+
+
 def test_deploy_wrapper_coordinates_deployment(mocker, module):
     wrapper = Mock()
     module._self_wrapper = wrapper

@@ -12,6 +12,7 @@ from typing import Any, cast
 import torch
 import wrapt
 
+from aitune.records import Artifact
 from aitune.torch.backend.backend import Backend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
@@ -243,6 +244,20 @@ class Module(wrapt.CallableObjectProxy):
         if self._self_state == ModuleState.TUNED:
             wrapper = cast(TunedModule, self._self_wrapper)
             wrapper.deactivate()
+
+    def artifact(self) -> Artifact:
+        """Return the artifact produced by this tuned module.
+
+        Returns:
+            The module's deployable artifact.
+
+        Raises:
+            RuntimeError: If the module has not been tuned or cannot map to one artifact.
+        """
+        if self._self_state != ModuleState.TUNED:
+            raise RuntimeError(f"Module {self._self_name!r} is not tuned; a deployable artifact is not available")
+        wrapper = cast(TunedModule, self._self_wrapper)
+        return wrapper.artifact()
 
     @staticmethod
     def is_state_dict_valid(state_dict: dict):
