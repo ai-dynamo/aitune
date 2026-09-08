@@ -7,63 +7,37 @@ from dataclasses import dataclass
 from aitune.records.dtypes import DType
 
 
-def _validate_declared_shape(shape: tuple[int | str | None, ...]) -> None:
-    """Validate static and symbolic dimensions."""
-    if not isinstance(shape, tuple):
-        raise ValueError(f"BoundedTensorSpec.shape must be a tuple, got {shape!r}")
-
-    for index, dimension in enumerate(shape):
-        if isinstance(dimension, bool):
-            raise ValueError(
-                f"BoundedTensorSpec.shape[{index}] must be a positive integer, symbolic name, or None, "
-                f"got {dimension!r}"
-            )
-        if isinstance(dimension, int) and dimension <= 0:
-            raise ValueError(f"BoundedTensorSpec.shape[{index}] must be positive, got {dimension!r}")
-        if isinstance(dimension, str) and not dimension:
-            raise ValueError(f"BoundedTensorSpec.shape[{index}] must not be an empty symbolic name")
-        if not isinstance(dimension, int | str) and dimension is not None:
-            raise ValueError(
-                f"BoundedTensorSpec.shape[{index}] must be a positive integer, symbolic name, or None, "
-                f"got {dimension!r}"
-            )
-
-
-def _validate_bound(name: str, label: str, shape: tuple[int, ...], rank: int) -> None:
+def _validate_bound(field_name: str, shape: tuple[int, ...]) -> None:
     """Validate one concrete shape bound."""
     if not isinstance(shape, tuple):
-        raise ValueError(f"BoundedTensorSpec.{label}_shape must be a tuple, got {shape!r}")
-    if len(shape) != rank:
-        raise ValueError(f"{label}_shape for {name!r} must have rank {rank}, got {len(shape)}")
+        raise ValueError(f"BoundedTensorSpec.{field_name} must be a tuple, got {shape!r}")
     for index, value in enumerate(shape):
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
-            raise ValueError(f"{label} size for axis {index} must be a positive integer, got {value!r}")
+            raise ValueError(f"{field_name}[{index}] must be a positive integer, got {value!r}")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class BoundedTensorSpec:
     """Describe one tensor over the shape range established by tuning.
 
-    Integer dimensions are fixed, strings are symbolic dimensions, and ``None``
-    is an unnamed dynamic dimension. Concrete minimum and maximum shapes record
-    the domain AITune validated for the artifact. ``batch_axis`` is ``None`` when
-    tuning did not identify a logical request batch axis.
+    Minimum and maximum shapes record the concrete domain AITune validated for
+    the artifact. An axis is fixed when both bounds are equal and dynamic when
+    they differ. The first axis is treated as the logical batch axis by default;
+    ``batch_axis=None`` explicitly describes an unbatched tensor.
 
     Args:
         name: Tensor name used by the executable.
         dtype: Tensor element type.
-        shape: Static and dynamic dimensions declared by the executable.
-        min_shape: Smallest shape AITune selected for the artifact.
-        max_shape: Largest shape AITune selected for the artifact.
-        batch_axis: Logical batch-axis index, or ``None`` when unknown.
+        min_shape: Smallest accepted tensor shape.
+        max_shape: Largest accepted tensor shape.
+        batch_axis: Logical batch-axis index, or ``None`` for an unbatched tensor.
     """
 
     name: str
     dtype: DType
-    shape: tuple[int | str | None, ...]
     min_shape: tuple[int, ...]
     max_shape: tuple[int, ...]
-    batch_axis: int | None = None
+    batch_axis: int | None = 0
 
     def __post_init__(self) -> None:
         """Validate the tensor declaration and its concrete bounds."""
@@ -72,21 +46,16 @@ class BoundedTensorSpec:
         if not isinstance(self.dtype, DType):
             raise ValueError(f"BoundedTensorSpec.dtype must be a DType, got {self.dtype!r}")
 
-        _validate_declared_shape(self.shape)
-        rank = len(self.shape)
-        _validate_bound(self.name, "minimum", self.min_shape, rank)
-        _validate_bound(self.name, "maximum", self.max_shape, rank)
+        _validate_bound("min_shape", self.min_shape)
+        _validate_bound("max_shape", self.max_shape)
+        rank = len(self.min_shape)
+        if len(self.max_shape) != rank:
+            raise ValueError(f"Bounds for {self.name!r} must have the same rank, got {rank} and {len(self.max_shape)}")
 
-        for index, (declared, minimum, maximum) in enumerate(
-            zip(self.shape, self.min_shape, self.max_shape, strict=True)
-        ):
+        for index, (minimum, maximum) in enumerate(zip(self.min_shape, self.max_shape, strict=True)):
             if minimum > maximum:
                 raise ValueError(
                     f"Axis {index} of {self.name!r} must satisfy min <= max, got min={minimum}, max={maximum}"
-                )
-            if isinstance(declared, int) and (minimum, maximum) != (declared, declared):
-                raise ValueError(
-                    f"Fixed axis {index} of {self.name!r} must remain {declared}, got min={minimum}, max={maximum}"
                 )
 
         if self.batch_axis is not None and (
