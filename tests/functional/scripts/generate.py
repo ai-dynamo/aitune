@@ -78,7 +78,7 @@ def _matrix_entry(
     return {
         "id": entry_id,
         "test_number": test_number,
-        "docker_image": docker_image,
+        "docker_image": _replace_custome_docker_image(docker_image),
         "is_custom_docker_image": docker_image != default_docker_image,
         "runner": runner,
         "environment": json.dumps(_environment_for_job(config)),
@@ -89,6 +89,10 @@ def _matrix_entry(
         "use_gated_hf_token": config.use_gated_hf_token,
     }
 
+def _replace_custome_docker_image(docker_image: str) -> str:
+    if docker_image.startswith("ghcr.io/"):
+        return docker_image
+    return docker_image.replace("nvcr.io/nvidia/pytorch:", "ghcr.io/ai-dynamo/aitune:nvcr-torch-")
 
 def _make_script_entries(
     namespace: str,
