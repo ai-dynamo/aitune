@@ -172,6 +172,7 @@ jobs:
             extra_packages: ""
     container:
       image: ${{ matrix.torch_ci_image }}
+      options: -u 1000
     env:
       EXTRA_PACKAGES: ${{ matrix.extra_packages }}
     steps:
