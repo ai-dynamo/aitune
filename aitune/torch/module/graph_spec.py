@@ -11,6 +11,7 @@ from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tensor_spec import TensorSpec
+from aitune.torch.utils.tensor import format_tensor_name
 
 
 @dataclass
@@ -52,6 +53,10 @@ class GraphSpec:
             else:
                 self.post_input_spec.update_shapes_seen(post_inputs_metadata)
         self.output_spec.update_shapes_seen(outputs_metadata)
+
+    def output_names(self) -> tuple[str, ...]:
+        """Return names for flat module outputs in their recorded order."""
+        return tuple(format_tensor_name(locator.path, "output") for locator, _ in self.output_spec.tensor_data)
 
     def make_batch(self, args: tuple, kwargs: dict[str, Any], batch_size: int) -> tuple[tuple, dict[str, Any]]:
         """Return a call resized to the specified batch size while preserving its argument layout."""
