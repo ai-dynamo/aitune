@@ -210,10 +210,14 @@ class TorchTensorRTAotBackend(Backend):
         self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
 
         with self._track_build_step(TorchTensorRTAotBuildStep.TORCH_EXPORT):
-            # ``use_auto=False`` replaces ``Dim.AUTO`` hints with the finite explicit ranges required by
-            # TensorRT optimization profiles. ``strict=False`` retains non-strict Torch Export compatibility,
-            # while the exporter also avoids size-0/1 hints at problematic profile boundaries (TensorRT #4103).
-            export_result = TorchExporter(use_auto=False, strict=False).export(
+            # ``use_auto=False`` first tries the finite explicit ranges required by TensorRT optimization
+            # profiles. If Torch Export cannot prove the entire range valid, bounded ``Dim.DYNAMIC`` hints retain
+            # those limits while allowing it to infer guards. ``strict=False`` retains non-strict compatibility.
+            export_result = TorchExporter(
+                use_auto=False,
+                strict=False,
+                fallback_to_dynamic_hints=True,
+            ).export(
                 model,
                 samples[0],
                 graph_spec,

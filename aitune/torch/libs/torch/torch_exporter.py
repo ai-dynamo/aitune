@@ -8,6 +8,9 @@ from typing import Any
 
 import torch
 import torch.nn as nn
+from torch._dynamo.exc import UserError, UserErrorType
+from torch.fx.experimental.symbolic_shapes import ConstraintViolationError
+from torch.utils._pytree import tree_map
 
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
@@ -33,12 +36,21 @@ class TorchExporter:
         use_auto: Use automatic constraints for non-batch dynamic dimensions. Set to
             ``False`` when a consumer requires explicit minimum and maximum bounds.
         strict: Whether Torch Export should use strict tracing.
+        fallback_to_dynamic_hints: Retry constraint violations with bounded
+            ``Dim.DYNAMIC`` hints instead of explicit dimensions.
     """
 
-    def __init__(self, *, use_auto: bool = True, strict: bool = True):
+    def __init__(
+        self,
+        *,
+        use_auto: bool = True,
+        strict: bool = True,
+        fallback_to_dynamic_hints: bool = False,
+    ):
         """Initialize the exporter with its dynamic-shape and tracing modes."""
         self.use_auto = use_auto
         self.strict = strict
+        self.fallback_to_dynamic_hints = fallback_to_dynamic_hints
 
     def export(
         self,
@@ -68,19 +80,58 @@ class TorchExporter:
 
         logger.info("Exporting model with torch.export.export.")
         with torch.no_grad():
-            exported_program = torch.export.export(
-                module,
-                args,
-                kwargs=kwargs or None,
-                dynamic_shapes=dynamic_shapes,
-                strict=self.strict,
-            )
+            try:
+                exported_program = torch.export.export(
+                    module,
+                    args,
+                    kwargs=kwargs or None,
+                    dynamic_shapes=dynamic_shapes,
+                    strict=self.strict,
+                )
+            except (ConstraintViolationError, UserError) as error:
+                if not self.fallback_to_dynamic_hints:
+                    raise
+                if isinstance(error, UserError) and error.error_type != UserErrorType.CONSTRAINT_VIOLATION:
+                    raise
+                dynamic_hints = _as_dynamic_hints(dynamic_shapes)
+                if dynamic_hints is dynamic_shapes:
+                    raise
+                dynamic_shapes = dynamic_hints
+                logger.warning(
+                    "Explicit dynamic-shape constraints were rejected; retrying export with bounded dynamic hints."
+                )
+                log_dynamic_shapes(dynamic_shapes)
+                exported_program = torch.export.export(
+                    module,
+                    args,
+                    kwargs=kwargs or None,
+                    dynamic_shapes=dynamic_shapes,
+                    strict=self.strict,
+                )
 
         return TorchExportResult(
             exported_program=exported_program,
             sample=prepared_sample,
             dynamic_shapes=dynamic_shapes,
         )
+
+
+def _as_dynamic_hints(dynamic_shapes: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Relax explicit dimensions, returning the original structure when nothing changes."""
+    if dynamic_shapes is None:
+        return None
+
+    hints = {}
+
+    def replace(value):
+        if not isinstance(value, torch.export.dynamic_shapes._Dim):
+            return value
+        if value not in hints:
+            hints[value] = torch.export.Dim.DYNAMIC(min=value.min, max=value.max)
+        return hints[value]
+
+    dynamic_hints = tree_map(replace, dynamic_shapes)
+    return dynamic_hints if hints else dynamic_shapes
 
 
 __all__ = ["TorchExporter", "TorchExportResult"]

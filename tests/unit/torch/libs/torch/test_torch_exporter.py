@@ -4,9 +4,12 @@
 
 import pytest
 import torch
+import torch.nn as nn
+from torch.fx.experimental.symbolic_shapes import ConstraintViolationError
 
 from aitune.torch.libs.torch import TorchExporter
 from tests.toy_models import TOY_EXPORT_MODELS
+from tests.utilities.helpers import make_graph_spec, update_input_spec
 
 SHAPE_CASES = (
     pytest.param([2], False, id="static"),
@@ -78,3 +81,62 @@ def test_export_model_matrix(use_auto, strict, model_name, model_factory, batch_
         normalized = graph_spec.forward_signature.normalize(sample_args, sample_kwargs)
         actual = exported_module(*normalized.args, **normalized.kwargs)
         torch.testing.assert_close(actual, expected)
+
+
+def test_export_retries_constraint_violations_with_bounded_dynamic_hints(mocker):
+    """A constraint violation triggers a retry with bounded dynamic hints."""
+
+    class StridedSpatialModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = nn.Conv2d(3, 4, kernel_size=7, stride=2, padding=3)
+            self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        def forward(self, x):
+            return self.pool(self.conv(x))
+
+    model = StridedSpatialModel().eval()
+    sample = ((torch.randn(1, 3, 128, 128),), {})
+    graph_spec = make_graph_spec(model.forward, sample, batch_size=1)
+    update_input_spec(graph_spec, ((torch.randn(1, 3, 192, 192),), {}), batch_size=1)
+    torch_export = torch.export.export
+    first_attempt = True
+
+    def fail_first_attempt(*args, **kwargs):
+        nonlocal first_attempt
+        if first_attempt:
+            first_attempt = False
+            raise ConstraintViolationError("constraint violation")
+        return torch_export(*args, **kwargs)
+
+    export = mocker.patch("torch.export.export", side_effect=fail_first_attempt)
+
+    result = TorchExporter(
+        use_auto=False,
+        strict=False,
+        fallback_to_dynamic_hints=True,
+    ).export(model, sample, graph_spec)
+
+    assert export.call_count == 2
+    height = result.dynamic_shapes["x"][2]
+    width = result.dynamic_shapes["x"][3]
+    assert isinstance(height, torch.export.dynamic_shapes._DimHint)
+    assert (height.min, height.max) == (128, 192)
+    assert height is width
+    assert result.exported_program.module()(torch.randn(1, 3, 192, 192)).shape == (1, 4, 48, 48)
+
+
+def test_export_does_not_retry_when_dynamic_shapes_cannot_be_relaxed(mocker):
+    """A constraint failure without explicit dimensions must not repeat the same export."""
+    model = nn.Linear(4, 2).eval()
+    sample = ((torch.randn(2, 4),), {})
+    graph_spec = make_graph_spec(model.forward, sample, batch_size=2)
+    export = mocker.patch(
+        "torch.export.export",
+        side_effect=ConstraintViolationError("constraint violation"),
+    )
+
+    with pytest.raises(ConstraintViolationError, match="constraint violation"):
+        TorchExporter(fallback_to_dynamic_hints=True).export(model, sample, graph_spec)
+
+    export.assert_called_once()
