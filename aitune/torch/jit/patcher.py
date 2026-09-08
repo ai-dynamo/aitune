@@ -24,6 +24,7 @@ T = TypeVar("T")
 # avoid breaking tuning by accident (e.g. dropping ``torch_tensorrt`` leads to
 # wrapt-decorated forwards in the compiled gm and crashes ``torch_tensorrt.save``).
 _DEFAULT_PATCH_EXCLUDE: tuple[str, ...] = (
+    "aitune",  # Do not patch AITune while it inspects or compiles user modules.
     "torch.jit",
     "torch._inductor",
     "torch._dynamo",
