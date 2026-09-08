@@ -35,8 +35,8 @@ def _run_worker() -> None:
         assert value.item() == sum(range(WORLD_SIZE))
         print(f"NCCL sanity passed on rank {dist.get_rank()}", flush=True)
     finally:
-        dist.destroy_process_group()
         print(f"NCCL process group destroyed on rank {dist.get_rank()}", flush=True)
+        dist.destroy_process_group()
 
 
 def main() -> None:
