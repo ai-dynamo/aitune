@@ -142,4 +142,22 @@ class ONNXExporter:
                 if min_size != max_size:
                     dynamic_axes[format_tensor_name(locator.path, "output")].append(axis)
 
+        ONNXExporter._add_state_dynamic_axes(dynamic_axes, graph_spec)
         return dynamic_axes
+
+    @staticmethod
+    def _add_state_dynamic_axes(dynamic_axes: dict, graph_spec: GraphSpec) -> None:
+        """Declare dynamic axes for outputs that carry changed input tensors."""
+        if graph_spec.post_input_spec is None:
+            return
+
+        post_tensor_specs = dict(graph_spec.post_input_spec.tensor_data)
+        for mutation in graph_spec.extra_tensor_mutations():
+            tensor_spec = post_tensor_specs.get(mutation.locator)
+            if tensor_spec is None:
+                continue
+            for axis, (min_size, max_size) in enumerate(
+                zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)
+            ):
+                if min_size != max_size:
+                    dynamic_axes[format_tensor_name(mutation.locator.path, "state")].append(axis)

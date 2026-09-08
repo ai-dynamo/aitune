@@ -9,9 +9,10 @@ import torch
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.libs.exporting import ONNXExporter
+from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyNestedInputModel
-from tests.utilities.helpers import make_graph_spec
+from tests.utilities.helpers import make_graph_spec, make_recorded_graph_spec, update_input_spec
 
 
 @pytest.mark.parametrize("use_dynamo", [False, True], ids=["trace", "dynamo"])
@@ -82,3 +83,30 @@ def test_trace_export_uses_explicit_dynamic_axis_names(tmp_path):
     exported = onnx.load(output_path)
     dimensions = [dimension.dim_param for dimension in exported.graph.input[0].type.tensor_type.shape.dim]
     assert dimensions == ["batch", "sequence"]
+
+
+def test_trace_export_marks_mutable_state_output_as_dynamic(tmp_path):
+    class ReplaceCache(torch.nn.Module):
+        def forward(self, x, cache):
+            cache[0] = x + 1
+            return x * 2
+
+    model = ReplaceCache().eval()
+    sample = ((torch.ones(2, 4), [None]), {})
+    graph_spec = make_recorded_graph_spec(model, sample, strict=True)
+    second_x = torch.ones(3, 4)
+    second_cache = [None]
+    model(second_x, second_cache)
+    update_input_spec(graph_spec, ((second_x, [None]), {}), strict=True)
+    graph_spec.post_input_spec.update_shapes_seen(
+        SampleMetadata.from_inputs({"x": second_x, "cache": second_cache}, strict=True)
+    )
+    output_path = tmp_path / "dynamic-state.onnx"
+
+    ONNXExporter(output_path).export(model, sample, graph_spec)
+
+    exported = onnx.load(output_path)
+    state_output = next(
+        output for output in exported.graph.output if output.name == format_tensor_name(("cache", 0), "state")
+    )
+    assert state_output.type.tensor_type.shape.dim[0].dim_param
