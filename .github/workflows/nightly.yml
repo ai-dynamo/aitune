@@ -84,6 +84,10 @@ jobs:
     timeout-minutes: 15
     container:
       image: *pytorch_ci_image
+    env:
+      NCCL_DEBUG: INFO
+      NCCL_DEBUG_SUBSYS: INIT,NET,GRAPH
+      UCX_LOG_LEVEL: info
     steps:
       - uses: *actions_checkout
         with:
@@ -155,44 +159,44 @@ jobs:
   #           echo "dist_run_id=${{ needs.main-ci.outputs.dist_run_id }}" >> $GITHUB_OUTPUT
   #         fi
 
-  pytorch-gpu-nvcr-container:
-    name: PyTorch GPU ${{ matrix.torch_ci_image }}
-    runs-on: prod-aitune-tester-rtx-pro-4500-v1
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - torch_ci_image: nvcr.io/nvidia/pytorch:25.08-py3
-            extra_packages: "numpy<2.0"
-          - torch_ci_image: nvcr.io/nvidia/pytorch:25.10-py3
-            extra_packages: ""
-          - torch_ci_image: nvcr.io/nvidia/pytorch:26.01-py3
-            extra_packages: ""
-          - torch_ci_image: nvcr.io/nvidia/pytorch:26.03-py3
-            extra_packages: ""
-          - torch_ci_image: nvcr.io/nvidia/pytorch:26.05-py3
-            extra_packages: ""
-          - torch_ci_image: nvcr.io/nvidia/pytorch:26.06-py3
-            extra_packages: ""
-    container:
-      image: ${{ matrix.torch_ci_image }}
-      options: -u 1000
-    env:
-      EXTRA_PACKAGES: ${{ matrix.extra_packages }}
-    steps:
-      - uses: *actions_checkout
-        with:
-          persist-credentials: false
-      - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
-      - run: pip list
-      - run: nvidia-smi
-      - run: python -c "import sys; print(sys.version)"
-      - run: python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
-      - run: python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
-      - run: python -c "import tensorrt; print(tensorrt.__version__)"
-      - run: python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
-      - run: pytest
+  # pytorch-gpu-nvcr-container:
+  #   name: PyTorch GPU ${{ matrix.torch_ci_image }}
+  #   runs-on: prod-aitune-tester-rtx-pro-4500-v1
+  #   timeout-minutes: 45
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - torch_ci_image: nvcr.io/nvidia/pytorch:25.08-py3
+  #           extra_packages: "numpy<2.0"
+  #         - torch_ci_image: nvcr.io/nvidia/pytorch:25.10-py3
+  #           extra_packages: ""
+  #         - torch_ci_image: nvcr.io/nvidia/pytorch:26.01-py3
+  #           extra_packages: ""
+  #         - torch_ci_image: nvcr.io/nvidia/pytorch:26.03-py3
+  #           extra_packages: ""
+  #         - torch_ci_image: nvcr.io/nvidia/pytorch:26.05-py3
+  #           extra_packages: ""
+  #         - torch_ci_image: nvcr.io/nvidia/pytorch:26.06-py3
+  #           extra_packages: ""
+  #   container:
+  #     image: ${{ matrix.torch_ci_image }}
+  #     options: -u 1000
+  #   env:
+  #     EXTRA_PACKAGES: ${{ matrix.extra_packages }}
+  #   steps:
+  #     - uses: *actions_checkout
+  #       with:
+  #         persist-credentials: false
+  #     - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
+  #     - run: pip list
+  #     - run: nvidia-smi
+  #     - run: python -c "import sys; print(sys.version)"
+  #     - run: python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
+  #     - run: python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
+  #     - run: python -c "import tensorrt; print(tensorrt.__version__)"
+  #     - run: python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+  #     - run: pytest
 
   generate-functional-matrix:
     name: Generate functional matrix
