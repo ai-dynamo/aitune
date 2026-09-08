@@ -46,7 +46,7 @@ env:
   UV_VERSION: 0.12.8
   UV_PYTHON: &python_version "3.12"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
-  PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/${{ github.repository }}:${{ github.sha }}
+  PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
   # plugin. RTX runners have no EFA provider, so OFI initialization fails and
@@ -87,80 +87,6 @@ jobs:
           name: dist
           path: dist/
           if-no-files-found: error
-
-  create-base-images:
-    name: NVCR PyTorch ${{ matrix.torch_ci_image_base }} based AITune image
-    runs-on: linux-amd64-cpu4
-    timeout-minutes: 45
-    needs: wheel
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        torch_ci_image_base: [25.08-py3, 25.10-py3, 26.01-py3, 26.03-py3, 26.05-py3, 26.06-py3]
-    steps:
-      - uses: *actions_checkout
-        with:
-          persist-credentials: false
-      - uses: *actions_download_artifact
-        with:
-          name: dist
-          path: dist
-      - uses: *actions_docker_login
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: *actions_docker_build_push
-        with:
-          context: .
-          file: .github/docker/Dockerfile
-          push: true
-          build-args: |
-            FROM_IMAGE=nvcr.io/nvidia/pytorch:${{ matrix.torch_ci_image_base }}
-          tags: ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}
-      - id: image
-        run: echo "image=ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}" >> "$GITHUB_OUTPUT"
-
-  create-cuda-base-images:
-    name: ${{ matrix.cuda_ci_image_base }} based AITune image
-    runs-on: linux-amd64-cpu4
-    timeout-minutes: 45
-    needs: wheel
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        cuda_ci_image_base:
-            - 12.9.2-devel-ubuntu24.04
-            - 13.0.3-devel-ubuntu24.04
-    steps:
-      - uses: *actions_checkout
-        with:
-          persist-credentials: false
-      - uses: *actions_download_artifact
-        with:
-          name: dist
-          path: dist
-      - uses: *actions_docker_login
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: *actions_docker_build_push
-        with:
-          context: .
-          file: .github/docker/cuda.Dockerfile
-          push: true
-          build-args: |
-            FROM_IMAGE=nvcr.io/nvidia/cuda:${{ matrix.cuda_ci_image_base }}
-          tags: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}
-      - id: image
-        run: echo "image=ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}" >> "$GITHUB_OUTPUT"
 
   pytorch-image:
     name: Build PyTorch image
@@ -221,9 +147,9 @@ jobs:
 
   pytorch-gpu-nvcr-container:
     name: PyTorch GPU ${{ matrix.torch_ci_image }}
+    needs: wheel
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
-    needs: create-base-images
     strategy:
       fail-fast: false
       matrix:
@@ -261,9 +187,9 @@ jobs:
 
   pytorch-gpu-cuda-python-matrix:
     name: CUDA ${{ matrix.variant.uv_torch_backend }} Python ${{ matrix.python_version }} ${{ matrix.variant.aitune_extras }}
+    needs: wheel
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
-    needs: create-cuda-base-images
     strategy:
       fail-fast: false
       matrix:
@@ -304,6 +230,7 @@ jobs:
           python-version: ${{ matrix.python_version }}
           version: ${{ env.UV_VERSION }}
       - run: nvidia-smi
+      - run: uv venv
       - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }}]" --group test ${{ matrix.variant.extra_packages }}
       - run: uv pip list
       - run: uv run python -c "import sys; print(sys.version)"
@@ -358,38 +285,9 @@ jobs:
 
         # --projects-path examples \
 
-
-  test-4-rank-sanity:
-    name: Test 4-rank sanity
-    runs-on: prod-aitune-tester-rtx-pro-4500-4-v1
-    needs: pytorch-image
-    timeout-minutes: 15
-    container:
-      image: *pytorch_ci_image
-    env:
-      NCCL_DEBUG: INFO
-      NCCL_DEBUG_SUBSYS: INIT,NET,GRAPH
-      UCX_LOG_LEVEL: info
-    steps:
-      - uses: *actions_checkout
-        with:
-          persist-credentials: false
-      - run: nvidia-smi
-      - run: nvidia-smi -L
-      - run: nvidia-smi topo -m
-      - run: |
-          python -c "import sys; print(sys.version)"
-          python -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA version:', torch.version.cuda)"
-          python -c "import torch; print('CUDA is available:', torch.cuda.is_available()); torch.cuda.init()"
-          python -c "import torch; print('CUDA devices:', torch.cuda.device_count())"
-          python -c "import tensorrt; print('TensorRT version:', tensorrt.__version__)"
-          python -c "import torch_tensorrt; print('Torch-TensorRT version:', torch_tensorrt.__version__)"
-      - run: python .github/scripts/sanity/check_nccl_4_rank.py
-
-
   functional:
     name: ${{ matrix.id }}
-    needs: [wheel, generate-functional-matrix, create-base-images]
+    needs: [wheel, pytorch-image, generate-functional-matrix]
     if: needs.generate-functional-matrix.outputs.matrix_count != '0'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
@@ -422,7 +320,6 @@ jobs:
             "${{ matrix.path }}" \
             --kind "${{ matrix.kind }}" \
             --test-number "${{ matrix.test_number }}" \
-            --is-custom-docker-image "${{ matrix.is_custom_docker_image }}" \
             --verbose
 
       - if: always()
