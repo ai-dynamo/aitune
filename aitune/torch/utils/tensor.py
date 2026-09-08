@@ -8,7 +8,7 @@ from typing import Any, Literal
 import torch
 
 
-def format_tensor_name(path: int | str | tuple[int | str, ...], prefix: Literal["input", "output"]) -> str:
+def format_tensor_name(path: int | str | tuple[int | str, ...], prefix: Literal["input", "output", "state"]) -> str:
     """Format a semantic path as a readable, backend-safe tensor name."""
     if path == ():
         return prefix
