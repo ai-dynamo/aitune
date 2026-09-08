@@ -17,19 +17,26 @@ TIMEOUT_SECONDS = 300
 
 def _run_worker() -> None:
     """Create the rank-local NCCL communicator and verify one collective."""
+    print(f"Running worker on rank {dist.get_rank()}", flush=True)
     local_rank = int(os.environ["LOCAL_RANK"])
     device = torch.device("cuda", local_rank)
     torch.cuda.set_device(device)
+    print(f"CUDA device set to {device}", flush=True)
     dist.init_process_group("nccl", device_id=device)
+    print(f"NCCL initialized on rank {dist.get_rank()}", flush=True)
     try:
+        print(f"NCCL world size: {dist.get_world_size()}", flush=True)
         assert dist.get_world_size() == WORLD_SIZE
         value = torch.tensor(float(dist.get_rank()), device=device)
         dist.all_reduce(value)
+        print(f"NCCL all_reduce completed on rank {dist.get_rank()}", flush=True)
         torch.cuda.synchronize(device)
+        print(f"NCCL synchronization completed on rank {dist.get_rank()}", flush=True)
         assert value.item() == sum(range(WORLD_SIZE))
         print(f"NCCL sanity passed on rank {dist.get_rank()}", flush=True)
     finally:
         dist.destroy_process_group()
+        print(f"NCCL process group destroyed on rank {dist.get_rank()}", flush=True)
 
 
 def main() -> None:
