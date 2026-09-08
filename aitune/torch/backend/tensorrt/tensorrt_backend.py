@@ -254,6 +254,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         # runtime variables
         self._output_allocator = None
+        self._output_input_aliases: dict[str, str] = {}
+        self._aliased_outputs: dict[str, torch.Tensor] = {}
         self._trt_runtime = None
         self._trt_optimization_profiles: list[Profile] = []
 
@@ -727,17 +729,30 @@ class TensorRTBackend(Backend, TensorRTRunner):
         # Initialize output allocator with engine info for proper dtype handling
         logger.debug("Setting up output allocator")
         self._output_allocator = TorchOutputAllocator(engine_info=self._engine_info)
+        self._configure_output_bindings()
 
-        # Set output allocator for each output tensor individually
+        # Load optimization profiles
+        self._trt_optimization_profiles = self._load_trt_optimization_profiles(optimization_profiles_artifact.path)
+
+    def _configure_output_bindings(self) -> None:
+        """Register allocators for independent outputs and record input-aliased outputs."""
+        engine_aliases = getattr(self._engine_info, "output_input_aliases", {})
+        self._output_input_aliases = engine_aliases if isinstance(engine_aliases, dict) else {}
+        self._aliased_outputs = {}
+
         for output_name in self._output_names:
+            if output_name in self._output_input_aliases:
+                logger.debug(
+                    "Output tensor '%s' aliases input tensor '%s'",
+                    output_name,
+                    self._output_input_aliases[output_name],
+                )
+                continue
             success = self._context.set_output_allocator(output_name, self._output_allocator)
             if not success:
                 logger.error("Failed to set output allocator for tensor '%s'", output_name)
                 raise RuntimeError(f"Failed to set output allocator for tensor '{output_name}'")
             logger.debug("Set output allocator for tensor '%s'", output_name)
-
-        # Load optimization profiles
-        self._trt_optimization_profiles = self._load_trt_optimization_profiles(optimization_profiles_artifact.path)
 
     def _deactivate(self):
         """Deactivate the TensorRT engine."""
@@ -764,6 +779,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 "_outputs",
                 "_context",
                 "_output_allocator",
+                "_output_input_aliases",
+                "_aliased_outputs",
                 "_cuda_graph",
                 "_last_input_shapes",
                 "_static_inputs",
@@ -818,6 +835,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """Collect TensorRT outputs, restore input changes, and rebuild the module result."""
         # Get outputs from the allocator (already properly shaped by TensorRT)
         outputs = self._output_allocator.outputs
+        outputs.update(self._aliased_outputs)
         forward_contract = self._graph_spec.forward_contract
         if forward_contract is None:
             raise RuntimeError("Graph specification has no recorded forward contract.")
@@ -826,7 +844,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
         }
         flat_outputs = tuple(
             outputs.pop(name)
-            if index in mutation_output_indices or not self._config.use_cuda_graphs
+            if (
+                name in self._output_input_aliases
+                or index in mutation_output_indices
+                or not self._config.use_cuda_graphs
+            )
             else cast(torch.Tensor, outputs.pop(name)).clone()
             for index, name in enumerate(self._graph_spec.output_names())
         )
@@ -880,6 +902,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Args:
             inputs: Dictionary mapping input names to tensors
         """
+        bound_inputs = {}
         for name, tensor in inputs.items():
             # Ensure tensor is contiguous and on CUDA
             if not tensor.is_contiguous():
@@ -925,6 +948,23 @@ class TensorRTBackend(Backend, TensorRTRunner):
             if not success:
                 raise RuntimeError(f"TensorRT rejected the address for input {name!r}")
             logger.debug("Set tensor address for %s successfully", name)
+            bound_inputs[name] = tensor
+
+        self._bind_aliased_outputs(bound_inputs)
+
+    def _bind_aliased_outputs(self, bound_inputs: dict[str, torch.Tensor]) -> None:
+        """Bind aliased outputs to the addresses of their corresponding inputs."""
+        self._aliased_outputs = {}
+        for output_name, input_name in self._output_input_aliases.items():
+            tensor = bound_inputs.get(input_name)
+            if tensor is None:
+                raise RuntimeError(f"Aliased TensorRT output {output_name!r} refers to missing input {input_name!r}")
+            success = self._context.set_tensor_address(output_name, tensor.data_ptr())
+            if not success:
+                raise RuntimeError(
+                    f"TensorRT rejected aliased address for output {output_name!r} and input {input_name!r}"
+                )
+            self._aliased_outputs[output_name] = tensor
 
     def _set_optimization_profiles(self, inputs: dict[str, torch.Tensor]) -> None:
         """Set optimization profiles for the input tensors.

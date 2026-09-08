@@ -346,6 +346,60 @@ def test_prepare_outputs_applies_mutable_tensor_and_scalar_state(mocker):
     assert index == [1]
 
 
+def test_alias_binding_uses_input_address_instead_of_output_allocator(mocker):
+    backend = TensorRTBackend()
+    backend._engine_info = mocker.Mock(output_input_aliases={"cache_output": "cache_input"})
+    backend._output_names = ["value", "cache_output"]
+    backend._context = mocker.MagicMock()
+    backend._context.set_output_allocator.return_value = True
+    backend._context.set_input_shape.return_value = True
+    backend._context.set_tensor_address.return_value = True
+    backend._output_allocator = mocker.Mock()
+    backend._io_tensors = {"cache_input": {"shape": (2,)}}
+    cache = mocker.MagicMock()
+    cache.is_contiguous.return_value = True
+    cache.is_cuda = True
+    cache.shape = (2,)
+    cache.dtype = torch.float32
+    cache.data_ptr.return_value = 123
+
+    backend._configure_output_bindings()
+    backend._set_input_tensors({"cache_input": cache})
+
+    backend._context.set_output_allocator.assert_called_once_with("value", backend._output_allocator)
+    assert backend._context.set_tensor_address.call_args_list == [
+        mocker.call("cache_input", 123),
+        mocker.call("cache_output", 123),
+    ]
+    assert backend._aliased_outputs == {"cache_output": cache}
+
+
+def test_prepare_outputs_restores_aliased_state_buffer(mocker):
+    class StatefulDecoder(torch.nn.Module):
+        def forward(self, x, cache):
+            cache[0].add_(x)
+            return x * 2
+
+    model = StatefulDecoder().eval()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [torch.zeros(2)]), {}), strict=True)
+    output_name, state_name = graph_spec.output_names()
+    runtime_output = torch.full((2,), 2.0)
+    state = [torch.zeros(2)]
+    state_input_name = format_tensor_name(graph_spec.input_spec.tensor_data[1][0].path, "input")
+    backend = TensorRTBackend()
+    backend._graph_spec = graph_spec
+    backend._output_input_aliases = {state_name: state_input_name}
+    backend._aliased_outputs = {state_name: state[0]}
+    backend._output_allocator = mocker.Mock(outputs={output_name: runtime_output})
+    arguments = graph_spec.forward_signature.normalize((x, state), {}).arguments
+
+    result = backend._prepare_outputs_for_return(arguments)
+
+    assert result is runtime_output
+    assert state[0] is backend._aliased_outputs[state_name]
+
+
 @requires_cuda
 def test_backend_inference_returns_copy_of_tensors(tmp_path):
     """The test validates whether backend returns a copy of tensor and not the view of the allocated output.
