@@ -18,6 +18,9 @@ ENV ADDITIONAL_APT_PACKAGES=${ADDITIONAL_APT_PACKAGES}
 ARG ADDITIONAL_PACKAGES
 ENV ADDITIONAL_PACKAGES=${ADDITIONAL_PACKAGES}
 
+ARG ADDITIONAL_APT_PACKAGES
+ENV ADDITIONAL_APT_PACKAGES=${ADDITIONAL_APT_PACKAGES}
+
 ARG ADDITIONAL_PACKAGES
 ENV ADDITIONAL_PACKAGES=${ADDITIONAL_PACKAGES}
 
@@ -30,6 +33,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=dist,target=/aitune_dist \
+    if [ -n "$ADDITIONAL_APT_PACKAGES" ]; then apt-get update && apt-get install -y --no-install-recommends $ADDITIONAL_APT_PACKAGES; fi && \
     export WHEEL_PATH=$(ls /aitune_dist/*aitune*.whl) && \
     mkdir -p ${TMP_DIR} && \
     tar xf /aitune_dist/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
