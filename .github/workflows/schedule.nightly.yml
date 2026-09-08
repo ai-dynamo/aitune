@@ -331,7 +331,7 @@ jobs:
           python -c "import torch; print('CUDA devices:', torch.cuda.device_count())"
           python -c "import tensorrt; print('TensorRT version:', tensorrt.__version__)"
           python -c "import torch_tensorrt; print('Torch-TensorRT version:', torch_tensorrt.__version__)"
-      - run: python .github/scripts/nccl_4_rank_sanity.py
+      - run: python .github/scripts/sanity/check_nccl_4_rank.py
 
 
   functional:

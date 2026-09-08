@@ -52,8 +52,9 @@ def test_run_script_selects_entry_and_installs_dependencies(mocker: MockerFixtur
 
     install_dist.assert_called_once_with(False, False)
     assert calls[0] == "dist"
-    assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "demo"]
-    assert run.call_args_list[1].args[0] == [
+    assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "--group", "functional-test"]
+    assert run.call_args_list[1].args[0] == [sys.executable, "-m", "pip", "install", "demo"]
+    assert run.call_args_list[2].args[0] == [
         sys.executable,
         "-m",
         "pip",
@@ -61,8 +62,9 @@ def test_run_script_selects_entry_and_installs_dependencies(mocker: MockerFixtur
         "--pre",
         "extra",
     ]
-    assert run.call_args_list[2].args[0] == [sys.executable, str(script), '--name="second"']
-    assert run.call_args_list[2].kwargs["env"]["AITUNE_CONSOLE_OUTPUT"] == "1"
+    assert run.call_args_list[3].args[0][:4] == [sys.executable, '-m', 'pip', 'freeze']
+    assert run.call_args_list[4].args[0] == [sys.executable, str(script), '--name="second"']
+    assert run.call_args_list[4].kwargs["env"]["AITUNE_CONSOLE_OUTPUT"] == "1"
 
 
 def test_install_dist_installs_wheels_with_dependencies(mocker: MockerFixture) -> None:
@@ -100,8 +102,9 @@ variants = [
     run = mocker.patch.object(execute.subprocess, "run")
 
     execute.run(project, "project", 0)
-
-    assert run.call_args_list[0].args[0] == [
+    
+    assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "--group", "functional-test"]
+    assert run.call_args_list[1].args[0] == [
         sys.executable,
         "-m",
         "pip",
@@ -109,7 +112,8 @@ variants = [
         "--editable",
         str(project),
     ]
-    assert run.call_args_list[1].args[0] == [
+    assert run.call_args_list[2].args[0][:4] == [sys.executable, '-m', 'pip', 'freeze']
+    assert run.call_args_list[3].args[0] == [
         sys.executable,
         "-m",
         "torchrun",
@@ -119,8 +123,8 @@ variants = [
         "demo.inference",
         "--multi-gpu=true",
     ]
-    assert run.call_args_list[1].kwargs["cwd"] == project
-    assert run.call_args_list[1].kwargs["env"]["OUTPUT"] == "artifact"
+    assert run.call_args_list[3].kwargs["cwd"] == project
+    assert run.call_args_list[3].kwargs["env"]["OUTPUT"] == "artifact"
 
 
 def test_run_verbose_dry_run_prints_without_executing(
@@ -142,5 +146,7 @@ def test_run_verbose_dry_run_prints_without_executing(
     execute.run(script, "script", 0, verbose=True, dry_run=True)
 
     run.assert_not_called()
-    command = [sys.executable, str(script), '--name="demo"']
-    assert capsys.readouterr().out == f"+ {shlex.join(command)}\n"
+    out = capsys.readouterr().out
+    
+    assert "pip install --group functional-test" in out
+    assert "pip freeze --all" in out

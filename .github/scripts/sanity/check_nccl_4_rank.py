@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Verify that four local GPUs can form an NCCL process group and all-reduce."""
 
+# ruff: noqa: T201
+
 import os
 import subprocess
 import sys
@@ -9,7 +11,6 @@ from pathlib import Path
 
 import torch
 import torch.distributed as dist
-
 
 WORLD_SIZE = 4
 TIMEOUT_SECONDS = 300

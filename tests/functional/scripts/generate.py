@@ -89,10 +89,12 @@ def _matrix_entry(
         "use_gated_hf_token": config.use_gated_hf_token,
     }
 
+
 def _replace_custome_docker_image(docker_image: str) -> str:
     if docker_image.startswith("ghcr.io/"):
         return docker_image
     return docker_image.replace("nvcr.io/nvidia/pytorch:", "ghcr.io/ai-dynamo/aitune:nvcr-torch-")
+
 
 def _make_script_entries(
     namespace: str,

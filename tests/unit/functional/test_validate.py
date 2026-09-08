@@ -39,7 +39,7 @@ inference = "demo:main"
         encoding="utf-8",
     )
 
-    assert validate._validate_one(project) == f"{project}: missing [project.scripts] entries: tune"
+    assert validate.validate_one(project) == f"{project}: missing [project.scripts] entries: tune"
 
 
 def test_project_accepts_tune_and_inference_scripts(tmp_path: Path) -> None:
@@ -59,7 +59,7 @@ inference = "demo:inference"
         encoding="utf-8",
     )
 
-    assert validate._validate_one(project) is None
+    assert validate.validate_one(project) is None
 
 
 def test_skipped_project_does_not_require_scripts(tmp_path: Path) -> None:
@@ -76,4 +76,4 @@ skip = true
         encoding="utf-8",
     )
 
-    assert validate._validate_one(project) is None
+    assert validate.validate_one(project) is None
