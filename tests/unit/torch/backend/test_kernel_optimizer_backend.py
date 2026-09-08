@@ -12,6 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
 from torch.nn.attention import SDPBackend
 
+from aitune.records import Artifact
 from aitune.torch.backend.backend import Backend, BackendState, BuildMode, ExecutionMode
 from aitune.torch.backend.kernel_optimizer_backend import (
     KernelOptimizerBackend,
@@ -253,6 +254,17 @@ def test_backend_defaults_to_default_config_and_torch_inductor_jit_delegate():
     assert isinstance(first_backend._delegate_backend, TorchInductorJitBackend)
     assert first_backend._config is not second_backend._config
     assert first_backend._delegate_backend is not second_backend._delegate_backend
+
+
+def test_artifact_is_provided_by_delegate():
+    artifact = Mock(spec=Artifact)
+    delegate = Mock()
+    delegate.artifact.return_value = artifact
+    backend = KernelOptimizerBackend()
+    backend._delegate_backend = delegate
+
+    assert backend.artifact() is artifact
+    delegate.artifact.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
