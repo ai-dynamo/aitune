@@ -8,6 +8,8 @@ import functools
 import torch
 
 from aitune.torch.libs.exporting import TensorExportAdapter
+from aitune.torch.module.forward_contract import ForwardContract, InputMutation, InputMutationKind
+from aitune.torch.utils.tensor import format_tensor_name
 from tests.utilities.helpers import make_graph_spec
 
 
@@ -75,3 +77,31 @@ def test_adapter_isolates_mutable_non_tensor_inputs_between_calls():
 
     torch.testing.assert_close(first[0], x)
     torch.testing.assert_close(second[0], x)
+
+
+def test_adapter_appends_mutated_tensor_state_to_graph_outputs():
+    class UpdateState(torch.nn.Module):
+        def forward(self, x, state):
+            state[0].add_(x)
+            return x * 2
+
+    module = UpdateState()
+    x = torch.ones(2)
+    state = torch.zeros(2)
+    sample = ((x, [state]), {})
+    adapter, graph_spec = _make_adapter(module, sample)
+    state_locator = graph_spec.input_spec.tensor_data[1][0]
+    graph_spec.forward_contract = ForwardContract(
+        output_template=None,
+        input_mutations=(InputMutation(state_locator, InputMutationKind.COPY_TENSOR, output_index=1),),
+    )
+    adapter = TensorExportAdapter(module, sample, graph_spec)
+
+    result, updated_state = adapter(x, state)
+
+    torch.testing.assert_close(result, x * 2)
+    torch.testing.assert_close(updated_state, x)
+    assert graph_spec.output_names() == (
+        format_tensor_name((), "output"),
+        format_tensor_name(("state", 0), "state"),
+    )

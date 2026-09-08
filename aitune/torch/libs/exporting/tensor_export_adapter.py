@@ -64,6 +64,7 @@ class TensorExportAdapter(nn.Module):
         self._call_layout = graph_spec.forward_signature.capture_call_layout(*sample)
         self._input_spec = graph_spec.input_spec
         self._output_spec = graph_spec.output_spec
+        self._state_output_locators = tuple(mutation.locator for mutation in graph_spec.extra_tensor_mutations())
         self._argument_tree_spec, self._argument_leaf_template, self._tensor_leaf_indices = reconstruction
 
     def forward(self, *flat_inputs: torch.Tensor) -> tuple[torch.Tensor, ...]:
@@ -71,7 +72,9 @@ class TensorExportAdapter(nn.Module):
         arguments = self._reconstruct_arguments(flat_inputs)
         args, kwargs = self._call_layout.restore(arguments)
         output = self.module(*args, **kwargs)
-        return self._output_spec.flatten_tensors(output)
+        user_outputs = self._output_spec.flatten_tensors(output)
+        state_outputs = tuple(locator.get_value(arguments) for locator in self._state_output_locators)
+        return user_outputs + state_outputs
 
     def _reconstruct_arguments(self, flat_inputs: tuple[torch.Tensor, ...]) -> dict[str, Any]:
         """Rebuild normalized arguments without sharing mutable containers between calls."""
