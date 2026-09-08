@@ -110,3 +110,27 @@ def test_trace_export_marks_mutable_state_output_as_dynamic(tmp_path):
         output for output in exported.graph.output if output.name == format_tensor_name(("cache", 0), "state")
     )
     assert state_output.type.tensor_type.shape.dim[0].dim_param
+
+
+def test_failed_export_removes_incomplete_artifact(mocker, tmp_path):
+    class Identity(torch.nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Identity().eval()
+    x = torch.ones(2)
+    sample = ((x,), {})
+    graph_spec = make_graph_spec(model.forward, sample, model(x))
+    output_path = tmp_path / "incomplete.onnx"
+
+    def fail_after_creating_artifact(*args, **kwargs):
+        del args
+        output_path.write_bytes(b"incomplete")
+        raise RuntimeError("export failed")
+
+    mocker.patch("torch.onnx.export", side_effect=fail_after_creating_artifact)
+
+    with pytest.raises(RuntimeError, match="export failed"):
+        ONNXExporter(output_path).export(model, sample, graph_spec)
+
+    assert not output_path.exists()

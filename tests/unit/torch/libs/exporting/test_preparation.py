@@ -22,6 +22,20 @@ def test_prepare_moves_nested_tensor_leaves_to_device():
     assert all(tensor.device.type == "meta" for tensor in preparation.flat_inputs)
 
 
+def test_prepare_preserves_distributed_tensor_placement(mocker):
+    model = dict(TOY_EXPORT_MODELS)["simple"]().eval()
+    sample = model.samples(batch_sizes=[2])[0]
+    graph_spec = model.graph_spec(batch_sizes=[2])
+    tensor = sample[0][0]
+    mocker.patch("aitune.torch.utils.module.DTensor", torch.Tensor)
+
+    preparation = prepare_tensor_export(model, sample, graph_spec, device="meta")
+
+    prepared_tensor = preparation.flat_inputs[0]
+    assert prepared_tensor.device == tensor.device
+    assert prepared_tensor is not tensor
+
+
 def test_prepare_uses_recorded_graph_spec_without_calling_module(tmp_path):
     class CountingModule(torch.nn.Module):
         def __init__(self):
