@@ -46,7 +46,8 @@ env:
   UV_VERSION: 0.12.8
   UV_PYTHON: &python_version "3.12"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
-  PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+  # PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }} 
+  PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/ai-dynamo/aitune:82eb49ab9301930fdafcb772404d8538d0b011bc
 
   _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -77,38 +78,38 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  pytorch-image:
-    name: Build PyTorch image
-    needs: wheel
-    runs-on: linux-amd64-cpu4
-    outputs:
-      image: ${{ steps.image.outputs.image }}
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: *actions_checkout
-        with:
-          persist-credentials: false
-      - uses: *actions_download_artifact
-        with:
-          name: dist
-          path: dist
-      - uses: *actions_docker_login
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: *actions_docker_build_push
-        with:
-          context: .
-          file: .github/docker/Dockerfile
-          push: true
-          build-args: |
-            FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
-          tags: ${{ env.PYTORCH_CI_IMAGE }}
-      - id: image
-        run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
+  # pytorch-image:
+  #   name: Build PyTorch image
+  #   needs: wheel
+  #   runs-on: linux-amd64-cpu4
+  #   outputs:
+  #     image: ${{ steps.image.outputs.image }}
+  #   permissions:
+  #     contents: read
+  #     packages: write
+  #   steps:
+  #     - uses: *actions_checkout
+  #       with:
+  #         persist-credentials: false
+  #     - uses: *actions_download_artifact
+  #       with:
+  #         name: dist
+  #         path: dist
+  #     - uses: *actions_docker_login
+  #       with:
+  #         registry: ghcr.io
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
+  #     - uses: *actions_docker_build_push
+  #       with:
+  #         context: .
+  #         file: .github/docker/Dockerfile
+  #         push: true
+  #         build-args: |
+  #           FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
+  #         tags: ${{ env.PYTORCH_CI_IMAGE }}
+  #     - id: image
+  #       run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
 
   # main-ci-vars:
   #   name: Main CI Variables (pytorch_image and dist_run_id)
