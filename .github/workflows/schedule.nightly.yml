@@ -267,6 +267,7 @@ jobs:
             --scripts-path tests/functional/dataloader \
             --scripts-path tests/functional/dynamo \
             --github-output "$GITHUB_OUTPUT" \
+            --projects-path examples \
             --only-tags gpu/4,gpu/8 \
             --output-json jobs.json
 
@@ -281,9 +282,6 @@ jobs:
             jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.docker_image) | \(.runner) | \(.test_number) |"' jobs.json
             echo ""
           } >> $GITHUB_STEP_SUMMARY
-
-
-        # --projects-path examples \
 
   functional:
     name: ${{ matrix.id }}
