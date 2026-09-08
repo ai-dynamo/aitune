@@ -106,7 +106,7 @@ class TorchExporter:
 def _is_constraint_violation(error: Exception) -> bool:
     """Return whether Torch Export rejected the supplied shape constraints."""
     return isinstance(error, ConstraintViolationError) or (
-        isinstance(error, UserError) and error.error_type == UserErrorType.CONSTRAINT_VIOLATION
+        isinstance(error, UserError) and getattr(error, "error_type", None) == UserErrorType.CONSTRAINT_VIOLATION
     )
 
 
