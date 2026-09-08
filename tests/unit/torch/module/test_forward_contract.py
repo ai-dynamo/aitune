@@ -125,3 +125,43 @@ def test_restore_can_replace_a_tensor_normally_copied_into_the_input():
 
     assert arguments["state"][0] is replacement
     assert arguments["state"][0] is not original
+
+
+def test_restore_preserves_an_input_container_returned_in_mixed_outputs():
+    class ReturnState(torch.nn.Module):
+        def forward(self, x, state):
+            state[0].add_(x)
+            return {"result": x * 2, "state": state}
+
+    module = ReturnState()
+    recorded_args = (torch.ones(2), [torch.zeros(2)])
+    contract = _capture(module, recorded_args)
+    output_spec = SampleMetadata.from_outputs({"result": torch.zeros(2), "state": [torch.zeros(2)]}, strict=True)
+    arguments = {"x": torch.full((2,), 3.0), "state": [torch.zeros(2)]}
+    original_state = arguments["state"]
+    original_state_tensor = original_state[0]
+
+    result = contract.restore_outputs(
+        (torch.full((2,), 6.0), torch.full((2,), 3.0)),
+        arguments,
+        output_spec,
+    )
+
+    assert result["state"] is original_state
+    assert result["state"][0] is original_state_tensor
+    torch.testing.assert_close(result["state"][0], torch.full((2,), 3.0))
+    torch.testing.assert_close(result["result"], torch.full((2,), 6.0))
+
+
+def test_restore_preserves_a_tensor_returned_directly_from_inputs():
+    class ReturnInput(torch.nn.Module):
+        def forward(self, x):
+            return x
+
+    contract = _capture(ReturnInput(), (torch.zeros(2),))
+    output_spec = SampleMetadata.from_outputs(torch.zeros(2))
+    input_tensor = torch.ones(2)
+
+    result = contract.restore_outputs((torch.full((2,), 7.0),), {"x": input_tensor}, output_spec)
+
+    assert result is input_tensor

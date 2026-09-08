@@ -42,11 +42,20 @@ class InputMutation:
 
 
 @dataclass(frozen=True)
+class OutputInputAlias:
+    """An output path that returns the same object as an input path."""
+
+    output_locator: Locator
+    input_locator: Locator
+
+
+@dataclass(frozen=True)
 class ForwardContract:
     """Recorded output structure and input changes for one graph."""
 
     output_template: Any
     input_mutations: tuple[InputMutation, ...] = ()
+    output_input_aliases: tuple[OutputInputAlias, ...] = ()
 
     def extra_tensor_mutations(self, user_output_count: int) -> tuple[InputMutation, ...]:
         """Return tensor changes represented by additional graph outputs."""
@@ -93,7 +102,13 @@ class ForwardContract:
             else:
                 arguments = mutation.locator.set_value(arguments, value)
 
-        return output_spec.unflatten_tensors(flat_outputs[:user_output_count], self.output_template)
+        return output_spec.unflatten_tensors(
+            flat_outputs[:user_output_count],
+            self.output_template,
+            tuple(
+                (alias.output_locator, alias.input_locator.get_value(arguments)) for alias in self.output_input_aliases
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -144,6 +159,8 @@ class ForwardContractCapture:
     ) -> ForwardContract:
         """Describe supported input leaf changes observed after forward."""
         output_tensors = output_spec.flatten_tensors(output)
+        output_input_aliases = _find_output_input_aliases(arguments, output)
+        aliased_output_values = tuple(alias.output_locator.get_value(output) for alias in output_input_aliases)
         output_indices_by_identity = {id(tensor): index for index, tensor in enumerate(output_tensors)}
         next_output_index = len(output_tensors)
         mutations = []
@@ -163,9 +180,27 @@ class ForwardContractCapture:
             mutations.append(InputMutation(locator, kind, output_index=output_index))
 
         return ForwardContract(
-            output_template=output_spec.without_tensors(output),
+            output_template=output_spec.without_tensors(output, aliased_output_values),
             input_mutations=tuple(mutations),
+            output_input_aliases=output_input_aliases,
         )
+
+
+def _find_output_input_aliases(arguments: dict[str, Any], output: Any) -> tuple[OutputInputAlias, ...]:
+    """Find the largest output values that share identity with an input value."""
+    input_nodes = {
+        id(value): locator
+        for locator, value in Locator.find_nodes(arguments)
+        if isinstance(value, torch.Tensor) or Locator.is_traversable(value)
+    }
+    aliases = []
+    for output_locator, value in Locator.find_nodes(output, is_output=True):
+        if any(alias.output_locator.is_prefix_of(output_locator) for alias in aliases):
+            continue
+        input_locator = input_nodes.get(id(value))
+        if input_locator is not None:
+            aliases.append(OutputInputAlias(output_locator, input_locator))
+    return tuple(aliases)
 
 
 def _tensor_version(tensor: torch.Tensor) -> int | None:
