@@ -120,6 +120,9 @@ jobs:
     runs-on: linux-amd64-cpu4
     timeout-minutes: 45
     needs: wheel
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -290,7 +293,7 @@ jobs:
 
   functional:
     name: ${{ matrix.id }}
-    needs: [wheel, generate-functional-matrix]
+    needs: [wheel, generate-functional-matrix, create-base-images]
     if: needs.generate-functional-matrix.outputs.matrix_count != '0'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
