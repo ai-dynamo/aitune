@@ -47,9 +47,9 @@ def make_batch_dim(tensor_specs) -> Any:
     min_val = float("inf")
     max_val = 0
     for tensor_spec in tensor_specs:
-        for axis in tensor_spec.get_batch_axis_multipliers():
-            min_val = min(min_val, tensor_spec.min_shape[axis])
-            max_val = max(max_val, tensor_spec.max_shape[axis])
+        for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
+            min_val = min(min_val, tensor_spec.min_shape[axis] // multiplier)
+            max_val = max(max_val, tensor_spec.max_shape[axis] // multiplier)
     if min_val == max_val:
         return None
     return torch.export.Dim("batch", min=int(min_val), max=int(max_val))
@@ -66,8 +66,8 @@ def axis_dims_for_tensor(
     """Build export rules for the dynamic axes of one recorded tensor."""
     axis_dims: dict[int, Any] = {}
     if batch_dim is not None:
-        for axis in tensor_spec.get_batch_axis_multipliers():
-            axis_dims[axis] = batch_dim
+        for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
+            axis_dims[axis] = batch_dim if multiplier == 1 else multiplier * batch_dim
     for index, entry in enumerate(tensor_spec.shape):
         if isinstance(entry, str) and entry.startswith("dim"):
             if tensor_spec.min_shape[index] != tensor_spec.max_shape[index]:

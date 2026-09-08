@@ -240,7 +240,6 @@ def _resize_sample_to_shape(
     numerically invalid and can produce NaN or Inf outputs.
     """
     args, kwargs = copy.deepcopy(sample)
-    call_layout = graph_spec.forward_signature.capture_call_layout(args, kwargs)
     forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
     for locator, tensor_spec in graph_spec.input_spec.tensor_data:
         target_shape = getattr(tensor_spec, shape_attr)
@@ -248,7 +247,7 @@ def _resize_sample_to_shape(
             forward_inputs.arguments,
             _resize_tensor(locator.get_value(forward_inputs.arguments), target_shape),
         )
-    return call_layout.restore(forward_inputs.arguments)
+    return forward_inputs.args, forward_inputs.kwargs
 
 
 def _resize_tensor(tensor: torch.Tensor, target_shape: list[int]) -> torch.Tensor:

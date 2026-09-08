@@ -7,7 +7,7 @@ import torch
 
 from aitune.torch.libs.exporting import TorchExporter
 from tests.toy_models import ToyNestedInputModel
-from tests.utilities.helpers import make_graph_spec
+from tests.utilities.helpers import make_graph_spec, update_input_spec
 
 
 @pytest.mark.parametrize("strict", [True, False], ids=["strict", "non-strict"])
@@ -60,4 +60,26 @@ def test_export_supports_nested_dynamic_inputs(use_auto):
         arguments = graph_spec.forward_signature.normalize(args, kwargs).arguments
         flat_inputs = graph_spec.input_spec.flatten_tensors(arguments)
         actual = exported_module(*flat_inputs)
+        torch.testing.assert_close(actual, (expected,))
+
+
+def test_export_supports_different_batch_axis_multipliers():
+    class Model(torch.nn.Module):
+        def forward(self, x, doubled):
+            return x + doubled[::2]
+
+    model = Model().eval()
+    samples = [
+        ((torch.ones(1, 4), torch.ones(2, 4)), {}),
+        ((torch.ones(2, 4), torch.ones(4, 4)), {}),
+    ]
+    graph_spec = make_graph_spec(model.forward, samples[0], model(*samples[0][0]), batch_size=1)
+    update_input_spec(graph_spec, samples[1], batch_size=2)
+
+    export_result = TorchExporter().export(model, samples[0], graph_spec)
+    exported_module = export_result.exported_program.module()
+
+    for args, _ in samples:
+        expected = model(*args)
+        actual = exported_module(*args)
         torch.testing.assert_close(actual, (expected,))
