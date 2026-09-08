@@ -3,6 +3,8 @@
 name: Create AITune containers for nightly testing
 
 on:
+  schedule:
+    - cron: "0 0 * * 0"
   workflow_dispatch:
 
 permissions:
@@ -18,9 +20,6 @@ env:
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_VERSION: 0.12.8
   UV_PYTHON: &python_version "3.12"
-  TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
-  # PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }} 
-  PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/ai-dynamo/aitune:82eb49ab9301930fdafcb772404d8538d0b011bc
 
   # Actions version pins
   _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,8 +52,8 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  create-nvcr-base-images:
-    name: Create AITune images from NVCR PyTorch images
+  create-base-images:
+    name: create pytorch ${{ matrix.torch_ci_image_base }} based AITune image
     runs-on: linux-amd64-cpu4
     timeout-minutes: 45
     needs: wheel
@@ -87,10 +86,10 @@ jobs:
             FROM_IMAGE=nvcr.io/nvidia/pytorch:${{ matrix.torch_ci_image_base }}
           tags: ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}
       - id: image
-        run: echo "image=ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }} >> "$GITHUB_OUTPUT"
-    
+        run: echo "image=ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}" >> "$GITHUB_OUTPUT"
+
   create-cuda-base-images:
-    name: Create AITune images from CUDA images
+    name: create cuda ${{ matrix.cuda_ci_image_base }} based AITune image
     runs-on: linux-amd64-cpu4
     timeout-minutes: 45
     needs: wheel
@@ -123,8 +122,6 @@ jobs:
           push: true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/cuda:${{ matrix.cuda_ci_image_base }}
-            ADDITIONAL_APT_PACKAGES=ca-certificates curl git gcc g++ build-essential python3 python-is-python3 python3-dev python3-venv python3-setuptools
-
           tags: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}
       - id: image
-        run: echo "image=ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }} >> "$GITHUB_OUTPUT"
+        run: echo "image=ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}" >> "$GITHUB_OUTPUT"
