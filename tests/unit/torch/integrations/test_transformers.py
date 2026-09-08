@@ -26,10 +26,46 @@ def _make_cache() -> StaticCache:
     return StaticCache(config=config, max_cache_len=8)
 
 
+def _make_initialized_cache() -> StaticCache:
+    cache = _make_cache()
+    cache.early_initialization(
+        batch_size=1,
+        num_heads=2,
+        head_dim=4,
+        dtype=torch.float32,
+        device=torch.device("cpu"),
+    )
+    return cache
+
+
+class _UpdateCache(nn.Module):
+    def forward(self, value, cache):
+        cache.layers[0].keys.add_(value)
+        return {"value": cache.layers[0].keys[..., :1, :], "cache": cache}
+
+
 class _InitializeCache(nn.Module):
     def forward(self, key, cache, cache_position):
         keys, _ = cache.update(key, key, 0, {"cache_position": cache_position})
         return keys
+
+
+def test_initialized_static_cache_preserves_caller_owned_output_identity():
+    module = _UpdateCache().eval()
+    recorded_cache = _make_initialized_cache()
+    value = torch.ones_like(recorded_cache.layers[0].keys)
+    sample = ((value, recorded_cache), {})
+    graph_spec = make_recorded_graph_spec(module, sample)
+    exported = TorchExporter().export(module, sample, graph_spec).exported_program.module()
+
+    runtime_cache = _make_initialized_cache()
+    arguments = graph_spec.forward_signature.normalize((value, runtime_cache), {}).arguments
+    flat_inputs = graph_spec.input_spec.flatten_tensors(arguments)
+    output = graph_spec.restore_outputs(exported(*flat_inputs), arguments)
+
+    assert output["cache"] is runtime_cache
+    torch.testing.assert_close(output["value"], value[..., :1, :])
+    torch.testing.assert_close(runtime_cache.layers[0].keys, value)
 
 
 def test_lazy_static_cache_initialization_survives_the_tensor_export_boundary():
