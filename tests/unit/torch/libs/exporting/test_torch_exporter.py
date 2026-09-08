@@ -66,7 +66,7 @@ def test_export_supports_nested_dynamic_inputs(use_auto):
 def test_export_supports_different_batch_axis_multipliers():
     class Model(torch.nn.Module):
         def forward(self, x, doubled):
-            return x + doubled[::2]
+            return x + 1, doubled + 1
 
     model = Model().eval()
     samples = [
