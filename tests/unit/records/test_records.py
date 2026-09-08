@@ -21,7 +21,6 @@ INPUTS = (
     BoundedTensorSpec(
         name="input_ids",
         dtype=DType.INT64,
-        shape=("batch", "sequence"),
         min_shape=(1, 8),
         max_shape=(8, 512),
         batch_axis=0,
@@ -31,7 +30,6 @@ OUTPUTS = (
     BoundedTensorSpec(
         name="embedding",
         dtype=DType.FLOAT32,
-        shape=("batch", "sequence", 768),
         min_shape=(1, 8, 768),
         max_shape=(8, 512, 768),
         batch_axis=0,
@@ -64,33 +62,31 @@ def test_bounded_tensor_spec_describes_the_validated_tensor_domain():
     spec = BoundedTensorSpec(
         name="value",
         dtype=DType.FLOAT32,
-        shape=("batch", None, 4),
         min_shape=(1, 8, 4),
         max_shape=(16, 512, 4),
         batch_axis=0,
     )
 
-    assert spec.shape == ("batch", None, 4)
+    assert spec.min_shape == (1, 8, 4)
+    assert spec.max_shape == (16, 512, 4)
     assert spec.min_batch_size == 1
     assert spec.max_batch_size == 16
 
 
 @pytest.mark.parametrize(
-    ("shape", "min_shape", "max_shape"),
+    ("min_shape", "max_shape"),
     [
-        ((None, 4), (1,), (8, 4)),
-        ((None, 4), (1, 4), (8,)),
-        ((None,), (0,), (1,)),
-        ((None,), (2,), (1,)),
-        ((None, 4), (1, 8), (8, 8)),
+        ((1,), (8, 4)),
+        ((1, 4), (8,)),
+        ((0,), (1,)),
+        ((2,), (1,)),
     ],
 )
-def test_bounded_tensor_spec_rejects_inconsistent_bounds(shape, min_shape, max_shape):
+def test_bounded_tensor_spec_rejects_inconsistent_bounds(min_shape, max_shape):
     with pytest.raises(ValueError):
         BoundedTensorSpec(
             name="value",
             dtype=DType.FLOAT32,
-            shape=shape,
             min_shape=min_shape,
             max_shape=max_shape,
         )
@@ -102,7 +98,6 @@ def test_bounded_tensor_spec_requires_a_valid_batch_axis(batch_axis):
         BoundedTensorSpec(
             name="value",
             dtype=DType.FLOAT32,
-            shape=("batch", 4),
             min_shape=(1, 4),
             max_shape=(8, 4),
             batch_axis=batch_axis,
@@ -114,7 +109,6 @@ def test_artifact_preserves_tensor_order_and_shared_batch_limit(tmp_path):
     second_input = BoundedTensorSpec(
         name="mask",
         dtype=DType.BOOL,
-        shape=("batch", "sequence"),
         min_shape=(1, 8),
         max_shape=(4, 512),
         batch_axis=0,
@@ -137,9 +131,9 @@ def test_artifact_without_a_shared_batch_axis_has_no_batch_limit(tmp_path):
     output = BoundedTensorSpec(
         name="score",
         dtype=DType.FLOAT32,
-        shape=(1,),
         min_shape=(1,),
         max_shape=(1,),
+        batch_axis=None,
     )
 
     artifact = ONNXArtifact(inputs=INPUTS, outputs=(output,), path=path, fingerprint=fingerprint)
@@ -152,7 +146,6 @@ def test_artifact_without_batch_size_one_has_no_batch_limit(tmp_path):
     input_spec = BoundedTensorSpec(
         name="input_ids",
         dtype=DType.INT64,
-        shape=("batch", "sequence"),
         min_shape=(2, 8),
         max_shape=(8, 512),
         batch_axis=0,

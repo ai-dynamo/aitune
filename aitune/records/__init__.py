@@ -11,11 +11,29 @@ concrete bounds and batch interpretation established by tuning.
 
     >>> from pathlib import Path
     >>> inputs = (
-    ...     BoundedTensorSpec("input_ids", DType.INT64, ("batch", "sequence"), (1, 8), (8, 512), 0),
-    ...     BoundedTensorSpec("attention_mask", DType.BOOL, ("batch", "sequence"), (1, 8), (8, 512), 0),
+    ...     BoundedTensorSpec(
+    ...         name="input_ids",
+    ...         dtype=DType.INT64,
+    ...         min_shape=(1, 8),
+    ...         max_shape=(8, 512),
+    ...         batch_axis=0,
+    ...     ),
+    ...     BoundedTensorSpec(
+    ...         name="attention_mask",
+    ...         dtype=DType.BOOL,
+    ...         min_shape=(1, 8),
+    ...         max_shape=(8, 512),
+    ...         batch_axis=0,
+    ...     ),
     ... )
     >>> outputs = (
-    ...     BoundedTensorSpec("embedding", DType.FLOAT32, ("batch", "sequence", 768), (1, 8, 768), (8, 512, 768), 0),
+    ...     BoundedTensorSpec(
+    ...         name="embedding",
+    ...         dtype=DType.FLOAT32,
+    ...         min_shape=(1, 8, 768),
+    ...         max_shape=(8, 512, 768),
+    ...         batch_axis=0,
+    ...     ),
     ... )
     >>> artifact = ONNXArtifact(
     ...     path=Path("encoder.onnx"),
