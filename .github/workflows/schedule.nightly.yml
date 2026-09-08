@@ -46,8 +46,7 @@ env:
   UV_VERSION: 0.12.8
   UV_PYTHON: &python_version "3.12"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
-  # PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
-  PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/ai-dynamo/aitune:82eb49ab9301930fdafcb772404d8538d0b011bc
+  PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
   # plugin. RTX runners have no EFA provider, so OFI initialization fails and
@@ -185,6 +184,7 @@ jobs:
           push: true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/cuda:${{ matrix.cuda_ci_image_base }}
+            ADDITIONAL_APT_PACKAGES=ca-certificates curl git gcc g++ build-essential python3-dev python3-pip python3-venv python3-setuptools
           tags: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}
       - id: image
         run: echo "image=ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}" >> "$GITHUB_OUTPUT"
@@ -217,8 +217,8 @@ jobs:
           file: .github/docker/Dockerfile
           push: true
           build-args: |
-            FROM_IMAGE=nvcr.io/nvidia/pytorch:26.06-py3
-          tags: ghcr.io/ai-dynamo/aitune:26.06-py3
+            FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
+          tags: ${{ env.PYTORCH_CI_IMAGE }}
       - id: image
         run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
 
