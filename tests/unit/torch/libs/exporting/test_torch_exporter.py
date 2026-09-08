@@ -82,4 +82,4 @@ def test_export_supports_different_batch_axis_multipliers():
     for args, _ in samples:
         expected = model(*args)
         actual = exported_module(*args)
-        torch.testing.assert_close(actual, (expected,))
+        torch.testing.assert_close(actual, expected)
