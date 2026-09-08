@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicShapes, ShapeDefinition
+from aitune.torch.module.forward_contract import ForwardContract
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -30,6 +31,7 @@ class GraphSpec:
         forward_signature (ForwardSignature) - signature of the module's forward method
         dynamic_shapes (DynamicShapes) - explicit input shape definitions
         post_input_spec (SampleMetadata) - spec which describes the graph input after execution
+        forward_contract (ForwardContract) - output structure and input mutations captured during recording
     """
 
     name: str
@@ -38,6 +40,7 @@ class GraphSpec:
     forward_signature: ForwardSignature
     dynamic_shapes: DynamicShapes = field(default_factory=dict)
     post_input_spec: SampleMetadata | None = None
+    forward_contract: ForwardContract | None = None
 
     def update_shapes_seen(
         self,
@@ -138,6 +141,7 @@ class GraphSpec:
             "forward_signature": self.forward_signature.to_dict(),
             "dynamic_shapes": self.dynamic_shapes,
             "post_input_spec": self.post_input_spec,
+            "forward_contract": self.forward_contract,
         }
 
     @staticmethod
@@ -152,6 +156,7 @@ class GraphSpec:
             forward_signature=ForwardSignature.from_dict(data["forward_signature"]),
             dynamic_shapes=data["dynamic_shapes"],
             post_input_spec=data.get("post_input_spec"),
+            forward_contract=data.get("forward_contract"),
         )
 
     def __str__(self) -> str:
