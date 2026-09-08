@@ -193,7 +193,7 @@ class FunctionalTestConfig(BaseModel):
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("path", type=Path, help="PEP-723 script or pyproject.toml")
+    parser.add_argument("path", type=Path, help="PEP-723 script, pyproject.toml, or project directory")
     return parser.parse_args()
 
 
@@ -201,6 +201,8 @@ def main() -> None:
     """Print parsed functional-test config as JSON."""
     logging.basicConfig(level=logging.INFO)
     path = parse_args().path
+    if path.is_dir():
+        path = path / "pyproject.toml"
     if path.name == "pyproject.toml":
         config = FunctionalTestConfig.from_project(path)
     else:
