@@ -264,7 +264,6 @@ jobs:
             --scripts-path tests/functional/dataloader \
             --projects-path examples \
             --github-output "$GITHUB_OUTPUT" \
-            --only-tags gpu/4,gpu/8 \
             --output-json jobs.json
 
         # --scripts-path tests/functional/pytorch \
@@ -273,6 +272,7 @@ jobs:
         # --scripts-path tests/functional/dataloader \
         # --scripts-path tests/functional/dynamo \
         # --projects-path examples \
+        # --only-tags gpu/4,gpu/8 \
 
       - name: Display generated functional matrix
         if: always()
