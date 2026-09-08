@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.libs.exporting import TorchExporter
-from tests.utilities.helpers import make_recorded_graph_spec
+from tests.utilities.helpers import make_graph_spec, make_recorded_graph_spec, update_input_spec
 
 transformers = pytest.importorskip("transformers")
 from transformers import StaticCache  # noqa: E402
@@ -50,6 +50,12 @@ class _InitializeCache(nn.Module):
         return keys
 
 
+class _ReadCache(nn.Module):
+    def forward(self, value, cache):
+        layer = cache.layers[0]
+        return value + layer.keys.sum() + layer.values.sum()
+
+
 def test_initialized_static_cache_preserves_caller_owned_output_identity():
     module = _UpdateCache().eval()
     recorded_cache = _make_initialized_cache()
@@ -88,3 +94,30 @@ def test_lazy_static_cache_initialization_survives_the_tensor_export_boundary():
     assert runtime_cache.layers[0].max_batch_size == key.shape[0]
     assert runtime_cache.layers[0].num_heads == key.shape[1]
     assert runtime_cache.layers[0].head_dim == key.shape[3]
+
+
+@pytest.mark.parametrize(
+    "exporter",
+    (
+        pytest.param(TorchExporter(), id="inductor"),
+        pytest.param(
+            TorchExporter(use_auto=False, strict=False, fallback_to_dynamic_hints=True),
+            id="torch-tensorrt",
+        ),
+    ),
+)
+def test_static_cache_export_accepts_a_dynamic_tensor_input(exporter):
+    module = _ReadCache().eval()
+    cache = _make_initialized_cache()
+    sample = ((torch.ones(2, 4), cache), {})
+    graph_spec = make_graph_spec(module.forward, sample, module(*sample[0]))
+    update_input_spec(graph_spec, ((torch.ones(3, 4), cache), {}))
+
+    exported = exporter.export(module, sample, graph_spec).exported_program.module()
+
+    runtime_value = torch.ones(3, 4)
+    arguments = graph_spec.forward_signature.normalize((runtime_value, _make_initialized_cache()), {}).arguments
+    flat_inputs = graph_spec.input_spec.flatten_tensors(arguments)
+    output = graph_spec.restore_outputs(exported(*flat_inputs), arguments)
+
+    torch.testing.assert_close(output, runtime_value)
