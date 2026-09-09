@@ -113,7 +113,7 @@ def _arguments(arguments: dict[str, Any]) -> list[str]:
         if value is True:
             rendered.append(f"--{key}")
         elif value is not False and value is not None:
-            rendered.append(f'--{key}="{value}"')
+            rendered.append(f"--{key}={value}")
     return rendered
 
 
@@ -125,7 +125,7 @@ def _project_module(path: Path, script: str) -> str:
 
 def _run_command(command: list[str], verbose: bool, dry_run: bool, **kwargs: Any) -> None:
     if verbose:
-        print(f"+ {shlex.join(command)}", flush=True)
+        print(f"+ {shlex.join(command)} @ {kwargs.get('cwd', '.')}", flush=True)
     if not dry_run:
         subprocess.run(command, check=True, **kwargs)
 

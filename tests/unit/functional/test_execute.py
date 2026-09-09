@@ -56,7 +56,7 @@ def test_run_script_selects_entry_and_installs_dependencies(mocker: MockerFixtur
         "extra",
     ]
     assert run.call_args_list[3].args[0][:4] == [sys.executable, "-m", "pip", "freeze"]
-    assert run.call_args_list[4].args[0] == [sys.executable, str(script), '--name="second"']
+    assert run.call_args_list[4].args[0] == [sys.executable, str(script), "--name=second"]
     assert run.call_args_list[4].kwargs["env"]["AITUNE_CONSOLE_OUTPUT"] == "1"
 
 
@@ -132,5 +132,5 @@ def test_run_verbose_dry_run_prints_without_executing(
 def test_arguments_store_true_flags_omit_false() -> None:
     assert execute._arguments({"multi-gpu": False, "quantization": True, "name": "x", "skip": None}) == [
         "--quantization",
-        '--name="x"',
+        "--name=x",
     ]
