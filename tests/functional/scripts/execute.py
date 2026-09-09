@@ -76,20 +76,10 @@ def _install_dependencies(path: Path, kind: str, config: FunctionalTestConfig, v
 
 def _save_requirements(verbose: bool = False, dry_run: bool = False) -> None:
     _run_command(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "freeze",
-            "--all",
-            "--no-input",
-            "--local",
-            "--quiet",
-            ">",
-            "functional_test_requirements.txt",
-        ],
+        [sys.executable, "-m", "pip", "freeze", "--all", "--no-input", "--local", "--quiet"],
         verbose,
         dry_run,
+        stdout_path=Path("functional_test_requirements.txt"),
     )
 
 
@@ -123,11 +113,19 @@ def _project_module(path: Path, script: str) -> str:
     return target.partition(":")[0]
 
 
-def _run_command(command: list[str], verbose: bool, dry_run: bool, **kwargs: Any) -> None:
+def _run_command(
+    command: list[str], verbose: bool, dry_run: bool, stdout_path: Path | None = None, **kwargs: Any
+) -> None:
     if verbose:
-        print(f"+ {shlex.join(command)} @ {kwargs.get('cwd', '.')}", flush=True)
-    if not dry_run:
+        redirect = f" > {stdout_path}" if stdout_path else ""
+        print(f"+ {shlex.join(command)}{redirect} @ {kwargs.get('cwd', '.')}", flush=True)
+    if dry_run:
+        return
+    if stdout_path is None:
         subprocess.run(command, check=True, **kwargs)
+        return
+    with stdout_path.open("w", encoding="utf-8") as handle:
+        subprocess.run(command, check=True, stdout=handle, **kwargs)
 
 
 def _load_config(path: Path, kind: str) -> FunctionalTestConfig:
