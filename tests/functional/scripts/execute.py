@@ -40,13 +40,12 @@ def run(path: Path, kind: str, test_number: int, verbose: bool = False, dry_run:
     _install_dependencies(path, kind, config, verbose, dry_run)
     _save_requirements(verbose, dry_run)
 
-    _run_command(
-        _command(path, kind, entry),
-        verbose,
-        dry_run,
-        cwd=path if kind == "project" else None,
-        env=env,
-    )
+    run_kwargs: dict[str, Any] = {"cwd": path if kind == "project" else None, "env": env}
+    if kind == "project":
+        for script in ("tune", "inference"):
+            _run_command(_command(path, kind, entry, script), verbose, dry_run, **run_kwargs)
+    else:
+        _run_command(_command(path, kind, entry), verbose, dry_run, **run_kwargs)
 
 
 def _install_dependencies(path: Path, kind: str, config: FunctionalTestConfig, verbose: bool, dry_run: bool) -> None:
@@ -94,12 +93,12 @@ def _save_requirements(verbose: bool = False, dry_run: bool = False) -> None:
     )
 
 
-def _command(path: Path, kind: str, entry: FunctionalVariantConfig) -> list[str]:
+def _command(path: Path, kind: str, entry: FunctionalVariantConfig, script: str | None = None) -> list[str]:
     arguments = _arguments(entry.arguments)
     if kind == "script":
         return [sys.executable, str(path), *arguments]
 
-    module = _project_module(path)
+    module = _project_module(path, script)
     if entry.launcher:
         command = [sys.executable, "-m", entry.launcher]
         if entry.processes is not None:
@@ -109,12 +108,18 @@ def _command(path: Path, kind: str, entry: FunctionalVariantConfig) -> list[str]
 
 
 def _arguments(arguments: dict[str, Any]) -> list[str]:
-    return [f"--{name}={json.dumps(value, separators=(',', ':'))}" for name, value in arguments.items()]
+    rendered = []
+    for key, value in arguments.items():
+        if value is True:
+            rendered.append(f"--{key}")
+        elif value is not False and value is not None:
+            rendered.append(f'--{key}="{value}"')
+    return rendered
 
 
-def _project_module(path: Path) -> str:
+def _project_module(path: Path, script: str) -> str:
     project = tomllib.loads((path / "pyproject.toml").read_text(encoding="utf-8"))
-    target = project["project"]["scripts"]["inference"]
+    target = project["project"]["scripts"][script]
     return target.partition(":")[0]
 
 

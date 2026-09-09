@@ -70,6 +70,7 @@ name = "demo"
 version = "0.1.0"
 
 [project.scripts]
+tune = "demo.tune:main"
 inference = "demo.inference:main"
 
 [tool.aitune]
@@ -88,17 +89,18 @@ variants = [
     assert run.call_args_list[1].args[0] == [sys.executable, "-m", "pip", "install", "examples/common"]
     assert run.call_args_list[2].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[dynamo]"]
     assert run.call_args_list[3].args[0][:4] == [sys.executable, "-m", "pip", "freeze"]
-    assert run.call_args_list[4].args[0] == [
+    launched = [
         sys.executable,
         "-m",
         "torchrun",
         "--standalone",
         "--nproc-per-node=4",
         "--module",
-        "demo.inference",
-        "--multi-gpu=true",
     ]
+    assert run.call_args_list[4].args[0] == [*launched, "demo.tune", "--multi-gpu"]
+    assert run.call_args_list[5].args[0] == [*launched, "demo.inference", "--multi-gpu"]
     assert run.call_args_list[4].kwargs["cwd"] == project
+    assert run.call_args_list[5].kwargs["cwd"] == project
     assert run.call_args_list[4].kwargs["env"]["OUTPUT"] == "artifact"
 
 
@@ -125,3 +127,10 @@ def test_run_verbose_dry_run_prints_without_executing(
 
     assert "pip install --group functional-test" in out
     assert "pip freeze --all" in out
+
+
+def test_arguments_store_true_flags_omit_false() -> None:
+    assert execute._arguments({"multi-gpu": False, "quantization": True, "name": "x", "skip": None}) == [
+        "--quantization",
+        '--name="x"',
+    ]
