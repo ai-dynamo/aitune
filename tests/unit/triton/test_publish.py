@@ -226,6 +226,7 @@ def test_publish_file_preserves_config_and_copies_to_backend_layout(tmp_path, ba
     assert published == tmp_path / "repository" / config.name
     assert (published / "3" / filename).read_bytes() == source.read_bytes()
     assert (published / "config.pbtxt").read_text() == config.to_pbtxt()
+    assert not (published / "model_analyzer").exists()
     assert source.read_bytes() == b"prebuilt model"
 
 
