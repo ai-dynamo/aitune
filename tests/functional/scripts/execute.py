@@ -44,6 +44,8 @@ def run(path: Path, kind: str, test_number: int, verbose: bool = False, dry_run:
     if kind == "project":
         for script in ("tune", "inference"):
             _run_command(_command(path, kind, entry, script), verbose, dry_run, **run_kwargs)
+        if (path / "run_dynamo.sh").is_file():
+            _run_command(["./run_dynamo.sh"], verbose, dry_run, **run_kwargs)
     else:
         _run_command(_command(path, kind, entry), verbose, dry_run, **run_kwargs)
 

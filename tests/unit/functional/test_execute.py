@@ -65,9 +65,7 @@ def test_run_script_selects_entry_and_installs_dependencies(
     assert run.call_args_list[4].kwargs["env"]["AITUNE_CONSOLE_OUTPUT"] == "1"
 
 
-def test_run_project_uses_variant_launcher(
-    mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
+def test_run_project_uses_variant_launcher(mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
     project = tmp_path / "Demo"
     project.mkdir()
@@ -112,6 +110,34 @@ variants = [
     assert run.call_args_list[4].kwargs["cwd"] == project
     assert run.call_args_list[5].kwargs["cwd"] == project
     assert run.call_args_list[4].kwargs["env"]["OUTPUT"] == "artifact"
+    assert len(run.call_args_list) == 6
+
+
+def test_run_project_runs_dynamo_script_when_present(
+    mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    project = tmp_path / "Demo"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        """
+[project]
+name = "demo"
+version = "0.1.0"
+
+[project.scripts]
+tune = "demo.tune:main"
+inference = "demo.inference:main"
+""".strip(),
+        encoding="utf-8",
+    )
+    (project / "run_dynamo.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    run = mocker.patch.object(execute.subprocess, "run")
+
+    execute.run(project, "project", 0)
+
+    assert run.call_args_list[-1].args[0] == ["./run_dynamo.sh"]
+    assert run.call_args_list[-1].kwargs["cwd"] == project
 
 
 def test_run_verbose_dry_run_prints_without_executing(
