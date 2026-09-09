@@ -23,6 +23,7 @@ from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_errors, t
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.exporting import TorchExporter
+from aitune.torch.libs.exporting.export_validation import preflight_export, validate_export_profiles
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
@@ -220,6 +221,8 @@ class TorchTensorRTAotBackend(Backend):
                 device=self._device,
             )
             exported = export_result.exported_program
+            preflight_export(exported)
+            validate_export_profiles(exported, graph_spec)
 
         # Optimization-profile inputs for TRT engine building.
         input_signature = []
@@ -252,6 +255,13 @@ class TorchTensorRTAotBackend(Backend):
                     **self._compile_settings(),
                 )
 
+        if self.stateful_validation is not None:
+            self._opt_module = trt_model_compiled
+            try:
+                self.stateful_validation.check(self._infer, self._device, name="Torch-TensorRT before serialization")
+            finally:
+                self._opt_module = None
+
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
             _save_compiled_model(
@@ -260,6 +270,12 @@ class TorchTensorRTAotBackend(Backend):
                 input_signature,
                 export_result.dynamic_shapes,
                 self._config.pickle_protocol,
+                allow_retrace=not (
+                    graph_spec.forward_contract.input_mutations
+                    or graph_spec.forward_contract.output_input_aliases
+                    or exported.graph_signature.buffers_to_mutate
+                    or exported.graph_signature.user_inputs_to_mutate
+                ),
             )
             result["compiled_model_size_bytes"] = self._exported_model_artifact.path.stat().st_size
 
@@ -335,6 +351,8 @@ def _save_compiled_model(
     inputs: list[Any],
     dynamic_shapes: dict[str, Any] | None,
     pickle_protocol: int,
+    *,
+    allow_retrace: bool = True,
 ) -> None:
     """Save a compiled graph and retry known direct-export failures with retracing."""
     try:
@@ -347,6 +365,11 @@ def _save_compiled_model(
             )
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
     except (SpecViolationError, RuntimeError) as error:
+        if not allow_retrace:
+            raise RuntimeError(
+                "Direct Torch-TensorRT serialization failed for a model that changes inputs or shares outputs "
+                "with inputs. Retracing is disabled because it may lose these input changes or shared objects."
+            ) from error
         integer_parameter_error = "Only Tensors of floating point and complex dtype can require gradients"
         if isinstance(error, RuntimeError) and integer_parameter_error not in str(error):
             raise

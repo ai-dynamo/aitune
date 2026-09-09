@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import torch
@@ -26,6 +27,7 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
     ThroughputSaturatedProfilingStopStrategy,
 )
+from aitune.torch.task.stateful_validation import StatefulValidation
 from aitune.torch.utils.module import count_parameters, move_module_to_device
 from aitune.utils.logging import control_output, log, log_to_file
 from aitune.utils.timer import Timer
@@ -98,7 +100,7 @@ class TuneStrategy(ABC):
             return backend
 
     def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, samples: SampleStore):
-        """Check outputs for NaN/inf.
+        """Check outputs, input changes, and recorded stateful behavior.
 
         Args:
             backend: The backend to check.
@@ -107,7 +109,7 @@ class TuneStrategy(ABC):
             samples: Recorded samples to check.
 
         Note:
-            This method is should be called by the _tune method to check the correctness of the backend.
+            Call this method from _tune to check the backend.
 
             You can disable correctness check by calling `enable_correctness_check(False)`.
 
@@ -152,6 +154,13 @@ class TuneStrategy(ABC):
             infer=backend.infer,
             name=f"{name}.{graph_spec.name}.{backend.describe()}",
         )
+        stateful_validation = getattr(backend, "stateful_validation", None)
+        if stateful_validation is not None:
+            stateful_validation.check(
+                backend.infer,
+                correctness_device,
+                name=f"{name}.{graph_spec.name}.{backend.describe()}",
+            )
 
     def enable_correctness_check(self, enable: bool = True) -> "TuneStrategy":
         """Enable/disable correctness checking."""
@@ -212,13 +221,19 @@ class TuneStrategy(ABC):
         failure_phase: str | None = None
         built_backend = backend
 
-        with Timer(sink=self._sink, depth=2):
+        stateful_validation = None
+        with TemporaryDirectory(prefix="aitune-validation-") as validation_dir, Timer(sink=self._sink, depth=2):
             log("🤖 backend: %s", description, sink=self._sink)
             log("🔄 in progress...please wait", depth=2, sink=self._sink)
             try:
                 with coordinator.raise_if_any_rank_fails(f"Building backend {description}"):
                     with control_output(log_file=log_file):
                         built_backend = deepcopy(backend)
+                        if self._enable_correctness_check and graph_spec.forward_contract.input_mutations:
+                            move_module_to_device(module, device)
+                            stateful_validation = StatefulValidation(Path(validation_dir), graph_spec)
+                            stateful_validation.record(module, samples.iter_samples(device))
+                            built_backend.stateful_validation = stateful_validation
                         built_backend = built_backend.build(
                             module,
                             graph_spec,
@@ -234,12 +249,16 @@ class TuneStrategy(ABC):
                 log("✅ backend built", depth=2, sink=self._sink)
                 try:
                     with control_output(log_file=log_file):
+                        built_backend.stateful_validation = stateful_validation
                         self.check_correctness(built_backend, name, graph_spec, samples)
                 except Exception as e:
                     local_error = e
                     failure_phase = "validation"
                 else:
                     log("✅ backend validated", depth=2, sink=self._sink)
+            finally:
+                # Validation results are temporary and must not enter checkpoints.
+                built_backend.stateful_validation = None
 
             self.backend_results.append({"backend": description, "success": local_error is None})
             if local_error is None:

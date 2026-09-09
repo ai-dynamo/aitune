@@ -58,7 +58,8 @@ def check_dynamic_shape_boundary_inference(
         with coordinator.raise_if_any_rank_fails(f"Dynamic shape correctness check ({boundary_name})"):
             try:
                 with torch.no_grad():
-                    outputs = infer(*copy.deepcopy(args), **copy.deepcopy(kwargs))
+                    call_args, call_kwargs = copy.deepcopy((args, kwargs))
+                    outputs = infer(*call_args, **call_kwargs)
             except Exception as exc:
                 raise CorrectnessDynamicShapeError(
                     f"Dynamic shape correctness check failed with {boundary_name} input shapes for {name}: "

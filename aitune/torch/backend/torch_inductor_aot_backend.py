@@ -21,6 +21,7 @@ from aitune.torch.backend.backend import (
 )
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.exporting import TorchExporter
+from aitune.torch.libs.exporting.export_validation import preflight_export
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.module import move_module_to_device, offload
@@ -105,6 +106,7 @@ class TorchInductorAotBackend(Backend):
 
         with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
             exported = TorchExporter().export(module, samples[0], graph_spec, device=self._device).exported_program
+            preflight_export(exported)
 
         with self._track_build_step(TorchInductorAotBuildStep.AOT_COMPILE) as result:
             self._compiled_model_artifact = ArtifactPath(cache_dir, "model.pt2")

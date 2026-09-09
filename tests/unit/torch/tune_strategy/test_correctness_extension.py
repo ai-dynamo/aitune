@@ -152,6 +152,26 @@ def test_correctness_loads_samples_on_backend_device(mocker, tmp_path):
     assert iter_samples.call_args_list == [mocker.call(torch.device("cuda:1")), mocker.call(torch.device("cuda:1"))]
 
 
+@pytest.mark.parametrize("enabled", [True, False])
+def test_check_correctness_includes_stateful_validation(mocker, tmp_path, enabled):
+    backend, _, strategy, samples, graph_spec = _mock_backend_validation_context(mocker, tmp_path)
+    backend.device = torch.device("cpu")
+    stateful_validation = mocker.Mock()
+    backend.stateful_validation = stateful_validation
+    mocker.patch("aitune.torch.tune_strategy.tune_strategy.check_inference_output_correctness")
+    mocker.patch("aitune.torch.tune_strategy.tune_strategy.check_dynamic_shape_boundary_inference")
+    strategy.enable_correctness_check(enabled)
+
+    strategy.check_correctness(backend, "module", graph_spec, samples)
+
+    if enabled:
+        stateful_validation.check.assert_called_once_with(
+            backend.infer, backend.device, name=f"module.{graph_spec.name}.mock_backend"
+        )
+    else:
+        stateful_validation.check.assert_not_called()
+
+
 def test_correctness_requires_at_least_one_sample(tmp_path):
     """Correctness validation should not pass without recorded samples."""
 

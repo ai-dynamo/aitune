@@ -102,6 +102,17 @@ def test_save_compiled_model_without_retracing(mocker, tmp_path: Path):
     )
 
 
+def test_stateful_serialization_never_retraces_after_direct_failure(mocker, tmp_path):
+    library = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    library.logging.errors.return_value = mocker.MagicMock()
+    error = SpecViolationError("mutation metadata missing")
+    library.save.side_effect = error
+    with pytest.raises(RuntimeError, match="Retracing is disabled") as caught:
+        _save_compiled_model(mocker.Mock(), tmp_path / "model.pt", [], None, 5, allow_retrace=False)
+    assert caught.value.__cause__ is error
+    library.save.assert_called_once()
+
+
 @pytest.mark.parametrize(
     "direct_save_error",
     [
