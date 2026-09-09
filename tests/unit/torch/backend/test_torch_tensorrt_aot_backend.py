@@ -197,6 +197,14 @@ def test_populate_mutation_output_metadata_repairs_generated_getitem(mocker):
     exported = mocker.Mock()
     exported.graph_module.graph.nodes = [source_output, source_graph_output]
 
+    copy_target = mocker.Mock(meta={"val": source_value})
+    copy_node = mocker.Mock(
+        name="copy__default",
+        op="call_function",
+        target=torch.ops.aten.copy_.default,
+        args=(copy_target, source_output),
+        meta={},
+    )
     producer = mocker.Mock(meta={"val": ()})
     compiled_output = mocker.Mock(
         op="call_function",
@@ -206,13 +214,14 @@ def test_populate_mutation_output_metadata_repairs_generated_getitem(mocker):
     )
     compiled_graph_output = mocker.Mock(op="output", args=((compiled_output,),))
     compiled = mocker.Mock()
-    compiled.graph_module.graph.nodes = [compiled_output, compiled_graph_output]
+    compiled.graph_module.graph.nodes = [copy_target, copy_node, compiled_output, compiled_graph_output]
     mutation = mocker.Mock(output_index=0, locator="cache_position")
     graph_spec = mocker.Mock()
     graph_spec.extra_tensor_mutations.return_value = (mutation,)
 
     _populate_mutation_output_metadata(compiled, exported, graph_spec)
 
+    assert copy_node.meta["val"] is source_value
     assert compiled_output.meta["val"] is source_value
     assert producer.meta["val"] == (source_value,)
 

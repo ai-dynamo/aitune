@@ -433,6 +433,7 @@ def _flat_output_nodes(module: Any) -> tuple[Any, ...]:
 
 def _populate_mutation_output_metadata(compiled: Any, exported: Any, graph_spec: GraphSpec) -> None:
     """Copy valid Torch Export metadata onto Torch-TensorRT's generated mutation outputs."""
+    _populate_copy_node_metadata(compiled)
     mutations = graph_spec.extra_tensor_mutations()
     if not mutations:
         return
@@ -462,6 +463,23 @@ def _populate_mutation_output_metadata(compiled: Any, exported: Any, graph_spec:
                     values.append(source.meta["val"])
                 values[output_index] = source.meta["val"]
                 producer.meta["val"] = type(producer_value)(values)
+
+
+def _populate_copy_node_metadata(compiled: Any) -> None:
+    """Derive missing metadata for in-place copy nodes from their mutation targets."""
+    graph_module = _graph_module(compiled)
+    if graph_module is None:
+        return
+    for node in graph_module.graph.nodes:
+        if node.op != "call_function" or node.target != torch.ops.aten.copy_.default or "val" in node.meta:
+            continue
+        target = node.args[0]
+        target_value = getattr(target, "meta", {}).get("val")
+        if target_value is None:
+            raise TorchTensorRTSerializationContractError(
+                f"Mutation node {node.name} has no value metadata and its copy target cannot supply it."
+            )
+        node.meta["val"] = target_value
 
 
 def _metadata_contract(value: Any) -> Any:
