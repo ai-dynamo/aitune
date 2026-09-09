@@ -303,6 +303,30 @@ def test_tensorrt_backend_build_exposes_the_final_engine_interface(mock_tensorrt
     artifact.verify()
 
 
+def test_artifact_profiles_preserve_shape_bounds_and_engine_input_order():
+    backend = TensorRTBackend()
+    backend._input_names = ["input_x", "input_mask"]
+    backend._trt_optimization_profiles = [
+        Profile().add("input_mask", (1, 8), (2, 8), (4, 8)).add("input_x", (1, 32), (2, 32), (4, 32)),
+        Profile().add("input_mask", (5, 8), (6, 8), (8, 8)).add("input_x", (5, 32), (6, 32), (8, 32)),
+    ]
+
+    assert backend._artifact_profiles() == (
+        TensorRTOptimizationProfile(
+            inputs=(
+                TensorRTProfileInput(name="input_x", min_shape=(1, 32), opt_shape=(2, 32), max_shape=(4, 32)),
+                TensorRTProfileInput(name="input_mask", min_shape=(1, 8), opt_shape=(2, 8), max_shape=(4, 8)),
+            )
+        ),
+        TensorRTOptimizationProfile(
+            inputs=(
+                TensorRTProfileInput(name="input_x", min_shape=(5, 32), opt_shape=(6, 32), max_shape=(8, 32)),
+                TensorRTProfileInput(name="input_mask", min_shape=(5, 8), opt_shape=(6, 8), max_shape=(8, 8)),
+            )
+        ),
+    )
+
+
 @requires_cuda
 def test_artifact_metadata_failure_does_not_fail_tensorrt_build(mock_tensorrt_components, mocker, tmp_path):
     model = ToyTorchModel().to("cuda").eval()

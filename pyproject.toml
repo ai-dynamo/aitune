@@ -65,6 +65,7 @@ dynamo = [
 ]
 triton = [
     "pydantic>=2",
+    "protobuf>=6.33.5",
     "PyYAML>=6.0",
     "tritonclient[grpc]",
 ]
@@ -113,6 +114,9 @@ test = [
     "transformers>=4.54,<5",
     "setuptools",
     "importlib-metadata; python_version < '3.10'",
+    "pydantic>=2",
+    "protobuf>=6.33.5",
+    "tritonclient[grpc]",
 ]
 dev = [
     "build >= 0.8",

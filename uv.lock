@@ -282,6 +282,7 @@ dynamo = [
     { name = "uvloop" },
 ]
 triton = [
+    { name = "protobuf" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "tritonclient", version = "2.71.0", source = { registry = "https://pypi.org/simple" }, extra = ["grpc"], marker = "python_full_version < '3.12'" },
@@ -346,6 +347,8 @@ functional-test = [
 test = [
     { name = "datasets" },
     { name = "pillow" },
+    { name = "protobuf" },
+    { name = "pydantic" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
@@ -353,6 +356,8 @@ test = [
     { name = "setuptools", version = "81.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-6-aitune-torch211' or extra == 'extra-6-aitune-torch212' or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch28') or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch29') or (extra == 'extra-6-aitune-torch28' and extra == 'extra-6-aitune-torch29') or (extra != 'extra-6-aitune-torch210' and extra != 'extra-6-aitune-torch28' and extra != 'extra-6-aitune-torch29')" },
     { name = "setuptools", version = "83.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-6-aitune-torch210' or extra == 'extra-6-aitune-torch28' or extra == 'extra-6-aitune-torch29' or (extra == 'extra-6-aitune-torch211' and extra == 'extra-6-aitune-torch212')" },
     { name = "transformers" },
+    { name = "tritonclient", version = "2.71.0", source = { registry = "https://pypi.org/simple" }, extra = ["grpc"], marker = "python_full_version < '3.12'" },
+    { name = "tritonclient", version = "2.72.0", source = { registry = "https://pypi.org/simple" }, extra = ["grpc"], marker = "python_full_version >= '3.12'" },
 ]
 
 [package.metadata]
@@ -368,6 +373,7 @@ requires-dist = [
     { name = "onnx-ir", specifier = ">=0.1.11" },
     { name = "onnxscript", specifier = ">=0.2.0" },
     { name = "pandas", specifier = ">=2.3" },
+    { name = "protobuf", marker = "extra == 'triton'", specifier = ">=6.33.5" },
     { name = "pydantic", marker = "extra == 'triton'", specifier = ">=2" },
     { name = "psutil" },
     { name = "pyyaml", marker = "extra == 'triton'", specifier = ">=6.0" },
@@ -427,12 +433,15 @@ test = [
     { name = "datasets", specifier = ">=3.3.2" },
     { name = "importlib-metadata", marker = "python_full_version < '3.10'" },
     { name = "pillow" },
+    { name = "protobuf", specifier = ">=6.33.5" },
+    { name = "pydantic", specifier = ">=2" },
     { name = "pytest", specifier = ">=9.0.0" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "pytest-xdist" },
     { name = "setuptools" },
     { name = "transformers", specifier = ">=4.54,<5" },
+    { name = "tritonclient", extras = ["grpc"] },
 ]
 
 [[package]]
