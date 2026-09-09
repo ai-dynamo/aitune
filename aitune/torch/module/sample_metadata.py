@@ -21,9 +21,9 @@ def _hash_value(value: Any) -> int:
     """Hash nested values, falling back safely for unsupported unhashable objects."""
     if isinstance(value, Mapping):
         return hash(frozenset((_hash_value(key), _hash_value(item)) for key, item in value.items()))
-    if isinstance(value, (set, frozenset)):
+    if isinstance(value, set | frozenset):
         return hash(frozenset(_hash_value(item) for item in value))
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return hash(tuple(_hash_value(item) for item in value))
 
     try:

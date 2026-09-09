@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """TorchTensorRT backend with AOT compilation and intermediate model save."""
 
-import operator
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
+from inspect import signature
 from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, cast
@@ -24,7 +25,7 @@ from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_errors, t
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.exporting import TorchExporter
-from aitune.torch.libs.exporting.export_validation import preflight_export, validate_export_profiles
+from aitune.torch.libs.exporting.export_validation import validate_export_profiles
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
@@ -56,10 +57,6 @@ except (ImportError, RuntimeError, OSError):
 logger = getLogger(__name__)
 
 
-class TorchTensorRTSerializationContractError(RuntimeError):
-    """Raised when serialization would change a compiled program's exported contract."""
-
-
 class TorchTensorRTAotBuildStep(BackendBuildStep):
     """Identifiers for discrete sub-steps of a TorchTensorRTAot backend build."""
 
@@ -83,12 +80,15 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
     Attributes:
         compile_config: Torch-TensorRT compilation settings. Defaults to TorchTensorRTConfig().
         pickle_protocol: Pickle protocol for saved compiled artifacts. Defaults to 5.
+        use_legacy_exporter: Override Torch-TensorRT's save exporter when supported.
+            None uses the installed version's default; False requests its standard Torch Export path.
     """
 
     compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
         default_factory=TorchTensorRTConfig
     )
     pickle_protocol: int = 5
+    use_legacy_exporter: bool | None = None
 
     def describe(self) -> str:
         """Describe the backend configuration. Display only changed fields."""
@@ -226,7 +226,6 @@ class TorchTensorRTAotBackend(Backend):
                 device=self._device,
             )
             exported = export_result.exported_program
-            preflight_export(exported)
             validate_export_profiles(exported, graph_spec)
 
         # Optimization-profile inputs for TRT engine building.
@@ -269,19 +268,24 @@ class TorchTensorRTAotBackend(Backend):
 
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
-            _populate_mutation_output_metadata(trt_model_compiled, exported, graph_spec)
+            # The adapter takes *flat_inputs; the compiled GraphModule has one
+            # positional parameter per tensor. Preserve shared Dim objects.
+            save_shapes = (
+                export_result.dynamic_shapes["flat_inputs"] if export_result.dynamic_shapes is not None else None
+            )
             _save_compiled_model(
                 trt_model_compiled,
                 self._exported_model_artifact.path,
                 input_signature,
-                export_result.dynamic_shapes,
+                save_shapes,
                 self._config.pickle_protocol,
-                allow_retrace=not (
+                stateful=bool(
                     graph_spec.forward_contract.input_mutations
                     or graph_spec.forward_contract.output_input_aliases
                     or exported.graph_signature.buffers_to_mutate
                     or exported.graph_signature.user_inputs_to_mutate
                 ),
+                use_legacy_exporter=self._config.use_legacy_exporter,
             )
             result["compiled_model_size_bytes"] = self._exported_model_artifact.path.stat().st_size
 
@@ -354,137 +358,48 @@ class TorchTensorRTAotBackend(Backend):
 def _save_compiled_model(
     module: nn.Module,
     path: Path,
-    inputs: list[Any],
-    dynamic_shapes: dict[str, Any] | None,
+    inputs: Sequence[Any],
+    dynamic_shapes: tuple[dict[int, Any], ...] | None,
     pickle_protocol: int,
     *,
-    allow_retrace: bool = True,
+    stateful: bool = False,
+    use_legacy_exporter: bool | None = None,
 ) -> None:
-    """Save a compiled graph and retry known direct-export failures with retracing."""
-    _validate_exported_program(module)
-    try:
-        with torch_tensorrt_errors(torch_tensorrt):
-            torch_tensorrt.save(
-                module,
-                path.as_posix(),
-                retrace=False,
-                pickle_protocol=pickle_protocol,
-            )
-        logger.info("Saved the Torch-TensorRT artifact without retracing.")
-    except (SpecViolationError, RuntimeError) as error:
-        if not allow_retrace:
-            raise TorchTensorRTSerializationContractError(
-                "Direct Torch-TensorRT serialization failed for a model that changes inputs or shares outputs "
-                "with inputs. Retracing is disabled because it may lose these input changes or shared objects."
-            ) from error
-        integer_parameter_error = "Only Tensors of floating point and complex dtype can require gradients"
-        if isinstance(error, RuntimeError) and integer_parameter_error not in str(error):
-            raise
-        logger.warning(
-            "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
-            exc_info=True,
+    """Save through the public Dynamo exporter, leaving graph handling to Torch-TensorRT.
+
+    Stateless models retain the direct-save/re-export fallback. Stateful models
+    and explicit exporter selections use re-export directly. ``retrace=True``
+    requests Torch Export, not TorchScript tracing; AITune never repairs the graph.
+    """
+    if not stateful and use_legacy_exporter is None:
+        try:
+            with torch_tensorrt_errors(torch_tensorrt):
+                torch_tensorrt.save(
+                    module,
+                    path.as_posix(),
+                    output_format="exported_program",
+                    retrace=False,
+                    pickle_protocol=pickle_protocol,
+                )
+            logger.info("Saved the Torch-TensorRT artifact without retracing.")
+            return
+        except (SpecViolationError, RuntimeError) as error:
+            integer_parameter_error = "Only Tensors of floating point and complex dtype can require gradients"
+            if not isinstance(error, SpecViolationError) and integer_parameter_error not in str(error):
+                raise
+            logger.warning("Direct Torch-TensorRT save failed; retrying with Torch Export.", exc_info=True)
+    save_options = {}
+    if use_legacy_exporter is not None and "use_legacy_exporter" in signature(torch_tensorrt.save).parameters:
+        save_options["use_legacy_exporter"] = use_legacy_exporter
+    with torch_tensorrt_errors(torch_tensorrt):
+        torch_tensorrt.save(
+            module,
+            path.as_posix(),
+            output_format="exported_program",
+            retrace=True,
+            arg_inputs=inputs,
+            dynamic_shapes=dynamic_shapes,
+            pickle_protocol=pickle_protocol,
+            **save_options,
         )
-        with torch_tensorrt_errors(torch_tensorrt):
-            torch_tensorrt.save(
-                module,
-                path.as_posix(),
-                retrace=True,
-                inputs=inputs,
-                dynamic_shapes=dynamic_shapes,
-                pickle_protocol=pickle_protocol,
-            )
-        logger.info("Saved the Torch-TensorRT artifact using the retracing fallback.")
-
-
-def _validate_exported_program(module: Any) -> None:
-    """Validate an ExportedProgram when the supplied Torch-TensorRT object exposes that API."""
-    validate = getattr(module, "validate", None)
-    if not callable(validate):
-        return
-    try:
-        validate()
-    except Exception as error:
-        raise TorchTensorRTSerializationContractError(
-            "Torch-TensorRT produced an invalid exported program before serialization."
-        ) from error
-
-
-def _graph_module(module: Any) -> Any | None:
-    """Return the FX graph module contained in an exported or compiled object."""
-    graph_module = getattr(module, "graph_module", None)
-    if graph_module is not None:
-        return graph_module
-    return module if hasattr(module, "graph") else None
-
-
-def _flat_output_nodes(module: Any) -> tuple[Any, ...]:
-    """Return tensor-producing nodes referenced by the graph output."""
-    graph_module = _graph_module(module)
-    if graph_module is None:
-        return ()
-    output_nodes = [node for node in graph_module.graph.nodes if node.op == "output"]
-    if len(output_nodes) != 1:
-        return ()
-
-    flattened = []
-
-    def visit(value):
-        if hasattr(value, "meta"):
-            flattened.append(value)
-        elif isinstance(value, tuple | list):
-            for item in value:
-                visit(item)
-
-    visit(output_nodes[0].args)
-    return tuple(flattened)
-
-
-def _populate_mutation_output_metadata(compiled: Any, exported: Any, graph_spec: GraphSpec) -> None:
-    """Copy valid Torch Export metadata onto Torch-TensorRT's generated mutation outputs."""
-    _populate_copy_node_metadata(compiled)
-    mutations = graph_spec.extra_tensor_mutations()
-    if not mutations:
-        return
-    source_outputs = _flat_output_nodes(exported)
-    compiled_outputs = _flat_output_nodes(compiled)
-    for mutation in mutations:
-        if mutation.output_index is None:
-            raise TorchTensorRTSerializationContractError(f"Mutation output {mutation.locator} has no output index.")
-        index = mutation.output_index
-        if index >= len(source_outputs) or index >= len(compiled_outputs):
-            raise TorchTensorRTSerializationContractError(
-                f"Mutation output {mutation.locator} at index {index} is missing from the compiled graph."
-            )
-        source = source_outputs[index]
-        target = compiled_outputs[index]
-        if "val" not in source.meta:
-            raise TorchTensorRTSerializationContractError(
-                f"Mutation output {mutation.locator} at index {index} has no Torch Export value metadata."
-            )
-        target.meta["val"] = source.meta["val"]
-        if target.op == "call_function" and target.target == operator.getitem:
-            producer, output_index = target.args[:2]
-            producer_value = producer.meta.get("val")
-            if isinstance(output_index, int) and isinstance(producer_value, tuple | list):
-                values = list(producer_value)
-                while len(values) <= output_index:
-                    values.append(source.meta["val"])
-                values[output_index] = source.meta["val"]
-                producer.meta["val"] = type(producer_value)(values)
-
-
-def _populate_copy_node_metadata(compiled: Any) -> None:
-    """Derive missing metadata for in-place copy nodes from their mutation targets."""
-    graph_module = _graph_module(compiled)
-    if graph_module is None:
-        return
-    for node in graph_module.graph.nodes:
-        if node.op != "call_function" or node.target != torch.ops.aten.copy_.default or "val" in node.meta:
-            continue
-        target = node.args[0]
-        target_value = getattr(target, "meta", {}).get("val")
-        if target_value is None:
-            raise TorchTensorRTSerializationContractError(
-                f"Mutation node {node.name} has no value metadata and its copy target cannot supply it."
-            )
-        node.meta["val"] = target_value
+    logger.info("Saved the Torch-TensorRT artifact through its public Dynamo exporter.")

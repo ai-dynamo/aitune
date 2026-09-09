@@ -837,26 +837,19 @@ class TensorRTBackend(Backend, TensorRTRunner):
         # Get outputs from the allocator (already properly shaped by TensorRT)
         outputs = self._output_allocator.outputs
         outputs.update(self._aliased_outputs)
-        mutation_output_indices = {
-            mutation.output_index
-            for mutation in self._graph_spec.forward_contract.input_mutations
-            if mutation.output_index is not None
-        }
-        flat_outputs = tuple(
-            outputs.pop(name)
-            if (
-                name in self._output_input_aliases
-                or index in mutation_output_indices
-                or not self._config.use_cuda_graphs
-            )
-            else cast(torch.Tensor, outputs.pop(name)).clone()
-            for index, name in enumerate(self._graph_spec.output_names())
-        )
         mutation_policies = {
             mutation.output_index: self.tensor_mutation_policy
             for mutation in self._graph_spec.forward_contract.input_mutations
             if mutation.output_index is not None
         }
+        flat_outputs = []
+        for index, name in enumerate(self._graph_spec.output_names()):
+            tensor = cast(torch.Tensor, outputs.pop(name))
+            shares_state = name in self._output_input_aliases or index in mutation_policies
+            # CUDA graph buffers are reused; ordinary outputs need their own storage.
+            if self._config.use_cuda_graphs and not shares_state:
+                tensor = tensor.clone()
+            flat_outputs.append(tensor)
         result = self._graph_spec.restore_outputs(
             flat_outputs,
             arguments,

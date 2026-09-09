@@ -81,9 +81,9 @@ class RecordingModule:
         if self._dynamic_shapes:
             dynamic_shapes = self._resolve_and_validate_dynamic_shapes(inputs_metadata)
         sample_args, sample_kwargs = self._copy_inputs(forward_inputs.args, forward_inputs.kwargs)
-        snapshot_inputs = self._forward_signature.normalize(sample_args, sample_kwargs)
         contract_capture = None
         if inputs_metadata not in self._graph_specs:
+            snapshot_inputs = self._forward_signature.normalize(sample_args, sample_kwargs)
             contract_capture = ForwardContractCapture.before_call(
                 forward_inputs.arguments,
                 snapshot_inputs.arguments,

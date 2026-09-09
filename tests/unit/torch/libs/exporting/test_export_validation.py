@@ -4,7 +4,7 @@
 import pytest
 import torch
 
-from aitune.torch.libs.exporting.export_validation import preflight_export, validate_export_profiles
+from aitune.torch.libs.exporting.export_validation import validate_export_profiles
 from tests.utilities.helpers import make_recorded_graph_spec, update_input_spec
 
 
@@ -25,10 +25,9 @@ def _export_and_spec(export_max=4, profile_max=4):
     return exported, spec
 
 
-def test_export_preflight_and_profiles_do_not_rewrite_state():
+def test_profile_validation_does_not_rewrite_state():
     exported, spec = _export_and_spec()
     code, signature = exported.graph_module.code, str(exported.graph_signature)
-    preflight_export(exported)
     validate_export_profiles(exported, spec)
     assert exported.graph_module.code == code
     assert str(exported.graph_signature) == signature
@@ -46,14 +45,3 @@ def test_profiles_reject_static_axis_mismatch():
     update_input_spec(spec, ((torch.ones(4, 5),), {}))
     with pytest.raises(ValueError, match="axis 1"):
         validate_export_profiles(exported, spec)
-
-
-def test_preflight_reports_missing_lifted_state_without_repair(mocker):
-    exported = mocker.Mock()
-    error = RuntimeError("lifted_tensor_0 references nonexistent attribute")
-    exported.module.side_effect = error
-    with pytest.raises(RuntimeError, match="no tensors were relocated") as caught:
-        preflight_export(exported)
-    assert caught.value.__cause__ is error
-    exported.validate.assert_called_once()
-    exported.module.assert_called_once()

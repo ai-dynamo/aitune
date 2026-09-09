@@ -42,10 +42,8 @@ def test_capture_classifies_supported_leaf_mutations():
     mutations = {mutation.locator.path: mutation for mutation in contract.input_mutations}
     assert mutations[("inplace", 0)].kind == InputMutationKind.COPY_TENSOR
     assert mutations[("inplace", 0)].output_index == 1
-    assert mutations[("inplace", 0)].input_shape == (2,)
     assert mutations[("replaced", 0)].kind == InputMutationKind.REPLACE_TENSOR
     assert mutations[("replaced", 0)].output_index == 2
-    assert mutations[("replaced", 0)].input_shape == (2,)
     assert mutations[("step", 0)].kind == InputMutationKind.REPLACE_CONSTANT
     assert mutations[("step", 0)].value == 1
     assert contract.output_template == {"result": None, "label": "recorded"}
@@ -136,7 +134,7 @@ def test_restore_reshapes_a_copy_mutation_to_the_input_contract():
     output_spec = SampleMetadata.from_outputs(torch.zeros(1))
     contract = ForwardContract(
         output_template=None,
-        input_mutations=(InputMutation(locator, InputMutationKind.COPY_TENSOR, output_index=1, input_shape=()),),
+        input_mutations=(InputMutation(locator, InputMutationKind.COPY_TENSOR, output_index=1),),
     )
 
     result = contract.restore_outputs((torch.ones(1), torch.tensor([7])), arguments, output_spec)
@@ -155,7 +153,7 @@ def test_restore_does_not_reshape_a_replaced_tensor():
     output_spec = SampleMetadata.from_outputs(torch.zeros(1))
     contract = ForwardContract(
         output_template=None,
-        input_mutations=(InputMutation(locator, InputMutationKind.REPLACE_TENSOR, output_index=1, input_shape=()),),
+        input_mutations=(InputMutation(locator, InputMutationKind.REPLACE_TENSOR, output_index=1),),
     )
 
     contract.restore_outputs((torch.ones(1), replacement), arguments, output_spec)

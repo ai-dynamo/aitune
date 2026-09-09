@@ -1,25 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Read-only acceptance checks for AOT export boundaries."""
+"""Check TensorRT optimization profiles against Torch Export shape constraints."""
 
 import torch
 from torch.export.graph_signature import InputKind
 from torch.utils._sympy.value_ranges import bound_sympy
 
 from aitune.torch.module.graph_spec import GraphSpec
-
-
-def preflight_export(exported: torch.export.ExportedProgram) -> None:
-    """Verify that exported state can be materialized without repairing the graph."""
-    try:
-        exported.validate()
-        exported.module()
-    except Exception as error:
-        raise RuntimeError(
-            "AOT export preflight failed: the exported program cannot be validated/materialized. "
-            "Inspect lifted-state targets and retained forward wrappers; no tensors were relocated. "
-            f"Original error: {error}"
-        ) from error
 
 
 def validate_export_profiles(exported: torch.export.ExportedProgram, graph_spec: GraphSpec) -> None:

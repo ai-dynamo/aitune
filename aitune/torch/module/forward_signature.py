@@ -77,7 +77,7 @@ def validate_forward_input_path(path: object) -> None:
             len(path) >= 2
             and isinstance(path[0], str)
             and path[0]
-            and all(isinstance(component, (str, int)) and not isinstance(component, bool) for component in path[1:])
+            and all(isinstance(component, str | int) and not isinstance(component, bool) for component in path[1:])
         ):
             return
     raise AITuneUserInputError(
