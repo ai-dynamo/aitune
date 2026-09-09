@@ -39,6 +39,7 @@ class InputMutation:
     kind: InputMutationKind
     output_index: int | None = None
     value: Any = None
+    input_shape: tuple[int, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,8 @@ class ForwardContract:
                         f"Tensor mutation target {mutation.locator} resolved to {type(target).__name__}, not a tensor."
                     )
                 if target is not value:
+                    if value.shape != target.shape and value.numel() == target.numel():
+                        value = value.reshape_as(target)
                     target.copy_(value)
             else:
                 arguments = mutation.locator.set_value(arguments, value)
@@ -183,7 +186,13 @@ class ForwardContractCapture:
             if output_index is None:
                 output_index = next_output_index
                 next_output_index += 1
-            mutations.append(InputMutation(locator, kind, output_index=output_index))
+            previous = self._before.get(locator)
+            input_shape = (
+                previous.tensor_metadata.shape
+                if previous is not None and previous.tensor_metadata is not None
+                else None
+            )
+            mutations.append(InputMutation(locator, kind, output_index=output_index, input_shape=input_shape))
 
         return ForwardContract(
             output_template=output_spec.without_tensors(output, aliased_output_values),
