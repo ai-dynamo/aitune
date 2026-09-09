@@ -6,6 +6,52 @@ title: "Deployment Guide"
 
 This guide covers the full deployment story for AITune-tuned models: saving a tuned model to a checkpoint, loading it in production, and optionally serving it as an OpenAI-compatible HTTP endpoint via [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo).
 
+## Publish an Existing Model to Triton
+
+Install `aitune[triton]` to publish an ONNX graph, TensorRT plan, or AOTInductor PT2
+package that you already have. No AITune tuning flow is required.
+
+```python
+from aitune.triton import ONNXRuntimeModelConfig, publish
+
+config = ONNXRuntimeModelConfig(
+    name="encoder",
+    execution_provider="cuda",
+    max_batch_size=8,
+    dynamic_batching=True,
+    inputs=({"name": "input_ids", "data_type": "TYPE_INT64", "dims": (-1,)},),
+    outputs=({"name": "embedding", "data_type": "TYPE_FP32", "dims": (768,)},),
+)
+
+model_directory = publish(
+    "models/encoder.onnx",
+    path="model_repository",
+    config=config,
+    model_version=1,
+)
+```
+
+This writes `model_repository/encoder/config.pbtxt` and
+`model_repository/encoder/1/model.onnx`. The configuration supplies the tensor
+names, types, shapes, and batching contract; these must match your model. When
+`max_batch_size` is positive, `dims` excludes the leading batch dimension. Use
+`max_batch_size=0` and full tensor dimensions for an unbatched model.
+
+Choose `TensorRTModelConfig` with `optimization_profile_indices` and optional
+`cuda_graphs` for a TensorRT plan, or `TorchAOTIModelConfig` with `structured_call`
+for a PT2 package. The configuration type selects the backend and destination
+filename (`model.plan`, `model.onnx`, or `model.pt2`).
+
+For ONNX external data, pass `companions=["weights.bin", "data/weights.bin"]`
+with the files your graph actually references. Paths are relative to the source
+graph's directory. The graph and companions are copied under `1/model.onnx/`,
+preserving the companion paths. Files are staged before publication, and an
+existing model directory is never replaced. This API prepares the repository;
+it does not start Triton or verify that the model can execute on the target hardware.
+
+Tuned artifacts continue to use `publish(artifact, path=..., model_name=...)`,
+with configuration derived from the artifact.
+
 ## Save a Tuned Model
 
 ### Basic Save

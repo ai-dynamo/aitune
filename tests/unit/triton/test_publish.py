@@ -195,3 +195,187 @@ def test_integrity_failure_leaves_no_partial_model(tmp_path):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository" / "encoder").exists()
+
+
+def _file_config(backend="onnx", **overrides):
+    fields = {
+        "name": "external",
+        "max_batch_size": 8,
+        "inputs": ({"name": "x", "data_type": "TYPE_FP32", "dims": (16,)},),
+        "outputs": ({"name": "y", "data_type": "TYPE_FP32", "dims": (4,)},),
+        "dynamic_batching": True,
+    }
+    fields.update(overrides)
+    if backend == "tensorrt":
+        return aitriton.TensorRTModelConfig(**fields, optimization_profile_indices=(0, 1), cuda_graphs=True)
+    if backend == "pt2":
+        return aitriton.TorchAOTIModelConfig(**fields, structured_call=False)
+    return aitriton.ONNXRuntimeModelConfig(**fields, execution_provider=ONNXExecutionProvider.TENSORRT)
+
+
+@pytest.mark.parametrize(
+    ("backend", "filename"), [("onnx", "model.onnx"), ("tensorrt", "model.plan"), ("pt2", "model.pt2")]
+)
+def test_publish_file_preserves_config_and_copies_to_backend_layout(tmp_path, backend, filename):
+    source = tmp_path / "custom_filename.bin"
+    source.write_bytes(b"prebuilt model")
+    config = _file_config(backend)
+
+    published = aitriton.publish(str(source), path=tmp_path / "repository", config=config, model_version=3)
+
+    assert published == tmp_path / "repository" / config.name
+    assert (published / "3" / filename).read_bytes() == source.read_bytes()
+    assert (published / "config.pbtxt").read_text() == config.to_pbtxt()
+    assert source.read_bytes() == b"prebuilt model"
+
+
+def test_publish_file_copies_nested_onnx_external_data(tmp_path):
+    source = tmp_path / "encoder.onnx"
+    source.write_bytes(b"graph")
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "weights.bin").write_bytes(b"weights")
+
+    published = aitriton.publish(
+        source, path=tmp_path / "repository", config=_file_config(), companions=["data/weights.bin"]
+    )
+
+    assert (published / "1/model.onnx/model.onnx").read_bytes() == b"graph"
+    assert (published / "1/model.onnx/data/weights.bin").read_bytes() == b"weights"
+
+
+@pytest.mark.parametrize(
+    "companions", [["../weights"], ["/weights"], ["."], ["source.onnx"], ["model.onnx"], ["a", "a"]]
+)
+def test_publish_file_rejects_invalid_companion_paths(tmp_path, companions):
+    from aitune.exceptions import AITuneUserInputError
+
+    with pytest.raises(AITuneUserInputError):
+        aitriton.publish(
+            tmp_path / "source.onnx", path=tmp_path / "repository", config=_file_config(), companions=companions
+        )
+    assert not (tmp_path / "repository").exists()
+
+
+@pytest.mark.parametrize("backend", ["tensorrt", "pt2"])
+def test_publish_file_rejects_companions_for_single_file_formats(tmp_path, backend):
+    with pytest.raises(aitriton.PublicationError, match="Only ONNX"):
+        aitriton.publish(
+            tmp_path / "source", path=tmp_path / "repository", config=_file_config(backend), companions=["weights"]
+        )
+
+
+@pytest.mark.parametrize("missing_companion", [False, True])
+def test_publish_file_copy_failure_leaves_no_partial_model(tmp_path, missing_companion):
+    source = tmp_path / "source.onnx"
+    if missing_companion:
+        source.write_bytes(b"graph")
+    repository = tmp_path / "repository"
+    with pytest.raises(aitriton.PublicationError, match="Failed to publish"):
+        aitriton.publish(
+            source, path=repository, config=_file_config(), companions=["missing.bin"] if missing_companion else []
+        )
+    assert list(repository.iterdir()) == []
+
+
+def test_publish_file_does_not_replace_existing_model(tmp_path):
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"original")
+    published = aitriton.publish(source, path=tmp_path / "repository", config=_file_config())
+    source.write_bytes(b"replacement")
+    with pytest.raises(aitriton.PublicationError, match="never replaces"):
+        aitriton.publish(source, path=tmp_path / "repository", config=_file_config(), model_version=2)
+    assert (published / "1/model.onnx").read_bytes() == b"original"
+    assert not (published / "2").exists()
+
+
+@pytest.mark.parametrize(("name", "version"), [("../escape", 1), ("external", 0), ("external", True)])
+def test_publish_file_rejects_invalid_target(tmp_path, name, version):
+    from aitune.exceptions import AITuneUserInputError
+
+    with pytest.raises(AITuneUserInputError):
+        aitriton.publish(
+            tmp_path / "source", path=tmp_path / "repository", config=_file_config(name=name), model_version=version
+        )
+    assert not (tmp_path / "repository").exists()
+
+
+@pytest.mark.parametrize("options", [{}, {"model_name": "external"}, {"max_batch_size": 4}, {"dynamic_batching": True}])
+def test_publish_file_requires_config_and_rejects_artifact_options(tmp_path, options):
+    from aitune.exceptions import AITuneUserInputError
+
+    if options:
+        options = {**options, "config": _file_config()}
+    with pytest.raises(AITuneUserInputError):
+        aitriton.publish(tmp_path / "source", path=tmp_path / "repository", **options)
+    assert not (tmp_path / "repository").exists()
+
+
+@pytest.mark.parametrize("options", [{"config": _file_config()}, {"companions": ["weights"]}])
+def test_publish_artifact_rejects_file_options(tmp_path, options):
+    from aitune.exceptions import AITuneUserInputError
+
+    artifact = _plan(tmp_path / "source.plan")
+    with pytest.raises(AITuneUserInputError):
+        aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", **options)
+    assert not (tmp_path / "repository").exists()
+
+
+@pytest.mark.parametrize(
+    "kind,destination", [("label", "labels.txt"), ("warmup", "warmup/data.bin"), ("state", "initial_state/data.bin")]
+)
+def test_publish_config_resources(tmp_path, kind, destination):
+    from aitune.exceptions import AITuneUserInputError
+
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"model")
+    data = tmp_path / "data.bin"
+    data.write_bytes(b"sample data")
+    options = {"default_model_filename": "custom.onnx"}
+    if kind == "label":
+        options["outputs"] = ({"name": "y", "data_type": "TYPE_FP32", "dims": (4,), "label_filename": destination},)
+    elif kind == "warmup":
+        options["warmup"] = (
+            aitriton.ModelWarmup(
+                name="warm", inputs={"x": {"data_type": "TYPE_FP32", "dims": [16], "input_data_file": "data.bin"}}
+            ),
+        )
+    else:
+        options["dynamic_batching"] = False
+        options["sequence_batching"] = aitriton.SequenceBatcher(
+            state=(
+                {
+                    "input_name": "state_in",
+                    "output_name": "state_out",
+                    "data_type": "TYPE_FP32",
+                    "dims": [4],
+                    "initial_state": [
+                        {"name": "initial", "data_type": "TYPE_FP32", "dims": [4], "data_file": "data.bin"}
+                    ],
+                },
+            )
+        )
+    model_config = _file_config(**options)
+    repository = tmp_path / "repository"
+    with pytest.raises(AITuneUserInputError, match="Missing model resources"):
+        aitriton.publish(source, path=repository, config=model_config)
+    assert not repository.exists()
+    published = aitriton.publish(source, path=repository, config=model_config, resources={destination: data})
+    assert (published / destination).read_bytes() == b"sample data"
+    assert (published / "1" / "custom.onnx").read_bytes() == b"model"
+    assert (
+        text_format.Parse((published / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+        == model_config.to_protobuf()
+    )
+
+
+@pytest.mark.parametrize(
+    "destination", [".", "../escape", "/absolute", "config.pbtxt", "config.pbtxt/child", "1/model.onnx"]
+)
+def test_publish_rejects_invalid_resource_destination(tmp_path, destination):
+    from aitune.exceptions import AITuneUserInputError
+
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"model")
+    with pytest.raises(AITuneUserInputError, match="Invalid model resource destination"):
+        aitriton.publish(source, path=tmp_path / "repository", config=_file_config(), resources={destination: source})
+    assert not (tmp_path / "repository").exists()

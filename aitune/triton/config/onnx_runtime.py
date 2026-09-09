@@ -4,10 +4,12 @@
 
 from typing import Literal
 
+from google.protobuf import json_format
 from tritonclient.grpc import model_config_pb2
 
 from aitune.records import ONNXExecutionProvider
 from aitune.triton.config.common import _BaseModelConfig
+from aitune.triton.config.options import ExecutionAccelerator
 
 
 class ONNXRuntimeModelConfig(_BaseModelConfig):
@@ -15,11 +17,22 @@ class ONNXRuntimeModelConfig(_BaseModelConfig):
 
     platform: Literal["onnxruntime_onnx"] = "onnxruntime_onnx"
     execution_provider: ONNXExecutionProvider
+    gpu_execution_accelerators: tuple[ExecutionAccelerator, ...] = ()
+    cpu_execution_accelerators: tuple[ExecutionAccelerator, ...] = ()
 
     def to_protobuf(self) -> model_config_pb2.ModelConfig:
         """Preserve ONNX Runtime TensorRT provider selection."""
         config = super().to_protobuf()
-        if self.execution_provider is ONNXExecutionProvider.TENSORRT:
-            accelerator = config.optimization.execution_accelerators.gpu_execution_accelerator.add()
-            accelerator.name = "tensorrt"
+        for kind, accelerators in (
+            ("gpu_execution_accelerator", self.gpu_execution_accelerators),
+            ("cpu_execution_accelerator", self.cpu_execution_accelerators),
+        ):
+            target = getattr(config.optimization.execution_accelerators, kind)
+            for accelerator in accelerators:
+                if accelerator.name in {item.name for item in target}:
+                    raise ValueError(f"Duplicate execution accelerator: {accelerator.name}")
+                json_format.ParseDict(accelerator.model_dump(mode="json"), target.add())
+        gpu = config.optimization.execution_accelerators.gpu_execution_accelerator
+        if self.execution_provider is ONNXExecutionProvider.TENSORRT and not any(a.name == "tensorrt" for a in gpu):
+            gpu.add(name="tensorrt")
         return config
