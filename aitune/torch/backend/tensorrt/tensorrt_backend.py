@@ -842,9 +842,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     inputs=tuple(
                         TensorRTProfileInput(
                             name=name,
-                            min_shape=tuple(profile[name][0]),
-                            opt_shape=tuple(profile[name][1]),
-                            max_shape=tuple(profile[name][2]),
+                            min_shape=tuple(profile[name].min),
+                            opt_shape=tuple(profile[name].opt),
+                            max_shape=tuple(profile[name].max),
                         )
                         for name in self._input_names
                     )

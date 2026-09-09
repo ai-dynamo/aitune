@@ -27,6 +27,7 @@ def _graph_spec() -> GraphSpec:
             graph_spec = GraphSpec("graph", inputs, outputs, signature)
         else:
             graph_spec.update_shapes_seen(inputs, outputs)
+    assert graph_spec is not None
     return graph_spec
 
 
