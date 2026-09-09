@@ -100,7 +100,7 @@ variants = [
     launched = [
         sys.executable,
         "-m",
-        "torchrun",
+        "torch.distributed.run",
         "--standalone",
         "--nproc-per-node=4",
         "--module",

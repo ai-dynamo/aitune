@@ -92,7 +92,7 @@ def _command(path: Path, kind: str, entry: FunctionalVariantConfig, script: str 
 
     module = _project_module(path, script)
     if entry.launcher:
-        command = [sys.executable, "-m", entry.launcher]
+        command = [sys.executable, "-m", "torch.distributed.run"]
         if entry.processes is not None:
             command.extend(["--standalone", f"--nproc-per-node={entry.processes}"])
         return [*command, "--module", module, *arguments]
