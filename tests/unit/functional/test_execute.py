@@ -7,7 +7,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from pytest import CaptureFixture
+from pytest import CaptureFixture, MonkeyPatch
 from pytest_mock import MockerFixture
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -26,7 +26,10 @@ def _load_execute_module():
 execute = _load_execute_module()
 
 
-def test_run_script_selects_entry_and_installs_dependencies(mocker: MockerFixture, tmp_path: Path) -> None:
+def test_run_script_selects_entry_and_installs_dependencies(
+    mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
     script = tmp_path / "001_test.py"
     script.write_text(
         """
@@ -55,12 +58,17 @@ def test_run_script_selects_entry_and_installs_dependencies(mocker: MockerFixtur
         "--pre",
         "extra",
     ]
-    assert run.call_args_list[3].args[0][:4] == [sys.executable, "-m", "pip", "freeze"]
+    freeze = run.call_args_list[3]
+    assert freeze.args[0] == [sys.executable, "-m", "pip", "freeze", "--all", "--no-input", "--local", "--quiet"]
+    assert Path(freeze.kwargs["stdout"].name).name == "functional_test_requirements.txt"
     assert run.call_args_list[4].args[0] == [sys.executable, str(script), "--name=second"]
     assert run.call_args_list[4].kwargs["env"]["AITUNE_CONSOLE_OUTPUT"] == "1"
 
 
-def test_run_project_uses_variant_launcher(mocker: MockerFixture, tmp_path: Path) -> None:
+def test_run_project_uses_variant_launcher(
+    mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
     project = tmp_path / "Demo"
     project.mkdir()
     (project / "pyproject.toml").write_text(
@@ -88,7 +96,9 @@ variants = [
     assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "--group", "functional-test"]
     assert run.call_args_list[1].args[0] == [sys.executable, "-m", "pip", "install", "examples/common"]
     assert run.call_args_list[2].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[dynamo]"]
-    assert run.call_args_list[3].args[0][:4] == [sys.executable, "-m", "pip", "freeze"]
+    freeze = run.call_args_list[3]
+    assert freeze.args[0] == [sys.executable, "-m", "pip", "freeze", "--all", "--no-input", "--local", "--quiet"]
+    assert Path(freeze.kwargs["stdout"].name).name == "functional_test_requirements.txt"
     launched = [
         sys.executable,
         "-m",
@@ -127,6 +137,7 @@ def test_run_verbose_dry_run_prints_without_executing(
 
     assert "pip install --group functional-test" in out
     assert "pip freeze --all" in out
+    assert "> functional_test_requirements.txt" in out
 
 
 def test_arguments_store_true_flags_omit_false() -> None:
