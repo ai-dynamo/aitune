@@ -65,6 +65,7 @@ dynamo = [
 ]
 triton = [
     "pydantic>=2",
+    "PyYAML>=6.0",
     "tritonclient[grpc]",
 ]
 

@@ -71,9 +71,9 @@ class _BaseModelConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_batching(self) -> "_BaseModelConfig":
-        """Keep the scheduler setting consistent with the declared batch size."""
-        if self.dynamic_batching != (self.max_batch_size > 0):
-            raise ValueError("dynamic_batching requires a positive max_batch_size, and vice versa")
+        """Require a batched model contract before enabling the scheduler."""
+        if self.dynamic_batching and self.max_batch_size == 0:
+            raise ValueError("dynamic_batching requires a positive max_batch_size")
         return self
 
     def to_protobuf(self) -> model_config_pb2.ModelConfig:

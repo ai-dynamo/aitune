@@ -58,26 +58,28 @@ def _validate_artifact_files(artifact: Artifact, *, multi_file: bool) -> None:
 
 def _batch_size(artifact: Artifact, dynamic_batching: bool, requested: int | None) -> int:
     """Resolve and validate the Triton deployment batch limit."""
-    if not dynamic_batching:
-        if requested is not None:
-            raise AITuneUserInputError("max_batch_size requires dynamic_batching=True")
+    if requested is None and not dynamic_batching:
         return 0
-    if requested is not None and (not isinstance(requested, int) or isinstance(requested, bool) or requested < 2):
-        raise AITuneUserInputError(f"max_batch_size must be an integer of at least 2, got {requested!r}")
+    if requested is not None and (not isinstance(requested, int) or isinstance(requested, bool) or requested < 1):
+        raise AITuneUserInputError(f"max_batch_size must be a positive integer, got {requested!r}")
 
     supported = artifact.max_batch_size
-    if supported is None or supported < 2:
+    required = 2 if dynamic_batching else 1
+    if supported is None or supported < required:
         raise PublicationError(
-            "Cannot enable dynamic batching: every input and output must have a batch axis starting at 1 "
-            "and support a batch size of at least 2"
+            "Cannot publish a batched model: every input and output must have a batch axis starting at 1 "
+            f"and support a batch size of at least {required}"
         )
     if any(tensor.batch_axis != 0 for tensor in artifact.inputs + artifact.outputs):
-        raise PublicationError("Triton dynamic batching requires batch_axis=0 for every input and output")
+        raise PublicationError("Triton implicit batching requires batch_axis=0 for every input and output")
     if requested is not None and requested > supported:
         raise PublicationError(
             f"max_batch_size {requested} exceeds the artifact's bounded batch maximum of {supported}"
         )
-    return supported if requested is None else requested
+    batch_size = supported if requested is None else requested
+    if dynamic_batching and batch_size < 2:
+        raise AITuneUserInputError("dynamic_batching requires max_batch_size of at least 2")
+    return batch_size
 
 
 def _model_config(
@@ -149,7 +151,8 @@ def publish(
         model_name: New model directory name.
         model_version: Positive Triton model version.
         dynamic_batching: Let Triton combine independent client requests.
-        max_batch_size: Optional cap within the artifact's tuned batch bounds.
+        max_batch_size: Optional implicit batch limit within the artifact's tuned bounds.
+            It can be set without enabling the dynamic batcher.
 
     Returns:
         Path to the generated model directory.
