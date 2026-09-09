@@ -230,7 +230,7 @@ def test_check_dynamic_shape_boundary_inference_reports_backend_failure():
     input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 12),), {}), batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2)
 
-    def infer(tensor):
+    def infer(tensor, *, mask=None):
         if tuple(tensor.shape) != (2, 8):
             raise RuntimeError("backend shape failure")
         return tensor
@@ -256,7 +256,7 @@ def test_check_dynamic_shape_boundary_inference_validates_output_shapes_without_
     output_spec.update_shapes_seen(SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2))
     output_spec.update_shapes_seen(SampleMetadata.from_outputs(torch.zeros(2, 12), batch_size=2))
 
-    def infer(tensor):
+    def infer(tensor, *, mask=None):
         return torch.full(tuple(tensor.shape), float("nan"))
 
     check_dynamic_shape_boundary_inference(
@@ -272,7 +272,7 @@ def test_check_dynamic_shape_boundary_inference_reports_output_shape_failure():
     input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 12),), {}), batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2)
 
-    def infer(tensor):
+    def infer(tensor, *, mask=None):
         return torch.zeros(tensor.shape[0], tensor.shape[1], 1)
 
     with pytest.raises(CorrectnessTensorShapeError, match="output tensor shapes"):
@@ -289,7 +289,7 @@ def test_check_dynamic_shape_boundary_inference_reports_missing_output_data():
     input_spec.update_shapes_seen(_input_metadata(((torch.randn(2, 12),), {}), batch_size=2))
     output_spec = SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2)
 
-    def infer(tensor):
+    def infer(tensor, *, mask=None):
         del tensor
         return None
 

@@ -172,14 +172,14 @@ def test_save_compiled_model_does_not_retrace_a_stateful_graph(mocker, tmp_path:
     mock_torch_tensorrt.save.side_effect = SpecViolationError("mutation output is missing val")
     module = mocker.Mock(spec=nn.Module)
 
-    with pytest.raises(TorchTensorRTSerializationContractError, match="retracing is disabled"):
+    with pytest.raises(TorchTensorRTSerializationContractError, match="Retracing is disabled"):
         _save_compiled_model(
             module,
             tmp_path / "model.pt",
             inputs=[mocker.sentinel.input],
             dynamic_shapes=None,
             pickle_protocol=5,
-            stateful=True,
+            allow_retrace=False,
         )
 
     mock_torch_tensorrt.save.assert_called_once_with(
@@ -356,8 +356,7 @@ def test_mock_build(
     torch_device: torch.device,
     tmp_path: Path,
 ):
-    sentinel_exported = mocker.Mock(name="ExportedProgram")
-    export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
+    export_mock = mocker.spy(torch.export, "export")
 
     active_backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
@@ -385,7 +384,7 @@ def test_mock_build(
     warning_context.__exit__.assert_called_once()
     # Pin the pipeline shape: the ExportedProgram from torch.export.export must be
     # forwarded as the first positional arg to torch_tensorrt.dynamo.compile.
-    assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is sentinel_exported
+    assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is export_mock.spy_return
 
 
 @pytest.mark.parametrize(
@@ -429,8 +428,7 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     mocker.patch.object(TorchTensorRTAotBackend, "_devices", ["cpu", "cuda"])
 
     backend = TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
-    sentinel_exported = mocker.Mock(name="ExportedProgram")
-    export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
+    export_mock = mocker.spy(torch.export, "export")
 
     backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
 
@@ -468,7 +466,6 @@ def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.get_cuda_device", return_value=0)
     mocker.patch.object(TorchTensorRTAotBackend, "_devices", ["cpu", "cuda"])
-    mocker.patch("torch.export.export", return_value=mocker.Mock())
     backend = TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
 
     backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
@@ -486,17 +483,13 @@ def test_mock_infer(
     torch_device: torch.device,
     tmp_path: Path,
 ):
-    mocker.patch("torch.export.export")
     mocker.patch("torch.export.save")
     load = mocker.patch("torch.export.load", return_value=model)
     mocker.patch(
         "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.save",
         side_effect=_fake_torch_tensorrt_save,
     )
-    # torch.export.export is mocked above (returns Mock); torch_tensorrt.dynamo.compile
-    # would reject a Mock at its isinstance(_, ExportedProgram) check, so mock it too
-    # and return the original model — _opt_module then bypasses real TRT compilation
-    # while infer() still produces a real (1, 2) output via the underlying nn.Linear.
+    # Keep export validation real and bypass TRT compilation with the original model.
     mocker.patch(
         "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.dynamo.compile",
         return_value=model,

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import torch
 import torch.nn as nn
 
+from aitune.torch.module.forward_contract import TensorMutationPolicy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_backend_build
@@ -183,6 +184,8 @@ class Backend(ABC):
     _devices: ClassVar[list[str]] = ["cpu", "cuda"]
     _execution_modes: ClassVar[frozenset[ExecutionMode]]
     _build_mode: ClassVar[BuildMode]
+    # Shared by output restoration and stateful validation.
+    tensor_mutation_policy: ClassVar[TensorMutationPolicy] = TensorMutationPolicy.PRESERVE_INPUT
 
     def __init_subclass__(cls, **kwargs) -> None:
         """Require each backend subclass to declare its execution and build modes."""

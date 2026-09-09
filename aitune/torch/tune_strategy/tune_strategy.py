@@ -160,6 +160,7 @@ class TuneStrategy(ABC):
                 backend.infer,
                 correctness_device,
                 name=f"{name}.{graph_spec.name}.{backend.describe()}",
+                tensor_mutation_policy=backend.tensor_mutation_policy,
             )
 
     def enable_correctness_check(self, enable: bool = True) -> "TuneStrategy":

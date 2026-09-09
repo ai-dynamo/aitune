@@ -11,6 +11,7 @@ from typing import Any
 import torch
 
 from aitune.torch.distributed import coordinator
+from aitune.torch.module.forward_contract import InputMutationKind, TensorMutationPolicy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_store import Sample, SampleStore
@@ -85,10 +86,15 @@ def _snapshot(arguments: dict, output: Any, before: dict) -> dict:
     }
 
 
-def _compare(expected: dict, actual: dict, name: str) -> None:
+def _compare(expected: dict, actual: dict, name: str, replaced_inputs: tuple[Locator, ...] = ()) -> None:
     """Check values, shapes, dtypes, devices, and shared objects."""
+    # Engine-owned state may replace recorded tensor leaves. Keep checking all
+    # post-call aliases, including output-to-input aliases and shared containers.
+    ignored = {("before", locator) for locator in replaced_inputs}
     for field in ("aliases", "storage_aliases", "devices"):
-        if expected[field] != actual[field]:
+        expected_field = {path: value for path, value in expected[field].items() if path not in ignored}
+        actual_field = {path: value for path, value in actual[field].items() if path not in ignored}
+        if expected_field != actual_field:
             raise CorrectnessInputMutationError(f"{name}: {field} differ from eager execution")
     if expected["leaves"].keys() != actual["leaves"].keys():
         raise CorrectnessInputMutationError(f"{name}: input/output structure differs from eager execution")
@@ -142,8 +148,21 @@ class StatefulValidation:
                 output = module(*args, **kwargs)
                 torch.save(_snapshot(arguments, output, before), self.root / f"expected-{index}-{step}.pt")
 
-    def check(self, infer: Callable, device: torch.device | None, *, name: str) -> None:
+    def check(
+        self,
+        infer: Callable,
+        device: torch.device | None,
+        *,
+        name: str,
+        tensor_mutation_policy: TensorMutationPolicy = TensorMutationPolicy.PRESERVE_INPUT,
+    ) -> None:
         """Compare each call with its saved eager results, including changes to input state."""
+        replaced_inputs = tuple(
+            mutation.locator
+            for mutation in self.graph_spec.forward_contract.input_mutations
+            if mutation.kind == InputMutationKind.COPY_TENSOR
+            and tensor_mutation_policy == TensorMutationPolicy.REPLACE_INPUT
+        )
         with torch.no_grad():
             for index, (args, kwargs) in enumerate(self.samples.iter_samples(device)):
                 for step in range(self.steps):
@@ -153,7 +172,7 @@ class StatefulValidation:
                         before = _identity_nodes(arguments)
                         output = infer(*args, **kwargs)
                         expected = torch.load(self.root / f"expected-{index}-{step}.pt", weights_only=False)
-                        _compare(expected, _snapshot(arguments, output, before), label)
+                        _compare(expected, _snapshot(arguments, output, before), label, replaced_inputs)
 
 
 def _cuda_devices(module: torch.nn.Module, sample: Sample) -> list[int]:

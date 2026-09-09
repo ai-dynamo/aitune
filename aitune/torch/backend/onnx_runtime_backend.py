@@ -119,6 +119,7 @@ class ONNXRuntimeBackend(Backend):
 
     _build_mode = BuildMode.AHEAD_OF_TIME
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
+    tensor_mutation_policy = TensorMutationPolicy.REPLACE_INPUT
 
     # State dictionary keys
     STATE_TYPE = "type"
@@ -247,7 +248,7 @@ class ONNXRuntimeBackend(Backend):
         flat_outputs = tuple(outputs[name] for name in graph_spec.output_names())
         # ORT owns output buffers, so changed tensor leaves must install the returned tensors.
         mutation_policies = {
-            mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
+            mutation.output_index: self.tensor_mutation_policy
             for mutation in graph_spec.forward_contract.input_mutations
             if mutation.output_index is not None
         }

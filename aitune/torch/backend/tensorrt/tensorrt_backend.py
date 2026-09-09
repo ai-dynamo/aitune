@@ -201,6 +201,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
     _build_mode = BuildMode.AHEAD_OF_TIME
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
+    tensor_mutation_policy = TensorMutationPolicy.REPLACE_INPUT
 
     # State dictionary keys
     STATE_TYPE = "type"
@@ -852,7 +853,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             for index, name in enumerate(self._graph_spec.output_names())
         )
         mutation_policies = {
-            mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
+            mutation.output_index: self.tensor_mutation_policy
             for mutation in self._graph_spec.forward_contract.input_mutations
             if mutation.output_index is not None
         }

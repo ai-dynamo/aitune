@@ -166,7 +166,10 @@ def test_check_correctness_includes_stateful_validation(mocker, tmp_path, enable
 
     if enabled:
         stateful_validation.check.assert_called_once_with(
-            backend.infer, backend.device, name=f"module.{graph_spec.name}.mock_backend"
+            backend.infer,
+            backend.device,
+            name=f"module.{graph_spec.name}.mock_backend",
+            tensor_mutation_policy=backend.tensor_mutation_policy,
         )
     else:
         stateful_validation.check.assert_not_called()

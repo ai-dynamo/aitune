@@ -2,10 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 import torch
 
+from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend
+from aitune.torch.module.forward_contract import TensorMutationPolicy
 from aitune.torch.task.correctness import CorrectnessInputMutationError
 from aitune.torch.task.stateful_validation import StatefulValidation, _preserve_buffers
 from tests.utilities.helpers import make_recorded_graph_spec
@@ -82,6 +85,58 @@ def test_stateful_validation_checks_every_recorded_sample(tmp_path):
         stateful_validation.check(wrong_for_second, torch.device("cpu"), name="candidate")
 
 
+@pytest.mark.parametrize("backend_class", [ONNXRuntimeBackend, TensorRTBackend])
+def test_stateful_validation_accepts_engine_owned_state(validation, backend_class):
+    stateful_validation, _ = validation
+    backend = backend_class()
+    spec = backend._graph_spec = stateful_validation.graph_spec
+
+    def infer(value, cache):
+        engine_cache = {"value": cache["value"] + value, "counter": cache["counter"] + 1}
+        output = {"value": engine_cache["value"], "cache": engine_cache}
+        tensors = spec.output_spec.flatten_tensors(output)
+        outputs = dict(zip(spec.output_names(), tensors, strict=True))
+        arguments = {"value": value, "cache": cache}
+        if isinstance(backend, ONNXRuntimeBackend):
+            result = backend._prepare_outputs(outputs, arguments)
+        else:
+            backend._output_allocator = SimpleNamespace(outputs=outputs)
+            result = backend._prepare_outputs_for_return(arguments)
+        assert cache["value"] is engine_cache["value"]
+        assert result["cache"] is cache
+        return result
+
+    with pytest.raises(CorrectnessInputMutationError, match="aliases differ"):
+        stateful_validation.check(infer, torch.device("cpu"), name="strict")
+    stateful_validation.check(
+        infer, torch.device("cpu"), name="engine", tensor_mutation_policy=backend.tensor_mutation_policy
+    )
+
+
+@pytest.mark.parametrize("defect", ["values", "second-call", "alias", "rank", "dtype"])
+def test_replacement_policy_still_rejects_contract_defects(validation, defect):
+    stateful_validation, _ = validation
+
+    def infer(value, cache):
+        cache["value"] = cache["value"] + value
+        cache["counter"] = cache["counter"] + 1
+        output = {"value": cache["value"], "cache": cache}
+        if defect == "values" or (defect == "second-call" and cache["counter"].item() > 1):
+            cache["value"].zero_()
+        elif defect == "alias":
+            output["cache"] = deepcopy(cache)
+        elif defect == "rank":
+            cache["counter"] = cache["counter"].reshape(1)
+        elif defect == "dtype":
+            cache["counter"] = cache["counter"].float()
+        return output
+
+    with pytest.raises(CorrectnessInputMutationError, match="differs? from eager"):
+        stateful_validation.check(
+            infer, torch.device("cpu"), name="broken", tensor_mutation_policy=TensorMutationPolicy.REPLACE_INPUT
+        )
+
+
 def test_stateful_validation_preserves_cross_argument_aliases(tmp_path):
     class Model(torch.nn.Module):
         def forward(self, cache, *, same_cache):
@@ -112,6 +167,7 @@ def test_reference_buffers_are_restored_even_on_failure():
     torch.testing.assert_close(original, torch.zeros(2))
 
 
-def test_stateful_validation_requires_consecutive_calls(tmp_path):
+def test_stateful_validation_requires_consecutive_calls(tmp_path, validation):
+    stateful_validation, _ = validation
     with pytest.raises(ValueError, match="at least two"):
-        StatefulValidation(tmp_path, None, steps=1)
+        StatefulValidation(tmp_path, stateful_validation.graph_spec, steps=1)
