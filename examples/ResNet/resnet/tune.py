@@ -21,10 +21,12 @@ from aitune.torch import (
 from aitune.torch.backend import (
     ONNXAutoCastConfig,
     ONNXQuantizationConfig,
+    ONNXRuntimeBackend,
     TensorRTBackend,
     TensorRTBackendConfig,
     TorchAOBackend,
     TorchAOBackendConfig,
+    TorchInductorAotBackend,
     TorchInductorJitBackend,
     TorchInductorJitBackendConfig,
 )
@@ -34,12 +36,53 @@ from resnet.model import get_model, get_transform
 logger = getLogger(__name__)
 
 
+def _strategy(target):
+    """Select backends compatible with the requested deployment target."""
+    if target == "triton":
+        backends = [
+            TensorRTBackend(),
+            ONNXRuntimeBackend(),
+            TorchInductorAotBackend(),
+        ]
+    else:
+        backends = [
+            TensorRTBackend(
+                config=TensorRTBackendConfig(
+                    quantization_config=ONNXQuantizationConfig(
+                        precision="int8",
+                        calibration_method="max",
+                    ),
+                ),
+            ),
+            TensorRTBackend(
+                config=TensorRTBackendConfig(
+                    quantization_config=ONNXQuantizationConfig(
+                        precision="int8",
+                        calibration_method="max",
+                    ),
+                    use_dynamo=False,
+                ),
+            ),
+            TensorRTBackend(config=TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="fp16"))),
+            TensorRTBackend(
+                config=TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="fp16"), use_dynamo=False)
+            ),
+            TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo")),
+            TorchInductorJitBackend(
+                config=TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)
+            ),
+        ]
+    # TODO: Replace target-specific lists when AITune can select backends by deployment capability.
+    return MaxThroughputStrategy(backends=backends).enable_find_max_batch_size(False)
+
+
 def tune_model(
     model_name,
     image_path,
     tuned_model_path,
     max_batch_size,
     dynamic_shapes,
+    target,
 ):
     """Tunes ResNet model.
 
@@ -49,6 +92,7 @@ def tune_model(
         tuned_model_path: Path to save the tuned model.
         max_batch_size: Maximum batch size.
         dynamic_shapes: Whether to use user-provided dynamic shapes.
+        target: Runtime family for which the package is tuned.
     """
     batch_sizes = [2**n for n in range(max_batch_size.bit_length())]
     logger.info("Tuning with batch sizes: %s", batch_sizes)
@@ -71,43 +115,12 @@ def tune_model(
     module = Module(
         model,
         module_name,
-        strategy=MaxThroughputStrategy(
-            backends=[
-                TensorRTBackend(
-                    config=TensorRTBackendConfig(
-                        quantization_config=ONNXQuantizationConfig(
-                            precision="int8",
-                            calibration_method="max",
-                        ),
-                    ),
-                ),
-                TensorRTBackend(
-                    config=TensorRTBackendConfig(
-                        quantization_config=ONNXQuantizationConfig(
-                            precision="int8",
-                            calibration_method="max",
-                        ),
-                        use_dynamo=False,
-                    ),
-                ),
-                TensorRTBackend(config=TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="fp16"))),
-                TensorRTBackend(
-                    config=TensorRTBackendConfig(
-                        quantization_config=ONNXAutoCastConfig(precision="fp16"), use_dynamo=False
-                    )
-                ),
-                # Gives 3x TRT throughput but after load if fails
-                TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo")),
-                TorchInductorJitBackend(
-                    config=TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)
-                ),
-            ]
-        ).enable_find_max_batch_size(False),
+        strategy=_strategy(target),
         dynamic_shapes=shape_definitions,
     )
 
     logger.info("Tuning module: %s", model_name)
-    tune(module, dataset, batch_sizes=batch_sizes)
+    tune(module, dataset, batch_sizes=batch_sizes, ignore_failing_modules=target != "triton")
     logger.info("Tuning completed.")
 
     save(module, tuned_model_path, storage=LocalTorchStorage(remove_checkpoint_after_tune=True))
@@ -120,7 +133,14 @@ def main():
     """Entry point for the script."""
     log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
     basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
-    args = get_parser().parse_args()
+    parser = get_parser()
+    parser.add_argument(
+        "--target",
+        choices=("python", "triton"),
+        default="python",
+        help="Select backends for Python or direct Triton deployment (default: python)",
+    )
+    args = parser.parse_args()
 
     tune_model(
         model_name=args.model_name,
@@ -128,6 +148,7 @@ def main():
         tuned_model_path=args.tuned_model_path,
         max_batch_size=args.max_batch_size,
         dynamic_shapes=args.dynamic_shapes,
+        target=args.target,
     )
 
 
