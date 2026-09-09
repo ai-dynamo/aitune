@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch Inductor AOT backend."""
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
@@ -123,6 +124,17 @@ class TorchInductorAotBackend(Backend):
 
         self._activate()
         return self
+
+    @contextmanager
+    def validation_context(self):
+        """Reload the package around validation because runner buffers are opaque."""
+        self._deactivate()
+        self._activate()
+        try:
+            yield
+        finally:
+            self._deactivate()
+            self._activate()
 
     def _activate(self):
         """Load the compiled model from disk."""

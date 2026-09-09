@@ -28,6 +28,7 @@ from aitune.torch.libs.exporting import TorchExporter
 from aitune.torch.libs.exporting.export_validation import validate_export_profiles
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.task.stateful_validation import preserve_buffers
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.module import move_module_to_device
@@ -262,7 +263,10 @@ class TorchTensorRTAotBackend(Backend):
         if self.stateful_validation is not None:
             self._opt_module = trt_model_compiled
             try:
-                self.stateful_validation.check(self._infer, self._device, name="Torch-TensorRT before serialization")
+                with self.validation_context():
+                    self.stateful_validation.check(
+                        self._infer, self._device, name="Torch-TensorRT before serialization"
+                    )
             finally:
                 self._opt_module = None
 
@@ -294,6 +298,10 @@ class TorchTensorRTAotBackend(Backend):
         self._activate()
         logger.info("Module has been compiled, saved, and reloaded with TensorRT.")
         return self
+
+    def validation_context(self):
+        """Keep correctness checks from advancing buffers in the saved or loaded model."""
+        return preserve_buffers(self._opt_module)
 
     def _activate(self):
         """Load compiled module."""

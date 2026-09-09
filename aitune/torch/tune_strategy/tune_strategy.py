@@ -5,6 +5,7 @@
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from contextlib import nullcontext
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -27,7 +28,7 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
     ThroughputSaturatedProfilingStopStrategy,
 )
-from aitune.torch.task.stateful_validation import StatefulValidation
+from aitune.torch.task.stateful_validation import StatefulValidation, preserve_buffers
 from aitune.torch.utils.module import count_parameters, move_module_to_device
 from aitune.utils.logging import control_output, log, log_to_file
 from aitune.utils.timer import Timer
@@ -142,25 +143,28 @@ class TuneStrategy(ABC):
 
         self._logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
         correctness_device = getattr(backend, "device", None)
-        check_inference_output_correctness(
-            samples.iter_samples(correctness_device),
-            graph_spec,
-            infer=backend.infer,
-            name=f"{name}.{graph_spec.name}.{backend.describe()}",
-        )
-        check_dynamic_shape_boundary_inference(
-            next(samples.iter_samples(correctness_device)),
-            graph_spec,
-            infer=backend.infer,
-            name=f"{name}.{graph_spec.name}.{backend.describe()}",
-        )
         stateful_validation = getattr(backend, "stateful_validation", None)
-        if stateful_validation is not None:
-            stateful_validation.check(
-                backend.infer,
-                correctness_device,
+        context = backend.validation_context() if stateful_validation is not None else nullcontext()
+        with context:
+            # Compare with eager before ordinary checks advance model buffers.
+            if stateful_validation is not None:
+                stateful_validation.check(
+                    backend.infer,
+                    correctness_device,
+                    name=f"{name}.{graph_spec.name}.{backend.describe()}",
+                    tensor_mutation_policy=backend.tensor_mutation_policy,
+                )
+            check_inference_output_correctness(
+                samples.iter_samples(correctness_device),
+                graph_spec,
+                infer=backend.infer,
                 name=f"{name}.{graph_spec.name}.{backend.describe()}",
-                tensor_mutation_policy=backend.tensor_mutation_policy,
+            )
+            check_dynamic_shape_boundary_inference(
+                next(samples.iter_samples(correctness_device)),
+                graph_spec,
+                infer=backend.infer,
+                name=f"{name}.{graph_spec.name}.{backend.describe()}",
             )
 
     def enable_correctness_check(self, enable: bool = True) -> "TuneStrategy":
@@ -235,14 +239,17 @@ class TuneStrategy(ABC):
                             stateful_validation = StatefulValidation(Path(validation_dir), graph_spec)
                             stateful_validation.record(module, samples.iter_samples(device))
                             built_backend.stateful_validation = stateful_validation
-                        built_backend = built_backend.build(
-                            module,
-                            graph_spec,
-                            samples,
-                            device,
-                            backend_cache_dir,
-                            log_file=log_file,
-                        )
+                        # Compilation and JIT warmup may execute the original module.
+                        context = preserve_buffers(module) if stateful_validation is not None else nullcontext()
+                        with context:
+                            built_backend = built_backend.build(
+                                module,
+                                graph_spec,
+                                samples,
+                                device,
+                                backend_cache_dir,
+                                log_file=log_file,
+                            )
             except Exception as e:
                 local_error = e
                 failure_phase = "build"

@@ -843,11 +843,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
             if mutation.output_index is not None
         }
         flat_outputs = []
-        for index, name in enumerate(self._graph_spec.output_names()):
+        for name in self._graph_spec.output_names():
             tensor = cast(torch.Tensor, outputs.pop(name))
-            shares_state = name in self._output_input_aliases or index in mutation_policies
-            # CUDA graph buffers are reused; ordinary outputs need their own storage.
-            if self._config.use_cuda_graphs and not shares_state:
+            # Every CUDA graph result needs independent storage, including state:
+            # a later call may use a different cache on the same backend.
+            if self._config.use_cuda_graphs:
                 tensor = tensor.clone()
             flat_outputs.append(tensor)
         result = self._graph_spec.restore_outputs(

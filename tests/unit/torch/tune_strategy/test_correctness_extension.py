@@ -21,7 +21,7 @@ from aitune.torch.task.correctness import (
 )
 from aitune.torch.tune_strategy import TuneStrategy
 from tests.toy_models.torch_models import ToyTorchModel
-from tests.utilities.helpers import make_input_metadata, make_sample_store
+from tests.utilities.helpers import make_input_metadata, make_recorded_graph_spec, make_sample_store
 
 
 def _forward(x=None, *, cache=None):
@@ -454,3 +454,36 @@ def test_status_remains_on_console_when_backend_output_is_disabled(mocker, capfd
     assert "correctness details" not in console_text
     assert "backend details" in log_text
     assert "correctness details" in log_text
+
+
+def test_build_and_validation_preserve_eager_buffers(tmp_path):
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.register_buffer("calls", torch.tensor(0))
+
+        def forward(self, value, state):
+            self.calls.add_(1)
+            state.add_(value)
+            return state + self.calls
+
+    model = Model()
+    sample = ((torch.ones(2), torch.zeros(2)), {})
+    graph_spec = make_recorded_graph_spec(model, sample, strict=True)
+    initial = model.calls.clone()
+    samples = make_sample_store([sample, sample], tmp_path)
+    strategy = TuneStrategyTestCorrectness()
+    strategy.backend_results = []
+    backend = strategy._build_and_validate_backend(
+        TorchEagerBackend(),
+        model,
+        "buffered",
+        graph_spec,
+        samples,
+        torch.device("cpu"),
+        tmp_path,
+        raise_on_failure=True,
+    )
+    assert backend is not None
+    torch.testing.assert_close(model.calls, initial)
+    backend.deactivate()

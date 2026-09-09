@@ -16,6 +16,7 @@ from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, B
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
+from aitune.torch.task.stateful_validation import preserve_buffers
 from aitune.torch.utils.module import move_module_to_device
 
 logger = getLogger(__name__)
@@ -197,6 +198,10 @@ class TorchInductorJitBackend(Backend):
         for args, kwargs in self._iter_samples():
             self._infer_impl(*args, **kwargs)
         logger.info("Module has been compiled.")
+
+    def validation_context(self):
+        """Restore buffers shared with the compiled module after correctness checks."""
+        return preserve_buffers(self._orig_module)
 
     def _activate(self):
         """Activates backend."""

@@ -7,10 +7,17 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend
+from aitune.torch.backend import (
+    ONNXRuntimeBackend,
+    TensorRTBackend,
+    TorchEagerBackend,
+    TorchInductorJitBackend,
+    TorchTensorRTAotBackend,
+    TorchTensorRTJitBackend,
+)
 from aitune.torch.module.forward_contract import TensorMutationPolicy
 from aitune.torch.task.correctness import CorrectnessInputMutationError
-from aitune.torch.task.stateful_validation import StatefulValidation, _preserve_buffers
+from aitune.torch.task.stateful_validation import StatefulValidation, preserve_buffers
 from tests.utilities.helpers import make_recorded_graph_spec
 
 
@@ -157,7 +164,7 @@ def test_reference_buffers_are_restored_even_on_failure():
     model = torch.nn.Module()
     original = torch.zeros(2)
     model.register_buffer("state", original)
-    with pytest.raises(RuntimeError, match="failure"), _preserve_buffers(model):
+    with pytest.raises(RuntimeError, match="failure"), preserve_buffers(model):
         model.state.add_(1)
         model.state = torch.ones(3)
         model.register_buffer("temporary", torch.ones(1))
@@ -171,3 +178,104 @@ def test_stateful_validation_requires_consecutive_calls(tmp_path, validation):
     stateful_validation, _ = validation
     with pytest.raises(ValueError, match="at least two"):
         StatefulValidation(tmp_path, stateful_validation.graph_spec, steps=1)
+
+
+def test_cuda_graph_state_survives_interleaved_caches(tmp_path):
+    model = Accumulator()
+    sample = ((torch.ones(2), {"value": torch.zeros(2), "counter": torch.tensor(0)}), {})
+    spec = make_recorded_graph_spec(model, sample, strict=True)
+    backend = TensorRTBackend()
+    backend._config.use_cuda_graphs = True
+    backend._graph_spec = spec
+    buffers = (torch.empty(2), torch.empty(2), torch.tensor(0))
+
+    def infer(value, cache):
+        updated = cache["value"] + value
+        counter = cache["counter"] + 1
+        for target, source in zip(buffers, (updated, updated, counter), strict=True):
+            target.copy_(source)
+        backend._output_allocator = SimpleNamespace(outputs=dict(zip(spec.output_names(), buffers, strict=True)))
+        return backend._prepare_outputs_for_return({"value": value, "cache": cache})
+
+    caches = [deepcopy(sample[0][1]), deepcopy(sample[0][1])]
+    for index, scale in ((0, 1), (1, 7), (0, 2)):
+        result = infer(torch.full((2,), float(scale)), caches[index])
+        assert result["cache"] is caches[index]
+    torch.testing.assert_close(caches[0]["value"], torch.full((2,), 3.0))
+    torch.testing.assert_close(caches[1]["value"], torch.full((2,), 7.0))
+    assert caches[0]["counter"].item() == 2
+    assert caches[1]["counter"].item() == 1
+
+
+@pytest.mark.parametrize("backend_class", [ONNXRuntimeBackend, TensorRTBackend])
+@pytest.mark.parametrize("container", [lambda tensor: tensor, lambda tensor: (tensor,)])
+def test_engine_mutations_update_direct_and_tuple_inputs(tmp_path, backend_class, container):
+    class Model(torch.nn.Module):
+        def forward(self, value, state):
+            tensor = state[0] if isinstance(state, tuple) else state
+            tensor.add_(value)
+            return tensor
+
+    model = Model()
+    sample = ((torch.ones(2), container(torch.zeros(2))), {})
+    spec = make_recorded_graph_spec(model, sample, strict=True)
+    backend = backend_class()
+    backend._graph_spec = spec
+
+    def infer(value, state):
+        tensor = state[0] if isinstance(state, tuple) else state
+        outputs = dict(zip(spec.output_names(), (tensor + value,), strict=True))
+        arguments = {"value": value, "state": state}
+        if isinstance(backend, ONNXRuntimeBackend):
+            return backend._prepare_outputs(outputs, arguments)
+        backend._output_allocator = SimpleNamespace(outputs=outputs)
+        return backend._prepare_outputs_for_return(arguments)
+
+    validation = StatefulValidation(tmp_path, spec)
+    validation.record(model, [sample])
+    validation.check(
+        infer, torch.device("cpu"), name="direct-input", tensor_mutation_policy=backend.tensor_mutation_policy
+    )
+
+
+class BufferedAccumulator(Accumulator):
+    def __init__(self):
+        super().__init__()
+        self.register_buffer("calls", torch.tensor(0))
+
+    def forward(self, value, cache):
+        self.calls.add_(1)
+        output = super().forward(value, cache)
+        return {"state": output, "calls": self.calls.clone()}
+
+
+def test_validation_preserves_buffers_across_multiple_samples_and_checks(tmp_path):
+    model = BufferedAccumulator()
+    sample = ((torch.ones(2), {"value": torch.zeros(2), "counter": torch.tensor(0)}), {})
+    spec = make_recorded_graph_spec(model, sample)
+    initial = model.calls.clone()
+    validation = StatefulValidation(tmp_path, spec)
+    validation.record(model, [sample, sample])
+    torch.testing.assert_close(model.calls, initial)
+    for name in ("compiled", "reloaded"):
+        validation.check(model, torch.device("cpu"), name=name)
+        torch.testing.assert_close(model.calls, initial)
+
+
+@pytest.mark.parametrize(
+    "backend_class", [TorchEagerBackend, TorchInductorJitBackend, TorchTensorRTJitBackend, TorchTensorRTAotBackend]
+)
+def test_backend_validation_restores_buffers_on_failure(mocker, backend_class):
+    model = BufferedAccumulator()
+    if backend_class in (TorchTensorRTJitBackend, TorchTensorRTAotBackend):
+        mocker.patch(f"{backend_class.__module__}.assert_cuda_is_available")
+        mocker.patch(f"{backend_class.__module__}.assert_torch_tensorrt")
+    backend = backend_class()
+    if isinstance(backend, TorchTensorRTAotBackend):
+        backend._opt_module = model
+    else:
+        backend._orig_module = model
+    with pytest.raises(RuntimeError, match="validation failed"), backend.validation_context():
+        model.calls.add_(3)
+        raise RuntimeError("validation failed")
+    assert model.calls.item() == 0

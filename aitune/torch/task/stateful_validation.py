@@ -3,7 +3,7 @@
 """Save eager results to disk to check input changes, outside exported graphs."""
 
 from collections.abc import Callable, Iterable
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -19,8 +19,8 @@ from aitune.torch.task.correctness import CorrectnessInputMutationError
 
 
 @contextmanager
-def _preserve_buffers(module: torch.nn.Module):
-    """Restore the model's buffers after recording expected results."""
+def preserve_buffers(module: torch.nn.Module):
+    """Restore buffer values, identities, and registrations after temporary execution."""
     saved_buffers = []
     saved_values = {}
     for child in module.modules():
@@ -113,7 +113,8 @@ def _compare(expected: dict, actual: dict, name: str, replaced_inputs: tuple[Loc
 class StatefulValidation:
     """Compare repeated backend calls with the original model.
 
-    Each sample starts a new series of calls that reuse the same input state. Expected results
+    Each sample starts a new series of calls that reuse the same input state. Model buffers
+    advance continuously across all samples. Expected results
     are saved before compilation and loaded one call at a time to limit memory use.
     These checks do not change the exported graph. They cover state passed as inputs,
     not hidden Python attributes inside the model.
@@ -130,13 +131,13 @@ class StatefulValidation:
 
     def record(self, module: torch.nn.Module, samples: Iterable[Sample]) -> None:
         """Record expected results without changing the caller's inputs, buffers, or random state."""
-        with torch.no_grad():
+        with torch.no_grad(), preserve_buffers(module):
             for index, sample in enumerate(samples):
                 with coordinator.raise_if_any_rank_fails(f"Preparing stateful reference sample {index}"):
                     self.samples.append(sample)
                     args, kwargs = deepcopy(sample)
                 devices = _cuda_devices(module, sample)
-                with _preserve_buffers(module), torch.random.fork_rng(devices=devices):
+                with torch.random.fork_rng(devices=devices):
                     self._record_sequence(module, args, kwargs, index)
 
     def _record_sequence(self, module: torch.nn.Module, args: tuple, kwargs: dict, index: int) -> None:
@@ -157,18 +158,22 @@ class StatefulValidation:
         tensor_mutation_policy: TensorMutationPolicy = TensorMutationPolicy.PRESERVE_INPUT,
     ) -> None:
         """Compare each call with its saved eager results, including changes to input state."""
-        replaced_inputs = tuple(
-            mutation.locator
-            for mutation in self.graph_spec.forward_contract.input_mutations
-            if mutation.kind == InputMutationKind.COPY_TENSOR
-            and tensor_mutation_policy == TensorMutationPolicy.REPLACE_INPUT
-        )
-        with torch.no_grad():
+        # Backends manage their state through validation_context(); direct eager
+        # checks can preserve their module buffers here.
+        buffer_context = preserve_buffers(infer) if isinstance(infer, torch.nn.Module) else nullcontext()
+        with torch.no_grad(), buffer_context:
             for index, (args, kwargs) in enumerate(self.samples.iter_samples(device)):
                 for step in range(self.steps):
                     label = f"{name}, sample {index}, call {step + 1}"
                     with coordinator.raise_if_any_rank_fails(label):
                         arguments = self.graph_spec.forward_signature.normalize(args, kwargs).arguments
+                        replaced_inputs = tuple(
+                            mutation.locator
+                            for mutation in self.graph_spec.forward_contract.input_mutations
+                            if mutation.kind == InputMutationKind.COPY_TENSOR
+                            and tensor_mutation_policy == TensorMutationPolicy.REPLACE_INPUT
+                            and mutation.can_replace_input(arguments)
+                        )
                         before = _identity_nodes(arguments)
                         output = infer(*args, **kwargs)
                         expected = torch.load(self.root / f"expected-{index}-{step}.pt", weights_only=False)

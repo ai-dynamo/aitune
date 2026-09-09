@@ -18,6 +18,7 @@ from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.task.stateful_validation import preserve_buffers
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.module import move_module_to_device
@@ -190,6 +191,10 @@ class TorchTensorRTJitBackend(Backend):
         self._compile()
 
         return self
+
+    def validation_context(self):
+        """Restore buffers shared with the compiled module after correctness checks."""
+        return preserve_buffers(self._orig_module)
 
     def _activate(self):
         """Activate backend."""

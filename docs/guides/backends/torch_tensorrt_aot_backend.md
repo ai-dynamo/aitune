@@ -103,6 +103,8 @@ dynamic-shape constraints. Torch-TensorRT prepares the example tensors for savin
 Here, `retrace=True` selects the Torch Export save path; it does not use `torch.jit.trace`
 or produce TorchScript. AITune reloads the persisted artifact before accepting the backend,
 including stateful validation when configured.
+Validation preserves registered model buffers so temporary checks do not advance the state
+stored in the artifact or leave the loaded model changed.
 
 By default, `use_legacy_exporter=None` leaves exporter selection to the installed
 Torch-TensorRT version. On versions that expose the public `save(use_legacy_exporter=...)`

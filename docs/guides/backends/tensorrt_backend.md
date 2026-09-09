@@ -265,6 +265,10 @@ config = TensorRTBackendConfig(
 
 Enable CUDA graph capture for inference.
 
+Results are copied out of reusable CUDA graph buffers, including outputs used to update
+mutable input state. This keeps independent caches isolated when they use the same backend,
+at the cost of copying those state outputs on each call.
+
 ```python
 config = TensorRTBackendConfig(
     use_cuda_graphs=True,

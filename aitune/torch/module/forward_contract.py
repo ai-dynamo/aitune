@@ -40,6 +40,15 @@ class InputMutation:
     output_index: int | None = None
     value: Any = None
 
+    def can_replace_input(self, arguments: dict[str, Any]) -> bool:
+        """Return whether replacement reaches a mutable container owned by the caller.
+
+        Rebinding a direct argument, or rebuilding only tuples above it, changes
+        the normalized argument dictionary without updating the caller's state.
+        """
+        steps = tuple(self.locator.path_iter())
+        return any(not isinstance(Locator(steps[:depth]).get_value(arguments), tuple) for depth in range(1, len(steps)))
+
 
 @dataclass(frozen=True)
 class OutputInputAlias:
@@ -91,7 +100,8 @@ class ForwardContract:
                 mutation.output_index,
                 TensorMutationPolicy.PRESERVE_INPUT,
             )
-            if mutation.kind == InputMutationKind.COPY_TENSOR and policy == TensorMutationPolicy.PRESERVE_INPUT:
+            replace_input = policy == TensorMutationPolicy.REPLACE_INPUT and mutation.can_replace_input(arguments)
+            if mutation.kind == InputMutationKind.COPY_TENSOR and not replace_input:
                 target = mutation.locator.get_value(arguments)
                 if not isinstance(target, torch.Tensor):
                     raise TypeError(
