@@ -101,7 +101,7 @@ class TuneStrategy(ABC):
             return backend
 
     def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, samples: SampleStore):
-        """Check outputs, input changes, and recorded stateful behavior.
+        """Check output validity and input/output contracts without comparing tensor values to eager.
 
         Args:
             backend: The backend to check.
@@ -146,7 +146,7 @@ class TuneStrategy(ABC):
         stateful_validation = getattr(backend, "stateful_validation", None)
         context = backend.validation_context() if stateful_validation is not None else nullcontext()
         with context:
-            # Compare with eager before ordinary checks advance model buffers.
+            # Check the recorded state contract before ordinary checks advance model buffers.
             if stateful_validation is not None:
                 stateful_validation.check(
                     backend.infer,

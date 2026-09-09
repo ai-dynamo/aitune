@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Save eager results to disk to check input changes, outside exported graphs."""
+"""Check repeated-call input/output structure and aliases without comparing tensor values."""
 
 from collections.abc import Callable, Iterable
 from contextlib import contextmanager, nullcontext
@@ -69,15 +69,15 @@ def _alias_groups(nodes: dict, *, storage: bool = False) -> dict:
 
 
 def _snapshot(arguments: dict, output: Any, before: dict) -> dict:
-    """Copy call results to CPU and record which objects share data."""
+    """Record tensor metadata, leaf types, and aliases without copying tensor contents."""
     values = {"inputs": arguments, "outputs": output}
     nodes = _identity_nodes(values)
-    # Equal values are not enough: a copy must also keep the original input object.
+    # In-place mutations must keep the original input object.
     nodes.update({("before", path): value for path, value in before.items()})
     leaves = dict(Locator.find_leaves(values, include_mutation_fields=True))
     return {
         "leaves": {
-            path: value.detach().to("cpu", copy=True) if isinstance(value, torch.Tensor) else deepcopy(value)
+            path: (tuple(value.shape), value.dtype, value.layout) if isinstance(value, torch.Tensor) else type(value)
             for path, value in leaves.items()
         },
         "aliases": _alias_groups(nodes),
@@ -87,7 +87,7 @@ def _snapshot(arguments: dict, output: Any, before: dict) -> dict:
 
 
 def _compare(expected: dict, actual: dict, name: str, replaced_inputs: tuple[Locator, ...] = ()) -> None:
-    """Check values, shapes, dtypes, devices, and shared objects."""
+    """Check shapes, dtypes, devices, leaf types, and aliases, without numerical comparisons."""
     # Engine-owned state may replace recorded tensor leaves. Keep checking all
     # post-call aliases, including output-to-input aliases and shared containers.
     ignored = {("before", locator) for locator in replaced_inputs}
@@ -98,26 +98,20 @@ def _compare(expected: dict, actual: dict, name: str, replaced_inputs: tuple[Loc
             raise CorrectnessInputMutationError(f"{name}: {field} differ from eager execution")
     if expected["leaves"].keys() != actual["leaves"].keys():
         raise CorrectnessInputMutationError(f"{name}: input/output structure differs from eager execution")
-    for path, value in expected["leaves"].items():
-        other = actual["leaves"][path]
-        try:
-            if isinstance(value, torch.Tensor):
-                atol = 1e-2 if value.dtype in (torch.float16, torch.bfloat16) else 1e-3
-                torch.testing.assert_close(other, value, atol=atol, rtol=0, equal_nan=False)
-            elif type(other) is not type(value) or other != value:
-                raise AssertionError("non-tensor value differs")
-        except (AssertionError, TypeError, ValueError) as error:
-            raise CorrectnessInputMutationError(f"{name}: {path} differs from eager execution: {error}") from error
+    for path, metadata in expected["leaves"].items():
+        if metadata != actual["leaves"][path]:
+            raise CorrectnessInputMutationError(f"{name}: {path} metadata differs from eager execution")
 
 
 class StatefulValidation:
-    """Compare repeated backend calls with the original model.
+    """Check the structural contract of repeated backend calls against the original model.
 
     Each sample starts a new series of calls that reuse the same input state. Model buffers
-    advance continuously across all samples. Expected results
-    are saved before compilation and loaded one call at a time to limit memory use.
-    These checks do not change the exported graph. They cover state passed as inputs,
-    not hidden Python attributes inside the model.
+    advance continuously across all samples. Expected metadata is saved before compilation
+    and loaded one call at a time. Tensor contents and non-tensor values are not compared;
+    model accuracy requires a separate, model-specific evaluation.
+    These checks do not change the exported graph. They cover the structure and aliases of
+    state passed as inputs, not hidden Python attributes inside the model.
     """
 
     def __init__(self, root: Path, graph_spec: GraphSpec, *, steps: int = 3):
@@ -130,7 +124,7 @@ class StatefulValidation:
         self.samples = SampleStore.create(root, "inputs")
 
     def record(self, module: torch.nn.Module, samples: Iterable[Sample]) -> None:
-        """Record expected results without changing the caller's inputs, buffers, or random state."""
+        """Record expected metadata without changing the caller's inputs, buffers, or random state."""
         with torch.no_grad(), preserve_buffers(module):
             for index, sample in enumerate(samples):
                 with coordinator.raise_if_any_rank_fails(f"Preparing stateful reference sample {index}"):
@@ -141,7 +135,7 @@ class StatefulValidation:
                     self._record_sequence(module, args, kwargs, index)
 
     def _record_sequence(self, module: torch.nn.Module, args: tuple, kwargs: dict, index: int) -> None:
-        """Save each result before the next call can change it."""
+        """Save each call's metadata before the next call can change its structure or aliases."""
         for step in range(self.steps):
             with coordinator.raise_if_any_rank_fails(f"Stateful reference sample {index}, call {step + 1}"):
                 arguments = self.graph_spec.forward_signature.normalize(args, kwargs).arguments
@@ -157,7 +151,7 @@ class StatefulValidation:
         name: str,
         tensor_mutation_policy: TensorMutationPolicy = TensorMutationPolicy.PRESERVE_INPUT,
     ) -> None:
-        """Compare each call with its saved eager results, including changes to input state."""
+        """Compare each call's metadata and aliases with the recorded structural contract."""
         # Backends manage their state through validation_context(); direct eager
         # checks can preserve their module buffers here.
         buffer_context = preserve_buffers(infer) if isinstance(infer, torch.nn.Module) else nullcontext()

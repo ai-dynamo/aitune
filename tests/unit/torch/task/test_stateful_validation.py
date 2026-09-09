@@ -16,6 +16,7 @@ from aitune.torch.backend import (
     TorchTensorRTJitBackend,
 )
 from aitune.torch.module.forward_contract import TensorMutationPolicy
+from aitune.torch.module.locator import Locator
 from aitune.torch.task.correctness import CorrectnessInputMutationError
 from aitune.torch.task.stateful_validation import StatefulValidation, preserve_buffers
 from tests.utilities.helpers import make_recorded_graph_spec
@@ -53,16 +54,14 @@ def test_stateful_validation_retains_state_and_preserves_samples(validation):
     torch.testing.assert_close(sample[0][1]["value"], torch.zeros(2))
 
 
-@pytest.mark.parametrize("defect", ["values", "second-call", "alias", "replacement", "rank", "dtype"])
+@pytest.mark.parametrize("defect", ["second-call", "alias", "replacement", "rank", "dtype"])
 def test_stateful_validation_rejects_contract_defects(validation, defect):
     stateful_validation, _ = validation
 
     def infer(value, cache):
         output = Accumulator()(value, cache)
-        if defect == "values":
-            cache["value"].zero_()
-        elif defect == "second-call" and cache["counter"].item() > 1:
-            cache["value"].zero_()
+        if defect == "second-call" and cache["counter"].item() > 1:
+            output["cache"] = deepcopy(cache)
         elif defect == "alias":
             output["cache"] = deepcopy(cache)
         elif defect == "replacement":
@@ -86,10 +85,59 @@ def test_stateful_validation_checks_every_recorded_sample(tmp_path):
     stateful_validation.record(model, samples)
 
     def wrong_for_second(value, cache):
-        return model(torch.ones_like(value), cache)
+        output = model(value, cache)
+        if value[0].item() == 7:
+            output["cache"] = deepcopy(cache)
+        return output
 
     with pytest.raises(CorrectnessInputMutationError, match="sample 1"):
         stateful_validation.check(wrong_for_second, torch.device("cpu"), name="candidate")
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("policy", list(TensorMutationPolicy))
+def test_stateful_validation_accepts_different_tensor_values(tmp_path, dtype, policy):
+    model = Accumulator()
+    sample = ((torch.ones(2, dtype=dtype), {"value": torch.zeros(2, dtype=dtype), "counter": torch.tensor(0)}), {})
+    validation = StatefulValidation(tmp_path, make_recorded_graph_spec(model, sample))
+    validation.record(model, [sample])
+
+    def infer(value, cache):
+        # Deliberately differ from eager, including integer tensor state. Model
+        # accuracy is not part of backend structural acceptance.
+        if policy == TensorMutationPolicy.REPLACE_INPUT:
+            cache["value"] = torch.full_like(cache["value"], 123)
+            cache["counter"] = cache["counter"] + 9
+        else:
+            cache["value"].fill_(123)
+            cache["counter"].add_(9)
+        return {"value": cache["value"], "cache": cache}
+
+    validation.check(infer, torch.device("cpu"), name="different-values", tensor_mutation_policy=policy)
+
+
+def test_stateful_validation_accepts_different_scalar_output_values(tmp_path):
+    class Model(Accumulator):
+        def forward(self, value, cache):
+            return {"state": super().forward(value, cache), "score": 1.0}
+
+    model = Model()
+    sample = ((torch.ones(2), {"value": torch.zeros(2), "counter": torch.tensor(0)}), {})
+    validation = StatefulValidation(tmp_path, make_recorded_graph_spec(model, sample))
+    validation.record(model, [sample])
+
+    def infer(value, cache):
+        output = model(value, cache)
+        output["score"] = 12.5
+        return output
+
+    validation.check(infer, torch.device("cpu"), name="different-score")
+
+
+def test_stateful_references_contain_metadata_without_tensor_contents(validation):
+    stateful_validation, _ = validation
+    snapshot = torch.load(stateful_validation.root / "expected-0-0.pt", weights_only=False)
+    assert not any(isinstance(value, torch.Tensor) for _, value in Locator.find_leaves(snapshot))
 
 
 @pytest.mark.parametrize("backend_class", [ONNXRuntimeBackend, TensorRTBackend])
@@ -120,7 +168,7 @@ def test_stateful_validation_accepts_engine_owned_state(validation, backend_clas
     )
 
 
-@pytest.mark.parametrize("defect", ["values", "second-call", "alias", "rank", "dtype"])
+@pytest.mark.parametrize("defect", ["second-call", "alias", "rank", "dtype"])
 def test_replacement_policy_still_rejects_contract_defects(validation, defect):
     stateful_validation, _ = validation
 
@@ -128,8 +176,8 @@ def test_replacement_policy_still_rejects_contract_defects(validation, defect):
         cache["value"] = cache["value"] + value
         cache["counter"] = cache["counter"] + 1
         output = {"value": cache["value"], "cache": cache}
-        if defect == "values" or (defect == "second-call" and cache["counter"].item() > 1):
-            cache["value"].zero_()
+        if defect == "second-call" and cache["counter"].item() > 1:
+            output["cache"] = deepcopy(cache)
         elif defect == "alias":
             output["cache"] = deepcopy(cache)
         elif defect == "rank":

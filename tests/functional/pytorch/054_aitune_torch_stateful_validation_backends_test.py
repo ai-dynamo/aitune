@@ -7,7 +7,7 @@
 # allow_failure = false
 # ///
 
-"""Exercise mutable-input acceptance and checkpoint round trips on real GPU backends."""
+"""Exercise mutable-input structural acceptance and checkpoint round trips on real GPU backends."""
 
 import logging
 import sys
@@ -68,7 +68,7 @@ def run_backend(backend_class, operation="add_"):
             backend = strategy.tune(
                 model, f"stateful_{operation}", spec, make_sample_store([recorded], root), device, root / "build"
             )
-            # Held-out values differ from recording/compilation; each check retains cache state for three calls.
+            # Exercise the structural contract on new inputs across three calls; this is not an accuracy test.
             stateful_validation = StatefulValidation(root / "held-out", spec)
             stateful_validation.record(StatefulAccumulator(operation), [sample(2.75)])
             stateful_validation.check(backend.infer, device, name=f"{backend_class.__name__} held-out")
