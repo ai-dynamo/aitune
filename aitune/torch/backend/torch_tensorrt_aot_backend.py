@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """TorchTensorRT backend with AOT compilation and intermediate model save."""
 
+import operator
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
@@ -52,6 +53,10 @@ except (ImportError, RuntimeError, OSError):
 
 
 logger = getLogger(__name__)
+
+
+class TorchTensorRTSerializationContractError(RuntimeError):
+    """Raised when serialization would change a compiled program's exported contract."""
 
 
 class TorchTensorRTAotBuildStep(BackendBuildStep):
@@ -254,26 +259,35 @@ class TorchTensorRTAotBackend(Backend):
 
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
+            _populate_mutation_output_metadata(trt_model_compiled, exported, graph_spec)
+            serialized_contract = _exported_contract(trt_model_compiled)
             _save_compiled_model(
                 trt_model_compiled,
                 self._exported_model_artifact.path,
                 input_signature,
                 export_result.dynamic_shapes,
                 self._config.pickle_protocol,
+                stateful=bool(graph_spec.forward_contract.input_mutations),
             )
             result["compiled_model_size_bytes"] = self._exported_model_artifact.path.stat().st_size
 
         # Validate the same persisted artifact that production will load.
         del trt_model_compiled
-        self._activate()
+        self._activate(expected_contract=serialized_contract)
         logger.info("Module has been compiled, saved, and reloaded with TensorRT.")
         return self
 
-    def _activate(self):
+    def _activate(self, expected_contract: Any = None):
         """Load compiled module."""
         exported_model_artifact = cast(ArtifactPath, self._exported_model_artifact)
         with torch_tensorrt_errors(torch_tensorrt):
             loaded = torch_tensorrt.load(exported_model_artifact.path.as_posix())
+            _validate_exported_program(loaded)
+            if expected_contract is not None and _exported_contract(loaded) != expected_contract:
+                raise TorchTensorRTSerializationContractError(
+                    "Reloaded Torch-TensorRT artifact does not match the compiled input/output, mutation, rank, "
+                    "dtype, or alias contract."
+                )
             self._opt_module = loaded.module().to(self._device)
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
@@ -335,8 +349,11 @@ def _save_compiled_model(
     inputs: list[Any],
     dynamic_shapes: dict[str, Any] | None,
     pickle_protocol: int,
+    *,
+    stateful: bool = False,
 ) -> None:
-    """Save a compiled graph and retry known direct-export failures with retracing."""
+    """Save a compiled graph without allowing stateful contracts to be retraced."""
+    _validate_exported_program(module)
     try:
         with torch_tensorrt_errors(torch_tensorrt):
             torch_tensorrt.save(
@@ -347,6 +364,11 @@ def _save_compiled_model(
             )
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
     except (SpecViolationError, RuntimeError) as error:
+        if stateful:
+            raise TorchTensorRTSerializationContractError(
+                "Direct Torch-TensorRT serialization rejected a stateful exported program; retracing is disabled "
+                "because it can change mutation ranks and aliases."
+            ) from error
         integer_parameter_error = "Only Tensors of floating point and complex dtype can require gradients"
         if isinstance(error, RuntimeError) and integer_parameter_error not in str(error):
             raise
@@ -364,3 +386,111 @@ def _save_compiled_model(
                 pickle_protocol=pickle_protocol,
             )
         logger.info("Saved the Torch-TensorRT artifact using the retracing fallback.")
+
+
+def _validate_exported_program(module: Any) -> None:
+    """Validate an ExportedProgram when the supplied Torch-TensorRT object exposes that API."""
+    validate = getattr(module, "validate", None)
+    if not callable(validate):
+        return
+    try:
+        validate()
+    except Exception as error:
+        raise TorchTensorRTSerializationContractError(
+            "Torch-TensorRT produced an invalid exported program before serialization."
+        ) from error
+
+
+def _graph_module(module: Any) -> Any | None:
+    """Return the FX graph module contained in an exported or compiled object."""
+    graph_module = getattr(module, "graph_module", None)
+    if graph_module is not None:
+        return graph_module
+    return module if hasattr(module, "graph") else None
+
+
+def _flat_output_nodes(module: Any) -> tuple[Any, ...]:
+    """Return tensor-producing nodes referenced by the graph output."""
+    graph_module = _graph_module(module)
+    if graph_module is None:
+        return ()
+    output_nodes = [node for node in graph_module.graph.nodes if node.op == "output"]
+    if len(output_nodes) != 1:
+        return ()
+
+    flattened = []
+
+    def visit(value):
+        if hasattr(value, "meta"):
+            flattened.append(value)
+        elif isinstance(value, (tuple, list)):
+            for item in value:
+                visit(item)
+
+    visit(output_nodes[0].args)
+    return tuple(flattened)
+
+
+def _populate_mutation_output_metadata(compiled: Any, exported: Any, graph_spec: GraphSpec) -> None:
+    """Copy valid Torch Export metadata onto Torch-TensorRT's generated mutation outputs."""
+    mutations = graph_spec.extra_tensor_mutations()
+    if not mutations:
+        return
+    source_outputs = _flat_output_nodes(exported)
+    compiled_outputs = _flat_output_nodes(compiled)
+    for mutation in mutations:
+        if mutation.output_index is None:
+            raise TorchTensorRTSerializationContractError(f"Mutation output {mutation.locator} has no output index.")
+        index = mutation.output_index
+        if index >= len(source_outputs) or index >= len(compiled_outputs):
+            raise TorchTensorRTSerializationContractError(
+                f"Mutation output {mutation.locator} at index {index} is missing from the compiled graph."
+            )
+        source = source_outputs[index]
+        target = compiled_outputs[index]
+        if "val" not in source.meta:
+            raise TorchTensorRTSerializationContractError(
+                f"Mutation output {mutation.locator} at index {index} has no Torch Export value metadata."
+            )
+        target.meta["val"] = source.meta["val"]
+        if target.op == "call_function" and target.target == operator.getitem:
+            producer, output_index = target.args[:2]
+            producer_value = producer.meta.get("val")
+            if isinstance(output_index, int) and isinstance(producer_value, (tuple, list)):
+                values = list(producer_value)
+                while len(values) <= output_index:
+                    values.append(source.meta["val"])
+                values[output_index] = source.meta["val"]
+                producer.meta["val"] = type(producer_value)(values)
+
+
+def _metadata_contract(value: Any) -> Any:
+    """Describe tensor rank, shape, dtype, and device without retaining fake tensors."""
+    if isinstance(value, torch.Tensor):
+        shape = tuple(dimension if isinstance(dimension, int) else str(dimension) for dimension in value.shape)
+        return (shape, value.dtype, value.device.type)
+    if isinstance(value, (tuple, list)):
+        return tuple(_metadata_contract(item) for item in value)
+    return type(value).__name__
+
+
+def _exported_contract(module: Any) -> Any:
+    """Snapshot the serialized properties that must survive a direct save/load round trip."""
+    signature = getattr(module, "graph_signature", None)
+    call_spec = getattr(module, "call_spec", None)
+    graph_module = _graph_module(module)
+    if signature is None or graph_module is None:
+        return None
+
+    inputs = tuple(node for node in graph_module.graph.nodes if node.op == "placeholder")
+    outputs = _flat_output_nodes(module)
+    input_positions = {id(node): index for index, node in enumerate(inputs)}
+    return (
+        repr(getattr(call_spec, "in_spec", None)),
+        repr(getattr(call_spec, "out_spec", None)),
+        tuple((str(spec.kind), spec.target, getattr(spec.arg, "name", None)) for spec in signature.input_specs),
+        tuple((str(spec.kind), spec.target, getattr(spec.arg, "name", None)) for spec in signature.output_specs),
+        tuple(_metadata_contract(node.meta.get("val")) for node in inputs),
+        tuple(_metadata_contract(node.meta.get("val")) for node in outputs),
+        tuple(input_positions.get(id(node)) for node in outputs),
+    )

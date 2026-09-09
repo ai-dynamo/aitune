@@ -2,11 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for Torch Export through the flat tensor boundary."""
 
+from dataclasses import dataclass
+from types import SimpleNamespace
+
 import pytest
 import torch
 from torch.fx.experimental.symbolic_shapes import ConstraintViolationError
 
-from aitune.torch.libs.exporting import TorchExporter
+from aitune.torch.libs.exporting import TorchExportContractError, TorchExporter
+from aitune.torch.libs.exporting.torch_exporter import _preflight_unlift
 from tests.toy_models import ToyNestedInputModel
 from tests.utilities.helpers import make_graph_spec, update_input_spec
 
@@ -43,6 +47,47 @@ def test_export_falls_back_to_non_strict_mode(mocker):
 
     assert [call.kwargs["strict"] for call in export.call_args_list] == [True, False]
     torch.testing.assert_close(output, (x,))
+
+
+def test_preflight_rehomes_a_nested_lifted_tensor_constant(mocker):
+    @dataclass(frozen=True)
+    class InputSpec:
+        kind: object
+        target: str
+
+    class Signature:
+        def __init__(self, input_specs, output_specs):
+            self.input_specs = input_specs
+            self.output_specs = output_specs
+
+    lifted = torch.ones(2)
+    exported_program = mocker.Mock()
+    exported_program.graph_module = torch.nn.Module()
+    exported_program.constants = {"module.self_attn.lifted_tensor_0": lifted}
+    exported_program.graph_signature = Signature(
+        [InputSpec(SimpleNamespace(name="CONSTANT_TENSOR"), "module.self_attn.lifted_tensor_0")],
+        [],
+    )
+    exported_program.module.side_effect = [AttributeError("self_attn"), mocker.sentinel.module]
+
+    _preflight_unlift(exported_program)
+
+    repaired = exported_program._graph_signature
+    assert repaired.input_specs[0].target.startswith("_aitune_lifted_tensor_")
+    assert "." not in repaired.input_specs[0].target
+    assert getattr(exported_program.graph_module, repaired.input_specs[0].target) is lifted
+    assert exported_program.constants[repaired.input_specs[0].target] is lifted
+    assert "module.self_attn.lifted_tensor_0" not in exported_program.constants
+    assert exported_program.module.call_count == 2
+
+
+def test_preflight_reports_an_unrepairable_unlift_failure(mocker):
+    exported_program = mocker.Mock()
+    exported_program.graph_signature.input_specs = []
+    exported_program.module.side_effect = AttributeError("missing state")
+
+    with pytest.raises(TorchExportContractError, match="cannot be unlifted"):
+        _preflight_unlift(exported_program)
 
 
 def test_export_retries_rejected_constraints_with_bounded_dynamic_hints(mocker):

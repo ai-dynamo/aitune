@@ -42,8 +42,10 @@ def test_capture_classifies_supported_leaf_mutations():
     mutations = {mutation.locator.path: mutation for mutation in contract.input_mutations}
     assert mutations[("inplace", 0)].kind == InputMutationKind.COPY_TENSOR
     assert mutations[("inplace", 0)].output_index == 1
+    assert mutations[("inplace", 0)].input_shape == (2,)
     assert mutations[("replaced", 0)].kind == InputMutationKind.REPLACE_TENSOR
     assert mutations[("replaced", 0)].output_index == 2
+    assert mutations[("replaced", 0)].input_shape == (2,)
     assert mutations[("step", 0)].kind == InputMutationKind.REPLACE_CONSTANT
     assert mutations[("step", 0)].value == 1
     assert contract.output_template == {"result": None, "label": "recorded"}
@@ -125,6 +127,41 @@ def test_restore_can_replace_a_tensor_normally_copied_into_the_input():
 
     assert arguments["state"][0] is replacement
     assert arguments["state"][0] is not original
+
+
+def test_restore_reshapes_a_copy_mutation_to_the_input_contract():
+    target = torch.tensor(0)
+    arguments = {"state": target}
+    locator = SampleMetadata.from_inputs(arguments).tensor_data[0][0]
+    output_spec = SampleMetadata.from_outputs(torch.zeros(1))
+    contract = ForwardContract(
+        output_template=None,
+        input_mutations=(InputMutation(locator, InputMutationKind.COPY_TENSOR, output_index=1, input_shape=()),),
+    )
+
+    result = contract.restore_outputs((torch.ones(1), torch.tensor([7])), arguments, output_spec)
+
+    assert result.shape == (1,)
+    assert arguments["state"] is target
+    assert target.shape == ()
+    assert target.item() == 7
+
+
+def test_restore_does_not_reshape_a_replaced_tensor():
+    original = torch.tensor(0)
+    replacement = torch.tensor([7])
+    arguments = {"state": original}
+    locator = SampleMetadata.from_inputs(arguments).tensor_data[0][0]
+    output_spec = SampleMetadata.from_outputs(torch.zeros(1))
+    contract = ForwardContract(
+        output_template=None,
+        input_mutations=(InputMutation(locator, InputMutationKind.REPLACE_TENSOR, output_index=1, input_shape=()),),
+    )
+
+    contract.restore_outputs((torch.ones(1), replacement), arguments, output_spec)
+
+    assert arguments["state"] is replacement
+    assert arguments["state"].shape == (1,)
 
 
 def test_restore_preserves_an_input_container_returned_in_mixed_outputs():

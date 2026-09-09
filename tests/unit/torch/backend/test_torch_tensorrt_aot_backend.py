@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+import operator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -14,6 +15,8 @@ from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
     TorchTensorRTConfig,
+    TorchTensorRTSerializationContractError,
+    _populate_mutation_output_metadata,
     _save_compiled_model,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
@@ -150,6 +153,68 @@ def test_save_compiled_model_does_not_retrace_after_unrelated_error(
         _save_compiled_model(module, tmp_path / "model.pt", inputs=[], dynamic_shapes=None, pickle_protocol=5)
 
     mock_torch_tensorrt.save.assert_called_once()
+
+
+def test_save_compiled_model_does_not_retrace_a_stateful_graph(mocker, tmp_path: Path):
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.save.side_effect = SpecViolationError("mutation output is missing val")
+    module = mocker.Mock(spec=nn.Module)
+
+    with pytest.raises(TorchTensorRTSerializationContractError, match="retracing is disabled"):
+        _save_compiled_model(
+            module,
+            tmp_path / "model.pt",
+            inputs=[mocker.sentinel.input],
+            dynamic_shapes=None,
+            pickle_protocol=5,
+            stateful=True,
+        )
+
+    mock_torch_tensorrt.save.assert_called_once_with(
+        module,
+        (tmp_path / "model.pt").as_posix(),
+        retrace=False,
+        pickle_protocol=5,
+    )
+
+
+def test_save_compiled_model_validates_before_serialization(mocker, tmp_path: Path):
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    module = mocker.Mock()
+    module.validate.side_effect = SpecViolationError("invalid output metadata")
+
+    with pytest.raises(TorchTensorRTSerializationContractError, match="invalid exported program"):
+        _save_compiled_model(module, tmp_path / "model.pt", inputs=[], dynamic_shapes=None, pickle_protocol=5)
+
+    mock_torch_tensorrt.save.assert_not_called()
+
+
+def test_populate_mutation_output_metadata_repairs_generated_getitem(mocker):
+    source_value = torch.empty(())
+    source_output = mocker.Mock(op="call_function", meta={"val": source_value})
+    source_graph_output = mocker.Mock(op="output", args=((source_output,),))
+    exported = mocker.Mock()
+    exported.graph_module.graph.nodes = [source_output, source_graph_output]
+
+    producer = mocker.Mock(meta={"val": ()})
+    compiled_output = mocker.Mock(
+        op="call_function",
+        target=operator.getitem,
+        args=(producer, 0),
+        meta={},
+    )
+    compiled_graph_output = mocker.Mock(op="output", args=((compiled_output,),))
+    compiled = mocker.Mock()
+    compiled.graph_module.graph.nodes = [compiled_output, compiled_graph_output]
+    mutation = mocker.Mock(output_index=0, locator="cache_position")
+    graph_spec = mocker.Mock()
+    graph_spec.extra_tensor_mutations.return_value = (mutation,)
+
+    _populate_mutation_output_metadata(compiled, exported, graph_spec)
+
+    assert compiled_output.meta["val"] is source_value
+    assert producer.meta["val"] == (source_value,)
 
 
 @pytest.fixture
