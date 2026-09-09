@@ -18,6 +18,7 @@ from aitune.triton.config import (
     TorchAOTIModelConfig,
     tensor_config,
 )
+from aitune.triton.model_analyzer import _write_model_analyzer_configs
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,9 @@ def publish(
     """Publish one tuned artifact into a new Triton model repository entry.
 
     The operation never replaces an existing model. Files are verified and staged
-    before the completed model directory is moved into the repository.
+    before the completed model directory is moved into the repository. Model Analyzer
+    configs are generated automatically under ``model_analyzer/fast.yaml`` and
+    ``model_analyzer/manual.yaml``, with input shapes derived from the artifact.
 
     Args:
         artifact: Tuned artifact to publish.
@@ -197,6 +200,13 @@ def publish(
         if artifact.companions:
             destination = destination / file_name
         artifact.export_file(destination)
+        _write_model_analyzer_configs(
+            artifact,
+            config=config.to_protobuf(),
+            model_directory=model_directory,
+            destination=repository.parent / f"{repository.name}-model-analyzer" / model_name,
+            staging=staged_model / "model_analyzer",
+        )
         staged_model.rename(model_directory)
     except Exception as error:
         raise PublicationError(f"Failed to publish Triton model {model_name!r}: {error}") from error

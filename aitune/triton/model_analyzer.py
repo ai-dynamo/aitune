@@ -53,6 +53,7 @@ class QuickModelAnalyzerConfig(_ConfigModel):
     output_model_repository_path: Path
     override_output_model_repository: Literal[False] = False
     export_path: Path
+    perf_analyzer_flags: dict[str, tuple[str, ...]] = Field(default_factory=dict)
     run_config_search_mode: Literal["quick"] = "quick"
     run_config_search_min_instance_count: int = Field(default=1, ge=1)
     run_config_search_max_instance_count: int = Field(default=5, ge=1)
@@ -125,6 +126,7 @@ class ManualModelAnalyzerConfig(_ConfigModel):
     output_model_repository_path: Path
     override_output_model_repository: Literal[False] = False
     export_path: Path
+    perf_analyzer_flags: dict[str, tuple[str, ...]] = Field(default_factory=dict)
     run_config_search_mode: Literal["brute"] = "brute"
     run_config_search_disable: Literal[True] = True
 
@@ -174,8 +176,8 @@ def _validate_model(artifact: Artifact, model_directory: Path, config: model_con
         )
 
 
-def _bounded_values(maximum: int) -> tuple[int, ...]:
-    """Return powers of two within 1..maximum, including the exact maximum."""
+def _bounded_values(maximum: int, minimum: int = 1) -> tuple[int, ...]:
+    """Return powers of two within the bounds, including both endpoints."""
     values = []
     value = 1
     while value <= maximum:
@@ -183,7 +185,35 @@ def _bounded_values(maximum: int) -> tuple[int, ...]:
         value *= 2
     if values[-1] != maximum:
         values.append(maximum)
-    return tuple(values)
+    return tuple(sorted({minimum, *(value for value in values if value >= minimum)}))
+
+
+def _profiling_inputs(
+    artifact: Artifact, config: model_config_pb2.ModelConfig
+) -> tuple[dict[str, tuple[str, ...]], int, int]:
+    """Select concrete input shapes and compatible batch bounds from the artifact."""
+    minimum_batch, maximum_batch = 1, config.max_batch_size
+    shapes = {tensor.name: tensor.min_shape for tensor in artifact.inputs}
+    if isinstance(artifact, TensorRTPlanArtifact):
+        profiles = artifact.optimization_profiles
+        if maximum_batch:
+            profiles = tuple(
+                profile
+                for profile in profiles
+                if max(tensor.min_shape[0] for tensor in profile.inputs) <= maximum_batch
+            )
+            if not profiles:
+                raise ModelAnalyzerConfigError("No TensorRT profile supports the published batch limit")
+        profile = profiles[0]
+        shapes = {tensor.name: tensor.opt_shape for tensor in profile.inputs}
+        if maximum_batch:
+            minimum_batch = max(tensor.min_shape[0] for tensor in profile.inputs)
+            maximum_batch = min(maximum_batch, *(tensor.max_shape[0] for tensor in profile.inputs))
+    flags = []
+    for name, shape in shapes.items():
+        dimensions = shape[1:] if config.max_batch_size else shape
+        flags.append(f"{name}:{','.join(str(dimension) for dimension in dimensions)}")
+    return {"shape": tuple(flags)}, minimum_batch, maximum_batch
 
 
 def _configs(
@@ -191,19 +221,20 @@ def _configs(
     model_directory: Path,
     destination: Path,
     *,
+    config: model_config_pb2.ModelConfig,
     max_instance_count: int,
     queue_delay_microseconds: tuple[int, ...],
 ) -> tuple[QuickModelAnalyzerConfig | ManualModelAnalyzerConfig, ManualModelAnalyzerConfig]:
     """Build fast and exhaustive configurations from a published model."""
-    config = _read_published_config(model_directory)
     _validate_model(artifact, model_directory, config)
+    perf_flags, minimum_batch, maximum_batch = _profiling_inputs(artifact, config)
 
     repository = model_directory.parent.resolve()
     model_name = config.name
-    batch_sizes = _bounded_values(config.max_batch_size) if config.max_batch_size > 0 else (1,)
+    batch_sizes = _bounded_values(maximum_batch, minimum_batch) if maximum_batch > 0 else (1,)
     batch_range = {
-        "run_config_search_min_model_batch_size": 1,
-        "run_config_search_max_model_batch_size": config.max_batch_size,
+        "run_config_search_min_model_batch_size": minimum_batch,
+        "run_config_search_max_model_batch_size": maximum_batch,
     }
     if config.max_batch_size == 0:
         batch_range = {}
@@ -231,6 +262,7 @@ def _configs(
         )
         return ManualModelAnalyzerConfig(
             model_repository=repository,
+            perf_analyzer_flags=perf_flags,
             profile_models={
                 model_name: _ManualModelProfile(
                     parameters=_LoadParameters(batch_sizes=selected_batch_sizes, concurrency=concurrency),
@@ -249,10 +281,11 @@ def _configs(
         instance_counts=tuple(range(1, max_instance_count + 1)),
         queue_delays=queue_delay_microseconds,
     )
-    if profiles is not None and len(profiles) > 1:
+    if minimum_batch > 1 or (profiles is not None and len(profiles) > 1):
         # Model Analyzer's quick generator replaces instance_group and would
-        # discard TensorRT profile selection. Use a small safe brute sweep.
-        fast_batch_sizes = tuple(dict.fromkeys((1, config.max_batch_size))) if config.max_batch_size > 0 else (1,)
+        # discard TensorRT profile selection. Its default client batch of one also
+        # cannot serve profiles whose minimum batch is larger. Use a bounded sweep.
+        fast_batch_sizes = tuple(dict.fromkeys((minimum_batch, maximum_batch))) if config.max_batch_size > 0 else (1,)
         fast = manual_config(
             "fast",
             selected_batch_sizes=fast_batch_sizes,
@@ -263,6 +296,7 @@ def _configs(
     else:
         fast = QuickModelAnalyzerConfig(
             model_repository=repository,
+            perf_analyzer_flags=perf_flags,
             profile_models=(model_name,),
             checkpoint_directory=(destination / "fast-checkpoints").resolve(),
             output_model_repository_path=(destination / "fast-model-repository").resolve(),
@@ -288,6 +322,9 @@ def generate_model_analyzer_configs(
     multiple optimization profiles, it uses a reduced brute sweep instead because
     native quick search discards the profile selection from ``instance_group``.
     ``manual.yaml`` enumerates the complete recommended bounded search space.
+    Publication already writes defaults; use this function only to customize them.
+    Concrete input shapes use TensorRT profile optima or other artifacts' minimum
+    shapes. Input values use Perf Analyzer's synthetic-data defaults.
 
     Args:
         artifact: Tuned artifact used to create the published model.
@@ -311,21 +348,46 @@ def generate_model_analyzer_configs(
     if destination.exists():
         raise ModelAnalyzerConfigError(f"{destination} already exists; configuration generation never replaces files")
 
-    fast, manual = _configs(
-        artifact,
-        model_directory,
-        destination,
-        max_instance_count=max_instance_count,
-        queue_delay_microseconds=queue_delay_microseconds,
-    )
+    config = _read_published_config(model_directory)
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".aitune-{destination.name}-", dir=destination.parent))
     try:
-        (staging / _FAST_CONFIG_FILE_NAME).write_text(fast.to_yaml())
-        (staging / _MANUAL_CONFIG_FILE_NAME).write_text(manual.to_yaml())
+        _write_model_analyzer_configs(
+            artifact,
+            config=config,
+            model_directory=model_directory,
+            destination=destination,
+            staging=staging,
+            max_instance_count=max_instance_count,
+            queue_delay_microseconds=queue_delay_microseconds,
+        )
         staging.rename(destination)
     except Exception as error:
         raise ModelAnalyzerConfigError(f"Failed to generate Model Analyzer configurations: {error}") from error
     finally:
         shutil.rmtree(staging, ignore_errors=True)
     return destination
+
+
+def _write_model_analyzer_configs(
+    artifact: Artifact,
+    *,
+    config: model_config_pb2.ModelConfig,
+    model_directory: Path,
+    destination: Path,
+    staging: Path,
+    max_instance_count: int = 5,
+    queue_delay_microseconds: tuple[int, ...] = _DEFAULT_QUEUE_DELAYS_MICROSECONDS,
+) -> None:
+    """Write staged configs with paths pointing to their final deployment location."""
+    fast, manual = _configs(
+        artifact,
+        model_directory,
+        destination,
+        config=config,
+        max_instance_count=max_instance_count,
+        queue_delay_microseconds=queue_delay_microseconds,
+    )
+    staging.mkdir(parents=True, exist_ok=True)
+    (staging / _FAST_CONFIG_FILE_NAME).write_text(fast.to_yaml())
+    (staging / _MANUAL_CONFIG_FILE_NAME).write_text(manual.to_yaml())
