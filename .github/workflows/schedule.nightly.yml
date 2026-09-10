@@ -3,34 +3,11 @@
 name: Nightly CI
 
 on:
-  push:
-    branches:
-      - "pull-request/[0-9]+"
-  # schedule:
-  #   - cron: "0 2 * * *"
+  schedule:
+     - cron: "0 8 * * 1,2,3,4,5"
+
   workflow_dispatch:
-    inputs:
-      example_scope:
-        description: Example scope (L0-L3)
-        required: false
-        default: L1
-        type: choice
-        options:
-          - L0
-          - L1
-          - L2
-          - L3
-      skip_main_ci:
-        description: "Opt-out of running main CI (provide required artifacts and image manually)"
-        required: false
-        type: boolean
-        default: false
-      dist_run_id:
-        description: "dist artifact run ID (required if skip_main_ci=true)"
-        required: false
-      pytorch_image:
-        description: "SHA-tagged PyTorch CI image (required if skip_main_ci=true)"
-        required: false
+
 
 permissions:
   contents: read
@@ -61,9 +38,6 @@ env:
   _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
   _ACTIONS_DOWNLOAD_ARTIFACT: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
   _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-  _ACTIONS_DOCKER_LOGIN: &actions_docker_login docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-  _ACTIONS_DOCKER_BUILD_PUSH: &actions_docker_build_push docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-
 
 
 defaults:
@@ -71,177 +45,113 @@ defaults:
     shell: bash
 
 jobs:
-  wheel:
-    name: Build wheel
-    runs-on: linux-amd64-cpu4
+
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
+  pytorch-gpu-nvcr-container:
+    name: PyTorch GPU ${{ matrix.torch_ci_image }}
+    needs: ci
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.08-py3
+            extra_packages: "numpy<2.0"
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.10-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.01-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.03-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.05-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.06-py3
+            extra_packages: ""
+    container:
+      image: ${{ matrix.torch_ci_image }}
+      options: -u 1000
+    env:
+      EXTRA_PACKAGES: ${{ matrix.extra_packages }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
+      - run: pip list
+      - run: nvidia-smi
+      - run: python -c "import sys; print(sys.version)"
+      - run: python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
+      - run: python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
+      - run: python -c "import tensorrt; print(tensorrt.__version__)"
+      - run: python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+      - run: pytest
+
+  pytorch-gpu-cuda-python-matrix:
+    name: CUDA ${{ matrix.variant.uv_torch_backend }} Python ${{ matrix.python_version }} ${{ matrix.variant.aitune_extras }}
+    needs: ci
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.10", "3.11", "3.12"]
+        variant:
+          - uv_torch_backend: cu128
+            cuda_image: 12.9.2-devel-ubuntu24.04
+            aitune_extras: torch29
+            extra_packages: nvidia-cuda-runtime-cu13==0.0.0a0
+          - uv_torch_backend: cu128
+            cuda_image: 12.9.2-devel-ubuntu24.04
+            aitune_extras: torch211
+            extra_packages: nvidia-cuda-runtime-cu13==0.0.0a0
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch29
+            extra_packages: ""
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch210
+            extra_packages: ""
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch211
+            extra_packages: ""
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch212
+            extra_packages: ""
+    container:
+      image: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.variant.cuda_image }}
     steps:
       - uses: *actions_checkout
         with:
           persist-credentials: false
       - uses: *actions_setup_uv
         with:
-          python-version: *python_version
-      - run: uv build
-      - uses: *actions_upload_artifact
-        with:
-          name: dist
-          path: dist/
-          if-no-files-found: error
-
-  pytorch-image:
-    name: Build PyTorch image
-    needs: wheel
-    runs-on: linux-amd64-cpu4
-    outputs:
-      image: ${{ steps.image.outputs.image }}
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: *actions_checkout
-        with:
-          persist-credentials: false
-      - uses: *actions_download_artifact
-        with:
-          name: dist
-          path: dist
-      - uses: *actions_docker_login
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: *actions_docker_build_push
-        with:
-          context: .
-          file: .github/docker/Dockerfile
-          push: true
-          labels: |
-            org.opencontainers.image.description="AITune container for nightly testing based on PyTorch ${{ env.TORCH_CI_IMAGE }}"
-          build-args: |
-            FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
-          tags: ${{ env.PYTORCH_CI_IMAGE }}
-      - id: image
-        run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
-
-  # main-ci-vars:
-  #   name: Main CI Variables (pytorch_image and dist_run_id)
-  #   runs-on: linux-amd64-cpu4
-  #   needs: ${{ inputs.skip_main_ci && fromJSON('[]') || 'main-ci' }}
-  #   outputs:
-  #     pytorch_image: ${{ steps.set-vars.outputs.pytorch_image }}
-  #     dist_run_id: ${{ steps.set-vars.outputs.dist_run_id }}
-  #   steps:
-  #     - id: set-vars
-  #       run: |
-  #         if [[ "${{ inputs.skip_main_ci }}" == 'true' ]]; then
-  #           if [[ -z "${{ inputs.pytorch_image }}" || -z "${{ inputs.dist_run_id }}" ]]; then
-  #             echo "Both dist_run_id and pytorch_image must be provided when skip_main_ci=true" >&2
-  #             exit 1
-  #           fi
-  #           echo "pytorch_image=${{ inputs.pytorch_image }}" >> $GITHUB_OUTPUT
-  #           echo "dist_run_id=${{ inputs.dist_run_id }}" >> $GITHUB_OUTPUT
-  #         else
-  #           echo "pytorch_image=${{ needs.main-ci.outputs.pytorch_image }}" >> $GITHUB_OUTPUT
-  #           echo "dist_run_id=${{ needs.main-ci.outputs.dist_run_id }}" >> $GITHUB_OUTPUT
-  #         fi
-
-  # pytorch-gpu-nvcr-container:
-  #   name: PyTorch GPU ${{ matrix.torch_ci_image }}
-  #   needs: wheel
-  #   runs-on: prod-aitune-tester-rtx-pro-4500-v1
-  #   timeout-minutes: 45
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       include:
-  #         - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.08-py3
-  #           extra_packages: "numpy<2.0"
-  #         - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.10-py3
-  #           extra_packages: ""
-  #         - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.01-py3
-  #           extra_packages: ""
-  #         - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.03-py3
-  #           extra_packages: ""
-  #         - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.05-py3
-  #           extra_packages: ""
-  #         - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.06-py3
-  #           extra_packages: ""
-  #   container:
-  #     image: ${{ matrix.torch_ci_image }}
-  #     options: -u 1000
-  #   env:
-  #     EXTRA_PACKAGES: ${{ matrix.extra_packages }}
-  #   steps:
-  #     - uses: *actions_checkout
-  #       with:
-  #         persist-credentials: false
-  #     - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
-  #     - run: pip list
-  #     - run: nvidia-smi
-  #     - run: python -c "import sys; print(sys.version)"
-  #     - run: python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
-  #     - run: python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
-  #     - run: python -c "import tensorrt; print(tensorrt.__version__)"
-  #     - run: python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
-  #     - run: pytest
-
-  # pytorch-gpu-cuda-python-matrix:
-  #   name: CUDA ${{ matrix.variant.uv_torch_backend }} Python ${{ matrix.python_version }} ${{ matrix.variant.aitune_extras }}
-  #   needs: wheel
-  #   runs-on: prod-aitune-tester-rtx-pro-4500-v1
-  #   timeout-minutes: 45
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       python_version: ["3.10", "3.11", "3.12"]
-  #       variant:
-  #         - uv_torch_backend: cu128
-  #           cuda_image: 12.9.2-devel-ubuntu24.04
-  #           aitune_extras: torch29
-  #           extra_packages: nvidia-cuda-runtime-cu13==0.0.0a0
-  #         - uv_torch_backend: cu128
-  #           cuda_image: 12.9.2-devel-ubuntu24.04
-  #           aitune_extras: torch211
-  #           extra_packages: nvidia-cuda-runtime-cu13==0.0.0a0
-  #         - uv_torch_backend: cu130
-  #           cuda_image: 13.0.3-devel-ubuntu24.04
-  #           aitune_extras: torch29
-  #           extra_packages: ""
-  #         - uv_torch_backend: cu130
-  #           cuda_image: 13.0.3-devel-ubuntu24.04
-  #           aitune_extras: torch210
-  #           extra_packages: ""
-  #         - uv_torch_backend: cu130
-  #           cuda_image: 13.0.3-devel-ubuntu24.04
-  #           aitune_extras: torch211
-  #           extra_packages: ""
-  #         - uv_torch_backend: cu130
-  #           cuda_image: 13.0.3-devel-ubuntu24.04
-  #           aitune_extras: torch212
-  #           extra_packages: ""
-  #   container:
-  #     image: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.variant.cuda_image }}
-  #   steps:
-  #     - uses: *actions_checkout
-  #       with:
-  #         persist-credentials: false
-  #     - uses: *actions_setup_uv
-  #       with:
-  #         python-version: ${{ matrix.python_version }}
-  #         version: ${{ env.UV_VERSION }}
-  #     - run: nvidia-smi
-  #     - run: uv venv
-  #     - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }}]" --group test ${{ matrix.variant.extra_packages }}
-  #     - run: uv pip list
-  #     - run: uv run python -c "import sys; print(sys.version)"
-  #     - run: uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
-  #     - run: uv run python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
-  #     - run: uv run python -c "import tensorrt; print(tensorrt.__version__)"
-  #     - run: uv run python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
-  #     - run: uv run python -m pytest
+          python-version: ${{ matrix.python_version }}
+          version: ${{ env.UV_VERSION }}
+      - run: nvidia-smi
+      - run: uv venv
+      - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }}]" --group test ${{ matrix.variant.extra_packages }}
+      - run: uv pip list
+      - run: uv run python -c "import sys; print(sys.version)"
+      - run: uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
+      - run: uv run python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
+      - run: uv run python -c "import tensorrt; print(tensorrt.__version__)"
+      - run: uv run python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+      - run: uv run python -m pytest
 
   generate-functional-matrix:
     name: Generate functional matrix
+    needs: ci
     runs-on: linux-amd64-cpu4
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
@@ -257,21 +167,20 @@ jobs:
         id: generate
         env:
           AITUNE_TEST_SCOPE: L0
-          AITUNE_EXAMPLE_SCOPE: ${{ github.event.inputs.example_scope || 'L1' }}
+          AITUNE_EXAMPLE_SCOPE: L1
         run: |
           uv run --script tests/functional/scripts/generate.py \
-            --default-docker-image "${{ env.PYTORCH_CI_IMAGE }}" \
+            --default-docker-image "${{ needs.ci.outputs.pytorch_image }}" \
+            --scripts-path tests/functional/pytorch \
+            --scripts-path tests/functional/pytorch/kernels \
+            --scripts-path tests/functional/pytorch/jit \
             --scripts-path tests/functional/dataloader \
+            --scripts-path tests/functional/dynamo \
             --projects-path examples \
             --github-output "$GITHUB_OUTPUT" \
             --output-json jobs.json
 
-        # --scripts-path tests/functional/pytorch \
-        # --scripts-path tests/functional/pytorch/kernels \
-        # --scripts-path tests/functional/pytorch/jit \
-        # --scripts-path tests/functional/dataloader \
-        # --scripts-path tests/functional/dynamo \
-        # --projects-path examples \
+
         # --only-tags gpu/4,gpu/8 \
 
       - name: Display generated functional matrix
@@ -288,7 +197,7 @@ jobs:
 
   functional:
     name: ${{ matrix.id }}
-    needs: [wheel, pytorch-image, generate-functional-matrix]
+    needs: [ci, generate-functional-matrix]
     if: needs.generate-functional-matrix.outputs.matrix_count != '0'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
@@ -308,7 +217,7 @@ jobs:
         with:
           name: dist
           path: dist
-          # run-id: ${{ needs.wheel.outputs.dist_run_id }}
+          run-id: ${{ needs.ci.outputs.dist_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - run: nvidia-smi
       - name: Run functional job
