@@ -92,6 +92,8 @@ navigation:
         path: ../examples/ResNet/README.md
       - page: StableDiffusion
         path: ../examples/StableDiffusion/README.md
+      - page: WAN
+        path: ../examples/WAN/README.md
   - section: API Reference
     contents:
       - section: Ahead-of-time Tuning API

@@ -2,19 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [project]
-name = "ai-tune-flux-example"
+name = "ai-tune-wan-example"
 version = "0.1.0"
-description = "NVIDIA AITune FLUX.1 Example"
+description = "NVIDIA AITune WAN 2.1 text-to-video example"
 readme = "README.md"
 license = { text = "Apache 2.0" }
 requires-python = ">=3.10, <3.13"
 
 dependencies = [
+    "accelerate",
     "aitune",
     "aitune-examples-common",
     "diffusers>=0.36,<0.38",
-    "pillow",
-    "protobuf",
+    "ftfy",
+    "imageio[ffmpeg]",
     "sentencepiece",
     "torch>=2.0.0",
     "transformers<5",
@@ -23,12 +24,12 @@ dependencies = [
 [project.optional-dependencies]
 dynamo = [
     "ai-dynamo>=1.3,<2.0.0",
-    "openai",
-    "uvicorn",
-    "aiohttp",
     "aiofiles",
-    "uvloop",
+    "aiohttp",
+    "httpx",
     "pyyaml",
+    "uvicorn",
+    "uvloop",
 ]
 
 [tool.uv.sources]
@@ -36,8 +37,8 @@ aitune = { path = "../../", editable = true }
 aitune-examples-common = { path = "../../examples/common" }
 
 [project.scripts]
-tune = "flux.tune:main"
-inference = "flux.inference:main"
+tune = "wan.tune:main"
+inference = "wan.inference:main"
 
 [build-system]
 requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
@@ -48,17 +49,16 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 namespaces = false
-include = ["flux"]
+include = ["wan*"]
 
 [tool.setuptools.package-data]
-flux = ["**/*"]
+wan = ["**/*"]
 
 [tool.aitune]
 docker_image = "nvcr.io/nvidia/pytorch:26.06-py3"
 variants = [
-    { arguments = { "quantization" = false } },
-    { arguments = { "quantization" = true } },
-    { arguments = { "context-parallel" = "ulysses", "quantization" = false }, additional_tags = ["gpu/4"], launcher = "torchrun", processes = 4 },
+    { arguments = { "num-frames" = 81, "steps" = 30 } },
+    { arguments = { "context-parallel" = "ulysses", "num-frames" = 81, "steps" = 30 }, additional_tags = ["gpu/4"], launcher = "torchrun", processes = 4 },
 ]
 additional_tags = ["gpu/sm/120"]
 use_gated_hf_token = true

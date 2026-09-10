@@ -83,13 +83,14 @@ a tuned image. It logs both generation times and saves both images under `AITUNE
 
 ## Tune on multiple GPUs
 
-Launch one process per GPU and add `--multi-gpu`. This tested example uses four GPUs:
+Launch one process per GPU. The example detects the `torchrun` world size and enables Diffusers context parallelism
+automatically. This tested configuration uses four GPUs:
 
 ```bash
 uv run torchrun --standalone --nproc-per-node=4 \
   --log-dir logs --tee 3 --local-ranks-filter 0 \
   --module flux.tune \
-  --multi-gpu --context-parallel ulysses
+  --context-parallel ulysses
 ```
 
 The application initializes NCCL and enables Diffusers context parallelism on the transformer. AITune detects that
@@ -102,7 +103,7 @@ Run inference with the same GPU count and context-parallel mode used for tuning:
 AITUNE_OUTPUT_DIR=output uv run torchrun --standalone --nproc-per-node=4 \
   --log-dir logs --tee 3 --local-ranks-filter 0 \
   --module flux.inference \
-  --multi-gpu --context-parallel ulysses
+  --context-parallel ulysses
 ```
 
 Every rank participates in generation; rank 0 records timings and saves the images.
@@ -123,7 +124,6 @@ keeps application logging unchanged and preserves per-rank diagnostics for inves
 - `--guidance-scale`: Guidance scale (default: `3.5`).
 - `--max-sequence-length`: Maximum text sequence length (default: `128`).
 - `--tuned-model-path`: Base checkpoint path (default: `flux-dev.ait`).
-- `--multi-gpu`: Enable Diffusers context parallelism.
 - `--context-parallel`: `ulysses` or `ring` (default: `ulysses`).
 - `--quantization`: Add TorchAO NVFP4 and FP8 transformer candidates.
 
@@ -136,7 +136,7 @@ uv pip install ".[dynamo]"
 uv run torchrun --standalone --nproc-per-node=4 \
   --log-dir logs --tee 3 --local-ranks-filter 0 \
   --module flux.tune \
-  --multi-gpu --context-parallel ulysses
+  --context-parallel ulysses
 CUDA_VISIBLE_DEVICES=0,1,2,3 ./run_dynamo.sh
 ```
 

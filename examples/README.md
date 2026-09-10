@@ -55,6 +55,24 @@ Shows tuning of the FLUX text-to-image model, demonstrating advanced diffusion m
 - **More Info**:
   - https://huggingface.co/black-forest-labs/FLUX.1-dev
 
+## WAN
+
+### Generative AI - Text-to-Video
+
+Demonstrates distributed tuning and serving of the WAN 2.1 text-to-video model with Diffusers context parallelism.
+
+- **Location**: [`WAN`](./WAN/README.md)
+- **Model**: WAN 2.1 T2V 1.3B from Hugging Face
+- **Use Case**: Optimizing large text-to-video diffusion models across multiple GPUs
+- **Key Features**:
+  - Multi-GPU Ulysses and ring context parallelism
+  - Independent backend selection for the WAN transformer
+  - Rank-local distributed checkpoints
+  - Original and tuned MP4 generation
+  - Collective NVIDIA Dynamo serving
+- **More Info**:
+  - https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+
 ## ParakeetCTC
 
 ### Speech AI - Automatic Speech Recognition
