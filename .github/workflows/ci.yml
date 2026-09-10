@@ -134,7 +134,7 @@ jobs:
 
   dependency-review:
     name: Dependency Review
-    if: github.event_name != 'workflow_call'
+    if: github.event_name == 'push'
     runs-on: linux-amd64-cpu4
     permissions:
       pull-requests: write

@@ -57,6 +57,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      pull-requests: write # for dependency review (but it's not run)
 
   pytorch-gpu-nvcr-container:
     name: PyTorch GPU ${{ matrix.torch_ci_image }}
