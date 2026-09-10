@@ -1,9 +1,15 @@
 #syntax=docker/dockerfile:1.3
-ARG FROM_IMAGE=nvcr.io/nvidia/pytorch:25.10-py3
+ARG FROM_IMAGE=nvcr.io/nvidia/pytorch:26.01-py3
 FROM ${FROM_IMAGE}
 
 ARG ONNXRUNTIME_VERSION=1.16.2
 ARG FRAMEWORK_VERSION=25.10
+
+ARG ADDITIONAL_APT_PACKAGES
+ENV ADDITIONAL_APT_PACKAGES=${ADDITIONAL_APT_PACKAGES}
+
+ARG ADDITIONAL_PACKAGES
+ENV ADDITIONAL_PACKAGES=${ADDITIONAL_PACKAGES}
 
 ENV AIT_DIR="/opt/ai-tune"
 ENV AIT_DIST_DIR=${AIT_DIR}/dist
@@ -21,17 +27,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     mv ${TMP_DIR}/tests ${AIT_DIR} && \
     (cd ${TMP_DIR} && pip install . --group test --break-system-packages) && \
     pip install --no-deps ${WHEEL_PATH} --break-system-packages && \
-    rm -rf ${TMP_DIR}
-
-ARG ADDITIONAL_PACKAGES
-ENV ADDITIONAL_PACKAGES=${ADDITIONAL_PACKAGES}
-RUN if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install $ADDITIONAL_PACKAGES; fi
-
-
-# Create user and group with UID/GID 1001 for GitHub Actions runner compatibility
-RUN groupadd -g 1001 runner && useradd -m -u 1001 -g 1001 runner \
-    && chown -R runner:runner ${AIT_DIR} \
-    && chmod -R ug+rw ${AIT_DIR}
+    rm -rf ${TMP_DIR} && \
+    pip install pydantic tomli --break-system-packages && \
+    if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install --break-system-packages $ADDITIONAL_PACKAGES; fi && \
+    groupadd -g 1001 runner && useradd -m -u 1001 -g 1001 runner && \
+    chown -R runner:runner ${AIT_DIR} && \
+    chmod -R ug+rw ${AIT_DIR}
 
 USER runner
 
