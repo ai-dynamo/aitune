@@ -9,6 +9,7 @@ title: "Changelog"
 
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
 - feat: serve application-managed multi-GPU models through one collective Dynamo worker
+- feat: add a WAN 2.1 context-parallel tuning and Dynamo serving example
 - feat: add the experimental `KernelOptimizerBackend` for selecting functional kernel providers before building a delegate JIT or AOT backend
 - feat: add the experimental `KernelOptimizer` API with Torch SDPA, SageAttention, and FlashAttention-4 providers and serializable provider runtime plans
 - feat: extend `enable_performance_validation` with `ENABLED`, `DIAGNOSTIC`, and `DISABLED` modes, including diagnostic-only eager comparison and positional boolean compatibility

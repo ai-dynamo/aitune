@@ -178,7 +178,7 @@ def tune_model(
     logger.info("Checkpoint copied to %s", relocated_path)
 
 
-def run_example(args) -> None:
+def run_example(args, multi_gpu: bool) -> None:
     """Inspect, tune, and save the configured FLUX pipeline."""
     tune_model(
         model_name=args.model_name,
@@ -188,7 +188,7 @@ def run_example(args) -> None:
         guidance_scale=args.guidance_scale,
         max_sequence_length=args.max_sequence_length,
         tuned_model_path=args.tuned_model_path,
-        multi_gpu=args.multi_gpu,
+        multi_gpu=multi_gpu,
         context_parallel=args.context_parallel,
         quantization=args.quantization,
     )
@@ -200,9 +200,9 @@ def main():
     log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
     basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     args = parse_args()
-    initialize_distributed(args.multi_gpu)
+    multi_gpu = initialize_distributed()
     try:
-        run_example(args)
+        run_example(args, multi_gpu)
     finally:
         shutdown_distributed()
 
