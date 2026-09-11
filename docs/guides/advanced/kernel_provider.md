@@ -14,7 +14,7 @@ plan format may change in future releases.
 providers, and returns a plan containing only candidates that are faster than the original PyTorch functions. The plan
 can be activated directly, without wrapping the module in an AITune backend.
 
-Use [`KernelOptimizerBackend`](../backends/kernel_optimizer_backend.md) instead when AITune should own provider
+Use [`KernelSelectorBackend`](../backends/kernel_selector_backend.md) instead when AITune should own provider
 selection, apply the selected plan while building another backend, and save the resulting plan or compiled artifact in
 an AITune checkpoint. The direct API documented on this page is useful when the application should manage the plan and
 its runtime explicitly.
@@ -71,8 +71,8 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.attention import SDPBackend
 
-from aitune.torch.backend.kernels import KernelOptimizer
-from aitune.torch.backend.kernels.kernel_provider import TorchSDPAKernelProvider
+from aitune.torch.kernel_forge import KernelOptimizer
+from aitune.torch.kernel_forge.kernel_provider import TorchSDPAKernelProvider
 
 logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
 
@@ -127,8 +127,8 @@ remaining candidates continue through validation and benchmarking:
 ```python
 from torch.nn.attention import SDPBackend
 
-from aitune.torch.backend.kernels import KernelOptimizer
-from aitune.torch.backend.kernels.kernel_provider import (
+from aitune.torch.kernel_forge import KernelOptimizer
+from aitune.torch.kernel_forge.kernel_provider import (
     FlashAttention4KernelProvider,
     SageAttentionKernelProvider,
     TorchSDPAKernelProvider,
@@ -153,7 +153,7 @@ selected plan.
 one provider for each backend that should be evaluated:
 
 ```python
-from aitune.torch.backend.kernels.kernel_provider import (
+from aitune.torch.kernel_forge.kernel_provider import (
     DiffusersAttentionBackend,
     DiffusersAttentionKernelProvider,
 )
@@ -181,10 +181,10 @@ PyTorch SDPA backends instead.
 
 ## Provider interface and lifecycle
 
-Import the base provider APIs from `aitune.torch.backend.kernels.kernel_provider`:
+Import the base provider APIs from `aitune.torch.kernel_forge.kernel_provider`:
 
 ```python
-from aitune.torch.backend.kernels.kernel_provider import (
+from aitune.torch.kernel_forge.kernel_provider import (
     KernelProvider,
     KernelProviderState,
     kernel_provider_from_dict,
@@ -222,7 +222,7 @@ provider classes before restoring plans that contain them.
 Kernel generators produce providers asynchronously and are exported from the same package:
 
 ```python
-from aitune.torch.backend.kernels.kernel_provider import (
+from aitune.torch.kernel_forge.kernel_provider import (
     KernelGenerationResult,
     KernelGenerator,
 )
@@ -279,7 +279,7 @@ with plan.apply(model):
 Use `KernelProviderRuntime` directly when activation must span multiple contexts or requires explicit lifecycle control:
 
 ```python
-from aitune.torch.backend.kernels import KernelProviderRuntime
+from aitune.torch.kernel_forge import KernelProviderRuntime
 
 runtime = KernelProviderRuntime(model, plan)
 with torch.no_grad():
@@ -311,7 +311,7 @@ from pathlib import Path
 
 import torch
 
-from aitune.torch.backend.kernels import KernelOptimizationPlan
+from aitune.torch.kernel_forge import KernelOptimizationPlan
 
 plan_path = Path("kernel-plan.json")
 plan_path.write_text(json.dumps(plan.to_dict()))
