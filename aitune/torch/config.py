@@ -9,7 +9,12 @@ from typing import Any
 import nvtx.nvtx as nvtx
 
 from aitune.utils.env_vars import AITUNE_CACHE_DIR as _AITUNE_CACHE_DIR
-from aitune.utils.env_vars import AITUNE_DIFFUSERS_INTEGRATION, AITUNE_TRANSFORMERS_INTEGRATION, TUNING_DATA_PATH
+from aitune.utils.env_vars import (
+    AITUNE_DIFFUSERS_INTEGRATION,
+    AITUNE_DISABLE_ONNX_MODEL_COPY,
+    AITUNE_TRANSFORMERS_INTEGRATION,
+    TUNING_DATA_PATH,
+)
 
 DEFAULT_MIN_NUM_SAMPLES = 100
 DEFAULT_MAX_NUM_SAMPLES_STORED = 1  # you can set infinity if you want to store/use all samples
@@ -48,6 +53,7 @@ class AITuneConfig:
         self._cache_dir: Path = aitune_cache_dir()
         self._min_num_samples: int = DEFAULT_MIN_NUM_SAMPLES
         self.max_num_samples_stored: int | float = DEFAULT_MAX_NUM_SAMPLES_STORED
+        self.disable_onnx_model_copy: bool = AITUNE_DISABLE_ONNX_MODEL_COPY
         self.device_after_tuning: str = DEFAULT_DEVICE_AFTER_TUNING
         # ``None`` preserves whether AITune selected the path. Explicit paths, including
         # AITUNE_TUNING_DATA_PATH, must be used verbatim in distributed runs.

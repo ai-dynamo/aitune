@@ -16,7 +16,9 @@ from aitune.torch.utils.tensor import format_tensor_name
 logger = logging.getLogger(__name__)
 
 
-def prepare_calibration_data(data: Sequence[Sample], graph_spec: GraphSpec) -> dict[str, np.ndarray]:
+def prepare_calibration_data(
+    data: Sequence[Sample], graph_spec: GraphSpec, input_names: dict[str, str] | None = None
+) -> dict[str, np.ndarray]:
     """Prepare calibration data in ModelOpt format from 1..N samples and graph_spec.
 
     Builds a single dict of arrays (one per ONNX input) by mapping each sample to
@@ -30,6 +32,7 @@ def prepare_calibration_data(data: Sequence[Sample], graph_spec: GraphSpec) -> d
 
     Args:
         data: List of 1..N Sample objects (args, kwargs); each can have any batch size.
+        input_names: Optional mapping from recorded names to native ONNX names.
         graph_spec: Graph specification whose input_spec defines ONNX input names
             and locators into normalized forward arguments.
 
@@ -75,6 +78,8 @@ def prepare_calibration_data(data: Sequence[Sample], graph_spec: GraphSpec) -> d
     )
     for name, arr in result.items():
         logger.info("  Calibration input %r: shape %s", name, arr.shape)
+    if input_names is not None:
+        return {input_names[name]: value for name, value in result.items()}
     return result
 
 

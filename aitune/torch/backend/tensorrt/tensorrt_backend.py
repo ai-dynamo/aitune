@@ -6,6 +6,7 @@ import contextlib
 import copy
 import json
 import logging
+import shutil
 from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
@@ -18,6 +19,7 @@ import torch.nn as nn
 from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
+from aitune.torch.config import config as global_config
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch.backend.backend import (
     Backend,
@@ -40,6 +42,7 @@ from aitune.torch.config import config as global_config
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
 from aitune.torch.utils.module import offload
@@ -210,9 +213,8 @@ class TensorRTBackendConfig(BackendConfig):
 class TensorRTBackend(Backend, TensorRTRunner):
     """TensorRT backend for model acceleration.
 
-    This class provides functionality to build and run TensorRT engines from PyTorch models.
-    It handles the process of exporting models to ONNX and then converting them to TensorRT
-    engines for optimized inference.
+    This class builds and runs TensorRT engines from PyTorch models or existing OnnxModule graphs.
+    Torch models are exported to ONNX; OnnxModule uses its source path directly.
     """
 
     _build_mode = BuildMode.AHEAD_OF_TIME
@@ -223,6 +225,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
     STATE_ENGINE_PATH = "engine_path"
     STATE_TRT_OPTIMIZATION_PROFILES_PATH = "trt_optimization_profiles_path"
     STATE_OUTPUT_OBJECT = "output_object"
+    STATE_ONNX_INPUT_NAMES = "onnx_input_names"
     STATE_GRAPH_SPEC = "graph_spec"
     STATE_DEVICE = "device"
     STATE_QUANTIZATION_CONFIG = "quantization_config"
@@ -269,6 +272,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._trt_optimization_profiles_artifact: ArtifactPath | None = None
         self._output_object = None
         self._graph_spec = None
+        self._onnx_input_names: dict[str, str] | None = None
 
         # runtime variables
         self._output_allocator = None
@@ -355,7 +359,29 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._graph_spec = graph_spec
 
         cuda_set_device(self._device)
-        self._output_object = self._get_output_object(module=module, sample=samples[0])
+        if isinstance(module, OnnxModule):
+            import onnx
+
+            module.deactivate()
+            if isinstance(self._config.quantization_config, TorchQuantizationConfig):
+                raise AITuneUserInputError(
+                    "Torch quantization requires a Torch module; use ONNX quantization for OnnxModule."
+                )
+            graph = onnx.load(module.path, load_external_data=False).graph
+            initializers = {tensor.name for tensor in graph.initializer}
+            names = [node.name for node in graph.input if node.name not in initializers]
+            del graph
+            args, kwargs = samples[0]
+            # Normalize names in place of tensors to map recorded paths to ONNX inputs.
+            named_inputs = graph_spec.forward_signature.normalize(
+                tuple(names[: len(args)]), {name: name for name in kwargs}
+            )
+            self._onnx_input_names = {
+                format_tensor_name(locator.path, "input"): locator.get_value(named_inputs.arguments)
+                for locator, _ in graph_spec.input_spec.tensor_data
+            }
+        else:
+            self._output_object = self._get_output_object(module=module, sample=samples[0])
 
         if isinstance(self._config.quantization_config, TorchQuantizationConfig):
             engine_path = self._build_modelopt_torch(module, graph_spec, samples, cache_dir)
@@ -404,17 +430,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     config=self._config.quantization_config,
                 )
 
-            step = TensorRTBuildStep.ONNX_EXPORT
-            with annotate(step.annotation), self._track_build_step(step) as result:
-                onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
-
-                onnx_exporter = ONNXExporter(
-                    use_dynamo=self._config.use_dynamo,
-                    opset_version=self._config.opset_version,
-                    output_path=onnx_path_quantized,
-                )
-                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
-                result["onnx_size_bytes"] = onnx_path_quantized.stat().st_size
+            onnx_path_quantized = self._export_onnx(module, graph_spec, samples[0], cache_dir, suffix="ptq")
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -424,7 +440,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
-                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, samples=samples)
+                self._trt_optimization_profiles = self._get_engine_profiles(graph_spec=graph_spec, samples=samples)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path_quantized,
@@ -462,19 +478,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            step = TensorRTBuildStep.ONNX_EXPORT
-            with annotate(step.annotation), self._track_build_step(step) as result:
-                logger.info("Initializing ONNX exporter")
-
-                onnx_path = self._prepare_onnx_model_path(cache_dir)
-                onnx_exporter = ONNXExporter(
-                    use_dynamo=self._config.use_dynamo,
-                    opset_version=self._config.opset_version,
-                    output_path=onnx_path,
-                )
-
-                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
-                result["onnx_size_bytes"] = onnx_path.stat().st_size
+            onnx_path = self._export_onnx(module, graph_spec, samples[0], cache_dir)
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -493,6 +497,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     config=self._config.quantization_config,
                     samples=samples,
                     graph_spec=graph_spec,
+                    input_names=self._onnx_input_names,
                 )
                 result["onnx_size_bytes"] = onnx_path_quantized.stat().st_size
 
@@ -501,7 +506,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
-                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, samples=samples)
+                self._trt_optimization_profiles = self._get_engine_profiles(graph_spec=graph_spec, samples=samples)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path_quantized,
@@ -539,19 +544,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            step = TensorRTBuildStep.ONNX_EXPORT
-            with annotate(step.annotation), self._track_build_step(step) as result:
-                logger.info("Initializing ONNX exporter")
-
-                onnx_path = self._prepare_onnx_model_path(cache_dir)
-                onnx_exporter = ONNXExporter(
-                    use_dynamo=self._config.use_dynamo,
-                    opset_version=self._config.opset_version,
-                    output_path=onnx_path,
-                )
-
-                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
-                result["onnx_size_bytes"] = onnx_path.stat().st_size
+            onnx_path = self._export_onnx(module, graph_spec, samples[0], cache_dir)
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -569,6 +562,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     config=self._config.quantization_config,
                     samples=samples,
                     graph_spec=graph_spec,
+                    input_names=self._onnx_input_names,
                 )
                 result["onnx_size_bytes"] = onnx_path_autocasted.stat().st_size
 
@@ -577,7 +571,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
-                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, samples=samples)
+                self._trt_optimization_profiles = self._get_engine_profiles(graph_spec=graph_spec, samples=samples)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path_autocasted,
@@ -600,6 +594,67 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._deactivate()
             raise e
 
+    def _export_onnx(
+        self, module: nn.Module, graph_spec: GraphSpec, sample: Sample, cache_dir: Path, suffix: str = ""
+    ) -> Path:
+        """Export Torch or copy an ONNX graph and its external weights into the backend cache."""
+        step = TensorRTBuildStep.ONNX_EXPORT
+        with annotate(step.annotation), self._track_build_step(step) as result:
+            path = self._prepare_onnx_model_path(cache_dir, suffix)
+            if isinstance(module, OnnxModule):
+                path, size = self._copy_or_not_onnx_module(module, path)
+            else:
+                exporter = ONNXExporter(
+                    use_dynamo=self._config.use_dynamo,
+                    opset_version=self._config.opset_version,
+                    output_path=path,
+                )
+                exporter.export(module=module, sample=sample, graph_spec=graph_spec)
+                size = path.stat().st_size
+
+            result["onnx_size_bytes"] = size
+
+        return path
+
+    def _copy_or_not_onnx_module(self, module: OnnxModule, path: Path) -> tuple[Path, int]:
+        """Copy the ONNX model to the cache directory."""
+        import onnx
+        from onnx.external_data_helper import _get_all_tensors
+
+        # model might be big and copying it might not be desirable
+        if global_config.disable_onnx_model_copy:
+            return (Path(module.path), module.path.stat().st_size)
+
+        model = onnx.load(module.path, load_external_data=False)
+        locations = {
+            entry.value
+            for tensor in _get_all_tensors(model)
+            for entry in tensor.external_data
+            if entry.key == "location"
+        }
+        size = module.path.stat().st_size
+        for location in locations:
+            destination = path.parent / location
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(module.path.parent / location, destination)
+            size += destination.stat().st_size
+
+        shutil.copy2(module.path, path)
+        return (path, size)
+
+    def _get_engine_profiles(self, graph_spec: GraphSpec, samples: Sequence[Sample]) -> list[Profile]:
+        """Map recorded profile names to native ONNX inputs when needed."""
+        profiles = self.get_profiles(graph_spec, samples)
+        if self._onnx_input_names is None:
+            return profiles
+        native_profiles = []
+        for profile in profiles:
+            native_profile = Profile()
+            for name, (min_shape, opt_shape, max_shape) in profile.items():
+                native_profile.add(self._onnx_input_names[name], min_shape, opt_shape, max_shape)
+            native_profiles.append(native_profile)
+        return native_profiles
+
     def _build_standard(
         self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
     ) -> Path:
@@ -615,19 +670,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            step = TensorRTBuildStep.ONNX_EXPORT
-            with annotate(step.annotation), self._track_build_step(step) as result:
-                logger.info("Initializing ONNX exporter")
-
-                onnx_path = self._prepare_onnx_model_path(cache_dir)
-                onnx_exporter = ONNXExporter(
-                    use_dynamo=self._config.use_dynamo,
-                    opset_version=self._config.opset_version,
-                    output_path=onnx_path,
-                )
-
-                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
-                result["onnx_size_bytes"] = onnx_path.stat().st_size
+            onnx_path = self._export_onnx(module, graph_spec, samples[0], cache_dir)
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -637,7 +680,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 # Initialize TensorRT builder
                 logger.info("Initializing TensorRT builder")
                 engine_path = self._prepare_trt_engine_path(cache_dir)
-                self._trt_optimization_profiles = self.get_profiles(graph_spec=graph_spec, samples=samples)
+                self._trt_optimization_profiles = self._get_engine_profiles(graph_spec=graph_spec, samples=samples)
 
                 trt_builder = TensorRTBuilder(
                     input_onnx_path=onnx_path,
@@ -866,6 +909,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """
         # Get outputs from the allocator (already properly shaped by TensorRT)
         outputs = self._output_allocator.outputs
+        if self._onnx_input_names is not None:
+            return {name: tensor.clone() for name, tensor in outputs.items()}
 
         result = copy.deepcopy(self._output_object)  # make each results a unique copy of the original output object
         for locator, _ in self._graph_spec.output_spec.tensor_data:
@@ -906,6 +951,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
         forward_inputs = self._graph_spec.forward_signature.normalize(args, kwargs)
         for locator, _ in self._graph_spec.input_spec.tensor_data:
             name = format_tensor_name(locator.path, "input")
+            if self._onnx_input_names is not None:
+                name = self._onnx_input_names[name]
             if name in engine_input_names:
                 inputs[name] = locator.get_value(forward_inputs.arguments)
             else:
@@ -1138,6 +1185,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_ENGINE_PATH: self._engine_artifact,
             self.STATE_OUTPUT_OBJECT: self._output_object,
+            self.STATE_ONNX_INPUT_NAMES: self._onnx_input_names,
             self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_QUANTIZATION_CONFIG: self._config.quantization_config,
@@ -1160,7 +1208,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
         backend._config = TensorRTBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]
-        # CUDA graphs cannot be serialized and must be re-captured.
+        backend._onnx_input_names = state_dict.get(cls.STATE_ONNX_INPUT_NAMES)
+        # Ensure CUDA graphs are disabled when loading from checkpoint
+        # CUDA graphs cannot be serialized and must be re-captured
         if backend._config.use_cuda_graphs:
             logger.info("CUDA graphs were enabled in saved state, but will be re-captured on first inference")
             # CUDA graph state will be None initially, triggering re-capture
