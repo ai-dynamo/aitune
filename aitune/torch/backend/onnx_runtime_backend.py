@@ -10,7 +10,6 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
-import numpy as np
 import nvtx
 import onnxruntime
 import torch
@@ -18,28 +17,14 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.checkpoint.artifact import ArtifactPath
-from aitune.torch.libs.cuda.memory import memcpy_to_torch
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
+from aitune.torch.libs.onnx.runtime import run_onnx
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
 
 logger = getLogger(__name__)
-
-
-# Mapping from torch dtype to numpy dtype for ONNX Runtime IOBinding.
-_TORCH_DTYPE_TO_NUMPY: dict[torch.dtype, type] = {
-    torch.float16: np.float16,
-    torch.float32: np.float32,
-    torch.float64: np.float64,
-    torch.int8: np.int8,
-    torch.int16: np.int16,
-    torch.int32: np.int32,
-    torch.int64: np.int64,
-    torch.uint8: np.uint8,
-    torch.bool: np.bool_,
-}
 
 
 class ONNXExecutionProvider(str, Enum):
@@ -228,8 +213,8 @@ class ONNXRuntimeBackend(Backend):
     def _prepare_inputs(self, args: tuple, kwargs: dict) -> dict[str, Any]:
         """Map args/kwargs to session input names using graph_spec locators.
 
-        Tensors are returned as-is (preserving their device); conversion to the
-        format expected by ONNX Runtime happens in ``_infer`` via IOBinding.
+        Tensors are returned as-is (preserving their device); I/O binding happens
+        in the shared ``run_onnx`` executor.
         """
         session_input_names = {inp.name for inp in self._session.get_inputs()}
         inputs: dict[str, Any] = {}
@@ -253,54 +238,11 @@ class ONNXRuntimeBackend(Backend):
                 logger.debug("Output: %s not found in session outputs", name)
         return result
 
-    def _bind_inputs(self, io_binding: onnxruntime.IOBinding, inputs: dict[str, Any]) -> None:
-        """Bind prepared inputs to an IOBinding handle.
-
-        GPU tensors are bound zero-copy via DLPack; CPU tensors and other
-        array-like values are bound as numpy arrays.
-        """
-        for name, value in inputs.items():
-            value = value.contiguous()
-            logger.debug("Binding input %s: device=%s shape=%s dtype=%s", name, value.device, value.shape, value.dtype)
-            np_dtype = _TORCH_DTYPE_TO_NUMPY.get(value.dtype)
-            if np_dtype is None:
-                raise ValueError(f"Unsupported tensor dtype for ONNX Runtime IOBinding: {value.dtype}")
-            io_binding.bind_input(
-                name=name,
-                device_type="cuda",
-                device_id=value.device.index,
-                element_type=np_dtype,
-                shape=list(value.shape),
-                buffer_ptr=value.data_ptr(),
-            )
-
-    def _bind_outputs(self, io_binding: onnxruntime.IOBinding) -> None:
-        """Tell ORT to allocate all outputs on the CUDA device.
-
-        ORT owns the output buffers; shapes are resolved at inference time.
-        Tensors are retrieved after inference via ``_collect_outputs``.
-        """
-        device_id = self._device.index or 0
-        for output in self._session.get_outputs():
-            io_binding.bind_output(output.name, "cuda", device_id)
-
-    def _collect_outputs(self, io_binding: onnxruntime.IOBinding) -> dict[str, torch.Tensor]:
-        """Collect ORT CUDA outputs into torch tensors via D2D memcpy (no CPU round-trip)."""
-        device = torch.device(self._device)
-        return {
-            node.name: memcpy_to_torch(ort_val.data_ptr(), list(ort_val.shape()), ort_val.data_type(), device)
-            for node, ort_val in zip(self._session.get_outputs(), io_binding.get_outputs(), strict=False)
-        }
-
     @nvtx.annotate(message="ONNXRuntimeBackend.infer", domain="AITune", color="green")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
-        """Run inference through the ONNX Runtime session via IOBinding."""
+        """Run inference through the shared ONNX Runtime I/O binding executor."""
         inputs = self._prepare_inputs(args, kwargs)
-        io_binding = self._session.io_binding()
-        self._bind_inputs(io_binding, inputs)
-        self._bind_outputs(io_binding)
-        self._session.run_with_iobinding(io_binding)
-        return self._prepare_outputs(self._collect_outputs(io_binding))
+        return self._prepare_outputs(run_onnx(self._session, inputs, self._device))
 
     def _get_output_object(self, module: nn.Module, sample: Sample) -> Any:
         """Get the output object from the module and sample.
