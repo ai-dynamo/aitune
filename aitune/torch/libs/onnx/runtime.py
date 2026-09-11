@@ -85,3 +85,14 @@ def _collect_outputs(
         node.name: memcpy_to_torch(ort_val.data_ptr(), list(ort_val.shape()), ort_val.data_type(), device)
         for node, ort_val in zip(session.get_outputs(), io_binding.get_outputs(), strict=True)
     }
+
+
+def prepare_onnx_inputs(session: onnxruntime.InferenceSession, args: tuple, kwargs: dict) -> dict[str, torch.Tensor]:
+    """Match positional and named inputs to the original ONNX graph names."""
+    names = [node.name for node in session.get_inputs()]
+    if len(args) > len(names) or set(names[: len(args)]) & kwargs.keys():
+        raise TypeError("Too many positional inputs or duplicate ONNX input names")
+    inputs = dict(zip(names, args, strict=False)) | kwargs
+    if inputs.keys() != set(names):
+        raise TypeError(f"Expected ONNX inputs {names}, got {list(inputs)}")
+    return inputs

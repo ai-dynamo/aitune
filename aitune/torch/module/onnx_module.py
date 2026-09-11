@@ -8,7 +8,7 @@ import onnxruntime
 import torch
 from torch import nn
 
-from aitune.torch.libs.onnx.runtime import run_onnx
+from aitune.torch.libs.onnx.runtime import prepare_onnx_inputs, run_onnx
 
 
 class OnnxModule(nn.Module):
@@ -34,14 +34,7 @@ class OnnxModule(nn.Module):
         device = values[0].device
         self._ensure_session(device)
 
-        names = [node.name for node in self._session.get_inputs()]
-        if len(args) > len(names) or set(names[: len(args)]) & kwargs.keys():
-            raise TypeError("Too many positional inputs or duplicate ONNX input names")
-
-        inputs = dict(zip(names, args, strict=False)) | kwargs
-        if inputs.keys() != set(names):
-            raise TypeError(f"Expected ONNX inputs {names}, got {list(inputs)}")
-
+        inputs = prepare_onnx_inputs(self._session, args, kwargs)
         return run_onnx(self._session, inputs, device)
 
     def _ensure_session(self, device: torch.device) -> None:
