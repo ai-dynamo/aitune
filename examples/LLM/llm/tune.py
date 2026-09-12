@@ -124,18 +124,18 @@ def tune_model(model, tokenizer, cache="static", max_new_tokens=20):
 
 def run_example(args) -> None:
     """Run the example while owning its distributed and model lifecycles."""
-    initialize_distributed(args.multi_gpu)
+    multi_gpu = initialize_distributed()
     try:
         generate_args = generation_options(args.cache, args.max_new_tokens)
         messages = [{"role": "user", "content": "How big is the universe?"}]
 
         # Establish the reference output before AITune wraps the model.
-        model, tokenizer = get_model_and_tokenizer(args.model_id, args.multi_gpu)
+        model, tokenizer = get_model_and_tokenizer(args.model_id, multi_gpu)
         original_pipeline = create_text_pipeline("text-generation", model=model, tokenizer=tokenizer)
         original_output = original_pipeline(messages, **generate_args)
 
         # Tune a fresh model, then repeat the same generation for comparison.
-        model, tokenizer = get_model_and_tokenizer(args.model_id, args.multi_gpu)
+        model, tokenizer = get_model_and_tokenizer(args.model_id, multi_gpu)
         tuned_model = tune_model(model, tokenizer, args.cache, args.max_new_tokens)
         tuned_pipeline = create_text_pipeline("text-generation", model=tuned_model, tokenizer=tokenizer)
         tuned_output = tuned_pipeline(messages, **generate_args)

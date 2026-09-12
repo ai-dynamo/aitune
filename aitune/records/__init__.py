@@ -1,13 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Frontend-neutral values shared by tuning frontends and publishers.
+"""Portable deployment records for tuning frontends and runtime adapters.
 
 The package deliberately depends only on the Python standard library. Frontends
 map native values into these records, and publishers consume them without either
 side importing the other.
 
-``BoundedTensorSpec`` records the executable tensor interface together with the
-concrete bounds and batch interpretation established by tuning.
+``DeploymentArtifact`` composes model files, bounded tensor specifications, and
+runtime settings. Adapters dispatch on ``model.format`` and ``runtime.name``;
+custom formats and runtimes use the same records without subclassing.
 
     >>> from pathlib import Path
     >>> inputs = (
@@ -35,11 +36,11 @@ concrete bounds and batch interpretation established by tuning.
     ...         batch_axis=0,
     ...     ),
     ... )
-    >>> artifact = ONNXArtifact(
-    ...     path=Path("encoder.onnx"),
-    ...     fingerprint="0" * 64,
+    >>> artifact = DeploymentArtifact(
+    ...     model=ModelFiles(format="onnx", path=Path("encoder.onnx")),
     ...     inputs=inputs,
     ...     outputs=outputs,
+    ...     runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
     ... )
     >>> artifact.input_names
     ('input_ids', 'attention_mask')
@@ -47,30 +48,14 @@ concrete bounds and batch interpretation established by tuning.
     8
 """
 
-from aitune.records.artifacts import (
-    Artifact,
-    ArtifactFile,
-    ArtifactIntegrityError,
-    ONNXArtifact,
-    ONNXExecutionProvider,
-    PT2Artifact,
-    TensorRTOptimizationProfile,
-    TensorRTPlanArtifact,
-    TensorRTProfileInput,
-)
+from aitune.records.artifact import DeploymentArtifact, ModelFiles, RuntimeConfig
 from aitune.records.dtypes import DType
 from aitune.records.shapes import BoundedTensorSpec
 
 __all__ = [
-    "Artifact",
-    "ArtifactFile",
-    "ArtifactIntegrityError",
     "BoundedTensorSpec",
     "DType",
-    "ONNXArtifact",
-    "ONNXExecutionProvider",
-    "PT2Artifact",
-    "TensorRTOptimizationProfile",
-    "TensorRTPlanArtifact",
-    "TensorRTProfileInput",
+    "DeploymentArtifact",
+    "ModelFiles",
+    "RuntimeConfig",
 ]

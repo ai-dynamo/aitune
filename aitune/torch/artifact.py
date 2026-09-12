@@ -90,7 +90,7 @@ def bounded_tensor_specs(
         if kind == "input":
             min_shape, _, max_shape = graph_spec.get_effective_input_shapes(locator, tensor_spec)
         else:
-            min_shape, max_shape = tensor_spec.min_shape, tensor_spec.max_shape
+            min_shape, max_shape = graph_spec.get_effective_output_shapes(tensor_spec)
         result.append(
             BoundedTensorSpec(
                 name=name,

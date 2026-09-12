@@ -3,13 +3,13 @@
 """Shared fields for backend-specific Triton model configurations."""
 
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from google.protobuf import text_format
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tritonclient.grpc import model_config_pb2
 
-from aitune.records import BoundedTensorSpec, DType
+from aitune.records import BoundedTensorSpec, DeploymentArtifact, DType
 
 
 class TritonDataType(str, Enum):
@@ -69,6 +69,19 @@ class _BaseModelConfig(BaseModel):
     outputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
     dynamic_batching: bool = False
 
+    @classmethod
+    def from_artifact(cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int) -> "_BaseModelConfig":
+        """Combine the tensor interface with runtime-specific artifact settings."""
+        batched = max_batch_size > 0
+        return cls(
+            name=name,
+            max_batch_size=max_batch_size,
+            inputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.inputs),
+            outputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.outputs),
+            dynamic_batching=batched,
+            **cls._artifact_options(artifact),
+        )
+
     @model_validator(mode="after")
     def _validate_batching(self) -> "_BaseModelConfig":
         """Require a batched model contract before enabling the scheduler."""
@@ -102,6 +115,11 @@ class _BaseModelConfig(BaseModel):
             content += "max_batch_size: 0\n"
         text_format.Parse(content, model_config_pb2.ModelConfig())
         return content
+
+    @classmethod
+    def _artifact_options(cls, artifact: DeploymentArtifact) -> dict[str, Any]:
+        """Read settings owned by the specialized Triton config."""
+        raise NotImplementedError
 
 
 def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConfig:

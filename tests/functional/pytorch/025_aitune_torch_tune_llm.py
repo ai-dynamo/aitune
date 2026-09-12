@@ -6,6 +6,7 @@
 # scope = "always"
 # allow_failure = true
 # use_gated_hf_token = true
+# additional_tags = ["mem/80g"]
 # [environment]
 # TQDM_DISABLE=1
 # ///

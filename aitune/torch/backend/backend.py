@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 import torch
 import torch.nn as nn
 
-from aitune.records import Artifact
+from aitune.records import DeploymentArtifact
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_backend_build
@@ -331,7 +331,7 @@ class Backend(ABC):
 
         return self._infer(*args, **kwargs)
 
-    def artifact(self) -> Artifact:
+    def artifact(self) -> DeploymentArtifact:
         """Return the deployable artifact produced by this backend.
 
         Returns:

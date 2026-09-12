@@ -74,6 +74,63 @@ Inference uses ONNX Runtime IOBinding. Inputs are bound from CUDA tensors, outpu
 
 Dynamic batch and spatial dimensions are derived from the recorded graph spec and passed into export. Provide representative input samples that cover the shapes you expect in production.
 
+## Export a Tuned Artifact
+
+After tuning the wrapped module from the quick start, retrieve its `DeploymentArtifact`:
+
+```python
+artifact = model.artifact()
+artifact.model.export_files("deployment/model.onnx")
+
+print(artifact.input_names)
+print(artifact.output_names)
+print(artifact.max_batch_size)
+print(artifact.model.format)       # onnx
+print(artifact.runtime.name)       # onnxruntime
+print(artifact.runtime.options)    # {"execution_provider": "cuda"}
+```
+
+`DeploymentArtifact` is one shared contract across file formats, runtimes, and deployment platforms. It composes:
+
+- `model`: a `ModelFiles` record with the format, main file path, additional relative paths, and format-specific metadata.
+- `inputs` / `outputs`: ordered bounded tensor specifications.
+- `runtime`: a `RuntimeConfig` record with the runtime name and its selected options.
+
+`artifact.model.path` identifies the main ONNX file in the cache. `artifact.model.additional_files` contains relative paths to required files, such as external weights. `artifact.model.files` lists all source paths for storage or upload tools. For the ONNX backend, `artifact.runtime.options["execution_provider"]` is `"cuda"` or `"tensorrt"`; these are portable strings, rather than Torch configuration objects.
+
+`artifact.model.export_files()` copies directly to the destination and creates missing directories. It preserves additional files' relative paths even when the main file is renamed. Existing files are overwritten, and a failed copy can leave an incomplete export. Keep the source files unchanged while copying; the deployment application handles staging, publication, and remote transfers.
+
+The input and output records describe executable tensor names, dtypes, shape bounds, and known batch axes. Batch-size discovery records the expanded input and output batch bounds in `GraphSpec`. The artifact uses the graph's effective output bounds, which also account for explicit input batch ranges. Other output dimensions retain their observed bounds, so representative samples are still needed for varying spatial or sequence dimensions. `max_batch_size` is `None` when the complete interface cannot be described with a shared batch axis supporting batch size one.
+
+`model.artifact()` constructs and validates the deployment record when called. Activation retains the finalized tensor interface, so the record can also be generated after deactivation without reopening a session. The method requires a tuned module backed by one compiled graph. It raises `RuntimeError` for multiple graphs, a backend without artifact support, or an ONNX interface that cannot be represented by the recorded metadata. Successful backend inference does not by itself guarantee an artifact is available.
+
+The API is also available after loading a checkpoint:
+
+```python
+ait.save(model, "model.ait")
+restored = ait.load(model, "model.ait")
+restored.artifact().model.export_files("deployment/restored.onnx")
+```
+
+### Custom Deployment Adapters
+
+The records depend only on the Python standard library. Custom consumers can import `aitune.records` without importing Torch, ONNX Runtime, or a deployment platform. An adapter selects its implementation using `artifact.model.format` and `artifact.runtime.name`, then translates the tensor interface and runtime options into its deployment configuration. It does not need a different artifact class for each model-store backend.
+
+Custom producers use the same records. For example, a runtime consuming ONNX files can describe its own execution settings:
+
+```python
+from aitune.records import DeploymentArtifact, RuntimeConfig
+
+custom_artifact = DeploymentArtifact(
+    model=artifact.model,
+    inputs=artifact.inputs,
+    outputs=artifact.outputs,
+    runtime=RuntimeConfig(name="my_runtime", options={"threads": 4}),
+)
+```
+
+Format and runtime identifiers are open strings, so custom backends can describe their own file formats and runtimes without an AITune registry or subclass. The producer and adapter agree on the identifiers, keys, and value types in `model.metadata` and `runtime.options`. Use portable data values for these mappings. Model-store names, versions, instance counts, and scheduling remain the deployment adapter's responsibility.
+
 ## When to Use
 
 Use ONNXRuntime when:

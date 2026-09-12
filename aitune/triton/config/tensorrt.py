@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Validated TensorRT plan configuration for Triton."""
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import field_validator
+from pydantic import Field
 from tritonclient.grpc import model_config_pb2
 
+from aitune.records import DeploymentArtifact
 from aitune.triton.config.common import _BaseModelConfig
 
 
@@ -14,23 +15,23 @@ class TensorRTModelConfig(_BaseModelConfig):
     """Triton configuration specialized for serialized TensorRT plans."""
 
     platform: Literal["tensorrt_plan"] = "tensorrt_plan"
-    optimization_profile_indices: tuple[int, ...]
+    optimization_profile_count: int = Field(gt=0, strict=True)
     cuda_graphs: bool = False
-
-    @field_validator("optimization_profile_indices")
-    @classmethod
-    def _validate_profiles(cls, indices: tuple[int, ...]) -> tuple[int, ...]:
-        """Require every TensorRT optimization profile in index order."""
-        if indices != tuple(range(len(indices))):
-            raise ValueError("TensorRT optimization profiles must contain every index in order")
-        return indices
 
     def to_protobuf(self) -> model_config_pb2.ModelConfig:
         """Add TensorRT optimization-profile selection to the common config."""
         config = super().to_protobuf()
         if self.cuda_graphs:
             config.optimization.cuda.graphs = True
-        if len(self.optimization_profile_indices) > 1:
+        if self.optimization_profile_count > 1:
             group = config.instance_group.add(kind=model_config_pb2.ModelInstanceGroup.KIND_GPU)
-            group.profile.extend(str(index) for index in self.optimization_profile_indices)
+            group.profile.extend(str(index) for index in range(self.optimization_profile_count))
         return config
+
+    @classmethod
+    def _artifact_options(cls, artifact: DeploymentArtifact) -> dict[str, Any]:
+        """Read plan profile metadata and TensorRT runtime settings."""
+        return {
+            "optimization_profile_count": artifact.model.metadata.get("optimization_profile_count"),
+            "cuda_graphs": artifact.runtime.options.get("use_cuda_graphs", False),
+        }

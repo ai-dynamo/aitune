@@ -134,11 +134,12 @@ dev = [
 functional-test = [
     "fire",
     "timm",
-    "diffusers<=0.34.0",
+    "diffusers>=0.35.0",
     "datasets>=3.3.2",
     "transformers>=4.54,<5",
     "sentencepiece>=0.2.0",
     "urllib3>=2.6.3", # sec
+    "kernels>=0.12",
     "sageattention",
     "flash-attn-4==4.0.0b27",
 ]
