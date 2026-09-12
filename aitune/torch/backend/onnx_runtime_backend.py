@@ -172,8 +172,8 @@ class ONNXRuntimeBackend(Backend):
         self._output_object = None
         self._graph_spec: GraphSpec | None = None
         self._samples: SampleStore | None = None
-        self._artifact: DeploymentArtifact | None = None
-        self._artifact_error: str | None = None
+        self._input_nodes: list[onnxruntime.NodeArg] | None = None
+        self._output_nodes: list[onnxruntime.NodeArg] | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -184,11 +184,11 @@ class ONNXRuntimeBackend(Backend):
         return f"{self.__class__.__name__}({self._config.describe()})"
 
     def artifact(self) -> DeploymentArtifact:
-        """Return the ONNX model and runtime contract captured during activation."""
-        if self._artifact is None:
-            detail = f": {self._artifact_error}" if self._artifact_error else ""
-            raise RuntimeError(f"ONNX artifact is not available until the backend has built or deployed{detail}")
-        return self._artifact
+        """Create the deployment record on request, including after deactivation."""
+        try:
+            return self._create_artifact()
+        except (OSError, RuntimeError, ValueError) as error:
+            raise RuntimeError(f"ONNX artifact is not available: {error}") from error
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Export the model to ONNX then load the session."""
@@ -244,26 +244,23 @@ class ONNXRuntimeBackend(Backend):
             except Exception:
                 self._deactivate()
                 raise
-        if self._artifact is None:
-            self._capture_artifact()
-
-    def _capture_artifact(self) -> None:
-        """Capture publication metadata without changing backend tuning success."""
-        try:
-            self._artifact = self._create_artifact()
-            self._artifact_error = None
-        except (OSError, RuntimeError, ValueError) as error:
-            self._artifact_error = str(error)
-            logger.info("ONNX model is not available for publication: %s", error)
+        # Keep the finalized interface when the session is released; validate it only on artifact().
+        self._input_nodes = self._session.get_inputs()
+        self._output_nodes = self._session.get_outputs()
 
     def _create_artifact(self) -> DeploymentArtifact:
-        """Create an artifact from the active session and recorded shape bounds."""
-        if self._onnx_model_artifact is None or self._session is None or self._graph_spec is None:
-            raise RuntimeError("ONNX artifact requires an exported model, active session, and graph specification")
+        """Create an artifact from the saved interface and recorded shape bounds."""
+        if (
+            self._onnx_model_artifact is None
+            or self._input_nodes is None
+            or self._output_nodes is None
+            or self._graph_spec is None
+        ):
+            raise RuntimeError("ONNX artifact requires a built or deployed backend with a recorded interface")
 
         model_path = self._onnx_model_artifact.path
-        input_nodes = self._session.get_inputs()
-        output_nodes = self._session.get_outputs()
+        input_nodes = self._input_nodes
+        output_nodes = self._output_nodes
         inputs = bounded_tensor_specs(
             self._graph_spec,
             "input",
