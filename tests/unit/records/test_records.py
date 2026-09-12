@@ -1,23 +1,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import hashlib
 from pathlib import Path
 
 import pytest
 
 from aitune.records import (
-    ArtifactFile,
     BoundedTensorSpec,
+    DeploymentArtifact,
     DType,
-    ONNXArtifact,
-    ONNXExecutionProvider,
-    PT2Artifact,
-    TensorRTOptimizationProfile,
-    TensorRTPlanArtifact,
-    TensorRTProfileInput,
+    ModelFiles,
+    RuntimeConfig,
 )
-from aitune.records.artifacts import ArtifactIntegrityError
 
 INPUTS = (
     BoundedTensorSpec(
@@ -37,25 +31,13 @@ OUTPUTS = (
         batch_axis=0,
     ),
 )
-PROFILES = (
-    TensorRTOptimizationProfile(
-        inputs=(
-            TensorRTProfileInput(
-                name="input_ids",
-                min_shape=(1, 8),
-                opt_shape=(4, 256),
-                max_shape=(8, 512),
-            ),
-        )
-    ),
-)
 
 
-def _write_artifact(tmp_path, contents=b"artifact-bytes") -> tuple[Path, str]:
+def _write_artifact(tmp_path, contents=b"artifact-bytes") -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "model.bin"
     path.write_bytes(contents)
-    return path, hashlib.sha256(contents).hexdigest()
+    return path
 
 
 def test_dtype_vocabulary_is_stable_and_frontend_neutral():
@@ -119,7 +101,7 @@ def test_bounded_tensor_spec_requires_a_valid_batch_axis(batch_axis):
 
 
 def test_artifact_preserves_tensor_order_and_shared_batch_limit(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path, b"onnx")
+    path = _write_artifact(tmp_path, b"onnx")
     second_input = BoundedTensorSpec(
         name="mask",
         dtype=DType.BOOL,
@@ -128,11 +110,11 @@ def test_artifact_preserves_tensor_order_and_shared_batch_limit(tmp_path):
         batch_axis=0,
     )
 
-    artifact = ONNXArtifact(
+    artifact = DeploymentArtifact(
         inputs=(*INPUTS, second_input),
         outputs=OUTPUTS,
-        path=path,
-        fingerprint=fingerprint,
+        model=ModelFiles(format="onnx", path=path),
+        runtime=RuntimeConfig(name="onnxruntime"),
     )
 
     assert artifact.input_names == ("input_ids", "mask")
@@ -141,7 +123,7 @@ def test_artifact_preserves_tensor_order_and_shared_batch_limit(tmp_path):
 
 
 def test_artifact_without_a_shared_batch_axis_has_no_batch_limit(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path)
+    path = _write_artifact(tmp_path)
     output = BoundedTensorSpec(
         name="score",
         dtype=DType.FLOAT32,
@@ -150,13 +132,18 @@ def test_artifact_without_a_shared_batch_axis_has_no_batch_limit(tmp_path):
         batch_axis=None,
     )
 
-    artifact = ONNXArtifact(inputs=INPUTS, outputs=(output,), path=path, fingerprint=fingerprint)
+    artifact = DeploymentArtifact(
+        inputs=INPUTS,
+        outputs=(output,),
+        model=ModelFiles(format="onnx", path=path),
+        runtime=RuntimeConfig(name="onnxruntime"),
+    )
 
     assert artifact.max_batch_size is None
 
 
 def test_artifact_without_batch_size_one_has_no_batch_limit(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path)
+    path = _write_artifact(tmp_path)
     input_spec = BoundedTensorSpec(
         name="input_ids",
         dtype=DType.INT64,
@@ -165,172 +152,138 @@ def test_artifact_without_batch_size_one_has_no_batch_limit(tmp_path):
         batch_axis=0,
     )
 
-    artifact = ONNXArtifact(inputs=(input_spec,), outputs=OUTPUTS, path=path, fingerprint=fingerprint)
+    artifact = DeploymentArtifact(
+        inputs=(input_spec,),
+        outputs=OUTPUTS,
+        model=ModelFiles(format="onnx", path=path),
+        runtime=RuntimeConfig(name="onnxruntime"),
+    )
 
     assert artifact.max_batch_size is None
 
 
 def test_artifact_rejects_duplicate_tensor_names(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path)
+    path = _write_artifact(tmp_path)
 
     with pytest.raises(ValueError, match="input tensor names must be unique"):
-        ONNXArtifact(inputs=(INPUTS[0], INPUTS[0]), outputs=OUTPUTS, path=path, fingerprint=fingerprint)
-
-
-def test_artifact_formats_preserve_runtime_requirements(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path)
-
-    plan = TensorRTPlanArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
-        path=path,
-        fingerprint=fingerprint,
-        optimization_profiles=PROFILES + PROFILES,
-        use_cuda_graphs=True,
-    )
-    onnx = ONNXArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
-        path=path,
-        fingerprint=fingerprint,
-        execution_provider=ONNXExecutionProvider.TENSORRT,
-    )
-    pt2 = PT2Artifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
-        path=path,
-        fingerprint=fingerprint,
-        structured_call=True,
-    )
-
-    assert (plan.optimization_profile_count, plan.use_cuda_graphs) == (2, True)
-    assert onnx.execution_provider is ONNXExecutionProvider.TENSORRT
-    assert pt2.structured_call is True
-
-
-def test_tensorrt_profile_rejects_an_optimum_outside_its_bounds():
-    with pytest.raises(ValueError, match="min <= opt <= max"):
-        TensorRTProfileInput(
-            name="input_ids",
-            min_shape=(1, 8),
-            opt_shape=(9, 256),
-            max_shape=(8, 512),
-        )
-
-
-def test_tensorrt_plan_requires_profiles_to_match_its_inputs(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path)
-    wrong_profile = TensorRTOptimizationProfile(
-        inputs=(
-            TensorRTProfileInput(
-                name="tokens",
-                min_shape=(1, 8),
-                opt_shape=(4, 256),
-                max_shape=(8, 512),
-            ),
-        )
-    )
-
-    with pytest.raises(ValueError, match="must match the artifact input order"):
-        TensorRTPlanArtifact(
-            inputs=INPUTS,
+        DeploymentArtifact(
+            inputs=(INPUTS[0], INPUTS[0]),
             outputs=OUTPUTS,
-            path=path,
-            fingerprint=fingerprint,
-            optimization_profiles=(wrong_profile,),
+            model=ModelFiles(format="onnx", path=path),
+            runtime=RuntimeConfig(name="onnxruntime"),
         )
 
 
-def test_artifact_refuses_changed_or_missing_bytes(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path, b"plan")
-    artifact = TensorRTPlanArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
-        path=path,
-        fingerprint=fingerprint,
-        optimization_profiles=PROFILES,
+@pytest.mark.parametrize(
+    ("model_format", "metadata", "runtime_name", "options"),
+    [
+        ("tensorrt_plan", {"optimization_profile_count": 2}, "tensorrt", {"use_cuda_graphs": True}),
+        ("onnx", {}, "onnxruntime", {"execution_provider": "tensorrt"}),
+        ("pt2", {"structured_call": True}, "aotinductor", {}),
+        ("custom_format", {"version": 1}, "custom_runtime", {"workers": 4}),
+    ],
+)
+def test_deployment_artifact_preserves_format_metadata_and_runtime_options(
+    tmp_path, model_format, metadata, runtime_name, options
+):
+    model = ModelFiles(format=model_format, path=_write_artifact(tmp_path), metadata=metadata)
+    runtime = RuntimeConfig(name=runtime_name, options=options)
+
+    artifact = DeploymentArtifact(model=model, inputs=INPUTS, outputs=OUTPUTS, runtime=runtime)
+
+    assert artifact.model.format == model_format
+    assert artifact.model.metadata == metadata
+    assert artifact.runtime.name == runtime_name
+    assert artifact.runtime.options == options
+
+
+def test_same_model_files_can_be_used_with_different_runtimes(tmp_path):
+    model = ModelFiles(format="onnx", path=_write_artifact(tmp_path))
+    runtimes = (
+        RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+        RuntimeConfig(name="custom_runtime", options={"threads": 2}),
     )
-    artifact.verify()
+    artifacts = [
+        DeploymentArtifact(model=model, inputs=INPUTS, outputs=OUTPUTS, runtime=runtime) for runtime in runtimes
+    ]
 
-    path.write_bytes(b"changed")
-    with pytest.raises(ArtifactIntegrityError, match="has changed since it was built"):
-        artifact.verify()
-
-    path.unlink()
-    with pytest.raises(ArtifactIntegrityError, match="cache may have been cleared"):
-        artifact.verify()
+    assert all(artifact.model is model for artifact in artifacts)
+    assert tuple(artifact.runtime.name for artifact in artifacts) == ("onnxruntime", "custom_runtime")
 
 
-def test_export_file_copies_only_verified_bytes(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path / "cache", b"plan")
-    artifact = TensorRTPlanArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
-        path=path,
-        fingerprint=fingerprint,
-        optimization_profiles=PROFILES,
-    )
+def test_export_files_raises_for_missing_source(tmp_path):
+    model_files = ModelFiles(format="tensorrt_plan", path=tmp_path / "missing.plan")
+
+    with pytest.raises(FileNotFoundError):
+        model_files.export_files(tmp_path / "repository" / "model.plan")
+
+
+def test_export_files_copies_current_bytes(tmp_path):
+    path = _write_artifact(tmp_path / "cache", b"plan")
+    model_files = ModelFiles(format="tensorrt_plan", path=path)
     destination = tmp_path / "repository" / "model.plan"
 
-    assert artifact.export_file(destination).read_bytes() == b"plan"
+    assert model_files.export_files(destination).read_bytes() == b"plan"
 
     path.write_bytes(b"changed")
-    with pytest.raises(ArtifactIntegrityError):
-        artifact.export_file(destination)
-    assert destination.read_bytes() == b"plan"
+    assert model_files.export_files(destination).read_bytes() == b"changed"
 
 
-def test_artifact_exports_verified_companion_files(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path / "cache", b"onnx")
+@pytest.mark.parametrize("destination_directory", ["repository", "cache"])
+@pytest.mark.parametrize("destination_name", ["model.onnx", "model.bin"])
+def test_artifact_exports_additional_files(tmp_path, destination_directory, destination_name):
+    path = _write_artifact(tmp_path / "cache", b"onnx")
     weights = path.parent / "weights" / "model.data"
     weights.parent.mkdir()
     weights.write_bytes(b"weights")
-    weights_fingerprint = hashlib.sha256(b"weights").hexdigest()
-    artifact = ONNXArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
+    model_files = ModelFiles(
+        format="onnx",
         path=path,
-        fingerprint=fingerprint,
-        companions=(ArtifactFile(Path("weights/model.data"), weights_fingerprint),),
+        additional_files=(Path("weights/model.data"),),
     )
 
-    destination = tmp_path / "repository" / "model.onnx"
-    artifact.export_file(destination)
+    assert model_files.files == (path, weights)
+
+    destination = tmp_path / destination_directory / destination_name
+    assert model_files.export_files(destination) == destination
 
     assert destination.read_bytes() == b"onnx"
     assert (destination.parent / "weights" / "model.data").read_bytes() == b"weights"
 
 
-def test_changed_companion_does_not_replace_existing_export(tmp_path):
-    path, fingerprint = _write_artifact(tmp_path / "cache", b"new-model")
+def test_export_files_copies_current_additional_file_bytes(tmp_path):
+    path = _write_artifact(tmp_path / "cache", b"new-model")
     weights = path.parent / "model.data"
     weights.write_bytes(b"expected-weights")
-    artifact = ONNXArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
+    model_files = ModelFiles(
+        format="onnx",
         path=path,
-        fingerprint=fingerprint,
-        companions=(ArtifactFile(Path("model.data"), hashlib.sha256(b"expected-weights").hexdigest()),),
+        additional_files=(Path("model.data"),),
     )
     destination = tmp_path / "repository" / "model.onnx"
     destination.parent.mkdir()
     destination.write_bytes(b"old-model")
     weights.write_bytes(b"changed-weights")
 
-    with pytest.raises(ArtifactIntegrityError):
-        artifact.export_file(destination)
+    model_files.export_files(destination)
 
-    assert destination.read_bytes() == b"old-model"
+    assert destination.read_bytes() == b"new-model"
+    assert (destination.parent / "model.data").read_bytes() == b"changed-weights"
 
 
 @pytest.mark.parametrize("relative_path", [Path(), Path("../model.data"), Path("/model.data")])
-def test_artifact_companion_must_stay_inside_artifact_directory(relative_path):
+def test_artifact_additional_file_must_stay_inside_artifact_directory(relative_path):
     with pytest.raises(ValueError, match="must stay inside"):
-        ArtifactFile(relative_path, "0" * 64)
+        ModelFiles(format="onnx", path=Path("model.onnx"), additional_files=(relative_path,))
 
 
-def test_artifact_requires_a_sha256_fingerprint(tmp_path):
-    path, _ = _write_artifact(tmp_path)
-
-    with pytest.raises(ValueError, match="lowercase SHA-256"):
-        ONNXArtifact(inputs=INPUTS, outputs=OUTPUTS, path=path, fingerprint="not-a-digest")
+@pytest.mark.parametrize(
+    ("additional_files", "message"),
+    [
+        ((Path("weights.data"), Path("weights.data")), "must be unique"),
+        ((Path("model.onnx"),), "cannot also be the model's main file"),
+    ],
+)
+def test_model_files_reject_conflicting_paths(additional_files, message):
+    with pytest.raises(ValueError, match=message):
+        ModelFiles(format="onnx", path=Path("model.onnx"), additional_files=additional_files)

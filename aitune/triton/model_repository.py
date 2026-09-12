@@ -8,16 +8,14 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from pydantic import ValidationError
-
 from aitune.exceptions import AITuneError, AITuneUserInputError
-from aitune.records import Artifact, ONNXArtifact, PT2Artifact, TensorRTPlanArtifact
+from aitune.records import DeploymentArtifact
 from aitune.triton.config import (
     ONNXRuntimeModelConfig,
     TensorRTModelConfig,
     TorchAOTIModelConfig,
-    tensor_config,
 )
+from aitune.triton.config.common import _BaseModelConfig
 from aitune.triton.model_analyzer import _write_model_analyzer_configs
 
 logger = logging.getLogger(__name__)
@@ -31,33 +29,41 @@ __all__ = [
 ]
 
 _CONFIG_FILE_NAME = "config.pbtxt"
+_MODEL_CONFIGS: dict[str, type[_BaseModelConfig]] = {
+    "tensorrt": TensorRTModelConfig,
+    "onnxruntime": ONNXRuntimeModelConfig,
+    "aotinductor": TorchAOTIModelConfig,
+}
 
 
 class PublicationError(AITuneError):
     """Raised when an artifact cannot be published as a Triton model."""
 
 
-def _artifact_layout(artifact: Artifact) -> tuple[str, bool]:
+def _artifact_layout(artifact: DeploymentArtifact) -> tuple[str, bool]:
     """Return Triton's file name and multi-file behavior."""
-    if isinstance(artifact, TensorRTPlanArtifact):
+    format_runtime = (artifact.model.format, artifact.runtime.name)
+    if format_runtime == ("tensorrt_plan", "tensorrt"):
         return "model.plan", False
-    if isinstance(artifact, ONNXArtifact):
+    if format_runtime == ("onnx", "onnxruntime"):
         return "model.onnx", True
-    if isinstance(artifact, PT2Artifact):
+    if format_runtime == ("pt2", "aotinductor"):
         return "model.pt2", False
-    supported = "ONNXArtifact, PT2Artifact, and TensorRTPlanArtifact"
-    raise PublicationError(f"Triton publication supports {supported}, got {type(artifact).__name__}")
+    raise PublicationError(
+        f"Unsupported Triton model format/runtime pair: {format_runtime!r}. "
+        "Supported pairs are tensorrt_plan/tensorrt, onnx/onnxruntime, and pt2/aotinductor"
+    )
 
 
-def _validate_artifact_files(artifact: Artifact, *, multi_file: bool) -> None:
-    """Reject companion files when Triton's format has no defined layout."""
-    if artifact.companions and not multi_file:
+def _validate_artifact_files(artifact: DeploymentArtifact, *, multi_file: bool) -> None:
+    """Reject additional files when Triton's format has no defined layout."""
+    if artifact.model.additional_files and not multi_file:
         raise PublicationError(
-            f"{type(artifact).__name__} is a single-file Triton format, but the artifact has companion files"
+            f"{artifact.model.format!r} is a single-file Triton format, but the artifact has additional files"
         )
 
 
-def _batch_size(artifact: Artifact, dynamic_batching: bool, requested: int | None) -> int:
+def _batch_size(artifact: DeploymentArtifact, dynamic_batching: bool, requested: int | None) -> int:
     """Resolve and validate the Triton deployment batch limit."""
     if requested is None and not dynamic_batching:
         return 0
@@ -84,55 +90,27 @@ def _batch_size(artifact: Artifact, dynamic_batching: bool, requested: int | Non
 
 
 def _model_config(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     *,
     model_name: str,
     dynamic_batching: bool,
     max_batch_size: int | None,
-) -> TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig:
+) -> _BaseModelConfig:
     """Build a validated Triton configuration from an artifact."""
     if not artifact.inputs or not artifact.outputs:
         raise PublicationError("Triton publication requires at least one input and one output")
     batch_size = _batch_size(artifact, dynamic_batching, max_batch_size)
-    batched = batch_size > 0
+    config_type = _MODEL_CONFIGS.get(artifact.runtime.name)
+    if config_type is None:
+        raise PublicationError(f"Unsupported Triton runtime: {artifact.runtime.name!r}")
     try:
-        inputs = tuple(tensor_config(tensor, batched=batched) for tensor in artifact.inputs)
-        outputs = tuple(tensor_config(tensor, batched=batched) for tensor in artifact.outputs)
-        if isinstance(artifact, TensorRTPlanArtifact):
-            return TensorRTModelConfig(
-                name=model_name,
-                max_batch_size=batch_size,
-                inputs=inputs,
-                outputs=outputs,
-                dynamic_batching=dynamic_batching,
-                optimization_profile_indices=tuple(range(artifact.optimization_profile_count)),
-                cuda_graphs=artifact.use_cuda_graphs,
-            )
-        if isinstance(artifact, ONNXArtifact):
-            return ONNXRuntimeModelConfig(
-                name=model_name,
-                max_batch_size=batch_size,
-                inputs=inputs,
-                outputs=outputs,
-                dynamic_batching=dynamic_batching,
-                execution_provider=artifact.execution_provider,
-            )
-        if isinstance(artifact, PT2Artifact):
-            return TorchAOTIModelConfig(
-                name=model_name,
-                max_batch_size=batch_size,
-                inputs=inputs,
-                outputs=outputs,
-                dynamic_batching=dynamic_batching,
-                structured_call=artifact.structured_call,
-            )
-    except ValidationError as error:
-        raise PublicationError(f"Invalid Triton configuration for {type(artifact).__name__}: {error}") from error
-    raise AssertionError(f"Unhandled Triton artifact: {type(artifact).__name__}")
+        return config_type.from_artifact(artifact, name=model_name, max_batch_size=batch_size)
+    except (KeyError, TypeError, ValueError) as error:
+        raise PublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
 
 
 def publish(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     /,
     *,
     path: str | os.PathLike[str],
@@ -143,13 +121,19 @@ def publish(
 ) -> Path:
     """Publish one tuned artifact into a new Triton model repository entry.
 
-    The operation never replaces an existing model. Files are verified and staged
+    The operation never replaces an existing model. Files are copied and staged
     before the completed model directory is moved into the repository. Model Analyzer
     configs are generated automatically under ``model_analyzer/fast.yaml`` and
     ``model_analyzer/manual.yaml``, with input shapes derived from the artifact.
 
+    Supported model format/runtime pairs are ``onnx``/``onnxruntime``,
+    ``tensorrt_plan``/``tensorrt``, and ``pt2``/``aotinductor``. ONNX provider
+    selection comes from ``runtime.options["execution_provider"]``. TensorRT uses
+    ``model.metadata["optimization_profile_count"]`` and the optional runtime
+    setting ``use_cuda_graphs``. PT2 uses ``model.metadata["structured_call"]``.
+
     Args:
-        artifact: Tuned artifact to publish.
+        artifact: Deployment record containing model files, tensor specs, and runtime settings.
         path: Triton model repository root.
         model_name: New model directory name.
         model_version: Positive Triton model version.
@@ -197,9 +181,9 @@ def publish(
         version_directory.mkdir(parents=True)
         (staged_model / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
         destination = version_directory / file_name
-        if artifact.companions:
+        if artifact.model.additional_files:
             destination = destination / file_name
-        artifact.export_file(destination)
+        artifact.model.export_files(destination)
         _write_model_analyzer_configs(
             artifact,
             config=config.to_protobuf(),

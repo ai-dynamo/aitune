@@ -54,13 +54,14 @@ exercise the other configurations:
 
 ## Tune on multiple GPUs
 
-Launch one process per GPU and add `--multi-gpu`:
+Launch one process per GPU. The example detects the `torchrun` world size and enables Transformers tensor
+parallelism automatically:
 
 ```bash
 uv run torchrun --standalone --nproc-per-node=4 \
   --log-dir logs --tee 3 --local-ranks-filter 0 \
   --module llm.tune \
-  --multi-gpu --model_id Qwen/Qwen3-0.6B --cache dynamic --max-new-tokens 32
+  --model_id Qwen/Qwen3-0.6B --cache dynamic --max-new-tokens 32
 ```
 
 The application initializes the NCCL process group and Transformers shards the model with its native tensor-parallel
@@ -83,7 +84,6 @@ keeps application logging unchanged and preserves per-rank diagnostics for inves
 - `--model_id`: Hugging Face model name or path (default: `Qwen/Qwen3-0.6B`).
 - `--cache`: `static`, `dynamic`, or `no_cache` (default: `static`).
 - `--max-new-tokens`: Number of tokens generated during comparison and tuning (default: `512`).
-- `--multi-gpu`: Enable Transformers native tensor parallelism.
 
 ## Benchmark on one GPU
 
