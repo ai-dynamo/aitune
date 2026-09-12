@@ -271,8 +271,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._trt_optimization_profiles_artifact: ArtifactPath | None = None
         self._output_object = None
         self._graph_spec = None
-        self._artifact: DeploymentArtifact | None = None
-        self._artifact_error: str | None = None
 
         # runtime variables
         self._output_allocator = None
@@ -292,11 +290,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
         return f"{self.__class__.__name__}({self._config.describe()})"
 
     def artifact(self) -> DeploymentArtifact:
-        """Return the TensorRT plan and runtime contract captured during activation."""
-        if self._artifact is None:
-            detail = f": {self._artifact_error}" if self._artifact_error else ""
-            raise RuntimeError(f"TensorRT artifact is not available until the backend has built or deployed{detail}")
-        return self._artifact
+        """Create the deployment record on request, including after deactivation."""
+        try:
+            return self._create_artifact()
+        except (OSError, RuntimeError, ValueError) as error:
+            raise RuntimeError(f"TensorRT artifact is not available: {error}") from error
 
     def _timing_cache_path(self) -> Path | None:
         """Return a timing cache path that is safe for this process."""
@@ -763,8 +761,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
             max_graphs=self._config.max_cuda_graphs,
             policy=self._config.cuda_graph_cache_policy,
         )
-        if self._artifact is None:
-            self._capture_artifact()
 
     def _create_output_allocator(self, context):
         """Attach an independent output allocator to an execution context."""
@@ -780,24 +776,15 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         return allocator
 
-    def _capture_artifact(self) -> None:
-        """Capture publication metadata without changing backend tuning success."""
-        try:
-            self._artifact = self._create_artifact()
-            self._artifact_error = None
-        except (OSError, RuntimeError, ValueError) as error:
-            self._artifact_error = str(error)
-            logger.info("TensorRT plan is not available for publication: %s", error)
-
     def _create_artifact(self) -> DeploymentArtifact:
-        """Create an artifact from the active engine and recorded shape bounds."""
+        """Create an artifact from the saved engine interface and recorded bounds."""
         if (
             self._engine_artifact is None
             or self._graph_spec is None
             or self._input_names is None
             or self._output_names is None
         ):
-            raise RuntimeError("TensorRT artifact requires an engine, active runtime, and graph specification")
+            raise RuntimeError("TensorRT artifact requires a built or deployed backend with a recorded interface")
 
         profiles = self._artifact_profiles()
         inputs = bounded_tensor_specs(self._graph_spec, "input", recorded_names=self._input_names)
@@ -890,11 +877,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._base_context = None
             self._base_output_allocator = None
 
-            # Safely delete attributes if they exist
+            # Retain tensor names and profiles for artifact generation after deactivation.
             for attr_name in [
                 "_io_tensors",
-                "_input_names",
-                "_output_names",
                 "_engine_info",
                 "_cuda_stream",
                 "_start_time",

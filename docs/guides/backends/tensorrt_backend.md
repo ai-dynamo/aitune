@@ -79,8 +79,9 @@ for deployment adapters to interpret.
 
 The exported file is the TensorRT plan. The profile metadata is embedded in the deployment record;
 AITune's profile sidecar remains part of its checkpoint, and is not needed to execute the exported plan.
-`model.artifact()` also works after restoring and deploying a checkpoint. Artifact capture requires
-the finalized engine interface and available profile metadata.
+`model.artifact()` constructs and validates the deployment record when called. The backend retains
+the finalized tensor names and profile metadata after deactivation, so generation does not require
+reloading the engine. The method also works after restoring and deploying a checkpoint.
 
 ## Configuration Options
 
