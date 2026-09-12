@@ -120,17 +120,75 @@ def test_make_batch_normalizes_call_and_resizes_inputs():
     assert kwargs["mask"].shape == (10, 5)
 
 
-def test_update_max_batch_size_normalizes_call_and_updates_input_spec():
+@pytest.mark.parametrize("max_batch_size", [2, 8])
+def test_update_max_batch_size_updates_input_and_output_specs(max_batch_size):
+    graph_spec = _batching_graph_spec()
+    graph_spec.output_spec = _output_metadata((2, 7), (4, 9), (5,), batch_size=2)
+    graph_spec.output_spec.update_shapes_seen(_output_metadata((3, 11), (6, 9), (5,), batch_size=3))
+
+    graph_spec.update_max_batch_size(max_batch_size)
+
+    expected_max = max(3, max_batch_size)
+    tensor_specs = {locator.path: tensor_spec for locator, tensor_spec in graph_spec.input_spec.tensor_data}
+    assert tensor_specs["x"].min_shape == [2, 3]
+    assert tensor_specs["x"].max_shape == [expected_max, 3]
+    assert tensor_specs["mask"].min_shape == [4, 5]
+    assert tensor_specs["mask"].max_shape == [2 * expected_max, 5]
+    output_specs = graph_spec.output_spec.tensor_specs
+    assert output_specs[0].min_shape == [2, 7]
+    assert output_specs[0].max_shape == [expected_max, 11]
+    assert output_specs[1].min_shape == [4, 9]
+    assert output_specs[1].max_shape == [2 * expected_max, 9]
+    assert output_specs[2].min_shape == output_specs[2].max_shape == [5]
+
+
+def test_update_max_batch_size_preserves_outputs_without_known_batch_axes():
     graph_spec = _batching_graph_spec()
 
-    graph_spec.update_max_batch_size(
-        ((), {"mask": torch.randn(2, 5), "x": torch.randn(1, 3)}),
-        max_batch_size=8,
-    )
+    graph_spec.update_max_batch_size(8)
 
-    tensor_specs = {locator.path: tensor_spec for locator, tensor_spec in graph_spec.input_spec.tensor_data}
-    assert tensor_specs["x"].max_shape == [8, 3]
-    assert tensor_specs["mask"].max_shape == [16, 5]
+    assert graph_spec.output_spec.tensor_specs[0].min_shape == [2, 7]
+    assert graph_spec.output_spec.tensor_specs[0].max_shape == [2, 7]
+
+
+@pytest.mark.parametrize("second_input_max, expected_max", [(4, 4), (16, 8)])
+def test_effective_output_shapes_intersect_explicit_and_scaled_input_batch_ranges(second_input_max, expected_max):
+    graph_spec = _graph_spec(batch_size=1)
+    graph_spec.output_spec = _output_metadata((2, 7), (5,), batch_size=1)
+    graph_spec.update_shapes_seen(
+        _input_metadata((4, 3), (8, 5), batch_size=4),
+        _output_metadata((8, 11), (5,), batch_size=4),
+    )
+    graph_spec.dynamic_shapes = {"x": (BatchDim("batch", min=2, max=8), 3)}
+    graph_spec.input_spec.tensor_specs[1].max_shape[0] = 2 * second_input_max
+    batched, static = graph_spec.output_spec.tensor_specs
+
+    assert graph_spec.get_effective_output_shapes(batched) == ([4, 7], [2 * expected_max, 11])
+    assert graph_spec.get_effective_output_shapes(static) == ([5], [5])
+    assert batched.min_shape == [2, 7]
+    assert batched.max_shape == [8, 11]
+
+
+def test_effective_output_shapes_reject_disjoint_input_batch_ranges():
+    graph_spec = _batching_graph_spec()
+    graph_spec.dynamic_shapes = {"x": (BatchDim("batch", min=8, max=16), 3)}
+
+    with pytest.raises(ValueError, match="no shared logical batch range"):
+        graph_spec.get_effective_output_shapes(graph_spec.output_spec.tensor_specs[0])
+
+
+def test_effective_output_shapes_preserve_observations_without_logical_input_batch_axes():
+    graph_spec = _graph_spec(batch_size=1)
+    graph_spec.update_shapes_seen(
+        _input_metadata((4, 3), (8, 5), batch_size=4),
+        _output_metadata((4, 7), batch_size=4),
+    )
+    graph_spec.dynamic_shapes = {
+        "x": (DynamicDim("length", min=1, max=16), 3),
+        "y": (DynamicDim("other_length", min=1, max=32), 5),
+    }
+
+    assert graph_spec.get_effective_output_shapes(graph_spec.output_spec.tensor_specs[0]) == ([1, 7], [4, 7])
 
 
 def test_get_max_batch_size_returns_largest_local_batch_axis():

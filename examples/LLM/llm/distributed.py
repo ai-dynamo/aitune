@@ -8,13 +8,14 @@ import torch
 import torch.distributed as dist
 
 
-def initialize(enabled: bool) -> None:
-    """Initialize one NCCL rank per GPU when multi-GPU execution is enabled."""
-    if not enabled:
-        return
+def initialize() -> bool:
+    """Initialize NCCL when ``torchrun`` launches more than one process."""
+    if int(os.environ.get("WORLD_SIZE", "1")) <= 1:
+        return False
     local_rank = int(os.environ["LOCAL_RANK"])
     torch.cuda.set_device(local_rank)
     dist.init_process_group("nccl")
+    return True
 
 
 def is_rank_zero() -> bool:
