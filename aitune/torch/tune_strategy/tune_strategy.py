@@ -67,7 +67,12 @@ class TuneStrategy(ABC):
         cache_dir: Path,
     ):
         """Performs tune dry run."""
+        self._configure_for_module(module)
         self._describe(module, name, graph_spec, samples, device, cache_dir, dry_run=True)
+
+    def _configure_for_module(self, module: nn.Module) -> None:
+        """Resolve any module-dependent defaults before reporting or tuning."""
+        return
 
     def describe(self) -> str:
         """Describes what strategy is doing."""
@@ -83,6 +88,7 @@ class TuneStrategy(ABC):
         cache_dir: Path,
     ) -> Backend:
         """Tune a torch module with the provided graph specification and samples."""
+        self._configure_for_module(module)
         self.backend_results = []
         coordinator.verify_equal(
             (name, graph_spec.name, self.to_json_dict()),

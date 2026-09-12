@@ -44,11 +44,13 @@ except (ImportError, RuntimeError, OSError):
             enabled_precisions: Enabled TensorRT precisions. Defaults to None.
             use_explicit_typing: Whether to use explicit typing. Defaults to True.
             workspace_size: TensorRT workspace size. Defaults to 0.
+            use_distributed_mode_trace: Enable distributed tracing. Defaults to False.
         """
 
         enabled_precisions: set[torch.dtype] | None = None
         use_explicit_typing: bool = True
         workspace_size: int = 0
+        use_distributed_mode_trace: bool = False
 
 
 logger = getLogger(__name__)

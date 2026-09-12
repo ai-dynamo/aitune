@@ -3,16 +3,16 @@
 """Tests for the JIT Config contract."""
 
 from aitune.torch.jit.config import Config
-from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
+from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
 from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
 
 
-def test_resolve_strategy_default_is_first_wins():
+def test_resolve_strategy_default_is_max_throughput():
     cfg = Config()
 
     strategy = cfg.resolve_strategy()
 
-    assert isinstance(strategy, FirstWinsStrategy)
+    assert isinstance(strategy, MaxThroughputStrategy)
     assert len(strategy._backends) > 0  # has the built-in default backends
 
 

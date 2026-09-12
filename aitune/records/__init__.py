@@ -37,7 +37,6 @@ concrete bounds and batch interpretation established by tuning.
     ... )
     >>> artifact = ONNXArtifact(
     ...     path=Path("encoder.onnx"),
-    ...     fingerprint="0" * 64,
     ...     inputs=inputs,
     ...     outputs=outputs,
     ... )
@@ -49,8 +48,6 @@ concrete bounds and batch interpretation established by tuning.
 
 from aitune.records.artifact import (
     Artifact,
-    ArtifactFile,
-    ArtifactIntegrityError,
     ONNXArtifact,
     ONNXExecutionProvider,
     PT2Artifact,
@@ -61,8 +58,6 @@ from aitune.records.shapes import BoundedTensorSpec
 
 __all__ = [
     "Artifact",
-    "ArtifactFile",
-    "ArtifactIntegrityError",
     "BoundedTensorSpec",
     "DType",
     "ONNXArtifact",

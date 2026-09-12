@@ -288,26 +288,17 @@ def test_timer_name_preserved(caplog):
     assert sum(1 for msg in messages if timer_name in msg) >= 2  # checkpoint, complete
 
 
-def test_checkpoint_lap_time_calculation():
+def test_checkpoint_lap_time_calculation(monkeypatch):
     """Test that checkpoint lap times are calculated correctly."""
+    times = iter([1.0, 1.02, 1.05, 1.06, 1.07])
+    monkeypatch.setattr(time, "perf_counter", lambda: next(times))
+
     with Timer("test") as timer:
-        time.sleep(0.02)
         lap1 = timer.checkpoint("cp1")
-
-        time.sleep(0.03)
         lap2 = timer.checkpoint("cp2")
-
-        time.sleep(0.01)
         lap3 = timer.checkpoint("cp3")
 
-    # First lap should be ~0.02s
-    assert 0.015 < lap1 < 0.04
-
-    # Second lap should be ~0.03s (since last checkpoint)
-    assert 0.025 < lap2 < 0.05
-
-    # Third lap should be ~0.01s (since last checkpoint)
-    assert 0.005 < lap3 < 0.03
+    assert [lap1, lap2, lap3] == pytest.approx([0.02, 0.03, 0.01])
 
 
 def test_checkpoint_total_time():
