@@ -16,6 +16,8 @@ title: "Changelog"
 - feat: add `ModuleFunctionKernelProfiler` API for attributing CUDA kernels to module-scoped `torch.nn.functional` calls
 - feat: introduce explicit backend artifacts declaration
 - feat: forward-signature preservation for bound, decorated, and wrapped `partial`/`partialmethod` callables
+- feat: default to `MaxThroughputStrategy` for both JIT and AOT tuning, with mode-specific backend candidates
+- feat: adapt default backend candidates to tuning mode and module topology, with TorchInductor AOT/JIT defaults for distributed JIT tuning and distributed tracing for Torch-TensorRT AOT
 - fix: reject backends that do not reproduce eager post-call input mutations such as cache population and index updates
 - fix: reduce memory usage in multi-module tuning by storing recorded samples on disk and loading them lazily during backend warmup
 - fix: preserve nested input structure for static and dynamic Torch Export and ONNX Dynamo shapes

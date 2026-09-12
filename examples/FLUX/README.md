@@ -55,8 +55,9 @@ The command:
 3. Profiles the configured backends and selects the highest-throughput backend for each module.
 4. Saves the tuned pipeline as an AITune checkpoint.
 
-The transformer compares Torch-TensorRT and TorchInductor. Other tunable modules compare TensorRT and
-TorchInductor backends.
+The transformer compares Torch-TensorRT and TorchInductor with model-specific settings. Other tunable modules use
+the default AOT backend candidates. Maximum-batch-size discovery is disabled for all modules to match this example's
+single-image inference and serving workload.
 
 ### Optional transformer quantization
 
@@ -146,7 +147,7 @@ endpoint. AITune's `DynamoWorker` detects the initialized process group and coor
 follower ranks so all GPUs participate.
 
 Use the same visible GPU count for tuning and serving. The script is a functional deployment example, not a permanent
-server. It processes one request at a time, matching the batch-size-1 profiles produced during tuning.
+server. It processes one request at a time, matching the single-image workload recorded during tuning.
 
 ## Hardware metrics
 

@@ -9,7 +9,6 @@ from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp, relocated_
 from transformers import AutoTokenizer, EsmForMaskedLM
 
 import aitune.torch as ait
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorJitBackend
 
 DEVICE = torch.device("cuda")
 MODEL_NAME = "facebook/esm2_t33_650M_UR50D"
@@ -58,17 +57,8 @@ def tune(
         modules_info = ait.inspect(model, [input_data], number_of_iterations=1, warmup_iterations=1)
         modules_info.describe()
 
-        strategy = ait.FirstWinsStrategy(
-            backends=[
-                TensorRTBackend(),
-                TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
-                TorchInductorJitBackend(),
-            ]
-        )
-        strategy.enable_find_max_batch_size(enable=False)
-
         logger.info("Wrapping modules...")
-        model = ait.wrap(model, modules_info.get_modules(), strategy=strategy)
+        model = ait.wrap(model, modules_info.get_modules())
 
         logger.info("Tuning model...")
         ait.tune(model, [input_data], batch_sizes=batch_sizes)
