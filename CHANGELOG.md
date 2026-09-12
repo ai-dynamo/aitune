@@ -5,13 +5,15 @@ title: "Changelog"
 ---
 # Changelog
 
+## 0.7.0 (unreleased)
+- feat: support Transformers `StaticCache` inputs with TorchInductor AOT, Torch-TensorRT AOT, ONNX Runtime, and TensorRT
+
 ## 0.6.0 (unreleased)
 
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
 - feat: serve application-managed multi-GPU models through one collective Dynamo worker
 - feat: default to `MaxThroughputStrategy` for both JIT and AOT tuning, with mode-specific backend candidates
 - feat: adapt default backend candidates to tuning mode and module topology, with TorchInductor AOT/JIT defaults for distributed JIT tuning and distributed tracing for Torch-TensorRT AOT
-- feat: support Transformers `StaticCache` inputs with TorchInductor AOT, Torch-TensorRT AOT, ONNX Runtime, and TensorRT
 - feat: cache TensorRT CUDA graphs per static profile with bounded aged LFU, optional LRU, and fallback for dynamic shapes or capture failure
 - feat: extend `enable_performance_validation` with `ENABLED`, `DIAGNOSTIC`, and `DISABLED` modes, including diagnostic-only eager comparison and positional boolean compatibility
 - feat: add a WAN 2.1 context-parallel tuning and Dynamo serving example
