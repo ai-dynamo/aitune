@@ -224,7 +224,7 @@ def test_tensorrt_backend_build(mock_tensorrt_components, tmp_path):
 
 
 @requires_cuda
-def test_tensorrt_backend_build_exposes_the_final_engine_interface(mock_tensorrt_components, tmp_path):
+def test_tensorrt_artifact_after_deactivation_exposes_the_final_engine_interface(mock_tensorrt_components, tmp_path):
     _, _, mock_runtime = mock_tensorrt_components
     runtime = mock_runtime.return_value
     context, bindings, _, _, engine_info = runtime.create_execution_context.return_value
@@ -257,6 +257,7 @@ def test_tensorrt_backend_build_exposes_the_final_engine_interface(mock_tensorrt
         cache_dir=tmp_path,
     )
 
+    backend.deactivate()
     artifact = backend.artifact()
 
     assert isinstance(artifact, DeploymentArtifact)
@@ -349,7 +350,7 @@ def test_artifact_profiles_require_engine_input_names():
 def test_artifact_metadata_failure_does_not_fail_tensorrt_build(mock_tensorrt_components, mocker, tmp_path):
     model = ToyTorchModel().to("cuda").eval()
     backend = TensorRTBackend()
-    mocker.patch.object(backend, "_create_artifact", side_effect=ValueError("unsupported interface"))
+    create_artifact = mocker.patch.object(backend, "_create_artifact", side_effect=ValueError("unsupported interface"))
 
     backend.build(
         model,
@@ -360,8 +361,13 @@ def test_artifact_metadata_failure_does_not_fail_tensorrt_build(mock_tensorrt_co
     )
 
     assert backend.is_active
+    create_artifact.assert_not_called()
+    backend.deactivate()
+    backend.activate()
+    create_artifact.assert_not_called()
     with pytest.raises(RuntimeError, match="unsupported interface"):
         backend.artifact()
+    create_artifact.assert_called_once()
 
 
 @requires_cuda
@@ -594,8 +600,8 @@ def test_tensorrt_backend_deactivate(tmp_path):
     backend.deactivate()
     assert not hasattr(backend, "_context")
     assert not hasattr(backend, "_io_tensors")
-    assert not hasattr(backend, "_input_names")
-    assert not hasattr(backend, "_output_names")
+    assert backend._input_names is not None
+    assert backend._output_names is not None
     assert not hasattr(backend, "_engine_info")
     assert not hasattr(backend, "_cuda_stream")
     assert not hasattr(backend, "_start_time")

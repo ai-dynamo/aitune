@@ -245,11 +245,12 @@ def test_build_returns_active_backend(mock_onnx, backend, model, graph_spec, sam
 
 @requires_cuda
 @pytest.mark.parametrize("execution_provider", [None, ONNXExecutionProvider.CUDA, ONNXExecutionProvider.TENSORRT])
-def test_build_exposes_the_final_onnx_interface(
+def test_artifact_after_deactivation_exposes_the_final_onnx_interface(
     mock_onnx, model, graph_spec, sample_data, torch_device, tmp_path, execution_provider
 ):
     backend = ONNXRuntimeBackend(ONNXRuntimeBackendConfig(execution_provider=execution_provider))
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+    backend.deactivate()
 
     artifact = backend.artifact()
 
@@ -313,8 +314,13 @@ def test_artifact_metadata_failure_does_not_fail_backend_build(
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
     assert backend.is_active
+    backend._create_artifact.assert_not_called()
+    backend.deactivate()
+    backend.activate()
+    backend._create_artifact.assert_not_called()
     with pytest.raises(RuntimeError, match="unsupported interface"):
         backend.artifact()
+    backend._create_artifact.assert_called_once()
 
 
 @pytest.mark.parametrize("kind", ["input", "output"])
@@ -329,11 +335,10 @@ def test_artifact_metadata_failure_does_not_fail_backend_build(
         ("tensor(float)", ["batch", 64], "axis 1 is fixed at 64"),
     ],
 )
-def test_artifact_capture_reports_actual_interface_mismatches(tmp_path, kind, element_type, shape, message):
+def test_artifact_reports_actual_interface_mismatches(tmp_path, kind, element_type, shape, message):
     backend = ONNXRuntimeBackend()
     backend._onnx_model_artifact = ArtifactPath(tmp_path, "model.onnx")
     backend._graph_spec = ToyTorchModel().graph_spec(batch_sizes=[1, 2], device=torch.device("cpu"))
-    backend._session = Mock()
     nodes = {}
     for tensor_kind, width in (("input", 32), ("output", 5)):
         metadata = getattr(backend._graph_spec, f"{tensor_kind}_spec")
@@ -344,10 +349,8 @@ def test_artifact_capture_reports_actual_interface_mismatches(tmp_path, kind, el
         nodes[tensor_kind] = node
     nodes[kind].type = element_type
     nodes[kind].shape = shape
-    backend._session.get_inputs.return_value = [nodes["input"]]
-    backend._session.get_outputs.return_value = [nodes["output"]]
-
-    backend._capture_artifact()
+    backend._input_nodes = [nodes["input"]]
+    backend._output_nodes = [nodes["output"]]
 
     with pytest.raises(RuntimeError, match=message):
         backend.artifact()
