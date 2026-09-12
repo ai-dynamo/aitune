@@ -62,12 +62,10 @@ def test_jit_flux():
     history = []
     PatchedModule.print_hierarchy(sink=lambda s: history.append(s))
     print("\n".join(history))
-    # Assert the expected output
     assert PRINT_HIERARCHY_HEADER in history[0]
-    # assert re.match(r".*CLIPTextModel.*state=tuned.*TensorRTBackend", history[1])
-    assert re.match(r".*T5EncoderModel.*state=tuned.*TensorRTBackend", history[2])
-    assert re.match(r".*FluxTransformer2DModel.*state=tuned.*TensorRTBackend", history[3])
-    # assert re.match(r".*Decoder.*state=tuned.*TensorRTBackend", history[4])
+    # The default strategy selects backends by measured throughput, so the winner can vary.
+    assert any(re.match(r".*T5EncoderModel.*state=tuned\b", line) for line in history)
+    assert any(re.match(r".*FluxTransformer2DModel.*state=tuned\b", line) for line in history)
 
     logger.info("Testing inference with batch_size=1")
     start = perf_counter()
