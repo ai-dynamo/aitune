@@ -5,6 +5,7 @@
 import copy
 from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import Enum
 from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, cast
@@ -15,7 +16,7 @@ import onnxruntime
 import torch
 import torch.nn as nn
 
-from aitune.records import ArtifactFile, DType, ONNXArtifact, ONNXExecutionProvider
+from aitune.records import DeploymentArtifact, DType, ModelFiles, RuntimeConfig
 from aitune.torch.artifact import bounded_tensor_specs
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.checkpoint.artifact import ArtifactPath
@@ -25,9 +26,15 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
-from aitune.utils.hashing import hash_file
 
 logger = getLogger(__name__)
+
+
+class ONNXExecutionProvider(str, Enum):
+    """ONNX Runtime execution providers supported by the Torch backend."""
+
+    CUDA = "cuda"
+    TENSORRT = "tensorrt"
 
 
 # Mapping from torch dtype to numpy dtype for ONNX Runtime IOBinding.
@@ -165,7 +172,7 @@ class ONNXRuntimeBackend(Backend):
         self._output_object = None
         self._graph_spec: GraphSpec | None = None
         self._samples: SampleStore | None = None
-        self._artifact: ONNXArtifact | None = None
+        self._artifact: DeploymentArtifact | None = None
         self._artifact_error: str | None = None
 
     def key(self) -> str:
@@ -176,7 +183,7 @@ class ONNXRuntimeBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def artifact(self) -> ONNXArtifact:
+    def artifact(self) -> DeploymentArtifact:
         """Return the ONNX model and runtime contract captured during activation."""
         if self._artifact is None:
             detail = f": {self._artifact_error}" if self._artifact_error else ""
@@ -249,7 +256,7 @@ class ONNXRuntimeBackend(Backend):
             self._artifact_error = str(error)
             logger.info("ONNX model is not available for publication: %s", error)
 
-    def _create_artifact(self) -> ONNXArtifact:
+    def _create_artifact(self) -> DeploymentArtifact:
         """Create an artifact from the active session and recorded shape bounds."""
         if self._onnx_model_artifact is None or self._session is None or self._graph_spec is None:
             raise RuntimeError("ONNX artifact requires an exported model, active session, and graph specification")
@@ -269,19 +276,18 @@ class ONNXRuntimeBackend(Backend):
         )
         _validate_onnx_interface(input_nodes, inputs, "input")
         _validate_onnx_interface(output_nodes, outputs, "output")
-        companions = ()
+        additional_files = ()
         if self._onnx_data_artifact is not None:
             data_path = self._onnx_data_artifact.path
-            companions = (
-                ArtifactFile(relative_path=data_path.relative_to(model_path.parent), fingerprint=hash_file(data_path)),
-            )
-        return ONNXArtifact(
+            additional_files = (data_path.relative_to(model_path.parent),)
+        return DeploymentArtifact(
+            model=ModelFiles(format="onnx", path=model_path, additional_files=additional_files),
             inputs=inputs,
             outputs=outputs,
-            path=model_path,
-            fingerprint=hash_file(model_path),
-            companions=companions,
-            execution_provider=self._config.execution_provider or ONNXExecutionProvider.CUDA,
+            runtime=RuntimeConfig(
+                name="onnxruntime",
+                options={"execution_provider": (self._config.execution_provider or ONNXExecutionProvider.CUDA).value},
+            ),
         )
 
     def _warmup(self, samples: Iterable[Sample]) -> None:

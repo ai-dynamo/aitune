@@ -19,7 +19,7 @@ from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
 from aitune.exceptions import AITuneUserInputError
-from aitune.records import TensorRTOptimizationProfile, TensorRTPlanArtifact, TensorRTProfileInput
+from aitune.records import DeploymentArtifact, ModelFiles, RuntimeConfig
 from aitune.torch.artifact import bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
@@ -29,6 +29,7 @@ from aitune.torch.backend.backend import (
     BuildMode,
     ExecutionMode,
 )
+from aitune.torch.backend.tensorrt.cuda_graphs import CudaGraphCachePolicy, TensorRTCudaGraphCache
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCast, ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig, ONNXQuantizer
 from aitune.torch.backend.tensorrt.tensorrt_builder import TensorRTBuilder
@@ -45,7 +46,6 @@ from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
-from aitune.utils.hashing import hash_file
 from aitune.utils.monitoring import annotate
 
 G_LOGGER.use_python_logging_system = True
@@ -120,7 +120,9 @@ class TensorRTBackendConfig(BackendConfig):
         device: The device to use for the TensorRT engine.
         quantization_config: The quantization configuration for the TensorRT engine.
         enable_tf32: Whether to enable TF32 hardware acceleration.
-        use_cuda_graphs: Whether to use CUDA graphs for the TensorRT engine.
+        use_cuda_graphs: Cache CUDA graphs for static profiles (enabled by default), falling back on capture failure.
+        max_cuda_graphs: Maximum cached CUDA graphs per backend.
+        cuda_graph_cache_policy: Aged LFU admission and eviction by default, or unconditional LRU admission.
     """
 
     use_dynamo: bool = True
@@ -133,7 +135,20 @@ class TensorRTBackendConfig(BackendConfig):
     device: str = "cuda"
     quantization_config: ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None = None
     enable_tf32: bool = True
-    use_cuda_graphs: bool = False
+    use_cuda_graphs: bool = True
+    max_cuda_graphs: int = 8
+    cuda_graph_cache_policy: CudaGraphCachePolicy = "lfu"
+
+    def __post_init__(self):
+        """Validate the graph cache capacity and policy."""
+        if (
+            isinstance(self.max_cuda_graphs, bool)
+            or not isinstance(self.max_cuda_graphs, int)
+            or self.max_cuda_graphs < 1
+        ):
+            raise ValueError("max_cuda_graphs must be a positive integer")
+        if self.cuda_graph_cache_policy not in ("lru", "lfu"):
+            raise ValueError("cuda_graph_cache_policy must be 'lru' or 'lfu'")
 
     @classmethod
     def from_dict(cls, data: dict) -> "TensorRTBackendConfig":
@@ -256,7 +271,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._trt_optimization_profiles_artifact: ArtifactPath | None = None
         self._output_object = None
         self._graph_spec = None
-        self._artifact: TensorRTPlanArtifact | None = None
+        self._artifact: DeploymentArtifact | None = None
         self._artifact_error: str | None = None
 
         # runtime variables
@@ -264,11 +279,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._trt_runtime = None
         self._trt_optimization_profiles: list[Profile] = []
 
-        # CUDA graph variables
-        self._cuda_graph = None
-        self._last_input_shapes = None
-        self._static_inputs = {}
-        self._infer_cuda_graph = None
+        self._cuda_graphs = TensorRTCudaGraphCache()
+        self._base_context = None
+        self._base_output_allocator = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -278,7 +291,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def artifact(self) -> TensorRTPlanArtifact:
+    def artifact(self) -> DeploymentArtifact:
         """Return the TensorRT plan and runtime contract captured during activation."""
         if self._artifact is None:
             detail = f": {self._artifact_error}" if self._artifact_error else ""
@@ -678,9 +691,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 if not inputs:
                     raise ValueError("No input tensors provided for inference")
 
-                # Check if input shapes have changed (for CUDA graph invalidation)
-                self._invalidate_cuda_graph(inputs)
-
                 self._set_optimization_profiles(inputs)
 
                 # Set input tensor shapes and addresses
@@ -689,44 +699,29 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
                 # Run inference with timing
                 logger.debug("Executing TensorRT inference")
-                try:
-                    # Only synchronize before timing for accuracy
-                    with torch.cuda.stream(self._cuda_stream):
-                        self._start_time.record(stream=self._cuda_stream)
-
-                        # Using if instead overloading/replacing a function as simple if is faster
-                        if self._config.use_cuda_graphs:
-                            self._infer_cuda_graph()
-                        else:
-                            status = self._context.execute_async_v3(self._cuda_stream.cuda_stream)
-                            if not status:
-                                raise RuntimeError("TensorRT execution failed")
-
+                with torch.cuda.stream(self._cuda_stream):
+                    self._start_time.record(stream=self._cuda_stream)
+                    if self._use_cuda_graphs:
+                        self._cuda_graphs.execute(self._cuda_stream)
+                    else:
+                        self._execute_engine()
                     self._end_time.record(stream=self._cuda_stream)
-                except Exception as e:
-                    # Attempt to recover from error
-                    torch.cuda.empty_cache()
-                    raise e
 
                 # Wait for inference to complete
-                try:
-                    logger.debug("Synchronizing CUDA stream")
-                    self._cuda_stream.synchronize()
+                self._cuda_stream.synchronize()
+                if self._cuda_graphs.capture_failed:
+                    self._cuda_graphs.clear()
 
-                    elapsed_time = self._start_time.elapsed_time(self._end_time)
-                    logger.debug("Inference completed in %s ms", elapsed_time)
-                except Exception as e:
-                    torch.cuda.empty_cache()
-                    elapsed_time = 0
-                    raise e
+                elapsed_time = self._start_time.elapsed_time(self._end_time)
+                logger.debug("Inference completed in %s ms", elapsed_time)
 
                 # Return a copy of the outputs with the correct format
                 return self._prepare_outputs_for_return()
 
-            except Exception as e:
+            except Exception:
                 torch.cuda.synchronize()
                 torch.cuda.empty_cache()
-                raise e
+                raise
 
     def _activate(self):
         """Activate the TensorRT engine."""
@@ -742,19 +737,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._context, self._io_tensors, self._input_names, self._output_names, self._engine_info = (
             self._trt_runtime.create_execution_context(engine_bytes=engine_bytes)
         )
+        self._base_context = self._context
 
         # Initialize CUDA stream for inference
         logger.debug("Creating dedicated CUDA stream for inference")
         self._cuda_stream = torch.cuda.Stream()
-
-        # Initializing CUDA graph for inference
-        logger.debug("Creating CUDA graph for inference")
-        if self._config.use_cuda_graphs:
-            self._infer_cuda_graph = self._build_cuda_graph
-            self._static_inputs = {}
-            self._cuda_graph = None
-        else:
-            self._infer_cuda_graph = None
 
         # Initialize timing events
         logger.debug("Creating CUDA events for timing")
@@ -763,20 +750,35 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         # Initialize output allocator with engine info for proper dtype handling
         logger.debug("Setting up output allocator")
-        self._output_allocator = TorchOutputAllocator(engine_info=self._engine_info)
+        self._output_allocator = self._create_output_allocator(self._context)
+        self._base_output_allocator = self._output_allocator
+
+        # Load optimization profiles and classify graph eligibility from all inputs.
+        self._trt_optimization_profiles = self._load_trt_optimization_profiles(optimization_profiles_artifact.path)
+        self._cuda_graphs.configure(
+            self._base_context.engine,
+            self._io_tensors,
+            self._input_names,
+            self._trt_optimization_profiles,
+            max_graphs=self._config.max_cuda_graphs,
+            policy=self._config.cuda_graph_cache_policy,
+        )
+        if self._artifact is None:
+            self._capture_artifact()
+
+    def _create_output_allocator(self, context):
+        """Attach an independent output allocator to an execution context."""
+        allocator = TorchOutputAllocator(engine_info=self._engine_info)
 
         # Set output allocator for each output tensor individually
         for output_name in self._output_names:
-            success = self._context.set_output_allocator(output_name, self._output_allocator)
+            success = context.set_output_allocator(output_name, allocator)
             if not success:
                 logger.error("Failed to set output allocator for tensor '%s'", output_name)
                 raise RuntimeError(f"Failed to set output allocator for tensor '{output_name}'")
             logger.debug("Set output allocator for tensor '%s'", output_name)
 
-        # Load optimization profiles
-        self._trt_optimization_profiles = self._load_trt_optimization_profiles(optimization_profiles_artifact.path)
-        if self._artifact is None:
-            self._capture_artifact()
+        return allocator
 
     def _capture_artifact(self) -> None:
         """Capture publication metadata without changing backend tuning success."""
@@ -787,7 +789,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._artifact_error = str(error)
             logger.info("TensorRT plan is not available for publication: %s", error)
 
-    def _create_artifact(self) -> TensorRTPlanArtifact:
+    def _create_artifact(self) -> DeploymentArtifact:
         """Create an artifact from the active engine and recorded shape bounds."""
         if (
             self._engine_artifact is None
@@ -799,33 +801,45 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         profiles = self._artifact_profiles()
         inputs = bounded_tensor_specs(self._graph_spec, "input", recorded_names=self._input_names)
+        for input_spec in inputs:
+            if any(len(profile[input_spec.name]["min_shape"]) != len(input_spec.min_shape) for profile in profiles):
+                raise ValueError(f"TensorRT profile rank does not match artifact input {input_spec.name!r}")
         inputs = tuple(
             replace(
                 input_spec,
                 min_shape=tuple(
-                    min(profile.inputs[index].min_shape[axis] for profile in profiles)
+                    min(profile[input_spec.name]["min_shape"][axis] for profile in profiles)
                     for axis in range(len(input_spec.min_shape))
                 ),
                 max_shape=tuple(
-                    max(profile.inputs[index].max_shape[axis] for profile in profiles)
+                    max(profile[input_spec.name]["max_shape"][axis] for profile in profiles)
                     for axis in range(len(input_spec.max_shape))
                 ),
             )
-            for index, input_spec in enumerate(inputs)
+            for input_spec in inputs
         )
         engine_path = self._engine_artifact.path
-        return TensorRTPlanArtifact(
+        return DeploymentArtifact(
+            model=ModelFiles(
+                format="tensorrt_plan",
+                path=engine_path,
+                metadata={"optimization_profiles": profiles, "optimization_profile_count": len(profiles)},
+            ),
             inputs=inputs,
             outputs=bounded_tensor_specs(self._graph_spec, "output", recorded_names=self._output_names),
-            path=engine_path,
-            fingerprint=hash_file(engine_path),
-            optimization_profiles=profiles,
-            use_cuda_graphs=self._config.use_cuda_graphs,
+            runtime=RuntimeConfig(
+                name="tensorrt",
+                options={
+                    "use_cuda_graphs": self._config.use_cuda_graphs,
+                    "max_cuda_graphs": self._config.max_cuda_graphs,
+                    "cuda_graph_cache_policy": self._config.cuda_graph_cache_policy,
+                },
+            ),
         )
 
-    def _artifact_profiles(self) -> tuple[TensorRTOptimizationProfile, ...]:
-        """Translate the engine's TensorRT profiles into deployment records."""
-        if not self._trt_optimization_profiles or self._input_names is None:
+    def _artifact_profiles(self) -> tuple[dict[str, dict[str, tuple[int, ...]]], ...]:
+        """Describe exact profile ranges as plain data in engine input order."""
+        if not self._trt_optimization_profiles or not self._input_names:
             raise RuntimeError("TensorRT artifact requires its optimization profiles")
 
         result = []
@@ -837,20 +851,24 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     f"TensorRT profile inputs do not match the engine (missing: {sorted(missing_names)}, "
                     f"unknown: {sorted(unknown_names)})"
                 )
-            result.append(
-                TensorRTOptimizationProfile(
-                    inputs=tuple(
-                        TensorRTProfileInput(
-                            name=name,
-                            min_shape=tuple(profile[name].min),
-                            opt_shape=tuple(profile[name].opt),
-                            max_shape=tuple(profile[name].max),
-                        )
-                        for name in self._input_names
-                    )
-                )
-            )
+            result.append({name: self._artifact_profile_shapes(name, profile[name]) for name in self._input_names})
         return tuple(result)
+
+    @staticmethod
+    def _artifact_profile_shapes(name: str, shape_range: Any) -> dict[str, tuple[int, ...]]:
+        """Validate and copy a Polygraphy shape range into portable metadata."""
+        minimum, optimum, maximum = tuple(shape_range.min), tuple(shape_range.opt), tuple(shape_range.max)
+        if len({len(minimum), len(optimum), len(maximum)}) != 1:
+            raise ValueError(f"TensorRT profile shapes for {name!r} must have the same rank")
+        if any(
+            not isinstance(dimension, int) or isinstance(dimension, bool) or dimension <= 0
+            for shape in (minimum, optimum, maximum)
+            for dimension in shape
+        ):
+            raise ValueError(f"TensorRT profile shapes for {name!r} must contain positive integers")
+        if any(not low <= opt <= high for low, opt, high in zip(minimum, optimum, maximum, strict=True)):
+            raise ValueError(f"TensorRT profile shapes for {name!r} must satisfy min <= opt <= max")
+        return {"min_shape": minimum, "opt_shape": optimum, "max_shape": maximum}
 
     def _deactivate(self):
         """Deactivate the TensorRT engine."""
@@ -858,12 +876,19 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._trt_runtime = None
 
         try:
+            if self._cuda_stream is not None:
+                self._cuda_stream.synchronize()
+            self._cuda_graphs.clear()
             with contextlib.ExitStack() as stack:
                 if self._context:
                     stack.enter_context(self._context)
 
             if self._output_allocator is not None:
                 self._output_allocator.clear()
+            if self._base_output_allocator is not None:
+                self._base_output_allocator.clear()
+            self._base_context = None
+            self._base_output_allocator = None
 
             # Safely delete attributes if they exist
             for attr_name in [
@@ -877,10 +902,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 "_outputs",
                 "_context",
                 "_output_allocator",
-                "_cuda_graph",
-                "_last_input_shapes",
-                "_static_inputs",
-                "_infer_cuda_graph",
             ]:
                 if hasattr(self, attr_name):
                     delattr(self, attr_name)
@@ -1023,16 +1044,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
             logger.debug("Setting shape for input tensor %s: %s, dtype=%s", name, shape, dtype)
 
             # CUDA graphs always use the same memory address for the same input tensors
-            if self._config.use_cuda_graphs:
-                if name not in self._static_inputs:
-                    # creating static memory for inputs
-                    self._static_inputs[name] = torch.zeros_like(tensor)
-
-                # copy the tensor to the static input
-                static_tensor = self._static_inputs[name]
-                static_tensor.copy_(tensor)
-
-                tensor = static_tensor
+            if self._use_cuda_graphs:
+                tensor = self._cuda_graphs.copy_input(name, tensor, self._cuda_stream)
+                if self._cuda_graphs.active.graph is not None:
+                    # Replaying must not modify the context captured by this graph.
+                    continue
 
             success = self._context.set_input_shape(name, shape)
             if not success:
@@ -1050,41 +1066,52 @@ class TensorRTBackend(Backend, TensorRTRunner):
             logger.debug("Set tensor address for %s successfully", name)
 
     def _set_optimization_profiles(self, inputs: dict[str, torch.Tensor]) -> None:
-        """Set optimization profiles for the input tensors.
+        """Select an ordinary context or the static profile's cached graph context."""
+        index = self._find_optimization_profile(inputs)
+        self._cuda_graphs.active = None
+        # Drop references to the previous graph context before the cache can evict it.
+        if self._base_context is not None:
+            self._context = self._base_context
+            self._output_allocator = self._base_output_allocator
+        if self._config.use_cuda_graphs and self._cuda_graphs.is_eligible(index):
+            profile = self._cuda_graphs.select(
+                index, self._base_context.engine, self._cuda_stream, self._create_output_allocator
+            )
+            if profile is not None:
+                self._context = profile.context
+                self._output_allocator = profile.output_allocator
+                return
+
+        if self._trt_optimization_profiles and self._context.active_optimization_profile != index:
+            if not self._context.set_optimization_profile_async(index, self._cuda_stream.cuda_stream):
+                raise RuntimeError(f"TensorRT rejected optimization profile {index}")
+
+    def _find_optimization_profile(self, inputs: dict[str, torch.Tensor]) -> int:
+        """Find the first matching profile, including validation for a single profile.
 
         Args:
             inputs: Dictionary mapping input names to tensors
         """
         if not self._trt_optimization_profiles:
-            return
-
-        if len(self._trt_optimization_profiles) == 1:
-            # Optimization profile 0 is the default profile
-            return
+            return 0
 
         for idx, profile in enumerate(self._trt_optimization_profiles):
-            if len(profile) != len(inputs):
-                continue  # number of inputs mismatch, skipping profile
+            if profile.keys() != inputs.keys():
+                continue
 
             for name, (min_shape, _, max_shape) in profile.items():
-                # assuming that inputs can have different arguments, but this will not happen in practice
-                if name not in inputs:
-                    break  # no argument in input, skipping profile
-
                 tensor = inputs[name]
-                tensor_shape_matches = all(
-                    min_ <= actual and actual <= max_
+                if len(tensor.shape) != len(min_shape):
+                    break
+                if not all(
+                    min_ <= actual <= max_
                     for (actual, min_, max_) in zip(tensor.shape, min_shape, max_shape, strict=True)
-                )
-                if not tensor_shape_matches:
-                    break  # shape mismatch, skipping profile
+                ):
+                    break
 
-            else:  # for else is executed if the loop did not break
-                success = self._context.set_optimization_profile_async(idx, self._cuda_stream.cuda_stream)
-                if not success:
-                    raise RuntimeError(f"TensorRT rejected optimization profile {idx}")
+            else:
                 logger.debug("Selected TensorRT optimization profile %d", idx)
-                return
+                return idx
 
         raise RuntimeError("No TensorRT optimization profile matches the input shapes")
 
@@ -1194,54 +1221,19 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         return min_shapes, opt_shapes, max_shapes
 
-    def _build_cuda_graph(self):
-        """Create a CUDA graph for inference."""
-        logger.debug("Capturing CUDA graph for first time")
-        # First execution to ensure everything is set up
-        status = self._context.execute_async_v3(self._cuda_stream.cuda_stream)
-        if not status:
-            raise RuntimeError("TensorRT execution failed during CUDA graph setup")
+    @property
+    def _use_cuda_graphs(self) -> bool:
+        """Use graphs only for fixed-shape profiles, until capture fails for this instance."""
+        return (
+            self._config.use_cuda_graphs
+            and not self._cuda_graphs.capture_failed
+            and self._cuda_graphs.active is not None
+        )
 
-        # Begin CUDA graph capture
-        self._cuda_graph = torch.cuda.CUDAGraph()
-
-        # See https://docs.pytorch.org/docs/2.4/generated/torch.cuda.graph.html for more args
-        with torch.cuda.graph(self._cuda_graph, stream=self._cuda_stream):
-            # Execute inference within the capture
-            status = self._context.execute_async_v3(self._cuda_stream.cuda_stream)
-            if not status:
-                raise RuntimeError("TensorRT execution failed during CUDA graph capture")
-
-        logger.debug("CUDA graph captured and instantiated successfully")
-        self._infer_cuda_graph = self._execute_cuda_graph
-
-        # Execute the CUDA graph
-        self._infer_cuda_graph()
-
-    def _execute_cuda_graph(self):
-        """Execute inference using CUDA graphs for optimized performance.
-
-        This method implements the CUDA graph capture and launch pattern:
-        1. If no CUDA graph exists, capture one by running inference twice
-        2. If CUDA graph exists, launch the captured graph
-        """
-        logger.debug("Launching CUDA graph")
-        # Launch the captured CUDA graph
-        self._cuda_graph.replay()
-
-    def _invalidate_cuda_graph(self, inputs: dict[str, torch.Tensor]):
-        """Setup the inputs for the CUDA graph.
-
-        This should be called when input shapes change or when the graph needs to be rebuilt.
-        """
-        if self._config.use_cuda_graphs:
-            current_input_shapes = {name: tensor.shape for name, tensor in inputs.items()}
-            if self._last_input_shapes != current_input_shapes:
-                logger.debug("Input shapes changed, invalidating CUDA graph")
-                self._cuda_graph = None
-                self._infer_cuda_graph = self._build_cuda_graph
-                self._last_input_shapes = current_input_shapes
-                self._static_inputs = {}
+    def _execute_engine(self):
+        """Execute TensorRT normally, propagating engine execution failures."""
+        if not self._context.execute_async_v3(self._cuda_stream.cuda_stream):
+            raise RuntimeError("TensorRT execution failed")
 
     def to_dict(self):
         """Returns the state_dict of the backend."""
@@ -1271,8 +1263,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         backend._config = TensorRTBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]
-        # Ensure CUDA graphs are disabled when loading from checkpoint
-        # CUDA graphs cannot be serialized and must be re-captured
+        # CUDA graphs cannot be serialized and must be re-captured.
         if backend._config.use_cuda_graphs:
             logger.info("CUDA graphs were enabled in saved state, but will be re-captured on first inference")
             # CUDA graph state will be None initially, triggering re-capture

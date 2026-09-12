@@ -12,7 +12,7 @@ from typing import Any, cast
 import torch
 import wrapt
 
-from aitune.records import Artifact
+from aitune.records import DeploymentArtifact
 from aitune.torch.backend.backend import Backend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
@@ -25,7 +25,7 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import report_graph_tune, report_module_tune
-from aitune.torch.tune_strategy import FirstWinsStrategy
+from aitune.torch.tune_strategy import MaxThroughputStrategy
 from aitune.torch.tune_strategy.tune_strategy import (
     DummyTuneStrategy,
     TuneStrategy,
@@ -38,7 +38,7 @@ from aitune.torch.utils.module import (
 
 logger = getLogger(__name__)
 
-DEFAULT_STRATEGY = FirstWinsStrategy()
+DEFAULT_STRATEGY = MaxThroughputStrategy.for_aot()
 
 
 class ModuleState(Enum):
@@ -245,7 +245,7 @@ class Module(wrapt.CallableObjectProxy):
             wrapper = cast(TunedModule, self._self_wrapper)
             wrapper.deactivate()
 
-    def artifact(self) -> Artifact:
+    def artifact(self) -> DeploymentArtifact:
         """Return the artifact produced by this tuned module.
 
         Returns:
@@ -341,6 +341,7 @@ class Module(wrapt.CallableObjectProxy):
                 samples = recording.samples_for_graph_spec(graph_spec)
 
                 try:
+                    strategy._configure_for_module(self.__wrapped__)
                     if dry_run:
                         strategy.tune_dry_run(self.__wrapped__, self._self_name, graph_spec, samples, device, cache_dir)
                         continue
@@ -481,7 +482,7 @@ class Module(wrapt.CallableObjectProxy):
     ):
         """Sets up strategy or strategy_map or strategy_list depending on input args."""
         if strategy is None and strategies is None:
-            strategy = DEFAULT_STRATEGY
+            strategy = DEFAULT_STRATEGY.clone()
 
         if strategy is not None and strategies is not None:
             raise ValueError("Only one of strategy or strategies should be provided")

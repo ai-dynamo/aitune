@@ -85,12 +85,12 @@ class FindMaxBatchSizeMixin(TuneStrategy):
             assert max_batch_size is not None
             assert max_throughput is not None
             self._logger.info(
-                "✅ Distributed max batch size for %s is %d with worst-rank throughput %.2f samples/s",
+                "✅ Max batch size for %s is %d with throughput %.2f samples/s",
                 name,
                 max_batch_size,
                 max_throughput,
             )
-            graph_spec.update_max_batch_size(samples[0], max_batch_size)
+            graph_spec.update_max_batch_size(max_batch_size)
 
     def _pre_tune(
         self,

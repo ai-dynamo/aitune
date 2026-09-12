@@ -12,10 +12,8 @@ from polygraphy.backend.trt import Profile
 from aitune.exceptions import AITuneUserInputError
 from aitune.records import (
     BoundedTensorSpec,
+    DeploymentArtifact,
     DType,
-    TensorRTOptimizationProfile,
-    TensorRTPlanArtifact,
-    TensorRTProfileInput,
 )
 from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
@@ -245,7 +243,12 @@ def test_tensorrt_backend_build_exposes_the_final_engine_interface(mock_tensorrt
     second_profile = TensorRTProfile().add_input_shape("x", (3, IN_FEATURES), (3, IN_FEATURES), (4, IN_FEATURES))
 
     backend = TensorRTBackend(
-        TensorRTBackendConfig(use_cuda_graphs=True, profiles=[first_profile, second_profile])
+        TensorRTBackendConfig(
+            use_cuda_graphs=True,
+            max_cuda_graphs=3,
+            cuda_graph_cache_policy="lru",
+            profiles=[first_profile, second_profile],
+        )
     ).build(
         model,
         graph_spec,
@@ -256,7 +259,7 @@ def test_tensorrt_backend_build_exposes_the_final_engine_interface(mock_tensorrt
 
     artifact = backend.artifact()
 
-    assert isinstance(artifact, TensorRTPlanArtifact)
+    assert isinstance(artifact, DeploymentArtifact)
     assert artifact.inputs == (
         BoundedTensorSpec(
             name="input_x",
@@ -275,32 +278,22 @@ def test_tensorrt_backend_build_exposes_the_final_engine_interface(mock_tensorrt
             batch_axis=0,
         ),
     )
-    assert artifact.path == tmp_path / "tensorrt/model.plan"
-    assert artifact.optimization_profile_count == 2
-    assert artifact.optimization_profiles == (
-        TensorRTOptimizationProfile(
-            inputs=(
-                TensorRTProfileInput(
-                    name="input_x",
-                    min_shape=(1, IN_FEATURES),
-                    opt_shape=(2, IN_FEATURES),
-                    max_shape=(2, IN_FEATURES),
-                ),
-            )
-        ),
-        TensorRTOptimizationProfile(
-            inputs=(
-                TensorRTProfileInput(
-                    name="input_x",
-                    min_shape=(3, IN_FEATURES),
-                    opt_shape=(3, IN_FEATURES),
-                    max_shape=(4, IN_FEATURES),
-                ),
-            )
-        ),
+    assert artifact.model.format == "tensorrt_plan"
+    assert artifact.model.path == tmp_path / "tensorrt/model.plan"
+    assert artifact.model.additional_files == ()
+    assert artifact.model.metadata["optimization_profile_count"] == 2
+    assert artifact.model.metadata["optimization_profiles"] == (
+        {"input_x": {"min_shape": (1, IN_FEATURES), "opt_shape": (2, IN_FEATURES), "max_shape": (2, IN_FEATURES)}},
+        {"input_x": {"min_shape": (3, IN_FEATURES), "opt_shape": (3, IN_FEATURES), "max_shape": (4, IN_FEATURES)}},
     )
-    assert artifact.use_cuda_graphs
-    artifact.verify()
+    assert artifact.runtime.name == "tensorrt"
+    assert artifact.runtime.options == {
+        "use_cuda_graphs": True,
+        "max_cuda_graphs": 3,
+        "cuda_graph_cache_policy": "lru",
+    }
+    destination = tmp_path / "export" / "model.plan"
+    assert artifact.model.export_files(destination).read_bytes() == b"fake"
 
 
 def test_artifact_profiles_preserve_shape_bounds_and_engine_input_order():
@@ -311,20 +304,45 @@ def test_artifact_profiles_preserve_shape_bounds_and_engine_input_order():
         Profile().add("input_mask", (5, 8), (6, 8), (8, 8)).add("input_x", (5, 32), (6, 32), (8, 32)),
     ]
 
-    assert backend._artifact_profiles() == (
-        TensorRTOptimizationProfile(
-            inputs=(
-                TensorRTProfileInput(name="input_x", min_shape=(1, 32), opt_shape=(2, 32), max_shape=(4, 32)),
-                TensorRTProfileInput(name="input_mask", min_shape=(1, 8), opt_shape=(2, 8), max_shape=(4, 8)),
-            )
-        ),
-        TensorRTOptimizationProfile(
-            inputs=(
-                TensorRTProfileInput(name="input_x", min_shape=(5, 32), opt_shape=(6, 32), max_shape=(8, 32)),
-                TensorRTProfileInput(name="input_mask", min_shape=(5, 8), opt_shape=(6, 8), max_shape=(8, 8)),
-            )
-        ),
+    profiles = backend._artifact_profiles()
+
+    assert profiles == (
+        {
+            "input_x": {"min_shape": (1, 32), "opt_shape": (2, 32), "max_shape": (4, 32)},
+            "input_mask": {"min_shape": (1, 8), "opt_shape": (2, 8), "max_shape": (4, 8)},
+        },
+        {
+            "input_x": {"min_shape": (5, 32), "opt_shape": (6, 32), "max_shape": (8, 32)},
+            "input_mask": {"min_shape": (5, 8), "opt_shape": (6, 8), "max_shape": (8, 8)},
+        },
     )
+    assert all(tuple(profile) == ("input_x", "input_mask") for profile in profiles)
+
+
+@pytest.mark.parametrize(
+    ("minimum", "optimum", "maximum", "message"),
+    [
+        ((1, 32), (9, 32), (8, 32), "min <= opt <= max"),
+        ((1, 32), (2,), (8, 32), "same rank"),
+        ((0, 32), (2, 32), (8, 32), "positive integers"),
+    ],
+)
+def test_artifact_profiles_reject_invalid_shape_bounds(minimum, optimum, maximum, message):
+    backend = TensorRTBackend()
+    backend._input_names = ["input_x"]
+    backend._trt_optimization_profiles = [Profile().add("input_x", minimum, optimum, maximum)]
+
+    with pytest.raises(ValueError, match=message):
+        backend._artifact_profiles()
+
+
+def test_artifact_profiles_require_engine_input_names():
+    backend = TensorRTBackend()
+    backend._input_names = ["input_x"]
+    backend._trt_optimization_profiles = [Profile().add("input_tokens", (1, 32), (2, 32), (8, 32))]
+
+    with pytest.raises(ValueError, match="profile inputs do not match the engine"):
+        backend._artifact_profiles()
 
 
 @requires_cuda
@@ -372,18 +390,19 @@ def test_checkpoint_loaded_backend_reconstructs_tensorrt_artifact(mock_tensorrt_
 
     restored.deploy(torch.device("cuda"))
 
-    assert restored.artifact().optimization_profiles == (
-        TensorRTOptimizationProfile(
-            inputs=(
-                TensorRTProfileInput(
-                    name="input_x",
-                    min_shape=(BATCH_SIZE, IN_FEATURES),
-                    opt_shape=(BATCH_SIZE, IN_FEATURES),
-                    max_shape=(BATCH_SIZE, IN_FEATURES),
-                ),
-            )
-        ),
+    artifact = restored.artifact()
+    assert artifact.model.format == "tensorrt_plan"
+    assert artifact.model.metadata["optimization_profiles"] == (
+        {
+            "input_x": {
+                "min_shape": (BATCH_SIZE, IN_FEATURES),
+                "opt_shape": (BATCH_SIZE, IN_FEATURES),
+                "max_shape": (BATCH_SIZE, IN_FEATURES),
+            },
+        },
     )
+    assert artifact.model.metadata == backend.artifact().model.metadata
+    assert artifact.runtime == backend.artifact().runtime
 
 
 def test_tensorrt_state_marks_runtime_artifacts_but_not_timing_cache(tmp_path):
@@ -1089,7 +1108,7 @@ def test_set_optimization_profiles_rejects_failed_context_update(mocker, global_
 
 
 def test_set_input_tensors_rejects_invalid_shape(mocker):
-    backend = TensorRTBackend()
+    backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
     backend._context = mocker.MagicMock()
     backend._context.set_input_shape.return_value = False
     backend._context.active_optimization_profile = 1
@@ -1108,7 +1127,7 @@ def test_set_input_tensors_rejects_invalid_shape(mocker):
 
 
 def test_set_input_tensors_rejects_invalid_address(mocker):
-    backend = TensorRTBackend()
+    backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
     backend._context = mocker.MagicMock()
     backend._context.set_input_shape.return_value = True
     backend._context.set_tensor_address.return_value = False
@@ -1125,7 +1144,7 @@ def test_set_input_tensors_rejects_invalid_address(mocker):
 
 
 def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
-    backend = TensorRTBackend()
+    backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
     backend._context = mocker.MagicMock()
     backend._context.execute_async_v3.return_value = True
     backend._cuda_stream = mocker.MagicMock()
@@ -1133,7 +1152,6 @@ def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
     backend._start_time = mocker.MagicMock()
     backend._end_time = mocker.MagicMock()
     backend._prepare_inputs = mocker.MagicMock(return_value={"args_0": mocker.MagicMock()})
-    backend._invalidate_cuda_graph = mocker.MagicMock()
     backend._prepare_outputs_for_return = mocker.MagicMock(return_value="output")
     mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.torch.cuda.stream")
     calls = []
