@@ -21,7 +21,6 @@ def get_tune_parser():
         choices=["no_cache", "dynamic", "static"],
         help="Cache implementation type",
     )
-    parser.add_argument("--multi-gpu", action="store_true", help="Use Transformers native tensor parallelism")
     parser.add_argument("--max-new-tokens", type=int, default=512, help="Number of tokens to generate")
     return parser
 
