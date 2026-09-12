@@ -115,7 +115,7 @@ def do_inference(
     synchronize()
 
 
-def run_example(args) -> None:
+def run_example(args, multi_gpu: bool) -> None:
     """Generate images before and after loading the configured checkpoint."""
     tuned_model_path = distributed_output_path(args.tuned_model_path)
     do_inference(
@@ -127,7 +127,7 @@ def run_example(args) -> None:
         max_sequence_length=args.max_sequence_length,
         tuned_model_path=relocated_checkpoint_path(tuned_model_path),
         output_dir=os.environ.get("AITUNE_OUTPUT_DIR", "output"),
-        multi_gpu=args.multi_gpu,
+        multi_gpu=multi_gpu,
         context_parallel=args.context_parallel,
     )
 
@@ -137,9 +137,9 @@ def main():
     log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
     basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     args = parse_args()
-    initialize_distributed(args.multi_gpu)
+    multi_gpu = initialize_distributed()
     try:
-        run_example(args)
+        run_example(args, multi_gpu)
     finally:
         shutdown_distributed()
 

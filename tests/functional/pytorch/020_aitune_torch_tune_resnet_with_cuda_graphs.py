@@ -10,21 +10,25 @@
 import logging
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import timm
 import torch
 
-from aitune.torch.backend.tensorrt import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend.tensorrt import ProfileMode, TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.config import config as global_config
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tuning import tune
 
 logger = logging.getLogger(Path(__file__).stem)
+BATCH_SIZES = [1, 2, 4, 8, 16, 32, 64]
 
 
-def test_resnet50_with_cuda_graphs_invalidation():
-    """Test ResNet50 with CUDA graphs handles different batch sizes (shape changes) by creating a new CUDA graph."""
+@patch.object(global_config, "max_num_samples_stored", len(BATCH_SIZES))
+def test_resnet50_with_cuda_graph_profiles():
+    """Measure ResNet50 performance and verify graph reuse across static batch profiles."""
     # given
     device = torch.device("cuda")
 
@@ -37,10 +41,10 @@ def test_resnet50_with_cuda_graphs_invalidation():
 
     sample = torch.randn((3, 224, 224), device=device)
     with torch.no_grad():
-        vanilla_benchmark = simple_benchmark(model, sample, batch_sizes=[1, 2, 4, 8, 16, 32, 64])
+        vanilla_benchmark = simple_benchmark(model, sample, batch_sizes=BATCH_SIZES)
 
     # Create TensorRT backend with CUDA graphs enabled
-    config = TensorRTBackendConfig(use_cuda_graphs=False)
+    config = TensorRTBackendConfig(use_cuda_graphs=True, profiles=ProfileMode.SAMPLES_USED)
     backend = TensorRTBackend(config=config)
 
     # when - create module and tune with CUDA graphs enabled
@@ -53,33 +57,35 @@ def test_resnet50_with_cuda_graphs_invalidation():
         strategy=strategy,
     )
 
-    tune(module, [data_bs2[0]], batch_sizes=[1, 2, 4, 8, 16, 32, 64], dry_run=False, device=device)
+    tune(module, [data_bs2[0]], batch_sizes=BATCH_SIZES, max_num_batches_per_batch_size=1, device=device)
 
-    # Test with different batch sizes to trigger CUDA graph invalidation
     trtre_backend = next(iter(module._self_wrapper.backends.values()))
+    graphs = trtre_backend._cuda_graphs
+    assert len(trtre_backend._trt_optimization_profiles) == len(BATCH_SIZES)
+    assert graphs.static_profile_indices == set(range(len(BATCH_SIZES)))
 
-    output1 = module(data_bs2)
-    cuda_graph_bs2 = trtre_backend._cuda_graph
+    module(data_bs2)
+    assert graphs.active is not None and graphs.active.graph is not None
+    cuda_graph_bs2 = graphs.active.graph
+    module(data_bs4)
+    assert graphs.active is not None and graphs.active.graph is not None
+    cuda_graph_bs4 = graphs.active.graph
+    assert cuda_graph_bs2 is not cuda_graph_bs4
 
-    output2 = module(data_bs2)
-    assert cuda_graph_bs2 is trtre_backend._cuda_graph
+    # Every request changes shape and returns to an already captured profile.
+    for _ in range(4):
+        module(data_bs2)
+        assert graphs.active.graph is cuda_graph_bs2
+        module(data_bs4)
+        assert graphs.active.graph is cuda_graph_bs4
+    assert not graphs.capture_failed
 
-    # New graph
-    output3 = module(data_bs4)
-    cuda_graph_bs4 = trtre_backend._cuda_graph
-    if trtre_backend._config.use_cuda_graphs:
-        assert cuda_graph_bs2 is not cuda_graph_bs4
+    tuned_benchmark = simple_benchmark(module, sample, batch_sizes=BATCH_SIZES)
 
-    output4 = module(data_bs4)
-    assert cuda_graph_bs4 is trtre_backend._cuda_graph  # No change
-
-    torch.testing.assert_close(output1, output2, atol=1e-5, rtol=1e-5)
-    torch.testing.assert_close(output3, output4, atol=1e-5, rtol=1e-5)
-
-    tuned_benchmark = simple_benchmark(module, sample, batch_sizes=[1, 2, 4, 8, 16, 32, 64])
-
-    print(vanilla_benchmark.to_markdown(), "vanilla")
-    print(tuned_benchmark.to_markdown(), "tunned cuda_graph=", trtre_backend._config.use_cuda_graphs)
+    assert not graphs.capture_failed
+    assert len(graphs.profiles) == len(BATCH_SIZES)
+    print(vanilla_benchmark.to_markdown(), "eager")
+    print(tuned_benchmark.to_markdown(), "tuned with cached cuda graphs")
 
 
 def simple_benchmark(module, sample, num_runs=100, num_warmup=10, batch_sizes=None):
@@ -88,7 +94,7 @@ def simple_benchmark(module, sample, num_runs=100, num_warmup=10, batch_sizes=No
 
     from aitune.torch.dataloader import DataLoaderFactory
 
-    batch_sizes = batch_sizes or [1, 2, 4, 8, 16, 32, 64]
+    batch_sizes = batch_sizes or BATCH_SIZES
     results = {}
     for batch_size in batch_sizes:
         print(f"Benchmarking batch size: {batch_size}")
@@ -99,7 +105,8 @@ def simple_benchmark(module, sample, num_runs=100, num_warmup=10, batch_sizes=No
         for _ in range(num_warmup):
             module(data)
 
-        # Time it
+        # Synchronize warmup before starting the wall-clock measurement.
+        torch.cuda.synchronize()
         t = []
         for _ in range(num_runs):
             start_time = time.perf_counter()
@@ -107,6 +114,7 @@ def simple_benchmark(module, sample, num_runs=100, num_warmup=10, batch_sizes=No
             torch.cuda.synchronize()
             t.append(time.perf_counter() - start_time)
 
+        assert np.isfinite(t).all() and (np.asarray(t) > 0).all()
         results[batch_size] = {
             "latency": np.mean(t),
             "throughput": 1 / np.mean(t) * batch_size,
@@ -117,5 +125,5 @@ def simple_benchmark(module, sample, num_runs=100, num_warmup=10, batch_sizes=No
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, force=True)
-    test_resnet50_with_cuda_graphs_invalidation()
+    test_resnet50_with_cuda_graph_profiles()
     logger.info("Done")

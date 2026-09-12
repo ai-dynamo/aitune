@@ -622,25 +622,25 @@ ONNXRuntime backend exports the selected PyTorch module to ONNX and runs inferen
     backend = ONNXRuntimeBackend(config)
 
 
-Kernel Optimizer Backend
+Kernel Selector Backend
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-The experimental Kernel Optimizer backend selects faster implementations of supported
+The experimental Kernel Selector backend selects faster implementations of supported
 ``torch.nn.functional`` calls before building another AITune backend. It is a composite backend: its JIT or AOT build
 mode and supported execution topology come from the delegate backend.
 
 .. code-block:: python
 
-    from aitune.torch.backend import KernelOptimizerBackend, KernelOptimizerBackendConfig, TorchInductorJitBackend
-    from aitune.torch.backend.kernels.kernel_provider import SageAttentionKernelProvider
+    from aitune.torch.backend import KernelSelectorBackend, KernelSelectorBackendConfig, TorchInductorJitBackend
+    from aitune.torch.kernel_forge.kernel_provider import SageAttentionKernelProvider
 
-    backend = KernelOptimizerBackend(
-        config=KernelOptimizerBackendConfig(kernel_providers=SageAttentionKernelProvider()),
+    backend = KernelSelectorBackend(
+        config=KernelSelectorBackendConfig(kernel_providers=SageAttentionKernelProvider()),
         delegate_backend=TorchInductorJitBackend(),
     )
 
-See the `Kernel Optimizer Backend Guide
-<https://docs.nvidia.com/aitune/dev/guides/backends/kernel-optimizer-backend>`_ for provider and delegate compatibility.
+See the `Kernel Selector Backend Guide
+<https://docs.nvidia.com/aitune/dev/guides/backends/kernel-selector-backend>`_ for provider and delegate compatibility.
 
 
 Tune Strategies
