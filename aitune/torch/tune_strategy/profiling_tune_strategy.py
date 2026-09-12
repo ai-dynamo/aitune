@@ -408,10 +408,11 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                     if best is not None and best.backend.is_active:
                         best.backend.deactivate()
                     log(
-                        "🎯 new best %s for %s is %s, batch size: %s",
+                        "🎯 new best %s for %s is %s, speedup=%s, batch size: %s",
                         self._metric_label,
                         built.describe(),
                         self._fmt(result.metric),
+                        speedup,
                         batch_size,
                         depth=2,
                         sink=self._sink,
