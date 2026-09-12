@@ -56,26 +56,18 @@ class Config:
         """Return the tune strategy to use for JIT tuning.
 
         When ``strategy`` is set explicitly it is returned as-is. Otherwise the default is a
-        ``FirstWinsStrategy`` covering TensorRT (with and without dynamo) and TorchInductorJit —
-        kept here so the contract is visible on the config and tune-data snapshots can reflect
-        what will actually run.
+        ``MaxThroughputStrategy``. Ordinary modules profile TensorRT (with and without dynamo)
+        and TorchInductor JIT. Distributed modules profile TorchInductor AOT and TorchInductor JIT.
+        Candidates are resolved when the module is available.
 
         Strategy and backend modules are imported lazily to keep the JIT config a thin data
         layer that doesn't pull runtime modules at import time.
         """
         if self.strategy is not None:
             return self.strategy
-        from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTBackendConfig
-        from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
-        from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
+        from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
 
-        return FirstWinsStrategy(
-            backends=[
-                TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=True)),
-                TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-                TorchInductorJitBackend(),
-            ]
-        )
+        return MaxThroughputStrategy.for_jit()
 
     def reset_to_defaults(self) -> None:
         """Reset all options to their default values (e.g. for test isolation)."""

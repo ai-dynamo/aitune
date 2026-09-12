@@ -235,3 +235,4 @@ See the [E5Large example](../../../examples/E5Large/README.md) for a complete wo
 - [Backend Guides](../backends/tensorrt_backend.md) — backend-specific deployment notes
 - [E5Large example](../../../examples/E5Large/README.md) — end-to-end embedding worker
 - [FLUX example](../../../examples/FLUX/README.md) — end-to-end image generation worker
+- [WAN example](../../../examples/WAN/README.md) — context-parallel text-to-video worker

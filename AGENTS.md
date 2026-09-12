@@ -92,7 +92,7 @@ JIT also supports `detect_graph_breaks` (uses `torch._dynamo.explain()` to skip 
 | `aitune/torch/performance/` | `PerformanceProfile` + `profile()` — user-facing performance attribution profiler |
 | `aitune/torch/tune_data/` | `snapshot_tuning_data()` — manually flush in-memory tuning telemetry to disk |
 | `aitune/torch/config.py` | `AITuneConfig` singleton (`aitune.torch.config`) |
-| `aitune/torch/jit/config.py` | `Config` dataclass singleton (`aitune.torch.jit_config`); default strategy: `FirstWinsStrategy([TensorRTBackend(dynamo=True), TensorRTBackend(dynamo=False), TorchInductorJitBackend()])` |
+| `aitune/torch/jit/config.py` | `Config` dataclass singleton (`aitune.torch.jit_config`); default strategy: `MaxThroughputStrategy` with JIT-specific backend defaults |
 | `aitune/utils/env_vars.py` | Core env-var constants; inspect debug vars are parsed in `inspecting/module_inspector.py` |
 | `aitune/dynamo/` | `DynamoWorker` — serve tuned models as Dynamo endpoints (requires `aitune[dynamo]`) |
 
@@ -129,6 +129,15 @@ Strategies decide which backend(s) to use and how:
 - `MaxThroughputStrategy` — profiles all backends via `task/profiling/profiling.py`, selects highest throughput
 - `MinLatencyStrategy` — profiles all backends via `task/profiling/profiling.py`, selects lowest latency
 - `LatencyBudgetStrategy` — profiles all backends via `task/profiling/profiling.py`, selects highest throughput under a latency budget
+
+AOT and JIT default to `MaxThroughputStrategy.for_aot()` and `MaxThroughputStrategy.for_jit()`, respectively.
+`for_aot()` preserves each strategy's default batch-size policy; `for_jit()` disables maximum-batch-size discovery.
+Strategy classes own their backend defaults through `_default_aot_backends(distributed=False)` and
+`_default_jit_backends(distributed=False)`. Both must define their candidates explicitly. `MultiBackendStrategy`
+selects the workflow during construction and resolves the module type before tuning. Explicit backend lists take
+precedence. JIT uses TensorRT (Dynamo and legacy) and Inductor JIT for ordinary
+modules, or Inductor AOT/JIT for distributed modules. AOT adds Inductor AOT and Torch-TensorRT AOT;
+distributed AOT omits native TensorRT and enables Torch-TensorRT's distributed tracing.
 
 ## Code Style
 

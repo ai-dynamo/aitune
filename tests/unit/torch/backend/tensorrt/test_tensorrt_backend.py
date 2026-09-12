@@ -921,7 +921,7 @@ def test_set_optimization_profiles_rejects_failed_context_update(mocker, global_
 
 
 def test_set_input_tensors_rejects_invalid_shape(mocker):
-    backend = TensorRTBackend()
+    backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
     backend._context = mocker.MagicMock()
     backend._context.set_input_shape.return_value = False
     backend._context.active_optimization_profile = 1
@@ -940,7 +940,7 @@ def test_set_input_tensors_rejects_invalid_shape(mocker):
 
 
 def test_set_input_tensors_rejects_invalid_address(mocker):
-    backend = TensorRTBackend()
+    backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
     backend._context = mocker.MagicMock()
     backend._context.set_input_shape.return_value = True
     backend._context.set_tensor_address.return_value = False
@@ -957,7 +957,7 @@ def test_set_input_tensors_rejects_invalid_address(mocker):
 
 
 def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
-    backend = TensorRTBackend()
+    backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
     backend._context = mocker.MagicMock()
     backend._context.execute_async_v3.return_value = True
     backend._cuda_stream = mocker.MagicMock()
@@ -965,7 +965,6 @@ def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
     backend._start_time = mocker.MagicMock()
     backend._end_time = mocker.MagicMock()
     backend._prepare_inputs = mocker.MagicMock(return_value={"args_0": mocker.MagicMock()})
-    backend._invalidate_cuda_graph = mocker.MagicMock()
     backend._prepare_outputs_for_return = mocker.MagicMock(return_value="output")
     mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.torch.cuda.stream")
     calls = []
