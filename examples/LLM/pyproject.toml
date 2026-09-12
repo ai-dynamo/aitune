@@ -42,8 +42,8 @@ llm = ["**/*"]
 [tool.aitune]
 variants = [
     { arguments = { "model_id" = "Qwen/Qwen3-0.6B", "max-new-tokens" = 2 } },
-    { arguments = { "multi-gpu" = true, "model_id" = "Qwen/Qwen3-0.6B", "cache" = "dynamic", "max-new-tokens" = 2 }, additional_tags = ["gpu/4"], launcher = "torchrun", processes = 4 },
-    { arguments = { "multi-gpu" = true, "model_id" = "Qwen/Qwen3-0.6B", "cache" = "no_cache", "max-new-tokens" = 2 }, additional_tags = ["gpu/4"], launcher = "torchrun", processes = 4 },
+    { arguments = { "model_id" = "Qwen/Qwen3-0.6B", "cache" = "dynamic", "max-new-tokens" = 2 }, additional_tags = ["gpu/4"], launcher = "torchrun", processes = 4 },
+    { arguments = { "model_id" = "Qwen/Qwen3-0.6B", "cache" = "no_cache", "max-new-tokens" = 2 }, additional_tags = ["gpu/4"], launcher = "torchrun", processes = 4 },
 ]
 additional_tags = ["mem/80g"]
 use_gated_hf_token = true

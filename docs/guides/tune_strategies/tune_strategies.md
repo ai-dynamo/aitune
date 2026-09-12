@@ -8,6 +8,45 @@ Tune strategies determine how AITune selects and configures backends during the 
 
 ## Overview
 
+Both ahead-of-time and JIT tuning default to `MaxThroughputStrategy`, with different backend candidates. JIT disables maximum-batch-size discovery and uses the recorded input bounds.
+Explicit backend lists and strategy choices are preserved.
+
+Default JIT tuning profiles TensorRT (Dynamo), TensorRT (`use_dynamo=False`), and TorchInductor JIT for ordinary
+modules. For distributed modules, it profiles TorchInductor AOT and TorchInductor JIT.
+
+Default AOT tuning profiles the following candidates in order:
+
+| Candidate | Ordinary module | Distributed module |
+|---|---|---|
+| TensorRT (Dynamo) | Yes | — |
+| TensorRT (`use_dynamo=False`) | Yes | — |
+| TorchInductor AOT | Yes | Yes |
+| Torch-TensorRT AOT | Yes | `use_distributed_mode_trace=True` |
+| TorchInductor JIT | Yes | Yes |
+
+Use `MaxThroughputStrategy.for_aot()` for the full candidate set above, or
+`MaxThroughputStrategy.for_jit()` for the smaller JIT set. The regular constructor is equivalent to
+`for_aot()`. AOT preserves each strategy's batch-size policy; JIT disables maximum-batch-size discovery
+to limit tuning work during inference. Both factories accept constructor arguments, including explicit backend lists.
+
+Profiling determines the winning backend; candidate order is not a performance ranking.
+`FirstWinsStrategy` owns a separate fallback order because it stops at the first backend that passes its checks.
+
+Strategy implementations follow the same configuration hooks:
+
+| Hook | Default candidates for |
+|---|---|
+| `_default_aot_backends(distributed=False)` | AOT modules |
+| `_default_jit_backends(distributed=False)` | JIT modules |
+
+Each hook defines its own candidates and uses `distributed` to select compatible backends. Neither hook delegates
+to the other. `MultiBackendStrategy` selects the workflow during construction and the module type before tuning.
+Explicit backend lists, including empty lists, take precedence.
+
+`ProfilingTuneStrategy` defines the candidates used by the latency strategies in both workflows.
+`MaxThroughputStrategy` inherits its AOT candidates and defines a smaller JIT set. `FirstWinsStrategy`
+explicitly uses the same fallback order in both workflows.
+
 AITune provides five built-in strategies:
 
 - **OneBackendStrategy**: Uses a single specified backend
@@ -37,7 +76,7 @@ Most users do not need to configure this behavior. For diagnostic analytics or t
 
 ## Choosing a Strategy
 
-Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. If you want a safer default with minimal tuning time, `FirstWinsStrategy` balances reliability and speed. When absolute throughput matters and you can afford longer tuning, choose `MaxThroughputStrategy`.
+Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. Choose `FirstWinsStrategy` when tuning time is the priority. Use `MinLatencyStrategy` for per-request latency or `MaxThroughputStrategy` for throughput.
 
 | Strategy                  | When to Use                                   | Tuning Time | Reliability             | Performance                     |
 |---------------------------|-----------------------------------------------|-------------|-------------------------|---------------------------------|
@@ -156,7 +195,6 @@ baseline or falls back to eager. Advanced performance-validation modes can make 
 from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchInductorJitBackendConfig,
     TorchInductorJitBackend,
     TorchAOBackend,
     TorchAOBackendConfig
@@ -166,7 +204,7 @@ import aitune.torch as ait
 # List all candidate backends
 backends = [
     TensorRTBackend(config=TensorRTBackendConfig()),
-    TorchInductorJitBackend(config=TorchInductorJitBackendConfig(mode="max-autotune")),
+    TorchInductorJitBackend(),
     TorchAOBackend(config=TorchAOBackendConfig(quantization="fp8wo")),
 ]
 

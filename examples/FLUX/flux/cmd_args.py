@@ -98,7 +98,6 @@ def parse_args():
         default="flux-dev.ait",
         help="Path to save the tuned model",
     )
-    parser.add_argument("--multi-gpu", action="store_true", help="Use Diffusers context parallelism")
     parser.add_argument(
         "--quantization",
         action="store_true",
