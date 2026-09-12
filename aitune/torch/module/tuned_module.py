@@ -8,7 +8,7 @@ from typing import Any
 import torch
 
 from aitune.global_context import MODULE_CONTEXT_KEY, global_context
-from aitune.records import Artifact
+from aitune.records import DeploymentArtifact
 from aitune.torch.backend.backend import Backend, BuildMode
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
@@ -117,7 +117,7 @@ class TunedModule:
         for backend in self._backends.values():
             backend.deactivate()
 
-    def artifact(self) -> Artifact:
+    def artifact(self) -> DeploymentArtifact:
         """Return the artifact for a module backed by one compiled graph.
 
         Returns:

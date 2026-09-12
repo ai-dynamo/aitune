@@ -10,19 +10,15 @@ inspect live trees by object identity here.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 import torch
 from torch.utils import _pytree
 
-from aitune.records import PT2Artifact
-from aitune.torch.artifact import bounded_tensor_specs
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_store import Sample
 from aitune.torch.module.tensor_spec import TensorSpec
-from aitune.utils.hashing import hash_file
 
 
 class PT2CallContractState(TypedDict):
@@ -84,29 +80,6 @@ class PT2CallContract:
         )
 
 
-def create_pt2_artifact(graph_spec: GraphSpec, path: Path, contract: PT2CallContract) -> PT2Artifact:
-    """Create a bounded artifact using Triton's ordinal PT2 tensor names."""
-    input_names = tuple(f"INPUT__{index}" for index in range(len(contract.input_order)))
-    output_names = tuple(f"OUTPUT__{index}" for index in range(len(contract.output_order)))
-    return PT2Artifact(
-        inputs=bounded_tensor_specs(
-            graph_spec,
-            "input",
-            metadata_indices=contract.input_order,
-            artifact_names=input_names,
-        ),
-        outputs=bounded_tensor_specs(
-            graph_spec,
-            "output",
-            metadata_indices=contract.output_order,
-            artifact_names=output_names,
-        ),
-        path=path,
-        fingerprint=hash_file(path),
-        structured_call=contract.structured,
-    )
-
-
 def _validate_tensor_tree(value: Any, path: str) -> None:
     """Require tensors under containers supported by Triton's PT2 runtime."""
     if isinstance(value, torch.Tensor):
@@ -160,4 +133,4 @@ def _metadata_order(
     return tuple(order)
 
 
-__all__ = ["PT2CallContract", "PT2CallContractState", "create_pt2_artifact"]
+__all__ = ["PT2CallContract", "PT2CallContractState"]

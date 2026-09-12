@@ -14,7 +14,7 @@ plan format may change in future releases.
 providers, and returns a plan containing only candidates that are faster than the original PyTorch functions. The plan
 can be activated directly, without wrapping the module in an AITune backend.
 
-Use [`KernelOptimizerBackend`](../backends/kernel_optimizer_backend.md) instead when AITune should own provider
+Use [`KernelSelectorBackend`](../backends/kernel_selector_backend.md) instead when AITune should own provider
 selection, apply the selected plan while building another backend, and save the resulting plan or compiled artifact in
 an AITune checkpoint. The direct API documented on this page is useful when the application should manage the plan and
 its runtime explicitly.
@@ -71,8 +71,8 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.attention import SDPBackend
 
-from aitune.torch.backend.kernels import KernelOptimizer
-from aitune.torch.backend.kernels.kernel_provider import TorchSDPAKernelProvider
+from aitune.torch.kernel_forge import KernelOptimizer
+from aitune.torch.kernel_forge.kernel_provider import TorchSDPAKernelProvider
 
 logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
 
@@ -114,6 +114,7 @@ AITune includes the following static providers:
 | Provider | Runtime dependency | Purpose |
 |---|---|---|
 | `TorchSDPAKernelProvider` | PyTorch | Runs SDPA under a selected `torch.nn.attention.SDPBackend`. |
+| `DiffusersAttentionKernelProvider` | `diffusers>=0.35.0`; Hub backends also require `kernels>=0.12` | Runs compatible 4D SDPA calls through a selected Diffusers attention dispatcher backend. |
 | `SageAttentionKernelProvider` | `sageattention` | Runs compatible SDPA calls with SageAttention. |
 | `FlashAttention4KernelProvider` | `flash-attn-4` | Runs compatible 4D SDPA calls with FlashAttention-4, including supported GQA and MQA layouts. |
 
@@ -126,8 +127,8 @@ remaining candidates continue through validation and benchmarking:
 ```python
 from torch.nn.attention import SDPBackend
 
-from aitune.torch.backend.kernels import KernelOptimizer
-from aitune.torch.backend.kernels.kernel_provider import (
+from aitune.torch.kernel_forge import KernelOptimizer
+from aitune.torch.kernel_forge.kernel_provider import (
     FlashAttention4KernelProvider,
     SageAttentionKernelProvider,
     TorchSDPAKernelProvider,
@@ -146,12 +147,44 @@ Providers specialize their inference plans from representative samples. Inconsis
 cause `prepare()` to return `False`; runtime and correctness failures reject the candidate before it can enter the
 selected plan.
 
-## Provider interface and lifecycle
+### Diffusers attention dispatcher
 
-Import the base provider APIs from `aitune.torch.backend.kernels.kernel_provider`:
+`DiffusersAttentionKernelProvider` exposes Diffusers attention dispatcher implementations as kernel candidates. Create
+one provider for each backend that should be evaluated:
 
 ```python
-from aitune.torch.backend.kernels.kernel_provider import (
+from aitune.torch.kernel_forge.kernel_provider import (
+    DiffusersAttentionBackend,
+    DiffusersAttentionKernelProvider,
+)
+
+providers = [
+    DiffusersAttentionKernelProvider(DiffusersAttentionBackend.FLASH),
+    DiffusersAttentionKernelProvider(DiffusersAttentionBackend.SAGE),
+    DiffusersAttentionKernelProvider(DiffusersAttentionBackend.XFORMERS),
+]
+```
+
+`DiffusersAttentionBackend` lists the dispatcher implementations compatible with SDPA replacement. Their availability
+and optional dependencies depend on the installed Diffusers version. See the
+[Diffusers attention backend documentation](https://huggingface.co/docs/diffusers/en/optimization/attention_backends)
+for the current list. The provider converts PyTorch SDPA's 4D HND layout to the NHD layout expected by the Diffusers
+dispatcher and converts its output back to HND.
+
+Hub-backed implementations, whose enum names end in `_HUB`, download their kernels from the Hugging Face Hub and
+require `kernels>=0.12` in addition to Diffusers. Non-Hub implementations do not depend on the `kernels` package.
+
+The Diffusers `native`, `_native_cudnn`, `_native_efficient`, `_native_flash`, and `_native_math` implementations call
+`torch.nn.functional.scaled_dot_product_attention` themselves and therefore cannot replace that function without
+recursion. They are intentionally omitted from `DiffusersAttentionBackend`; use `TorchSDPAKernelProvider` for those
+PyTorch SDPA backends instead.
+
+## Provider interface and lifecycle
+
+Import the base provider APIs from `aitune.torch.kernel_forge.kernel_provider`:
+
+```python
+from aitune.torch.kernel_forge.kernel_provider import (
     KernelProvider,
     KernelProviderState,
     kernel_provider_from_dict,
@@ -189,7 +222,7 @@ provider classes before restoring plans that contain them.
 Kernel generators produce providers asynchronously and are exported from the same package:
 
 ```python
-from aitune.torch.backend.kernels.kernel_provider import (
+from aitune.torch.kernel_forge.kernel_provider import (
     KernelGenerationResult,
     KernelGenerator,
 )
@@ -246,7 +279,7 @@ with plan.apply(model):
 Use `KernelProviderRuntime` directly when activation must span multiple contexts or requires explicit lifecycle control:
 
 ```python
-from aitune.torch.backend.kernels import KernelProviderRuntime
+from aitune.torch.kernel_forge import KernelProviderRuntime
 
 runtime = KernelProviderRuntime(model, plan)
 with torch.no_grad():
@@ -278,7 +311,7 @@ from pathlib import Path
 
 import torch
 
-from aitune.torch.backend.kernels import KernelOptimizationPlan
+from aitune.torch.kernel_forge import KernelOptimizationPlan
 
 plan_path = Path("kernel-plan.json")
 plan_path.write_text(json.dumps(plan.to_dict()))

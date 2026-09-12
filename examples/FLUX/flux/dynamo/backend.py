@@ -52,13 +52,13 @@ class FluxDynamoBackend:
         self._inference_steps = backend_config.get("steps", DEFAULT_INFERENCE_STEPS)
         self._guidance_scale = backend_config.get("guidance_scale", DEFAULT_GUIDANCE_SCALE)
         self._max_sequence_length = backend_config.get("max_sequence_length", DEFAULT_MAX_SEQUENCE_LENGTH)
-        self._multi_gpu = int(os.environ.get("WORLD_SIZE", "1")) > 1
+        self._multi_gpu = False
         self._pipeline = None
         self._generation_lock = threading.Lock()
 
     def run(self) -> None:
         """Initialize distributed execution and start serving requests."""
-        initialize_distributed(self._multi_gpu)
+        self._multi_gpu = initialize_distributed()
         try:
             config = dyn.DynamoWorkerConfig(type="image", model_path=self.model_name, mapping=self.map_request)
             dyn.dynamo_worker(self.generate, config, setup=self.setup, warmup=self.warmup)

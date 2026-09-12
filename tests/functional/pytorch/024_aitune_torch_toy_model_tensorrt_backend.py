@@ -3,9 +3,13 @@
 
 from logging import DEBUG, basicConfig, getLogger
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
+import tensorrt as trt
 import torch
+from polygraphy.backend.trt import TrtRunner
 
+from aitune.records import DeploymentArtifact, DType
 from aitune.torch.backend.tensorrt.tensorrt_backend import (
     ProfileMode,
     TensorRTBackend,
@@ -16,7 +20,7 @@ from aitune.torch.dataloader import DynamicShapeDataset
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
-from aitune.torch.tuning import tune
+from aitune.torch.tuning import load, save, tune
 from aitune.torch.utils.tensor import format_tensor_name
 
 logger = getLogger(Path(__file__).stem)
@@ -28,6 +32,47 @@ class ToyModel(torch.nn.Module):
 
     def forward(self, x):
         return x * 0.1
+
+
+def _check_exported_artifact(artifact, destination):
+    assert artifact.model.export_files(destination) == destination
+    assert destination.read_bytes() == artifact.model.path.read_bytes()
+    assert tuple(destination.parent.iterdir()) == (destination,)
+
+    # Load the exported plan independently of AITune's runtime and checkpoint sidecars.
+    trt_logger = trt.Logger(trt.Logger.WARNING)
+    runtime = trt.Runtime(trt_logger)
+    engine = runtime.deserialize_cuda_engine(destination.read_bytes())
+    assert engine is not None
+    names = tuple(engine.get_tensor_name(index) for index in range(engine.num_io_tensors))
+    assert (
+        tuple(name for name in names if engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT) == artifact.input_names
+    )
+    assert (
+        tuple(name for name in names if engine.get_tensor_mode(name) == trt.TensorIOMode.OUTPUT)
+        == artifact.output_names
+    )
+    assert all(engine.get_tensor_dtype(name) == trt.float32 for name in names)
+    profiles = artifact.model.metadata["optimization_profiles"]
+    assert engine.num_optimization_profiles == len(profiles)
+
+    with TrtRunner(engine) as runner:
+        for index, profile in enumerate(profiles):
+            runner.set_profile(index)
+            assert tuple(profile) == artifact.input_names
+            bounds = profile[artifact.input_names[0]]
+            assert tuple(tuple(shape) for shape in engine.get_tensor_profile_shape(artifact.input_names[0], index)) == (
+                bounds["min_shape"],
+                bounds["opt_shape"],
+                bounds["max_shape"],
+            )
+            value = torch.randn(bounds["opt_shape"])
+            expected = ToyModel()(value)
+            outputs = runner.infer({artifact.input_names[0]: value.numpy()})
+            assert tuple(outputs) == artifact.output_names
+            torch.testing.assert_close(
+                torch.from_numpy(outputs[artifact.output_names[0]]), expected, rtol=1e-5, atol=1e-6
+            )
 
 
 def testing_multi_profile_with_samples():
@@ -74,18 +119,59 @@ def testing_multi_profile_with_samples():
     # still runs after error
     module(data2.repeat(2, 1, 1, 1))
 
-    # check profiles are saved and loaded correctly
-    active_backend = next(iter(module.module.backends.values()))
-    profiles = active_backend._trt_optimization_profiles
-
+    # Check the public artifact against the four profiles selected during tuning.
+    artifact = module.artifact()
+    assert isinstance(artifact, DeploymentArtifact)
+    assert artifact.model.format == "tensorrt_plan"
+    assert artifact.model.path.is_file()
+    assert artifact.model.additional_files == ()
+    assert artifact.model.files == (artifact.model.path,)
+    assert artifact.runtime.name == "tensorrt"
+    assert artifact.runtime.options == {
+        "use_cuda_graphs": True,
+        "max_cuda_graphs": 8,
+        "cuda_graph_cache_policy": "lfu",
+    }
     input_name = format_tensor_name("x", "input")
-    shapes = {tuple(profile[input_name].min) for profile in profiles}
+    assert artifact.input_names == (input_name,)
+    assert len(artifact.outputs) == 1
+    for spec in artifact.inputs + artifact.outputs:
+        assert spec.dtype is DType.FLOAT32
+        assert spec.min_shape == (2, 3, 224, 224)
+        assert spec.max_shape == (8, 3, 448, 448)
+        assert spec.batch_axis == 0
+    assert artifact.max_batch_size is None  # These profiles do not support batch size one.
+    profiles = artifact.model.metadata["optimization_profiles"]
+    assert artifact.model.metadata["optimization_profile_count"] == len(profiles) == 4
+    assert {profile[input_name]["min_shape"] for profile in profiles} == {
+        (8, 3, 448, 448),
+        (2, 3, 448, 448),
+        (8, 3, 224, 224),
+        (2, 3, 224, 224),
+    }
+    for profile in profiles:
+        bounds = profile[input_name]
+        assert bounds["min_shape"] == bounds["opt_shape"] == bounds["max_shape"]
 
-    assert (8, 3, 448, 448) in shapes
-    assert (2, 3, 448, 448) in shapes
+    with TemporaryDirectory(prefix="aitune-tensorrt-artifact-") as directory:
+        root = Path(directory)
+        _check_exported_artifact(artifact, root / "export" / "renamed.plan")
+        checkpoint = root / "model.ait"
+        save(module, checkpoint)
+        module.deactivate()
 
-    assert (8, 3, 224, 224) in shapes
-    assert (2, 3, 224, 224) in shapes
+        restored = load(ToyModel().eval(), checkpoint)
+        restored_artifact = restored.artifact()
+        assert restored_artifact.model.path != artifact.model.path
+        assert restored_artifact.model.format == artifact.model.format
+        assert restored_artifact.model.additional_files == artifact.model.additional_files
+        assert restored_artifact.model.metadata == artifact.model.metadata
+        assert restored_artifact.inputs == artifact.inputs
+        assert restored_artifact.outputs == artifact.outputs
+        assert restored_artifact.runtime == artifact.runtime
+        _check_exported_artifact(restored_artifact, root / "restored-export" / "model.plan")
+        value = data2.repeat(2, 1, 1, 1)
+        torch.testing.assert_close(restored(value), value * 0.1, rtol=1e-5, atol=1e-6)
 
     MODULE_REGISTRY.clear()
 

@@ -117,8 +117,8 @@ def test_snapshot_config_jit_mode_strategy_resolves_default_when_unset(mocker):
     # when
     result = snapshot_config(AITuneMode.JIT)
 
-    # then — snapshot reflects the resolved default (FirstWinsStrategy), not the sentinel
-    assert result["strategy"]["name"] == "FirstWinsStrategy"
+    # then — snapshot reflects the resolved default (MaxThroughputStrategy), not the sentinel
+    assert result["strategy"]["name"] == "MaxThroughputStrategy"
     assert "backends" in result["strategy"]["config"]
 
 

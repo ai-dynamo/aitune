@@ -59,11 +59,14 @@ class GraphSpec:
         forward_inputs.arguments = self.input_spec.make_batch(forward_inputs.arguments, batch_size)
         return forward_inputs.args, forward_inputs.kwargs
 
-    def update_max_batch_size(self, sample: tuple[tuple, dict], max_batch_size: int) -> None:
-        """Update input metadata with the specified maximum batch size."""
-        args, kwargs = sample
-        forward_inputs = self.forward_signature.normalize(args, kwargs)
-        self.input_spec.update_max_batch_size(forward_inputs.arguments, max_batch_size)
+    def update_max_batch_size(self, max_batch_size: int) -> None:
+        """Extend input and output batch bounds to include the discovered batch size.
+
+        Bounds use established batch-axis multipliers. Other
+        dimensions and previously observed bounds are preserved.
+        """
+        self.input_spec.update_max_batch_size(max_batch_size)
+        self.output_spec.update_max_batch_size(max_batch_size)
 
     def get_shape_definition(self, locator: Locator) -> ShapeDefinition | None:
         """Return the explicit shape definition for an input tensor, if configured."""
@@ -96,6 +99,25 @@ class GraphSpec:
                 max_shape.append(dimension.max)
         return min_shape, opt_shape, max_shape
 
+    def get_effective_output_shapes(self, tensor_spec: TensorSpec) -> tuple[list[int], list[int]]:
+        """Return output bounds using the effective logical input batch range.
+
+        Explicit input definitions take precedence over recorded input bounds.
+        Known output batch axes follow the range shared by all batched inputs;
+        other dimensions retain their observed bounds. Recorded metadata is unchanged.
+        """
+        min_shape, max_shape = tensor_spec.min_shape[:], tensor_spec.max_shape[:]
+        ranges = tuple(self._iter_batch_size_ranges(normalized=True))
+        if ranges:
+            min_batch = max(minimum for minimum, _ in ranges)
+            max_batch = min(maximum for _, maximum in ranges)
+            if min_batch > max_batch:
+                raise ValueError(f"Graph {self.name!r} inputs have no shared logical batch range")
+            for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
+                min_shape[axis] = min_batch * multiplier
+                max_shape[axis] = max_batch * multiplier
+        return min_shape, max_shape
+
     def _iter_batch_size_ranges(self, normalized: bool = False) -> Iterator[tuple[int, int]]:
         """Yield batch ranges from explicit definitions or inferred metadata."""
         for locator, tensor_spec in self.input_spec.tensor_data:
@@ -108,7 +130,10 @@ class GraphSpec:
 
             for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
                 multiplier = multiplier if normalized else 1
-                yield tensor_spec.min_shape[axis] // multiplier, tensor_spec.max_shape[axis] // multiplier
+                yield (
+                    (tensor_spec.min_shape[axis] + multiplier - 1) // multiplier,
+                    tensor_spec.max_shape[axis] // multiplier,
+                )
 
     def get_max_batch_size(self, normalized: bool = False) -> int:
         """Get max batch size from input spec.
