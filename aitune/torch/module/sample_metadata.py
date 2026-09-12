@@ -387,11 +387,16 @@ class SampleMetadata:
         for locator, tensor_spec in tensor_data.items():
             tensor_spec.update_shapes_seen(other_tensor_data[locator])
 
-    def update_max_batch_size(self, inputs: dict[str, Any], max_batch_size: int):
-        """Update input spec with max batch size information."""
-        inputs = self.make_batch(inputs, max_batch_size)
-        max_batch_metadata = SampleMetadata.from_inputs(inputs, batch_size=max_batch_size, strict=True)
-        self.update_shapes_seen(max_batch_metadata)
+    def update_max_batch_size(self, max_batch_size: int) -> None:
+        """Extend known batch-axis bounds without creating tensors.
+
+        Batch-axis multipliers determine each dimension's maximum size. Existing
+        bounds are preserved, and dimensions without a known batch relationship
+        remain unchanged.
+        """
+        for _, tensor_spec in self._tensor_data:
+            for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
+                tensor_spec.max_shape[axis] = max(tensor_spec.max_shape[axis], max_batch_size * multiplier)
 
     def has_batch_axis(self) -> bool:
         """Check if metadata has batch axis."""

@@ -10,7 +10,7 @@ from typing import Any
 import torch.nn as nn
 from torch.nn.attention import SDPBackend
 
-from aitune.records import Artifact
+from aitune.records import DeploymentArtifact
 from aitune.torch.backend.backend import (
     Backend,
     BackendConfig,
@@ -201,7 +201,7 @@ class KernelSelectorBackend(Backend):
             return f"{self.__class__.__name__}(delegate={self._delegate_backend.describe()})"
         return f"{self.__class__.__name__}({self._config.describe()},delegate={self._delegate_backend.describe()})"
 
-    def artifact(self) -> Artifact:
+    def artifact(self) -> DeploymentArtifact:
         """Return the artifact produced by a publishable AOT delegate."""
         return self._delegate_backend.artifact()
 

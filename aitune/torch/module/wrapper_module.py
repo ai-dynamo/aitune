@@ -12,7 +12,7 @@ from typing import Any, cast
 import torch
 import wrapt
 
-from aitune.records import Artifact
+from aitune.records import DeploymentArtifact
 from aitune.torch.backend.backend import Backend
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
@@ -245,7 +245,7 @@ class Module(wrapt.CallableObjectProxy):
             wrapper = cast(TunedModule, self._self_wrapper)
             wrapper.deactivate()
 
-    def artifact(self) -> Artifact:
+    def artifact(self) -> DeploymentArtifact:
         """Return the artifact produced by this tuned module.
 
         Returns:

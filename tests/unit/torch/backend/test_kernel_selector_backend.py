@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
 from torch.nn.attention import SDPBackend
 
-from aitune.records import Artifact
+from aitune.records import DeploymentArtifact
 from aitune.torch.backend.backend import Backend, BackendState, BuildMode, ExecutionMode
 from aitune.torch.backend.kernel_selector_backend import (
     KernelSelectorBackend,
@@ -262,10 +262,10 @@ def test_backend_defaults_to_default_config_and_torch_inductor_jit_delegate():
 
 
 def test_artifact_is_provided_by_delegate():
-    artifact = Mock(spec=Artifact)
+    artifact = Mock(spec=DeploymentArtifact)
     delegate = Mock()
     delegate.artifact.return_value = artifact
-    backend = KernelOptimizerBackend()
+    backend = KernelSelectorBackend()
     backend._delegate_backend = delegate
 
     assert backend.artifact() is artifact
