@@ -10,8 +10,6 @@ from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 
 import aitune.torch as ait
 from aitune.torch.backend import (
-    TensorRTBackend,
-    TensorRTBackendConfig,
     TorchAOBackend,
     TorchAOBackendConfig,
     TorchInductorJitBackend,
@@ -82,17 +80,6 @@ def _transformer_strategy(
     return strategy
 
 
-def _pipeline_strategy():
-    """Compare backends used by tunable modules outside the transformer."""
-    return ait.MaxThroughputStrategy(
-        backends=[
-            TensorRTBackend(),
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorJitBackend(),
-        ]
-    )
-
-
 def tune_model(
     model_name,
     prompt,
@@ -149,10 +136,9 @@ def tune_model(
     modules_info.describe()
 
     transformer_strategy = _transformer_strategy(sizes=sizes, multi_gpu=multi_gpu, quantization=quantization)
-    transformer_strategy.enable_find_max_batch_size(enable=False)
-
-    default_strategy = _pipeline_strategy()
-    default_strategy.enable_find_max_batch_size(enable=False)
+    # Match the single-image workload used by this example's inference and serving commands.
+    transformer_strategy.enable_find_max_batch_size(False)
+    default_strategy = ait.MaxThroughputStrategy.for_aot().enable_find_max_batch_size(False)
 
     # Leave all modules except the transformer unquantized.
     modules = [m for m in modules_info.get_modules() if m.name != "transformer"]

@@ -22,23 +22,22 @@ import torch.nn as nn
 
 from aitune.torch.backend import (
     Backend,
-    ONNXRuntimeBackend,
-    ONNXRuntimeBackendConfig,
     TensorRTBackend,
     TensorRTBackendConfig,
     TorchEagerBackend,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
     TorchTensorRTAotBackend,
-    TorchTensorRTJitBackend,
+    TorchTensorRTAotBackendConfig,
 )
+from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTConfig
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
-from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
-from aitune.torch.tune_strategy.mixin.performance_validation_mixin import fmt_speedup_msg
+from aitune.torch.tune_strategy.formatting import fmt_speedup_comparison, fmt_speedup_msg
+from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.utils.logging import log
 
@@ -80,7 +79,7 @@ class BackendPerfResult:
     passed: bool
 
 
-class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
+class ProfilingTuneStrategy(MultiBackendStrategy):
     """Base class for strategies that select a backend by a profiled metric.
 
     Subclasses set ``_title``, ``_description``, ``_metric_label`` (e.g. "throughput"),
@@ -113,8 +112,7 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
             profiling_config: Profiling configuration shared by strategy profiling tasks.
             kwargs: Additional arguments passed to the parent class (e.g. ``sink``).
         """
-        super().__init__(profiling_config=profiling_config, **kwargs)
-        self._backends = backends if backends is not None else self._default_backends()
+        super().__init__(backends=backends, profiling_config=profiling_config, **kwargs)
         self._performance_validation_mode = PerformanceValidationMode.ENABLED
 
         self.perf_validation_results: list[BackendPerfResult] = []
@@ -140,6 +138,46 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
     def performance_validation_mode(self) -> PerformanceValidationMode:
         """Return the configured performance validation mode."""
         return self._performance_validation_mode
+
+    def to_json_dict(self) -> dict[str, Any]:
+        """Returns config dict for the strategy."""
+        return {
+            "backends": [b.describe() for b in self._backends],
+            "performance_validation_mode": self._performance_validation_mode.value,
+            "profiling_config": self._profiling_config_to_json_dict(),
+        }
+
+    def _default_aot_backends(self, distributed: bool = False) -> list[Backend]:
+        """Compare supported export and compiler alternatives for AOT; performance varies by model."""
+        backends: list[Backend] = []
+        if not distributed:
+            backends = [TensorRTBackend(), TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False))]
+        return [
+            *backends,
+            TorchInductorAotBackend(),
+            TorchTensorRTAotBackend(
+                config=TorchTensorRTAotBackendConfig(
+                    compile_config=TorchTensorRTConfig(use_distributed_mode_trace=distributed),
+                ),
+            ),
+            TorchInductorJitBackend(),
+        ]
+
+    def _default_jit_backends(self, distributed: bool = False) -> list[Backend]:
+        """Compare supported export and compiler alternatives for JIT; performance varies by model."""
+        backends: list[Backend] = []
+        if not distributed:
+            backends = [TensorRTBackend(), TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False))]
+        return [
+            *backends,
+            TorchInductorAotBackend(),
+            TorchTensorRTAotBackend(
+                config=TorchTensorRTAotBackendConfig(
+                    compile_config=TorchTensorRTConfig(use_distributed_mode_trace=distributed),
+                ),
+            ),
+            TorchInductorJitBackend(),
+        ]
 
     @abstractmethod
     def _measure(
@@ -351,15 +389,21 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
                 self.backend_results[-1].update(result.to_json_dict(self._metric_label))
                 report_backend_metric(self._metric_label, built.describe(), result.metric)
                 batch_size = result.selected_batch_size
+                perf_result = self._record_perf_result(built, result)
+                speedup = (
+                    fmt_speedup_comparison(perf_result.speedup, perf_result.passed)
+                    if perf_result is not None
+                    else "n/a"
+                )
                 log(
-                    "✅ backend profiled - %s: %s, batch size: %s",
+                    "✅ backend profiled - %s: %s, speedup=%s, batch size: %s",
                     self._metric_label,
                     self._fmt(result.metric),
+                    speedup,
                     batch_size,
                     depth=2,
                     sink=self._sink,
                 )
-                self._record_perf_result(built, result)
                 if best is None or self._is_better(result, best.result):
                     if best is not None and best.backend.is_active:
                         best.backend.deactivate()
@@ -383,21 +427,21 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
 
         return best
 
-    def _record_perf_result(self, backend: Backend, result: BackendProfilingResult) -> None:
-        """Appends a BackendPerfResult for the given backend if a baseline is available."""
+    def _record_perf_result(self, backend: Backend, result: BackendProfilingResult) -> BackendPerfResult | None:
+        """Records and returns the eager comparison so profiling logs use the same speedup."""
         metric = result.metric
         if self._baseline_result is None or self._baseline_result.metric <= 0 or metric <= 0:
             return
         speedup = self._speedup(result, self._baseline_result)
-        self.perf_validation_results.append(
-            BackendPerfResult(
-                backend_description=backend.describe(),
-                metric=metric,
-                baseline_metric=self._baseline_result.metric,
-                speedup=speedup,
-                passed=speedup >= 1.0,
-            )
+        perf_result = BackendPerfResult(
+            backend_description=backend.describe(),
+            metric=metric,
+            baseline_metric=self._baseline_result.metric,
+            speedup=speedup,
+            passed=speedup >= 1.0,
         )
+        self.perf_validation_results.append(perf_result)
+        return perf_result
 
     def _resolve_winner(self, best: _TuneCandidate | None) -> _TuneCandidate:
         """Returns the winning candidate, falling back to the TorchEager baseline when appropriate."""
@@ -480,19 +524,6 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
             batching=batching,
         )
 
-    def _default_backends(self) -> list[Backend]:
-        """Returns default backends."""
-        return [
-            TensorRTBackend(),
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorJitBackend(),
-            TorchInductorAotBackend(),
-            TorchTensorRTJitBackend(),
-            TorchTensorRTAotBackend(),
-            ONNXRuntimeBackend(),
-            ONNXRuntimeBackend(config=ONNXRuntimeBackendConfig(use_dynamo=False)),
-        ]
-
     def _describe_parts(self) -> list[str]:
         """Returns the parts of the description."""
         return [
@@ -501,11 +532,3 @@ class ProfilingTuneStrategy(FindMaxBatchSizeMixin):
             "backends:",
             *[f"  {backend.describe()}" for backend in self._backends],
         ]
-
-    def to_json_dict(self) -> dict[str, Any]:
-        """Returns config dict for the strategy."""
-        return {
-            "backends": [b.describe() for b in self._backends],
-            "performance_validation_mode": self._performance_validation_mode.value,
-            "profiling_config": self._profiling_config_to_json_dict(),
-        }
