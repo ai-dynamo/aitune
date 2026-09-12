@@ -2,53 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Durable references to tuned files that publishers can consume."""
 
-import hashlib
 import os
-import string
-import tempfile
-from collections.abc import Iterator
+import shutil
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
 from aitune.records.shapes import BoundedTensorSpec
-
-_HASH_CHUNK_SIZE = 1024 * 1024
-
-
-class ArtifactIntegrityError(RuntimeError):
-    """Raised when an artifact file is unavailable or differs from its recorded bytes."""
-
-
-def _validate_fingerprint(fingerprint: str) -> None:
-    """Validate a SHA-256 digest stored in an artifact record."""
-    if (
-        len(fingerprint) != 64
-        or fingerprint != fingerprint.lower()
-        or any(character not in string.hexdigits for character in fingerprint)
-    ):
-        raise ValueError("Artifact fingerprint must be a lowercase SHA-256 hexadecimal digest")
-
-
-@dataclass(frozen=True, slots=True)
-class ArtifactFile:
-    """Describe a file required beside an artifact's entry file.
-
-    Args:
-        relative_path: File location relative to the entry file's directory.
-        fingerprint: Lowercase SHA-256 digest of the file at build time.
-    """
-
-    relative_path: Path
-    fingerprint: str
-
-    def __post_init__(self) -> None:
-        """Reject paths that could escape the artifact directory."""
-        if self.relative_path == Path() or self.relative_path.is_absolute() or ".." in self.relative_path.parts:
-            raise ValueError(
-                f"Artifact companion path must stay inside the artifact directory, got {self.relative_path}"
-            )
-        _validate_fingerprint(self.fingerprint)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -62,38 +22,37 @@ class Artifact:
     Args:
         inputs: Ordered tuned input specifications.
         outputs: Ordered tuned output specifications.
-        path: Tuned file in the AITune cache.
-        fingerprint: Lowercase SHA-256 digest of the file at build time.
-        companions: Additional files resolved relative to ``path.parent``.
+        path: Main tuned file in the AITune cache that the runtime opens.
+        additional_files: Relative paths to files required by the main file, such
+            as separate weights, resolved relative to ``path.parent``.
     """
 
     inputs: tuple[BoundedTensorSpec, ...]
     outputs: tuple[BoundedTensorSpec, ...]
     path: Path
-    fingerprint: str
-    companions: tuple[ArtifactFile, ...] = ()
+    additional_files: tuple[Path, ...] = ()
 
     def __post_init__(self) -> None:
         """Validate invariants that the field types cannot express."""
-        _validate_fingerprint(self.fingerprint)
-
         for label, tensors in (("input", self.inputs), ("output", self.outputs)):
             names = tuple(tensor.name for tensor in tensors)
             if len(names) != len(set(names)):
                 raise ValueError(f"{label} tensor names must be unique, got {names}")
 
-        companion_paths = tuple(companion.relative_path for companion in self.companions)
-        if len(companion_paths) != len(set(companion_paths)):
-            raise ValueError(f"Artifact companion paths must be unique, got {companion_paths}")
-        if Path(self.path.name) in companion_paths:
-            raise ValueError("An artifact companion cannot also be its entry file")
+        for relative_path in self.additional_files:
+            if relative_path == Path() or relative_path.is_absolute() or ".." in relative_path.parts:
+                raise ValueError(f"Additional file path must stay inside the artifact directory, got {relative_path}")
+        if len(self.additional_files) != len(set(self.additional_files)):
+            raise ValueError(f"Additional file paths must be unique, got {self.additional_files}")
+        if Path(self.path.name) in self.additional_files:
+            raise ValueError("An additional file cannot also be the artifact's main file")
 
     @property
-    def files(self) -> tuple[tuple[Path, str], ...]:
-        """Return the complete artifact file set, with the entry file first."""
+    def files(self) -> tuple[Path, ...]:
+        """Return the complete artifact file set, with the main file first."""
         return (
-            (self.path, self.fingerprint),
-            *((self.path.parent / file.relative_path, file.fingerprint) for file in self.companions),
+            self.path,
+            *(self.path.parent / relative_path for relative_path in self.additional_files),
         )
 
     @property
@@ -124,103 +83,43 @@ class Artifact:
             maximums.append(tensor.max_shape[tensor.batch_axis])
         return min(maximums)
 
-    def verify(self) -> None:
-        """Verify that every artifact file is readable and matches its recorded hash.
+    def export_files(self, path: str | os.PathLike[str]) -> Path:
+        """Copy the main file and its additional files to the destination.
 
-        Raises:
-            ArtifactIntegrityError: If the file cannot be read or its contents changed.
-        """
-        for path, fingerprint in self.files:
-            self._compare_fingerprint(self._fingerprint_file(path), path, fingerprint)
-
-    def export_file(self, path: str | os.PathLike[str]) -> Path:
-        """Copy the verified entry file and its companions to ``path``.
+        Copies directly to the destination, overwriting existing files. A copy
+        failure may leave an incomplete export. The caller is responsible for
+        keeping sources unchanged during copying and for staging and publishing
+        the complete artifact.
 
         Args:
-            path: Destination file. Missing parent directories are created.
+            path: Destination main file. Additional files retain their relative
+                paths beside it. Missing parent directories are created.
 
         Returns:
-            The destination path.
+            The destination main file path.
 
         Raises:
-            ArtifactIntegrityError: If the source cannot be read or changed since build.
+            OSError: If directory creation or copying fails.
         """
         destination = Path(path)
-        if destination.resolve() == self.path.resolve():
-            self.verify()
-            return destination
-
-        planned = [(self.path, destination, self.fingerprint)]
+        planned = [(self.path, destination)]
         planned.extend(
             (
-                self.path.parent / companion.relative_path,
-                destination.parent / companion.relative_path,
-                companion.fingerprint,
+                self.path.parent / relative_path,
+                destination.parent / relative_path,
             )
-            for companion in self.companions
+            for relative_path in self.additional_files
         )
-        destinations = tuple(target for _, target, _ in planned)
+        destinations = tuple(target for _, target in planned)
         if len(destinations) != len(set(destinations)):
-            raise ValueError("The exported entry file would overwrite one of its companions")
+            raise ValueError("The exported main file would overwrite one of its additional files")
 
-        staged: list[tuple[Path, Path]] = []
-        try:
-            for source, target, fingerprint in planned:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                output = tempfile.NamedTemporaryFile(
-                    mode="wb",
-                    dir=target.parent,
-                    prefix=f".{target.name}.",
-                    suffix=".tmp",
-                    delete=False,
-                )
-                temporary_path = Path(output.name)
-                staged.append((temporary_path, target))
-                digest = hashlib.sha256()
-                with output:
-                    for chunk in self._read_chunks(source):
-                        digest.update(chunk)
-                        output.write(chunk)
-                self._compare_fingerprint(digest.hexdigest(), source, fingerprint)
-
-            for temporary_path, target in staged:
-                os.replace(temporary_path, target)
-        except (ArtifactIntegrityError, OSError):
-            for temporary_path, _ in staged:
-                temporary_path.unlink(missing_ok=True)
-            raise
+        for source, target in planned:
+            if source.resolve() == target.resolve():
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
         return destination
-
-    def _fingerprint_file(self, path: Path) -> str:
-        """Return the SHA-256 digest of the current artifact file."""
-        digest = hashlib.sha256()
-        for chunk in self._read_chunks(path):
-            digest.update(chunk)
-        return digest.hexdigest()
-
-    def _read_chunks(self, path: Path) -> Iterator[bytes]:
-        """Yield source bytes while translating read failures."""
-        try:
-            with path.open("rb") as source:
-                while chunk := source.read(_HASH_CHUNK_SIZE):
-                    yield chunk
-        except OSError as error:
-            raise self._unreadable(path, error) from error
-
-    def _compare_fingerprint(self, actual: str, path: Path, expected: str) -> None:
-        """Raise unless ``actual`` is the recorded artifact fingerprint."""
-        if actual != expected:
-            raise ArtifactIntegrityError(
-                f"The {type(self).__name__} at {path} has changed since it was built: "
-                f"expected {expected[:12]}, found {actual[:12]}. Tune again to rebuild it."
-            )
-
-    def _unreadable(self, path: Path, error: OSError) -> ArtifactIntegrityError:
-        """Describe why the referenced cache file cannot be read."""
-        return ArtifactIntegrityError(
-            f"The {type(self).__name__} cannot be read at {path}. "
-            f"The AITune cache may have been cleared or changed. Cause: {error}"
-        )
 
 
 @dataclass(frozen=True, kw_only=True)
