@@ -7,11 +7,10 @@ import pytest
 
 from aitune.records import (
     BoundedTensorSpec,
+    DeploymentArtifact,
     DType,
-    ONNXArtifact,
-    ONNXExecutionProvider,
-    PT2Artifact,
-    TensorRTPlanArtifact,
+    ModelFiles,
+    RuntimeConfig,
 )
 
 INPUTS = (
@@ -111,10 +110,11 @@ def test_artifact_preserves_tensor_order_and_shared_batch_limit(tmp_path):
         batch_axis=0,
     )
 
-    artifact = ONNXArtifact(
+    artifact = DeploymentArtifact(
         inputs=(*INPUTS, second_input),
         outputs=OUTPUTS,
-        path=path,
+        model=ModelFiles(format="onnx", path=path),
+        runtime=RuntimeConfig(name="onnxruntime"),
     )
 
     assert artifact.input_names == ("input_ids", "mask")
@@ -132,7 +132,12 @@ def test_artifact_without_a_shared_batch_axis_has_no_batch_limit(tmp_path):
         batch_axis=None,
     )
 
-    artifact = ONNXArtifact(inputs=INPUTS, outputs=(output,), path=path)
+    artifact = DeploymentArtifact(
+        inputs=INPUTS,
+        outputs=(output,),
+        model=ModelFiles(format="onnx", path=path),
+        runtime=RuntimeConfig(name="onnxruntime"),
+    )
 
     assert artifact.max_batch_size is None
 
@@ -147,7 +152,12 @@ def test_artifact_without_batch_size_one_has_no_batch_limit(tmp_path):
         batch_axis=0,
     )
 
-    artifact = ONNXArtifact(inputs=(input_spec,), outputs=OUTPUTS, path=path)
+    artifact = DeploymentArtifact(
+        inputs=(input_spec,),
+        outputs=OUTPUTS,
+        model=ModelFiles(format="onnx", path=path),
+        runtime=RuntimeConfig(name="onnxruntime"),
+    )
 
     assert artifact.max_batch_size is None
 
@@ -156,53 +166,67 @@ def test_artifact_rejects_duplicate_tensor_names(tmp_path):
     path = _write_artifact(tmp_path)
 
     with pytest.raises(ValueError, match="input tensor names must be unique"):
-        ONNXArtifact(inputs=(INPUTS[0], INPUTS[0]), outputs=OUTPUTS, path=path)
+        DeploymentArtifact(
+            inputs=(INPUTS[0], INPUTS[0]),
+            outputs=OUTPUTS,
+            model=ModelFiles(format="onnx", path=path),
+            runtime=RuntimeConfig(name="onnxruntime"),
+        )
 
 
-def test_artifact_formats_preserve_runtime_requirements(tmp_path):
-    path = _write_artifact(tmp_path)
+@pytest.mark.parametrize(
+    ("model_format", "metadata", "runtime_name", "options"),
+    [
+        ("tensorrt_plan", {"optimization_profile_count": 2}, "tensorrt", {"use_cuda_graphs": True}),
+        ("onnx", {}, "onnxruntime", {"execution_provider": "tensorrt"}),
+        ("pt2", {"structured_call": True}, "aotinductor", {}),
+        ("custom_format", {"version": 1}, "custom_runtime", {"workers": 4}),
+    ],
+)
+def test_deployment_artifact_preserves_format_metadata_and_runtime_options(
+    tmp_path, model_format, metadata, runtime_name, options
+):
+    model = ModelFiles(format=model_format, path=_write_artifact(tmp_path), metadata=metadata)
+    runtime = RuntimeConfig(name=runtime_name, options=options)
 
-    plan = TensorRTPlanArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
-        path=path,
-        optimization_profile_count=2,
-        use_cuda_graphs=True,
+    artifact = DeploymentArtifact(model=model, inputs=INPUTS, outputs=OUTPUTS, runtime=runtime)
+
+    assert artifact.model.format == model_format
+    assert artifact.model.metadata == metadata
+    assert artifact.runtime.name == runtime_name
+    assert artifact.runtime.options == options
+
+
+def test_same_model_files_can_be_used_with_different_runtimes(tmp_path):
+    model = ModelFiles(format="onnx", path=_write_artifact(tmp_path))
+    runtimes = (
+        RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+        RuntimeConfig(name="custom_runtime", options={"threads": 2}),
     )
-    onnx = ONNXArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
-        path=path,
-        execution_provider=ONNXExecutionProvider.TENSORRT,
-    )
-    pt2 = PT2Artifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
-        path=path,
-        structured_call=True,
-    )
+    artifacts = [
+        DeploymentArtifact(model=model, inputs=INPUTS, outputs=OUTPUTS, runtime=runtime) for runtime in runtimes
+    ]
 
-    assert (plan.optimization_profile_count, plan.use_cuda_graphs) == (2, True)
-    assert onnx.execution_provider is ONNXExecutionProvider.TENSORRT
-    assert pt2.structured_call is True
+    assert all(artifact.model is model for artifact in artifacts)
+    assert tuple(artifact.runtime.name for artifact in artifacts) == ("onnxruntime", "custom_runtime")
 
 
 def test_export_files_raises_for_missing_source(tmp_path):
-    artifact = TensorRTPlanArtifact(inputs=INPUTS, outputs=OUTPUTS, path=tmp_path / "missing.plan")
+    model_files = ModelFiles(format="tensorrt_plan", path=tmp_path / "missing.plan")
 
     with pytest.raises(FileNotFoundError):
-        artifact.export_files(tmp_path / "repository" / "model.plan")
+        model_files.export_files(tmp_path / "repository" / "model.plan")
 
 
 def test_export_files_copies_current_bytes(tmp_path):
     path = _write_artifact(tmp_path / "cache", b"plan")
-    artifact = TensorRTPlanArtifact(inputs=INPUTS, outputs=OUTPUTS, path=path)
+    model_files = ModelFiles(format="tensorrt_plan", path=path)
     destination = tmp_path / "repository" / "model.plan"
 
-    assert artifact.export_files(destination).read_bytes() == b"plan"
+    assert model_files.export_files(destination).read_bytes() == b"plan"
 
     path.write_bytes(b"changed")
-    assert artifact.export_files(destination).read_bytes() == b"changed"
+    assert model_files.export_files(destination).read_bytes() == b"changed"
 
 
 @pytest.mark.parametrize("destination_directory", ["repository", "cache"])
@@ -212,17 +236,16 @@ def test_artifact_exports_additional_files(tmp_path, destination_directory, dest
     weights = path.parent / "weights" / "model.data"
     weights.parent.mkdir()
     weights.write_bytes(b"weights")
-    artifact = ONNXArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
+    model_files = ModelFiles(
+        format="onnx",
         path=path,
         additional_files=(Path("weights/model.data"),),
     )
 
-    assert artifact.files == (path, weights)
+    assert model_files.files == (path, weights)
 
     destination = tmp_path / destination_directory / destination_name
-    assert artifact.export_files(destination) == destination
+    assert model_files.export_files(destination) == destination
 
     assert destination.read_bytes() == b"onnx"
     assert (destination.parent / "weights" / "model.data").read_bytes() == b"weights"
@@ -232,9 +255,8 @@ def test_export_files_copies_current_additional_file_bytes(tmp_path):
     path = _write_artifact(tmp_path / "cache", b"new-model")
     weights = path.parent / "model.data"
     weights.write_bytes(b"expected-weights")
-    artifact = ONNXArtifact(
-        inputs=INPUTS,
-        outputs=OUTPUTS,
+    model_files = ModelFiles(
+        format="onnx",
         path=path,
         additional_files=(Path("model.data"),),
     )
@@ -243,7 +265,7 @@ def test_export_files_copies_current_additional_file_bytes(tmp_path):
     destination.write_bytes(b"old-model")
     weights.write_bytes(b"changed-weights")
 
-    artifact.export_files(destination)
+    model_files.export_files(destination)
 
     assert destination.read_bytes() == b"new-model"
     assert (destination.parent / "model.data").read_bytes() == b"changed-weights"
@@ -252,4 +274,16 @@ def test_export_files_copies_current_additional_file_bytes(tmp_path):
 @pytest.mark.parametrize("relative_path", [Path(), Path("../model.data"), Path("/model.data")])
 def test_artifact_additional_file_must_stay_inside_artifact_directory(relative_path):
     with pytest.raises(ValueError, match="must stay inside"):
-        ONNXArtifact(inputs=INPUTS, outputs=OUTPUTS, path=Path("model.onnx"), additional_files=(relative_path,))
+        ModelFiles(format="onnx", path=Path("model.onnx"), additional_files=(relative_path,))
+
+
+@pytest.mark.parametrize(
+    ("additional_files", "message"),
+    [
+        ((Path("weights.data"), Path("weights.data")), "must be unique"),
+        ((Path("model.onnx"),), "cannot also be the model's main file"),
+    ],
+)
+def test_model_files_reject_conflicting_paths(additional_files, message):
+    with pytest.raises(ValueError, match=message):
+        ModelFiles(format="onnx", path=Path("model.onnx"), additional_files=additional_files)
