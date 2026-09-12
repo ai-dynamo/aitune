@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+model_name: "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+tuned_model_path: "wan2.1-t2v-1.3b.ait"
+context_parallel: "ulysses"
+prompt: "A white ferret leaps from a moss-covered log into a clear mountain stream"
+negative_prompt: "static, blurry, low quality, distorted, subtitles, watermark"
+height: 480
+width: 832
+num_frames: 81
+steps: 30
+guidance_scale: 5.0
+max_sequence_length: 512
+fps: 16

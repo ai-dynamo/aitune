@@ -11,6 +11,7 @@ from polygraphy.backend.trt import Profile
 
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch.backend import ArtifactPath
+from aitune.torch.backend.tensorrt.cuda_graphs import CudaGraphProfile
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.tensorrt_backend import ProfileMode, TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
@@ -322,7 +323,8 @@ def test_tensorrt_backend_prepare_inputs(mocker):
     assert torch.equal(prepared_inputs[x_name], test_tensor)
 
 
-def test_prepare_outputs_applies_mutable_tensor_and_scalar_state(mocker):
+@pytest.mark.parametrize("use_graph", [False, True])
+def test_prepare_outputs_applies_mutable_tensor_and_scalar_state(mocker, use_graph):
     class StatefulDecoder(torch.nn.Module):
         def forward(self, x, cache, index):
             cache[0] = x + 1
@@ -334,7 +336,12 @@ def test_prepare_outputs_applies_mutable_tensor_and_scalar_state(mocker):
     graph_spec = make_recorded_graph_spec(model, ((x, [None], [0]), {}), strict=True)
     backend = TensorRTBackend()
     backend._graph_spec = graph_spec
-    backend._output_allocator = mocker.Mock(outputs=dict(zip(graph_spec.output_names(), (x * 2, x + 1), strict=True)))
+    state_output = x + 1
+    backend._output_allocator = mocker.Mock(
+        outputs=dict(zip(graph_spec.output_names(), (x * 2, state_output), strict=True))
+    )
+    if use_graph:
+        backend._cuda_graphs.active = CudaGraphProfile(mocker.Mock(), backend._output_allocator, graph=mocker.Mock())
     cache = [None]
     index = [0]
     arguments = graph_spec.forward_signature.normalize((x, cache, index), {}).arguments
@@ -344,6 +351,35 @@ def test_prepare_outputs_applies_mutable_tensor_and_scalar_state(mocker):
     torch.testing.assert_close(result, x * 2)
     torch.testing.assert_close(cache[0], x + 1)
     assert index == [1]
+    if use_graph:
+        state_output.fill_(99)
+        torch.testing.assert_close(cache[0], x + 1)
+    else:
+        assert cache[0] is state_output
+
+
+@pytest.mark.parametrize("reject_allocator", [False, True])
+def test_create_output_allocator_uses_supplied_context(mocker, reject_allocator):
+    backend = TensorRTBackend()
+    backend._engine_info = mocker.Mock(output_input_aliases={"cache_output": "cache_input"})
+    backend._output_names = ["value", "cache_output"]
+    backend._context = mocker.Mock()
+    backend._output_allocator = mocker.Mock()
+    base_allocator = backend._output_allocator
+    create_allocator = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.TorchOutputAllocator")
+    context = mocker.Mock()
+    context.set_output_allocator.return_value = not reject_allocator
+
+    if reject_allocator:
+        with pytest.raises(RuntimeError, match="Failed to set output allocator"):
+            backend._create_output_allocator(context)
+    else:
+        assert backend._create_output_allocator(context) is create_allocator.return_value
+
+    create_allocator.assert_called_once_with(engine_info=backend._engine_info)
+    context.set_output_allocator.assert_called_once_with("value", create_allocator.return_value)
+    backend._context.set_output_allocator.assert_not_called()
+    assert backend._output_allocator is base_allocator
 
 
 def test_alias_binding_uses_input_address_instead_of_output_allocator(mocker):
@@ -363,7 +399,7 @@ def test_alias_binding_uses_input_address_instead_of_output_allocator(mocker):
     cache.dtype = torch.float32
     cache.data_ptr.return_value = 123
 
-    backend._configure_output_bindings()
+    backend._configure_output_bindings(backend._context, backend._output_allocator)
     backend._set_input_tensors({"cache_input": cache})
 
     backend._context.set_output_allocator.assert_called_once_with("value", backend._output_allocator)
@@ -1001,7 +1037,7 @@ def test_set_optimization_profiles_rejects_failed_context_update(mocker, global_
 
 
 def test_set_input_tensors_rejects_invalid_shape(mocker):
-    backend = TensorRTBackend()
+    backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
     backend._context = mocker.MagicMock()
     backend._context.set_input_shape.return_value = False
     backend._context.active_optimization_profile = 1
@@ -1020,7 +1056,7 @@ def test_set_input_tensors_rejects_invalid_shape(mocker):
 
 
 def test_set_input_tensors_rejects_invalid_address(mocker):
-    backend = TensorRTBackend()
+    backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
     backend._context = mocker.MagicMock()
     backend._context.set_input_shape.return_value = True
     backend._context.set_tensor_address.return_value = False
@@ -1037,7 +1073,7 @@ def test_set_input_tensors_rejects_invalid_address(mocker):
 
 
 def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
-    backend = TensorRTBackend()
+    backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
     backend._graph_spec = mocker.MagicMock()
     backend._graph_spec.forward_signature.normalize.return_value.arguments = {}
     backend._context = mocker.MagicMock()
@@ -1047,7 +1083,6 @@ def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
     backend._start_time = mocker.MagicMock()
     backend._end_time = mocker.MagicMock()
     backend._prepare_inputs = mocker.MagicMock(return_value={"args_0": mocker.MagicMock()})
-    backend._invalidate_cuda_graph = mocker.MagicMock()
     backend._prepare_outputs_for_return = mocker.MagicMock(return_value="output")
     mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.torch.cuda.stream")
     calls = []

@@ -8,21 +8,58 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorJitBackend
-from aitune.torch.backend.backend import Backend
+from aitune.torch.backend import (
+    Backend,
+    TensorRTBackend,
+    TensorRTBackendConfig,
+    TorchInductorAotBackend,
+    TorchInductorJitBackend,
+)
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
-from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin, PerformanceValidationMixin
+from aitune.torch.tune_strategy.mixin import PerformanceValidationMixin
+from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
 from aitune.utils.logging import log
 
 
-class FirstWinsStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
-    """Strategy which runs backends until it gets first working backend."""
+class FirstWinsStrategy(PerformanceValidationMixin, MultiBackendStrategy):
+    """Try backends in order and stop at the first that passes the configured checks.
+
+    The default order tries TensorRT export paths before Inductor. It is a fallback
+    policy, not a measured performance ranking. AOT and JIT use the same order.
+    """
 
     def __init__(self, backends: list[Backend] | None = None, **kwargs):
         """Initializes strategy."""
-        super().__init__(**kwargs)
-        self._backends = backends or self._default_backends()
+        super().__init__(backends=backends, **kwargs)
+
+    def to_json_dict(self) -> dict[str, Any]:
+        """Returns config dict for first wins strategy."""
+        return {
+            "backends": [backend.describe() for backend in self._backends],
+            "performance_validation_mode": self._performance_validation_mode.value,
+            "profiling_config": self._profiling_config_to_json_dict(),
+        }
+
+    def _default_aot_backends(self, distributed: bool = False) -> list[Backend]:
+        """Try TensorRT before Inductor for AOT; distributed modules need Inductor backends."""
+        if distributed:
+            return [TorchInductorAotBackend(), TorchInductorJitBackend()]
+        return [
+            TensorRTBackend(),
+            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
+            TorchInductorJitBackend(),
+        ]
+
+    def _default_jit_backends(self, distributed: bool = False) -> list[Backend]:
+        """Try TensorRT before Inductor for JIT; distributed modules need Inductor backends."""
+        if distributed:
+            return [TorchInductorAotBackend(), TorchInductorJitBackend()]
+        return [
+            TensorRTBackend(),
+            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
+            TorchInductorJitBackend(),
+        ]
 
     def _tune(
         self,
@@ -52,14 +89,6 @@ class FirstWinsStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
 
         raise RuntimeError(f"There is no valid backend for a module: {name}, graph_spec: {graph_spec}")
 
-    def _default_backends(self) -> list[Backend]:
-        """Returns default backends."""
-        return [
-            TensorRTBackend(),
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorJitBackend(),
-        ]
-
     def _describe_parts(self) -> list[str]:
         """Returns the parts of the description."""
         return [
@@ -68,11 +97,3 @@ class FirstWinsStrategy(PerformanceValidationMixin, FindMaxBatchSizeMixin):
             "backends:",
             *[f"  {backend.describe()}" for backend in self._backends],
         ]
-
-    def to_json_dict(self) -> dict[str, Any]:
-        """Returns config dict for first wins strategy."""
-        return {
-            "backends": [backend.describe() for backend in self._backends],
-            "performance_validation_mode": self._performance_validation_mode.value,
-            "profiling_config": self._profiling_config_to_json_dict(),
-        }

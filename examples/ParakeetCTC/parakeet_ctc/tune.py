@@ -10,13 +10,7 @@ import torch
 from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 from nemo.collections.asr.parts.mixins.transcription import InternalTranscribeConfig, TranscribeConfig
 
-from aitune.torch import FirstWinsStrategy, TuneStrategy, inspect, save, tune, wrap
-from aitune.torch.backend import (
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchInductorAotBackend,
-    TorchInductorJitBackend,
-)
+from aitune.torch import TuneStrategy, inspect, save, tune, wrap
 from parakeet_ctc.cmd_args import parse_args
 from parakeet_ctc.model import get_model
 
@@ -36,7 +30,7 @@ def tune_model(
         model_name: The name of the model to tune.
         audio_path: The path to the audio file to transcribe.
         tuned_model_path: The path to save the tuned model file.
-        strategy: The strategy to use for tuning.
+        strategy: Optional tuning strategy; uses AITune's default when omitted.
         batch_sizes: The batch sizes to tune.
     """
     pipeline = get_model(model_name=model_name)
@@ -83,21 +77,10 @@ def main():
     basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     args = parse_args()
 
-    strategy = FirstWinsStrategy(
-        backends=[
-            TensorRTBackend(),
-            TensorRTBackend(TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorAotBackend(),
-            TorchInductorJitBackend(),
-        ]
-    )
-    strategy.enable_find_max_batch_size(enable=False)
-
     tune_model(
         model_name=args.model_name,
         audio_path=args.audio_path,
         tuned_model_path=args.tuned_model_path,
-        strategy=strategy,
     )
 
 
