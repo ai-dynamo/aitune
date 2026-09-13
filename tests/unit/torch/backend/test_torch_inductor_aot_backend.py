@@ -338,6 +338,19 @@ def test_deactivate_clears_runner(mock_aoti, backend, model, graph_spec, sample_
     assert backend.state == BackendState.INACTIVE
 
 
+def test_deactivate_releases_deployed_runner(backend, mocker):
+    backend.state = BackendState.CHECKPOINT_LOADED
+    backend._compiled_model_artifact = Mock(path=Path("model.pt2"))
+    load_package = mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
+    backend.deploy(device=torch.device("cpu"))
+    assert backend._runner is load_package.return_value
+
+    backend.deactivate()
+
+    assert backend._runner is None
+    assert backend.state == BackendState.RELEASED
+
+
 @requires_cuda
 def test_activate_reloads_runner(mock_aoti, backend, model, graph_spec, sample_data, torch_device, tmp_path):
     load_mock = torch._inductor.aoti_load_package  # already patched by mock_aoti

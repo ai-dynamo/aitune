@@ -291,7 +291,8 @@ Each backend is a small state machine that enforces safe usage:
 - `INACTIVE` → `ACTIVE`: `activate()` restores the backend for inference.
 - `CHECKPOINT_LOADED` → `ACTIVE` or `DEPLOYED`: A backend created from a checkpoint can be activated for tinkering or
   deployed for final use.
-- `ACTIVE` → `DEPLOYED`: `deploy()` finalizes the backend. After this, state changes are not allowed.
+- `DEPLOYED` → `RELEASED`: `deactivate()` releases a deployed backend permanently. It cannot be activated again;
+  load a new checkpoint instance to resume inference. Repeated deactivation is harmless.
 
 The backend's state is governed by the strategy and the user must not change it. After a module is successfully tuned, it can be used to do inference - the backend will be in `ACTIVE` or `DEPLOYED` states.
 

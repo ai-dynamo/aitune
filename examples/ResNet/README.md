@@ -126,7 +126,10 @@ uv sync --extra triton
 uv run --extra triton ./run_triton.sh
 ```
 
-The runner waits for Triton, invokes the client, and stops the server. Both scripts default to release `26.05`; set
+The runner copies the published repository into the Triton container before starting it,
+waits for the model to become ready, invokes the client, and removes the container on exit.
+Copying also works when the repository is inside a CI job container and the Docker daemon runs on its host.
+Both scripts default to release `26.05`; set
 `NVIDIA_RELEASE` once in the calling shell to use another matching pair.
 
 Triton loads the published models at startup with `--model-control-mode=none`; no load API call is needed.
@@ -144,6 +147,8 @@ Model-store generation loads the package, extracts its selected artifact, and cr
 `model_repository/resnet50`. The `config.pbtxt`, tensor bounds, and maximum batch size all come from that artifact.
 It also creates `model_analyzer/fast.yaml` for a quick search and `model_analyzer/manual.yaml` for the complete
 recommended search space. Neither operation replaces an existing output directory.
+
+The command explicitly deactivates the loaded module before exiting to release its backend runtime.
 
 AITune backends that require a Python process are intentionally excluded from this flow. Deploy those through the
 Dynamo path above instead of wrapping them in Triton's Python Backend.

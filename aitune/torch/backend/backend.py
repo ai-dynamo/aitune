@@ -44,7 +44,8 @@ class BackendState(Enum):
         ACTIVE: The model was tuned and the backend is activated, you can do inference
         CHECKPOINT_LOADED: The backend was loaded from a checkpoint, it is ready to be deployed
         DEPLOYED: The model was tuned and is ready to use, you can do inference. All data required to jit building has
-        been freed, you can't change backend state anymore.
+        been freed; deactivation releases the backend permanently.
+        RELEASED: A deployed backend was deactivated and cannot be activated again.
 
     State transitions:
     ```mermaid
@@ -56,7 +57,8 @@ class BackendState(Enum):
         checkpoint_loaded --> deployed: When backend is deployed from checkpoint
         checkpoint_loaded --> active: When backend is activated from checkpoint
         active --> deployed: When backend is deployed after being active
-        deployed --> [*]
+        deployed --> released: When backend is deactivated
+        released --> [*]
     ```
 
     Note:
@@ -68,7 +70,7 @@ class BackendState(Enum):
     This abstract class has public interface methods which manage state of the backend:
         build(): Builds backend, changes state to ACTIVE
         activate(): Activates backend, changes state to ACTIVE
-        deactivate(): Deactivates backend, changes state to INACTIVE
+        deactivate(): Deactivates backend, changes state to INACTIVE or RELEASED
         deploy(): Deploys backend, changes state to DEPLOYED
 
     Each method calls corresponding private method which should not change state differently - with one exception:
@@ -94,6 +96,7 @@ class BackendState(Enum):
     ACTIVE = "active"
     CHECKPOINT_LOADED = "checkpoint_loaded"
     DEPLOYED = "deployed"
+    RELEASED = "released"
 
 
 class ExecutionMode(str, Enum):
@@ -274,6 +277,8 @@ class Backend(ABC):
             raise RuntimeError(f"Cannot activate backend {self.name}, backend should be built first")
         if self.state == BackendState.DEPLOYED:
             raise RuntimeError(f"Cannot activate backend {self.name}, backend is already deployed")
+        if self.state == BackendState.RELEASED:
+            raise RuntimeError(f"Cannot activate backend {self.name}, deployed backend has been released")
 
         if self.state == BackendState.INACTIVE or self.state == BackendState.CHECKPOINT_LOADED:
             with release_transient_memory():
@@ -285,24 +290,24 @@ class Backend(ABC):
         """Deactivates backend.
 
         After deactivating, the backend cannot be used to do inference.
+        Deployed backends are permanently released; load a new instance to use them again.
         """
         if self.state == BackendState.INIT:
             raise RuntimeError(f"Cannot deactivate backend {self.name}, backend should be built first")
-        if self.state == BackendState.DEPLOYED:
-            raise RuntimeError(f"Cannot deactivate backend {self.name}, backend is already deployed")
         if self.state == BackendState.CHECKPOINT_LOADED:
-            raise RuntimeError(f"Cannot deactivate backend {self.name}, backend has already been deployed")
+            raise RuntimeError(f"Cannot deactivate backend {self.name}, backend has not been deployed")
 
-        if self.state == BackendState.ACTIVE:
+        if self.state in (BackendState.ACTIVE, BackendState.DEPLOYED):
+            next_state = BackendState.RELEASED if self.state == BackendState.DEPLOYED else BackendState.INACTIVE
             self._deactivate()
+            self.state = next_state
             self._clean_memory()
-            self.state = BackendState.INACTIVE
 
     @annotate(color="cyan")
     def deploy(self, device: torch.device | None):
         """Deploys the backend.
 
-        After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
+        After deploying, the backend is ready to do inference. Deactivation permanently releases it.
 
         Args:
             device: The device to deploy the backend on.
@@ -434,7 +439,7 @@ class Backend(ABC):
     def _deploy(self):
         """Deploys the backend.
 
-        After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
+        After deploying, the backend is ready to do inference. Deactivation permanently releases it.
         """
         ...
 
