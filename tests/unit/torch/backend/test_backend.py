@@ -80,7 +80,7 @@ def test_backend_without_a_deployable_format_rejects_artifact_request():
 
 
 def test_deployed_backend_can_be_released_but_not_reused(mocker):
-    backend = DummyBackend()
+    backend = SleepBackend()
     backend.state = BackendState.CHECKPOINT_LOADED
     backend.deploy(device=torch.device("cpu"))
     deactivate = mocker.spy(backend, "_deactivate")
