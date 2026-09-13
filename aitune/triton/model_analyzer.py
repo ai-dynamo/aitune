@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, 
 from tritonclient.grpc import model_config_pb2
 
 from aitune.exceptions import AITuneError, AITuneUserInputError
-from aitune.records import Artifact, ONNXArtifact, PT2Artifact, TensorRTPlanArtifact
+from aitune.records import DeploymentArtifact
 
 __all__ = [
     "ManualModelAnalyzerConfig",
@@ -131,15 +131,17 @@ class ManualModelAnalyzerConfig(_ConfigModel):
     run_config_search_disable: Literal[True] = True
 
 
-def _platform(artifact: Artifact) -> str:
-    """Return the Triton platform expected for an artifact type."""
-    if isinstance(artifact, TensorRTPlanArtifact):
+def _platform(artifact: DeploymentArtifact) -> str:
+    """Return the Triton platform expected for the model format and runtime."""
+    if (artifact.model.format, artifact.runtime.name) == ("tensorrt_plan", "tensorrt"):
         return "tensorrt_plan"
-    if isinstance(artifact, ONNXArtifact):
+    if (artifact.model.format, artifact.runtime.name) == ("onnx", "onnxruntime"):
         return "onnxruntime_onnx"
-    if isinstance(artifact, PT2Artifact):
+    if (artifact.model.format, artifact.runtime.name) == ("pt2", "aotinductor"):
         return "torch_aoti"
-    raise ModelAnalyzerConfigError(f"Model Analyzer configuration does not support {type(artifact).__name__}")
+    raise ModelAnalyzerConfigError(
+        f"Model Analyzer does not support {artifact.model.format!r} with runtime {artifact.runtime.name!r}"
+    )
 
 
 def _read_published_config(model_directory: Path) -> model_config_pb2.ModelConfig:
@@ -153,7 +155,7 @@ def _read_published_config(model_directory: Path) -> model_config_pb2.ModelConfi
         raise ModelAnalyzerConfigError(f"Cannot read Triton model configuration at {config_path}: {error}") from error
 
 
-def _validate_model(artifact: Artifact, model_directory: Path, config: model_config_pb2.ModelConfig) -> None:
+def _validate_model(artifact: DeploymentArtifact, model_directory: Path, config: model_config_pb2.ModelConfig) -> None:
     """Ensure the artifact and published model describe the same deployment."""
     if config.name != model_directory.name:
         raise ModelAnalyzerConfigError(
@@ -162,7 +164,7 @@ def _validate_model(artifact: Artifact, model_directory: Path, config: model_con
     expected_platform = _platform(artifact)
     if config.platform != expected_platform:
         raise ModelAnalyzerConfigError(
-            f"{type(artifact).__name__} requires Triton platform {expected_platform!r}, got {config.platform!r}"
+            f"{artifact.model.format!r} requires Triton platform {expected_platform!r}, got {config.platform!r}"
         )
     if tuple(tensor.name for tensor in config.input) != artifact.input_names:
         raise ModelAnalyzerConfigError("Triton model inputs do not match the artifact")
@@ -178,6 +180,8 @@ def _validate_model(artifact: Artifact, model_directory: Path, config: model_con
 
 def _bounded_values(maximum: int, minimum: int = 1) -> tuple[int, ...]:
     """Return powers of two within the bounds, including both endpoints."""
+    if not 1 <= minimum <= maximum:
+        raise ModelAnalyzerConfigError(f"Invalid batch bounds: minimum={minimum}, maximum={maximum}")
     values = []
     value = 1
     while value <= maximum:
@@ -189,26 +193,30 @@ def _bounded_values(maximum: int, minimum: int = 1) -> tuple[int, ...]:
 
 
 def _profiling_inputs(
-    artifact: Artifact, config: model_config_pb2.ModelConfig
+    artifact: DeploymentArtifact, config: model_config_pb2.ModelConfig
 ) -> tuple[dict[str, tuple[str, ...]], int, int]:
     """Select concrete input shapes and compatible batch bounds from the artifact."""
     minimum_batch, maximum_batch = 1, config.max_batch_size
     shapes = {tensor.name: tensor.min_shape for tensor in artifact.inputs}
-    if isinstance(artifact, TensorRTPlanArtifact):
-        profiles = artifact.optimization_profiles
-        if maximum_batch:
-            profiles = tuple(
-                profile
-                for profile in profiles
-                if max(tensor.min_shape[0] for tensor in profile.inputs) <= maximum_batch
-            )
-            if not profiles:
-                raise ModelAnalyzerConfigError("No TensorRT profile supports the published batch limit")
-        profile = profiles[0]
-        shapes = {tensor.name: tensor.opt_shape for tensor in profile.inputs}
-        if maximum_batch:
-            minimum_batch = max(tensor.min_shape[0] for tensor in profile.inputs)
-            maximum_batch = min(maximum_batch, *(tensor.max_shape[0] for tensor in profile.inputs))
+    if (artifact.model.format, artifact.runtime.name) == ("tensorrt_plan", "tensorrt"):
+        profiles = _profile_indices(config)
+        profile_data = artifact.model.metadata.get("optimization_profiles")
+        if not profile_data or len(profile_data) != artifact.model.metadata.get("optimization_profile_count"):
+            raise ModelAnalyzerConfigError("TensorRT model metadata requires optimization_profiles matching its count")
+        for index in profiles:
+            if not index.isdecimal() or int(index) >= len(profile_data):
+                raise ModelAnalyzerConfigError(f"Invalid TensorRT profile index: {index!r}")
+        for index in profiles:
+            profile = profile_data[int(index)]
+            if not config.max_batch_size:
+                break
+            minimum_batch = max(bounds["min_shape"][0] for bounds in profile.values())
+            maximum_batch = min(config.max_batch_size, *(bounds["max_shape"][0] for bounds in profile.values()))
+            if minimum_batch <= maximum_batch:
+                break
+        else:
+            raise ModelAnalyzerConfigError("No enabled TensorRT profile supports a common batch size")
+        shapes = {name: bounds["opt_shape"] for name, bounds in profile.items()}
     flags = []
     for name, shape in shapes.items():
         dimensions = shape[1:] if config.max_batch_size else shape
@@ -216,8 +224,14 @@ def _profiling_inputs(
     return {"shape": tuple(flags)}, minimum_batch, maximum_batch
 
 
+def _profile_indices(config: model_config_pb2.ModelConfig) -> tuple[str, ...]:
+    """Return enabled TensorRT profiles, including Triton's implicit profile zero."""
+    profiles = (index for group in config.instance_group for index in (tuple(group.profile) or ("0",)))
+    return tuple(dict.fromkeys(profiles)) or ("0",)
+
+
 def _configs(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     model_directory: Path,
     destination: Path,
     *,
@@ -240,8 +254,10 @@ def _configs(
         batch_range = {}
 
     profiles: tuple[str, ...] | None = None
-    if config.platform == "tensorrt_plan" and config.instance_group:
-        profiles = tuple(config.instance_group[0].profile) or None
+    if config.platform == "tensorrt_plan":
+        profiles = _profile_indices(config)
+        if profiles == ("0",) and not config.instance_group:
+            profiles = None
 
     def manual_config(
         label: str,
@@ -281,7 +297,7 @@ def _configs(
         instance_counts=tuple(range(1, max_instance_count + 1)),
         queue_delays=queue_delay_microseconds,
     )
-    if minimum_batch > 1 or (profiles is not None and len(profiles) > 1):
+    if minimum_batch > 1 or profiles not in (None, ("0",)):
         # Model Analyzer's quick generator replaces instance_group and would
         # discard TensorRT profile selection. Its default client batch of one also
         # cannot serve profiles whose minimum batch is larger. Use a bounded sweep.
@@ -308,7 +324,7 @@ def _configs(
 
 
 def generate_model_analyzer_configs(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     /,
     *,
     model_path: str | os.PathLike[str],
@@ -318,9 +334,9 @@ def generate_model_analyzer_configs(
 ) -> Path:
     """Generate fast and exhaustive Model Analyzer YAML for a published model.
 
-    ``fast.yaml`` uses Model Analyzer's quick search. For a TensorRT plan with
-    multiple optimization profiles, it uses a reduced brute sweep instead because
-    native quick search discards the profile selection from ``instance_group``.
+    ``fast.yaml`` uses Model Analyzer's quick search where possible. TensorRT
+    profile selections beyond profile zero or minimum batches above one require
+    a reduced brute sweep to preserve those constraints.
     ``manual.yaml`` enumerates the complete recommended bounded search space.
     Publication already writes defaults; use this function only to customize them.
     Concrete input shapes use TensorRT profile optima or other artifacts' minimum
@@ -370,7 +386,7 @@ def generate_model_analyzer_configs(
 
 
 def _write_model_analyzer_configs(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     *,
     config: model_config_pb2.ModelConfig,
     model_directory: Path,

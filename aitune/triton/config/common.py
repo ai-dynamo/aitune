@@ -70,7 +70,9 @@ class _BaseModelConfig(BaseModel):
     dynamic_batching: bool = False
 
     @classmethod
-    def from_artifact(cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int) -> "_BaseModelConfig":
+    def from_artifact(
+        cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int, dynamic_batching: bool = False
+    ) -> "_BaseModelConfig":
         """Combine the tensor interface with runtime-specific artifact settings."""
         batched = max_batch_size > 0
         return cls(
@@ -78,7 +80,7 @@ class _BaseModelConfig(BaseModel):
             max_batch_size=max_batch_size,
             inputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.inputs),
             outputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.outputs),
-            dynamic_batching=batched,
+            dynamic_batching=dynamic_batching,
             **cls._artifact_options(artifact),
         )
 

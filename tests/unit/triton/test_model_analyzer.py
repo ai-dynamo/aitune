@@ -1,25 +1,22 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import hashlib
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 import yaml
+from google.protobuf import text_format
+from tritonclient.grpc import model_config_pb2
 
 from aitune import triton as aitriton
 from aitune.records import (
     BoundedTensorSpec,
+    DeploymentArtifact,
     DType,
-    ONNXArtifact,
-    TensorRTOptimizationProfile,
-    TensorRTPlanArtifact,
-    TensorRTProfileInput,
+    ModelFiles,
+    RuntimeConfig,
 )
-
-
-def _hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _spec(name: str, dtype: DType, maximum_batch_size: int) -> BoundedTensorSpec:
@@ -31,28 +28,27 @@ def _spec(name: str, dtype: DType, maximum_batch_size: int) -> BoundedTensorSpec
     )
 
 
-def _plan(path: Path, *, maximum_batch_size: int = 8, profiles: int = 1) -> TensorRTPlanArtifact:
+def _with_profiles(artifact: DeploymentArtifact, *profiles: dict) -> DeploymentArtifact:
+    return replace(
+        artifact,
+        model=replace(
+            artifact.model,
+            metadata={"optimization_profile_count": len(profiles), "optimization_profiles": profiles},
+        ),
+    )
+
+
+def _plan(path: Path, *, maximum_batch_size: int = 8, profiles: int = 1) -> DeploymentArtifact:
     """Return a TensorRT artifact with a bounded implicit batch dimension."""
     path.write_bytes(b"TensorRT plan")
-    return TensorRTPlanArtifact(
-        path=path,
-        fingerprint=_hash(path),
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="tensorrt_plan", path=path),
         inputs=(_spec("input", DType.FLOAT32, maximum_batch_size),),
         outputs=(_spec("output", DType.FLOAT32, maximum_batch_size),),
-        optimization_profiles=(
-            TensorRTOptimizationProfile(
-                inputs=(
-                    TensorRTProfileInput(
-                        name="input",
-                        min_shape=(1, 8),
-                        opt_shape=(4, 8),
-                        max_shape=(maximum_batch_size, 8),
-                    ),
-                )
-            ),
-        )
-        * profiles,
+        runtime=RuntimeConfig(name="tensorrt"),
     )
+    profile = {"input": {"min_shape": (1, 8), "opt_shape": (4, 8), "max_shape": (maximum_batch_size, 8)}}
+    return _with_profiles(artifact, *((profile,) * profiles))
 
 
 def test_generates_quick_and_manual_searches_with_tuned_bounds(tmp_path):
@@ -100,9 +96,9 @@ def test_generates_quick_and_manual_searches_with_tuned_bounds(tmp_path):
 def test_keeps_an_unbatched_model_unbatched(tmp_path):
     source = tmp_path / "source.onnx"
     source.write_bytes(b"ONNX graph")
-    artifact = ONNXArtifact(
-        path=source,
-        fingerprint=_hash(source),
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
         inputs=(_spec("input", DType.FLOAT32, 8),),
         outputs=(_spec("output", DType.FLOAT32, 8),),
     )
@@ -130,9 +126,9 @@ def test_refuses_an_artifact_that_does_not_match_the_published_model(tmp_path):
     model = aitriton.publish(plan, path=tmp_path / "repository", model_name="encoder")
     onnx_path = tmp_path / "source.onnx"
     onnx_path.write_bytes(b"ONNX graph")
-    onnx = ONNXArtifact(
-        path=onnx_path,
-        fingerprint=_hash(onnx_path),
+    onnx = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=onnx_path),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
         inputs=plan.inputs,
         outputs=plan.outputs,
     )
@@ -208,13 +204,25 @@ def test_publish_generates_analyzer_configs_automatically(tmp_path):
     )
 
 
+def test_analyzer_results_stay_outside_a_current_directory_repository(tmp_path, monkeypatch):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    monkeypatch.chdir(repository)
+    model = aitriton.publish(artifact, path=".", model_name="encoder")
+    for name in ("fast", "manual"):
+        config = yaml.safe_load((model / "model_analyzer" / f"{name}.yaml").read_text())
+        expected = tmp_path / "repository-model-analyzer" / "encoder" / f"{name}-model-repository"
+        assert Path(config["output_model_repository_path"]) == expected
+
+
 @pytest.mark.parametrize("batched", [False, True])
 def test_publish_uses_concrete_shapes_for_dynamic_onnx_inputs(tmp_path, batched):
     source = tmp_path / "source.onnx"
     source.write_bytes(b"ONNX graph")
-    artifact = ONNXArtifact(
-        path=source,
-        fingerprint=_hash(source),
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
         inputs=tuple(
             BoundedTensorSpec(name=name, dtype=DType.INT64, min_shape=(1, 16), max_shape=(8, 512))
             for name in ("tokens", "mask")
@@ -229,18 +237,13 @@ def test_publish_uses_concrete_shapes_for_dynamic_onnx_inputs(tmp_path, batched)
 
 
 def test_publish_uses_tensorrt_optimum_shape_and_profile_batch_bounds(tmp_path):
-    source = tmp_path / "source.plan"
-    source.write_bytes(b"plan")
-    artifact = TensorRTPlanArtifact(
-        path=source,
-        fingerprint=_hash(source),
+    artifact = replace(
+        _plan(tmp_path / "source.plan"),
         inputs=(BoundedTensorSpec(name="input", dtype=DType.FLOAT32, min_shape=(1, 8), max_shape=(8, 512)),),
-        outputs=(_spec("output", DType.FLOAT32, 8),),
-        optimization_profiles=(
-            TensorRTOptimizationProfile(
-                inputs=(TensorRTProfileInput(name="input", min_shape=(1, 8), opt_shape=(2, 128), max_shape=(4, 256)),)
-            ),
-        ),
+    )
+    artifact = _with_profiles(
+        artifact,
+        {"input": {"min_shape": (1, 8), "opt_shape": (2, 128), "max_shape": (4, 256)}},
     )
     model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
     fast = yaml.safe_load((model / "model_analyzer/fast.yaml").read_text())
@@ -266,16 +269,10 @@ def test_analyzer_generation_failure_leaves_no_published_model(tmp_path, monkeyp
 
 
 def test_profile_with_larger_minimum_batch_uses_explicit_search(tmp_path):
-    from dataclasses import replace
-
     artifact = _plan(tmp_path / "source.plan")
-    artifact = replace(
+    artifact = _with_profiles(
         artifact,
-        optimization_profiles=(
-            TensorRTOptimizationProfile(
-                inputs=(TensorRTProfileInput(name="input", min_shape=(3, 8), opt_shape=(4, 8), max_shape=(8, 8)),)
-            ),
-        ),
+        {"input": {"min_shape": (3, 8), "opt_shape": (4, 8), "max_shape": (8, 8)}},
     )
     model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
     for name, batches in (("fast", [3, 8]), ("manual", [3, 4, 8])):
@@ -286,19 +283,69 @@ def test_profile_with_larger_minimum_batch_uses_explicit_search(tmp_path):
 
 
 def test_publish_pt2_generates_analyzer_configs(tmp_path):
-    from aitune.records import PT2Artifact
-
     source = tmp_path / "model.pt2"
     source.write_bytes(b"pt2")
-    artifact = PT2Artifact(
-        path=source,
-        fingerprint=_hash(source),
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="pt2", path=source, metadata={"structured_call": True}),
+        runtime=RuntimeConfig(name="aotinductor"),
         inputs=(_spec("input", DType.FLOAT32, 1),),
         outputs=(_spec("output", DType.FLOAT32, 1),),
-        structured_call=True,
     )
     model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     for name in ("fast", "manual"):
         config = yaml.safe_load((model / "model_analyzer" / f"{name}.yaml").read_text())
         assert config["perf_analyzer_flags"] == {"shape": ["input:1,8"]}
         assert "run_config_search_max_model_batch_size" not in config
+
+
+def test_analyzer_uses_only_enabled_tensorrt_profiles(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    artifact = replace(
+        artifact,
+        inputs=(BoundedTensorSpec(name="input", dtype=DType.FLOAT32, min_shape=(1, 8), max_shape=(8, 16)),),
+    )
+    artifact = _with_profiles(
+        artifact,
+        *artifact.model.metadata["optimization_profiles"],
+        {"input": {"min_shape": (1, 16), "opt_shape": (4, 16), "max_shape": (8, 16)}},
+    )
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
+    config_path = model / "config.pbtxt"
+    config = text_format.Parse(config_path.read_text(), model_config_pb2.ModelConfig())
+    config.instance_group[0].profile[:] = ["1"]
+    config_path.write_text(text_format.MessageToString(config))
+
+    output = aitriton.generate_model_analyzer_configs(artifact, model_path=model, path=tmp_path / "analyzer")
+    for name in ("fast", "manual"):
+        generated = yaml.safe_load((output / f"{name}.yaml").read_text())
+        assert generated["perf_analyzer_flags"] == {"shape": ["input:16"]}
+        assert generated["run_config_search_mode"] == "brute"
+        groups = generated["profile_models"]["encoder"]["model_config_parameters"]["instance_group"]
+        assert groups[0]["profile"] == ["1"]
+
+
+@pytest.mark.parametrize("compatible_fallback", [False, True])
+def test_analyzer_requires_a_common_batch_range_for_all_inputs(tmp_path, compatible_fallback):
+    artifact = _plan(tmp_path / "source.plan")
+    incompatible = {
+        "input": {"min_shape": (1, 8), "opt_shape": (2, 8), "max_shape": (2, 8)},
+        "mask": {"min_shape": (3, 8), "opt_shape": (4, 8), "max_shape": (8, 8)},
+    }
+    compatible = {name: {"min_shape": (4, 8), "opt_shape": (4, 8), "max_shape": (8, 8)} for name in ("input", "mask")}
+    artifact = replace(
+        artifact,
+        inputs=(_spec("input", DType.FLOAT32, 8), _spec("mask", DType.FLOAT32, 8)),
+    )
+    profiles = (incompatible, compatible) if compatible_fallback else (incompatible,)
+    artifact = _with_profiles(artifact, *profiles)
+    repository = tmp_path / "repository"
+    if not compatible_fallback:
+        with pytest.raises(aitriton.PublicationError, match="common batch size"):
+            aitriton.publish(artifact, path=repository, model_name="encoder", max_batch_size=8)
+        assert list(repository.iterdir()) == []
+        return
+
+    model = aitriton.publish(artifact, path=repository, model_name="encoder", max_batch_size=8)
+    for name in ("fast", "manual"):
+        generated = yaml.safe_load((model / "model_analyzer" / f"{name}.yaml").read_text())
+        assert generated["profile_models"]["encoder"]["parameters"]["batch_sizes"] == [4, 8]
