@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Validated ONNX Runtime configuration for Triton."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from google.protobuf import json_format
 from tritonclient.grpc import model_config_pb2
 
-from aitune.records import ONNXExecutionProvider
+from aitune.records import DeploymentArtifact
 from aitune.triton.config.common import _BaseModelConfig
 from aitune.triton.config.options import ExecutionAccelerator
 
@@ -16,7 +16,7 @@ class ONNXRuntimeModelConfig(_BaseModelConfig):
     """Triton configuration specialized for ONNX Runtime artifacts."""
 
     platform: Literal["onnxruntime_onnx"] = "onnxruntime_onnx"
-    execution_provider: ONNXExecutionProvider
+    execution_provider: Literal["cuda", "tensorrt"]
     gpu_execution_accelerators: tuple[ExecutionAccelerator, ...] = ()
     cpu_execution_accelerators: tuple[ExecutionAccelerator, ...] = ()
 
@@ -33,6 +33,12 @@ class ONNXRuntimeModelConfig(_BaseModelConfig):
                     raise ValueError(f"Duplicate execution accelerator: {accelerator.name}")
                 json_format.ParseDict(accelerator.model_dump(mode="json"), target.add())
         gpu = config.optimization.execution_accelerators.gpu_execution_accelerator
-        if self.execution_provider is ONNXExecutionProvider.TENSORRT and not any(a.name == "tensorrt" for a in gpu):
-            gpu.add(name="tensorrt")
+        if self.execution_provider == "tensorrt" and not any(a.name == "tensorrt" for a in gpu):
+            accelerator = config.optimization.execution_accelerators.gpu_execution_accelerator.add()
+            accelerator.name = "tensorrt"
         return config
+
+    @classmethod
+    def _artifact_options(cls, artifact: DeploymentArtifact) -> dict[str, Any]:
+        """Read the execution provider selected for ONNX Runtime."""
+        return {"execution_provider": artifact.runtime.options["execution_provider"]}

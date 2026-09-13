@@ -13,7 +13,7 @@ The TensorRT backend:
 - **High Performance**: Maximum inference speed on NVIDIA GPUs
 - **Dynamic Shapes**: Supports optimization profiles for variable input sizes
 - **Quantization**: INT8, FP8, INT4, FP16/BF16 autocast, and mixed precision support
-- **CUDA Graphs**: Optional CUDA graph capture for reduced CPU overhead
+- **CUDA Graphs**: Cached per static profile by default, with normal execution for dynamic ranges or capture failure
 - **Model Optimizer Integration**: Advanced quantization via TensorRT Model Optimizer
 - **Flexible Export**: Supports both Dynamo and script-based ONNX export
 
@@ -56,6 +56,33 @@ config = TensorRTBackendConfig(
 backend = TensorRTBackend(config)
 ```
 
+## Export a Tuned Artifact
+
+After tuning, retrieve the same `DeploymentArtifact` contract used by the ONNX backend:
+
+```python
+artifact = model.artifact()
+artifact.model.export_files("deployment/model.plan")
+
+print(artifact.model.format)  # tensorrt_plan
+print(artifact.runtime.name)  # tensorrt
+profiles = artifact.model.metadata["optimization_profiles"]
+print(artifact.model.metadata["optimization_profile_count"])
+print(artifact.runtime.options)
+```
+
+Each optimization profile is a dictionary keyed by executable input name, in engine input order.
+Each input contains `min_shape`, `opt_shape`, and `max_shape` tuples. These exact ranges are
+preserved alongside the overall input bounds; multiple profiles can leave gaps within those bounds.
+Runtime options preserve `use_cuda_graphs`, `max_cuda_graphs`, and `cuda_graph_cache_policy` as plain values
+for deployment adapters to interpret.
+
+The exported file is the TensorRT plan. The profile metadata is embedded in the deployment record;
+AITune's profile sidecar remains part of its checkpoint, and is not needed to execute the exported plan.
+`model.artifact()` constructs and validates the deployment record when called. The backend retains
+the finalized tensor names and profile metadata after deactivation, so generation does not require
+reloading the engine. The method also works after restoring and deploying a checkpoint.
+
 ## Configuration Options
 
 ### TensorRTBackendConfig
@@ -73,7 +100,9 @@ class TensorRTBackendConfig(BackendConfig):
     device: str = "cuda"
     quantization_config: ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None = None
     enable_tf32: bool = True
-    use_cuda_graphs: bool = False
+    use_cuda_graphs: bool = True
+    max_cuda_graphs: int = 8
+    cuda_graph_cache_policy: Literal["lru", "lfu"] = "lfu"
 ```
 
 ### use_dynamo
@@ -263,11 +292,28 @@ config = TensorRTBackendConfig(
 
 ### use_cuda_graphs
 
-Enable CUDA graph capture for inference.
+CUDA graphs are enabled by default for engines with fixed input shapes and for optimization profiles
+where `min == opt == max` for every dimension of every input. Profiles containing a dynamic range use
+ordinary TensorRT execution, even when a request happens to match their optimum shape. Inputs used as
+shape tensors also use ordinary execution because fixed dimensions do not guarantee fixed shape values.
+
+Each eligible profile is captured lazily when admitted to the cache. Its graph, execution context, input buffers,
+and output allocator are cached together while sharing the engine. Switching back to a previously used
+static profile replays its cached graph without recapture while it remains in the cache. The cache holds
+up to `max_cuda_graphs` entries (default: 8). The default aged LFU policy can execute an uncached profile
+normally to preserve frequently used graphs and avoid repeated capture. The optional LRU policy always
+admits uncached profiles, releasing the least recently used graph when full. All TensorRT profiles remain available.
+Deactivation releases the cache and usage history; activation starts with an empty cache.
+
+If capture fails, the backend logs a warning, releases the graph cache after execution finishes, and runs the current
+and subsequent calls without CUDA graphs. It does not retry capture on shape changes after a failure.
+Normal TensorRT execution errors still propagate. A newly loaded backend attempts capture again.
+
+Set `use_cuda_graphs=False` to disable capture explicitly:
 
 ```python
 config = TensorRTBackendConfig(
-    use_cuda_graphs=True,
+    use_cuda_graphs=False,
 )
 ```
 
@@ -275,13 +321,55 @@ config = TensorRTBackendConfig(
 
 - Reduced CPU overhead
 - Better performance for small models
-- Automatic re-capture on shape changes
+- Reuse of cached graphs when switching between static profiles
 
 **Limitations**:
 
-- First inference is slower (graph capture)
-- Shape changes trigger re-capture
+- Requests that capture a graph are slower, including recapture after eviction
+- Each cached static profile retains its own context and buffers, increasing device memory use
 - Not beneficial for very large models
+
+### max_cuda_graphs
+
+Maximum resident CUDA graphs per backend, as a positive integer (default: `8`). This limits cached graphs,
+not the number of TensorRT optimization profiles or their total memory usage. It is a count limit, not a
+device-memory budget.
+
+```python
+config = TensorRTBackendConfig(max_cuda_graphs=16)
+```
+
+With LRU, cycling through nine static profiles in an eight-entry cache causes eviction and recapture on
+every request after warmup. Default LFU admission avoids admitting profiles on equal frequency, allowing
+uncached requests to execute normally instead of repeatedly replacing graphs.
+
+### cuda_graph_cache_policy
+
+Choose `"lfu"` (default) or `"lru"`. LRU always admits an uncached eligible profile, evicting the least
+recently used graph when full. LFU uses recent request frequency to protect hot profiles:
+
+- Count every eligible profile request, including requests executed without a cached graph.
+- Halve all counts using integer division every 1,024 eligible requests, before counting that request.
+  Aging follows request traffic, not elapsed time, so historical popularity fades as new requests arrive.
+- Fill free cache slots immediately. When full, choose the least frequently used resident, breaking
+  frequency ties by least recent use.
+- Admit an incoming profile only if its count is strictly higher than the victim's. Otherwise, execute
+  normally on the base context without capturing or evicting a graph. Rejected requests still contribute
+  to future admission. This does not disable CUDA graphs or indicate a capture failure.
+
+```python
+config = TensorRTBackendConfig(max_cuda_graphs=8, cuda_graph_cache_policy="lfu")
+```
+
+Set `cuda_graph_cache_policy="lru"` to always admit the most recently requested profiles.
+Saved configurations with an explicit policy retain that choice; configurations without the field use LFU.
+
+Frequency history is bounded by the engine's eligible profiles, independently of the graph cache size.
+LFU can protect recurring hot shapes from occasional requests for other shapes, while LRU responds
+immediately to changes in the working set. Neither policy accounts for graph memory size or capture cost.
+The CUDA graph CI benchmark compares normal execution, LRU, and LFU using identical request sequences,
+reporting latency, capture counts, and requests served by graphs. LFU is the default to avoid the repeated
+capture overhead observed when the working set exceeds cache capacity. It is not faster for every workload.
 
 ## Optimization Profiles
 

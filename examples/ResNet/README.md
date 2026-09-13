@@ -129,6 +129,11 @@ uv run --extra triton ./run_triton.sh
 The runner waits for Triton, invokes the client, and stops the server. Both scripts default to release `26.05`; set
 `NVIDIA_RELEASE` once in the calling shell to use another matching pair.
 
+Triton loads the published models at startup with `--model-control-mode=none`; no load API call is needed.
+The runner uses host networking locally and shares the job container's network in GitLab Docker jobs, so the
+readiness checks and client reach the same `localhost`. When running inside another Docker container, set
+`TRITON_NETWORK=container:<name-or-id>` to share that container's network.
+
 The equivalent package-to-repository command is available independently:
 
 ```bash

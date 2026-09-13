@@ -338,6 +338,7 @@ functional-test = [
     { name = "diffusers" },
     { name = "fire" },
     { name = "flash-attn-4" },
+    { name = "kernels" },
     { name = "sageattention" },
     { name = "sentencepiece" },
     { name = "timm" },
@@ -420,9 +421,10 @@ dev = [
 doc = [{ name = "pyyaml", specifier = ">=6.0" }]
 functional-test = [
     { name = "datasets", specifier = ">=3.3.2" },
-    { name = "diffusers", specifier = "<=0.34.0" },
+    { name = "diffusers", specifier = ">=0.35.0" },
     { name = "fire" },
     { name = "flash-attn-4", specifier = "==4.0.0b27" },
+    { name = "kernels", specifier = ">=0.12" },
     { name = "sageattention" },
     { name = "sentencepiece", specifier = ">=0.2.0" },
     { name = "timm" },
@@ -1333,10 +1335,11 @@ wheels = [
 
 [[package]]
 name = "diffusers"
-version = "0.34.0"
+version = "0.39.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
+    { name = "httpx" },
     { name = "huggingface-hub" },
     { name = "importlib-metadata" },
     { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'aarch64' and 'tegra' in platform_release and extra == 'extra-6-aitune-torch28') or (platform_machine != 'aarch64' and extra == 'extra-6-aitune-torch28' and extra == 'extra-6-aitune-torch29') or ('tegra' not in platform_release and extra == 'extra-6-aitune-torch28' and extra == 'extra-6-aitune-torch29') or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch211') or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch212') or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch28') or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch29') or (extra == 'extra-6-aitune-torch211' and extra == 'extra-6-aitune-torch212') or (extra == 'extra-6-aitune-torch211' and extra == 'extra-6-aitune-torch28') or (extra == 'extra-6-aitune-torch211' and extra == 'extra-6-aitune-torch29') or (extra == 'extra-6-aitune-torch212' and extra == 'extra-6-aitune-torch28') or (extra == 'extra-6-aitune-torch212' and extra == 'extra-6-aitune-torch29')" },
@@ -1348,9 +1351,9 @@ dependencies = [
     { name = "requests" },
     { name = "safetensors" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/34/01/eee276cb1ffa1528d3fac8c8382c32d0deef7f089baeefbee254bbbc0a8f/diffusers-0.34.0.tar.gz", hash = "sha256:25d84e779781fb8a78de22ea0f732aac32b619c65548a04e520d0b55e29a54e7", size = 3083860, upload-time = "2025-06-24T14:56:57.438Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/81/6095237b86a3116c4789f28c4435d5296c00c0fc74ffde99008fd6b3a36c/diffusers-0.39.0.tar.gz", hash = "sha256:14bb1d98c85a0e463d734c99aaa73b480a7bc9bad22af30fbf730ef8f09c1d67", size = 4651240, upload-time = "2026-07-03T08:48:47.904Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/e0/d5af850081d479e5bb6f6f310e98e1e2ea6cce9e5d67e2b7978d5690497e/diffusers-0.34.0-py3-none-any.whl", hash = "sha256:b0f642cd57756357bad5d23fe95b61f2e6e30321c93f1302cca6d832a01e6d33", size = 3774402, upload-time = "2025-06-24T14:56:55.089Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/3f/7469c46e9d22307ea686bab687d70e6bf328722952f9d10339f5e913e608/diffusers-0.39.0-py3-none-any.whl", hash = "sha256:912aca51b5787365110806e984d5555735bf8a461073bb8459029d0bca7870ef", size = 5631176, upload-time = "2026-07-03T08:48:45.337Z" },
 ]
 
 [[package]]
@@ -2255,6 +2258,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/02/49/9d1284d0dc65e2c757b74c6687b6d319b02f822ad039e5c512df9194d9dd/jupyter_core-5.9.1.tar.gz", hash = "sha256:4d09aaff303b9566c3ce657f580bd089ff5c91f5f89cf7d8846c3cdf465b5508", size = 89814, upload-time = "2025-10-16T19:19:18.444Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/e7/80988e32bf6f73919a113473a604f5a8f09094de312b9d52b79c2df7612b/jupyter_core-5.9.1-py3-none-any.whl", hash = "sha256:ebf87fdc6073d142e114c72c9e29a9d7ca03fad818c5d300ce2adc1fb0743407", size = 29032, upload-time = "2025-10-16T19:19:16.783Z" },
+]
+
+[[package]]
+name = "kernels"
+version = "0.12.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "packaging" },
+    { name = "pyyaml" },
+    { name = "tomli", marker = "python_full_version < '3.11' or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch211') or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch212') or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch28') or (extra == 'extra-6-aitune-torch210' and extra == 'extra-6-aitune-torch29') or (extra == 'extra-6-aitune-torch211' and extra == 'extra-6-aitune-torch212') or (extra == 'extra-6-aitune-torch211' and extra == 'extra-6-aitune-torch28') or (extra == 'extra-6-aitune-torch211' and extra == 'extra-6-aitune-torch29') or (extra == 'extra-6-aitune-torch212' and extra == 'extra-6-aitune-torch28') or (extra == 'extra-6-aitune-torch212' and extra == 'extra-6-aitune-torch29') or (extra == 'extra-6-aitune-torch28' and extra == 'extra-6-aitune-torch29')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b3/84/9f68f355f6ce99e977872021fbdbafadcf2820f51d3f7bd697ec3801cb7a/kernels-0.12.3.tar.gz", hash = "sha256:87e29716578e7e71dc5a7578e0132bfdae305bedaeb602698f87c88ca6c60e32", size = 57407, upload-time = "2026-03-20T10:20:42.166Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/3e/778e4a86830e9139df2d16d86c4488fce426ec19daa83cbd2854ef389030/kernels-0.12.3-py3-none-any.whl", hash = "sha256:5d1d33fcb774e03bb7f0688ac24d91ef6b963692f80f0a85ddd2286e69f3cf2f", size = 55501, upload-time = "2026-03-20T10:20:40.643Z" },
 ]
 
 [[package]]

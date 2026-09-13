@@ -9,16 +9,14 @@ import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
-from pydantic import ValidationError
-
 from aitune.exceptions import AITuneError, AITuneUserInputError
-from aitune.records import Artifact, ONNXArtifact, PT2Artifact, TensorRTPlanArtifact
+from aitune.records import DeploymentArtifact
 from aitune.triton.config import (
     ONNXRuntimeModelConfig,
     TensorRTModelConfig,
     TorchAOTIModelConfig,
-    tensor_config,
 )
+from aitune.triton.config.common import _BaseModelConfig
 from aitune.triton.model_analyzer import _write_model_analyzer_configs
 
 logger = logging.getLogger(__name__)
@@ -32,33 +30,41 @@ __all__ = [
 ]
 
 _CONFIG_FILE_NAME = "config.pbtxt"
+_MODEL_CONFIGS: dict[str, type[_BaseModelConfig]] = {
+    "tensorrt": TensorRTModelConfig,
+    "onnxruntime": ONNXRuntimeModelConfig,
+    "aotinductor": TorchAOTIModelConfig,
+}
 
 
 class PublicationError(AITuneError):
     """Raised when an artifact cannot be published as a Triton model."""
 
 
-def _artifact_layout(artifact: Artifact) -> tuple[str, bool]:
+def _artifact_layout(artifact: DeploymentArtifact) -> tuple[str, bool]:
     """Return Triton's file name and multi-file behavior."""
-    if isinstance(artifact, TensorRTPlanArtifact):
+    format_runtime = (artifact.model.format, artifact.runtime.name)
+    if format_runtime == ("tensorrt_plan", "tensorrt"):
         return "model.plan", False
-    if isinstance(artifact, ONNXArtifact):
+    if format_runtime == ("onnx", "onnxruntime"):
         return "model.onnx", True
-    if isinstance(artifact, PT2Artifact):
+    if format_runtime == ("pt2", "aotinductor"):
         return "model.pt2", False
-    supported = "ONNXArtifact, PT2Artifact, and TensorRTPlanArtifact"
-    raise PublicationError(f"Triton publication supports {supported}, got {type(artifact).__name__}")
+    raise PublicationError(
+        f"Unsupported Triton model format/runtime pair: {format_runtime!r}. "
+        "Supported pairs are tensorrt_plan/tensorrt, onnx/onnxruntime, and pt2/aotinductor"
+    )
 
 
-def _validate_artifact_files(artifact: Artifact, *, multi_file: bool) -> None:
-    """Reject companion files when Triton's format has no defined layout."""
-    if artifact.companions and not multi_file:
+def _validate_artifact_files(artifact: DeploymentArtifact, *, multi_file: bool) -> None:
+    """Reject additional files when Triton's format has no defined layout."""
+    if artifact.model.additional_files and not multi_file:
         raise PublicationError(
-            f"{type(artifact).__name__} is a single-file Triton format, but the artifact has companion files"
+            f"{artifact.model.format!r} is a single-file Triton format, but the artifact has additional files"
         )
 
 
-def _batch_size(artifact: Artifact, dynamic_batching: bool, requested: int | None) -> int:
+def _batch_size(artifact: DeploymentArtifact, dynamic_batching: bool, requested: int | None) -> int:
     """Resolve and validate the Triton deployment batch limit."""
     if requested is None and not dynamic_batching:
         return 0
@@ -85,55 +91,29 @@ def _batch_size(artifact: Artifact, dynamic_batching: bool, requested: int | Non
 
 
 def _model_config(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     *,
     model_name: str,
     dynamic_batching: bool,
     max_batch_size: int | None,
-) -> TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig:
+) -> _BaseModelConfig:
     """Build a validated Triton configuration from an artifact."""
     if not artifact.inputs or not artifact.outputs:
         raise PublicationError("Triton publication requires at least one input and one output")
     batch_size = _batch_size(artifact, dynamic_batching, max_batch_size)
-    batched = batch_size > 0
+    config_type = _MODEL_CONFIGS.get(artifact.runtime.name)
+    if config_type is None:
+        raise PublicationError(f"Unsupported Triton runtime: {artifact.runtime.name!r}")
     try:
-        inputs = tuple(tensor_config(tensor, batched=batched) for tensor in artifact.inputs)
-        outputs = tuple(tensor_config(tensor, batched=batched) for tensor in artifact.outputs)
-        if isinstance(artifact, TensorRTPlanArtifact):
-            return TensorRTModelConfig(
-                name=model_name,
-                max_batch_size=batch_size,
-                inputs=inputs,
-                outputs=outputs,
-                dynamic_batching=dynamic_batching,
-                optimization_profile_indices=tuple(range(artifact.optimization_profile_count)),
-                cuda_graphs=artifact.use_cuda_graphs,
-            )
-        if isinstance(artifact, ONNXArtifact):
-            return ONNXRuntimeModelConfig(
-                name=model_name,
-                max_batch_size=batch_size,
-                inputs=inputs,
-                outputs=outputs,
-                dynamic_batching=dynamic_batching,
-                execution_provider=artifact.execution_provider,
-            )
-        if isinstance(artifact, PT2Artifact):
-            return TorchAOTIModelConfig(
-                name=model_name,
-                max_batch_size=batch_size,
-                inputs=inputs,
-                outputs=outputs,
-                dynamic_batching=dynamic_batching,
-                structured_call=artifact.structured_call,
-            )
-    except ValidationError as error:
-        raise PublicationError(f"Invalid Triton configuration for {type(artifact).__name__}: {error}") from error
-    raise AssertionError(f"Unhandled Triton artifact: {type(artifact).__name__}")
+        return config_type.from_artifact(
+            artifact, name=model_name, max_batch_size=batch_size, dynamic_batching=dynamic_batching
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise PublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
 
 
 def publish(
-    model: Artifact | str | os.PathLike[str],
+    model: DeploymentArtifact | str | os.PathLike[str],
     /,
     *,
     path: str | os.PathLike[str],
@@ -142,7 +122,7 @@ def publish(
     dynamic_batching: bool = False,
     max_batch_size: int | None = None,
     config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig | None = None,
-    companions: Sequence[str | os.PathLike[str]] = (),
+    additional_files: Sequence[str | os.PathLike[str]] = (),
     resources: Mapping[str, str | os.PathLike[str]] | None = None,
 ) -> Path:
     """Publish a tuned artifact or an existing model file to a Triton repository.
@@ -160,8 +140,8 @@ def publish(
         dynamic_batching: Enable request batching for an artifact.
         max_batch_size: Implicit batch limit within an artifact's tuned bounds.
         config: Explicit backend-specific configuration required for a file.
-        companions: ONNX external-data paths relative to the source file's directory.
-            Artifact companions are taken from the artifact record instead.
+        additional_files: ONNX external-data paths relative to the source file's directory.
+            Artifact additional files are taken from the artifact record instead.
         resources: Model-relative destination paths mapped to local files, for example
             {"warmup/sample.bin": "samples/input.bin"} or {"labels.txt": "labels.txt"}.
 
@@ -172,9 +152,9 @@ def publish(
         AITuneUserInputError: If arguments are invalid or mix file and artifact options.
         PublicationError: If the model cannot be represented or publication fails.
     """
-    if isinstance(model, Artifact):
-        if config is not None or companions or resources:
-            raise AITuneUserInputError("Artifact publication derives config and companions from the artifact")
+    if isinstance(model, DeploymentArtifact):
+        if config is not None or additional_files or resources:
+            raise AITuneUserInputError("Artifact publication derives config and additional files from the artifact")
         if model_name is None:
             raise AITuneUserInputError("model_name is required when publishing an artifact")
         return _publish_artifact(
@@ -192,12 +172,17 @@ def publish(
     if model_name is not None or dynamic_batching or max_batch_size is not None:
         raise AITuneUserInputError("For a model file, specify the model name and batching settings in config")
     return _publish_file(
-        model, path=path, config=config, model_version=model_version, companions=companions, resources=resources
+        model,
+        path=path,
+        config=config,
+        model_version=model_version,
+        additional_files=additional_files,
+        resources=resources,
     )
 
 
 def _publish_artifact(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     /,
     *,
     path: str | os.PathLike[str],
@@ -208,13 +193,21 @@ def _publish_artifact(
 ) -> Path:
     """Publish one tuned artifact into a new Triton model repository entry.
 
-    The operation never replaces an existing model. Files are verified and staged
+    The operation never replaces an existing model. Files are copied and staged
     before the completed model directory is moved into the repository. Model Analyzer
     configs are generated automatically under ``model_analyzer/fast.yaml`` and
     ``model_analyzer/manual.yaml``, with input shapes derived from the artifact.
 
+    Supported model format/runtime pairs are ``onnx``/``onnxruntime``,
+    ``tensorrt_plan``/``tensorrt``, and ``pt2``/``aotinductor``. ONNX provider
+    selection comes from ``runtime.options["execution_provider"]``. TensorRT uses
+    ``model.metadata["optimization_profile_count"]`` and the optional runtime
+    setting ``use_cuda_graphs``. Analyzer shapes come from
+    ``model.metadata["optimization_profiles"]``. PT2 uses
+    ``model.metadata["structured_call"]``.
+
     Args:
-        artifact: Tuned artifact to publish.
+        artifact: Deployment record containing model files, tensor specs, and runtime settings.
         path: Triton model repository root.
         model_name: New model directory name.
         model_version: Positive Triton model version.
@@ -245,8 +238,8 @@ def _publish_artifact(
         config=config,
         model_version=model_version,
         file_name=file_name,
-        nested=bool(artifact.companions),
-        export_file=artifact.export_file,
+        nested=bool(artifact.model.additional_files),
+        export_files=artifact.model.export_files,
         artifact=artifact,
     )
 
@@ -268,13 +261,13 @@ def _validate_target(model_name: str, model_version: int) -> None:
 def _publish_model(
     *,
     path: str | os.PathLike[str],
-    config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig,
+    config: _BaseModelConfig,
     model_version: int,
     file_name: str,
     nested: bool,
-    export_file: Callable[[Path], object],
+    export_files: Callable[[Path], object],
     resources: Mapping[Path, Path] | None = None,
-    artifact: Artifact | None = None,
+    artifact: DeploymentArtifact | None = None,
 ) -> Path:
     """Stage a model and its configuration before publishing the directory."""
     model_name = config.name
@@ -293,7 +286,7 @@ def _publish_model(
         destination = version_directory / file_name
         if nested:
             destination = destination / file_name
-        export_file(destination)
+        export_files(destination)
         for relative, source in (resources or {}).items():
             target = staged_model / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -323,7 +316,7 @@ def _publish_file(
     path: str | os.PathLike[str],
     config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig,
     model_version: int = 1,
-    companions: Sequence[str | os.PathLike[str]] = (),
+    additional_files: Sequence[str | os.PathLike[str]] = (),
     resources: Mapping[str, str | os.PathLike[str]] | None = None,
 ) -> Path:
     """Publish an existing model file using an explicit Triton configuration.
@@ -339,7 +332,7 @@ def _publish_file(
         config: Backend-specific configuration, including the target model name.
             For implicit batching, tensor dimensions omit the leading batch axis.
         model_version: Positive Triton model version.
-        companions: ONNX external-data paths relative to ``model_file.parent``.
+        additional_files: ONNX external-data paths relative to ``model_file.parent``.
             Relative paths are preserved beside the published graph.
         resources: Auxiliary files mapped by destination relative to the model directory.
 
@@ -347,7 +340,7 @@ def _publish_file(
         Path to the generated model directory.
 
     Raises:
-        AITuneUserInputError: If target arguments or companion paths are invalid.
+        AITuneUserInputError: If target arguments or additional file paths are invalid.
         PublicationError: If the configuration is unsupported or copying fails.
     """
     layouts = {
@@ -359,13 +352,13 @@ def _publish_file(
         raise PublicationError("config must be a TensorRTModelConfig, ONNXRuntimeModelConfig, or TorchAOTIModelConfig")
     _validate_target(config.name, model_version)
     source = Path(model_file)
-    relative_paths = _companion_paths(source, companions)
+    relative_paths = _additional_file_paths(source, additional_files)
     if relative_paths and not isinstance(config, ONNXRuntimeModelConfig):
-        raise PublicationError("Only ONNX models support companion files")
+        raise PublicationError("Only ONNX models support additional files")
     file_name = config.default_model_filename or layouts[type(config)]
     resource_files = _resource_files(config, resources or {})
     if Path(file_name) in relative_paths:
-        raise AITuneUserInputError(f"A companion file cannot overwrite {file_name}")
+        raise AITuneUserInputError(f"An additional file cannot overwrite {file_name}")
 
     def copy_files(destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -381,21 +374,21 @@ def _publish_file(
         model_version=model_version,
         file_name=file_name,
         nested=bool(relative_paths),
-        export_file=copy_files,
+        export_files=copy_files,
         resources=resource_files,
     )
 
 
-def _companion_paths(source: Path, companions: Sequence[str | os.PathLike[str]]) -> tuple[Path, ...]:
+def _additional_file_paths(source: Path, additional_files: Sequence[str | os.PathLike[str]]) -> tuple[Path, ...]:
     """Validate the relative file layout of an externally supplied model."""
-    paths = tuple(Path(companion) for companion in companions)
+    paths = tuple(Path(relative) for relative in additional_files)
     for relative in paths:
         if relative == Path() or relative.is_absolute() or ".." in relative.parts:
-            raise AITuneUserInputError(f"Companion path must stay inside the model directory: {relative}")
+            raise AITuneUserInputError(f"Additional file path must stay inside the model directory: {relative}")
         if relative == Path(source.name):
-            raise AITuneUserInputError("The model entry file cannot also be a companion")
+            raise AITuneUserInputError("The model entry file cannot also be an additional file")
     if len(paths) != len(set(paths)):
-        raise AITuneUserInputError("Companion paths must be unique")
+        raise AITuneUserInputError("Additional file paths must be unique")
     return paths
 
 

@@ -9,7 +9,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from aitune.records import BoundedTensorSpec, DType, ONNXArtifact
+from aitune.records import BoundedTensorSpec, DeploymentArtifact, DType
 from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.backend import BackendState
 from aitune.torch.backend.onnx_runtime_backend import (
@@ -244,14 +244,17 @@ def test_build_returns_active_backend(mock_onnx, backend, model, graph_spec, sam
 
 
 @requires_cuda
-def test_build_exposes_the_final_onnx_interface(
-    mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
+@pytest.mark.parametrize("execution_provider", [None, ONNXExecutionProvider.CUDA, ONNXExecutionProvider.TENSORRT])
+def test_artifact_after_deactivation_exposes_the_final_onnx_interface(
+    mock_onnx, model, graph_spec, sample_data, torch_device, tmp_path, execution_provider
 ):
+    backend = ONNXRuntimeBackend(ONNXRuntimeBackendConfig(execution_provider=execution_provider))
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+    backend.deactivate()
 
     artifact = backend.artifact()
 
-    assert isinstance(artifact, ONNXArtifact)
+    assert isinstance(artifact, DeploymentArtifact)
     assert artifact.inputs == (
         BoundedTensorSpec(
             name="input_x",
@@ -270,9 +273,14 @@ def test_build_exposes_the_final_onnx_interface(
             batch_axis=0,
         ),
     )
-    assert artifact.path == tmp_path / "model_raw.onnx"
-    assert artifact.execution_provider is ONNXExecutionProvider.CUDA
-    artifact.verify()
+    assert artifact.model.path == tmp_path / "model_raw.onnx"
+    assert artifact.model.format == "onnx"
+    assert artifact.runtime.name == "onnxruntime"
+    expected_provider = (execution_provider or ONNXExecutionProvider.CUDA).value
+    assert artifact.runtime.options == {"execution_provider": expected_provider}
+    assert type(artifact.runtime.options["execution_provider"]) is str
+    assert artifact.model.additional_files == ()
+    assert artifact.model.files == (artifact.model.path,)
 
 
 @requires_cuda
@@ -289,8 +297,12 @@ def test_build_includes_onnx_external_data_in_the_artifact(
 
     artifact = backend.artifact()
 
-    assert tuple(file.relative_path for file in artifact.companions) == (Path("model_raw.onnx.data"),)
-    artifact.verify()
+    assert artifact.model.additional_files == (Path("model_raw.onnx.data"),)
+    assert artifact.model.files == (artifact.model.path, tmp_path / "model_raw.onnx.data")
+    destination = tmp_path / "export" / "model.onnx"
+    assert artifact.model.export_files(destination) == destination
+    assert destination.read_bytes() == b"onnx-model"
+    assert (destination.parent / "model_raw.onnx.data").read_bytes() == b"external-data"
 
 
 @requires_cuda
@@ -302,7 +314,45 @@ def test_artifact_metadata_failure_does_not_fail_backend_build(
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
     assert backend.is_active
+    backend._create_artifact.assert_not_called()
+    backend.deactivate()
+    backend.activate()
+    backend._create_artifact.assert_not_called()
     with pytest.raises(RuntimeError, match="unsupported interface"):
+        backend.artifact()
+    backend._create_artifact.assert_called_once()
+
+
+@pytest.mark.parametrize("kind", ["input", "output"])
+@pytest.mark.parametrize(
+    ("element_type", "shape", "message"),
+    [
+        ("tensor(string)", ["batch", 32], "unsupported element type"),
+        ("tensor(double)", ["batch", 32], "dtype does not match"),
+        ("tensor(float)", None, "rank does not match"),
+        ("tensor(float)", ["batch"], "rank does not match"),
+        ("tensor(float)", [1, 32], "axis 0 is fixed at 1"),
+        ("tensor(float)", ["batch", 64], "axis 1 is fixed at 64"),
+    ],
+)
+def test_artifact_reports_actual_interface_mismatches(tmp_path, kind, element_type, shape, message):
+    backend = ONNXRuntimeBackend()
+    backend._onnx_model_artifact = ArtifactPath(tmp_path, "model.onnx")
+    backend._graph_spec = ToyTorchModel().graph_spec(batch_sizes=[1, 2], device=torch.device("cpu"))
+    nodes = {}
+    for tensor_kind, width in (("input", 32), ("output", 5)):
+        metadata = getattr(backend._graph_spec, f"{tensor_kind}_spec")
+        node = Mock()
+        node.name = format_tensor_name(metadata.tensor_data[0][0].path, tensor_kind)
+        node.type = "tensor(float)"
+        node.shape = ["batch", width]
+        nodes[tensor_kind] = node
+    nodes[kind].type = element_type
+    nodes[kind].shape = shape
+    backend._input_nodes = [nodes["input"]]
+    backend._output_nodes = [nodes["output"]]
+
+    with pytest.raises(RuntimeError, match=message):
         backend.artifact()
 
 
@@ -488,8 +538,9 @@ def test_from_dict_restores_state(tmp_path, torch_device):
 
 
 @requires_cuda
+@pytest.mark.parametrize("execution_provider", [ONNXExecutionProvider.CUDA, ONNXExecutionProvider.TENSORRT])
 def test_checkpoint_loaded_backend_recreates_external_data_artifact(
-    mock_onnx, model, graph_spec, sample_data, torch_device, tmp_path
+    mock_onnx, model, graph_spec, sample_data, torch_device, tmp_path, execution_provider
 ):
     def export_with_external_data(*args, **kwargs):
         model_path = Path(kwargs["f"])
@@ -497,7 +548,7 @@ def test_checkpoint_loaded_backend_recreates_external_data_artifact(
         Path(f"{model_path}.data").write_bytes(b"external-data")
 
     mock_onnx.side_effect = export_with_external_data
-    backend = ONNXRuntimeBackend().build(
+    backend = ONNXRuntimeBackend(ONNXRuntimeBackendConfig(execution_provider=execution_provider)).build(
         model,
         graph_spec,
         sample_data,
@@ -509,9 +560,11 @@ def test_checkpoint_loaded_backend_recreates_external_data_artifact(
     restored.deploy(torch_device)
     artifact = restored.artifact()
 
-    assert artifact.path == tmp_path / "model_raw.onnx"
-    assert tuple(file.relative_path for file in artifact.companions) == (Path("model_raw.onnx.data"),)
-    artifact.verify()
+    assert artifact.model.path == tmp_path / "model_raw.onnx"
+    assert artifact.model.additional_files == (Path("model_raw.onnx.data"),)
+    assert artifact.model.files == (artifact.model.path, tmp_path / "model_raw.onnx.data")
+    assert artifact.runtime == backend.artifact().runtime
+    assert artifact.runtime.options == {"execution_provider": execution_provider.value}
 
 
 @requires_cuda

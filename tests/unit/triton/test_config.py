@@ -6,7 +6,6 @@ from google.protobuf import text_format
 from pydantic import ValidationError
 from tritonclient.grpc import model_config_pb2 as pb
 
-from aitune.records import ONNXExecutionProvider
 from aitune.triton import (
     DynamicBatcher,
     ExecutionAccelerator,
@@ -31,7 +30,7 @@ def config(backend="onnx", **kwargs):
         return TensorRTModelConfig(**{"optimization_profile_indices": (0,)} | options)
     if backend == "pt2":
         return TorchAOTIModelConfig(**{"structured_call": False} | options)
-    return ONNXRuntimeModelConfig(**{"execution_provider": ONNXExecutionProvider.CUDA} | options)
+    return ONNXRuntimeModelConfig(**{"execution_provider": "cuda"} | options)
 
 
 def roundtrip(model):
@@ -202,6 +201,7 @@ def test_tensorrt_profile_selection_and_optimization():
             instance_groups=(InstanceGroup(kind="KIND_GPU", gpus=(1,), profile=("3",)),),
         )
     )
+    assert len(result.instance_group) == 1
     assert result.instance_group[0].profile == ["3"]
     assert result.instance_group[0].gpus == [1]
     assert result.optimization.cuda.graphs
@@ -209,10 +209,15 @@ def test_tensorrt_profile_selection_and_optimization():
     assert result.optimization.gather_kernel_buffer_threshold == 16
 
 
+def test_onnx_provider_from_string_enables_tensorrt():
+    result = roundtrip(config(execution_provider="".join(("tensor", "rt"))))
+    assert [item.name for item in result.optimization.execution_accelerators.gpu_execution_accelerator] == ["tensorrt"]
+
+
 def test_onnx_accelerators_preserve_parameters():
     result = roundtrip(
         config(
-            execution_provider=ONNXExecutionProvider.TENSORRT,
+            execution_provider="tensorrt",
             gpu_execution_accelerators=(ExecutionAccelerator(name="tensorrt", parameters={"precision_mode": "FP16"}),),
             cpu_execution_accelerators=(ExecutionAccelerator(name="openvino", parameters={"num_of_threads": "2"}),),
         )

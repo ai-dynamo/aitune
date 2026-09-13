@@ -14,9 +14,13 @@ configuration object or generation call is required:
 ```python
 from aitune.triton import publish
 
-# artifact is the ONNX, TensorRT, or PT2 artifact produced by tuning.
+# artifact is a DeploymentArtifact produced by tuning.
 model_path = publish(artifact, path="model_repository", model_name="encoder")
 ```
+
+Set `max_batch_size` to publish with an implicit batch dimension within the
+artifact's bounds. Enable `dynamic_batching=True` to let Triton combine client
+requests; an implicit batch dimension alone does not enable that scheduler.
 
 The model directory contains the versioned model, `config.pbtxt`, and
 `model_analyzer/fast.yaml` and `model_analyzer/manual.yaml`. Publication stages
@@ -78,16 +82,20 @@ Choose `TensorRTModelConfig` with `optimization_profile_indices` and optional
 `cuda_graphs` for a TensorRT plan, or `TorchAOTIModelConfig` with `structured_call`
 for a PT2 package. The configuration type selects the backend and destination
 filename (`model.plan`, `model.onnx`, or `model.pt2`).
+For a tuned TensorRT artifact, the configuration factory derives these profile
+indices from `artifact.model.metadata["optimization_profile_count"]`.
 
-For ONNX external data, pass `companions=["weights.bin", "data/weights.bin"]`
+For ONNX external data, pass `additional_files=["weights.bin", "data/weights.bin"]`
 with the files your graph actually references. Paths are relative to the source
-graph's directory. The graph and companions are copied under `1/model.onnx/`,
-preserving the companion paths. Files are staged before publication, and an
+graph's directory. The graph and additional files are copied under `1/model.onnx/`,
+preserving the additional file paths. Files are staged before publication, and an
 existing model directory is never replaced. This API prepares the repository;
 it does not start Triton or verify that the model can execute on the target hardware.
 
 Tuned artifacts continue to use `publish(artifact, path=..., model_name=...)`,
-with configuration derived from the artifact.
+with configuration derived from the artifact. Manual file publication does not
+generate Model Analyzer configurations because the supplied Triton configuration
+does not contain the model's bounded input shapes and optimization profiles.
 
 ## Save a Tuned Model
 
@@ -318,3 +326,4 @@ See the [E5Large example](../../../examples/E5Large/README.md) for a complete wo
 - [Backend Guides](../backends/tensorrt_backend.md) — backend-specific deployment notes
 - [E5Large example](../../../examples/E5Large/README.md) — end-to-end embedding worker
 - [FLUX example](../../../examples/FLUX/README.md) — end-to-end image generation worker
+- [WAN example](../../../examples/WAN/README.md) — context-parallel text-to-video worker

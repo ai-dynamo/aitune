@@ -5,6 +5,7 @@
 import copy
 from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import Enum
 from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, cast
@@ -15,7 +16,7 @@ import onnxruntime
 import torch
 import torch.nn as nn
 
-from aitune.records import ArtifactFile, DType, ONNXArtifact, ONNXExecutionProvider
+from aitune.records import DeploymentArtifact, DType, ModelFiles, RuntimeConfig
 from aitune.torch.artifact import bounded_tensor_specs
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.checkpoint.artifact import ArtifactPath
@@ -25,9 +26,15 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
-from aitune.utils.hashing import hash_file
 
 logger = getLogger(__name__)
+
+
+class ONNXExecutionProvider(str, Enum):
+    """ONNX Runtime execution providers supported by the Torch backend."""
+
+    CUDA = "cuda"
+    TENSORRT = "tensorrt"
 
 
 # Mapping from torch dtype to numpy dtype for ONNX Runtime IOBinding.
@@ -165,8 +172,8 @@ class ONNXRuntimeBackend(Backend):
         self._output_object = None
         self._graph_spec: GraphSpec | None = None
         self._samples: SampleStore | None = None
-        self._artifact: ONNXArtifact | None = None
-        self._artifact_error: str | None = None
+        self._input_nodes: list[onnxruntime.NodeArg] | None = None
+        self._output_nodes: list[onnxruntime.NodeArg] | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -176,12 +183,12 @@ class ONNXRuntimeBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def artifact(self) -> ONNXArtifact:
-        """Return the ONNX model and runtime contract captured during activation."""
-        if self._artifact is None:
-            detail = f": {self._artifact_error}" if self._artifact_error else ""
-            raise RuntimeError(f"ONNX artifact is not available until the backend has built or deployed{detail}")
-        return self._artifact
+    def artifact(self) -> DeploymentArtifact:
+        """Create the deployment record on request, including after deactivation."""
+        try:
+            return self._create_artifact()
+        except (OSError, RuntimeError, ValueError) as error:
+            raise RuntimeError(f"ONNX artifact is not available: {error}") from error
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Export the model to ONNX then load the session."""
@@ -237,26 +244,23 @@ class ONNXRuntimeBackend(Backend):
             except Exception:
                 self._deactivate()
                 raise
-        if self._artifact is None:
-            self._capture_artifact()
+        # Keep the finalized interface when the session is released; validate it only on artifact().
+        self._input_nodes = self._session.get_inputs()
+        self._output_nodes = self._session.get_outputs()
 
-    def _capture_artifact(self) -> None:
-        """Capture publication metadata without changing backend tuning success."""
-        try:
-            self._artifact = self._create_artifact()
-            self._artifact_error = None
-        except (OSError, RuntimeError, ValueError) as error:
-            self._artifact_error = str(error)
-            logger.info("ONNX model is not available for publication: %s", error)
-
-    def _create_artifact(self) -> ONNXArtifact:
-        """Create an artifact from the active session and recorded shape bounds."""
-        if self._onnx_model_artifact is None or self._session is None or self._graph_spec is None:
-            raise RuntimeError("ONNX artifact requires an exported model, active session, and graph specification")
+    def _create_artifact(self) -> DeploymentArtifact:
+        """Create an artifact from the saved interface and recorded shape bounds."""
+        if (
+            self._onnx_model_artifact is None
+            or self._input_nodes is None
+            or self._output_nodes is None
+            or self._graph_spec is None
+        ):
+            raise RuntimeError("ONNX artifact requires a built or deployed backend with a recorded interface")
 
         model_path = self._onnx_model_artifact.path
-        input_nodes = self._session.get_inputs()
-        output_nodes = self._session.get_outputs()
+        input_nodes = self._input_nodes
+        output_nodes = self._output_nodes
         inputs = bounded_tensor_specs(
             self._graph_spec,
             "input",
@@ -269,19 +273,18 @@ class ONNXRuntimeBackend(Backend):
         )
         _validate_onnx_interface(input_nodes, inputs, "input")
         _validate_onnx_interface(output_nodes, outputs, "output")
-        companions = ()
+        additional_files = ()
         if self._onnx_data_artifact is not None:
             data_path = self._onnx_data_artifact.path
-            companions = (
-                ArtifactFile(relative_path=data_path.relative_to(model_path.parent), fingerprint=hash_file(data_path)),
-            )
-        return ONNXArtifact(
+            additional_files = (data_path.relative_to(model_path.parent),)
+        return DeploymentArtifact(
+            model=ModelFiles(format="onnx", path=model_path, additional_files=additional_files),
             inputs=inputs,
             outputs=outputs,
-            path=model_path,
-            fingerprint=hash_file(model_path),
-            companions=companions,
-            execution_provider=self._config.execution_provider or ONNXExecutionProvider.CUDA,
+            runtime=RuntimeConfig(
+                name="onnxruntime",
+                options={"execution_provider": (self._config.execution_provider or ONNXExecutionProvider.CUDA).value},
+            ),
         )
 
     def _warmup(self, samples: Iterable[Sample]) -> None:

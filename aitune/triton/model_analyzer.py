@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, 
 from tritonclient.grpc import model_config_pb2
 
 from aitune.exceptions import AITuneError, AITuneUserInputError
-from aitune.records import Artifact, ONNXArtifact, PT2Artifact, TensorRTPlanArtifact
+from aitune.records import DeploymentArtifact
 
 __all__ = [
     "ManualModelAnalyzerConfig",
@@ -131,15 +131,17 @@ class ManualModelAnalyzerConfig(_ConfigModel):
     run_config_search_disable: Literal[True] = True
 
 
-def _platform(artifact: Artifact) -> str:
-    """Return the Triton platform expected for an artifact type."""
-    if isinstance(artifact, TensorRTPlanArtifact):
+def _platform(artifact: DeploymentArtifact) -> str:
+    """Return the Triton platform expected for the model format and runtime."""
+    if (artifact.model.format, artifact.runtime.name) == ("tensorrt_plan", "tensorrt"):
         return "tensorrt_plan"
-    if isinstance(artifact, ONNXArtifact):
+    if (artifact.model.format, artifact.runtime.name) == ("onnx", "onnxruntime"):
         return "onnxruntime_onnx"
-    if isinstance(artifact, PT2Artifact):
+    if (artifact.model.format, artifact.runtime.name) == ("pt2", "aotinductor"):
         return "torch_aoti"
-    raise ModelAnalyzerConfigError(f"Model Analyzer configuration does not support {type(artifact).__name__}")
+    raise ModelAnalyzerConfigError(
+        f"Model Analyzer does not support {artifact.model.format!r} with runtime {artifact.runtime.name!r}"
+    )
 
 
 def _read_published_config(model_directory: Path) -> model_config_pb2.ModelConfig:
@@ -153,7 +155,7 @@ def _read_published_config(model_directory: Path) -> model_config_pb2.ModelConfi
         raise ModelAnalyzerConfigError(f"Cannot read Triton model configuration at {config_path}: {error}") from error
 
 
-def _validate_model(artifact: Artifact, model_directory: Path, config: model_config_pb2.ModelConfig) -> None:
+def _validate_model(artifact: DeploymentArtifact, model_directory: Path, config: model_config_pb2.ModelConfig) -> None:
     """Ensure the artifact and published model describe the same deployment."""
     if config.name != model_directory.name:
         raise ModelAnalyzerConfigError(
@@ -162,7 +164,7 @@ def _validate_model(artifact: Artifact, model_directory: Path, config: model_con
     expected_platform = _platform(artifact)
     if config.platform != expected_platform:
         raise ModelAnalyzerConfigError(
-            f"{type(artifact).__name__} requires Triton platform {expected_platform!r}, got {config.platform!r}"
+            f"{artifact.model.format!r} requires Triton platform {expected_platform!r}, got {config.platform!r}"
         )
     if tuple(tensor.name for tensor in config.input) != artifact.input_names:
         raise ModelAnalyzerConfigError("Triton model inputs do not match the artifact")
@@ -191,27 +193,30 @@ def _bounded_values(maximum: int, minimum: int = 1) -> tuple[int, ...]:
 
 
 def _profiling_inputs(
-    artifact: Artifact, config: model_config_pb2.ModelConfig
+    artifact: DeploymentArtifact, config: model_config_pb2.ModelConfig
 ) -> tuple[dict[str, tuple[str, ...]], int, int]:
     """Select concrete input shapes and compatible batch bounds from the artifact."""
     minimum_batch, maximum_batch = 1, config.max_batch_size
     shapes = {tensor.name: tensor.min_shape for tensor in artifact.inputs}
-    if isinstance(artifact, TensorRTPlanArtifact):
+    if (artifact.model.format, artifact.runtime.name) == ("tensorrt_plan", "tensorrt"):
         profiles = _profile_indices(config)
+        profile_data = artifact.model.metadata.get("optimization_profiles")
+        if not profile_data or len(profile_data) != artifact.model.metadata.get("optimization_profile_count"):
+            raise ModelAnalyzerConfigError("TensorRT model metadata requires optimization_profiles matching its count")
         for index in profiles:
-            if not index.isdecimal() or int(index) >= artifact.optimization_profile_count:
+            if not index.isdecimal() or int(index) >= len(profile_data):
                 raise ModelAnalyzerConfigError(f"Invalid TensorRT profile index: {index!r}")
         for index in profiles:
-            profile = artifact.optimization_profiles[int(index)]
+            profile = profile_data[int(index)]
             if not config.max_batch_size:
                 break
-            minimum_batch = max(tensor.min_shape[0] for tensor in profile.inputs)
-            maximum_batch = min(config.max_batch_size, *(tensor.max_shape[0] for tensor in profile.inputs))
+            minimum_batch = max(bounds["min_shape"][0] for bounds in profile.values())
+            maximum_batch = min(config.max_batch_size, *(bounds["max_shape"][0] for bounds in profile.values()))
             if minimum_batch <= maximum_batch:
                 break
         else:
             raise ModelAnalyzerConfigError("No enabled TensorRT profile supports a common batch size")
-        shapes = {tensor.name: tensor.opt_shape for tensor in profile.inputs}
+        shapes = {name: bounds["opt_shape"] for name, bounds in profile.items()}
     flags = []
     for name, shape in shapes.items():
         dimensions = shape[1:] if config.max_batch_size else shape
@@ -226,7 +231,7 @@ def _profile_indices(config: model_config_pb2.ModelConfig) -> tuple[str, ...]:
 
 
 def _configs(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     model_directory: Path,
     destination: Path,
     *,
@@ -319,7 +324,7 @@ def _configs(
 
 
 def generate_model_analyzer_configs(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     /,
     *,
     model_path: str | os.PathLike[str],
@@ -381,7 +386,7 @@ def generate_model_analyzer_configs(
 
 
 def _write_model_analyzer_configs(
-    artifact: Artifact,
+    artifact: DeploymentArtifact,
     *,
     config: model_config_pb2.ModelConfig,
     model_directory: Path,

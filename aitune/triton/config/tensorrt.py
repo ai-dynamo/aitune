@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Validated TensorRT plan configuration for Triton."""
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import NonNegativeInt, field_validator
+from pydantic import NonNegativeInt, StrictInt, field_validator
 from tritonclient.grpc import model_config_pb2
 
+from aitune.records import DeploymentArtifact
 from aitune.triton.config.common import _BaseModelConfig
 
 
@@ -14,7 +15,7 @@ class TensorRTModelConfig(_BaseModelConfig):
     """Triton configuration specialized for serialized TensorRT plans."""
 
     platform: Literal["tensorrt_plan"] = "tensorrt_plan"
-    optimization_profile_indices: tuple[int, ...]
+    optimization_profile_indices: tuple[StrictInt, ...]
     cuda_graphs: bool = False
     eager_batching: bool | None = None
     gather_kernel_buffer_threshold: NonNegativeInt | None = None
@@ -50,3 +51,14 @@ class TensorRTModelConfig(_BaseModelConfig):
             if not group.profile:
                 group.profile.extend(profiles)
         return config
+
+    @classmethod
+    def _artifact_options(cls, artifact: DeploymentArtifact) -> dict[str, Any]:
+        """Read plan profile metadata and TensorRT runtime settings."""
+        count = artifact.model.metadata.get("optimization_profile_count")
+        if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+            raise ValueError("TensorRT model metadata requires a positive integer optimization_profile_count")
+        return {
+            "optimization_profile_indices": tuple(range(count)),
+            "cuda_graphs": artifact.runtime.options.get("use_cuda_graphs", False),
+        }

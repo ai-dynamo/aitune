@@ -8,7 +8,6 @@ import pytest
 
 from aitune.torch.jit.config import config
 from aitune.torch.jit.patched_module import _build_strategy
-from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
@@ -21,11 +20,11 @@ def reset_jit_config():
     config.reset_to_defaults()
 
 
-def test_build_strategy_default_is_first_wins_with_find_max_batch_size_disabled():
-    # No override; resolve_strategy() builds the default FirstWinsStrategy.
+def test_build_strategy_default_is_max_throughput_with_find_max_batch_size_disabled():
+    # No override; resolve_strategy() builds the default MaxThroughputStrategy.
     strategy = _build_strategy()
 
-    assert isinstance(strategy, FirstWinsStrategy)
+    assert isinstance(strategy, MaxThroughputStrategy)
     assert strategy._enable_find_max_batch_size is False
 
 
