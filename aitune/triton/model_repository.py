@@ -104,7 +104,9 @@ def _model_config(
     if config_type is None:
         raise PublicationError(f"Unsupported Triton runtime: {artifact.runtime.name!r}")
     try:
-        return config_type.from_artifact(artifact, name=model_name, max_batch_size=batch_size)
+        return config_type.from_artifact(
+            artifact, name=model_name, max_batch_size=batch_size, dynamic_batching=dynamic_batching
+        )
     except (KeyError, TypeError, ValueError) as error:
         raise PublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
 
@@ -188,7 +190,7 @@ def publish(
             artifact,
             config=config.to_protobuf(),
             model_directory=model_directory,
-            destination=repository.parent / f"{repository.name}-model-analyzer" / model_name,
+            destination=repository.resolve().parent / f"{repository.resolve().name}-model-analyzer" / model_name,
             staging=staged_model / "model_analyzer",
         )
         staged_model.rename(model_directory)
