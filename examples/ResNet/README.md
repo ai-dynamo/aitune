@@ -148,6 +148,23 @@ Model-store generation loads the package, extracts its selected artifact, and cr
 It also creates `model_analyzer/fast.yaml` for a quick search and `model_analyzer/manual.yaml` for the complete
 recommended search space. Neither operation replaces an existing output directory.
 
+The command logs each publication stage and explicitly deactivates the loaded module in a `finally` block.
+During cleanup, a watchdog dumps Python thread stacks every 60 seconds if the process remains alive.
+The final `returning from main` message does not confirm that interpreter shutdown has finished;
+check the exit status from the calling shell. For a bounded diagnostic run on Linux (including CI), use:
+
+```bash
+status=0
+timeout --kill-after=30s 5m triton-model-store --tuned-model-path resnet50.ait || status=$?
+echo "triton-model-store exit status: $status"
+exit "$status"
+```
+
+Run this block in a shell with the example installed. Status `0` means the process exited successfully;
+`124` means the timeout expired, and `137` indicates SIGKILL (including the timeout's forced-kill fallback).
+Other nonzero statuses indicate failure. Preserve the status in CI so publication failures cannot be hidden.
+Avoid `os._exit(0)`: it skips cleanup and can report success despite a shutdown problem.
+
 AITune backends that require a Python process are intentionally excluded from this flow. Deploy those through the
 Dynamo path above instead of wrapping them in Triton's Python Backend.
 
