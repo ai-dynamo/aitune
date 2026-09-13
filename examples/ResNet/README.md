@@ -126,7 +126,10 @@ uv sync --extra triton
 uv run --extra triton ./run_triton.sh
 ```
 
-The runner waits for Triton, invokes the client, and stops the server. Both scripts default to release `26.05`; set
+The runner copies the published repository into the Triton container before starting it,
+waits for the model to become ready, invokes the client, and removes the container on exit.
+Copying also works when the repository is inside a CI job container and the Docker daemon runs on its host.
+Both scripts default to release `26.05`; set
 `NVIDIA_RELEASE` once in the calling shell to use another matching pair.
 
 Triton loads the published models at startup with `--model-control-mode=none`; no load API call is needed.
