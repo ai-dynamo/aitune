@@ -5,7 +5,7 @@ title: "Changelog"
 ---
 # Changelog
 
-## 0.6.0 (unreleased)
+## 0.6.0
 
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
 - feat: serve application-managed multi-GPU models through one collective Dynamo worker
