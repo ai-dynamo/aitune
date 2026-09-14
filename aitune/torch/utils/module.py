@@ -144,14 +144,25 @@ def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
     """Offload an ordinary module while preserving distributed placement.
 
     Args:
-        model: Model to offload.
-        device: Device to offload to.
+        model: Model to offload, including any nested ONNX Runtime sessions.
+        device: Device to offload to. ONNX modules use CPU for meta.
     """
+    from aitune.torch.module.onnx_module import OnnxModule
+
     if is_distributed_module(model):
         return
 
     with annotate("Offloading module"):
         model.to(device)
+
+        if isinstance(model, OnnxModule):
+            model.offload(device)
+            return
+
+        # TODO(kn): go deeper?
+        for module in model.modules():
+            if isinstance(module, OnnxModule):
+                module.offload(device)
         cleanup_memory()
 
 

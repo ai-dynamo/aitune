@@ -23,10 +23,13 @@ from aitune.torch.backend import ONNXRuntimeBackend
 from aitune.torch.dataloader import DynamicShapeDataset
 from aitune.torch.module import OnnxModule
 from aitune.torch.task.profiling import ProfilingConfig
+from aitune.torch.utils.memory import cleanup_memory
+from aitune.torch.utils.module import offload
 
 
+@pytest.mark.parametrize("offload_device", ["cpu", "meta"])
 @torch.inference_mode()
-def test_onnx_resnet(tmp_path: Path) -> None:
+def test_onnx_resnet(tmp_path: Path, offload_device: str) -> None:
     if not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
 
@@ -51,6 +54,31 @@ def test_onnx_resnet(tmp_path: Path) -> None:
     torch.testing.assert_close(expected[1].cpu(), reference(images[:1]), rtol=1e-2, atol=1e-2)
     del reference
 
+    assert "CUDAExecutionProvider" in source._session.get_providers()
+    cleanup_memory()
+    free_before, _ = torch.cuda.mem_get_info()
+    # Include a parent module: offload must also switch nested ONNX sessions.
+    offload(source, device=offload_device)
+    assert source._session.get_providers() == ["CPUExecutionProvider"]
+    free_after, _ = torch.cuda.mem_get_info()
+    # ORT allocations are outside PyTorch's allocator; ResNet-50 weights exceed 90 MiB.
+    assert free_after - free_before > 50 * 1024**2
+    with pytest.raises(AssertionError, match="call offload"):
+        source(images=requests[:1])
+
+    actual_cpu = source(images=images[:1])["logits"]
+    assert actual_cpu.device.type == "cpu"
+
+    torch.testing.assert_close(actual_cpu, expected[1].cpu(), rtol=1e-2, atol=1e-2)
+    assert source._session.get_providers() == ["CPUExecutionProvider"]
+
+    offload(source, device="cuda")
+    assert "CUDAExecutionProvider" in source._session.get_providers()
+    with pytest.raises(AssertionError, match="call offload"):
+        source(images=images[:1])
+
+    torch.testing.assert_close(source(images=requests[:1])["logits"], expected[1], rtol=1e-2, atol=1e-2)
+
     strategy = OneBackendStrategy(ONNXRuntimeBackend(), profiling_config=ProfilingConfig(batch_sizes=batch_sizes))
     # Both paths use ORT CUDA; this test checks integration, with no speedup requirement.
     strategy.enable_performance_validation(False)
@@ -58,7 +86,7 @@ def test_onnx_resnet(tmp_path: Path) -> None:
     try:
         tune(
             module,
-            DynamicShapeDataset([{"images": image} for image in images]),
+            DynamicShapeDataset([{"images": image} for image in requests]),
             batch_sizes=batch_sizes,
             device="cuda",
             ignore_failing_modules=False,

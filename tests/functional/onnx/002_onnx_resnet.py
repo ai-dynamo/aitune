@@ -52,7 +52,10 @@ def test_onnx_resnet(tmp_path: Path) -> None:
     del reference
 
     strategy = MaxThroughputStrategy(
-        [ONNXRuntimeBackend(), TensorRTBackend(TensorRTBackendConfig(workspace_size=1 << 30))],
+        [
+            ONNXRuntimeBackend(),
+            TensorRTBackend(TensorRTBackendConfig(workspace_size=1 << 30)),
+        ],
         profiling_config=ProfilingConfig(batch_sizes=batch_sizes),
     )
     strategy.enable_find_max_batch_size(True)
@@ -61,7 +64,7 @@ def test_onnx_resnet(tmp_path: Path) -> None:
     try:
         tune(
             module,
-            DynamicShapeDataset([{"images": image} for image in images]),
+            DynamicShapeDataset([{"images": image} for image in requests]),
             batch_sizes=batch_sizes,
             device="cuda",
             ignore_failing_modules=False,
@@ -70,10 +73,12 @@ def test_onnx_resnet(tmp_path: Path) -> None:
         assert isinstance(backend, (ONNXRuntimeBackend, TensorRTBackend))
         results = strategy.perf_validation_results
         assert len(results) == 2  # Both backends must build, validate, and finish profiling.
+
         best = max(results, key=lambda result: result.metric)
         assert best.passed
         assert best.backend_description == backend.describe()
         assert best.speedup >= 1.0
+
         selected = next(result for result in strategy.backend_results if result["backend"] == backend.describe())
         selected_batch = selected["selected_batch_size"]
         assert selected_batch in batch_sizes
@@ -81,7 +86,8 @@ def test_onnx_resnet(tmp_path: Path) -> None:
             f"Selected {backend.describe()}, batch {selected_batch}; "
             f"baseline: {best.baseline_metric:.2f} images/s; "
             f"tuned: {best.metric:.2f} images/s; speedup: {best.speedup:.2f}x"
-        )
+        )  # noqa: T201
+
         assert source._session is None
         for batch in batch_sizes:
             actual = module(images=requests[:batch])["logits"]

@@ -19,7 +19,6 @@ import torch.nn as nn
 from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
-from aitune.torch.config import config as global_config
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch.backend.backend import (
     Backend,

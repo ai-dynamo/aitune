@@ -22,7 +22,7 @@ from torchvision.models import ResNet50_Weights, resnet50
 
 from aitune.torch import Module, OneBackendStrategy, config, tune
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
-from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig
+from aitune.torch.backend.tensorrt.onnx_quantization import CalibrationMethod, ONNXQuantizationConfig
 from aitune.torch.dataloader import DynamicShapeDataset
 from aitune.torch.module import OnnxModule
 from aitune.torch.task.profiling import ProfilingConfig
@@ -30,7 +30,7 @@ from aitune.torch.task.profiling import ProfilingConfig
 
 @pytest.mark.parametrize("calibration_method", ["max", "entropy"])
 @torch.inference_mode()
-def test_onnx_resnet_quantization(tmp_path: Path, monkeypatch, calibration_method: str) -> None:
+def test_onnx_resnet_quantization(tmp_path: Path, monkeypatch, calibration_method: CalibrationMethod) -> None:
     if not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
 
@@ -53,6 +53,7 @@ def test_onnx_resnet_quantization(tmp_path: Path, monkeypatch, calibration_metho
         external_data=False,
     )
     del reference
+
     source = OnnxModule(path)
     expected = {batch: source(images=requests[:batch])["logits"] for batch in batch_sizes}
     strategy = OneBackendStrategy(
@@ -71,13 +72,14 @@ def test_onnx_resnet_quantization(tmp_path: Path, monkeypatch, calibration_metho
     try:
         tune(
             module,
-            DynamicShapeDataset([{"images": image} for image in calibration]),
+            DynamicShapeDataset([{"images": image} for image in calibration.cuda()]),
             batch_sizes=batch_sizes,
             device="cuda",
             ignore_failing_modules=False,
         )
         (backend,) = module.module.backends.values()
         assert isinstance(backend, TensorRTBackend)
+
         quantized = onnx.load(backend._engine_artifact.root / "onnx_ptq" / "model.onnx")
         node_types = [node.op_type for node in quantized.graph.node]
         assert "QuantizeLinear" in node_types
@@ -87,12 +89,13 @@ def test_onnx_resnet_quantization(tmp_path: Path, monkeypatch, calibration_metho
         for batch in batch_sizes:
             actual = module(images=requests[:batch])["logits"]
             assert actual.is_cuda and torch.isfinite(actual).all()
+
             cosine = torch.nn.functional.cosine_similarity(actual, expected[batch]).min().item()
             relative_error = ((actual - expected[batch]).norm() / expected[batch].norm()).item()
             # Quantization allows bounded drift; compare logits, not only softmax probabilities.
             assert cosine >= 0.99
             assert relative_error <= 0.1
-            print(f"INT8 {calibration_method}, batch {batch}: cosine={cosine:.5f}, relative L2={relative_error:.5f}")
+            print(f"INT8 {calibration_method}, batch {batch}: cosine={cosine:.5f}, relative L2={relative_error:.5f}")  # noqa: T201
     finally:
         module.deactivate()
         source.deactivate()
