@@ -3,12 +3,8 @@
 name: Nightly CI
 
 on:
-  push:
-    branches:
-      - "pull-request/[0-9]+"
-
   schedule:
-     - cron: "0 8 * * 1,2,3,4,5"
+     - cron: "0 2 * * 1,2,3,4,5"
 
   workflow_dispatch:
 
