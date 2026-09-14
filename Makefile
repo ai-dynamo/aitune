@@ -83,6 +83,34 @@ lint: ## check style with pre-commit and pytype
 validate-functional: ## validate PEP-723 / [tool.aitune] metadata for functional tests and examples
 	uv run --script tests/functional/scripts/validate.py
 
+list-functional-tests: ## list all functional tests
+	uv run --script tests/functional/scripts/generate.py \
+            --default-docker-image "aitune-functional:latest" \
+            --scripts-path tests/functional/pytorch \
+            --scripts-path tests/functional/pytorch/kernels \
+            --scripts-path tests/functional/pytorch/jit \
+            --scripts-path tests/functional/dataloader \
+            --scripts-path tests/functional/dynamo \
+            --projects-path examples \
+			--stdout | jq -r '.[] | .id'
+
+build-functional-image: ## build the image for functional tests
+	docker build \
+		--build-arg USER_ID=$(shell id -u) --build-arg GROUP_ID=$(shell id -g) \
+		-f .github/docker/Dockerfile -t aitune-functional .
+
+TEST ?= tests/functional/pytorch/002_aitune_torch_wrap_module_resnet_test.py
+TYPE ?= script
+TID ?= 0
+run-functional-test: ## run a functional test in the container, arguments: TEST=tests_path, TYPE=script|project, TID=test_number
+	docker run --rm --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+		-u $(shell id -u):$(shell id -g) \
+		-e HF_TOKEN \
+		-v $(PWD):/opt/ai-tune/ \
+		-w /opt/ai-tune/ \
+		aitune-functional:latest \
+			python tests/functional/scripts/execute.py $(TEST) --kind $(TYPE) --test-number $(TID) --verbose
+
 
 test: ## run tests on
 	pytest
@@ -99,7 +127,7 @@ coverage: ## check code coverage quickly with the default Python
 	$(BROWSER) htmlcov/index.html
 
 dist: clean ## builds source and wheel package
-	python3 -m build .
+	uv build
 	ls -lh dist
 
 install: clean ## install the package to the active Python's site-packages
