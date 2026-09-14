@@ -5,6 +5,9 @@
 # dependencies = ["torchvision"]
 # scope = "always"
 # allow_failure = false
+# [[pip_install]]
+# packages = ["onnxruntime-gpu"]
+# flags = ["--upgrade", "--index-url", "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"]
 # ///
 
 """Compare INT8 max and entropy calibration on pretrained ONNX ResNet-50.
@@ -55,21 +58,22 @@ def test_onnx_resnet_quantization(tmp_path: Path, monkeypatch, calibration_metho
     del reference
 
     source = OnnxModule(path)
-    expected = {batch: source(images=requests[:batch])["logits"] for batch in batch_sizes}
-    strategy = OneBackendStrategy(
-        TensorRTBackend(
-            TensorRTBackendConfig(
-                workspace_size=1 << 30,
-                quantization_config=ONNXQuantizationConfig("int8", calibration_method=calibration_method),
-            )
-        ),
-        profiling_config=ProfilingConfig(batch_sizes=batch_sizes),
-    )
-    # A quantization regression must exercise the quantized engine even if it is slower.
-    strategy.enable_performance_validation(False)
-    strategy.enable_find_max_batch_size(False)
-    module = Module(source, f"onnx-resnet50-int8-{calibration_method}", strategy=strategy)
+    module = None
     try:
+        expected = {batch: source(images=requests[:batch])["logits"] for batch in batch_sizes}
+        strategy = OneBackendStrategy(
+            TensorRTBackend(
+                TensorRTBackendConfig(
+                    workspace_size=1 << 30,
+                    quantization_config=ONNXQuantizationConfig("int8", calibration_method=calibration_method),
+                )
+            ),
+            profiling_config=ProfilingConfig(batch_sizes=batch_sizes),
+        )
+        # A quantization regression must exercise the quantized engine even if it is slower.
+        strategy.enable_performance_validation(False)
+        strategy.enable_find_max_batch_size(False)
+        module = Module(source, f"onnx-resnet50-int8-{calibration_method}", strategy=strategy)
         tune(
             module,
             DynamicShapeDataset([{"images": image} for image in calibration.cuda()]),
@@ -84,6 +88,13 @@ def test_onnx_resnet_quantization(tmp_path: Path, monkeypatch, calibration_metho
         node_types = [node.op_type for node in quantized.graph.node]
         assert "QuantizeLinear" in node_types
         assert "DequantizeLinear" in node_types
+        (graph_spec,) = module.graph_specs
+        (input_spec,) = graph_spec.input_spec.tensor_specs
+        (output_spec,) = graph_spec.output_spec.tensor_specs
+        assert input_spec.name == "images"
+        assert output_spec.name == "logits"
+        assert input_spec.min_shape == [1, 3, 224, 224]
+        assert input_spec.max_shape == [max(batch_sizes), 3, 224, 224]
         assert source._session is None
 
         for batch in batch_sizes:
@@ -97,7 +108,8 @@ def test_onnx_resnet_quantization(tmp_path: Path, monkeypatch, calibration_metho
             assert relative_error <= 0.1
             print(f"INT8 {calibration_method}, batch {batch}: cosine={cosine:.5f}, relative L2={relative_error:.5f}")  # noqa: T201
     finally:
-        module.deactivate()
+        if module is not None:
+            module.deactivate()
         source.deactivate()
 
 

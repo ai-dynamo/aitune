@@ -64,7 +64,6 @@ class ONNXAutoCast:
         config: ONNXAutoCastConfig,
         samples: Sequence[Sample] | None = None,
         graph_spec: GraphSpec | None = None,
-        input_names: dict[str, str] | None = None,
     ) -> Path:
         """Autocast the ONNX model using NVIDIA ModelOpt.
 
@@ -75,7 +74,6 @@ class ONNXAutoCast:
             samples: Optional calibration dataset for quantization.
                 If None, random data will be used for calibration
             graph_spec: Graph specification containing input names mapping
-            input_names: Optional mapping from recorded names to native ONNX names.
 
 
         Returns:
@@ -90,7 +88,7 @@ class ONNXAutoCast:
             Version(modelopt.__version__) > Version("0.42.0") and samples is not None and graph_spec is not None
         )
         if use_calibration:
-            calibration_data = prepare_calibration_data(samples, graph_spec, input_names)
+            calibration_data = prepare_calibration_data(samples, graph_spec)
         else:
             calibration_data = None
 

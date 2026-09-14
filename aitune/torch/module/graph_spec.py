@@ -4,13 +4,14 @@
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicShapes, ShapeDefinition
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tensor_spec import TensorSpec
+from aitune.torch.utils.tensor import format_tensor_name
 
 
 @dataclass
@@ -37,6 +38,11 @@ class GraphSpec:
     forward_signature: ForwardSignature
     dynamic_shapes: DynamicShapes = field(default_factory=dict)
     post_input_spec: SampleMetadata | None = None
+
+    @staticmethod
+    def tensor_name(locator: Locator, spec: TensorSpec, kind: Literal["input", "output"]) -> str:
+        """Use original graph tensor names when available, otherwise derive them from Python paths."""
+        return spec.name if spec.name is not None else format_tensor_name(locator.path, kind)
 
     def update_shapes_seen(
         self,

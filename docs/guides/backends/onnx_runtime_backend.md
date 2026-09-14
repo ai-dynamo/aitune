@@ -84,6 +84,29 @@ Use ONNXRuntime when:
 
 Prefer `TensorRTBackend` when you need direct TensorRT engine control, TensorRT-specific configuration, CUDA Graphs, or Model Optimizer quantization workflows.
 
+## Existing ONNX files
+
+`OnnxModule` wraps an existing ONNX file as a torch module. Its forward method uses ONNX Runtime,
+accepts tensors positionally in graph input order or by their original names, and returns a dictionary
+keyed by the graph output names.
+
+```python
+from aitune.torch.module import OnnxModule
+
+source = OnnxModule("model.onnx")
+outputs = source(**{"input.1": input_tensor})
+```
+
+Wrap and tune this module through the usual torch workflow. `ONNXRuntimeBackend` and `TensorRTBackend`
+use the source file directly instead of exporting it again. Recording derives min/max shapes and batch
+axes from samples using the same logic as ordinary torch modules. Explicit `dynamic_shapes` retain their
+usual precedence. Python call signatures and graph grouping follow the ordinary torch workflow.
+
+Original tensor names are preserved in `TensorSpec.name`, independently of Python access paths.
+For example, a named ONNX input `input.1` has the recorded path `("kwargs", "input.1")`; use this path
+for `dynamic_shapes` or `TensorRTProfile.add_input_shape()`. Positional inputs use `("args", index)` paths. Calibration, profiles, runtime bindings,
+and checkpoints use the preserved tensor name.
+
 ## Troubleshooting
 
 ### Issue: ONNX export fails

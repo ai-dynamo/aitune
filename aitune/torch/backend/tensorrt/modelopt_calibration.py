@@ -10,15 +10,12 @@ import torch
 
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
-from aitune.torch.utils.tensor import format_tensor_name
 
 # Setup logger
 logger = logging.getLogger(__name__)
 
 
-def prepare_calibration_data(
-    data: Sequence[Sample], graph_spec: GraphSpec, input_names: dict[str, str] | None = None
-) -> dict[str, np.ndarray]:
+def prepare_calibration_data(data: Sequence[Sample], graph_spec: GraphSpec) -> dict[str, np.ndarray]:
     """Prepare calibration data in ModelOpt format from 1..N samples and graph_spec.
 
     Builds a single dict of arrays (one per ONNX input) by mapping each sample to
@@ -32,7 +29,6 @@ def prepare_calibration_data(
 
     Args:
         data: List of 1..N Sample objects (args, kwargs); each can have any batch size.
-        input_names: Optional mapping from recorded names to native ONNX names.
         graph_spec: Graph specification whose input_spec defines ONNX input names
             and locators into normalized forward arguments.
 
@@ -54,7 +50,7 @@ def prepare_calibration_data(
             "Ensure the model was recorded with at least one tensor input."
         )
 
-    onnx_input_names = [format_tensor_name(locator.path, "input") for locator, _ in tensor_data]
+    onnx_input_names = [graph_spec.tensor_name(locator, tensor_spec, "input") for locator, tensor_spec in tensor_data]
     logger.info(
         "Preparing calibration data for %d samples with ONNX input names: %s",
         len(data),
@@ -78,8 +74,6 @@ def prepare_calibration_data(
     )
     for name, arr in result.items():
         logger.info("  Calibration input %r: shape %s", name, arr.shape)
-    if input_names is not None:
-        return {input_names[name]: value for name, value in result.items()}
     return result
 
 
@@ -112,7 +106,7 @@ def _sample_to_input_dict(
     args, kwargs = sample
     forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
     input_dict: dict[str, np.ndarray] = {}
-    for locator, _ in graph_spec.input_spec.tensor_data:
+    for locator, tensor_spec in graph_spec.input_spec.tensor_data:
         value = locator.get_value(forward_inputs.arguments)
         if not torch.is_tensor(value):
             logger.debug(
@@ -121,7 +115,7 @@ def _sample_to_input_dict(
                 type(value).__name__,
             )
             continue
-        input_dict[format_tensor_name(locator.path, "input")] = value.detach().cpu().numpy()
+        input_dict[graph_spec.tensor_name(locator, tensor_spec, "input")] = value.detach().cpu().numpy()
     return input_dict
 
 

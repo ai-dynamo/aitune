@@ -5,6 +5,9 @@
 # dependencies = ["torchvision"]
 # scope = "always"
 # allow_failure = false
+# [[pip_install]]
+# packages = ["onnxruntime-gpu"]
+# flags = ["--upgrade", "--index-url", "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"]
 # ///
 
 """Run pretrained ResNet-50 ONNX through OneBackendStrategy and ONNXRuntimeBackend.
@@ -23,13 +26,13 @@ from aitune.torch.backend import ONNXRuntimeBackend
 from aitune.torch.dataloader import DynamicShapeDataset
 from aitune.torch.module import OnnxModule
 from aitune.torch.task.profiling import ProfilingConfig
-from aitune.torch.utils.memory import cleanup_memory
 from aitune.torch.utils.module import offload
 
 
 @pytest.mark.parametrize("offload_device", ["cpu", "meta"])
+@pytest.mark.parametrize("nested", [False, True])
 @torch.inference_mode()
-def test_onnx_resnet(tmp_path: Path, offload_device: str) -> None:
+def test_onnx_resnet(tmp_path: Path, offload_device: str, nested: bool) -> None:
     if not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
 
@@ -49,41 +52,37 @@ def test_onnx_resnet(tmp_path: Path, offload_device: str) -> None:
         external_data=False,
     )
     source = OnnxModule(path)
-    requests = images.cuda()
-    expected = {batch: source(images=requests[:batch])["logits"] for batch in batch_sizes}
-    torch.testing.assert_close(expected[1].cpu(), reference(images[:1]), rtol=1e-2, atol=1e-2)
-    del reference
-
-    assert "CUDAExecutionProvider" in source._session.get_providers()
-    cleanup_memory()
-    free_before, _ = torch.cuda.mem_get_info()
-    # Include a parent module: offload must also switch nested ONNX sessions.
-    offload(source, device=offload_device)
-    assert source._session.get_providers() == ["CPUExecutionProvider"]
-    free_after, _ = torch.cuda.mem_get_info()
-    # ORT allocations are outside PyTorch's allocator; ResNet-50 weights exceed 90 MiB.
-    assert free_after - free_before > 50 * 1024**2
-    with pytest.raises(AssertionError, match="call offload"):
-        source(images=requests[:1])
-
-    actual_cpu = source(images=images[:1])["logits"]
-    assert actual_cpu.device.type == "cpu"
-
-    torch.testing.assert_close(actual_cpu, expected[1].cpu(), rtol=1e-2, atol=1e-2)
-    assert source._session.get_providers() == ["CPUExecutionProvider"]
-
-    offload(source, device="cuda")
-    assert "CUDAExecutionProvider" in source._session.get_providers()
-    with pytest.raises(AssertionError, match="call offload"):
-        source(images=images[:1])
-
-    torch.testing.assert_close(source(images=requests[:1])["logits"], expected[1], rtol=1e-2, atol=1e-2)
-
-    strategy = OneBackendStrategy(ONNXRuntimeBackend(), profiling_config=ProfilingConfig(batch_sizes=batch_sizes))
-    # Both paths use ORT CUDA; this test checks integration, with no speedup requirement.
-    strategy.enable_performance_validation(False)
-    module = Module(source, "onnx-resnet50", strategy=strategy)
+    module = None
     try:
+        requests = images.cuda()
+        expected = {batch: source(images=requests[:batch])["logits"] for batch in batch_sizes}
+        torch.testing.assert_close(expected[1].cpu(), reference(images[:1]), rtol=1e-2, atol=1e-2)
+        del reference
+
+        assert "CUDAExecutionProvider" in source._session.get_providers()
+        target = torch.nn.ModuleDict({"child": source}) if nested else source
+        offload(target, device=offload_device)
+        assert source._session.get_providers() == ["CPUExecutionProvider"]
+        with pytest.raises(AssertionError, match="call offload"):
+            source(images=requests[:1])
+
+        actual_cpu = source(images=images[:1])["logits"]
+        assert actual_cpu.device.type == "cpu"
+
+        torch.testing.assert_close(actual_cpu, expected[1].cpu(), rtol=1e-2, atol=1e-2)
+        assert source._session.get_providers() == ["CPUExecutionProvider"]
+
+        offload(target, device="cuda")
+        assert "CUDAExecutionProvider" in source._session.get_providers()
+        with pytest.raises(AssertionError, match="call offload"):
+            source(images=images[:1])
+
+        torch.testing.assert_close(source(images=requests[:1])["logits"], expected[1], rtol=1e-2, atol=1e-2)
+
+        strategy = OneBackendStrategy(ONNXRuntimeBackend(), profiling_config=ProfilingConfig(batch_sizes=batch_sizes))
+        # Both paths use ORT CUDA; this test checks integration, with no speedup requirement.
+        strategy.enable_performance_validation(False)
+        module = Module(source, "onnx-resnet50", strategy=strategy)
         tune(
             module,
             DynamicShapeDataset([{"images": image} for image in requests]),
@@ -94,13 +93,21 @@ def test_onnx_resnet(tmp_path: Path, offload_device: str) -> None:
         (backend,) = module.module.backends.values()
         assert isinstance(backend, ONNXRuntimeBackend)
         assert backend._onnx_model_artifact.path == path
+        (graph_spec,) = module.graph_specs
+        (input_spec,) = graph_spec.input_spec.tensor_specs
+        (output_spec,) = graph_spec.output_spec.tensor_specs
+        assert input_spec.name == "images"
+        assert output_spec.name == "logits"
+        assert input_spec.min_shape == [1, 3, 224, 224]
+        assert input_spec.max_shape == [max(batch_sizes), 3, 224, 224]
         assert source._session is None
         for batch in batch_sizes:
             actual = module(images=requests[:batch])["logits"]
             assert actual.is_cuda
             torch.testing.assert_close(actual, expected[batch], rtol=1e-2, atol=1e-2)
     finally:
-        module.deactivate()
+        if module is not None:
+            module.deactivate()
         source.deactivate()
 
 

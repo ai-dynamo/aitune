@@ -16,7 +16,6 @@ from aitune.torch.dynamic_shapes import DynamicDim
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
 from aitune.torch.utils.shapes import build_dynamic_shapes, log_dynamic_shapes
-from aitune.torch.utils.tensor import format_tensor_name
 
 # torch.onnx.export(dynamo=True, fallback=...) was removed in 2.11 (and some nightlies before).
 # Inspect the signature directly rather than relying on version string parsing.
@@ -113,8 +112,14 @@ class ONNXExporter:
             args, kwargs = graph_spec.make_batch(args, kwargs, batch_size=batch_size)
 
         dynamic_shapes = self._create_dynamic_shapes((args, kwargs), graph_spec)
-        input_names = [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
-        output_names = [format_tensor_name(locator.path, "output") for locator, _ in graph_spec.output_spec.tensor_data]
+        input_names = [
+            graph_spec.tensor_name(locator, tensor_spec, "input")
+            for locator, tensor_spec in graph_spec.input_spec.tensor_data
+        ]
+        output_names = [
+            graph_spec.tensor_name(locator, tensor_spec, "output")
+            for locator, tensor_spec in graph_spec.output_spec.tensor_data
+        ]
 
         log_dynamic_shapes(dynamic_shapes)
 
@@ -144,8 +149,14 @@ class ONNXExporter:
         # Use standard torch ONNX export
         dynamic_axes = self._create_dynamic_axes(graph_spec)
 
-        input_names = [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
-        output_names = [format_tensor_name(locator.path, "output") for locator, _ in graph_spec.output_spec.tensor_data]
+        input_names = [
+            graph_spec.tensor_name(locator, tensor_spec, "input")
+            for locator, tensor_spec in graph_spec.input_spec.tensor_data
+        ]
+        output_names = [
+            graph_spec.tensor_name(locator, tensor_spec, "output")
+            for locator, tensor_spec in graph_spec.output_spec.tensor_data
+        ]
 
         logger.info("Input names: %s", input_names)
         logger.info("Output names: %s", output_names)
@@ -212,17 +223,17 @@ class ONNXExporter:
                     if isinstance(dimension, DynamicDim)
                 }
                 if axes:
-                    dynamic_axes[format_tensor_name(locator.path, "input")] = axes
+                    dynamic_axes[graph_spec.tensor_name(locator, tensor_spec, "input")] = axes
                 continue
 
             for ax, (d1, d2) in enumerate(zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)):
                 if d1 != d2:
-                    dynamic_axes[format_tensor_name(locator.path, "input")].append(ax)
+                    dynamic_axes[graph_spec.tensor_name(locator, tensor_spec, "input")].append(ax)
 
         # Process output dynamic axes
         for locator, tensor_spec in graph_spec.output_spec.tensor_data:
             for ax, (d1, d2) in enumerate(zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)):
                 if d1 != d2:
-                    dynamic_axes[format_tensor_name(locator.path, "output")].append(ax)
+                    dynamic_axes[graph_spec.tensor_name(locator, tensor_spec, "output")].append(ax)
 
         return dynamic_axes

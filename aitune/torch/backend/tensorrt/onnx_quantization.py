@@ -152,7 +152,6 @@ class ONNXQuantizer:
         config: ONNXQuantizationConfig,
         samples: Sequence[Sample] | None = None,
         graph_spec: GraphSpec | None = None,
-        input_names: dict[str, str] | None = None,
     ) -> Path:
         """Quantize the ONNX model using NVIDIA ModelOpt.
 
@@ -163,7 +162,6 @@ class ONNXQuantizer:
             samples: Optional calibration dataset for quantization.
                 If None, random data will be used for calibration
             graph_spec: Graph specification containing input names mapping
-            input_names: Optional mapping from recorded names to native ONNX names.
 
         Returns:
             Path to the quantized ONNX file
@@ -174,7 +172,7 @@ class ONNXQuantizer:
             RuntimeError: If quantization fails
         """
         if samples is not None and graph_spec is not None:
-            calibration_data = prepare_calibration_data(samples, graph_spec, input_names)
+            calibration_data = prepare_calibration_data(samples, graph_spec)
         else:
             calibration_data = None
 
