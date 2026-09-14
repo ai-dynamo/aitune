@@ -4,7 +4,7 @@
 title: "ONNXRuntime Backend Guide"
 ---
 
-The ONNXRuntime backend exports a wrapped PyTorch module to ONNX and runs inference with ONNX Runtime on NVIDIA GPUs. It is useful when you want an ONNX artifact, broad operator coverage through ONNX Runtime, or a TensorRT execution-provider path without using the TensorRT backend directly.
+The ONNXRuntime backend exports a wrapped PyTorch module to ONNX, or uses an existing `OnnxModule` graph directly, and runs inference with ONNX Runtime on NVIDIA GPUs. It is useful when you want an ONNX artifact, broad operator coverage through ONNX Runtime, or a TensorRT execution-provider path without using the TensorRT backend directly.
 
 ## Quick Start
 
@@ -54,6 +54,8 @@ class ONNXRuntimeBackendConfig(BackendConfig):
     opset_version: int | None = None
 ```
 
+`use_dynamo` and `opset_version` apply only when exporting PyTorch modules. `OnnxModule` uses its existing graph without re-export.
+
 ### use_dynamo
 
 When `True`, AITune exports through `torch.onnx.export(dynamo=True)`, which uses the newer torch export path internally. Set it to `False` to use the classic trace-based exporter when that provides better coverage for a specific model.
@@ -68,11 +70,11 @@ Passes an explicit ONNX opset version to `torch.onnx.export`. Leave it as `None`
 
 ## Runtime Behavior
 
-During tuning, AITune writes the exported model as `model_raw.onnx` in the backend cache directory. If the ONNX exporter emits an external data file, AITune stores and restores it with the checkpoint.
+When tuning a PyTorch module, AITune writes the exported model as `model_raw.onnx` in the backend cache directory. If the ONNX exporter emits an external data file, AITune stores and restores it with the checkpoint.
 
 Inference uses ONNX Runtime IOBinding. Inputs are bound from CUDA tensors, outputs are allocated on CUDA, and output tensors are copied back to PyTorch tensors without a CPU round trip.
 
-Dynamic batch and spatial dimensions are derived from the recorded graph spec and passed into export. Provide representative input samples that cover the shapes you expect in production.
+For PyTorch modules, dynamic batch and spatial dimensions are derived from the recorded graph spec and passed into export. Provide representative input samples that cover the shapes you expect in production.
 
 ## When to Use
 
@@ -97,7 +99,9 @@ source = OnnxModule("model.onnx")
 outputs = source(**{"input.1": input_tensor})
 ```
 
-Wrap and tune this module through the usual torch workflow. `ONNXRuntimeBackend` and `TensorRTBackend`
+Only `ONNXRuntimeBackend` and `TensorRTBackend` support tuning `OnnxModule`. Pass an explicit compatible backend list; strategy defaults include incompatible backends. See [ONNX Model Tuning](../onnx_tuning.md) for a complete example.
+
+`ONNXRuntimeBackend` and `TensorRTBackend`
 use the source file directly instead of exporting it again. Recording derives min/max shapes and batch
 axes from samples using the same logic as ordinary torch modules. Explicit `dynamic_shapes` retain their
 usual precedence. Python call signatures and graph grouping follow the ordinary torch workflow.
