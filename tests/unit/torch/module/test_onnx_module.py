@@ -200,8 +200,7 @@ def test_onnx_module_tensorrt_quantization(tmp_path, precision):
     config = ONNXAutoCastConfig() if precision == "fp16" else ONNXQuantizationConfig("int8", calibration_method="max")
     candidate = TensorRTBackend(TensorRTBackendConfig(quantization_config=config))
     copied = candidate._export_onnx(source, None, None, tmp_path / "copy")
-    path.unlink()
-    (tmp_path / "weights.bin").unlink()
+
     source = OnnxModule(copied)
     x = torch.ones(4, 16, 4, 4, device="cuda")
     torch.testing.assert_close(source(x)["y"], x * 8)

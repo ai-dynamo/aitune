@@ -585,7 +585,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         with annotate(step.annotation), self._track_build_step(step) as result:
             path = self._prepare_onnx_model_path(cache_dir, suffix)
             if isinstance(module, OnnxModule):
-                path, size = self._copy_or_not_onnx_module(module, path)
+                path, size = (Path(module.path), module.path.stat().st_size)
             else:
                 exporter = ONNXExporter(
                     use_dynamo=self._config.use_dynamo,
@@ -598,32 +598,6 @@ class TensorRTBackend(Backend, TensorRTRunner):
             result["onnx_size_bytes"] = size
 
         return path
-
-    def _copy_or_not_onnx_module(self, module: OnnxModule, path: Path) -> tuple[Path, int]:
-        """Copy the ONNX model to the cache directory."""
-        import onnx
-        from onnx.external_data_helper import _get_all_tensors
-
-        # model might be big and copying it might not be desirable
-        if global_config.disable_onnx_model_copy:
-            return (Path(module.path), module.path.stat().st_size)
-
-        model = onnx.load(module.path, load_external_data=False)
-        locations = {
-            entry.value
-            for tensor in _get_all_tensors(model)
-            for entry in tensor.external_data
-            if entry.key == "location"
-        }
-        size = module.path.stat().st_size
-        for location in locations:
-            destination = path.parent / location
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(module.path.parent / location, destination)
-            size += destination.stat().st_size
-
-        shutil.copy2(module.path, path)
-        return (path, size)
 
     def _build_standard(
         self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
