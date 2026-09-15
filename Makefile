@@ -140,4 +140,4 @@ install-dev: clean-build clean-pyc clean-test
 
 uv-locks-update:
 	uv lock
-	for ex in examples/*/pyproject.toml; do (cd `dirname $$ex` && uv lock); done
+	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock); done
