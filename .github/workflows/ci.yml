@@ -13,8 +13,6 @@ on:
         required: true
       HF_TOKEN:
         required: true
-      GITHUB_TOKEN:
-        required: true
     outputs:
       dist_run_id:
         description: Reusable workflow run ID for downloading the dist artifact
