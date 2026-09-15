@@ -20,7 +20,7 @@ on:
       pytorch_image:
         description: SHA-tagged PyTorch CI image pushed to GHCR
         value: ${{ jobs.pytorch-image.outputs.image }}
-      
+
 
 permissions:
   contents: read
