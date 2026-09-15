@@ -49,7 +49,10 @@ jobs:
   ci:
     name: CI
     uses: ./.github/workflows/ci.yml
-    secrets: inherit
+    secrets:
+      FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: read
       packages: write

@@ -5,9 +5,16 @@ name: PR and Main CI
 on:
   push:
     branches:
-      - "pull-request/x[0-9]+"
+      - "pull-request/[0-9]+"
   workflow_dispatch:
   workflow_call:
+    secrets:
+      FERN_TOKEN:
+        required: true
+      HF_TOKEN:
+        required: true
+      GITHUB_TOKEN:
+        required: true
     outputs:
       dist_run_id:
         description: Reusable workflow run ID for downloading the dist artifact
@@ -15,6 +22,7 @@ on:
       pytorch_image:
         description: SHA-tagged PyTorch CI image pushed to GHCR
         value: ${{ jobs.pytorch-image.outputs.image }}
+      
 
 permissions:
   contents: read
