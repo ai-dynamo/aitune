@@ -74,6 +74,11 @@ def test_backend_exposes_build_mode():
     assert SleepBackend().build_mode == BuildMode.JUST_IN_TIME
 
 
+def test_backend_without_a_deployable_format_rejects_artifact_request():
+    with pytest.raises(RuntimeError, match="does not produce a deployable artifact"):
+        SleepBackend().artifact()
+
+
 def test_backend_requires_explicit_build_mode():
     with pytest.raises(TypeError, match="MissingBuildModeBackend must explicitly define _build_mode"):
 

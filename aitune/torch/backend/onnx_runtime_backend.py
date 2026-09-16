@@ -16,6 +16,8 @@ import onnxruntime
 import torch
 import torch.nn as nn
 
+from aitune.records import DeploymentArtifact, DType, ModelFiles, RuntimeConfig
+from aitune.torch.artifact import bounded_tensor_specs
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.cuda.memory import memcpy_to_torch
@@ -26,6 +28,13 @@ from aitune.torch.utils.module import offload
 from aitune.torch.utils.tensor import format_tensor_name
 
 logger = getLogger(__name__)
+
+
+class ONNXExecutionProvider(str, Enum):
+    """ONNX Runtime execution providers supported by the Torch backend."""
+
+    CUDA = "cuda"
+    TENSORRT = "tensorrt"
 
 
 # Mapping from torch dtype to numpy dtype for ONNX Runtime IOBinding.
@@ -41,19 +50,36 @@ _TORCH_DTYPE_TO_NUMPY: dict[torch.dtype, type] = {
     torch.bool: np.bool_,
 }
 
+_ORT_TYPE_TO_DTYPE = {
+    "tensor(bool)": DType.BOOL,
+    "tensor(uint8)": DType.UINT8,
+    "tensor(int8)": DType.INT8,
+    "tensor(int16)": DType.INT16,
+    "tensor(int32)": DType.INT32,
+    "tensor(int64)": DType.INT64,
+    "tensor(float16)": DType.FLOAT16,
+    "tensor(float)": DType.FLOAT32,
+    "tensor(double)": DType.FLOAT64,
+}
 
-class ONNXExecutionProvider(str, Enum):
-    """Supported ONNX Runtime execution providers.
 
-    Only NVIDIA GPU-backed providers are supported:
-
-    * ``CUDA`` — ``CUDAExecutionProvider``: standard GPU execution.
-    * ``TENSORRT`` — ``TensorrtExecutionProvider`` with ``CUDAExecutionProvider``
-      as fallback: enables TensorRT engine compilation for maximum GPU throughput.
-    """
-
-    CUDA = "cuda"
-    TENSORRT = "tensorrt"
+def _validate_onnx_interface(nodes: list[onnxruntime.NodeArg], specs, kind: str) -> None:
+    """Validate the finalized ONNX interface against the recorded Torch contract."""
+    for node, spec in zip(nodes, specs, strict=True):
+        try:
+            dtype = _ORT_TYPE_TO_DTYPE[node.type]
+        except KeyError as error:
+            raise ValueError(f"ONNX {kind} {node.name!r} uses unsupported element type {node.type!r}") from error
+        if dtype is not spec.dtype:
+            raise ValueError(f"ONNX {kind} {node.name!r} dtype does not match the recorded graph")
+        if node.shape is None or len(node.shape) != len(spec.min_shape):
+            raise ValueError(f"ONNX {kind} {node.name!r} rank does not match the recorded graph")
+        for axis, dimension in enumerate(node.shape):
+            if isinstance(dimension, int) and (spec.min_shape[axis], spec.max_shape[axis]) != (dimension, dimension):
+                raise ValueError(
+                    f"ONNX {kind} {node.name!r} axis {axis} is fixed at {dimension}, "
+                    f"but AITune recorded bounds {spec.min_shape[axis]}..{spec.max_shape[axis]}"
+                )
 
 
 @dataclass
@@ -146,6 +172,8 @@ class ONNXRuntimeBackend(Backend):
         self._output_object = None
         self._graph_spec: GraphSpec | None = None
         self._samples: SampleStore | None = None
+        self._input_nodes: list[onnxruntime.NodeArg] | None = None
+        self._output_nodes: list[onnxruntime.NodeArg] | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -154,6 +182,13 @@ class ONNXRuntimeBackend(Backend):
     def describe(self) -> str:
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
+
+    def artifact(self) -> DeploymentArtifact:
+        """Create the deployment record on request, including after deactivation."""
+        try:
+            return self._create_artifact()
+        except (OSError, RuntimeError, ValueError) as error:
+            raise RuntimeError(f"ONNX artifact is not available: {error}") from error
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Export the model to ONNX then load the session."""
@@ -209,6 +244,48 @@ class ONNXRuntimeBackend(Backend):
             except Exception:
                 self._deactivate()
                 raise
+        # Keep the finalized interface when the session is released; validate it only on artifact().
+        self._input_nodes = self._session.get_inputs()
+        self._output_nodes = self._session.get_outputs()
+
+    def _create_artifact(self) -> DeploymentArtifact:
+        """Create an artifact from the saved interface and recorded shape bounds."""
+        if (
+            self._onnx_model_artifact is None
+            or self._input_nodes is None
+            or self._output_nodes is None
+            or self._graph_spec is None
+        ):
+            raise RuntimeError("ONNX artifact requires a built or deployed backend with a recorded interface")
+
+        model_path = self._onnx_model_artifact.path
+        input_nodes = self._input_nodes
+        output_nodes = self._output_nodes
+        inputs = bounded_tensor_specs(
+            self._graph_spec,
+            "input",
+            recorded_names=tuple(node.name for node in input_nodes),
+        )
+        outputs = bounded_tensor_specs(
+            self._graph_spec,
+            "output",
+            recorded_names=tuple(node.name for node in output_nodes),
+        )
+        _validate_onnx_interface(input_nodes, inputs, "input")
+        _validate_onnx_interface(output_nodes, outputs, "output")
+        additional_files = ()
+        if self._onnx_data_artifact is not None:
+            data_path = self._onnx_data_artifact.path
+            additional_files = (data_path.relative_to(model_path.parent),)
+        return DeploymentArtifact(
+            model=ModelFiles(format="onnx", path=model_path, additional_files=additional_files),
+            inputs=inputs,
+            outputs=outputs,
+            runtime=RuntimeConfig(
+                name="onnxruntime",
+                options={"execution_provider": (self._config.execution_provider or ONNXExecutionProvider.CUDA).value},
+            ),
+        )
 
     def _warmup(self, samples: Iterable[Sample]) -> None:
         """Run representative samples to initialize the execution provider.

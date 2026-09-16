@@ -9,6 +9,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from aitune.records import BoundedTensorSpec, DeploymentArtifact, DType
 from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.backend import BackendState
 from aitune.torch.backend.onnx_runtime_backend import (
@@ -76,7 +77,11 @@ def mock_onnx(mocker, graph_spec):
     memcpy_to_torch is patched to return a fixed tensor so _collect_outputs works
     in CPU-only test environments without a real CUDA device or libcudart.
     """
-    mocker.patch("torch.onnx.export")
+
+    def _export(*args, **kwargs):
+        Path(kwargs["f"]).write_bytes(b"onnx-model")
+
+    export = mocker.patch("torch.onnx.export", side_effect=_export)
     mocker.patch("onnx.checker.check_model")
     mocker.patch(
         "aitune.torch.backend.onnx_runtime_backend.memcpy_to_torch",
@@ -89,9 +94,13 @@ def mock_onnx(mocker, graph_spec):
         mock_sess = Mock()
         mock_inp = Mock()
         mock_inp.name = input_name
+        mock_inp.type = "tensor(float)"
+        mock_inp.shape = ["batch", 32]
         mock_sess.get_inputs.return_value = [mock_inp]
         mock_out = Mock()
         mock_out.name = output_name
+        mock_out.type = "tensor(float)"
+        mock_out.shape = ["batch", 5]
         mock_sess.get_outputs.return_value = [mock_out]
         mock_ort_val = Mock()
         mock_ort_val.data_ptr.return_value = 0
@@ -103,6 +112,7 @@ def mock_onnx(mocker, graph_spec):
         return mock_sess
 
     mocker.patch("onnxruntime.InferenceSession", side_effect=_make_session)
+    return export
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +241,119 @@ def test_build_returns_active_backend(mock_onnx, backend, model, graph_spec, sam
     assert built is backend
     assert backend.is_active
     assert backend._onnx_model_artifact == ArtifactPath(tmp_path, Path("model_raw.onnx"))
+
+
+@requires_cuda
+@pytest.mark.parametrize("execution_provider", [None, ONNXExecutionProvider.CUDA, ONNXExecutionProvider.TENSORRT])
+def test_artifact_after_deactivation_exposes_the_final_onnx_interface(
+    mock_onnx, model, graph_spec, sample_data, torch_device, tmp_path, execution_provider
+):
+    backend = ONNXRuntimeBackend(ONNXRuntimeBackendConfig(execution_provider=execution_provider))
+    backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+    backend.deactivate()
+
+    artifact = backend.artifact()
+
+    assert isinstance(artifact, DeploymentArtifact)
+    assert artifact.inputs == (
+        BoundedTensorSpec(
+            name="input_x",
+            dtype=DType.FLOAT32,
+            min_shape=(1, 32),
+            max_shape=(2, 32),
+            batch_axis=0,
+        ),
+    )
+    assert artifact.outputs == (
+        BoundedTensorSpec(
+            name="output",
+            dtype=DType.FLOAT32,
+            min_shape=(1, 5),
+            max_shape=(2, 5),
+            batch_axis=0,
+        ),
+    )
+    assert artifact.model.path == tmp_path / "model_raw.onnx"
+    assert artifact.model.format == "onnx"
+    assert artifact.runtime.name == "onnxruntime"
+    expected_provider = (execution_provider or ONNXExecutionProvider.CUDA).value
+    assert artifact.runtime.options == {"execution_provider": expected_provider}
+    assert type(artifact.runtime.options["execution_provider"]) is str
+    assert artifact.model.additional_files == ()
+    assert artifact.model.files == (artifact.model.path,)
+
+
+@requires_cuda
+def test_build_includes_onnx_external_data_in_the_artifact(
+    mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
+):
+    def export_with_external_data(*args, **kwargs):
+        model_path = Path(kwargs["f"])
+        model_path.write_bytes(b"onnx-model")
+        Path(f"{model_path}.data").write_bytes(b"external-data")
+
+    mock_onnx.side_effect = export_with_external_data
+    backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+
+    artifact = backend.artifact()
+
+    assert artifact.model.additional_files == (Path("model_raw.onnx.data"),)
+    assert artifact.model.files == (artifact.model.path, tmp_path / "model_raw.onnx.data")
+    destination = tmp_path / "export" / "model.onnx"
+    assert artifact.model.export_files(destination) == destination
+    assert destination.read_bytes() == b"onnx-model"
+    assert (destination.parent / "model_raw.onnx.data").read_bytes() == b"external-data"
+
+
+@requires_cuda
+def test_artifact_metadata_failure_does_not_fail_backend_build(
+    mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
+):
+    backend._create_artifact = Mock(side_effect=ValueError("unsupported interface"))
+
+    backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+
+    assert backend.is_active
+    backend._create_artifact.assert_not_called()
+    backend.deactivate()
+    backend.activate()
+    backend._create_artifact.assert_not_called()
+    with pytest.raises(RuntimeError, match="unsupported interface"):
+        backend.artifact()
+    backend._create_artifact.assert_called_once()
+
+
+@pytest.mark.parametrize("kind", ["input", "output"])
+@pytest.mark.parametrize(
+    ("element_type", "shape", "message"),
+    [
+        ("tensor(string)", ["batch", 32], "unsupported element type"),
+        ("tensor(double)", ["batch", 32], "dtype does not match"),
+        ("tensor(float)", None, "rank does not match"),
+        ("tensor(float)", ["batch"], "rank does not match"),
+        ("tensor(float)", [1, 32], "axis 0 is fixed at 1"),
+        ("tensor(float)", ["batch", 64], "axis 1 is fixed at 64"),
+    ],
+)
+def test_artifact_reports_actual_interface_mismatches(tmp_path, kind, element_type, shape, message):
+    backend = ONNXRuntimeBackend()
+    backend._onnx_model_artifact = ArtifactPath(tmp_path, "model.onnx")
+    backend._graph_spec = ToyTorchModel().graph_spec(batch_sizes=[1, 2], device=torch.device("cpu"))
+    nodes = {}
+    for tensor_kind, width in (("input", 32), ("output", 5)):
+        metadata = getattr(backend._graph_spec, f"{tensor_kind}_spec")
+        node = Mock()
+        node.name = format_tensor_name(metadata.tensor_data[0][0].path, tensor_kind)
+        node.type = "tensor(float)"
+        node.shape = ["batch", width]
+        nodes[tensor_kind] = node
+    nodes[kind].type = element_type
+    nodes[kind].shape = shape
+    backend._input_nodes = [nodes["input"]]
+    backend._output_nodes = [nodes["output"]]
+
+    with pytest.raises(RuntimeError, match=message):
+        backend.artifact()
 
 
 @requires_cuda
@@ -412,6 +535,36 @@ def test_from_dict_restores_state(tmp_path, torch_device):
     assert restored._graph_spec is not None
     assert restored._output_object is not None
     assert restored.state == BackendState.CHECKPOINT_LOADED
+
+
+@requires_cuda
+@pytest.mark.parametrize("execution_provider", [ONNXExecutionProvider.CUDA, ONNXExecutionProvider.TENSORRT])
+def test_checkpoint_loaded_backend_recreates_external_data_artifact(
+    mock_onnx, model, graph_spec, sample_data, torch_device, tmp_path, execution_provider
+):
+    def export_with_external_data(*args, **kwargs):
+        model_path = Path(kwargs["f"])
+        model_path.write_bytes(b"onnx-model")
+        Path(f"{model_path}.data").write_bytes(b"external-data")
+
+    mock_onnx.side_effect = export_with_external_data
+    backend = ONNXRuntimeBackend(ONNXRuntimeBackendConfig(execution_provider=execution_provider)).build(
+        model,
+        graph_spec,
+        sample_data,
+        device=torch_device,
+        cache_dir=tmp_path,
+    )
+    restored = ONNXRuntimeBackend.from_dict(None, backend.to_dict())
+
+    restored.deploy(torch_device)
+    artifact = restored.artifact()
+
+    assert artifact.model.path == tmp_path / "model_raw.onnx"
+    assert artifact.model.additional_files == (Path("model_raw.onnx.data"),)
+    assert artifact.model.files == (artifact.model.path, tmp_path / "model_raw.onnx.data")
+    assert artifact.runtime == backend.artifact().runtime
+    assert artifact.runtime.options == {"execution_provider": execution_provider.value}
 
 
 @requires_cuda

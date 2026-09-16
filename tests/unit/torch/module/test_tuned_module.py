@@ -110,6 +110,27 @@ def test_deactivate():
     backend2.deactivate.assert_called()
 
 
+def test_artifact_delegates_to_the_unique_backend():
+    expected = object()
+    backend = Mock(spec=Backend)
+    backend.artifact.return_value = expected
+    module = TunedModule(
+        backends=OrderedDict({Mock(spec=SampleMetadata): backend}),
+        check_graph=False,
+        module_name="test",
+        forward_signature=ForwardSignature.from_callable(lambda x: x),
+    )
+
+    assert module.artifact() is expected
+
+
+def test_artifact_rejects_multiple_compiled_graphs():
+    _, _, module = get_tuned_module()
+
+    with pytest.raises(RuntimeError, match="has 2 compiled graphs"):
+        module.artifact()
+
+
 def test_serialization():
     """Test serialization and deserialization of TunedModule."""
     kwargs = {}
