@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 name: aitune-commit
-description: Use when creating a git commit to ensure the message follows the Conventional Commits specification
+description: Use when creating a git commit to require Conventional Commits formatting, DCO sign-off, and cryptographic signing
 license: Apache-2.0
 ---
 
@@ -13,7 +13,7 @@ license: Apache-2.0
 1. Run `git diff HEAD`, `git log --oneline`, `git status` to understand the changes
 2. Compose **one** commit message covering the current task changes
 3. Stage only the files that belong to the current task
-4. Run `git commit -m "..."`, unless the user explicitly asks for sign-off; then run `git commit --signoff -m "..."`
+4. Run `git commit -s -S -m "..."` to add the DCO sign-off and cryptographically sign the commit using the configured signing key.
 5. After the commit succeeds, suggest one MR title that summarises the branch's overall purpose (derived from `git log origin/main..HEAD --oneline`). Rules:
    - Follow Conventional Commits format: `type(scope): description`
    - Pick the **dominant** type (most impactful: feat > fix > refactor > chore/docs/test)
@@ -23,7 +23,7 @@ license: Apache-2.0
 
 **Never ask the user to confirm the commit message.** Commit directly once the message is selected.
 **Never offer multiple commit options or ask whether to split.** Always produce a single message.
-**Never add sign-off unless the user explicitly asks for it.** Organization members are exempt from DCO sign-off; non-members should request sign-off explicitly.
+**Always use both `-s` and `-S` for commits, including amendments.** `-s` adds the `Signed-off-by` trailer; `-S` cryptographically signs the commit. If signing fails, report the error and resolve the signing setup before retrying; do not fall back to an unsigned commit.
 **Never run `git push`.** Pushing is a manual step for the user.
 
 ## Format
@@ -55,7 +55,7 @@ license: Apache-2.0
 - **type** and **description** are required
 - **scope** is optional — use the affected module/area (e.g. `feat(auth):`)
 - Description is lowercase, imperative mood, no period at end
-- **Single message line only** — do not manually add a body or footer; when the user requests sign-off, let `git commit --signoff` add the footer
+- **Single message line only** — do not manually add a body or footer; let `git commit -s` add the sign-off trailer
 - Keep it short and informative — aim for 50–72 chars, hard limit 120
 - Breaking changes: add `!` after type/scope (`feat!:`)
 - Exception: `BREAKING CHANGE:` footer only if `!` alone is insufficient
