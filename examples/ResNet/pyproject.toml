@@ -27,6 +27,7 @@ dynamo = [
     "python-multipart",
     "pydantic-tensor",
 ]
+triton = ["aitune[triton]"]
 
 [tool.uv.sources]
 aitune = { path = "../../" }
@@ -34,7 +35,10 @@ aitune-examples-common = { path = "../../examples/common" }
 
 [project.scripts]
 tune = "resnet.tune:main"
-inference = "resnet.inference:main"
+python-inference = "resnet.python_inference:main"
+dynamo-inference = "resnet.dynamo.client:main"
+triton-model-store = "resnet.triton.model_store:main"
+triton-inference = "resnet.triton.client:main"
 
 [build-system]
 requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
@@ -45,10 +49,12 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 namespaces = false
-include = ["resnet"]
+include = ["resnet", "resnet.*"]
 
 [tool.setuptools.package-data]
 resnet = ["**/*"]
 
 [tool.aitune]
+docker_image = "nvcr.io/nvidia/pytorch:26.05-py3"
+workflows = ["dynamo", "triton"]
 arguments = [{ "image-path" = "dog.webp" }, { "image-path" = "dog.webp", "dynamic-shapes" = 1 }]

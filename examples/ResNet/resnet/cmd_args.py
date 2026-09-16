@@ -8,20 +8,13 @@ from pathlib import Path
 default_image_path = str(Path(__file__).parent.parent / "dog.webp")
 
 
-def get_parser():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Tune ResNet model")
+def add_common_args(parser):
+    """Add arguments shared by ResNet workflows."""
     parser.add_argument(
         "--model-name",
         type=str,
         default="resnet50",
         help="Name of the model to tune",
-    )
-    parser.add_argument(
-        "--tuned-model-path",
-        type=str,
-        default="resnet50.ait",
-        help="Path to save the tuned model",
     )
     parser.add_argument(
         "--image-path",
@@ -41,5 +34,17 @@ def get_parser():
         choices=(0, 1),
         default=0,
         help="Enable user-provided dynamic shapes (default: 0)",
+    )
+    return parser
+
+
+def get_parser(description="Tune ResNet model"):
+    """Create a parser for a workflow that consumes an AITune package."""
+    parser = add_common_args(argparse.ArgumentParser(description=description))
+    parser.add_argument(
+        "--tuned-model-path",
+        type=str,
+        default="resnet50.ait",
+        help="Path to save the tuned model",
     )
     return parser
