@@ -6,7 +6,6 @@ import contextlib
 import copy
 import json
 import logging
-import shutil
 from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
