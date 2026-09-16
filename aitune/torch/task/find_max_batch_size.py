@@ -9,7 +9,6 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend import TorchEagerBackend
 from aitune.torch.backend.backend import Backend
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
@@ -19,6 +18,7 @@ from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inferen
 from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStrategy
 from aitune.torch.task.profiling.metrics import get_throughput
 from aitune.torch.task.profiling.profiling import ProfilingResults, ProfilingStatus, profile_backend
+from aitune.torch.utils.module import get_default_backend_for_module
 from aitune.utils.logging import control_output
 from aitune.utils.monitoring import annotate
 
@@ -51,7 +51,7 @@ def find_max_batch_size(
         device: Device to use for the calculation.
         cache_dir: Cache directory to store the backend artifacts.
     """
-    backend = TorchEagerBackend()
+    backend = get_default_backend_for_module(module)
     backend_cache_dir = cache_dir / backend.key()
     log_file = _log_file(backend_cache_dir, "build.log")
     with coordinator.raise_if_any_rank_fails("Building find-max-batch-size backend"):

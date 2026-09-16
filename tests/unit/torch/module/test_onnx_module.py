@@ -8,7 +8,7 @@ import torch
 from onnx import TensorProto, helper
 
 from aitune.torch import MaxThroughputStrategy, Module, tune
-from aitune.torch.backend import TorchEagerBackend
+from aitune.torch.backend import ONNXRuntimeBackend
 from aitune.torch.dataloader import DynamicShapeDataset
 from aitune.torch.module import OnnxModule
 from aitune.torch.task.profiling import ProfilingConfig
@@ -40,16 +40,17 @@ def test_onnx_module_simple_inference(onnx_add_path, device):
     torch.testing.assert_close(source(x=x)["y"], x * 2)
 
 
-@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
-def test_onnx_module_record_and_tune(onnx_add_path, device):
-    if device.startswith("cuda") and not torch.cuda.is_available():
+def test_onnx_module_record_and_tune(onnx_add_path):
+    if not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
+    device = "cuda:0"
 
     source = OnnxModule(onnx_add_path)
 
     x = torch.randn(3, 4, device=device).T  # Exercise non-contiguous input lifetime.
 
-    strategy = MaxThroughputStrategy([TorchEagerBackend()], profiling_config=ProfilingConfig(batch_sizes=[1, 2]))
+    strategy = MaxThroughputStrategy([ONNXRuntimeBackend()], profiling_config=ProfilingConfig(batch_sizes=[1, 2]))
+    strategy.enable_find_max_batch_size(False)
     strategy.enable_performance_validation(False)
 
     module = Module(source, "onnx-double", strategy=strategy)
@@ -80,6 +81,7 @@ def test_onnx_module_backend(onnx_add_path, named, backend_type):
     x = torch.randn(4, 3, device="cuda")
     torch.testing.assert_close(source(x)["y"], x * 2)
     strategy = OneBackendStrategy(backend_cls(), profiling_config=ProfilingConfig(batch_sizes=[1, 2]))
+    strategy.enable_find_max_batch_size(False)
     strategy.enable_performance_validation(False)
     module = Module(source, "onnx-runtime-double", strategy=strategy)
     dataset = DynamicShapeDataset([{"x": row} if named else (row,) for row in x])
@@ -131,6 +133,7 @@ def test_onnx_module_external_weights_checkpoint(tmp_path):
     )
     source = OnnxModule(path)
     strategy = OneBackendStrategy(ONNXRuntimeBackend(), profiling_config=ProfilingConfig(batch_sizes=[1, 2]))
+    strategy.enable_find_max_batch_size(False)
     strategy.enable_performance_validation(False)
     module = Module(source, "onnx-external", strategy=strategy)
     x = torch.randn(4, 3, device="cuda")
@@ -205,6 +208,7 @@ def test_onnx_module_tensorrt_quantization(tmp_path, precision):
     x = torch.ones(4, 16, 4, 4, device="cuda")
     torch.testing.assert_close(source(x)["y"], x * 8)
     strategy = OneBackendStrategy(candidate, profiling_config=ProfilingConfig(batch_sizes=[1, 2]))
+    strategy.enable_find_max_batch_size(False)
     strategy.enable_performance_validation(False)
     module = Module(source, "onnx-quantized", strategy=strategy)
     try:

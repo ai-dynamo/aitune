@@ -170,7 +170,7 @@ def test_pre_tune_sets_baseline_throughput(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 100.0, MagicMock())),
@@ -190,7 +190,7 @@ def test_pre_tune_stores_baseline_backend(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 50.0, MagicMock())),
@@ -211,7 +211,7 @@ def test_pre_tune_resets_results_on_each_call(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 100.0, MagicMock())),
@@ -233,7 +233,7 @@ def test_pre_tune_baseline_build_failure_leaves_baseline_none(
     failing_eager.build.side_effect = RuntimeError("build failed")
 
     with patch(
-        "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+        "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
         return_value=failing_eager,
     ):
         ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
@@ -254,7 +254,7 @@ def test_pre_tune_skips_baseline_when_performance_validation_disabled(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ) as mock_eager_cls,
         patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile,
@@ -306,7 +306,7 @@ def test_pre_tune_does_not_profile_baseline_when_performance_validation_disabled
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ) as mock_eager_cls,
         patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile,
@@ -329,7 +329,7 @@ def test_resolved_batch_size_uses_graph_spec_get_max_batch_size(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(16, 100.0, MagicMock())),
@@ -352,7 +352,7 @@ def test_pre_tune_uses_strategy_profiling_config_for_baseline(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 80.0, MagicMock())) as mock_profile,
@@ -418,7 +418,7 @@ def test_pre_tune_logs_baseline_profiling_start_when_validation_enabled(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 80.0, MagicMock())),

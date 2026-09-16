@@ -126,17 +126,18 @@ def test_backend_accepts_torch_modules(backend_cls):
     backend_cls()._assert_supported_modules(nn.Linear(2, 2))
 
 
-@pytest.mark.parametrize("backend_cls", [ONNXRuntimeBackend, TensorRTBackend, TorchEagerBackend])
+@pytest.mark.parametrize("backend_cls", [ONNXRuntimeBackend, TensorRTBackend])
 def test_backend_accepts_onnx_modules(backend_cls, tmp_path):
     backend_cls()._assert_supported_modules(OnnxModule(tmp_path / "model.onnx"))
 
 
-def test_backend_build_rejects_unsupported_onnx_module(tmp_path):
-    backend = DummyBackend()
+@pytest.mark.parametrize("backend_cls", [DummyBackend, TorchEagerBackend])
+def test_backend_build_rejects_unsupported_onnx_module(backend_cls, tmp_path):
+    backend = backend_cls()
     backend._config = BackendTestConfig()
     assert backend._supported_modules == frozenset({ModuleFormat.TORCH})
 
-    with pytest.raises(RuntimeError, match="DummyBackend does not support onnx modules"):
+    with pytest.raises(RuntimeError, match=f"{backend_cls.__name__} does not support onnx modules"):
         backend.build(OnnxModule(tmp_path / "model.onnx"), None, [], torch.device("cpu"), tmp_path)
 
     assert backend.state == BackendState.INIT

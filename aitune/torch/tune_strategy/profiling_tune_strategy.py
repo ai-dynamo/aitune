@@ -24,7 +24,6 @@ from aitune.torch.backend import (
     Backend,
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchEagerBackend,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
     TorchTensorRTAotBackend,
@@ -40,6 +39,7 @@ from aitune.torch.tune_data.reporting import report_backend_metric, report_graph
 from aitune.torch.tune_strategy.formatting import fmt_speedup_comparison, fmt_speedup_msg
 from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
+from aitune.torch.utils.module import get_default_backend_for_module
 from aitune.utils.logging import log
 
 
@@ -286,7 +286,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         shutil.rmtree(baseline_cache_dir, ignore_errors=True)
         baseline_cache_dir.mkdir(parents=True)
         local_error: Exception | None = None
-        backend = TorchEagerBackend()
+        backend = get_default_backend_for_module(module)
         result: BackendProfilingResult | None = None
         try:
             with coordinator.raise_if_any_rank_fails("Building TorchEager baseline"):
