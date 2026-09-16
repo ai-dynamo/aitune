@@ -5,6 +5,10 @@ title: "Changelog"
 ---
 # Changelog
 
+## 0.7.0 (unreleased)
+
+- feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
+
 ## 0.6.0
 
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
@@ -19,7 +23,6 @@ title: "Changelog"
 - feat: help engineers locate GPU bottlenecks by linking CUDA kernel activity to model modules and functional calls
 - feat: introduce explicit backend artifacts declaration
 - feat: forward-signature preservation for bound, decorated, and wrapped `partial`/`partialmethod` callables
-- feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
 - fix: reduce memory usage in multi-module tuning by storing recorded samples on disk and loading them lazily during backend warmup
 - fix: reject backends that do not reproduce eager post-call input mutations such as cache population and index updates
 - fix: configured autocast is applied consistently during JIT warmup and inference
