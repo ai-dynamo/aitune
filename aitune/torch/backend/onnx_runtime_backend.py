@@ -150,33 +150,9 @@ class ONNXRuntimeBackend(Backend):
         self._graph_spec = graph_spec
 
         if isinstance(module, OnnxModule):
-            self._output_object = {spec.name: None for _, spec in graph_spec.output_spec.tensor_data}
-            self._onnx_model_artifact = ArtifactPath.from_existing(module.path, root=module.path.parent)
-            # Release the baseline session before allocating the backend's configured session.
-            module.deactivate()
-            # Read only graph metadata; leave large external weights on disk.
-            model = onnx.load(module.path, load_external_data=False)
-            locations = {
-                entry.value
-                for tensor in _get_all_tensors(model)
-                for entry in tensor.external_data
-                if entry.key == "location"
-            }
-            self._external_data_artifacts = [
-                ArtifactPath.from_existing(module.path.parent / location, root=module.path.parent)
-                for location in sorted(locations)
-            ]
-            del model
+            self._use_existing_onnx(module, graph_spec)
         else:
-            self._output_object = self._get_output_object(module=module, sample=samples[0])
-            module = module.eval().to(self._device)
-            self._onnx_model_artifact = ArtifactPath(cache_dir, "model_raw.onnx")
-            onnx_exporter = ONNXExporter(
-                output_path=self._onnx_model_artifact.path,
-                use_dynamo=self._config.use_dynamo,
-                opset_version=self._config.opset_version,
-            )
-            onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
+            self._export_onnx(module, graph_spec, samples, cache_dir)
 
         data_file = Path(str(self._onnx_model_artifact.path) + ".data")
         if data_file.exists():
@@ -187,6 +163,37 @@ class ONNXRuntimeBackend(Backend):
         self._activate()
 
         return self
+
+    def _use_existing_onnx(self, module: OnnxModule, graph_spec: GraphSpec) -> None:
+        """Prepare artifacts and output structure from an existing ONNX model."""
+        self._output_object = {spec.name: None for _, spec in graph_spec.output_spec.tensor_data}
+        self._onnx_model_artifact = ArtifactPath.from_existing(module.path, root=module.path.parent)
+        # Release the baseline session before allocating the backend's configured session.
+        module.deactivate()
+        # Read only graph metadata; leave large external weights on disk.
+        model = onnx.load(module.path, load_external_data=False)
+        locations = {
+            entry.value
+            for tensor in _get_all_tensors(model)
+            for entry in tensor.external_data
+            if entry.key == "location"
+        }
+        self._external_data_artifacts = [
+            ArtifactPath.from_existing(module.path.parent / location, root=module.path.parent)
+            for location in sorted(locations)
+        ]
+
+    def _export_onnx(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> None:
+        """Export a Torch module and preserve its output structure."""
+        self._output_object = self._get_output_object(module=module, sample=samples[0])
+        module = module.eval().to(self._device)
+        self._onnx_model_artifact = ArtifactPath(cache_dir, "model_raw.onnx")
+        onnx_exporter = ONNXExporter(
+            output_path=self._onnx_model_artifact.path,
+            use_dynamo=self._config.use_dynamo,
+            opset_version=self._config.opset_version,
+        )
+        onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
 
     # ------------------------------------------------------------------
     # Session lifecycle
