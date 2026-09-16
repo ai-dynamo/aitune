@@ -86,6 +86,10 @@ See [TensorRT optimization profiles](backends/tensorrt_optimization_profiles.md)
 | `ONNXRuntimeBackend` | ONNX Runtime with the CUDA or TensorRT execution provider |
 | `TensorRTBackend` | Builds and runs a TensorRT engine directly |
 
+Backends declare supported source formats through `_supported_modules`, a frozenset of `ModuleFormat` values.
+The default is `ModuleFormat.TORCH`; ONNX Runtime and TensorRT also support `ModuleFormat.ONNX`.
+Unsupported formats are rejected before backend compilation.
+
 For existing ONNX input, export options such as `use_dynamo` and `opset_version` do not re-export or modify the source graph.
 
 `TensorRTBackend` supports `ONNXAutoCastConfig` for FP16/BF16 conversion and `ONNXQuantizationConfig` for ONNX quantization.

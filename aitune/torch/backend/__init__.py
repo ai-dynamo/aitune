@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch backend module."""
 
-from aitune.torch.backend.backend import Backend, BuildMode, ExecutionMode
+from aitune.torch.backend.backend import Backend, BuildMode, ExecutionMode, ModuleFormat
 from aitune.torch.backend.kernel_selector_backend import KernelSelectorBackend, KernelSelectorBackendConfig
 from aitune.torch.backend.onnx_runtime_backend import (
     ONNXExecutionProvider,
@@ -37,6 +37,7 @@ __all__ = [
     "Backend",
     "BuildMode",
     "ExecutionMode",
+    "ModuleFormat",
     "KernelSelectorBackend",
     "KernelSelectorBackendConfig",
     "ONNXAutoCastConfig",

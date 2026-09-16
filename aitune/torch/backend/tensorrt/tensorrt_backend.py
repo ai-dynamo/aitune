@@ -26,6 +26,7 @@ from aitune.torch.backend.backend import (
     BackendState,
     BuildMode,
     ExecutionMode,
+    ModuleFormat,
 )
 from aitune.torch.backend.tensorrt.cuda_graphs import CudaGraphCachePolicy, TensorRTCudaGraphCache
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCast, ONNXAutoCastConfig
@@ -216,6 +217,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
     """
 
     _build_mode = BuildMode.AHEAD_OF_TIME
+    _supported_modules = frozenset({ModuleFormat.TORCH, ModuleFormat.ONNX})
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
 
     # State dictionary keys

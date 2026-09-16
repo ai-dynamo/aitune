@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from onnx.external_data_helper import _get_all_tensors
 
-from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
+from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode, ModuleFormat
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.libs.onnx.runtime import run_onnx
@@ -105,6 +105,7 @@ class ONNXRuntimeBackend(Backend):
     """
 
     _build_mode = BuildMode.AHEAD_OF_TIME
+    _supported_modules = frozenset({ModuleFormat.TORCH, ModuleFormat.ONNX})
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
 
     # State dictionary keys
