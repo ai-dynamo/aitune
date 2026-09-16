@@ -14,16 +14,20 @@ configuration object or generation call is required:
 ```python
 from aitune.triton import publish
 
-# artifact is the ONNX, TensorRT, or PT2 artifact produced by tuning.
+# artifact is a DeploymentArtifact produced by tuning.
 model_path = publish(artifact, path="model_repository", model_name="encoder")
 ```
+
+Set `max_batch_size` to publish with an implicit batch dimension within the
+artifact's bounds. Enable `dynamic_batching=True` to let Triton combine client
+requests; an implicit batch dimension alone does not enable that scheduler.
 
 The model directory contains the versioned model, `config.pbtxt`, and
 `model_analyzer/fast.yaml` and `model_analyzer/manual.yaml`. Publication stages
 these files together; a failure leaves no partial model directory.
 
 The generated configurations derive concrete input shapes from the artifact:
-TensorRT uses the first compatible optimization profile's optimum shapes;
+TensorRT uses the first compatible enabled optimization profile's optimum shapes;
 ONNX and PT2 use their recorded minimum shapes. Batched deployments omit the
 leading batch dimension in Perf Analyzer's shape flags. Search batch sizes stay
 within the deployment limit and the selected TensorRT profile's bounds.
@@ -42,6 +46,56 @@ Checkpoint, result, and generated model-repository paths are under
 For custom instance-count or queue-delay limits, the existing
 `generate_model_analyzer_configs(artifact, model_path=model_path, path=...)`
 function can write another configuration pair to a new directory.
+
+## Publish an Existing Model to Triton
+
+Install `aitune[triton]` to publish an ONNX graph, TensorRT plan, or AOTInductor PT2
+package that you already have. No AITune tuning flow is required.
+
+```python
+from aitune.triton import ONNXRuntimeModelConfig, publish
+
+config = ONNXRuntimeModelConfig(
+    name="encoder",
+    execution_provider="cuda",
+    max_batch_size=8,
+    dynamic_batching=True,
+    inputs=({"name": "input_ids", "data_type": "TYPE_INT64", "dims": (-1,)},),
+    outputs=({"name": "embedding", "data_type": "TYPE_FP32", "dims": (768,)},),
+)
+
+model_directory = publish(
+    "models/encoder.onnx",
+    path="model_repository",
+    config=config,
+    model_version=1,
+)
+```
+
+This writes `model_repository/encoder/config.pbtxt` and
+`model_repository/encoder/1/model.onnx`. The configuration supplies the tensor
+names, types, shapes, and batching contract; these must match your model. When
+`max_batch_size` is positive, `dims` excludes the leading batch dimension. Use
+`max_batch_size=0` and full tensor dimensions for an unbatched model.
+
+Choose `TensorRTModelConfig` with `optimization_profile_indices` and optional
+`cuda_graphs` for a TensorRT plan, or `TorchAOTIModelConfig` with `structured_call`
+for a PT2 package. The configuration type selects the backend and destination
+filename (`model.plan`, `model.onnx`, or `model.pt2`).
+For a tuned TensorRT artifact, the configuration factory derives these profile
+indices from `artifact.model.metadata["optimization_profile_count"]`.
+
+For ONNX external data, pass `additional_files=["weights.bin", "data/weights.bin"]`
+with the files your graph actually references. Paths are relative to the source
+graph's directory. The graph and additional files are copied under `1/model.onnx/`,
+preserving the additional file paths. Files are staged before publication, and an
+existing model directory is never replaced. This API prepares the repository;
+it does not start Triton or verify that the model can execute on the target hardware.
+
+Tuned artifacts continue to use `publish(artifact, path=..., model_name=...)`,
+with configuration derived from the artifact. Manual file publication does not
+generate Model Analyzer configurations because the supplied Triton configuration
+does not contain the model's bounded input shapes and optimization profiles.
 
 ## Save a Tuned Model
 
