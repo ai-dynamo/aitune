@@ -174,8 +174,8 @@ def test_load_runtime_dependencies_caches_backend_before_inference(monkeypatch):
             True,
             id="strict",
             marks=pytest.mark.skipif(
-                TORCH_MAJOR_MINOR == (2, 9),
-                reason="PyTorch 2.9 strict export cannot capture hooks that patch torch.nn.functional",
+                TORCH_MAJOR_MINOR in ((2, 8), (2, 9)),
+                reason="PyTorch 2.8 and 2.9 strict export cannot capture hooks that patch torch.nn.functional",
             ),
         ),
     ),

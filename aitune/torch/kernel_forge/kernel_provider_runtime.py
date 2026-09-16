@@ -51,10 +51,18 @@ class KernelProviderRuntime:
         self._hooks = hooks
 
     def deactivate(self) -> None:
-        """Deactivate providers idempotently."""
+        """Deactivate providers and restore outstanding function patches idempotently.
+
+        Graph capture may invoke a module's forward pre-hook without invoking its
+        matching post-hook. Unwind any patches left on the function stacks so a
+        provider cannot remain installed after the runtime is deactivated.
+        """
         for hook in self._hooks:
             hook.remove()
         self._hooks.clear()
+        for function_name, function_stack in self._function_stacks.items():
+            while function_stack:
+                setattr(F, function_name, function_stack.pop())
 
     @contextmanager
     def applied(self) -> Generator[None, None, None]:
