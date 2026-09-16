@@ -5,6 +5,10 @@ title: "Changelog"
 ---
 # Changelog
 
+## 0.7.0 (unreleased)
+
+- feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
+
 ## 0.6.0
 
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
