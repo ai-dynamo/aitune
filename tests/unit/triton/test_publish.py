@@ -38,21 +38,32 @@ def _plan(path: Path, *, profiles: int = 1, use_cuda_graphs: bool = False) -> De
     path.write_bytes(b"TensorRT plan")
     inputs, outputs = _interface()
     return DeploymentArtifact(
-        model=ModelFiles(format="tensorrt_plan", path=path, metadata={"optimization_profile_count": profiles}),
+        model=ModelFiles(
+            format="tensorrt_plan",
+            path=path,
+            metadata={
+                "optimization_profile_count": profiles,
+                "optimization_profiles": (
+                    {"input_ids": {"min_shape": (1, 8), "opt_shape": (4, 128), "max_shape": (8, 512)}},
+                )
+                * profiles,
+            },
+        ),
         inputs=inputs,
         outputs=outputs,
         runtime=RuntimeConfig(name="tensorrt", options={"use_cuda_graphs": use_cuda_graphs}),
     )
 
 
-def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path):
+@pytest.mark.parametrize("dynamic_batching", [False, True])
+def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path, dynamic_batching):
     artifact = _plan(tmp_path / "source.plan", profiles=2, use_cuda_graphs=True)
 
     model = aitriton.publish(
         artifact,
         path=tmp_path / "repository",
         model_name="encoder",
-        dynamic_batching=True,
+        dynamic_batching=dynamic_batching,
         max_batch_size=4,
     )
 
@@ -68,7 +79,7 @@ def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path):
     assert tuple(parsed.input[0].dims) == (-1,)
     assert tuple(parsed.instance_group[0].profile) == ("0", "1")
     assert parsed.optimization.cuda.graphs
-    assert parsed.HasField("dynamic_batching")
+    assert parsed.HasField("dynamic_batching") == dynamic_batching
 
 
 @pytest.mark.parametrize(
@@ -249,3 +260,40 @@ def test_requires_pt2_call_metadata(tmp_path):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()
+
+
+@pytest.mark.parametrize(
+    ("model_format", "runtime", "metadata", "options"),
+    [
+        ("onnx", "onnxruntime", {}, {"execution_provider": "cuda"}),
+        ("pt2", "aotinductor", {"structured_call": False}, {}),
+    ],
+)
+@pytest.mark.parametrize("dynamic_batching", [False, True])
+def test_artifact_batch_limit_is_independent_of_scheduler(
+    tmp_path, model_format, runtime, metadata, options, dynamic_batching
+):
+    source = tmp_path / f"source.{model_format}"
+    source.write_bytes(b"model")
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format=model_format, path=source, metadata=metadata),
+        inputs=(_spec("INPUT__0", DType.FLOAT32, (1, 16), (8, 16)),),
+        outputs=(_spec("OUTPUT__0", DType.FLOAT32, (1, 8), (8, 8)),),
+        runtime=RuntimeConfig(name=runtime, options=options),
+    )
+
+    published = aitriton.publish(
+        artifact,
+        path=tmp_path / "repository",
+        model_name="encoder",
+        max_batch_size=4,
+        dynamic_batching=dynamic_batching,
+    )
+
+    config = text_format.Parse((published / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert config.max_batch_size == 4
+    assert tuple(config.input[0].dims) == (16,)
+    assert tuple(config.output[0].dims) == (8,)
+    assert config.HasField("dynamic_batching") == dynamic_batching
+    assert (published / "model_analyzer/fast.yaml").is_file()
+    assert (published / "model_analyzer/manual.yaml").is_file()

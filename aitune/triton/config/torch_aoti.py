@@ -24,6 +24,6 @@ class TorchAOTIModelConfig(_BaseModelConfig):
     @model_validator(mode="after")
     def _validate_structured_batching(self) -> "TorchAOTIModelConfig":
         """Reject batching that cannot preserve a structured PT2 call."""
-        if self.structured_call and self.dynamic_batching:
+        if self.structured_call and self.max_batch_size > 0:
             raise ValueError("Triton default batching does not support PT2 artifacts with structured calls")
         return self
