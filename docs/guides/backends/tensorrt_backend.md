@@ -56,6 +56,33 @@ config = TensorRTBackendConfig(
 backend = TensorRTBackend(config)
 ```
 
+## Export a Tuned Artifact
+
+After tuning, retrieve the same `DeploymentArtifact` contract used by the ONNX backend:
+
+```python
+artifact = model.artifact()
+artifact.model.export_files("deployment/model.plan")
+
+print(artifact.model.format)  # tensorrt_plan
+print(artifact.runtime.name)  # tensorrt
+profiles = artifact.model.metadata["optimization_profiles"]
+print(artifact.model.metadata["optimization_profile_count"])
+print(artifact.runtime.options)
+```
+
+Each optimization profile is a dictionary keyed by executable input name, in engine input order.
+Each input contains `min_shape`, `opt_shape`, and `max_shape` tuples. These exact ranges are
+preserved alongside the overall input bounds; multiple profiles can leave gaps within those bounds.
+Runtime options preserve `use_cuda_graphs`, `max_cuda_graphs`, and `cuda_graph_cache_policy` as plain values
+for deployment adapters to interpret.
+
+The exported file is the TensorRT plan. The profile metadata is embedded in the deployment record;
+AITune's profile sidecar remains part of its checkpoint, and is not needed to execute the exported plan.
+`model.artifact()` constructs and validates the deployment record when called. The backend retains
+the finalized tensor names and profile metadata after deactivation, so generation does not require
+reloading the engine. The method also works after restoring and deploying a checkpoint.
+
 ## Configuration Options
 
 ### TensorRTBackendConfig
