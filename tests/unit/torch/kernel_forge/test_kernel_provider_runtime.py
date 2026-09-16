@@ -105,6 +105,28 @@ def test_runtime_activate_and_deactivate_are_idempotent():
     assert len(calls) == 1
 
 
+def test_runtime_deactivation_restores_unbalanced_function_patches():
+    original_relu = F.relu
+    module = _ReluModule()
+    runtime = _runtime(module, _CallableProvider("relu", original_relu))
+    runtime.activate()
+
+    try:
+        pre_hook = next(iter(module._forward_pre_hooks.values()))
+        pre_hook(module, (torch.tensor([-1.0, 1.0]),))
+
+        assert F.relu is not original_relu
+        assert runtime._function_stacks["relu"] == [original_relu]
+
+        runtime.deactivate()
+
+        assert F.relu is original_relu
+        assert runtime._function_stacks["relu"] == []
+    finally:
+        F.relu = original_relu
+        runtime.deactivate()
+
+
 def test_runtime_activation_rolls_back_when_hook_registration_fails(monkeypatch):
     module = _ReluModule()
     runtime = _runtime(module, _CallableProvider("relu", F.relu))
