@@ -1,0 +1,608 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/locator
+title: aitune.torch.module.locator
+---
+
+Locator for an object in a nested structure.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`Locator`](#aitune-torch-module-locator-Locator) | A path-based locator for navigating and manipulating nested data structures. |
+| [`ObjectType`](#aitune-torch-module-locator-ObjectType) | Object type. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`get_class_data_fields_cached`](#aitune-torch-module-locator-get_class_data_fields_cached) | Inspects class ONCE. Returns a PRE-SORTED tuple. |
+| [`get_class_fields_set_cached`](#aitune-torch-module-locator-get_class_fields_set_cached) | Returns a set of class fields for fast lookup. |
+| [`get_object_fields`](#aitune-torch-module-locator-get_object_fields) | Returns SORTED public data fields. |
+
+### API
+
+<Anchor id="aitune-torch-module-locator-Locator">
+
+<CodeBlock links={{"aitune.torch.module.locator.ObjectType":"#aitune-torch-module-locator-ObjectType"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.locator.Locator(
+    access_path: tuple[tuple[int | str, aitune.torch.module.locator.ObjectType], ...],
+    is_output: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+A path-based locator for navigating and manipulating nested data structures.
+
+The Locator class provides mechanisms to identify and access elements (such as Python primitives,
+torch tensors, etc.) within nested structures—including sequences, dictionaries, dataclasses,
+and custom user types. It maintains a path that traverses the structure, allowing retrieval
+and mutation of values at those paths, as well as traversing nested contents and supporting
+custom types.
+
+The access path is stored as a sequence of (accessor, ObjectType) tuples. The accessor is either
+an integer index (for sequences) or a string key/attribute name (for dicts, dataclasses,
+or user types).
+
+The primary entry point for this class is the `find_leaves` method, which yields all leaves
+found within a nested structure.
+
+
+<ParamField path="_ignored_types" type="set[type] = set()">
+</ParamField>
+
+<ParamField path="_user_types" type="dict[type, bool] = dict[type, bool]()">
+</ParamField>
+
+<ParamField path="depth" type="int">
+Get the depth of the locator.
+</ParamField>
+
+<ParamField path="display_path" type="str">
+Format the locator as a Python-like access path.
+</ParamField>
+
+<ParamField path="leaf_name" type="int | str">
+Get the leaf of the locator.
+</ParamField>
+
+<ParamField path="path" type="int | str | tuple[int | str, ...]">
+Get the semantic path, without the container types in the access path. Example ``("inputs", "tokens", 0)``.
+</ParamField>
+
+<ParamField path="root_name" type="int | str">
+Get the root of the locator.
+</ParamField>
+<Anchor id="aitune-torch-module-locator-Locator-__eq__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.__eq__(
+    value: object
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Equality operator.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-__hash__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.__hash__() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Hash of the locator.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.__repr__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Representation of the locator.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-__str__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.__str__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+String representation of the locator.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_get_iter_handler">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._get_iter_handler(
+    obj_type
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Get the iter handler for the given object type.
+
+The purpose of this is to cache lookups and speed up the find leaves operation.
+
+**Parameters:**
+
+<ParamField path="obj_type">
+The object type to get the iter handler for.
+</ParamField>
+
+**Returns:**
+
+The iter handler for the given object type.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_iter_dataclass">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._iter_dataclass(
+    current: object
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Iterate over a dataclass.
+
+**Parameters:**
+
+<ParamField path="current" type="object">
+The dataclass to iterate.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_iter_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._iter_dict(
+    current: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Iterate over a dictionary.
+
+**Parameters:**
+
+<ParamField path="current" type="dict">
+The dictionary to iterate.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_iter_sequence">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._iter_sequence(
+    current: list | tuple
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Iterate over a sequence.
+
+**Parameters:**
+
+<ParamField path="current" type="list | tuple">
+The sequence to iterate.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_iter_user_type">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._iter_user_type(
+    current: object
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Iterate over a user type.
+
+**Parameters:**
+
+<ParamField path="current" type="object">
+The user type object to iterate.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_resolve_only_tensors">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._resolve_only_tensors(
+    obj_type: type,
+    parent_only_tensors: bool
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Resolve the only_tensors flag for the current object.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-accessor_at">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.accessor_at(
+    index: int
+) -> int | str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the accessor at the given index.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-find_leaves">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.find_leaves(
+    obj: object,
+    only_tensors: bool = False,
+    is_output: bool = False
+) -> collections.abc.Generator[tuple[aitune.torch.module.locator.Locator, object], None, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Walks the object and yields locators and their leaf values.
+
+Leaf value is anything that is stored in a sequence, dictionary, or dataclass. If `only_tensors` is True,
+only tensors are returned, otherwise all objects are returned.
+
+Note:
+- if a user type is marked as ignore, it will not be traversed nor returned.
+- if a user type is registered, it will be traversed like a dataclass. If it was registered with
+      `only_tensors=True`, only tensors are returned irrespective of method argument `only_tensors`.
+      Such a case may happen when we want to handle LLM cache and look only for tensors inside cache object.
+
+**Parameters:**
+
+<ParamField path="obj" type="object">
+The object to walk.
+</ParamField>
+
+<ParamField path="only_tensors" type="bool" default="False">
+Whether to only return tensors.
+</ParamField>
+
+<ParamField path="is_output" type="bool" default="False">
+Whether the locators point into forward outputs.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-get_value">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.get_value(
+    obj: object
+) -> object
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the value of the locator.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-ignore_type">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.ignore_type()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Ignore a type.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-path_iter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.path_iter()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Yield (accessor, ObjectType) tuples for each step in the path.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-register_user_type">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.register_user_type(
+    only_tensors: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Register a user type.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-set_value">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.set_value(
+    obj: object,
+    value: object
+) -> object
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set the value of the locator.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-unignore_type">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.unignore_type()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Unignore a type.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-unregister_user_type">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.unregister_user_type()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Unregister a user type.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-locator-ObjectType">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.locator.ObjectType
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Object type.
+
+<ParamField path="DATACLASS" type="= 2">
+</ParamField>
+
+<ParamField path="DICT" type="= 1">
+</ParamField>
+
+<ParamField path="SEQUENCE" type="= 0">
+</ParamField>
+
+<ParamField path="USER_TYPE" type="= 3">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-module-locator-get_class_data_fields_cached">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.get_class_data_fields_cached(
+    cls
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspects class ONCE. Returns a PRE-SORTED tuple.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-locator-get_class_fields_set_cached">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.get_class_fields_set_cached(
+    cls
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns a set of class fields for fast lookup.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-locator-get_object_fields">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.get_object_fields(
+    obj
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns SORTED public data fields.
+
+
+</Indent>

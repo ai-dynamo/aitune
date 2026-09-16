@@ -105,7 +105,13 @@ Workflow::
 <ParamField path="STATE_OUTPUT_OBJECT" type="= 'output_object'">
 </ParamField>
 
+<ParamField path="STATE_SAMPLES" type="= 'samples'">
+</ParamField>
+
 <ParamField path="STATE_TYPE" type="= 'type'">
+</ParamField>
+
+<ParamField path="_build_mode" type="= BuildMode.AHEAD_OF_TIME">
 </ParamField>
 
 <ParamField path="_config" type="= config or ONNXRuntimeBackendConfig()">
@@ -114,13 +120,19 @@ Workflow::
 <ParamField path="_devices" type="list[str] = ['cuda']">
 </ParamField>
 
+<ParamField path="_execution_modes" type="= frozenset(&#123;ExecutionMode.SINGLE_GPU&#125;)">
+</ParamField>
+
 <ParamField path="_graph_spec" type="GraphSpec | None = None">
 </ParamField>
 
-<ParamField path="_onnx_data_path" type="Path | None = None">
+<ParamField path="_onnx_data_artifact" type="ArtifactPath | None = None">
 </ParamField>
 
-<ParamField path="_onnx_model_path" type="Path | None = None">
+<ParamField path="_onnx_model_artifact" type="ArtifactPath | None = None">
+</ParamField>
+
+<ParamField path="_samples" type="SampleStore | None = None">
 </ParamField>
 
 <ParamField path="_session" type="InferenceSession | None = None">
@@ -189,13 +201,13 @@ Tensors are retrieved after inference via ``_collect_outputs``.
 </Indent>
 <Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
 ) -> aitune.torch.backend.backend.Backend
 ```
@@ -285,12 +297,12 @@ Return execution providers based on config (no automatic CPU fallback).
 </Indent>
 <Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_get_output_object">
 
-<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._get_output_object(
     module: torch.nn.Module,
-    sample: aitune.torch.module.recording_module.Sample
+    sample: aitune.torch.module.sample_store.Sample
 ) -> typing.Any
 ```
 
@@ -382,14 +394,14 @@ Reconstruct original output structure from session output tensors.
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_save_config">
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_warmup">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._save_config(
-    cache_dir: pathlib.Path
-)
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._warmup(
+    samples: collections.abc.Iterable[aitune.torch.module.sample_store.Sample]
+) -> None
 ```
 
 </CodeBlock>
@@ -397,7 +409,18 @@ aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._save_config(
 
 <Indent>
 
-Store the backend configuration to a file.
+Run representative samples to initialize the execution provider.
+
+Some execution providers defer work until inference. In particular, the TensorRT
+execution provider compiles the ONNX graph when it first runs. Exercising a small
+number of recorded samples makes those failures part of the backend build instead
+of deferring them until profiling or application inference.
+
+**Parameters:**
+
+<ParamField path="samples" type="Iterable[Sample]">
+Recorded input samples for the backend build.
+</ParamField>
 
 
 </Indent>

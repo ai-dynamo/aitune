@@ -158,6 +158,10 @@ device attribute is patched with dynamic class creation so that only instance at
 <ParamField path="attempted_tuning" type="bool = False">
 </ParamField>
 
+<ParamField path="cache_dir" type="Path">
+Get the module cache directory.
+</ParamField>
+
 <ParamField path="deferred_tuning_enabled" type="bool = False">
 </ParamField>
 
@@ -414,6 +418,42 @@ Return JSON-ready graph specs recorded before deferred tuning.
 
 
 </Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_log_tuning_exception">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._log_tuning_exception(
+    exception: Exception
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log a JIT tuning exception and persist its traceback.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_module_cache_dir">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._module_cache_dir() -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return this module's cache directory.
+
+
+</Indent>
 <Anchor id="aitune-torch-jit-patched_module-PatchedModule-_module_dtypes">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -428,25 +468,6 @@ aitune.torch.jit.patched_module.PatchedModule._module_dtypes() -> list[str]
 <Indent>
 
 Return unique parameter and buffer dtypes for this module tree.
-
-
-</Indent>
-<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_offload">
-
-<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.jit.patched_module.PatchedModule._offload(
-    backends: collections.OrderedDict[aitune.torch.module.sample_metadata.SampleMetadata, aitune.torch.backend.backend.Backend]
-)
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Offload the module to the meta device only if no JIT backends are used.
 
 
 </Indent>
@@ -637,14 +658,14 @@ Return whether this tuning path should emit per-module inspection details.
 </Indent>
 <Anchor id="aitune-torch-jit-patched_module-PatchedModule-_simulate_dry_run">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.jit.patched_module.PatchedModule":"#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.jit.patched_module.PatchedModule":"#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.jit.patched_module.PatchedModule._simulate_dry_run(
     strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy,
     module: aitune.torch.jit.patched_module.PatchedModule,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 )
@@ -665,12 +686,12 @@ This is done to simulate failures during JIT tuning to see how it would behave.
 </Indent>
 <Anchor id="aitune-torch-jit-patched_module-PatchedModule-_throw_if_has_graph_break">
 
-<CodeBlock links={{"aitune.torch.jit.patched_module.PatchedModule":"#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.jit.patched_module.PatchedModule":"#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.jit.patched_module.PatchedModule._throw_if_has_graph_break(
     module: aitune.torch.jit.patched_module.PatchedModule,
-    data: list[aitune.torch.module.recording_module.Sample]
+    samples: aitune.torch.module.sample_store.SampleStore
 )
 ```
 
@@ -687,14 +708,14 @@ Adds to history the duration of the checking.
 </Indent>
 <Anchor id="aitune-torch-jit-patched_module-PatchedModule-_tune">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.jit.patched_module.PatchedModule":"#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.jit.patched_module.PatchedModule":"#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.jit.patched_module.PatchedModule._tune(
     strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy,
     module: aitune.torch.jit.patched_module.PatchedModule,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 )
@@ -790,6 +811,25 @@ the original forward is restored.
 <ParamField path="state" type="ModuleState">
 The new state of the module
 </ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_write_error_log">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._write_error_log(
+    exception: Exception
+) -> pathlib.Path | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Persist a tuning traceback in this module's cache directory.
 
 
 </Indent>

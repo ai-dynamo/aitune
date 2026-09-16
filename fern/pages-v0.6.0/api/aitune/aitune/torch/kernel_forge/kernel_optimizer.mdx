@@ -1,0 +1,660 @@
+---
+layout: overview
+slug: aitune/aitune/torch/kernel_forge/kernel_optimizer
+title: aitune.torch.kernel_forge.kernel_optimizer
+---
+
+Kernel optimizer based on module function kernel profiling.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`KernelOptimizer`](#aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer) | Profiles and replaces eligible ``torch.nn.functional`` kernels in a module. |
+| [`_FunctionSearch`](#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch) | Samples and accumulated candidates for one PyTorch function. |
+| [`_GenerationTask`](#aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask) | One submitted generator task and its expected function. |
+| [`_KernelCandidate`](#aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate) | A kernel candidate. |
+
+### Data
+
+[`KernelSource`](#aitune-torch-kernel_forge-kernel_optimizer-KernelSource)
+
+[`KernelSourceType`](#aitune-torch-kernel_forge-kernel_optimizer-KernelSourceType)
+
+[`_PROFILE_SUMMARY_LIMIT`](#aitune-torch-kernel_forge-kernel_optimizer-_PROFILE_SUMMARY_LIMIT)
+
+[`logger`](#aitune-torch-kernel_forge-kernel_optimizer-logger)
+
+### API
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider","aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler":"/aitune/aitune/torch/kernel_forge/module_function_kernel_profiler#aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler","aitune.torch.kernel_forge.kernel_utils.KernelUtils":"/aitune/aitune/torch/kernel_forge/kernel_utils#aitune-torch-kernel_forge-kernel_utils-KernelUtils"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer(
+    kernel_providers: aitune.torch.kernel_forge.kernel_provider.KernelProvider | list[aitune.torch.kernel_forge.kernel_provider.KernelProvider] | None = None,
+    kernel_generators: aitune.torch.kernel_forge.kernel_provider.KernelGenerator | list[aitune.torch.kernel_forge.kernel_provider.KernelGenerator] | None = None,
+    kernel_profiler_factory: collections.abc.Callable[..., aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler] = ModuleFunctionKernelProfiler,
+    kernel_utils: aitune.torch.kernel_forge.kernel_utils.KernelUtils | None = None,
+    provider_min_time_share_percent: float = 0.0,
+    generator_min_time_share_percent: float = 10.0,
+    generation_timeout: float = AITUNE_KERNEL_GENERATION_TI...
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profiles and replaces eligible ``torch.nn.functional`` kernels in a module.
+
+``make_plan(function, data, module=...)`` profiles forwards, starts asynchronous
+generators, benchmarks static providers while generation runs, collects and
+benchmarks generated candidates, and returns the selected runtime plan.
+
+
+<ParamField path="kernel_utils">
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_evaluate_candidate">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._evaluate_candidate(
+    search: aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch,
+    provider: aitune.torch.kernel_forge.kernel_provider.KernelProvider,
+    description: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run the common correctness validation and benchmark for one candidate.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_evaluate_generation_result">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_optimizer._GenerationTask":"#aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask","aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_generator#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._evaluate_generation_result(
+    searches: dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch],
+    task: aitune.torch.kernel_forge.kernel_optimizer._GenerationTask,
+    result: aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Evaluate one completed generation result.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_evaluate_generation_results">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_optimizer._GenerationTask":"#aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._evaluate_generation_results(
+    searches: dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch],
+    tasks: list[aitune.torch.kernel_forge.kernel_optimizer._GenerationTask]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Evaluate generated candidates sequentially as their futures finish.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_evaluate_provider_candidates">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._evaluate_provider_candidates(
+    searches: dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch],
+    provider_functions: list[str]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare and benchmark all provider candidates while generators run.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_generators_for_function">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._generators_for_function(
+    func_name: str
+) -> list[aitune.torch.kernel_forge.kernel_provider.KernelGenerator]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return dynamic generators supporting one function.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_kernel_sources">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelSource":"#aitune-torch-kernel_forge-kernel_optimizer-KernelSource"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._kernel_sources() -> list[aitune.torch.kernel_forge.kernel_optimizer.KernelSource]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return all available static and dynamic kernel sources.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_kernel_sources_for_function">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType":"#aitune-torch-kernel_forge-kernel_optimizer-KernelSourceType"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._kernel_sources_for_function(
+    sources: list[aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType],
+    func_name: str
+) -> list[aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return sources supporting one function.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_log_kernel_candidates_results">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate":"#aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._log_kernel_candidates_results(
+    func_name: str,
+    candidates: list[aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate],
+    baseline_latency: float
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log candidate latencies and their improvement over the baseline.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_log_summary">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._log_summary(
+    summary_df: pandas.DataFrame,
+    provider_function_names: list[str],
+    generator_function_names: list[str]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log profiler results with markers for the selected kernel sources.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_make_plan">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"/aitune/aitune/torch/kernel_forge/module_function_kernel_profiler#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData","aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"/aitune/aitune/torch/kernel_forge/kernel_optimization_plan#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._make_plan(
+    function_data: dict[str, aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData],
+    profiled_functions: list[str],
+    provider_functions: list[str],
+    generator_functions: list[str]
+) -> aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Evaluate kernel candidates and return the best providers.
+
+All generator tasks are scheduled first. While asynchronous generation is running, candidates from static
+providers are prepared and benchmarked. Generated results are then collected and evaluated using the same
+validation and benchmarking path. Finally, the fastest candidate for each function is selected when it
+outperforms the original PyTorch function.
+
+**Parameters:**
+
+<ParamField path="function_data" type="dict[str, FunctionData]">
+Collected input samples for each supported function.
+</ParamField>
+
+<ParamField path="profiled_functions" type="list[str]">
+Profiled functions in descending kernel-time order.
+</ParamField>
+
+<ParamField path="provider_functions" type="list[str]">
+Profiled functions selected for static providers.
+</ParamField>
+
+<ParamField path="generator_functions" type="list[str]">
+Profiled functions selected for asynchronous generators.
+</ParamField>
+
+**Returns:** `KernelOptimizationPlan`
+
+A runtime plan containing the fastest providers that outperform their baselines.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_prepare_provider_samples">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"/aitune/aitune/torch/kernel_forge/module_function_kernel_profiler#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData","aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._prepare_provider_samples(
+    function_data: aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData
+) -> tuple[list[aitune.torch.module.sample_store.Sample], list[aitune.torch.module.sample_store.Sample]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return unique validation samples and a GCD-reduced benchmark distribution.
+
+By dividing counters by the GCD of the counters, we can reduce the number of samples
+to a minimum while maintaining the same distribution.
+
+**Parameters:**
+
+<ParamField path="function_data" type="FunctionData">
+the function data to prepare the provider samples for
+</ParamField>
+
+**Returns:** `tuple[list[Sample], list[Sample]]`
+
+a tuple of unique validation samples and a GCD-reduced benchmark distribution
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_prepare_searches">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"/aitune/aitune/torch/kernel_forge/module_function_kernel_profiler#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData","aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._prepare_searches(
+    function_data: dict[str, aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData],
+    profiled_functions: list[str]
+) -> dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare each selected function's samples exactly once.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_providers_for_function">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._providers_for_function(
+    func_name: str
+) -> list[aitune.torch.kernel_forge.kernel_provider.KernelProvider]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return static providers supporting one function.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_select_best_candidate">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate":"#aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._select_best_candidate(
+    func_name: str,
+    search: aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch
+) -> aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select the fastest valid candidate when it beats the single baseline measurement.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_select_source_functions">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType":"#aitune-torch-kernel_forge-kernel_optimizer-KernelSourceType"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._select_source_functions(
+    summary_df: pandas.DataFrame,
+    sources: list[aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType],
+    min_time_share_percent: float
+) -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select functions supported by a source and meeting its time-share threshold.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_submit_generation_tasks">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_optimizer._GenerationTask":"#aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._submit_generation_tasks(
+    searches: dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch],
+    generator_functions: list[str]
+) -> list[aitune.torch.kernel_forge.kernel_optimizer._GenerationTask]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Submit all supported generator-function pairs before static work.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_supported_function_names">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._supported_function_names() -> set[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return function names supported by providers or generators.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_supported_functions">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelSource":"#aitune-torch-kernel_forge-kernel_optimizer-KernelSource"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._supported_functions(
+    source: aitune.torch.kernel_forge.kernel_optimizer.KernelSource
+) -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return function names supported by a provider or generator.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-make_plan">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"/aitune/aitune/torch/kernel_forge/kernel_optimization_plan#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer.make_plan(
+    function: collections.abc.Callable,
+    data: collections.abc.Sequence[aitune.torch.module.sample_store.Sample] | None = None,
+    module: torch.nn.Module | None = None
+) -> aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Optimize a module by replacing eligible kernels with the best ones.
+
+**Parameters:**
+
+<ParamField path="function" type="Callable">
+the function to run inference with
+</ParamField>
+
+<ParamField path="data" type="Sequence[Sample] | None" default="None">
+the data to use for optimization, if None the function will be called without arguments
+</ParamField>
+
+<ParamField path="module" type="nn.Module | None" default="None">
+the module whose hierarchy should be optimized. If omitted and ``function`` is an ``nn.Module``,
+``function`` is used as the module.
+</ParamField>
+
+**Returns:** `KernelOptimizationPlan`
+
+A plan containing the selected runtime kernel providers.
+
+**Raises:**
+
+- `ValueError`: If the module scope cannot be resolved.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate":"#aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch(
+    real_function: collections.abc.Callable,
+    unique_samples: list[aitune.torch.module.sample_store.Sample],
+    benchmark_samples: list[aitune.torch.module.sample_store.Sample],
+    candidates: list[aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate] = list()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Samples and accumulated candidates for one PyTorch function.
+
+
+<ParamField path="benchmark_samples" type="list[Sample]">
+</ParamField>
+
+<ParamField path="candidates" type="list[_KernelCandidate] = field(default_factory=list)">
+</ParamField>
+
+<ParamField path="real_function" type="Callable">
+</ParamField>
+
+<ParamField path="unique_samples" type="list[Sample]">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_generator#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_optimizer._GenerationTask(
+    function_name: str,
+    generator_name: str,
+    future: concurrent.futures.Future[aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+One submitted generator task and its expected function.
+
+
+<ParamField path="function_name" type="str">
+</ParamField>
+
+<ParamField path="future" type="Future[KernelGenerationResult]">
+</ParamField>
+
+<ParamField path="generator_name" type="str">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate(
+    provider: aitune.torch.kernel_forge.kernel_provider.KernelProvider,
+    latency: float,
+    description: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+A kernel candidate.
+
+
+<ParamField path="description" type="str">
+The description of the candidate.
+</ParamField>
+
+<ParamField path="latency" type="float">
+The latency of the candidate.
+</ParamField>
+
+<ParamField path="provider" type="KernelProvider">
+The selected runtime kernel provider.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelSource">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelSource = KernelProvider | KernelGenerator
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelSourceType">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType = TypeVar('KernelSourceType', KernelProvider, KernelGenerator)
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-_PROFILE_SUMMARY_LIMIT">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer._PROFILE_SUMMARY_LIMIT = 100
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimizer-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimizer.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

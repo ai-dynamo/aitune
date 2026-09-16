@@ -37,6 +37,9 @@ import aitune.torch as ait
 ait.config.tuning_data_output_path = "/tmp/aitune-report.json"
 ```
 
+In distributed runs, AITune adds the rank to its default report filename. Explicit paths are used exactly as provided,
+so assign a distinct path on each rank.
+
 For long-running processes, snapshot the current report without waiting for process exit:
 
 ```python

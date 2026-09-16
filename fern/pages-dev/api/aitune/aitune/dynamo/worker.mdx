@@ -4,7 +4,7 @@ slug: aitune/aitune/dynamo/worker
 title: aitune.dynamo.worker
 ---
 
-Dynamo worker — serve AITune-tuned models as Dynamo endpoints.
+Serve AITune-tuned models as NVIDIA Dynamo endpoints.
 
 ## Module Contents
 
@@ -12,23 +12,17 @@ Dynamo worker — serve AITune-tuned models as Dynamo endpoints.
 
 | Name | Description |
 |------|-------------|
-| [`DynamoWorker`](#aitune-dynamo-worker-DynamoWorker) | Base class for AITune Dynamo workers (power-user API). |
+| [`DynamoWorker`](#aitune-dynamo-worker-DynamoWorker) | Base class for custom AITune Dynamo workers. |
 | [`DynamoWorkerConfig`](#aitune-dynamo-worker-DynamoWorkerConfig) | Configuration for the high-level :func:`dynamo_worker` entrypoint. |
-| [`_HighLevelDynamoWorker`](#aitune-dynamo-worker-_HighLevelDynamoWorker) | Internal worker built from a DynamoWorkerConfig. Not part of public API. |
+| [`_HighLevelDynamoWorker`](#aitune-dynamo-worker-_HighLevelDynamoWorker) | Adapt a callable and :class:`DynamoWorkerConfig` to the worker API. |
 
 ### Functions
 
 | Name | Description |
 |------|-------------|
-| [`_get_wiring`](#aitune-dynamo-worker-_get_wiring) | Return (ModelInput, ModelType, request_class) for *type_*. |
-| [`_import_dynamo`](#aitune-dynamo-worker-_import_dynamo) | Import dynamo runtime dependencies, raising a clear error if absent. |
-| [`_pack_response`](#aitune-dynamo-worker-_pack_response) | Convert a user function's return value to the Dynamo wire-format dict. |
-| [`_run_dynamo_worker`](#aitune-dynamo-worker-_run_dynamo_worker) | Low-level runtime loop. Call ``setup()`` once, serve until SIGTERM/SIGINT. |
-| [`dynamo_worker`](#aitune-dynamo-worker-dynamo_worker) | Serve a tuned model as a Dynamo worker endpoint. |
+| [`dynamo_worker`](#aitune-dynamo-worker-dynamo_worker) | Serve a tuned model through a local or collective Dynamo worker. |
 
 ### Data
-
-[`_VALID_TYPES`](#aitune-dynamo-worker-_VALID_TYPES)
 
 [`logger`](#aitune-dynamo-worker-logger)
 
@@ -47,10 +41,15 @@ class aitune.dynamo.worker.DynamoWorker()
 
 <Indent>
 
-Base class for AITune Dynamo workers (power-user API).
+Base class for custom AITune Dynamo workers.
 
-Subclass, override :meth:`setup` and :meth:`serve`, then call :meth:`run`.
+Override :meth:`setup` and :meth:`serve`, then call :meth:`run`. An initialized
+multi-rank process group starts one endpoint on rank zero while every rank
+executes each request.
 
+
+<ParamField path="_collective" type="bool = False">
+</ParamField>
 
 <ParamField path="component" type="str = 'backend'">
 </ParamField>
@@ -78,19 +77,7 @@ aitune.dynamo.worker.DynamoWorker.on_ready(
 
 <Badge>async</Badge>
 
-Called after the Dynamo endpoint is registered.
-
-Override to call ``register_model`` or perform post-startup work.
-
-**Parameters:**
-
-<ParamField path="runtime" type="Any">
-The :class:`DistributedRuntime` instance.
-</ParamField>
-
-<ParamField path="endpoint" type="Any">
-The registered Dynamo :class:`Endpoint` object.
-</ParamField>
+Run optional registration work after the endpoint is available.
 
 
 </Indent>
@@ -109,7 +96,7 @@ aitune.dynamo.worker.DynamoWorker.run(
 
 <Indent>
 
-Start serving. Blocks until SIGTERM/SIGINT.
+Start serving and block until shutdown.
 
 **Parameters:**
 
@@ -136,17 +123,7 @@ aitune.dynamo.worker.DynamoWorker.serve(
 
 <Badge>async</Badge>
 
-Handle one request. Async generator — yield response chunks.
-
-**Parameters:**
-
-<ParamField path="request" type="Any">
-Incoming request payload.
-</ParamField>
-
-**Raises:**
-
-- `NotImplementedError`: Must be overridden by subclasses.
+Handle one request and yield response chunks.
 
 
 </Indent>
@@ -163,11 +140,24 @@ aitune.dynamo.worker.DynamoWorker.setup() -> None
 
 <Indent>
 
-Initialize the model. Called once before serving starts.
+Initialize the model once before serving starts.
 
-**Raises:**
 
-- `NotImplementedError`: Must be overridden by subclasses.
+</Indent>
+<Anchor id="aitune-dynamo-worker-DynamoWorker-warmup">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.worker.DynamoWorker.warmup() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run optional model warmup after every rank completes setup.
 
 
 </Indent>
@@ -175,11 +165,11 @@ Initialize the model. Called once before serving starts.
 
 <Anchor id="aitune-dynamo-worker-DynamoWorkerConfig">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.dynamo.protocol.Modality":"/aitune/aitune/dynamo/protocol#aitune-dynamo-protocol-Modality"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.dynamo.worker.DynamoWorkerConfig(
-    type: typing.Literal['image', 'video', 'embedding'],
+    type: aitune.dynamo.protocol.Modality,
     model_path: str,
     mapping: collections.abc.Callable | None = None,
     namespace: str = 'aitune',
@@ -201,35 +191,34 @@ Configuration for the high-level :func:`dynamo_worker` entrypoint.
 
 **Parameters:**
 
-<ParamField path="type" type="Literal['image', 'video', 'embedding']">
-Modality type. One of ``"image"``, ``"video"``, ``"embedding"``.
+<ParamField path="type" type="Modality">
+Modality type. One of ``"image"``, ``"video"``, ``"audio"``, ``"embedding"``.
 </ParamField>
 
 <ParamField path="model_path" type="str">
-HuggingFace model ID or local path passed to ``register_model``.
+Hugging Face model ID or local path passed to ``register_model``.
 </ParamField>
 
 <ParamField path="mapping" type="Callable | None" default="None">
-Optional adapter ``fn(DynamoRequest) -&gt; dict``. The dict is
-unpacked as ``**kwargs`` when calling the user function. If ``None``
-and the user passed a plain callable (not ``nn.Module``), the raw
-Dynamo request object is passed as the sole positional argument.
+Optional adapter ``fn(DynamoRequest) -&gt; dict``. The result is
+unpacked as keyword arguments when calling the model. Without a mapping,
+a plain callable receives the deserialized request object.
 </ParamField>
 
 <ParamField path="namespace" type="str" default="'aitune'">
-Dynamo service namespace. Default: ``"aitune"``.
+Dynamo service namespace.
 </ParamField>
 
 <ParamField path="component" type="str" default="'backend'">
-Component name within the namespace. Default: ``"backend"``.
+Component name within the namespace.
 </ParamField>
 
 <ParamField path="endpoint" type="str" default="'generate'">
-Endpoint name within the component. Default: ``"generate"``.
+Endpoint name within the component.
 </ParamField>
 
 <ParamField path="enable_nats" type="bool" default="False">
-Enable NATS JetStream for KV cache events. Default: ``False``.
+Enable NATS JetStream for KV cache events.
 </ParamField>
 
 <ParamField path="model_name" type="str | None" default="None">
@@ -258,7 +247,7 @@ Name advertised to the Dynamo frontend. Defaults to ``model_path``.
 <ParamField path="namespace" type="str = 'aitune'">
 </ParamField>
 
-<ParamField path="type" type="Literal['image', 'video', 'embedding']">
+<ParamField path="type" type="Modality">
 </ParamField>
 </Indent>
 
@@ -269,7 +258,9 @@ Name advertised to the Dynamo frontend. Defaults to ``model_path``.
 ```python
 class aitune.dynamo.worker._HighLevelDynamoWorker(
     model_or_fn: torch.nn.Module | collections.abc.Callable,
-    config: aitune.dynamo.worker.DynamoWorkerConfig
+    config: aitune.dynamo.worker.DynamoWorkerConfig,
+    setup: collections.abc.Callable[[], None] | None = None,
+    warmup: collections.abc.Callable[[], None] | None = None
 )
 ```
 
@@ -280,7 +271,7 @@ class aitune.dynamo.worker._HighLevelDynamoWorker(
 
 **Bases:** [DynamoWorker](#aitune-dynamo-worker-DynamoWorker)
 
-Internal worker built from a DynamoWorkerConfig. Not part of public API.
+Adapt a callable and :class:`DynamoWorkerConfig` to the worker API.
 
 
 <ParamField path="component" type="= config.component">
@@ -291,23 +282,6 @@ Internal worker built from a DynamoWorkerConfig. Not part of public API.
 
 <ParamField path="namespace" type="= config.namespace">
 </ParamField>
-<Anchor id="aitune-dynamo-worker-_HighLevelDynamoWorker-_version_specific_register_model_kwargs">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.dynamo.worker._HighLevelDynamoWorker._version_specific_register_model_kwargs() -> dict
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-From version 1.3.0 dynamo introduces a new WorkerType enum and made it required.
-
-
-</Indent>
 <Anchor id="aitune-dynamo-worker-_HighLevelDynamoWorker-on_ready">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -326,7 +300,7 @@ aitune.dynamo.worker._HighLevelDynamoWorker.on_ready(
 
 <Badge>async</Badge>
 
-Register this worker with the Dynamo frontend.
+Register the configured model with the Dynamo frontend.
 
 
 </Indent>
@@ -347,7 +321,7 @@ aitune.dynamo.worker._HighLevelDynamoWorker.serve(
 
 <Badge>async</Badge>
 
-Deserialize request, run user function in executor, pack and yield response.
+Deserialize one request, execute the callable, and pack rank-zero output.
 
 
 </Indent>
@@ -364,20 +338,16 @@ aitune.dynamo.worker._HighLevelDynamoWorker.setup() -> None
 
 <Indent>
 
-No-op: the model is already initialized before dynamo_worker() is called.
+Resolve protocol types on every rank before serving.
 
 
 </Indent>
-</Indent>
-
-<Anchor id="aitune-dynamo-worker-_get_wiring">
+<Anchor id="aitune-dynamo-worker-_HighLevelDynamoWorker-warmup">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.dynamo.worker._get_wiring(
-    type_: str
-) -> tuple
+aitune.dynamo.worker._HighLevelDynamoWorker.warmup() -> None
 ```
 
 </CodeBlock>
@@ -385,142 +355,10 @@ aitune.dynamo.worker._get_wiring(
 
 <Indent>
 
-Return (ModelInput, ModelType, request_class) for *type_*.
-
-All imports are deferred because ``dynamo`` is optional.
-
-**Parameters:**
-
-<ParamField path="type_" type="str">
-Modality type string (``"image"``, ``"video"``, ``"embedding"``).
-</ParamField>
-
-**Returns:** `tuple`
-
-Tuple of (ModelInput enum value, ModelType enum value, request Pydantic class).
+Run the configured warmup callback after setup succeeds on every rank.
 
 
 </Indent>
-
-<Anchor id="aitune-dynamo-worker-_import_dynamo">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.dynamo.worker._import_dynamo() -> tuple
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Import dynamo runtime dependencies, raising a clear error if absent.
-
-**Returns:** `tuple`
-
-Tuple of (DistributedRuntime class, dynamo_worker decorator, uvloop module).
-
-**Raises:**
-
-- `ImportError`: When ``ai-dynamo-runtime`` or ``uvloop`` is not installed.
-
-
-</Indent>
-
-<Anchor id="aitune-dynamo-worker-_pack_response">
-
-<CodeBlock links={{"aitune.dynamo.worker.DynamoWorkerConfig":"#aitune-dynamo-worker-DynamoWorkerConfig"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.dynamo.worker._pack_response(
-    result: typing.Any,
-    config: aitune.dynamo.worker.DynamoWorkerConfig
-) -> dict
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Convert a user function's return value to the Dynamo wire-format dict.
-
-**Parameters:**
-
-<ParamField path="result" type="Any">
-Return value from the user's inference function.
-</ParamField>
-
-<ParamField path="config" type="DynamoWorkerConfig">
-Worker configuration (used for model name and type).
-</ParamField>
-
-**Returns:** `dict`
-
-A dict ready to yield to the Dynamo runtime.
-
-**Raises:**
-
-- `TypeError`: When *result* cannot be converted for *config.type*.
-
-
-</Indent>
-
-<Anchor id="aitune-dynamo-worker-_run_dynamo_worker">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.dynamo.worker._run_dynamo_worker(
-    setup: collections.abc.Callable[[], None],
-    serve: collections.abc.Callable[[Any], collections.abc.AsyncGenerator[typing.Any, None]],
-    namespace: str = 'aitune',
-    component: str = 'backend',
-    endpoint: str = 'generate',
-    enable_nats: bool = False,
-    on_ready: collections.abc.Callable[[Any, Any], collections.abc.Coroutine] | None = None
-) -> None
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Low-level runtime loop. Call ``setup()`` once, serve until SIGTERM/SIGINT.
-
-**Parameters:**
-
-<ParamField path="setup" type="Callable[[], None]">
-Zero-argument initializer called before serving starts.
-</ParamField>
-
-<ParamField path="serve" type="Callable[[Any], AsyncGenerator[Any, None]]">
-Async generator ``serve(request) -&gt; AsyncIterable[response]``.
-</ParamField>
-
-<ParamField path="namespace" type="str" default="'aitune'">
-Dynamo service namespace.
-</ParamField>
-
-<ParamField path="component" type="str" default="'backend'">
-Component name within the namespace.
-</ParamField>
-
-<ParamField path="endpoint" type="str" default="'generate'">
-Endpoint name within the component.
-</ParamField>
-
-<ParamField path="enable_nats" type="bool" default="False">
-Enable NATS JetStream for KV cache events.
-</ParamField>
-
-<ParamField path="on_ready" type="Callable[[Any, Any], Coroutine] | None" default="None">
-Optional async callable invoked after endpoint registration.
-</ParamField>
-
-
 </Indent>
 
 <Anchor id="aitune-dynamo-worker-dynamo_worker">
@@ -530,7 +368,9 @@ Optional async callable invoked after endpoint registration.
 ```python
 aitune.dynamo.worker.dynamo_worker(
     model_or_fn: torch.nn.Module | collections.abc.Callable,
-    config: aitune.dynamo.worker.DynamoWorkerConfig
+    config: aitune.dynamo.worker.DynamoWorkerConfig,
+    setup: collections.abc.Callable[[], None] | None = None,
+    warmup: collections.abc.Callable[[], None] | None = None
 ) -> None
 ```
 
@@ -539,50 +379,34 @@ aitune.dynamo.worker.dynamo_worker(
 
 <Indent>
 
-Serve a tuned model as a Dynamo worker endpoint.
-
-The minimal path to serving after ``ait.tune()`` or ``ait.load()``:
-
-1. Build a :class:`DynamoWorkerConfig` for your modality.
-2. Call this function. It blocks until SIGTERM/SIGINT.
-
-Startup validation happens before any Dynamo runtime is started.
-Modality-specific request deserialization, ``register_model``, sync-to-async
-wrapping, and response packing are handled automatically.
+Serve a tuned model through a local or collective Dynamo worker.
 
 **Parameters:**
 
 <ParamField path="model_or_fn" type="nn.Module | Callable">
-A ``torch.nn.Module`` (requires ``config.mapping``) or any
-callable. If callable and ``config.mapping`` is ``None``, the raw
-Dynamo request object is passed as the sole argument.
+A callable, or a ``torch.nn.Module`` with ``config.mapping``.
 </ParamField>
 
 <ParamField path="config" type="DynamoWorkerConfig">
-Worker configuration including modality type, model path, and
-optional request adapter.
+Modality, endpoint, request mapping, and execution configuration.
+</ParamField>
+
+<ParamField path="setup" type="Callable[[], None] | None" default="None">
+Optional rank-local model initialization. In collective execution,
+every rank must finish this callback before warmup begins.
+</ParamField>
+
+<ParamField path="warmup" type="Callable[[], None] | None" default="None">
+Optional model warmup run after setup succeeds on every rank.
 </ParamField>
 
 **Raises:**
 
-- `ValueError`: If ``config.type`` is not a supported P0 modality, or if
-a ``torch.nn.Module`` is passed without a ``mapping``.
-- `ImportError`: If ``ai-dynamo-runtime`` is not installed.
+- `ValueError`: If the modality is unsupported or a module has no mapping.
+- `ImportError`: If the optional Dynamo dependencies are unavailable.
 
 
 </Indent>
-
-<Anchor id="aitune-dynamo-worker-_VALID_TYPES">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.dynamo.worker._VALID_TYPES: frozenset[str] = frozenset({'image', 'video', 'embedding'})
-```
-
-</CodeBlock>
-</Anchor>
-
 
 <Anchor id="aitune-dynamo-worker-logger">
 

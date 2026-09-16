@@ -1,0 +1,187 @@
+---
+layout: overview
+slug: aitune/aitune/torch/kernel_forge/kernel_provider/kernel_generator
+title: aitune.torch.kernel_forge.kernel_provider.kernel_generator
+---
+
+Contracts for asynchronous kernel generation.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`KernelGenerationResult`](#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult) | Result of generating one provider for one PyTorch function. |
+| [`KernelGenerator`](#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator) | Asynchronously generate kernel providers for supported functions. |
+
+### API
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult(
+    function: str,
+    provider: aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider | None,
+    description: str,
+    error: str | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Result of generating one provider for one PyTorch function.
+
+A successful result contains a serializable provider. A controlled
+generation failure contains an error message instead. Unexpected failures
+may still be raised by the corresponding ``Future``.
+
+
+<ParamField path="description" type="str">
+</ParamField>
+
+<ParamField path="error" type="str | None = None">
+</ParamField>
+
+<ParamField path="function" type="str">
+</ParamField>
+
+<ParamField path="provider" type="KernelProvider | None">
+</ParamField>
+
+<ParamField path="succeeded" type="bool">
+Whether generation produced a usable provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require exactly one success or controlled-failure outcome.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Asynchronously generate kernel providers for supported functions.
+
+
+<ParamField path="name" type="str">
+Kernel generator name.
+
+Note: this name can be used to generate a unique identifier. If your generator has configuration options,
+override this method to return a unique identifier for a specific configuration.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator.__repr__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Return a human-readable kernel generator description.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator.prepare(
+    function: str,
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Prepare generation and return whether all samples are supported.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-submit">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult":"#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator.submit(
+    function: str,
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> concurrent.futures.Future[aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Start one generation task without waiting for it to finish.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-supports_functions">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator.supports_functions() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+List the PyTorch function names supported by the generator.
+
+
+</Indent>
+</Indent>

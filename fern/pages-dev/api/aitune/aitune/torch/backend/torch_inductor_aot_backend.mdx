@@ -66,10 +66,16 @@ Workflow::
 <ParamField path="STATE_TYPE" type="= 'type'">
 </ParamField>
 
-<ParamField path="_compiled_model_path" type="Path | None = None">
+<ParamField path="_build_mode" type="= BuildMode.AHEAD_OF_TIME">
+</ParamField>
+
+<ParamField path="_compiled_model_artifact" type="ArtifactPath | None = None">
 </ParamField>
 
 <ParamField path="_config" type="= config or TorchInductorAotBackendConfig()">
+</ParamField>
+
+<ParamField path="_execution_modes">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_activate">
 
@@ -90,13 +96,13 @@ Load the compiled model from disk.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
 ) -> aitune.torch.backend.backend.Backend
 ```
@@ -175,25 +181,6 @@ Inference keyword arguments.
 **Returns:** `Any`
 
 The result of the inference.
-
-
-</Indent>
-<Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_save_config">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend._save_config(
-    cache_dir: pathlib.Path
-)
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Store the backend configuration to a file.
 
 
 </Indent>

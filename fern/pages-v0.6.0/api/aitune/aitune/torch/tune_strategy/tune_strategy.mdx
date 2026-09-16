@@ -1,0 +1,610 @@
+---
+layout: overview
+slug: aitune/aitune/torch/tune_strategy/tune_strategy
+title: aitune.torch.tune_strategy.tune_strategy
+---
+
+Base class for tune strategy.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`DummyTuneStrategy`](#aitune-torch-tune_strategy-tune_strategy-DummyTuneStrategy) | Dummy tune strategy that does nothing. |
+| [`TuneStrategy`](#aitune-torch-tune_strategy-tune_strategy-TuneStrategy) | Base class for tune strategy. |
+
+### API
+
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-DummyTuneStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.tune_strategy.DummyTuneStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [TuneStrategy](#aitune-torch-tune_strategy-tune_strategy-TuneStrategy)
+
+Dummy tune strategy that does nothing.
+
+
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-DummyTuneStrategy-_describe_parts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.DummyTuneStrategy._describe_parts()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describes what strategy is doing.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-DummyTuneStrategy-_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.DummyTuneStrategy._tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tune a torch module with the provided graph specification and samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-DummyTuneStrategy-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.DummyTuneStrategy.to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns config dict for dummy strategy.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy">
+
+<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.tune_strategy.TuneStrategy(
+    sink: collections.abc.Callable | None = None,
+    profiling_config: aitune.torch.task.profiling.ProfilingConfig | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Base class for tune strategy.
+
+
+<ParamField path="_logger" type="Logger">
+Get a logger specific to this backend implementation.
+</ParamField>
+
+<ParamField path="_sink" type="= sink or self._logger.info">
+</ParamField>
+
+<ParamField path="profiling_config">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_build_and_validate_backend">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._build_and_validate_backend(
+    backend: aitune.torch.backend.backend.Backend,
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path,
+    raise_on_failure: bool = False
+) -> aitune.torch.backend.backend.Backend | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build and validate a backend with standardized error handling and logging.
+
+This method encapsulates the common workflow shared by all strategies:
+deep-copy the backend, build it, run correctness checks, and handle failures.
+
+**Parameters:**
+
+<ParamField path="backend" type="Backend">
+Backend to build (will be deep copied).
+</ParamField>
+
+<ParamField path="module" type="nn.Module">
+Module to tune.
+</ParamField>
+
+<ParamField path="name" type="str">
+Module name.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+Graph specification.
+</ParamField>
+
+<ParamField path="samples" type="SampleStore">
+Recorded samples.
+</ParamField>
+
+<ParamField path="device" type="torch.device">
+Target device.
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+Cache directory for this module/graph.
+</ParamField>
+
+<ParamField path="raise_on_failure" type="bool" default="False">
+If True, re-raise the original exception instead of returning None.
+</ParamField>
+
+**Returns:** `Backend | None`
+
+The built and validated backend, or None on failure.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_check_correctness">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._check_correctness(
+    backend: aitune.torch.backend.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run correctness checks for a built backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_configure_for_module">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._configure_for_module(
+    module: torch.nn.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve any module-dependent defaults before reporting or tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_count_layers">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._count_layers(
+    module: torch.nn.Module
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_describe">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._describe(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path,
+    dry_run: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describes the tune strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_describe_parts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._describe_parts() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Returns the parts of the description.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_layers_precisions">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._layers_precisions(
+    module: torch.nn.Module
+) -> set
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Get the layers precisions of the module and return a set of unique precisions.
+
+**Returns:** `set`
+
+Set of unique precisions
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_log_file">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._log_file(
+    cache_dir: pathlib.Path,
+    filename: str
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_post_tune">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._post_tune(
+    backend: aitune.torch.backend.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post-tune hook. Override to add custom logic after tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_pre_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._pre_tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Pre-tune hook. Override to add custom logic before tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_profiling_config_to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._profiling_config_to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns a JSON-serializable summary of the shared profiling config.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Tune a torch module with the provided graph specification and samples.
+
+Note: each tuning operation should do a deep copy of a backend as tuning could be called multiple times for the
+same module i.e. if there are different graph specs
+
+**Returns:** `Backend`
+
+The tuned and activated backend.
+
+**Raises:**
+
+- `RuntimeError`: if the backend fails any check.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-check_correctness">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy.check_correctness(
+    backend: aitune.torch.backend.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check outputs for NaN/inf.
+
+**Parameters:**
+
+<ParamField path="backend" type="Backend">
+The backend to check.
+</ParamField>
+
+<ParamField path="name" type="str">
+The name of the module.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+The graph spec of the module.
+</ParamField>
+
+<ParamField path="samples" type="SampleStore">
+Recorded samples to check.
+</ParamField>
+
+**Raises:**
+
+- `CorrectnessCheckError`: if the backend fails any check.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-clone">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy.clone() -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Clones the tune strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describes what strategy is doing.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-enable_correctness_check">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy.enable_correctness_check(
+    enable: bool = True
+) -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enable/disable correctness checking.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy.to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Returns a serializable dict describing this strategy's configuration.
+
+Each concrete strategy includes whichever settings are relevant
+(e.g. backend list, profiling parameters).  The dict must be
+JSON-serializable so it can be stored on tune-data events.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy.tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tune a torch module with the provided graph specification and samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-tune_dry_run">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy.tune_dry_run(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Performs tune dry run.
+
+
+</Indent>
+</Indent>

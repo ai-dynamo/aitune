@@ -161,3 +161,12 @@ Use `$aitune-docs-update` for full documentation refreshes so docs changes follo
 Add/update docstrings as defined in the [Google Style Guide](https://github.com/google/styleguide/blob/gh-pages/pyguide.md#38-comments-and-docstrings).
 
 Keep each documentation topic in one source location. Backend guides live under `docs/guides/backends/`, and runnable example documentation lives in `examples/*/README.md` with `examples/README.md` as the catalog. Do not hand-maintain duplicate copies under `docs/examples/`.
+
+## Licensing
+
+By contributing, you agree that your contribution is licensed under the
+[Apache 2.0 License](https://github.com/ai-dynamo/aitune/blob/main/LICENSE). All participation is
+also governed by the
+[Code of Conduct](https://github.com/ai-dynamo/aitune/blob/main/CODE_OF_CONDUCT.md).
+
+

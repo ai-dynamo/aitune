@@ -8,6 +8,45 @@ Tune strategies determine how AITune selects and configures backends during the 
 
 ## Overview
 
+Both ahead-of-time and JIT tuning default to `MaxThroughputStrategy`, with different backend candidates. JIT disables maximum-batch-size discovery and uses the recorded input bounds.
+Explicit backend lists and strategy choices are preserved.
+
+Default JIT tuning profiles TensorRT (Dynamo), TensorRT (`use_dynamo=False`), and TorchInductor JIT for ordinary
+modules. For distributed modules, it profiles TorchInductor AOT and TorchInductor JIT.
+
+Default AOT tuning profiles the following candidates in order:
+
+| Candidate | Ordinary module | Distributed module |
+|---|---|---|
+| TensorRT (Dynamo) | Yes | — |
+| TensorRT (`use_dynamo=False`) | Yes | — |
+| TorchInductor AOT | Yes | Yes |
+| Torch-TensorRT AOT | Yes | `use_distributed_mode_trace=True` |
+| TorchInductor JIT | Yes | Yes |
+
+Use `MaxThroughputStrategy.for_aot()` for the full candidate set above, or
+`MaxThroughputStrategy.for_jit()` for the smaller JIT set. The regular constructor is equivalent to
+`for_aot()`. AOT preserves each strategy's batch-size policy; JIT disables maximum-batch-size discovery
+to limit tuning work during inference. Both factories accept constructor arguments, including explicit backend lists.
+
+Profiling determines the winning backend; candidate order is not a performance ranking.
+`FirstWinsStrategy` owns a separate fallback order because it stops at the first backend that passes its checks.
+
+Strategy implementations follow the same configuration hooks:
+
+| Hook | Default candidates for |
+|---|---|
+| `_default_aot_backends(distributed=False)` | AOT modules |
+| `_default_jit_backends(distributed=False)` | JIT modules |
+
+Each hook defines its own candidates and uses `distributed` to select compatible backends. Neither hook delegates
+to the other. `MultiBackendStrategy` selects the workflow during construction and the module type before tuning.
+Explicit backend lists, including empty lists, take precedence.
+
+`ProfilingTuneStrategy` defines the candidates used by the latency strategies in both workflows.
+`MaxThroughputStrategy` inherits its AOT candidates and defines a smaller JIT set. `FirstWinsStrategy`
+explicitly uses the same fallback order in both workflows.
+
 AITune provides five built-in strategies:
 
 - **OneBackendStrategy**: Uses a single specified backend
@@ -29,21 +68,15 @@ Because of these differences, a backend that fails on one model may succeed on a
 
 ## Performance Validation
 
-Strategies validate both correctness and performance before accepting a tuned backend. When performance validation is enabled, AITune profiles a `TorchEagerBackend` baseline at the resolved batch size, then profiles each correctness-passing backend against that baseline.
+Strategies validate both correctness and performance before accepting a tuned backend. By default, AITune profiles a
+`TorchEagerBackend` baseline and avoids selecting an optimization that does not improve performance.
 
-For `OneBackendStrategy` and `FirstWinsStrategy`, baseline validation is enabled by default. A backend is rejected when its throughput is below `1 + min_speedup_ratio` relative to Torch eager; the default threshold is 1%, so a backend must be at least 1.01x faster to pass. `FirstWinsStrategy` then tries the next backend. `OneBackendStrategy` falls back to the profiled `TorchEagerBackend` when its single backend is correct but not faster. Disable this only when you deliberately want to keep a backend that is correct but not faster:
-
-```python
-strategy.enable_performance_validation(False)
-```
-
-`MaxThroughputStrategy` also profiles Torch eager as a baseline. With performance validation enabled, it falls back to Torch eager if no user-provided backend beats the baseline. When disabled with `enable_performance_validation(False)`, the Torch eager baseline is skipped and the fastest successful user backend wins.
-
-`MinLatencyStrategy` works the same way but selects by minimum latency instead of maximum throughput. `LatencyBudgetStrategy` selects by maximum throughput after filtering out profiled batch sizes whose latency exceeds the configured budget. Use `enable_performance_validation(False)` to disable baseline comparison.
+Most users do not need to configure this behavior. For diagnostic analytics or to skip the eager comparison, see
+[Performance Validation](../advanced/tuning_workflow.md#performance-validation).
 
 ## Choosing a Strategy
 
-Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. If you want a safer default with minimal tuning time, `FirstWinsStrategy` balances reliability and speed. When absolute throughput matters and you can afford longer tuning, choose `MaxThroughputStrategy`.
+Use the table below as a quick decision guide. If you already know a backend is compatible and stable in production, start with `OneBackendStrategy`. Choose `FirstWinsStrategy` when tuning time is the priority. Use `MinLatencyStrategy` for per-request latency or `MaxThroughputStrategy` for throughput.
 
 | Strategy                  | When to Use                                   | Tuning Time | Reliability             | Performance                     |
 |---------------------------|-----------------------------------------------|-------------|-------------------------|---------------------------------|
@@ -152,7 +185,9 @@ ait.tune(model, input_data)
 
 ## MaxThroughputStrategy
 
-Tries all backends, profiles their performance, and selects the fastest backend that beats the Torch eager baseline.
+Tries all backends, profiles their performance, and by default selects the fastest backend that beats the Torch eager
+baseline or falls back to eager. Advanced performance-validation modes can make selection independent of eager; see
+[Performance Validation](../advanced/tuning_workflow.md#performance-validation).
 
 ### Usage
 
@@ -160,7 +195,6 @@ Tries all backends, profiles their performance, and selects the fastest backend 
 from aitune.torch.backend import (
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchInductorJitBackendConfig,
     TorchInductorJitBackend,
     TorchAOBackend,
     TorchAOBackendConfig
@@ -170,7 +204,7 @@ import aitune.torch as ait
 # List all candidate backends
 backends = [
     TensorRTBackend(config=TensorRTBackendConfig()),
-    TorchInductorJitBackend(config=TorchInductorJitBackendConfig(mode="max-autotune")),
+    TorchInductorJitBackend(),
     TorchAOBackend(config=TorchAOBackendConfig(quantization="fp8wo")),
 ]
 

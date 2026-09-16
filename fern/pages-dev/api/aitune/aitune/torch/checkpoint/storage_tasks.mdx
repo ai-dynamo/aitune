@@ -30,10 +30,11 @@ Storage tasks.
 | Name | Description |
 |------|-------------|
 | [`_iter_backend_data_dicts`](#aitune-torch-checkpoint-storage_tasks-_iter_backend_data_dicts) | Yield backend state dictionaries that may contain checkpoint artifacts. |
+| [`_transform_artifact_paths`](#aitune-torch-checkpoint-storage_tasks-_transform_artifact_paths) | Transform artifact paths in plain checkpoint collections in place where possible. |
 | [`calculate_file_sha_hash`](#aitune-torch-checkpoint-storage_tasks-calculate_file_sha_hash) | Calculate SHA hash of a file. |
 | [`check_checkpoint_valid`](#aitune-torch-checkpoint-storage_tasks-check_checkpoint_valid) | Check if the checkpoint is valid. |
 | [`get_sha_sums_path`](#aitune-torch-checkpoint-storage_tasks-get_sha_sums_path) | Get the path to the SHA sums file. |
-| [`torch_load_with_custom_types`](#aitune-torch-checkpoint-storage_tasks-torch_load_with_custom_types) | Doest not use safe globals to load torch checkpoint with PosixPath object allowed. |
+| [`torch_load_with_custom_types`](#aitune-torch-checkpoint-storage_tasks-torch_load_with_custom_types) | Load a checkpoint safely with AITune's serialized value types allowlisted. |
 
 ### Data
 
@@ -63,6 +64,64 @@ class aitune.torch.checkpoint.storage_tasks.CopyBackendArtifactsTask()
 Task to copy backend artifacts.
 
 
+<Anchor id="aitune-torch-checkpoint-storage_tasks-CopyBackendArtifactsTask-_copy_artifact">
+
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.CopyBackendArtifactsTask._copy_artifact(
+    artifact: aitune.torch.checkpoint.artifact.ArtifactPath,
+    target_path: pathlib.Path,
+    backend_dir: pathlib.Path,
+    artifact_root_dirs: dict[pathlib.Path, pathlib.Path]
+) -> aitune.torch.checkpoint.artifact.ArtifactPath
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Copy an artifact into the checkpoint while preserving its root-relative path.
+
+The destination path has the following structure::
+
+    &lt;target_path&gt;/&lt;backend index&gt;/&lt;artifact root index&gt;/&lt;artifact.relative_path&gt;
+
+``backend_dir`` already contains the backend index. Each distinct resolved
+``artifact.root`` is assigned a numbered directory below ``backend_dir``;
+artifacts sharing a root also share that directory. The artifact's relative
+path is appended unchanged, preserving its original directory structure.
+
+**Parameters:**
+
+<ParamField path="artifact" type="ArtifactPath">
+Artifact to copy, including its owning root and relative path.
+</ParamField>
+
+<ParamField path="target_path" type="Path">
+Root directory of the checkpoint being created.
+</ParamField>
+
+<ParamField path="backend_dir" type="Path">
+Numbered checkpoint directory assigned to the artifact's backend.
+</ParamField>
+
+<ParamField path="artifact_root_dirs" type="dict[Path, Path]">
+Mapping from resolved artifact roots to their numbered
+directories within ``backend_dir``.
+</ParamField>
+
+**Returns:** `ArtifactPath`
+
+An artifact pointing to the copied checkpoint entry. Its root is ``.``
+
+**Raises:**
+
+- `ValueError`: If the resolved artifact path is outside its declared root.
+
+
+</Indent>
 <Anchor id="aitune-torch-checkpoint-storage_tasks-CopyBackendArtifactsTask-save">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -81,10 +140,8 @@ aitune.torch.checkpoint.storage_tasks.CopyBackendArtifactsTask.save(
 
 Copy backend artifacts to the specified path.
 
-Function traverses through state_dict which can contain torch parameters, layers or AITune backend artifacts.
-If it finds a backend artifact, it looks for any Path and copies it to the specified target path.
-
-It enumerates (with a counter) copied artifacts to avoid name collisions.
+Each backend and each distinct artifact root receives its own numbered
+directory. Paths relative to an artifact root are preserved.
 
 **Parameters:**
 
@@ -215,14 +272,118 @@ class aitune.torch.checkpoint.storage_tasks.RelocateBackendArtifactsTask()
 
 Rebase saved backend artifact paths onto the extracted checkpoint.
 
-Save stores copied backend artifacts as paths relative to the checkpoint root
-so a .ait archive can be copied or moved. After TorchLoadTask restores those
-Path objects, this task mutates the loaded state_dict in place and turns
-relative artifact paths into absolute paths for backend loaders. Absolute
-legacy paths are left unchanged because they already point at a concrete
-filesystem location.
+New checkpoints identify artifacts with :class:`ArtifactPath`. Checkpoints
+created before ``ArtifactPath`` used direct, checkpoint-relative ``Path``
+values in backend state dictionaries; those values still load, but the format
+is deprecated and a warning is emitted.
 
 
+<Anchor id="aitune-torch-checkpoint-storage_tasks-RelocateBackendArtifactsTask-_relocate_artifact">
+
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.RelocateBackendArtifactsTask._relocate_artifact(
+    artifact: aitune.torch.checkpoint.artifact.ArtifactPath,
+    checkpoint_root: pathlib.Path
+) -> aitune.torch.checkpoint.artifact.ArtifactPath
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Rebase a checkpoint-relative artifact onto the extracted checkpoint root.
+
+Saved artifacts contain a path relative to the checkpoint directory, for
+example ``1/1/nested/model.bin``. This method resolves that entry below
+``checkpoint_root`` and returns an artifact whose root is the absolute
+checkpoint directory while preserving the checkpoint-relative path.
+
+**Parameters:**
+
+<ParamField path="artifact" type="ArtifactPath">
+Artifact path restored from the checkpoint state dictionary.
+</ParamField>
+
+<ParamField path="checkpoint_root" type="Path">
+Resolved root directory of the extracted checkpoint.
+</ParamField>
+
+**Returns:** `ArtifactPath`
+
+An artifact rebased onto ``checkpoint_root``.
+
+**Raises:**
+
+- `ValueError`: If the resolved artifact path is outside ``checkpoint_root``.
+- `FileNotFoundError`: If the referenced artifact does not exist in the checkpoint.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-storage_tasks-RelocateBackendArtifactsTask-_relocate_legacy_paths">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.RelocateBackendArtifactsTask._relocate_legacy_paths(
+    checkpoint_root: pathlib.Path,
+    backend_index: int,
+    backend_data: dict
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Convert top-level artifact paths written by the legacy checkpoint format.
+
+Before ``ArtifactPath`` was introduced, copied backend artifacts were
+stored directly as checkpoint-relative ``Path`` values. Their first path
+component was the numbered backend directory, for example
+``Path("1/model.plan")`` for the first backend. A relative ``Path`` is
+treated as a legacy artifact only when this component matches
+``backend_index``; other relative paths may be regular backend configuration
+and are left unchanged.
+
+A recognized path is resolved below ``checkpoint_root``, checked for path
+traversal and existence, and replaced in ``backend_data`` with an
+``ArtifactPath`` rooted at the extracted checkpoint. Absolute ``Path``
+values are left unchanged. Only values directly in ``backend_data`` are
+considered because built-in backends stored legacy artifacts at that level.
+
+**Parameters:**
+
+<ParamField path="checkpoint_root" type="Path">
+Resolved root directory of the extracted checkpoint.
+</ParamField>
+
+<ParamField path="backend_index" type="int">
+One-based index identifying the backend's legacy artifact directory.
+</ParamField>
+
+<ParamField path="backend_data" type="dict">
+Backend state dictionary to update in place.
+</ParamField>
+
+**Returns:** `bool`
+
+True if at least one legacy path was converted.
+
+**Raises:**
+
+- `ValueError`: If a recognized legacy path resolves outside ``checkpoint_root``.
+- `FileNotFoundError`: If the referenced legacy artifact does not exist.
+
+
+</Indent>
 <Anchor id="aitune-torch-checkpoint-storage_tasks-RelocateBackendArtifactsTask-load">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -709,6 +870,32 @@ Yield backend state dictionaries that may contain checkpoint artifacts.
 
 </Indent>
 
+<Anchor id="aitune-torch-checkpoint-storage_tasks-_transform_artifact_paths">
+
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks._transform_artifact_paths(
+    value: typing.Any,
+    transform: collections.abc.Callable[[ArtifactPath], aitune.torch.checkpoint.artifact.ArtifactPath]
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Transform artifact paths in plain checkpoint collections in place where possible.
+
+Collection subclasses may encode user-visible behavior, such as positional indexing in
+``transformers.ModelOutput``. Treat them as opaque values so checkpoint processing does not
+replace them with their plain built-in counterparts. Tuples are rebuilt because they are
+immutable.
+
+
+</Indent>
+
 <Anchor id="aitune-torch-checkpoint-storage_tasks-calculate_file_sha_hash">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -824,7 +1011,7 @@ aitune.torch.checkpoint.storage_tasks.torch_load_with_custom_types(
 
 <Indent>
 
-Doest not use safe globals to load torch checkpoint with PosixPath object allowed.
+Load a checkpoint safely with AITune's serialized value types allowlisted.
 
 
 </Indent>

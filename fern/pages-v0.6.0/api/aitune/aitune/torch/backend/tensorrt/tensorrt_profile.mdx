@@ -1,0 +1,241 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/tensorrt/tensorrt_profile
+title: aitune.torch.backend.tensorrt.tensorrt_profile
+---
+
+TensorRT Profile for specifying optimization profiles.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TensorRTProfile`](#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile) | Class for representing a TensorRT optimization profile. |
+
+### Data
+
+[`logger`](#aitune-torch-backend-tensorrt-tensorrt_profile-logger)
+
+### API
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Class for representing a TensorRT optimization profile.
+
+This class provides an interface for defining optimization profiles
+for TensorRT engines with dynamic shapes.
+
+
+<ParamField path="_profile" type="= Profile()">
+</ParamField>
+
+<ParamField path="profile" type="Profile">
+Get the underlying Polygraphy Profile.
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-__eq__">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.__eq__(
+    other: aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if two TensorRTProfiles are equal.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-__hash__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.__hash__() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Hash the TensorRTProfile.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.__repr__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the official string representation of the profile.
+
+**Returns:** `str`
+
+Official string representation
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-__str__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.__str__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return string representation of the profile.
+
+**Returns:** `str`
+
+String representation
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-add_input_shape">
+
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardInputPath":"/aitune/aitune/torch/module/forward_signature#aitune-torch-module-forward_signature-ForwardInputPath","aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.add_input_shape(
+    path: aitune.torch.module.forward_signature.ForwardInputPath,
+    min_shape: tuple[int, ...],
+    opt_shape: tuple[int, ...],
+    max_shape: tuple[int, ...]
+) -> aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Add a shape binding to the profile.
+
+**Parameters:**
+
+<ParamField path="path" type="ForwardInputPath">
+Forward parameter path identifying the input tensor
+</ParamField>
+
+<ParamField path="min_shape" type="tuple[int, ...]">
+The minimum shape the profile will support
+</ParamField>
+
+<ParamField path="opt_shape" type="tuple[int, ...]">
+The shape for which TensorRT will tune the engine
+</ParamField>
+
+<ParamField path="max_shape" type="tuple[int, ...]">
+The maximum shape the profile will support
+</ParamField>
+
+**Returns:** `TensorRTProfile`
+
+The profile object for chaining
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.from_dict(
+    data: dict
+) -> aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Create TensorRTProfile from dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-profile_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.profile_to_dict(
+    profile: polygraphy.backend.trt.Profile
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Convert Polygraphy Profile to dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.to_dict() -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert TensorRTProfile to dictionary.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.tensorrt_profile.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

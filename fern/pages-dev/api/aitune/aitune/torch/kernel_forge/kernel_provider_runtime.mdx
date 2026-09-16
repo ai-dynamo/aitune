@@ -1,0 +1,160 @@
+---
+layout: overview
+slug: aitune/aitune/torch/kernel_forge/kernel_provider_runtime
+title: aitune.torch.kernel_forge.kernel_provider_runtime
+---
+
+Runtime activation of a selected kernel optimization plan.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`KernelProviderRuntime`](#aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime) | Install a kernel optimization plan by swapping ``torch.nn.functional`` calls. |
+
+### API
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"/aitune/aitune/torch/kernel_forge/kernel_optimization_plan#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime(
+    module: torch.nn.Module,
+    plan: aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Install a kernel optimization plan by swapping ``torch.nn.functional`` calls.
+
+
+<ParamField path="_function_stacks" type="dict[str, list[Callable]] = defaultdict(list)">
+</ParamField>
+
+<ParamField path="_hooks" type="list = []">
+</ParamField>
+
+<ParamField path="_provider_functions">
+</ParamField>
+
+<ParamField path="is_active" type="bool">
+Whether runtime hooks are currently installed.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime-_create_post_hook">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime._create_post_hook()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create a hook that restores functions after each module forward.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime-_create_pre_hook">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime._create_pre_hook()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create a hook that installs providers before each module forward.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime-_create_provider_function">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime._create_provider_function(
+    provider: aitune.torch.kernel_forge.kernel_provider.KernelProvider
+) -> collections.abc.Callable
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Expose a callable provider as a regular Python function.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime-activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime.activate() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Activate the selected providers idempotently.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime-applied">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime.applied() -> collections.abc.Generator[None, None, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Temporarily activate the plan for inference while preserving prior runtime state.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime-deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime.deactivate() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivate providers and restore outstanding function patches idempotently.
+
+Graph capture may invoke a module's forward pre-hook without invoking its
+matching post-hook. Unwind any patches left on the function stacks so a
+provider cannot remain installed after the runtime is deactivated.
+
+
+</Indent>
+</Indent>

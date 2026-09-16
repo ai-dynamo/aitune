@@ -1,0 +1,1077 @@
+---
+layout: overview
+slug: aitune/aitune/torch/jit/patched_module
+title: aitune.torch.jit.patched_module
+---
+
+Module for inspecting PyTorch models and tracking their execution.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`GraphBreakException`](#aitune-torch-jit-patched_module-GraphBreakException) | Exception raised when graph break is detected. |
+| [`ModuleState`](#aitune-torch-jit-patched_module-ModuleState) | Possible states of the Module class. |
+| [`PatchedModule`](#aitune-torch-jit-patched_module-PatchedModule) | Patched module. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_build_strategy`](#aitune-torch-jit-patched_module-_build_strategy) | Build the per-module tune strategy. |
+| [`_to_hist`](#aitune-torch-jit-patched_module-_to_hist) | Updates history with new entry. |
+
+### Data
+
+[`PRINT_HIERARCHY_HEADER`](#aitune-torch-jit-patched_module-PRINT_HIERARCHY_HEADER)
+
+[`PRINT_HIERARCHY_NO_MODULES_HEADER`](#aitune-torch-jit-patched_module-PRINT_HIERARCHY_NO_MODULES_HEADER)
+
+[`_emoji_state`](#aitune-torch-jit-patched_module-_emoji_state)
+
+### API
+
+<Anchor id="aitune-torch-jit-patched_module-GraphBreakException">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.jit.patched_module.GraphBreakException()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Exception</Badge>
+
+**Bases:** `Exception`
+
+Exception raised when graph break is detected.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-patched_module-ModuleState">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.jit.patched_module.ModuleState
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Possible states of the Module class.
+
+<ParamField path="DETACHED" type="= 'detached'">
+</ParamField>
+
+<ParamField path="EAGER" type="= 'eager'">
+</ParamField>
+
+<ParamField path="INIT" type="= 'init'">
+</ParamField>
+
+<ParamField path="RECORDING" type="= 'recording'">
+</ParamField>
+
+<ParamField path="SKIPPED" type="= 'skipped'">
+</ParamField>
+
+<ParamField path="TUNED" type="= 'tuned'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.jit.patched_module.PatchedModule(
+    module: torch.nn.Module
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Patched module.
+
+Intercepts torch.nn.Module's forward function to record data, tune module and to do inference on a tuned one.
+
+As opposed to the AITune declarative approach, where the user specifies which module should be tuned,
+JIT approach intercepts all modules on the fly and creates call hierarchy. After a few calls it can perform
+tuning. JIT is actually a bit harder case, since during navigation of the model hierarchy we are not aware
+of the real parent object (there could be python objects in between). Hence we cannot override parent object
+reference meaning we can't inject module as a proxy. This is why only forward function is overridden and
+device attribute is patched with dynamic class creation so that only instance attribute is changed.
+
+
+<ParamField path="_call_count" type="= 0">
+</ParamField>
+
+<ParamField path="_children" type="list[PatchedModule] = []">
+</ParamField>
+
+<ParamField path="_current_forward_hooks" type="= module._forward_hooks">
+</ParamField>
+
+<ParamField path="_current_forward_pre_hooks" type="= module._forward_pre_hooks">
+</ParamField>
+
+<ParamField path="_extra_state_info" type="str = ''">
+</ParamField>
+
+<ParamField path="_forward_routing">
+</ParamField>
+
+<ParamField path="_fq_name" type="str | None = None">
+</ParamField>
+
+<ParamField path="_id" type="= PatchedModule.module_counter">
+</ParamField>
+
+<ParamField path="_level" type="= -1">
+</ParamField>
+
+<ParamField path="_name" type="= module.__class__.__name__">
+</ParamField>
+
+<ParamField path="_original_forward" type="= module.forward">
+</ParamField>
+
+<ParamField path="_parent" type="PatchedModule | None = None">
+</ParamField>
+
+<ParamField path="attempted_tuning" type="bool = False">
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+Get the module cache directory.
+</ParamField>
+
+<ParamField path="deferred_tuning_enabled" type="bool = False">
+</ParamField>
+
+<ParamField path="fq_name" type="str">
+Get the fully qualified name of the module.
+
+This is guaranteed to be unique after first forward call.
+</ParamField>
+
+<ParamField path="fq_name_counter" type="Counter[str] = Counter()">
+</ParamField>
+
+<ParamField path="heads" type="list[PatchedModule] = []">
+</ParamField>
+
+<ParamField path="history" type="list[str] = []">
+</ParamField>
+
+<ParamField path="module_counter" type="int = 0">
+</ParamField>
+
+<ParamField path="patched_classes" type="Counter[str] = Counter()">
+</ParamField>
+
+<ParamField path="stack" type="deque[PatchedModule] = deque()">
+</ParamField>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.__repr__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Representation of the module.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-__str__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.__str__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+String representation of the module.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_create_graph_cache_dir">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._create_graph_cache_dir(
+    graph_spec_name: str
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create a cache directory for the graph.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_forward_init">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._forward_init(
+    wrapped,
+    instance,
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Forward call for the first time.
+
+This method is called when the module is first called.
+It initializes the module and sets the state to RECORDING.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_forward_recording">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._forward_recording(
+    wrapped,
+    instance,
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Forward call for the recording state.
+
+In this state we already have the hierarchy resolved for the current module.
+If necessary we can skip the module and its children from processing.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_forward_router">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._forward_router(
+    wrapped,
+    instance,
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Route forward calls to the appropriate state-specific handler.
+
+This method serves as a stable wrapper throughout the module's lifecycle.
+This design is necessary for compatibility with models that internally cache references
+to module.forward wrappers. Since the wrapper object itself never changes, cached
+references remain valid across state transitions.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_forward_tuned">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._forward_tuned(
+    wrapped,
+    instance,
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Forward call for the tuned state.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_get_fully_qualified_name">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._get_fully_qualified_name() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return a unique fully qualified name for this module in the hierarchy.
+
+Builds the path from root to this module by prepending the parent's already-computed
+fq_name (e.g. grand_parent_name.parent_name.name). An index suffix is only added when
+there is a duplicate path (same path seen more than once).
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_get_hierarchy_hash">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._get_hierarchy_hash() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the hash of the module hierarchy.
+
+Assumption: given name (actual class name + number of parameters) + id is unique enough to be used as a hash
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_handle_backend_added_hooks">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._handle_backend_added_hooks()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Handle new hooks if added by a backend.
+
+Before tuning hooks are cleared (empty OrderedDict). If there are new hooks added by a backend,
+they should be added to the existing ones but before the original hooks so that application layer hooks
+(like HF post processing hooks) are called after the backend hooks.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_inspection_graphs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._inspection_graphs() -> list[dict]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return JSON-ready graph specs recorded before deferred tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_log_tuning_exception">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._log_tuning_exception(
+    exception: Exception
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log a JIT tuning exception and persist its traceback.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_module_cache_dir">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._module_cache_dir() -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return this module's cache directory.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_module_dtypes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._module_dtypes() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return unique parameter and buffer dtypes for this module tree.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_patch_device_attribute">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._patch_device_attribute(
+    device: torch.device
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Patch the device attribute of the module and its parents.
+
+HF pipelines have `device` attribute which checks `next(module.parameters()).device`.
+Since JIT tuning moves the original module to a cpu device, this attribute returns cpu device.
+This causes misplacement issues where some modules are on cuda and other modules or tensors are moved according
+to the device attribute to cpu. To fix this, the method patches dynamically device attribute but only at instance
+(object) level i.e. does not touch class object. This has to be applied not only to the current module but to
+its parents in case parents objects do not have it's own parameters but include child module which has been
+tuned and move to a cpu device.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_proxy_forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._proxy_forward()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Proxy the forward calls with a stable wrapper.
+
+Replaces torch.nn.Module.forward method with a proxy forward that routes to the appropriate handler.
+The substitution is done with a wrapt.decorator so that the replaced function has the same docstring,
+signature and other attributes. This is crucial as some HF models perform self inspection for method arguments.
+
+We re-enable hooks so that they are called before and after the proxied forward.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_restore_original_forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._restore_original_forward()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Restore the original forward and hooks.
+
+We need to disable hooks, otherwise they will be called twice.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_set_original_forward_for_hierarchy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._set_original_forward_for_hierarchy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set original forwards for all patched descendants in the module tree.
+
+The PatchedModule child hierarchy tracks modules observed during execution. It does
+not include registered submodules that were never called for the recorded samples
+(for example eval-only Identity drop-path modules). Backends receive the full
+nn.Module ownership tree, and some of them deepcopy/export that tree, so restore
+every patched descendant before handing the module to a backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_should_be_skipped">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._should_be_skipped()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the module should be skipped.
+
+Name contains parameters, so only class names is relevant.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_should_be_tuned">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._should_be_tuned() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the module should be tuned, dispatching based on the active JIT mode.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_should_be_tuned_deferred">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._should_be_tuned_deferred() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the module should be tuned in deferred mode.
+
+The explicit enable_tune_deferred() call marks that recording is complete, so the
+next normal forward tunes eligible modules after recording that call.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_should_be_tuned_eager">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._should_be_tuned_eager() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the module should be tuned in eager mode.
+
+Requires a minimum number of forward passes and, when dynamic shapes are expected,
+at least one sample with a detected dynamic axis.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_should_report_inspection">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._should_report_inspection() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether this tuning path should emit per-module inspection details.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_simulate_dry_run">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.jit.patched_module.PatchedModule":"#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._simulate_dry_run(
+    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy,
+    module: aitune.torch.jit.patched_module.PatchedModule,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Simulate tuning in dry-run mode.
+
+It runs tune_dry_run but it also raises exception with probability of `config.dry_run_failure_probability`.
+
+This is done to simulate failures during JIT tuning to see how it would behave.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_throw_if_has_graph_break">
+
+<CodeBlock links={{"aitune.torch.jit.patched_module.PatchedModule":"#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._throw_if_has_graph_break(
+    module: aitune.torch.jit.patched_module.PatchedModule,
+    samples: aitune.torch.module.sample_store.SampleStore
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Throw if graph break is detected.
+
+Adds to history the duration of the checking.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_tune">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.jit.patched_module.PatchedModule":"#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._tune(
+    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy,
+    module: aitune.torch.jit.patched_module.PatchedModule,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tune the module with optional graph break detection and timing.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_tune_on_init">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._tune_on_init()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tune the module on init.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_unpatch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._unpatch()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Unpatch the module.
+
+Removes it also from Patcher object registry.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_unpatch_hierarchy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._unpatch_hierarchy(
+    include_self = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Unpatch the module and all its children.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_update_state">
+
+<CodeBlock links={{"aitune.torch.jit.patched_module.ModuleState":"#aitune-torch-jit-patched_module-ModuleState"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._update_state(
+    state: aitune.torch.jit.patched_module.ModuleState
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Update the state of the module and its forward method.
+
+For states with custom forward handlers (INIT, RECORDING, TUNED), this method
+installs a proxy forward that routes to the appropriate handler. For other states,
+the original forward is restored.
+
+**Parameters:**
+
+<ParamField path="state" type="ModuleState">
+The new state of the module
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-_write_error_log">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule._write_error_log(
+    exception: Exception
+) -> pathlib.Path | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Persist a tuning traceback in this module's cache directory.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-inspection_report">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.inspection_report() -> aitune.torch.tune_data.report_models.ModuleInspectionReport
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build a report snapshot of the JIT data observed for this module.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-inspection_subtree_reports">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.inspection_subtree_reports() -> list[aitune.torch.tune_data.report_models.ModuleInspectionReport]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build report snapshots for this module and observed child modules.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-on_python_exit">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.on_python_exit()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Give suggestions if tuning was not attempted.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-print_hierarchy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.print_hierarchy(
+    sink = print
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Prints the PatchedModule hierarchy starting from the head module.
+
+This method traverses the module tree starting from the head module
+and prints each module with indentation to show the hierarchy levels.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-print_history">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.print_history(
+    sink = print
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Prints history to the sink.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-reset">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.reset()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Reset PatchedModule state.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-try_tune">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.try_tune()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tune the module if readiness conditions for the active JIT mode are met.
+
+Delegates the readiness check to _should_be_tuned(), which dispatches to the
+mode-specific implementation (eager or deferred).
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-patched_module-PatchedModule-tune">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PatchedModule.tune()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tunes the module in blocking mode.
+
+**Parameters:**
+
+<ParamField path="dry_run">
+if True, only dry run the tuning
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-jit-patched_module-_build_strategy">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module._build_strategy() -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the per-module tune strategy.
+
+Resolves the strategy via ``config.resolve_strategy()`` and clones it so each module gets
+a fresh instance — strategies hold per-tune state (``backend_results`` etc.) that must
+not leak across modules.
+
+Find-max-batch-size profiling is disabled because in JIT we cannot run the original
+module separately; the strategy must work from the recorded samples alone.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-patched_module-_to_hist">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module._to_hist(
+    entry: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Updates history with new entry.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-patched_module-PRINT_HIERARCHY_HEADER">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PRINT_HIERARCHY_HEADER = 'JIT Tuning Hierarchy:'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-jit-patched_module-PRINT_HIERARCHY_NO_MODULES_HEADER">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module.PRINT_HIERARCHY_NO_MODULES_HEADER = 'No modules in hierarchy'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-jit-patched_module-_emoji_state">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.patched_module._emoji_state = {ModuleState.INIT: '⏳', ModuleState.RECORDING: '🔴', ModuleState.TUNED: '🎯', Mo...
+```
+
+</CodeBlock>
+</Anchor>
+

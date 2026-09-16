@@ -26,7 +26,8 @@ class aitune.torch.module.graph_spec.GraphSpec(
     input_spec: aitune.torch.module.sample_metadata.SampleMetadata,
     output_spec: aitune.torch.module.sample_metadata.SampleMetadata,
     forward_signature: aitune.torch.module.forward_signature.ForwardSignature,
-    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes = dict()
+    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes = dict(),
+    post_input_spec: aitune.torch.module.sample_metadata.SampleMetadata | None = None
 )
 ```
 
@@ -58,6 +59,9 @@ represents such a computational graph with a name and input_spec information.
 </ParamField>
 
 <ParamField path="output_spec" type="SampleMetadata">
+</ParamField>
+
+<ParamField path="post_input_spec" type="SampleMetadata | None = None">
 </ParamField>
 <Anchor id="aitune-torch-module-graph_spec-GraphSpec-__repr__">
 
@@ -282,7 +286,8 @@ Update input metadata with the specified maximum batch size.
 ```python
 aitune.torch.module.graph_spec.GraphSpec.update_shapes_seen(
     inputs_metadata: aitune.torch.module.sample_metadata.SampleMetadata,
-    outputs_metadata: aitune.torch.module.sample_metadata.SampleMetadata
+    outputs_metadata: aitune.torch.module.sample_metadata.SampleMetadata,
+    post_inputs_metadata: aitune.torch.module.sample_metadata.SampleMetadata | None = None
 )
 ```
 
@@ -291,7 +296,7 @@ aitune.torch.module.graph_spec.GraphSpec.update_shapes_seen(
 
 <Indent>
 
-Update input spec with other input spec.
+Update metadata observed before, during, and after another call.
 
 
 </Indent>

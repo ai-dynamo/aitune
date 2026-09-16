@@ -1,0 +1,326 @@
+---
+layout: overview
+slug: aitune/aitune/records/artifact
+title: aitune.records.artifact
+---
+
+Durable references to tuned files that publishers can consume.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`Artifact`](#aitune-records-artifact-Artifact) | Reference a finalized tuning result and its tensor interface. |
+| [`ArtifactIntegrityError`](#aitune-records-artifact-ArtifactIntegrityError) | Raised when an artifact file is unavailable or differs from its recorded bytes. |
+| [`ONNXArtifact`](#aitune-records-artifact-ONNXArtifact) | An ONNX model finalized as a tuning result for ONNX Runtime. |
+| [`TensorRTPlanArtifact`](#aitune-records-artifact-TensorRTPlanArtifact) | A serialized TensorRT plan produced by tuning. |
+
+### Data
+
+[`_HASH_CHUNK_SIZE`](#aitune-records-artifact-_HASH_CHUNK_SIZE)
+
+### API
+
+<Anchor id="aitune-records-artifact-Artifact">
+
+<CodeBlock links={{"aitune.records.shapes.TunedTensorSpec":"/aitune/aitune/records/shapes#aitune-records-shapes-TunedTensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.artifact.Artifact(
+    inputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
+    outputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
+    path: pathlib.Path,
+    fingerprint: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Reference a finalized tuning result and its tensor interface.
+
+An artifact exists only after tuning has established concrete tensor bounds.
+The record neither owns nor serializes its cache file. The AITune Package
+design will define source provenance and persistence.
+
+**Parameters:**
+
+<ParamField path="inputs" type="tuple[TunedTensorSpec, ...]">
+Ordered tuned input specifications.
+</ParamField>
+
+<ParamField path="outputs" type="tuple[TunedTensorSpec, ...]">
+Ordered tuned output specifications.
+</ParamField>
+
+<ParamField path="path" type="Path">
+Tuned file in the AITune cache.
+</ParamField>
+
+<ParamField path="fingerprint" type="str">
+Lowercase SHA-256 digest of the file at build time.
+</ParamField>
+
+
+<ParamField path="fingerprint" type="str">
+</ParamField>
+
+<ParamField path="input_names" type="tuple[str, ...]">
+Return input names in executable order.
+</ParamField>
+
+<ParamField path="inputs" type="tuple[TunedTensorSpec, ...]">
+</ParamField>
+
+<ParamField path="max_batch_size" type="int | None">
+Return the largest batch size supported by every tensor, if known.
+
+Every input and output must have a known batch axis and support batch
+size one. Differing maximums are intersected by using the smallest one.
+</ParamField>
+
+<ParamField path="output_names" type="tuple[str, ...]">
+Return output names in executable order.
+</ParamField>
+
+<ParamField path="outputs" type="tuple[TunedTensorSpec, ...]">
+</ParamField>
+
+<ParamField path="path" type="Path">
+</ParamField>
+<Anchor id="aitune-records-artifact-Artifact-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.artifact.Artifact.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate invariants that the field types cannot express.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-Artifact-_compare_fingerprint">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.artifact.Artifact._compare_fingerprint(
+    actual: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Raise unless ``actual`` is the recorded artifact fingerprint.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-Artifact-_fingerprint_file">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.artifact.Artifact._fingerprint_file() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the SHA-256 digest of the current artifact file.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-Artifact-_read_chunks">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.artifact.Artifact._read_chunks() -> collections.abc.Iterator[bytes]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Yield source bytes while translating read failures.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-Artifact-_unreadable">
+
+<CodeBlock links={{"aitune.records.artifact.ArtifactIntegrityError":"#aitune-records-artifact-ArtifactIntegrityError"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.artifact.Artifact._unreadable(
+    error: OSError
+) -> aitune.records.artifact.ArtifactIntegrityError
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describe why the referenced cache file cannot be read.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-Artifact-export_file">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.artifact.Artifact.export_file(
+    path: str | os.PathLike[str]
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Copy verified artifact bytes to ``path``.
+
+**Parameters:**
+
+<ParamField path="path" type="str | os.PathLike[str]">
+Destination file. Missing parent directories are created.
+</ParamField>
+
+**Returns:** `Path`
+
+The destination path.
+
+**Raises:**
+
+- `ArtifactIntegrityError`: If the source cannot be read or changed since build.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-Artifact-verify">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.artifact.Artifact.verify() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Verify that the file is readable and matches its recorded hash.
+
+**Raises:**
+
+- `ArtifactIntegrityError`: If the file cannot be read or its contents changed.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-records-artifact-ArtifactIntegrityError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.artifact.ArtifactIntegrityError()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `RuntimeError`
+
+Raised when an artifact file is unavailable or differs from its recorded bytes.
+
+
+</Indent>
+
+<Anchor id="aitune-records-artifact-ONNXArtifact">
+
+<CodeBlock links={{"aitune.records.shapes.TunedTensorSpec":"/aitune/aitune/records/shapes#aitune-records-shapes-TunedTensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.artifact.ONNXArtifact(
+    inputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
+    outputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
+    path: pathlib.Path,
+    fingerprint: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [Artifact](#aitune-records-artifact-Artifact)
+
+An ONNX model finalized as a tuning result for ONNX Runtime.
+
+
+</Indent>
+
+<Anchor id="aitune-records-artifact-TensorRTPlanArtifact">
+
+<CodeBlock links={{"aitune.records.shapes.TunedTensorSpec":"/aitune/aitune/records/shapes#aitune-records-shapes-TunedTensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.artifact.TensorRTPlanArtifact(
+    inputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
+    outputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
+    path: pathlib.Path,
+    fingerprint: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [Artifact](#aitune-records-artifact-Artifact)
+
+A serialized TensorRT plan produced by tuning.
+
+
+</Indent>
+
+<Anchor id="aitune-records-artifact-_HASH_CHUNK_SIZE">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.artifact._HASH_CHUNK_SIZE = 1024 * 1024
+```
+
+</CodeBlock>
+</Anchor>
+

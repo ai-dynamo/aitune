@@ -1,0 +1,564 @@
+---
+layout: overview
+slug: aitune/aitune/torch/kernel_forge/module_function_kernel_profiler
+title: aitune.torch.kernel_forge.module_function_kernel_profiler
+---
+
+Torch profiler for module function kernels.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ModuleFunctionKernelProfiler`](#aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler) | Attribute CUDA kernels to module-scoped ``torch.nn.functional`` calls. |
+| [`_ProfilingItem`](#aitune-torch-kernel_forge-module_function_kernel_profiler-_ProfilingItem) | Profiler item: module_name + function + kernel metadata. |
+| [`_SummaryItem`](#aitune-torch-kernel_forge-module_function_kernel_profiler-_SummaryItem) | Summary of profiling and collected sample data for one function. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_nearest_parent_label`](#aitune-torch-kernel_forge-module_function_kernel_profiler-_nearest_parent_label) | Find the nearest parent label that starts with the prefix. |
+| [`get_tensor_size`](#aitune-torch-kernel_forge-module_function_kernel_profiler-get_tensor_size) | Get the total size of tensors in args and kwargs. |
+| [`prime_cuda_profiler`](#aitune-torch-kernel_forge-module_function_kernel_profiler-prime_cuda_profiler) | Initialize Kineto/CUPTI with one discarded GPU-active session. |
+
+### Data
+
+[`FUNCTIONAL_PREFIX`](#aitune-torch-kernel_forge-module_function_kernel_profiler-FUNCTIONAL_PREFIX)
+
+[`FunctionData`](#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData)
+
+[`MODULE_PREFIX`](#aitune-torch-kernel_forge-module_function_kernel_profiler-MODULE_PREFIX)
+
+[`_cuda_profiler_primed`](#aitune-torch-kernel_forge-module_function_kernel_profiler-_cuda_profiler_primed)
+
+[`logger`](#aitune-torch-kernel_forge-module_function_kernel_profiler-logger)
+
+### API
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler(
+    function_names: set[str] | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Attribute CUDA kernels to module-scoped ``torch.nn.functional`` calls.
+
+The profiler temporarily instruments module ``forward`` methods and PyTorch
+functional calls, then combines those regions with PyTorch Profiler events.
+It returns kernel-level timing rows and, optionally, the distinct inputs
+observed for selected functional calls.
+
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-_collects_function_data">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._collects_function_data(
+    func_name: str
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether sample data should be collected for the function.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-_initialize">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._initialize()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Initialize the module function kernel profiler.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-_match_events_with_data">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler._ProfilingItem":"#aitune-torch-kernel_forge-module_function_kernel_profiler-_ProfilingItem","aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._match_events_with_data(
+    function_events: list[torch.autograd.profiler.FunctionEvent],
+    named_modules: list[tuple[str, torch.nn.Module]]
+) -> tuple[list[aitune.torch.kernel_forge.module_function_kernel_profiler._ProfilingItem], dict[str, aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Match the profiler function events with data.
+
+It uses profiler data, specifically kernels attribute TO filter function events. Next it walks through
+`cpu_parent` property to find the nearest parent label that starts with the module or function prefix.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-_record_functional_calls">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._record_functional_calls(
+    module = F
+) -> collections.abc.Generator[None, None, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Context manager to patch the Torch functional calls.
+
+**Parameters:**
+
+<ParamField path="module" default="F">
+The functional module to patch.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-_record_module_forwards">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._record_module_forwards(
+    named_modules: collections.abc.Iterable[tuple[str, torch.nn.Module]]
+) -> collections.abc.Generator[None, None, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Context manager to patch the module forwards.
+
+The module stack is used to track the current module hierarchy.
+The module sentinel is used to label the module forward calls for profiling.
+
+**Parameters:**
+
+<ParamField path="named_modules" type="Iterable[tuple[str, nn.Module]]">
+The named modules to patch.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-_rewrite_func_data">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._rewrite_func_data(
+    func_name: str
+) -> aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Rewrite func data from dict[ExactSampleMetadata, int] to list[tuple[int, Sample]].
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-_run_inference">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._run_inference(
+    function: collections.abc.Callable,
+    data: collections.abc.Sequence[aitune.torch.module.sample_store.Sample] | None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Run one complete inference iteration.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-_should_patch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._should_patch(
+    module,
+    func_name: str,
+    func: typing.Any
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if a function should be patched.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-describe_results">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler.describe_results(
+    profiling_df: pandas.DataFrame,
+    function_data: dict[str, aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData],
+    top_k: int = 10
+) -> pandas.DataFrame
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describe the profiling and function data.
+
+**Parameters:**
+
+<ParamField path="profiling_df" type="pd.DataFrame">
+the profiling data to describe
+</ParamField>
+
+<ParamField path="function_data" type="dict[str, FunctionData]">
+the function data to describe
+</ParamField>
+
+<ParamField path="top_k" type="int" default="10">
+the number of top-k functions to describe
+</ParamField>
+
+**Returns:** `pd.DataFrame`
+
+A dataframe summarizing call counts, distinct samples, modules, kernel time, time share, and input tensor
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-get_functions_to_patch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler.get_functions_to_patch(
+    module = F
+) -> list[tuple[str, typing.Any]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return available functions to patch from a module.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-profile">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler.profile(
+    function: collections.abc.Callable,
+    data: collections.abc.Sequence[aitune.torch.module.sample_store.Sample] | None = None,
+    module: torch.nn.Module | None = None,
+    warmup_iterations: int = 3
+) -> tuple[pandas.DataFrame, dict[str, aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profile the module and function kernel candidates.
+
+**Parameters:**
+
+<ParamField path="function" type="Callable">
+the function to run inference with
+</ParamField>
+
+<ParamField path="data" type="Sequence[Sample] | None" default="None">
+the data to use for profiling, if None the function will be called without arguments
+</ParamField>
+
+<ParamField path="module" type="nn.Module | None" default="None">
+the module whose hierarchy should be profiled. If omitted and ``function`` is an ``nn.Module``,
+``function`` is used as the module.
+</ParamField>
+
+<ParamField path="warmup_iterations" type="int" default="3">
+the number of complete, unprofiled passes over ``data`` before profiling. If ``data``
+is ``None``, each warmup iteration calls ``function`` once.
+</ParamField>
+
+**Returns:** `pd.DataFrame`
+
+A pair containing the profiling dataframe and per-function sample data. Each dataframe row identifies the
+
+**Raises:**
+
+- `ValueError`: If ``warmup_iterations`` is negative or the module scope cannot be resolved.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-_ProfilingItem">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.module_function_kernel_profiler._ProfilingItem
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `typing.TypedDict`
+
+Profiler item: module_name + function + kernel metadata.
+
+<ParamField path="function_name" type="str">
+
+</ParamField>
+
+<ParamField path="kernel" type="str">
+
+</ParamField>
+
+<ParamField path="kernel_us" type="float">
+
+</ParamField>
+
+<ParamField path="module" type="Module">
+
+</ParamField>
+
+<ParamField path="module_name" type="str">
+
+</ParamField>
+
+<ParamField path="op" type="str">
+
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-_SummaryItem">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.module_function_kernel_profiler._SummaryItem
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `typing.TypedDict`
+
+Summary of profiling and collected sample data for one function.
+
+<ParamField path="calls" type="int | float">
+
+</ParamField>
+
+<ParamField path="function_name" type="str">
+
+</ParamField>
+
+<ParamField path="num_distinct_samples" type="int | float">
+
+</ParamField>
+
+<ParamField path="num_modules" type="int">
+
+</ParamField>
+
+<ParamField path="tensor_size_MB" type="float">
+
+</ParamField>
+
+<ParamField path="time_spent_pct" type="float">
+
+</ParamField>
+
+<ParamField path="time_spent_us" type="float">
+
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-_nearest_parent_label">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler._nearest_parent_label(
+    event,
+    prefix
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Find the nearest parent label that starts with the prefix.
+
+It uses labels marked with record_function context manager.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-get_tensor_size">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.get_tensor_size(
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the total size of tensors in args and kwargs.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-prime_cuda_profiler">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.prime_cuda_profiler() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Initialize Kineto/CUPTI with one discarded GPU-active session.
+
+Some profiler combinations omit correlated CUDA activities from the first
+session in a process. Running a real kernel exercises CUPTI's device
+activity and CPU-to-GPU correlation paths; synchronizing keeps that work
+inside the discarded capture. This process-level priming is separate from
+the per-session throwaway kernel used by ``profile``.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-FUNCTIONAL_PREFIX">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.FUNCTIONAL_PREFIX = 'ait_torch.nn.functional:'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData = list[tuple[int, Sample]]
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-MODULE_PREFIX">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.MODULE_PREFIX = 'ait_nn_module:'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-_cuda_profiler_primed">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler._cuda_profiler_primed = False
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.module_function_kernel_profiler.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

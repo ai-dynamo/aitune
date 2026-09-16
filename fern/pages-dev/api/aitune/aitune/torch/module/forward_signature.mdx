@@ -19,6 +19,8 @@ Bind module inputs to a forward signature.
 
 | Name | Description |
 |------|-------------|
+| [`_find_partial`](#aitune-torch-module-forward_signature-_find_partial) | Return the first concrete partial in a callable's wrapper chain. |
+| [`_is_partial`](#aitune-torch-module-forward_signature-_is_partial) | Return whether the object itself, rather than a transparent proxy, is a partial. |
 | [`validate_forward_input_path`](#aitune-torch-module-forward_signature-validate_forward_input_path) | Validate a forward parameter name or nested path rooted at one. |
 
 ### Data
@@ -223,6 +225,55 @@ Convert the signature to a serializable dictionary.
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_signature-_find_partial">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature._find_partial(
+    obj: typing.Any
+) -> functools.partial | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the first concrete partial in a callable's wrapper chain.
+
+``inspect.signature`` normally follows ``__wrapped__``. For a wrapped partial, that loses the partial's pre-bound
+arguments and exposes the original callable's signature. An explicit ``__signature__`` remains authoritative and
+therefore stops traversal before any deeper partial is considered.
+
+For example, Diffusers Context Parallelism effectively installs
+``update_wrapper(partial(context_parallel_forward, module), context_parallel_forward)``. Following
+``__wrapped__`` reports ``(module, x, ...)`` even though ``module`` is already bound; inspecting the concrete
+partial reports the callable interface correctly as ``(x, ...)``.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_signature-_is_partial">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature._is_partial(
+    obj: typing.Any
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether the object itself, rather than a transparent proxy, is a partial.
+
+
 </Indent>
 
 <Anchor id="aitune-torch-module-forward_signature-validate_forward_input_path">

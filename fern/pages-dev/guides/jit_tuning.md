@@ -341,9 +341,11 @@ jit_config.strategy = FirstWinsStrategy(
 )
 ```
 
-Accepts any `TuneStrategy` (e.g. `FirstWinsStrategy`, `MaxThroughputStrategy`, `OneBackendStrategy`). Leave it as `None` (default) to use a `FirstWinsStrategy` over TensorRT (with and without dynamo) and `TorchInductorJitBackend`.
+Accepts any `TuneStrategy` (e.g. `MinLatencyStrategy`, `FirstWinsStrategy`, `MaxThroughputStrategy`, `OneBackendStrategy`). Leave it as `None` (default) to use a `MaxThroughputStrategy` over TensorRT (with and without dynamo) and `TorchInductorJitBackend`. JIT disables maximum-batch-size discovery and uses the recorded input bounds.
 
-This setting is common for all tuned modules.
+For distributed modules, the default candidates are `TorchInductorAotBackend` followed by `TorchInductorJitBackend`.
+An explicit backend list is used as supplied. The strategy setting is common for all tuned modules;
+default backend candidates are resolved for each module.
 
 #### patch_exclude
 

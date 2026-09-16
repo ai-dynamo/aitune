@@ -12,6 +12,7 @@ Find max batch size for a model.
 
 | Name | Description |
 |------|-------------|
+| [`_aggregate_throughput_per_batch_size`](#aitune-torch-task-find_max_batch_size-_aggregate_throughput_per_batch_size) | Return deterministic batch throughputs using the worst rank for each batch. |
 | [`_log_file`](#aitune-torch-task-find_max_batch_size-_log_file) | - |
 | [`find_max_batch_size`](#aitune-torch-task-find_max_batch_size-find_max_batch_size) | Finds max batch size for Torch Compile as a baseline. |
 | [`find_max_throughput_for_backend`](#aitune-torch-task-find_max_batch_size-find_max_throughput_for_backend) | Profiles a backend to find the batch size that achieves maximum throughput. |
@@ -22,6 +23,26 @@ Find max batch size for a model.
 [`logger`](#aitune-torch-task-find_max_batch_size-logger)
 
 ### API
+
+<Anchor id="aitune-torch-task-find_max_batch_size-_aggregate_throughput_per_batch_size">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.find_max_batch_size._aggregate_throughput_per_batch_size(
+    gathered_throughputs: list[dict[int, float]]
+) -> list[tuple[int, float]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return deterministic batch throughputs using the worst rank for each batch.
+
+
+</Indent>
 
 <Anchor id="aitune-torch-task-find_max_batch_size-_log_file">
 
@@ -44,14 +65,14 @@ aitune.torch.task.find_max_batch_size._log_file(
 
 <Anchor id="aitune-torch-task-find_max_batch_size-find_max_batch_size">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.profiling.ProfilingResults":"/aitune/aitune/torch/task/profiling/profiling#aitune-torch-task-profiling-profiling-ProfilingResults"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.profiling.ProfilingResults":"/aitune/aitune/torch/task/profiling/profiling#aitune-torch-task-profiling-profiling-ProfilingResults"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.find_max_batch_size.find_max_batch_size(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     profiling_config: aitune.torch.task.profiling.config.ProfilingConfig,
     device: torch.device,
     cache_dir: pathlib.Path
@@ -83,8 +104,8 @@ Name of the model.
 Graph spec of the model.
 </ParamField>
 
-<ParamField path="data" type="list[Sample]">
-Data to profile.
+<ParamField path="samples" type="SampleStore">
+Recorded samples to profile.
 </ParamField>
 
 <ParamField path="profiling_config" type="ProfilingConfig">
@@ -108,14 +129,14 @@ Cache directory to store the backend artifacts.
 
 <Anchor id="aitune-torch-task-find_max_batch_size-find_max_throughput_for_backend">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.profiling.ProfilingResults":"/aitune/aitune/torch/task/profiling/profiling#aitune-torch-task-profiling-profiling-ProfilingResults"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.profiling.ProfilingResults":"/aitune/aitune/torch/task/profiling/profiling#aitune-torch-task-profiling-profiling-ProfilingResults"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.find_max_batch_size.find_max_throughput_for_backend(
     backend: aitune.torch.backend.backend.Backend,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     profiling_config: aitune.torch.task.profiling.config.ProfilingConfig
 ) -> tuple[int, float, aitune.torch.task.profiling.profiling.ProfilingResults]
 ```
@@ -141,8 +162,8 @@ Name of the model.
 Graph spec of the model.
 </ParamField>
 
-<ParamField path="data" type="list[Sample]">
-Data to profile.
+<ParamField path="samples" type="SampleStore">
+Recorded samples to profile.
 </ParamField>
 
 <ParamField path="profiling_config" type="ProfilingConfig">

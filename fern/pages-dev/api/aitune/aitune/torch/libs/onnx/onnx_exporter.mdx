@@ -74,14 +74,14 @@ Input graph spec
 </Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_create_dynamic_shapes">
 
-<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._create_dynamic_shapes(
-    sample: aitune.torch.module.recording_module.Sample,
+    sample: aitune.torch.module.sample_store.Sample,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     use_auto: bool = True
-) -> dict[str, typing.Any]
+) -> dict[str, typing.Any] | None
 ```
 
 </CodeBlock>
@@ -113,20 +113,20 @@ ONNX graph stores dynamic axes as named symbols and leaves shape
 resolution to the runtime, so the default suits every export here.
 </ParamField>
 
-**Returns:** `dict[str, Any]`
+**Returns:** `dict[str, Any] | None`
 
-Dict of dynamic shapes keyed by forward parameter name. Recorded forward
+Dynamic shapes matching the normalized forward input structure, or ``None``
 
 
 </Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_export_dynamo">
 
-<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._export_dynamo(
     module: torch.nn.Module,
-    sample: aitune.torch.module.recording_module.Sample,
+    sample: aitune.torch.module.sample_store.Sample,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     onnx_path: pathlib.Path,
     verbose: bool | None = None
@@ -144,12 +144,12 @@ Export the module to ONNX using torch.dynamo.
 </Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_export_trace">
 
-<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._export_trace(
     module: torch.nn.Module,
-    sample: aitune.torch.module.recording_module.Sample,
+    sample: aitune.torch.module.sample_store.Sample,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     onnx_path: pathlib.Path,
     verbose: bool | None = None
@@ -167,12 +167,12 @@ Export the module to ONNX using torch.onnx.trace.
 </Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-export">
 
-<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter.export(
     module: torch.nn.Module,
-    sample: aitune.torch.module.recording_module.Sample,
+    sample: aitune.torch.module.sample_store.Sample,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     verbose: bool = False
 ) -> pathlib.Path

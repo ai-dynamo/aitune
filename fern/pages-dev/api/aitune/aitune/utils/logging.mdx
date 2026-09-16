@@ -30,6 +30,7 @@ Logging configuration for the AITune package.
 | [`log_to_file`](#aitune-utils-logging-log_to_file) | Append a message and optional exception details to a log file. |
 | [`set_module_level`](#aitune-utils-logging-set_module_level) | Set logging level for a specific module. |
 | [`setup_logging`](#aitune-utils-logging-setup_logging) | Configure logging for the AITune package. |
+| [`write_exception_log`](#aitune-utils-logging-write_exception_log) | Write an exception traceback to a cache directory. |
 
 ### API
 
@@ -451,7 +452,7 @@ Logging level to use (default: ERROR)
 </ParamField>
 
 <ParamField path="reraise" type="bool" default="False">
-Whether to re-raise the exception after logging (default: True)
+Whether to re-raise the exception after logging (default: False)
 </ParamField>
 
 <ParamField path="reraise_as" type="Exception | None" default="None">
@@ -572,6 +573,27 @@ Optional file path to write logs to
 <ParamField path="capture_warnings" type="bool" default="True">
 If True, warnings will be captured and displayed
 </ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-write_exception_log">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging.write_exception_log(
+    cache_dir: pathlib.Path,
+    exception: BaseException
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Write an exception traceback to a cache directory.
 
 
 </Indent>

@@ -1,0 +1,249 @@
+---
+layout: overview
+slug: aitune/aitune/torch/task/profiling/profiling
+title: aitune.torch.task.profiling.profiling
+---
+
+Profiling utilities for AITune models.
+
+TODO: add support for LLM token profiling, strategies for LLM benchmarking
+TODO: add support for additional out of module(this source) events
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ProfilingResults`](#aitune-torch-task-profiling-profiling-ProfilingResults) | Profiling results. |
+| [`ProfilingStatus`](#aitune-torch-task-profiling-profiling-ProfilingStatus) | Profiling status. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_profile`](#aitune-torch-task-profiling-profiling-_profile) | Profile a model. |
+| [`_run_profiling_batch_size`](#aitune-torch-task-profiling-profiling-_run_profiling_batch_size) | - |
+| [`profile`](#aitune-torch-task-profiling-profiling-profile) | Profile a callable with given dataset. |
+| [`profile_backend`](#aitune-torch-task-profiling-profiling-profile_backend) | Profile a backend with graph specification and recorded samples. |
+
+### Data
+
+[`logger`](#aitune-torch-task-profiling-profiling-logger)
+
+### API
+
+<Anchor id="aitune-torch-task-profiling-profiling-ProfilingResults">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.profiling.ProfilingResults(
+    entries: list[aitune.torch.task.profiling.events.ProfilingResultEvent] = list()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Profiling results.
+
+
+<ParamField path="entries" type="list[ProfilingResultEvent] = field(default_factory=list)">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling-ProfilingStatus">
+
+<CodeBlock links={{"aitune.torch.task.profiling.profiling.ProfilingResults":"#aitune-torch-task-profiling-profiling-ProfilingResults"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.profiling.ProfilingStatus(
+    status: aitune.torch.task.profiling.profiling.ProfilingStatus.Status,
+    error: typing.Any | None = None,
+    results: aitune.torch.task.profiling.profiling.ProfilingResults | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Profiling status.
+
+
+<ParamField path="error" type="Any | None = None">
+</ParamField>
+
+<ParamField path="results" type="ProfilingResults | None = None">
+</ParamField>
+
+<ParamField path="status" type="Status">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling-_profile">
+
+<CodeBlock links={{"aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.profiling._profile(
+    func: collections.abc.Callable,
+    samples: collections.abc.Generator[tuple[int, list | tuple, dict], None, None],
+    profiling_config: aitune.torch.task.profiling.config.ProfilingConfig,
+    model_name: str | None = None,
+    backend_details: str | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profile a model.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling-_run_profiling_batch_size">
+
+<CodeBlock links={{"aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.profiling._run_profiling_batch_size(
+    batch_size: int,
+    model: collections.abc.Callable,
+    sample: tuple[list | tuple, dict],
+    profiling_config: aitune.torch.task.profiling.config.ProfilingConfig,
+    model_name: str,
+    backend_details: str
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent] | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling-profile">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DataLoaderFactory","aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.profiling.ProfilingStatus":"#aitune-torch-task-profiling-profiling-ProfilingStatus"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.profiling.profile(
+    func: collections.abc.Callable,
+    dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
+    profiling_config: aitune.torch.task.profiling.config.ProfilingConfig,
+    model_name: str | None = None,
+    backend_details: str | None = None
+) -> aitune.torch.task.profiling.profiling.ProfilingStatus
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profile a callable with given dataset.
+
+**Parameters:**
+
+<ParamField path="func" type="Callable">
+Function to profile.
+</ParamField>
+
+<ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
+Dataset to profile.
+</ParamField>
+
+<ParamField path="profiling_config" type="ProfilingConfig">
+Configuration for profiling.
+</ParamField>
+
+<ParamField path="model_name" type="str | None" default="None">
+Name of the model, optional.
+</ParamField>
+
+<ParamField path="backend_details" type="str | None" default="None">
+Detailed information of the backend, optional.
+</ParamField>
+
+**Returns:** `ProfilingStatus`
+
+Status of the profiling.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling-profile_backend">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.config.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.profiling.ProfilingStatus":"#aitune-torch-task-profiling-profiling-ProfilingStatus"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.profiling.profile_backend(
+    backend: aitune.torch.backend.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    profiling_config: aitune.torch.task.profiling.config.ProfilingConfig
+) -> aitune.torch.task.profiling.profiling.ProfilingStatus
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profile a backend with graph specification and recorded samples.
+
+**Parameters:**
+
+<ParamField path="backend" type="Backend">
+Backend to profile.
+</ParamField>
+
+<ParamField path="name" type="str">
+Name of the model.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+Graph spec of the model. Used to generate batch samples.
+</ParamField>
+
+<ParamField path="samples" type="SampleStore">
+Recorded samples. Only the first is used to generate batches.
+</ParamField>
+
+<ParamField path="profiling_config" type="ProfilingConfig">
+Profiling configuration.
+</ParamField>
+
+**Returns:** `ProfilingStatus`
+
+Status of the profiling.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.profiling.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

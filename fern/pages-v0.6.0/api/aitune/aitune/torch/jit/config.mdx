@@ -1,0 +1,193 @@
+---
+layout: overview
+slug: aitune/aitune/torch/jit/config
+title: aitune.torch.jit.config
+---
+
+Configuration for JIT module.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`Config`](#aitune-torch-jit-config-Config) | Configuration for JIT module. |
+| [`JITMode`](#aitune-torch-jit-config-JITMode) | Mode for JIT execution. |
+
+### Data
+
+[`config`](#aitune-torch-jit-config-config)
+
+### API
+
+<Anchor id="aitune-torch-jit-config-Config">
+
+<CodeBlock links={{"aitune.torch.jit.config.JITMode":"#aitune-torch-jit-config-JITMode","aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.jit.config.Config(
+    mode: aitune.torch.jit.config.JITMode = JITMode.TUNE_EAGER,
+    dry_run: bool = False,
+    dry_run_failure_probability: float = 0.2,
+    device: str | torch.device | None = None,
+    min_samples: int = 1,
+    batch_axis_required: bool = True,
+    max_depth_level: int = 1,
+    min_parameters: int = 0,
+    detect_graph_breaks: bool = False,
+    skip_modules: list[str] = list(),
+    patch_exclude: tuple[str, ...] = (),
+    cache_dir: pathlib.Path = (lambda: _AITUNE_JIT_CACHE_...,
+    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configuration for JIT module.
+
+
+<ParamField path="batch_axis_required" type="bool = True">
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+</ParamField>
+
+<ParamField path="detect_graph_breaks" type="bool = False">
+</ParamField>
+
+<ParamField path="device" type="str | device | None = None">
+</ParamField>
+
+<ParamField path="dry_run" type="bool = False">
+</ParamField>
+
+<ParamField path="dry_run_failure_probability" type="float = 0.2">
+</ParamField>
+
+<ParamField path="max_depth_level" type="int = 1">
+</ParamField>
+
+<ParamField path="min_parameters" type="int = 0">
+</ParamField>
+
+<ParamField path="min_samples" type="int = 1">
+</ParamField>
+
+<ParamField path="mode" type="JITMode = JITMode.TUNE_EAGER">
+</ParamField>
+
+<ParamField path="patch_exclude" type="tuple[str, ...] = ()">
+</ParamField>
+
+<ParamField path="skip_modules" type="list[str] = field(default_factory=list)">
+</ParamField>
+
+<ParamField path="strategy" type="TuneStrategy | None = None">
+</ParamField>
+<Anchor id="aitune-torch-jit-config-Config-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.config.Config.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post init.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-config-Config-reset_to_defaults">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.config.Config.reset_to_defaults() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reset all options to their default values (e.g. for test isolation).
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-config-Config-resolve_strategy">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.config.Config.resolve_strategy() -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the tune strategy to use for JIT tuning.
+
+When ``strategy`` is set explicitly it is returned as-is. Otherwise the default is a
+``MaxThroughputStrategy``. Ordinary modules profile TensorRT (with and without dynamo)
+and TorchInductor JIT. Distributed modules profile TorchInductor AOT and TorchInductor JIT.
+Candidates are resolved when the module is available.
+
+Strategy and backend modules are imported lazily to keep the JIT config a thin data
+layer that doesn't pull runtime modules at import time.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-jit-config-JITMode">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.jit.config.JITMode
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Mode for JIT execution.
+
+<ParamField path="INSPECT" type="= 'inspect'">
+</ParamField>
+
+<ParamField path="TUNE_DEFERRED" type="= 'tune_deferred'">
+</ParamField>
+
+<ParamField path="TUNE_EAGER" type="= 'tune_eager'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-config-config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.config.config = Config()
+```
+
+</CodeBlock>
+</Anchor>
+

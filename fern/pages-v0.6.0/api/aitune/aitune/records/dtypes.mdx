@@ -1,0 +1,65 @@
+---
+layout: overview
+slug: aitune/aitune/records/dtypes
+title: aitune.records.dtypes
+---
+
+Frontend-neutral tensor element types used in publication records.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`DType`](#aitune-records-dtypes-DType) | Tensor element types supported by the first adapters. |
+
+### API
+
+<Anchor id="aitune-records-dtypes-DType">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.dtypes.DType
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Tensor element types supported by the first adapters.
+
+Frontends and publishers convert their native dtypes at the records boundary.
+
+<ParamField path="BOOL" type="= 'bool'">
+</ParamField>
+
+<ParamField path="FLOAT16" type="= 'float16'">
+</ParamField>
+
+<ParamField path="FLOAT32" type="= 'float32'">
+</ParamField>
+
+<ParamField path="FLOAT64" type="= 'float64'">
+</ParamField>
+
+<ParamField path="INT16" type="= 'int16'">
+</ParamField>
+
+<ParamField path="INT32" type="= 'int32'">
+</ParamField>
+
+<ParamField path="INT64" type="= 'int64'">
+</ParamField>
+
+<ParamField path="INT8" type="= 'int8'">
+</ParamField>
+
+<ParamField path="UINT8" type="= 'uint8'">
+</ParamField>
+
+</Indent>

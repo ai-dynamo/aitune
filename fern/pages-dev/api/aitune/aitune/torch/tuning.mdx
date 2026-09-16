@@ -15,7 +15,9 @@ Main tune function.
 | [`_activate_tuned_modules`](#aitune-torch-tuning-_activate_tuned_modules) | Activate all tuned modules after tuning is complete. |
 | [`_clear_cache`](#aitune-torch-tuning-_clear_cache) | Clear the cache. |
 | [`_describe_module`](#aitune-torch-tuning-_describe_module) | - |
+| [`_log_module_tuning_exception`](#aitune-torch-tuning-_log_module_tuning_exception) | Log a module-level tuning exception to the console and cache. |
 | [`_validate_and_normalize_batch_sizes`](#aitune-torch-tuning-_validate_and_normalize_batch_sizes) | Validate and normalize batch sizes for tuning. |
+| [`_write_module_error_log`](#aitune-torch-tuning-_write_module_error_log) | Persist a module-level tuning traceback in its rank-specific cache. |
 | [`load`](#aitune-torch-tuning-load) | Load the tuned module from a file. |
 | [`save`](#aitune-torch-tuning-save) | Save the tuned module to a file. |
 | [`tune`](#aitune-torch-tuning-tune) | Tune a callable which runs inference on a pipeline or a model. |
@@ -82,6 +84,27 @@ aitune.torch.tuning._describe_module(
 
 </Indent>
 
+<Anchor id="aitune-torch-tuning-_log_module_tuning_exception">
+
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning._log_module_tuning_exception(
+    module: aitune.torch.module.wrapper_module.Module,
+    exception: Exception
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log a module-level tuning exception to the console and cache.
+
+
+</Indent>
+
 <Anchor id="aitune-torch-tuning-_validate_and_normalize_batch_sizes">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -98,6 +121,27 @@ aitune.torch.tuning._validate_and_normalize_batch_sizes(
 <Indent>
 
 Validate and normalize batch sizes for tuning.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-_write_module_error_log">
+
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning._write_module_error_log(
+    module: aitune.torch.module.wrapper_module.Module,
+    exception: Exception
+) -> pathlib.Path | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Persist a module-level tuning traceback in its rank-specific cache.
 
 
 </Indent>
@@ -201,7 +245,7 @@ aitune.torch.tuning.tune(
     dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
     batch_sizes: list[int] | None = None,
     max_num_batches_per_batch_size: int | None = None,
-    device: str | torch.device | None = DEFAULT_DEVICE,
+    device: str | torch.device | None = None,
     dry_run: bool = False,
     disable_external_logging: bool = False,
     clear_cache: bool = False,
@@ -236,7 +280,7 @@ batch axis.
 The maximum number of batches to use for tuning per batch size.
 </ParamField>
 
-<ParamField path="device" type="str | torch.device | None" default="DEFAULT_DEVICE">
+<ParamField path="device" type="str | torch.device | None" default="None">
 The device to use for tuning.
 </ParamField>
 

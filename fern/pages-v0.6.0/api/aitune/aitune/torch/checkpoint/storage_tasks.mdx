@@ -1,0 +1,1053 @@
+---
+layout: overview
+slug: aitune/aitune/torch/checkpoint/storage_tasks
+title: aitune.torch.checkpoint.storage_tasks
+---
+
+Storage tasks.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`CopyBackendArtifactsTask`](#aitune-torch-checkpoint-storage_tasks-CopyBackendArtifactsTask) | Task to copy backend artifacts. |
+| [`LoadTask`](#aitune-torch-checkpoint-storage_tasks-LoadTask) | Base class to load state dict. |
+| [`MakeFolderTask`](#aitune-torch-checkpoint-storage_tasks-MakeFolderTask) | Task to make a folder. |
+| [`RelocateBackendArtifactsTask`](#aitune-torch-checkpoint-storage_tasks-RelocateBackendArtifactsTask) | Rebase saved backend artifact paths onto the extracted checkpoint. |
+| [`RemoveFolderTask`](#aitune-torch-checkpoint-storage_tasks-RemoveFolderTask) | Task to remove a folder. |
+| [`SaveTask`](#aitune-torch-checkpoint-storage_tasks-SaveTask) | Base class to save state dict. |
+| [`ShaSumsLoadTask`](#aitune-torch-checkpoint-storage_tasks-ShaSumsLoadTask) | Task to load and verify SHA hashes of files. |
+| [`ShaSumsSaveTask`](#aitune-torch-checkpoint-storage_tasks-ShaSumsSaveTask) | Task to save SHA hashes of files in the state dictionary. |
+| [`TorchLoadTask`](#aitune-torch-checkpoint-storage_tasks-TorchLoadTask) | Task to load a state dictionary using torch.load. |
+| [`TorchSaveTask`](#aitune-torch-checkpoint-storage_tasks-TorchSaveTask) | Task to save a state dictionary using torch.save. |
+| [`UnzipLoadTask`](#aitune-torch-checkpoint-storage_tasks-UnzipLoadTask) | Task to load a state dictionary from a zip file. |
+| [`ZipSaveTask`](#aitune-torch-checkpoint-storage_tasks-ZipSaveTask) | Task to save a state dictionary to a zip file. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_iter_backend_data_dicts`](#aitune-torch-checkpoint-storage_tasks-_iter_backend_data_dicts) | Yield backend state dictionaries that may contain checkpoint artifacts. |
+| [`_transform_artifact_paths`](#aitune-torch-checkpoint-storage_tasks-_transform_artifact_paths) | Transform artifact paths in plain checkpoint collections in place where possible. |
+| [`calculate_file_sha_hash`](#aitune-torch-checkpoint-storage_tasks-calculate_file_sha_hash) | Calculate SHA hash of a file. |
+| [`check_checkpoint_valid`](#aitune-torch-checkpoint-storage_tasks-check_checkpoint_valid) | Check if the checkpoint is valid. |
+| [`get_sha_sums_path`](#aitune-torch-checkpoint-storage_tasks-get_sha_sums_path) | Get the path to the SHA sums file. |
+| [`torch_load_with_custom_types`](#aitune-torch-checkpoint-storage_tasks-torch_load_with_custom_types) | Load a checkpoint safely with AITune's serialized value types allowlisted. |
+
+### Data
+
+[`AIT_EXTENSION`](#aitune-torch-checkpoint-storage_tasks-AIT_EXTENSION)
+
+[`STATE_DICT_FILE`](#aitune-torch-checkpoint-storage_tasks-STATE_DICT_FILE)
+
+[`logger`](#aitune-torch-checkpoint-storage_tasks-logger)
+
+### API
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-CopyBackendArtifactsTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.CopyBackendArtifactsTask()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [SaveTask](#aitune-torch-checkpoint-storage_tasks-SaveTask)
+
+Task to copy backend artifacts.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-CopyBackendArtifactsTask-_copy_artifact">
+
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.CopyBackendArtifactsTask._copy_artifact(
+    artifact: aitune.torch.checkpoint.artifact.ArtifactPath,
+    target_path: pathlib.Path,
+    backend_dir: pathlib.Path,
+    artifact_root_dirs: dict[pathlib.Path, pathlib.Path]
+) -> aitune.torch.checkpoint.artifact.ArtifactPath
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Copy an artifact into the checkpoint while preserving its root-relative path.
+
+The destination path has the following structure::
+
+    &lt;target_path&gt;/&lt;backend index&gt;/&lt;artifact root index&gt;/&lt;artifact.relative_path&gt;
+
+``backend_dir`` already contains the backend index. Each distinct resolved
+``artifact.root`` is assigned a numbered directory below ``backend_dir``;
+artifacts sharing a root also share that directory. The artifact's relative
+path is appended unchanged, preserving its original directory structure.
+
+**Parameters:**
+
+<ParamField path="artifact" type="ArtifactPath">
+Artifact to copy, including its owning root and relative path.
+</ParamField>
+
+<ParamField path="target_path" type="Path">
+Root directory of the checkpoint being created.
+</ParamField>
+
+<ParamField path="backend_dir" type="Path">
+Numbered checkpoint directory assigned to the artifact's backend.
+</ParamField>
+
+<ParamField path="artifact_root_dirs" type="dict[Path, Path]">
+Mapping from resolved artifact roots to their numbered
+directories within ``backend_dir``.
+</ParamField>
+
+**Returns:** `ArtifactPath`
+
+An artifact pointing to the copied checkpoint entry. Its root is ``.``
+
+**Raises:**
+
+- `ValueError`: If the resolved artifact path is outside its declared root.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-storage_tasks-CopyBackendArtifactsTask-save">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.CopyBackendArtifactsTask.save(
+    target_path: pathlib.Path,
+    state_dict: dict
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Copy backend artifacts to the specified path.
+
+Each backend and each distinct artifact root receives its own numbered
+directory. Paths relative to an artifact root are preserved.
+
+**Parameters:**
+
+<ParamField path="target_path" type="Path">
+The path where the backend artifacts should be copied.
+</ParamField>
+
+<ParamField path="state_dict" type="dict">
+The state dictionary to traverse.
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-LoadTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.LoadTask()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Base class to load state dict.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-LoadTask-load">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.LoadTask.load(
+    path: pathlib.Path,
+    state_dict: dict | None = None
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Load a state dictionary from the specified path.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+The path from where the state dictionary should be loaded.
+</ParamField>
+
+<ParamField path="state_dict" type="dict | None" default="None">
+Accumulated state dictionary loaded by previous tasks.
+</ParamField>
+
+**Returns:** `dict`
+
+The loaded state dictionary.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-MakeFolderTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.MakeFolderTask(
+    overwrite: bool = True
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [SaveTask](#aitune-torch-checkpoint-storage_tasks-SaveTask)
+
+Task to make a folder.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-MakeFolderTask-save">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.MakeFolderTask.save(
+    path: pathlib.Path,
+    state_dict: dict
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Make a folder.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-RelocateBackendArtifactsTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.RelocateBackendArtifactsTask()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [LoadTask](#aitune-torch-checkpoint-storage_tasks-LoadTask)
+
+Rebase saved backend artifact paths onto the extracted checkpoint.
+
+New checkpoints identify artifacts with :class:`ArtifactPath`. Checkpoints
+created before ``ArtifactPath`` used direct, checkpoint-relative ``Path``
+values in backend state dictionaries; those values still load, but the format
+is deprecated and a warning is emitted.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-RelocateBackendArtifactsTask-_relocate_artifact">
+
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.RelocateBackendArtifactsTask._relocate_artifact(
+    artifact: aitune.torch.checkpoint.artifact.ArtifactPath,
+    checkpoint_root: pathlib.Path
+) -> aitune.torch.checkpoint.artifact.ArtifactPath
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Rebase a checkpoint-relative artifact onto the extracted checkpoint root.
+
+Saved artifacts contain a path relative to the checkpoint directory, for
+example ``1/1/nested/model.bin``. This method resolves that entry below
+``checkpoint_root`` and returns an artifact whose root is the absolute
+checkpoint directory while preserving the checkpoint-relative path.
+
+**Parameters:**
+
+<ParamField path="artifact" type="ArtifactPath">
+Artifact path restored from the checkpoint state dictionary.
+</ParamField>
+
+<ParamField path="checkpoint_root" type="Path">
+Resolved root directory of the extracted checkpoint.
+</ParamField>
+
+**Returns:** `ArtifactPath`
+
+An artifact rebased onto ``checkpoint_root``.
+
+**Raises:**
+
+- `ValueError`: If the resolved artifact path is outside ``checkpoint_root``.
+- `FileNotFoundError`: If the referenced artifact does not exist in the checkpoint.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-storage_tasks-RelocateBackendArtifactsTask-_relocate_legacy_paths">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.RelocateBackendArtifactsTask._relocate_legacy_paths(
+    checkpoint_root: pathlib.Path,
+    backend_index: int,
+    backend_data: dict
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Convert top-level artifact paths written by the legacy checkpoint format.
+
+Before ``ArtifactPath`` was introduced, copied backend artifacts were
+stored directly as checkpoint-relative ``Path`` values. Their first path
+component was the numbered backend directory, for example
+``Path("1/model.plan")`` for the first backend. A relative ``Path`` is
+treated as a legacy artifact only when this component matches
+``backend_index``; other relative paths may be regular backend configuration
+and are left unchanged.
+
+A recognized path is resolved below ``checkpoint_root``, checked for path
+traversal and existence, and replaced in ``backend_data`` with an
+``ArtifactPath`` rooted at the extracted checkpoint. Absolute ``Path``
+values are left unchanged. Only values directly in ``backend_data`` are
+considered because built-in backends stored legacy artifacts at that level.
+
+**Parameters:**
+
+<ParamField path="checkpoint_root" type="Path">
+Resolved root directory of the extracted checkpoint.
+</ParamField>
+
+<ParamField path="backend_index" type="int">
+One-based index identifying the backend's legacy artifact directory.
+</ParamField>
+
+<ParamField path="backend_data" type="dict">
+Backend state dictionary to update in place.
+</ParamField>
+
+**Returns:** `bool`
+
+True if at least one legacy path was converted.
+
+**Raises:**
+
+- `ValueError`: If a recognized legacy path resolves outside ``checkpoint_root``.
+- `FileNotFoundError`: If the referenced legacy artifact does not exist.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-storage_tasks-RelocateBackendArtifactsTask-load">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.RelocateBackendArtifactsTask.load(
+    path: pathlib.Path,
+    state_dict: dict | None = None
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve relative backend artifact paths and return no additional state updates.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-RemoveFolderTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.RemoveFolderTask()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [SaveTask](#aitune-torch-checkpoint-storage_tasks-SaveTask)
+
+Task to remove a folder.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-RemoveFolderTask-save">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.RemoveFolderTask.save(
+    path: pathlib.Path,
+    state_dict: dict
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Remove a folder.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-SaveTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.SaveTask()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Base class to save state dict.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-SaveTask-save">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.SaveTask.save(
+    path: pathlib.Path,
+    state_dict: dict
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Save the state dictionary to the specified path.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+The path where the state dictionary should be saved.
+</ParamField>
+
+<ParamField path="state_dict" type="dict">
+The state dictionary to save.
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-ShaSumsLoadTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.ShaSumsLoadTask(
+    sha_type: typing.Literal['256', '512'] = '256'
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [LoadTask](#aitune-torch-checkpoint-storage_tasks-LoadTask)
+
+Task to load and verify SHA hashes of files.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-ShaSumsLoadTask-_get_failed_files">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.ShaSumsLoadTask._get_failed_files(
+    path: pathlib.Path,
+    stored_hashes: dict[str, str]
+) -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return stored paths whose current file hashes do not match.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-storage_tasks-ShaSumsLoadTask-_load_stored_hashes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.ShaSumsLoadTask._load_stored_hashes(
+    sha_file_path: pathlib.Path
+) -> dict[str, str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load stored hash values from a SHA sums file.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-storage_tasks-ShaSumsLoadTask-load">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.ShaSumsLoadTask.load(
+    path: pathlib.Path,
+    state_dict: dict | None = None
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load and verify SHA hashes of files in the specified path.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+The path containing files to verify.
+</ParamField>
+
+<ParamField path="state_dict" type="dict | None" default="None">
+Unused accumulated state from prior load tasks.
+</ParamField>
+
+**Raises:**
+
+- `FileNotFoundError`: If sha_hashes.txt file is not found.
+- `ValueError`: If sha_hashes.txt file format is invalid.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-ShaSumsSaveTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.ShaSumsSaveTask(
+    sha_type: typing.Literal['256', '512'] = '256'
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [SaveTask](#aitune-torch-checkpoint-storage_tasks-SaveTask)
+
+Task to save SHA hashes of files in the state dictionary.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-ShaSumsSaveTask-save">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.ShaSumsSaveTask.save(
+    path: pathlib.Path,
+    state_dict: dict
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Save SHA hashes of files in the specified path to a file.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+The path containing files to hash.
+</ParamField>
+
+<ParamField path="state_dict" type="dict">
+The state dictionary (not used in this implementation).
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-TorchLoadTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.TorchLoadTask()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [LoadTask](#aitune-torch-checkpoint-storage_tasks-LoadTask)
+
+Task to load a state dictionary using torch.load.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-TorchLoadTask-load">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.TorchLoadTask.load(
+    path: pathlib.Path,
+    state_dict: dict | None = None
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load a state dictionary from the specified path.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-TorchSaveTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.TorchSaveTask()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [SaveTask](#aitune-torch-checkpoint-storage_tasks-SaveTask)
+
+Task to save a state dictionary using torch.save.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-TorchSaveTask-save">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.TorchSaveTask.save(
+    path: pathlib.Path,
+    state_dict: dict
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Save the state dictionary to the specified path.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+The path where the state dictionary should be saved.
+</ParamField>
+
+<ParamField path="state_dict" type="dict">
+The state dictionary to save.
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-UnzipLoadTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.UnzipLoadTask()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [LoadTask](#aitune-torch-checkpoint-storage_tasks-LoadTask)
+
+Task to load a state dictionary from a zip file.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-UnzipLoadTask-load">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.UnzipLoadTask.load(
+    path: pathlib.Path,
+    state_dict: dict | None = None
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Extract the zip file at the given path to a folder with the same name.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+The path to the zip file that should be extracted.
+</ParamField>
+
+<ParamField path="state_dict" type="dict | None" default="None">
+Unused accumulated state from prior load tasks.
+</ParamField>
+
+**Returns:** `dict`
+
+An empty dictionary (following the pattern of other load tasks).
+
+**Raises:**
+
+- `FileNotFoundError`: If the zip file does not exist.
+- `ValueError`: If the path is not a zip file.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-ZipSaveTask">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.storage_tasks.ZipSaveTask()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [SaveTask](#aitune-torch-checkpoint-storage_tasks-SaveTask)
+
+Task to save a state dictionary to a zip file.
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-ZipSaveTask-save">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.ZipSaveTask.save(
+    path: pathlib.Path,
+    state_dict: dict
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Compress the folder under the given path to a zip file, including all nested folders.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+The path to the folder that should be compressed to a zip file.
+</ParamField>
+
+<ParamField path="state_dict" type="dict">
+The state dictionary (not used in this implementation).
+</ParamField>
+
+**Raises:**
+
+- `FileNotFoundError`: If the folder does not exist.
+- `ValueError`: If the path is not a directory.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-_iter_backend_data_dicts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks._iter_backend_data_dicts(
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Yield backend state dictionaries that may contain checkpoint artifacts.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-_transform_artifact_paths">
+
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks._transform_artifact_paths(
+    value: typing.Any,
+    transform: collections.abc.Callable[[ArtifactPath], aitune.torch.checkpoint.artifact.ArtifactPath]
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Transform artifact paths in plain checkpoint collections in place where possible.
+
+Collection subclasses may encode user-visible behavior, such as positional indexing in
+``transformers.ModelOutput``. Treat them as opaque values so checkpoint processing does not
+replace them with their plain built-in counterparts. Tuples are rebuilt because they are
+immutable.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-calculate_file_sha_hash">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.calculate_file_sha_hash(
+    file_path: str | pathlib.Path,
+    sha_type: typing.Literal['256', '512'] = '256'
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Calculate SHA hash of a file.
+
+**Parameters:**
+
+<ParamField path="file_path" type="str | Path">
+Path to the file to hash.
+</ParamField>
+
+<ParamField path="sha_type" type="Literal['256', '512']" default="'256'">
+The SHA type to use for hashing. Must be either "256" or "512".
+</ParamField>
+
+**Returns:** `str`
+
+SHA hash of the file as a hexadecimal string.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-check_checkpoint_valid">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.check_checkpoint_valid(
+    path: pathlib.Path
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the checkpoint is valid.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+The path to the checkpoint.
+</ParamField>
+
+**Returns:** `bool`
+
+True if the checkpoint is valid, False otherwise.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-get_sha_sums_path">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.get_sha_sums_path(
+    path: pathlib.Path,
+    sha_type: typing.Literal['256', '512'] = '256'
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the path to the SHA sums file.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+The path to the checkpoint directory.
+</ParamField>
+
+<ParamField path="sha_type" type="Literal['256', '512']" default="'256'">
+The SHA type used for hashing. Must be either "256" or "512".
+</ParamField>
+
+**Returns:** `Path`
+
+The path to the SHA sums file.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-torch_load_with_custom_types">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.torch_load_with_custom_types(
+    path: pathlib.Path
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load a checkpoint safely with AITune's serialized value types allowlisted.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-AIT_EXTENSION">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.AIT_EXTENSION = '.ait'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-STATE_DICT_FILE">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.STATE_DICT_FILE = 'state_dict.pt'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-checkpoint-storage_tasks-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.storage_tasks.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

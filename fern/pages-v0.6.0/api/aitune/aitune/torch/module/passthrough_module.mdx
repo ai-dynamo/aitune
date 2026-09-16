@@ -1,0 +1,82 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/passthrough_module
+title: aitune.torch.module.passthrough_module
+---
+
+Passthrough module.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`PassthroughModule`](#aitune-torch-module-passthrough_module-PassthroughModule) | Module that passes through the original module. |
+
+### API
+
+<Anchor id="aitune-torch-module-passthrough_module-PassthroughModule">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.passthrough_module.PassthroughModule(
+    module,
+    device: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Module that passes through the original module.
+
+Before passing the data this module moves the data to the same device as the module.
+
+
+<ParamField path="_forward_call" type="= module.__call__">
+</ParamField>
+<Anchor id="aitune-torch-module-passthrough_module-PassthroughModule-__call__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.passthrough_module.PassthroughModule.__call__(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Native inference on wrapped module.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-passthrough_module-PassthroughModule-_prepare_inputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.passthrough_module.PassthroughModule._prepare_inputs(
+    args = (),
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare inputs for inplace inference and place them on the same device if are not.
+
+
+</Indent>
+</Indent>

@@ -1,0 +1,599 @@
+---
+layout: overview
+slug: aitune/aitune/utils/logging
+title: aitune.utils.logging
+---
+
+Logging configuration for the AITune package.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`_TeeFile`](#aitune-utils-logging-_TeeFile) | File-like object that writes to multiple destinations (tee functionality). |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_redirect_logging_handlers`](#aitune-utils-logging-_redirect_logging_handlers) | Redirect all logging StreamHandlers to target file. |
+| [`_redirect_low_level_output`](#aitune-utils-logging-_redirect_low_level_output) | Redirect low-level file descriptors to target and return cleanup info. |
+| [`_restore_logging_handlers`](#aitune-utils-logging-_restore_logging_handlers) | Restore logging StreamHandlers to their original streams. |
+| [`_restore_low_level_output`](#aitune-utils-logging-_restore_low_level_output) | Restore low-level file descriptors. |
+| [`_try_redirect_handler`](#aitune-utils-logging-_try_redirect_handler) | Try to redirect a single handler to target file. |
+| [`control_output`](#aitune-utils-logging-control_output) | Silences or redirects stdout, stderr, and logs within the invoked context. |
+| [`libraries_logging`](#aitune-utils-logging-libraries_logging) | Suppress logging for all packages except the specified ones. |
+| [`log`](#aitune-utils-logging-log) | Log a message with indentation. |
+| [`log_exception_details`](#aitune-utils-logging-log_exception_details) | Log detailed exception information in a standardized format. |
+| [`log_to_file`](#aitune-utils-logging-log_to_file) | Append a message and optional exception details to a log file. |
+| [`set_module_level`](#aitune-utils-logging-set_module_level) | Set logging level for a specific module. |
+| [`setup_logging`](#aitune-utils-logging-setup_logging) | Configure logging for the AITune package. |
+| [`write_exception_log`](#aitune-utils-logging-write_exception_log) | Write an exception traceback to a cache directory. |
+
+### API
+
+<Anchor id="aitune-utils-logging-_TeeFile">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.logging._TeeFile(
+    files = ()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+File-like object that writes to multiple destinations (tee functionality).
+
+
+<Anchor id="aitune-utils-logging-_TeeFile-fileno">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._TeeFile.fileno() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return file descriptor of first file.
+
+
+</Indent>
+<Anchor id="aitune-utils-logging-_TeeFile-flush">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._TeeFile.flush() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Flush all file objects.
+
+
+</Indent>
+<Anchor id="aitune-utils-logging-_TeeFile-isatty">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._TeeFile.isatty() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether this is an interactive stream.
+
+
+</Indent>
+<Anchor id="aitune-utils-logging-_TeeFile-readable">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._TeeFile.readable() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether object supports reading.
+
+
+</Indent>
+<Anchor id="aitune-utils-logging-_TeeFile-writable">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._TeeFile.writable() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether object supports writing.
+
+
+</Indent>
+<Anchor id="aitune-utils-logging-_TeeFile-write">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._TeeFile.write(
+    data: str
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Write data to all file objects.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-logging-_redirect_logging_handlers">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._redirect_logging_handlers(
+    target_file,
+    original_stdout,
+    original_stderr
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Redirect all logging StreamHandlers to target file.
+
+**Parameters:**
+
+<ParamField path="target_file">
+File object to redirect to
+</ParamField>
+
+<ParamField path="original_stdout">
+Original sys.stdout reference
+</ParamField>
+
+<ParamField path="original_stderr">
+Original sys.stderr reference
+</ParamField>
+
+**Returns:**
+
+List of (handler, original_stream) tuples for restoration
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-_redirect_low_level_output">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._redirect_low_level_output(
+    target_fd
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Redirect low-level file descriptors to target and return cleanup info.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-_restore_logging_handlers">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._restore_logging_handlers(
+    saved_handler_streams
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Restore logging StreamHandlers to their original streams.
+
+**Parameters:**
+
+<ParamField path="saved_handler_streams">
+List of (handler, original_stream) tuples
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-_restore_low_level_output">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._restore_low_level_output(
+    save_fds
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Restore low-level file descriptors.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-_try_redirect_handler">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging._try_redirect_handler(
+    handler,
+    target_file,
+    original_stdout,
+    original_stderr
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Try to redirect a single handler to target file.
+
+**Parameters:**
+
+<ParamField path="handler">
+The logging handler to redirect
+</ParamField>
+
+<ParamField path="target_file">
+File object to redirect to
+</ParamField>
+
+<ParamField path="original_stdout">
+Original sys.stdout reference
+</ParamField>
+
+<ParamField path="original_stderr">
+Original sys.stderr reference
+</ParamField>
+
+**Returns:**
+
+Tuple of (handler, original_stream) if successful, None otherwise
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-control_output">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging.control_output(
+    log_file: str | pathlib.Path | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Silences or redirects stdout, stderr, and logs within the invoked context.
+
+**Parameters:**
+
+<ParamField path="log_file" type="str | Path | None" default="None">
+Optional file path to log output to
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-libraries_logging">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging.libraries_logging(
+    disabled: bool,
+    exceptions: list[str] | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Suppress logging for all packages except the specified ones.
+
+**Parameters:**
+
+<ParamField path="disabled" type="bool">
+If False, libraries logs will be suppressed.
+</ParamField>
+
+<ParamField path="exceptions" type="list[str] | None" default="None">
+List of package names to exclude from suppression
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-log">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging.log(
+    msg: str,
+    args = (),
+    sink: collections.abc.Callable = logging.info,
+    depth: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log a message with indentation.
+
+**Parameters:**
+
+<ParamField path="depth" type="int" default="0">
+Number of levels to indent
+</ParamField>
+
+<ParamField path="*args" default="()">
+Arguments to pass to the sink function
+</ParamField>
+
+<ParamField path="msg" type="str">
+Message to log
+</ParamField>
+
+<ParamField path="sink" type="Callable" default="logging.info">
+Function to use for logging
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-log_exception_details">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging.log_exception_details(
+    logger: logging.Logger,
+    exception: Exception,
+    message: str,
+    level: int = logging.ERROR,
+    reraise: bool = False,
+    reraise_as: Exception | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log detailed exception information in a standardized format.
+
+This function provides consistent and comprehensive exception logging
+across the AITune codebase, including exception type, message, and
+full traceback information.
+
+**Parameters:**
+
+<ParamField path="logger" type="logging.Logger">
+Logger instance to use for logging
+</ParamField>
+
+<ParamField path="exception" type="Exception">
+The exception that was caught
+</ParamField>
+
+<ParamField path="message" type="str">
+Custom error message describing the context
+</ParamField>
+
+<ParamField path="level" type="int" default="logging.ERROR">
+Logging level to use (default: ERROR)
+</ParamField>
+
+<ParamField path="reraise" type="bool" default="False">
+Whether to re-raise the exception after logging (default: False)
+</ParamField>
+
+<ParamField path="reraise_as" type="Exception | None" default="None">
+Optional exception to raise instead of the original (default: None)
+</ParamField>
+
+**Raises:**
+
+- `Exception`: Re-raises the original exception or the specified reraise_as exception
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-log_to_file">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging.log_to_file(
+    log_file: str | pathlib.Path | None,
+    message: str,
+    exception: Exception | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Append a message and optional exception details to a log file.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-set_module_level">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging.set_module_level(
+    module_name: str,
+    level: int | str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set logging level for a specific module.
+
+**Parameters:**
+
+<ParamField path="module_name" type="str">
+Name of the module (e.g., 'aitune.torch.backend')
+</ParamField>
+
+<ParamField path="level" type="int | str">
+Logging level (e.g., 'DEBUG', 'INFO', 'WARNING')
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-setup_logging">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging.setup_logging(
+    level: int | str | None = None,
+    format_string: str = '%(asctime)s - %(name)s - %...,
+    log_file: str | pathlib.Path | None = None,
+    capture_warnings: bool = True
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Configure logging for the AITune package.
+
+This function sets up the root logger with appropriate handlers and formatting.
+Call this at the start of your application to ensure all logs are displayed.
+
+Example usage:
+from aitune import setup_logging, set_module_level
+import logging
+
+# Configure with a log file and custom format
+setup_logging(
+    level=logging.DEBUG,
+    format_string="%(asctime)s - %(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s",
+    log_file="aitune.log",
+)
+
+# Set specific modules to different levels
+set_module_level("aitune.torch.backend.tensorrt", logging.DEBUG)  # Verbose TensorRT logs
+
+**Parameters:**
+
+<ParamField path="level" type="int | str | None" default="None">
+Logging level (default: None, uses current root logger level)
+</ParamField>
+
+<ParamField path="format_string" type="str" default="'%(asctime)s - %(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s'">
+Format for log messages
+</ParamField>
+
+<ParamField path="log_file" type="str | Path | None" default="None">
+Optional file path to write logs to
+</ParamField>
+
+<ParamField path="capture_warnings" type="bool" default="True">
+If True, warnings will be captured and displayed
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-write_exception_log">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.logging.write_exception_log(
+    cache_dir: pathlib.Path,
+    exception: BaseException
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Write an exception traceback to a cache directory.
+
+
+</Indent>

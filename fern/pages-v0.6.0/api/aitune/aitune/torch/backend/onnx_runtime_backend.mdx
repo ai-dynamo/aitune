@@ -1,0 +1,620 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/onnx_runtime_backend
+title: aitune.torch.backend.onnx_runtime_backend
+---
+
+ONNX Runtime backend.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ONNXExecutionProvider`](#aitune-torch-backend-onnx_runtime_backend-ONNXExecutionProvider) | Supported ONNX Runtime execution providers. |
+| [`ONNXRuntimeBackend`](#aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend) | Backend that exports models to ONNX and runs inference with ONNX Runtime. |
+| [`ONNXRuntimeBackendConfig`](#aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackendConfig) | Configuration for ONNXRuntimeBackend. |
+
+### Data
+
+[`_TORCH_DTYPE_TO_NUMPY`](#aitune-torch-backend-onnx_runtime_backend-_TORCH_DTYPE_TO_NUMPY)
+
+[`logger`](#aitune-torch-backend-onnx_runtime_backend-logger)
+
+### API
+
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXExecutionProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.onnx_runtime_backend.ONNXExecutionProvider
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Supported ONNX Runtime execution providers.
+
+Only NVIDIA GPU-backed providers are supported:
+
+* ``CUDA`` — ``CUDAExecutionProvider``: standard GPU execution.
+* ``TENSORRT`` — ``TensorrtExecutionProvider`` with ``CUDAExecutionProvider``
+  as fallback: enables TensorRT engine compilation for maximum GPU throughput.
+
+<ParamField path="CUDA" type="= 'cuda'">
+</ParamField>
+
+<ParamField path="TENSORRT" type="= 'tensorrt'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend">
+
+<CodeBlock links={{"aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackendConfig":"#aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend(
+    config: aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackendConfig | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+
+Backend that exports models to ONNX and runs inference with ONNX Runtime.
+
+Exports the model to a ``.onnx`` artifact at build time (trace or dynamo),
+then loads an ``onnxruntime.InferenceSession`` for inference.  Dynamic batch
+and spatial dimensions are inferred automatically from ``graph_spec``.
+
+Workflow::
+
+    backend = ONNXRuntimeBackend()
+    # build / tune as usual through ait.tune()
+    ait.save(model, "model.ait")
+    # later
+    ait.load(model, "model.ait")
+
+
+<ParamField path="STATE_CONFIG" type="= 'config'">
+</ParamField>
+
+<ParamField path="STATE_DEVICE" type="= 'device'">
+</ParamField>
+
+<ParamField path="STATE_GRAPH_SPEC" type="= 'graph_spec'">
+</ParamField>
+
+<ParamField path="STATE_ONNX_DATA_PATH" type="= 'onnx_data_path'">
+</ParamField>
+
+<ParamField path="STATE_ONNX_MODEL_PATH" type="= 'onnx_model_path'">
+</ParamField>
+
+<ParamField path="STATE_OUTPUT_OBJECT" type="= 'output_object'">
+</ParamField>
+
+<ParamField path="STATE_SAMPLES" type="= 'samples'">
+</ParamField>
+
+<ParamField path="STATE_TYPE" type="= 'type'">
+</ParamField>
+
+<ParamField path="_build_mode" type="= BuildMode.AHEAD_OF_TIME">
+</ParamField>
+
+<ParamField path="_config" type="= config or ONNXRuntimeBackendConfig()">
+</ParamField>
+
+<ParamField path="_devices" type="list[str] = ['cuda']">
+</ParamField>
+
+<ParamField path="_execution_modes" type="= frozenset(&#123;ExecutionMode.SINGLE_GPU&#125;)">
+</ParamField>
+
+<ParamField path="_graph_spec" type="GraphSpec | None = None">
+</ParamField>
+
+<ParamField path="_onnx_data_artifact" type="ArtifactPath | None = None">
+</ParamField>
+
+<ParamField path="_onnx_model_artifact" type="ArtifactPath | None = None">
+</ParamField>
+
+<ParamField path="_samples" type="SampleStore | None = None">
+</ParamField>
+
+<ParamField path="_session" type="InferenceSession | None = None">
+</ParamField>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load the ONNX Runtime session from disk.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_bind_inputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._bind_inputs(
+    io_binding: onnxruntime.IOBinding,
+    inputs: dict[str, typing.Any]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Bind prepared inputs to an IOBinding handle.
+
+GPU tensors are bound zero-copy via DLPack; CPU tensors and other
+array-like values are bound as numpy arrays.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_bind_outputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._bind_outputs(
+    io_binding: onnxruntime.IOBinding
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tell ORT to allocate all outputs on the CUDA device.
+
+ORT owns the output buffers; shapes are resolved at inference time.
+Tensors are retrieved after inference via ``_collect_outputs``.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._build(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export the model to ONNX then load the session.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_collect_outputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._collect_outputs(
+    io_binding: onnxruntime.IOBinding
+) -> dict[str, torch.Tensor]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Collect ORT CUDA outputs into torch tensors via D2D memcpy (no CPU round-trip).
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivate backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_deploy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._deploy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deploy backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_get_execution_providers">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._get_execution_providers() -> list[str | tuple]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return execution providers based on config (no automatic CPU fallback).
+
+* ``CUDA`` → ``[("CUDAExecutionProvider", &#123;"device_id": ...&#125;)]``
+* ``TENSORRT`` → ``["TensorrtExecutionProvider",
+  ("CUDAExecutionProvider", &#123;"device_id": ...&#125;)]``
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_get_output_object">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._get_output_object(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the output object from the module and sample.
+
+Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
+the output object.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+PyTorch module
+</ParamField>
+
+<ParamField path="sample" type="Sample">
+Sample input to use for model inference.
+</ParamField>
+
+**Returns:** `Any`
+
+The output object from the module.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run inference through the ONNX Runtime session via IOBinding.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_prepare_inputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._prepare_inputs(
+    args: tuple,
+    kwargs: dict
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Map args/kwargs to session input names using graph_spec locators.
+
+Tensors are returned as-is (preserving their device); conversion to the
+format expected by ONNX Runtime happens in ``_infer`` via IOBinding.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_prepare_outputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._prepare_outputs(
+    outputs: dict[str, torch.Tensor]
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reconstruct original output structure from session output tensors.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_warmup">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend._warmup(
+    samples: collections.abc.Iterable[aitune.torch.module.sample_store.Sample]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run representative samples to initialize the execution provider.
+
+Some execution providers defer work until inference. In particular, the TensorRT
+execution provider compiles the ONNX graph when it first runs. Exercising a small
+number of recorded samples makes those failures part of the backend build instead
+of deferring them until profiling or application inference.
+
+**Parameters:**
+
+<ParamField path="samples" type="Iterable[Sample]">
+Recorded input samples for the backend build.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the description of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend":"#aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend.from_dict(
+    module: torch.nn.Module | None,
+    state_dict: dict
+) -> aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Creates a backend from a state_dict.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend.key() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the key of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackend.to_dict() -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the state_dict of the backend.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackendConfig">
+
+<CodeBlock links={{"aitune.torch.backend.onnx_runtime_backend.ONNXExecutionProvider":"#aitune-torch-backend-onnx_runtime_backend-ONNXExecutionProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackendConfig(
+    use_dynamo: bool = True,
+    execution_provider: aitune.torch.backend.onnx_runtime_backend.ONNXExecutionProvider | None = None,
+    opset_version: int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+
+Configuration for ONNXRuntimeBackend.
+
+**Parameters:**
+
+<ParamField path="use_dynamo" type="bool" default="True">
+If ``True`` (default), export via ``torch.onnx.export(dynamo=True)``
+which calls ``torch.export.export`` internally and produces a more accurate
+graph (no Python-level tracing limitations). If ``False``, use the classic
+trace-based exporter — faster and broader model coverage.
+</ParamField>
+
+<ParamField path="execution_provider" type="ONNXExecutionProvider | None" default="None">
+ONNX Runtime execution provider to use. When ``None``
+the backend defaults to :attr:`ONNXExecutionProvider.CUDA`. Only
+:attr:`ONNXExecutionProvider.CUDA` and
+:attr:`ONNXExecutionProvider.TENSORRT` are supported.
+</ParamField>
+
+<ParamField path="opset_version" type="int | None" default="None">
+ONNX opset version passed to ``torch.onnx.export``.
+``None`` uses the torch default.
+</ParamField>
+
+
+<ParamField path="execution_provider" type="ONNXExecutionProvider | None = None">
+</ParamField>
+
+<ParamField path="opset_version" type="int | None = None">
+</ParamField>
+
+<ParamField path="use_dynamo" type="bool = True">
+</ParamField>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackendConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackendConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post init.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackendConfig-from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackendConfig":"#aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackendConfig.from_dict(
+    data: dict
+) -> aitune.torch.backend.onnx_runtime_backend.ONNXRuntimeBackendConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Initialise config from a plain dict (e.g. parsed from YAML).
+
+``execution_provider`` may be passed as a string and will be
+converted to an ``ONNXExecutionProvider`` enum value automatically.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-_TORCH_DTYPE_TO_NUMPY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend._TORCH_DTYPE_TO_NUMPY: dict[dtype, type] = {torch.float16: np.float16, torch.float32: np.float32, torch.float64: np.float64...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.onnx_runtime_backend.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

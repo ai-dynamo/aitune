@@ -1,0 +1,320 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/tensorrt/cuda_graphs
+title: aitune.torch.backend.tensorrt.cuda_graphs
+---
+
+CUDA graph capture and resource ownership for static TensorRT profiles.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`CudaGraphProfile`](#aitune-torch-backend-tensorrt-cuda_graphs-CudaGraphProfile) | Keep a captured context and its input/output storage alive together. |
+| [`TensorRTCudaGraphCache`](#aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache) | Cache static-profile graphs with LRU or aged LFU admission and eviction. |
+
+### Data
+
+[`CudaGraphCachePolicy`](#aitune-torch-backend-tensorrt-cuda_graphs-CudaGraphCachePolicy)
+
+[`logger`](#aitune-torch-backend-tensorrt-cuda_graphs-logger)
+
+### API
+
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-CudaGraphProfile">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.torch_output_allocator.TorchOutputAllocator":"/aitune/aitune/torch/backend/tensorrt/torch_output_allocator#aitune-torch-backend-tensorrt-torch_output_allocator-TorchOutputAllocator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphProfile(
+    context: typing.Any,
+    output_allocator: aitune.torch.backend.tensorrt.torch_output_allocator.TorchOutputAllocator,
+    inputs: dict[str, torch.Tensor] = dict(),
+    graph: typing.Any = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Keep a captured context and its input/output storage alive together.
+
+
+<ParamField path="inputs" type="dict[str, Tensor] = field(default_factory=dict)">
+</ParamField>
+
+<ParamField path="output_allocator" type="TorchOutputAllocator">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Cache static-profile graphs with LRU or aged LFU admission and eviction.
+
+
+<ParamField path="_DECAY_INTERVAL" type="= 1024">
+</ParamField>
+
+<ParamField path="_frequencies" type="dict[int, int] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_requests_since_decay" type="= 0">
+</ParamField>
+
+<ParamField path="active" type="CudaGraphProfile | None = None">
+</ParamField>
+
+<ParamField path="max_graphs" type="= 8">
+</ParamField>
+
+<ParamField path="policy" type="CudaGraphCachePolicy = 'lfu'">
+</ParamField>
+
+<ParamField path="profiles" type="OrderedDict[int, CudaGraphProfile] = OrderedDict()">
+</ParamField>
+
+<ParamField path="static_profile_indices" type="set[int] = set()">
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-_admit">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache._admit(
+    index: int,
+    stream
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Admit into free space, or replace a victim only when the policy allows it.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-_capture">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphProfile":"#aitune-torch-backend-tensorrt-cuda_graphs-CudaGraphProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache._capture(
+    profile: aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphProfile,
+    stream
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Warm up, capture, and replay; fall back only when capture itself fails.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-_evict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache._evict(
+    index: int,
+    stream
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Finish pending work before freeing an evicted graph's resources.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-_record_access">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache._record_access(
+    index: int
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Count cached and uncached requests, halving history every 1024 eligible requests.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-clear">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache.clear()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Release graphs before their resources, after the caller synchronizes execution.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-configure">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphCachePolicy":"#aitune-torch-backend-tensorrt-cuda_graphs-CudaGraphCachePolicy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache.configure(
+    engine,
+    io_tensors,
+    input_names,
+    optimization_profiles,
+    max_graphs: int = 8,
+    policy: aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphCachePolicy = 'lfu'
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Classify eligible profiles without allocating contexts or capturing graphs.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-copy_input">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache.copy_input(
+    name: str,
+    tensor: torch.Tensor,
+    stream
+) -> torch.Tensor
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Copy input data into stable storage on the inference stream.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-execute">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache.execute(
+    stream
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Capture on the first request, then replay the selected profile's graph.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-is_eligible">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache.is_eligible(
+    index: int
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether a profile can use graphs for this backend instance.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-TensorRTCudaGraphCache-select">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.torch_output_allocator.TorchOutputAllocator":"/aitune/aitune/torch/backend/tensorrt/torch_output_allocator#aitune-torch-backend-tensorrt-torch_output_allocator-TorchOutputAllocator","aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphProfile":"#aitune-torch-backend-tensorrt-cuda_graphs-CudaGraphProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.TensorRTCudaGraphCache.select(
+    index: int,
+    engine,
+    stream,
+    create_output_allocator: collections.abc.Callable[[Any], aitune.torch.backend.tensorrt.torch_output_allocator.TorchOutputAllocator]
+) -> aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphProfile | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select a cached profile, or return None to execute without capture when admission is denied.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-CudaGraphCachePolicy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphCachePolicy = Literal['lru', 'lfu']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-backend-tensorrt-cuda_graphs-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.cuda_graphs.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

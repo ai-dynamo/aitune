@@ -1,0 +1,343 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/sample_store
+title: aitune.torch.module.sample_store
+---
+
+Disk-backed sequence of recorded module inputs.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`SampleStore`](#aitune-torch-module-sample_store-SampleStore) | Store samples as ``.pt`` files and load them only when requested. |
+
+### Data
+
+[`Sample`](#aitune-torch-module-sample_store-Sample)
+
+[`_SAMPLE_FILE_TEMPLATE`](#aitune-torch-module-sample_store-_SAMPLE_FILE_TEMPLATE)
+
+[`logger`](#aitune-torch-module-sample_store-logger)
+
+### API
+
+<Anchor id="aitune-torch-module-sample_store-SampleStore">
+
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.sample_store.SampleStore(
+    artifact_path: aitune.torch.checkpoint.artifact.ArtifactPath
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `Sequence[Sample]`
+
+Store samples as ``.pt`` files and load them only when requested.
+
+Each sample is a serialized ``(args, kwargs)`` pair in a sequentially numbered
+``sample-N.pt`` file. Only the next sample index stays in memory during tuning.
+The sample directory must not contain other entries. Iteration loads one sample
+file at a time.
+
+``iter_samples(device=...)`` restores CUDA-recorded tensors on the requested
+device. CPU-recorded tensors remain on CPU. Tuning consumers share the completed
+sample files and receive newly loaded sample objects.
+
+
+<Anchor id="aitune-torch-module-sample_store-SampleStore-__getitem__">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.__getitem__(
+    index: int | slice
+) -> aitune.torch.module.sample_store.Sample | list[aitune.torch.module.sample_store.Sample]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load one sample or a slice of samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-__iter__">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.__iter__() -> collections.abc.Iterator[aitune.torch.module.sample_store.Sample]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Iterate samples on their recorded devices.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-__len__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.__len__() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the number of stored samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-_load_sample">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore._load_sample(
+    index: int
+) -> aitune.torch.module.sample_store.Sample
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-_map_location">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore._map_location(
+    device: torch.device | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Preserve CPU tensors while remapping serialized CUDA storage.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-_sample_filename">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore._sample_filename(
+    index: int
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-append">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.append(
+    sample: aitune.torch.module.sample_store.Sample
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Persist one sample.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-create">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.SampleStore":"#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.create(
+    root: pathlib.Path,
+    relative_path: str | pathlib.Path
+) -> aitune.torch.module.sample_store.SampleStore
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Create an empty sample store below an artifact root.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-evict_page_cache">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.evict_page_cache() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Ask Linux to discard cached pages for all persisted samples.
+
+Sample files remain available for checkpointing or rebuilding. This is a
+best-effort optimization and is a no-op when ``posix_fadvise`` is unavailable.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-from_dict">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.SampleStore":"#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.from_dict(
+    state: dict[str, typing.Any]
+) -> aitune.torch.module.sample_store.SampleStore
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore a store from backend checkpoint metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-from_samples">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"#aitune-torch-module-sample_store-Sample","aitune.torch.module.sample_store.SampleStore":"#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.from_samples(
+    samples: collections.abc.Sequence[aitune.torch.module.sample_store.Sample],
+    root: pathlib.Path,
+    relative_path: str | pathlib.Path
+) -> aitune.torch.module.sample_store.SampleStore
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Persist an existing sample sequence in a new store.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-iter_samples">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.iter_samples(
+    device: torch.device | None = None
+) -> collections.abc.Generator[aitune.torch.module.sample_store.Sample, None, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load one sample at a time without retaining the iterator's reference.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_store-SampleStore-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.SampleStore.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the sample metadata stored in a backend checkpoint.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-sample_store-Sample">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.Sample = tuple[tuple, dict]
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-module-sample_store-_SAMPLE_FILE_TEMPLATE">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store._SAMPLE_FILE_TEMPLATE = 'sample-{index:05d}.pt'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-module-sample_store-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_store.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

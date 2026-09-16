@@ -1,0 +1,720 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/wrapper_module
+title: aitune.torch.module.wrapper_module
+---
+
+AITune wrapper module.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`Module`](#aitune-torch-module-wrapper_module-Module) | AITune module wrapper. |
+| [`ModuleState`](#aitune-torch-module-wrapper_module-ModuleState) | Possible states of the Module class. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`get_object_name`](#aitune-torch-module-wrapper_module-get_object_name) | Get the name of an object from its module and class. |
+| [`sanitize_model_name`](#aitune-torch-module-wrapper_module-sanitize_model_name) | Sanitize model name to be used as a module name. |
+
+### Data
+
+[`DEFAULT_STRATEGY`](#aitune-torch-module-wrapper_module-DEFAULT_STRATEGY)
+
+[`StrategyList`](#aitune-torch-module-wrapper_module-StrategyList)
+
+[`StrategyMap`](#aitune-torch-module-wrapper_module-StrategyMap)
+
+[`logger`](#aitune-torch-module-wrapper_module-logger)
+
+### API
+
+<Anchor id="aitune-torch-module-wrapper_module-Module">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.wrapper_module.StrategyList":"#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"#aitune-torch-module-wrapper_module-StrategyMap","aitune.torch.dynamic_shapes.DynamicShapes":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.wrapper_module.Module(
+    module: torch.nn.Module,
+    name: str | None = None,
+    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None,
+    strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None = None,
+    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `CallableObjectProxy`
+
+AITune module wrapper.
+
+This class wraps a torch module and provides tuning functionality.
+The module can be in 3 different states:
+- `passthrough`: the module is not tuned, and will behave identically to the original module.
+- `recording`: the module records samples and detects multi-graphs, this is a necessary step before tuning.
+- `tuned`: the module is tuned and uses underlying tuned module.
+
+You can go from passthrough and recording with `enablePassthrough` and `enableRecording` methods.
+
+You can go from tuned to passthrough/recording only if the force flag is True - then the module will be reset.
+
+This wrapper can be used in place of a torch module, and will behave identically to the original module.
+
+
+<ParamField path="DYNAMIC_SHAPES_KEY" type="= 'dynamic_shapes'">
+</ParamField>
+
+<ParamField path="NAME_KEY" type="= 'name'">
+</ParamField>
+
+<ParamField path="TUNED_MODULE_KEY" type="= 'tuned_module'">
+</ParamField>
+
+<ParamField path="TYPE_KEY" type="= 'type'">
+</ParamField>
+
+<ParamField path="_current_forward_hooks" type="= module._forward_hooks">
+</ParamField>
+
+<ParamField path="_current_forward_pre_hooks" type="= module._forward_pre_hooks">
+</ParamField>
+
+<ParamField path="_self_device" type="= get_module_device(module) or torch.device('cpu')">
+</ParamField>
+
+<ParamField path="_self_name">
+</ParamField>
+
+<ParamField path="_self_orig_forward" type="= module.forward">
+</ParamField>
+
+<ParamField path="_self_proxy_forward" type="= wrapt.decorator(self._forward)(module.forward)">
+</ParamField>
+
+<ParamField path="_self_state" type="= ModuleState.INIT">
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+Get the module cache directory.
+</ParamField>
+
+<ParamField path="device" type="device">
+Get the device of the module.
+</ParamField>
+
+<ParamField path="graph_specs" type="list[GraphSpec]">
+Multi-graphs of the module.
+</ParamField>
+
+<ParamField path="module">
+Get the backends of the module.
+</ParamField>
+
+<ParamField path="name" type="str">
+Get the name of the module.
+</ParamField>
+
+<ParamField path="state" type="ModuleState">
+Get the state of the module.
+</ParamField>
+<Anchor id="aitune-torch-module-wrapper_module-Module-__getitem__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module.__getitem__(
+    key: typing.Any
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Delegate __getitem__ calls to the wrapped module.
+
+This allows the proxy to handle indexing operations on the wrapped module,
+which is particularly useful for Sequential modules and other indexable modules.
+
+**Parameters:**
+
+<ParamField path="key" type="Any">
+The index or key to use for accessing the wrapped module.
+</ParamField>
+
+**Returns:** `Any`
+
+The result of accessing the wrapped module with the given key.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_activate_wrapper">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._activate_wrapper()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_create_graph_cache_dir">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._create_graph_cache_dir(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create a cache directory for the graph.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_deactivate_wrapper">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._deactivate_wrapper()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_deploy_wrapper">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._deploy_wrapper(
+    device: torch.device | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._forward(
+    wrapped,
+    instance,
+    args,
+    kwargs
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Calls one of the wrappers depending on the module state.
+
+Before calling a particular wrapper, the forward method is restored so that we
+avoid infinite recursion. After the implementation handles the call forward is
+restored back to point to this _forward to intercept subsequent calls.
+
+**Parameters:**
+
+<ParamField path="wrapped">
+The wrapped module.
+</ParamField>
+
+<ParamField path="instance">
+The instance of the module.
+</ParamField>
+
+<ParamField path="args">
+The arguments to pass to the module.
+</ParamField>
+
+<ParamField path="kwargs">
+The keyword arguments to pass to the module.
+</ParamField>
+
+**Returns:** `Any`
+
+The result of the call.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_get_strategies_for_graph_specs">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._get_strategies_for_graph_specs(
+    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None,
+    graph_specs: list[aitune.torch.module.graph_spec.GraphSpec],
+    dry_run: bool
+) -> list[aitune.torch.tune_strategy.tune_strategy.TuneStrategy]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns strategies for given graph specs.
+
+Module level strategies (list/dict) take precedence over provided strategy.
+The function checks if there is sufficient strategies (list/dict).
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_handle_backend_added_hooks">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._handle_backend_added_hooks()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Handle new hooks if added by a backend.
+
+Before tuning hooks are cleared (empty OrderedDict). If there are new hooks added by a backend,
+they should be added to the existing ones but before the original hooks so that application layer hooks
+(like HF post processing hooks) are called after the backend hooks.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_module_cache_dir">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._module_cache_dir() -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the cache directory identified by the configured module name.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_proxy_forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._proxy_forward()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Proxy the forward calls.
+
+We need to re-enable hooks, so that they will be called before and after proxied forward.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_reset">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._reset()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resets the module to initial state.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_restore_original_forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._restore_original_forward()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Restore the original forward and hooks.
+
+We need to disable hooks, otherwise they will be called twice.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-_setup_strategies">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.wrapper_module.StrategyList":"#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module._setup_strategies(
+    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None,
+    strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Sets up strategy or strategy_map or strategy_list depending on input args.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module.activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Activates the module backends.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module.deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivates the module backends.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-enable_passthrough">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module.enable_passthrough(
+    force: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enables passthrough mode.
+
+**Parameters:**
+
+<ParamField path="force" type="bool" default="False">
+if True, force the module to be in the passthrough mode.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-enable_recording">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module.enable_recording(
+    force: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enables recording mode.
+
+**Parameters:**
+
+<ParamField path="force" type="bool" default="False">
+if True, force the module to be in the recording mode.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module.from_dict(
+    module: torch.nn.Module,
+    state_dict: dict,
+    device: torch.device | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create a wrapper module from a state dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-is_state_dict_valid">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module.is_state_dict_valid(
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Check if the state dictionary has a wrapper module.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module.to_dict(
+    args = (),
+    destination = None,
+    prefix = '',
+    keep_vars = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert the wrapper module to a state dictionary.
+
+The method follows torch.state_dict format so that it could be called recursively from torch.nn.Module.state_dict.
+The name of the function follows aitune convention of from/to dict. Special alias is created to match torch
+convention i.e. state_dict.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-tune">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.Module.tune(
+    device: str | torch.device | None = None,
+    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None,
+    dry_run: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tunes the module.
+
+**Parameters:**
+
+<ParamField path="device" type="str | torch.device | None" default="None">
+the device to use for tuning
+</ParamField>
+
+<ParamField path="strategy" type="TuneStrategy | None" default="None">
+the tuning strategy to use
+</ParamField>
+
+<ParamField path="dry_run" type="bool" default="False">
+if True, only dry run the tuning
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-wrapper_module-ModuleState">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.wrapper_module.ModuleState
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Possible states of the Module class.
+
+<ParamField path="INIT" type="= 'init'">
+</ParamField>
+
+<ParamField path="PASSTHROUGH" type="= 'passthrough'">
+</ParamField>
+
+<ParamField path="RECORDING" type="= 'recording'">
+</ParamField>
+
+<ParamField path="TUNED" type="= 'tuned'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-module-wrapper_module-get_object_name">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.get_object_name(
+    obj: typing.Any
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the name of an object from its module and class.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-wrapper_module-sanitize_model_name">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.sanitize_model_name(
+    model_name: str | None
+) -> str | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Sanitize model name to be used as a module name.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-wrapper_module-DEFAULT_STRATEGY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.DEFAULT_STRATEGY = MaxThroughputStrategy.for_aot()
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-module-wrapper_module-StrategyList">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.StrategyList = list[TuneStrategy]
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-module-wrapper_module-StrategyMap">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.StrategyMap = dict[SampleMetadata, TuneStrategy]
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-module-wrapper_module-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.wrapper_module.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

@@ -13,12 +13,14 @@ Torch backend module.
 ## Submodules
 
 - **[`aitune.torch.backend.backend`](/aitune/aitune/torch/backend/backend)**
+- **[`aitune.torch.backend.kernel_selector_backend`](/aitune/aitune/torch/backend/kernel_selector_backend)**
 - **[`aitune.torch.backend.onnx_runtime_backend`](/aitune/aitune/torch/backend/onnx_runtime_backend)**
 - **[`aitune.torch.backend.torch_eager`](/aitune/aitune/torch/backend/torch_eager)**
 - **[`aitune.torch.backend.torch_inductor_aot_backend`](/aitune/aitune/torch/backend/torch_inductor_aot_backend)**
 - **[`aitune.torch.backend.torch_inductor_jit_backend`](/aitune/aitune/torch/backend/torch_inductor_jit_backend)**
 - **[`aitune.torch.backend.torch_tensorrt_aot_backend`](/aitune/aitune/torch/backend/torch_tensorrt_aot_backend)**
 - **[`aitune.torch.backend.torch_tensorrt_jit_backend`](/aitune/aitune/torch/backend/torch_tensorrt_jit_backend)**
+- **[`aitune.torch.backend.torch_tensorrt_logging`](/aitune/aitune/torch/backend/torch_tensorrt_logging)**
 - **[`aitune.torch.backend.torchao_backend`](/aitune/aitune/torch/backend/torchao_backend)**
 
 ## Package Contents
@@ -34,7 +36,7 @@ Torch backend module.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.__all__ = ['Backend', 'ONNXAutoCastConfig', 'ONNXExecutionProvider', 'ONNXQuantizationConf...
+aitune.torch.backend.__all__ = ['ArtifactPath', 'Backend', 'BuildMode', 'ExecutionMode', 'KernelSelectorBackend...
 ```
 
 </CodeBlock>

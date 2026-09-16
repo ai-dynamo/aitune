@@ -18,6 +18,7 @@ Contains SampleMetadata which represents metadata of a function inputs (args and
 
 | Name | Description |
 |------|-------------|
+| [`_hash_value`](#aitune-torch-module-sample_metadata-_hash_value) | Hash nested values, falling back safely for unsupported unhashable objects. |
 | [`batch_tensor`](#aitune-torch-module-sample_metadata-batch_tensor) | Batch tensor so that instead of its own batch size it uses specified batch size. |
 
 ### API
@@ -70,6 +71,10 @@ Get LLM graph type.
 
 <ParamField path="other_data" type="tuple[tuple[Locator, Any], ...]">
 Get list of other data.
+</ParamField>
+
+<ParamField path="strict" type="bool">
+Return whether non-tensor leaves are included in this metadata.
 </ParamField>
 
 <ParamField path="tensor_data" type="tuple[tuple[Locator, TensorSpec]]">
@@ -146,6 +151,23 @@ aitune.torch.module.sample_metadata.SampleMetadata.__str__() -> str
 <Indent>
 
 Convert sample metadata to string.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-_hash_other_data">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata._hash_other_data() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Compute an order-independent hash for non-tensor data.
 
 
 </Indent>
@@ -398,6 +420,26 @@ Update shapes seen from other SampleMetadata.
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-sample_metadata-_hash_value">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata._hash_value(
+    value: typing.Any
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Hash nested values, falling back safely for unsupported unhashable objects.
+
+
 </Indent>
 
 <Anchor id="aitune-torch-module-sample_metadata-batch_tensor">

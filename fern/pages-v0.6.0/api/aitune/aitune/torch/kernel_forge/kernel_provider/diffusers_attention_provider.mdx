@@ -1,0 +1,249 @@
+---
+layout: overview
+slug: aitune/aitune/torch/kernel_forge/kernel_provider/diffusers_attention_provider
+title: aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider
+---
+
+Diffusers attention dispatcher kernel provider.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`DiffusersAttentionBackend`](#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionBackend) | Diffusers attention backends compatible with SDPA replacement. |
+| [`DiffusersAttentionKernelProvider`](#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider) | Run SDPA with a selected Diffusers attention dispatcher backend. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_import_diffusers_attention_dispatch`](#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-_import_diffusers_attention_dispatch) | Import and cache the optional Diffusers attention dispatcher module. |
+
+### Data
+
+[`_RUNTIME_UNAVAILABLE_MESSAGE`](#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-_RUNTIME_UNAVAILABLE_MESSAGE)
+
+### API
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionBackend">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionBackend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Diffusers attention backends compatible with SDPA replacement.
+
+<ParamField path="FLASH" type="= 'flash'">
+</ParamField>
+
+<ParamField path="FLASH_3" type="= '_flash_3'">
+</ParamField>
+
+<ParamField path="FLASH_3_HUB" type="= '_flash_3_hub'">
+</ParamField>
+
+<ParamField path="FLASH_4_HUB" type="= 'flash_4_hub'">
+</ParamField>
+
+<ParamField path="FLASH_HUB" type="= 'flash_hub'">
+</ParamField>
+
+<ParamField path="FLEX" type="= 'flex'">
+</ParamField>
+
+<ParamField path="SAGE" type="= 'sage'">
+</ParamField>
+
+<ParamField path="SAGE_HUB" type="= 'sage_hub'">
+</ParamField>
+
+<ParamField path="SAGE_QK_INT8_PV_FP16_CUDA" type="= '_sage_qk_int8_pv_fp16_cuda'">
+</ParamField>
+
+<ParamField path="SAGE_QK_INT8_PV_FP16_TRITON" type="= '_sage_qk_int8_pv_fp16_triton'">
+</ParamField>
+
+<ParamField path="SAGE_QK_INT8_PV_FP8_CUDA" type="= '_sage_qk_int8_pv_fp8_cuda'">
+</ParamField>
+
+<ParamField path="SAGE_QK_INT8_PV_FP8_CUDA_SM90" type="= '_sage_qk_int8_pv_fp8_cuda_sm90'">
+</ParamField>
+
+<ParamField path="XFORMERS" type="= 'xformers'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionBackend":"#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionBackend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider(
+    backend: aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionBackend
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [KernelProvider](/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
+
+Run SDPA with a selected Diffusers attention dispatcher backend.
+
+
+<ParamField path="_backend" type="Callable[..., Tensor]">
+Load the Diffusers dispatcher bound to the selected backend lazily.
+</ParamField>
+
+<ParamField path="name" type="str">
+Human-readable provider name.
+</ParamField>
+
+<ParamField path="supported_function" type="str">
+Name of the function replaced by this provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider":"#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider._from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore the selected Diffusers attention backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider._infer(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attn_mask: torch.Tensor | None = None,
+    dropout_p: float = 0.0,
+    is_causal: bool = False,
+    scale: float | None = None,
+    enable_gqa: bool = False
+) -> torch.Tensor
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run SDPA through the selected Diffusers attention backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_load_runtime_dependencies">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider._load_runtime_dependencies() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load Diffusers attention dependencies before graph capture.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider._prepare(
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare the provider without running inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider._to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize the selected Diffusers attention backend.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-_import_diffusers_attention_dispatch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider._import_diffusers_attention_dispatch() -> types.ModuleType | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Import and cache the optional Diffusers attention dispatcher module.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-_RUNTIME_UNAVAILABLE_MESSAGE">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider._RUNTIME_UNAVAILABLE_MESSAGE = "Diffusers attention dispatcher is not available. Install it with `pip install '...
+```
+
+</CodeBlock>
+</Anchor>
+

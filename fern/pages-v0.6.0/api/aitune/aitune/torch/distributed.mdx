@@ -1,0 +1,563 @@
+---
+layout: overview
+slug: aitune/aitune/torch/distributed
+title: aitune.torch.distributed
+---
+
+Non-owning integration with an application-managed distributed runtime.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`DistributedContext`](#aitune-torch-distributed-DistributedContext) | A snapshot of distributed state owned by the calling application. |
+| [`DistributedCoordinator`](#aitune-torch-distributed-DistributedCoordinator) | Coordinate operations across ranks or execute them locally in one process. |
+| [`DistributedOutcome`](#aitune-torch-distributed-DistributedOutcome) | Collective success or failure information for one distributed operation. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_error_token`](#aitune-torch-distributed-_error_token) | Return a bounded error description suitable for a collective. |
+| [`distributed_cache_dir`](#aitune-torch-distributed-distributed_cache_dir) | Return a reusable topology- and rank-isolated cache path. |
+| [`distributed_context`](#aitune-torch-distributed-distributed_context) | Return the current non-owning distributed context. |
+| [`distributed_output_path`](#aitune-torch-distributed-distributed_output_path) | Return a rank-specific output filename for multi-process execution. |
+| [`resolve_tuning_device`](#aitune-torch-distributed-resolve_tuning_device) | Resolve a tuning device without moving a module or changing CUDA state. |
+
+### Data
+
+[`_LOCAL_RANK_ENVIRONMENT_VARIABLES`](#aitune-torch-distributed-_LOCAL_RANK_ENVIRONMENT_VARIABLES)
+
+[`_OUT_OF_SPACE_ERROR`](#aitune-torch-distributed-_OUT_OF_SPACE_ERROR)
+
+[`_RANK_ENVIRONMENT_VARIABLES`](#aitune-torch-distributed-_RANK_ENVIRONMENT_VARIABLES)
+
+[`_WORLD_SIZE_ENVIRONMENT_VARIABLES`](#aitune-torch-distributed-_WORLD_SIZE_ENVIRONMENT_VARIABLES)
+
+[`coordinator`](#aitune-torch-distributed-coordinator)
+
+### API
+
+<Anchor id="aitune-torch-distributed-DistributedContext">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.distributed.DistributedContext(
+    rank: int = 0,
+    local_rank: int = 0,
+    world_size: int = 1,
+    torch_distributed_initialized: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+A snapshot of distributed state owned by the calling application.
+
+
+<ParamField path="is_multi_process" type="bool">
+Return whether the launcher describes more than one process.
+</ParamField>
+
+<ParamField path="local_rank" type="int = 0">
+</ParamField>
+
+<ParamField path="rank" type="int = 0">
+</ParamField>
+
+<ParamField path="torch_distributed_initialized" type="bool = False">
+</ParamField>
+
+<ParamField path="world_size" type="int = 1">
+</ParamField>
+<Anchor id="aitune-torch-distributed-DistributedContext-_detect">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedContext":"#aitune-torch-distributed-DistributedContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedContext._detect() -> aitune.torch.distributed.DistributedContext
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Detect launcher and process-group state without modifying either.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedContext-_environment_integer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedContext._environment_integer(
+    names: tuple[str, ...],
+    default: int
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return the first valid integer from the given environment variables.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-distributed-DistributedCoordinator">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedContext":"#aitune-torch-distributed-DistributedContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.distributed.DistributedCoordinator(
+    context: aitune.torch.distributed.DistributedContext | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Coordinate operations across ranks or execute them locally in one process.
+
+Multi-process execution uses the application-owned default process group and requires it to be initialized by the
+application. In single-process execution, collectives degrade to local behavior: barriers are no-ops, values and
+errors are returned as one-element collections, and local failures are raised directly. AITune never initializes
+or destroys a process group.
+
+
+<ParamField path="_context">
+</ParamField>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-_current_context">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedContext":"#aitune-torch-distributed-DistributedContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator._current_context() -> aitune.torch.distributed.DistributedContext
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the bound context or the current application-owned context.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-_validate_context">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedContext":"#aitune-torch-distributed-DistributedContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator._validate_context(
+    context: aitune.torch.distributed.DistributedContext
+) -> aitune.torch.distributed.DistributedContext
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Require an application-initialized process group for multi-process tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-barrier">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator.barrier() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Synchronize ranks when running in multiple processes.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-broadcast_from_rank0">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator.broadcast_from_rank0(
+    rank_zero_value: typing.Any
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Broadcast a small control-plane value from rank zero to every rank.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-collect">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator.collect(
+    value: typing.Any
+) -> list[typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Collect a small control-plane value from every rank.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-collect_results">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedOutcome":"#aitune-torch-distributed-DistributedOutcome"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator.collect_results(
+    value: typing.Any,
+    local_error: Exception | None
+) -> tuple[aitune.torch.distributed.DistributedOutcome, list[typing.Any]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Collect one result and its error status in a single collective.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-decide_by_rank0">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator.decide_by_rank0(
+    rank_zero_decision: bool
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Broadcast rank zero's control-flow decision to every rank.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-outcome">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedOutcome":"#aitune-torch-distributed-DistributedOutcome"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator.outcome(
+    local_error: Exception | None
+) -> aitune.torch.distributed.DistributedOutcome
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Gather one local exception into a single collective operation outcome.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-raise_if_any_rank_fails">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator.raise_if_any_rank_fails(
+    operation: str,
+    error_type: type[Exception] = RuntimeError
+) -> collections.abc.Iterator[None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Raise collectively after a rank fails within the managed operation.
+
+
+</Indent>
+<Anchor id="aitune-torch-distributed-DistributedCoordinator-verify_equal">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedCoordinator.verify_equal(
+    value: typing.Any,
+    description: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Raise when ranks do not report the same control-plane value.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-distributed-DistributedOutcome">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.distributed.DistributedOutcome(
+    errors: tuple[str | None, ...]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Collective success or failure information for one distributed operation.
+
+
+<ParamField path="errors" type="tuple[str | None, ...]">
+</ParamField>
+
+<ParamField path="failed_ranks" type="tuple[int, ...]">
+Return ranks that reported an error.
+</ParamField>
+
+<ParamField path="out_of_space" type="bool">
+Return whether any rank reported an out-of-space failure.
+</ParamField>
+
+<ParamField path="succeeded" type="bool">
+Return whether every rank completed the operation successfully.
+</ParamField>
+<Anchor id="aitune-torch-distributed-DistributedOutcome-raise_if_failed">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.DistributedOutcome.raise_if_failed(
+    operation: str,
+    local_error: Exception | None = None,
+    error_type: type[Exception] = RuntimeError
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Raise the local error or a rank-aware error when another rank failed.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-distributed-_error_token">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed._error_token(
+    error: Exception | None
+) -> str | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return a bounded error description suitable for a collective.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-distributed-distributed_cache_dir">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedContext":"#aitune-torch-distributed-DistributedContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.distributed_cache_dir(
+    path: str | pathlib.Path,
+    context: aitune.torch.distributed.DistributedContext | None = None
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return a reusable topology- and rank-isolated cache path.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-distributed-distributed_context">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedContext":"#aitune-torch-distributed-DistributedContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.distributed_context() -> aitune.torch.distributed.DistributedContext
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the current non-owning distributed context.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-distributed-distributed_output_path">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedContext":"#aitune-torch-distributed-DistributedContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.distributed_output_path(
+    path: str | pathlib.Path,
+    context: aitune.torch.distributed.DistributedContext | None = None
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return a rank-specific output filename for multi-process execution.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-distributed-resolve_tuning_device">
+
+<CodeBlock links={{"aitune.torch.distributed.DistributedContext":"#aitune-torch-distributed-DistributedContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.resolve_tuning_device(
+    requested_device: str | torch.device | None,
+    module: torch.nn.Module | None = None,
+    context: aitune.torch.distributed.DistributedContext | None = None
+) -> torch.device
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve a tuning device without moving a module or changing CUDA state.
+
+**Raises:**
+
+- `RuntimeError`: If no device is requested or inferred and CUDA is unavailable.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-distributed-_LOCAL_RANK_ENVIRONMENT_VARIABLES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed._LOCAL_RANK_ENVIRONMENT_VARIABLES = ('LOCAL_RANK', 'OMPI_COMM_WORLD_LOCAL_RANK')
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-distributed-_OUT_OF_SPACE_ERROR">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed._OUT_OF_SPACE_ERROR = 'OSError[ENOSPC]'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-distributed-_RANK_ENVIRONMENT_VARIABLES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed._RANK_ENVIRONMENT_VARIABLES = ('RANK', 'OMPI_COMM_WORLD_RANK')
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-distributed-_WORLD_SIZE_ENVIRONMENT_VARIABLES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed._WORLD_SIZE_ENVIRONMENT_VARIABLES = ('WORLD_SIZE', 'OMPI_COMM_WORLD_SIZE')
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-distributed-coordinator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.distributed.coordinator = DistributedCoordinator()
+```
+
+</CodeBlock>
+</Anchor>
+

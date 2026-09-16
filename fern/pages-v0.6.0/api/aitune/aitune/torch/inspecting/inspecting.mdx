@@ -1,0 +1,223 @@
+---
+layout: overview
+slug: aitune/aitune/torch/inspecting/inspecting
+title: aitune.torch.inspecting.inspecting
+---
+
+Inspecting and patching modules.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_reset_total_execution_time`](#aitune-torch-inspecting-inspecting-_reset_total_execution_time) | Reset the timings of the modules. |
+| [`_run_inference`](#aitune-torch-inspecting-inspecting-_run_inference) | Run one complete inference in lockstep across distributed ranks. |
+| [`_synchronize_inspection_result`](#aitune-torch-inspecting-inspecting-_synchronize_inspection_result) | Order local modules and apply timings using rank zero's inspection result. |
+| [`_warmup`](#aitune-torch-inspecting-inspecting-_warmup) | Warmup the model by running it on a few samples. |
+| [`inspect`](#aitune-torch-inspecting-inspecting-inspect) | Inspect provided callable object searching for nn.Module members executed as part of forward pass. |
+
+### Data
+
+[`DEFAULT_INSPECT_ITERATIONS`](#aitune-torch-inspecting-inspecting-DEFAULT_INSPECT_ITERATIONS)
+
+[`DEFAULT_WARMUP_ITERATIONS`](#aitune-torch-inspecting-inspecting-DEFAULT_WARMUP_ITERATIONS)
+
+[`LOG_FORMAT`](#aitune-torch-inspecting-inspecting-LOG_FORMAT)
+
+[`logger`](#aitune-torch-inspecting-inspecting-logger)
+
+### API
+
+<Anchor id="aitune-torch-inspecting-inspecting-_reset_total_execution_time">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.ModuleInspector":"/aitune/aitune/torch/inspecting/module_inspector#aitune-torch-inspecting-module_inspector-ModuleInspector"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting._reset_total_execution_time(
+    inspector: aitune.torch.inspecting.module_inspector.ModuleInspector
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reset the timings of the modules.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-inspecting-_run_inference">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting._run_inference(
+    obj: collections.abc.Callable,
+    args: collections.abc.Sequence[typing.Any],
+    kwargs: dict[str, typing.Any]
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run one complete inference in lockstep across distributed ranks.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-inspecting-_synchronize_inspection_result">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting._synchronize_inspection_result(
+    total_execution_time: float,
+    modules: list[aitune.torch.inspecting.module_info.ModuleInfo]
+) -> tuple[float, list[aitune.torch.inspecting.module_info.ModuleInfo]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Order local modules and apply timings using rank zero's inspection result.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-inspecting-_warmup">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DataLoaderFactory"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting._warmup(
+    obj: collections.abc.Callable,
+    dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
+    number_of_iterations: int
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Warmup the model by running it on a few samples.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-inspecting-inspect">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DataLoaderFactory","aitune.torch.inspecting.module_info.InspectedModulesInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-InspectedModulesInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting.inspect(
+    obj: collections.abc.Callable | torch.nn.Module,
+    dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
+    inference_function: collections.abc.Callable | None = None,
+    number_of_iterations: int = DEFAULT_INSPECT_ITERATIONS,
+    warmup_iterations: int = DEFAULT_WARMUP_ITERATIONS,
+    min_depth: int = 0,
+    max_depth: int = 5
+) -> aitune.torch.inspecting.module_info.InspectedModulesInfo
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect provided callable object searching for nn.Module members executed as part of forward pass.
+
+Returns:
+    InspectedModulesInfo object.
+
+**Parameters:**
+
+<ParamField path="obj" type="Callable | torch.nn.Module">
+Callable object to inspect.
+</ParamField>
+
+<ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
+List of tuples with batch size and input.
+</ParamField>
+
+<ParamField path="inference_function" type="Callable | None" default="None">
+Custom inference function to use for inspection, obj is used by default.
+</ParamField>
+
+<ParamField path="number_of_iterations" type="int" default="DEFAULT_INSPECT_ITERATIONS">
+Number of iterations to run for inference.
+</ParamField>
+
+<ParamField path="warmup_iterations" type="int" default="DEFAULT_WARMUP_ITERATIONS">
+Number of iterations to run for warmup.
+</ParamField>
+
+<ParamField path="min_depth" type="int" default="0">
+Minimum depth of the modules to inspect, if root level modules is not working, try to increase this value
+</ParamField>
+
+<ParamField path="max_depth" type="int" default="5">
+Maximum depth of the modules to inspect
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-inspecting-DEFAULT_INSPECT_ITERATIONS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting.DEFAULT_INSPECT_ITERATIONS = 10
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-inspecting-inspecting-DEFAULT_WARMUP_ITERATIONS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting.DEFAULT_WARMUP_ITERATIONS = 5
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-inspecting-inspecting-LOG_FORMAT">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting.LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-inspecting-inspecting-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

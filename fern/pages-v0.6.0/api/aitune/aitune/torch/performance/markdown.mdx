@@ -1,0 +1,302 @@
+---
+layout: overview
+slug: aitune/aitune/torch/performance/markdown
+title: aitune.torch.performance.markdown
+---
+
+Markdown rendering for performance profiles.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_escape_cell`](#aitune-torch-performance-markdown-_escape_cell) | - |
+| [`_format_fraction`](#aitune-torch-performance-markdown-_format_fraction) | - |
+| [`_format_list`](#aitune-torch-performance-markdown-_format_list) | - |
+| [`_format_us`](#aitune-torch-performance-markdown-_format_us) | - |
+| [`_markdown_table`](#aitune-torch-performance-markdown-_markdown_table) | - |
+| [`_render_key_average_table`](#aitune-torch-performance-markdown-_render_key_average_table) | - |
+| [`_render_key_averages`](#aitune-torch-performance-markdown-_render_key_averages) | - |
+| [`_render_markdown`](#aitune-torch-performance-markdown-_render_markdown) | Render a human-readable Markdown view over a performance profile. |
+| [`_render_overview`](#aitune-torch-performance-markdown-_render_overview) | - |
+| [`_render_regions`](#aitune-torch-performance-markdown-_render_regions) | - |
+| [`_render_run_regions`](#aitune-torch-performance-markdown-_render_run_regions) | - |
+| [`_render_runs`](#aitune-torch-performance-markdown-_render_runs) | - |
+| [`_render_warnings`](#aitune-torch-performance-markdown-_render_warnings) | - |
+| [`_yes_no`](#aitune-torch-performance-markdown-_yes_no) | - |
+
+### Data
+
+[`ReportDict`](#aitune-torch-performance-markdown-ReportDict)
+
+### API
+
+<Anchor id="aitune-torch-performance-markdown-_escape_cell">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._escape_cell(
+    value: typing.Any
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_format_fraction">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._format_fraction(
+    value: typing.Any
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_format_list">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._format_list(
+    values: list[str]
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_format_us">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._format_us(
+    value: typing.Any
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_markdown_table">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._markdown_table(
+    headers: list[str],
+    rows: list[list[str]]
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_render_key_average_table">
+
+<CodeBlock links={{"aitune.torch.performance.markdown.ReportDict":"#aitune-torch-performance-markdown-ReportDict"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._render_key_average_table(
+    title: str,
+    key_average: aitune.torch.performance.markdown.ReportDict
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_render_key_averages">
+
+<CodeBlock links={{"aitune.torch.performance.markdown.ReportDict":"#aitune-torch-performance-markdown-ReportDict"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._render_key_averages(
+    report: aitune.torch.performance.markdown.ReportDict
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_render_markdown">
+
+<CodeBlock links={{"aitune.torch.performance.markdown.ReportDict":"#aitune-torch-performance-markdown-ReportDict"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._render_markdown(
+    report: aitune.torch.performance.markdown.ReportDict
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Render a human-readable Markdown view over a performance profile.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_render_overview">
+
+<CodeBlock links={{"aitune.torch.performance.markdown.ReportDict":"#aitune-torch-performance-markdown-ReportDict"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._render_overview(
+    report: aitune.torch.performance.markdown.ReportDict
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_render_regions">
+
+<CodeBlock links={{"aitune.torch.performance.markdown.ReportDict":"#aitune-torch-performance-markdown-ReportDict"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._render_regions(
+    report: aitune.torch.performance.markdown.ReportDict
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_render_run_regions">
+
+<CodeBlock links={{"aitune.torch.performance.markdown.ReportDict":"#aitune-torch-performance-markdown-ReportDict"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._render_run_regions(
+    report: aitune.torch.performance.markdown.ReportDict
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_render_runs">
+
+<CodeBlock links={{"aitune.torch.performance.markdown.ReportDict":"#aitune-torch-performance-markdown-ReportDict"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._render_runs(
+    report: aitune.torch.performance.markdown.ReportDict
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_render_warnings">
+
+<CodeBlock links={{"aitune.torch.performance.markdown.ReportDict":"#aitune-torch-performance-markdown-ReportDict"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._render_warnings(
+    report: aitune.torch.performance.markdown.ReportDict
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-_yes_no">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown._yes_no(
+    value: bool
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-markdown-ReportDict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.markdown.ReportDict = dict[str, Any]
+```
+
+</CodeBlock>
+</Anchor>
+

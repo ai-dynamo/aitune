@@ -22,6 +22,8 @@ Environment variables for AITune.
 
 [`AITUNE_JIT_CACHE_DIR`](#aitune-utils-env_vars-AITUNE_JIT_CACHE_DIR)
 
+[`AITUNE_KERNEL_GENERATION_TIMEOUT`](#aitune-utils-env_vars-AITUNE_KERNEL_GENERATION_TIMEOUT)
+
 [`AITUNE_NVTX_EVENTS`](#aitune-utils-env_vars-AITUNE_NVTX_EVENTS)
 
 [`AITUNE_TRANSFORMERS_INTEGRATION`](#aitune-utils-env_vars-AITUNE_TRANSFORMERS_INTEGRATION)
@@ -90,7 +92,7 @@ aitune.utils.env_vars.AITUNE_CACHE_DIR = Path(os.environ.get('AITUNE_CACHE_DIR',
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.env_vars.AITUNE_DIFFUSERS_INTEGRATION = get_bool_env_variable('AITUNE_DIFFUSERS_INTEGRATION', False)
+aitune.utils.env_vars.AITUNE_DIFFUSERS_INTEGRATION = get_bool_env_variable('AITUNE_DIFFUSERS_INTEGRATION', True)
 ```
 
 </CodeBlock>
@@ -103,6 +105,18 @@ aitune.utils.env_vars.AITUNE_DIFFUSERS_INTEGRATION = get_bool_env_variable('AITU
 
 ```python
 aitune.utils.env_vars.AITUNE_JIT_CACHE_DIR = Path(os.environ.get('AITUNE_JIT_CACHE_DIR', _CACHE_DIR / 'aitune.jit'))
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-utils-env_vars-AITUNE_KERNEL_GENERATION_TIMEOUT">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.env_vars.AITUNE_KERNEL_GENERATION_TIMEOUT = float(os.environ.get('AITUNE_KERNEL_GENERATION_TIMEOUT', 6 * 60 * 60))
 ```
 
 </CodeBlock>

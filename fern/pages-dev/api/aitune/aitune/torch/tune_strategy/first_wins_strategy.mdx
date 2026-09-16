@@ -12,17 +12,17 @@ First Wins tune strategy.
 
 | Name | Description |
 |------|-------------|
-| [`FirstWinsStrategy`](#aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy) | Strategy which runs backends until it gets first working backend. |
+| [`FirstWinsStrategy`](#aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy) | Try backends in order and stop at the first that passes the configured checks. |
 
 ### API
 
 <Anchor id="aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.tune_strategy.first_wins_strategy.FirstWinsStrategy(
-    backends: list[aitune.torch.backend.backend.Backend] | None = None,
+    backends: list[aitune.torch.backend.Backend] | None = None,
     kwargs = {}
 )
 ```
@@ -32,19 +32,22 @@ class aitune.torch.tune_strategy.first_wins_strategy.FirstWinsStrategy(
 
 <Indent>
 
-**Bases:** [PerformanceValidationMixin](/aitune/aitune/torch/tune_strategy/mixin/performance_validation_mixin#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin), [FindMaxBatchSizeMixin](/aitune/aitune/torch/tune_strategy/mixin/find_max_batch_size_mixin#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin)
+**Bases:** [PerformanceValidationMixin](/aitune/aitune/torch/tune_strategy/mixin/performance_validation_mixin#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin), [MultiBackendStrategy](/aitune/aitune/torch/tune_strategy/multi_backend_strategy#aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy)
 
-Strategy which runs backends until it gets first working backend.
+Try backends in order and stop at the first that passes the configured checks.
+
+The default order tries TensorRT export paths before Inductor. It is a fallback
+policy, not a measured performance ranking. AOT and JIT use the same order.
 
 
-<ParamField path="_backends" type="= backends or self._default_backends()">
-</ParamField>
-<Anchor id="aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy-_default_backends">
+<Anchor id="aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy-_default_aot_backends">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.first_wins_strategy.FirstWinsStrategy._default_backends() -> list[aitune.torch.backend.backend.Backend]
+aitune.torch.tune_strategy.first_wins_strategy.FirstWinsStrategy._default_aot_backends(
+    distributed: bool = False
+) -> list[aitune.torch.backend.Backend]
 ```
 
 </CodeBlock>
@@ -52,7 +55,26 @@ aitune.torch.tune_strategy.first_wins_strategy.FirstWinsStrategy._default_backen
 
 <Indent>
 
-Returns default backends.
+Try TensorRT before Inductor for AOT; distributed modules need Inductor backends.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy-_default_jit_backends">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.first_wins_strategy.FirstWinsStrategy._default_jit_backends(
+    distributed: bool = False
+) -> list[aitune.torch.backend.Backend]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Try TensorRT before Inductor for JIT; distributed modules need Inductor backends.
 
 
 </Indent>
@@ -75,17 +97,17 @@ Returns the parts of the description.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy-_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.first_wins_strategy.FirstWinsStrategy._tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
-) -> aitune.torch.backend.backend.Backend
+) -> aitune.torch.backend.Backend
 ```
 
 </CodeBlock>
@@ -93,7 +115,7 @@ aitune.torch.tune_strategy.first_wins_strategy.FirstWinsStrategy._tune(
 
 <Indent>
 
-Tunes given torch module witzh provided graph_spec and data.
+Tune a torch module with the provided graph specification and samples.
 
 
 </Indent>

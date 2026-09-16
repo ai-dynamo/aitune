@@ -1,0 +1,217 @@
+---
+layout: overview
+slug: aitune/aitune/torch/config
+title: aitune.torch.config
+---
+
+Inplace configuration.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`AITuneConfig`](#aitune-torch-config-AITuneConfig) | AITune configuration. |
+| [`AITuneMode`](#aitune-torch-config-AITuneMode) | AITune execution mode used for tuning. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`aitune_cache_dir`](#aitune-torch-config-aitune_cache_dir) | Configure cache dir location based on environment variable. |
+
+### Data
+
+[`DEFAULT_DEVICE_AFTER_TUNING`](#aitune-torch-config-DEFAULT_DEVICE_AFTER_TUNING)
+
+[`DEFAULT_MAX_NUM_SAMPLES_STORED`](#aitune-torch-config-DEFAULT_MAX_NUM_SAMPLES_STORED)
+
+[`DEFAULT_MIN_NUM_SAMPLES`](#aitune-torch-config-DEFAULT_MIN_NUM_SAMPLES)
+
+[`DEFAULT_TUNING_DATA_OUTPUT_PATH`](#aitune-torch-config-DEFAULT_TUNING_DATA_OUTPUT_PATH)
+
+[`config`](#aitune-torch-config-config)
+
+### API
+
+<Anchor id="aitune-torch-config-AITuneConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.config.AITuneConfig()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+AITune configuration.
+
+
+<ParamField path="_cache_dir" type="Path = aitune_cache_dir()">
+</ParamField>
+
+<ParamField path="_min_num_samples" type="int = DEFAULT_MIN_NUM_SAMPLES">
+</ParamField>
+
+<ParamField path="_tuning_data_output_path" type="Path | None">
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+Get the cache directory.
+</ParamField>
+
+<ParamField path="device_after_tuning" type="str = DEFAULT_DEVICE_AFTER_TUNING">
+</ParamField>
+
+<ParamField path="enable_diffusers_integration" type="bool = AITUNE_DIFFUSERS_INTEGRATION">
+</ParamField>
+
+<ParamField path="enable_transformers_integration" type="bool = AITUNE_TRANSFORMERS_INTEGRATION">
+</ParamField>
+
+<ParamField path="max_num_samples_stored" type="int | float = DEFAULT_MAX_NUM_SAMPLES_STORED">
+</ParamField>
+
+<ParamField path="min_num_samples" type="int">
+Get the minimum number of samples to collect before optimizing.
+</ParamField>
+
+<ParamField path="strict_mode" type="bool = True">
+</ParamField>
+
+<ParamField path="tuning_data_output_path" type="Path">
+Get the output path for tuning data.
+</ParamField>
+
+<ParamField path="uses_default_tuning_data_output_path" type="bool">
+Return whether AITune selected the tuning data output path.
+</ParamField>
+<Anchor id="aitune-torch-config-AITuneConfig-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.config.AITuneConfig.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return all configuration attributes keyed by their public name.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-config-AITuneMode">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.config.AITuneMode
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+AITune execution mode used for tuning.
+
+<ParamField path="DECLARATIVE" type="= 'DECLARATIVE'">
+</ParamField>
+
+<ParamField path="JIT" type="= 'JIT'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-config-aitune_cache_dir">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.config.aitune_cache_dir() -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Configure cache dir location based on environment variable.
+
+**Returns:** `Path`
+
+Cache dir from AITUNE_CACHE_DIR environment variable, or default.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-config-DEFAULT_DEVICE_AFTER_TUNING">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.config.DEFAULT_DEVICE_AFTER_TUNING = 'meta'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-config-DEFAULT_MAX_NUM_SAMPLES_STORED">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.config.DEFAULT_MAX_NUM_SAMPLES_STORED = 1
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-config-DEFAULT_MIN_NUM_SAMPLES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.config.DEFAULT_MIN_NUM_SAMPLES = 100
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-config-DEFAULT_TUNING_DATA_OUTPUT_PATH">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.config.DEFAULT_TUNING_DATA_OUTPUT_PATH = _AITUNE_CACHE_DIR / 'tuning_data' / 'report.json'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-config-config">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.config.config = AITuneConfig()
+```
+
+</CodeBlock>
+</Anchor>
+

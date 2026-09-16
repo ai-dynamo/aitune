@@ -1,0 +1,61 @@
+---
+layout: overview
+slug: aitune/aitune/records
+title: aitune.records
+---
+
+Frontend-neutral values shared by tuning frontends and publishers.
+
+The package deliberately depends only on the Python standard library. Frontends
+map native values into these records, and publishers consume them without either
+side importing the other.
+
+``TensorSpec`` is the static interface declared by an executable. Tuning adds
+concrete bounds and batch interpretation in ``TunedTensorSpec``; only tuned
+specifications are stored on an ``Artifact``.
+
+    &gt;&gt;&gt; from pathlib import Path
+    &gt;&gt;&gt; input_ids = TensorSpec("input_ids", DType.INT64, ("batch", "sequence"))
+    &gt;&gt;&gt; attention_mask = TensorSpec("attention_mask", DType.BOOL, ("batch", "sequence"))
+    &gt;&gt;&gt; output_spec = TensorSpec("embedding", DType.FLOAT32, ("batch", "sequence", 768))
+    &gt;&gt;&gt; inputs = (
+    ...     TunedTensorSpec.from_spec(input_ids, min_shape=(1, 8), max_shape=(8, 512), batch_axis=0),
+    ...     TunedTensorSpec.from_spec(attention_mask, min_shape=(1, 8), max_shape=(8, 512), batch_axis=0),
+    ... )
+    &gt;&gt;&gt; outputs = (TunedTensorSpec.from_spec(output_spec, min_shape=(1, 8, 768), max_shape=(8, 512, 768), batch_axis=0),)
+    &gt;&gt;&gt; artifact = ONNXArtifact(
+    ...     path=Path("encoder.onnx"),
+    ...     fingerprint="0" * 64,
+    ...     inputs=inputs,
+    ...     outputs=outputs,
+    ... )
+    &gt;&gt;&gt; artifact.input_names
+    ('input_ids', 'attention_mask')
+    &gt;&gt;&gt; artifact.max_batch_size
+    8
+
+## Submodules
+
+- **[`aitune.records.artifact`](/aitune/aitune/records/artifact)**
+- **[`aitune.records.dtypes`](/aitune/aitune/records/dtypes)**
+- **[`aitune.records.shapes`](/aitune/aitune/records/shapes)**
+
+## Package Contents
+
+### Data
+
+[`__all__`](#aitune-records-__all__)
+
+### API
+
+<Anchor id="aitune-records-__all__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.__all__ = ['Artifact', 'ArtifactIntegrityError', 'DType', 'ONNXArtifact', 'TensorRTPlanArt...
+```
+
+</CodeBlock>
+</Anchor>
+

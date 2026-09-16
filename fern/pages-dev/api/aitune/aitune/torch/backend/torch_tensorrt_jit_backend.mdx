@@ -97,7 +97,13 @@ Backend does not use intermediate formats, and compiled model is not stored.
 <ParamField path="STATE_ORIG_MODULE" type="= 'orig_module'">
 </ParamField>
 
+<ParamField path="STATE_SAMPLES" type="= 'samples'">
+</ParamField>
+
 <ParamField path="STATE_TYPE" type="= 'type'">
+</ParamField>
+
+<ParamField path="_build_mode" type="= BuildMode.JUST_IN_TIME">
 </ParamField>
 
 <ParamField path="_compile_dynamic" type="= self._config.dynamic">
@@ -107,6 +113,15 @@ Backend does not use intermediate formats, and compiled model is not stored.
 </ParamField>
 
 <ParamField path="_devices" type="list[str] = ['cuda']">
+</ParamField>
+
+<ParamField path="_execution_modes">
+</ParamField>
+
+<ParamField path="_infer_impl" type="= self._infer_no_autocast">
+</ParamField>
+
+<ParamField path="_samples" type="SampleStore | None = None">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend-_activate">
 
@@ -127,13 +142,13 @@ Activate backend.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
 ) -> aitune.torch.backend.backend.Backend
 ```
@@ -161,6 +176,23 @@ aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackend._compile
 <Indent>
 
 Compile module with Torch compile.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend-_compile_settings">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackend._compile_settings() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Copy compile settings and isolate the timing cache by rank.
 
 
 </Indent>
@@ -236,14 +268,15 @@ Model outputs
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend-_save_config">
+<Anchor id="aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend-_infer_no_autocast">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackend._save_config(
-    cache_dir: pathlib.Path
-)
+aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackend._infer_no_autocast(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
 ```
 
 </CodeBlock>
@@ -251,7 +284,61 @@ aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackend._save_co
 
 <Indent>
 
-Store the backend configuration to a file.
+Run inference without autocast.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend-_infer_with_autocast">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackend._infer_with_autocast(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run inference with autocast enabled.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend-_iter_samples">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackend._iter_samples()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Iterate persisted samples, with support for legacy inline checkpoint data.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend-_select_infer_impl">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackend._select_infer_impl()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select the inference implementation based on configuration.
 
 
 </Indent>

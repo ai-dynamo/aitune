@@ -129,7 +129,7 @@ class aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy(
 
 <Indent>
 
-**Bases:** [FindMaxBatchSizeMixin](/aitune/aitune/torch/tune_strategy/mixin/find_max_batch_size_mixin#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin)
+**Bases:** [MultiBackendStrategy](/aitune/aitune/torch/tune_strategy/multi_backend_strategy#aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy)
 
 Base class for strategies that select a backend by a profiled metric.
 
@@ -138,14 +138,11 @@ Subclasses set ``_title``, ``_description``, ``_metric_label`` (e.g. "throughput
 and implement :meth:`_measure`, :meth:`_is_better`, and :meth:`_speedup`.
 
 TorchEager is profiled in ``_pre_tune`` as a baseline (not injected into the backends
-list). When performance validation is enabled (default), the strategy falls back to
-TorchEager when no user-provided backend beats it. When disabled, the best
-user-provided backend wins regardless of speed, and the strategy raises if all user
-backends fail.
+list) unless performance validation is disabled. In enabled mode (default), the
+strategy falls back to TorchEager when no user-provided backend beats it. In diagnostic
+mode, the eager comparison is reported but does not affect selection. In disabled mode,
+eager profiling and comparison are skipped.
 
-
-<ParamField path="_backends">
-</ParamField>
 
 <ParamField path="_baseline_backend" type="Backend | None = None">
 </ParamField>
@@ -162,7 +159,7 @@ backends fail.
 <ParamField path="_metric_unit" type="str = ''">
 </ParamField>
 
-<ParamField path="_performance_validation_enabled" type="bool = True">
+<ParamField path="_performance_validation_mode" type="= PerformanceValidationMode.ENABLED">
 </ParamField>
 
 <ParamField path="_title" type="str = ''">
@@ -173,12 +170,18 @@ backends fail.
 
 <ParamField path="perf_validation_results" type="list[BackendPerfResult] = []">
 </ParamField>
-<Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_default_backends">
 
-<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<ParamField path="performance_validation_mode" type="PerformanceValidationMode">
+Return the configured performance validation mode.
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_aggregate_result">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._default_backends() -> list[aitune.torch.backend.Backend]
+aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._aggregate_result(
+    gathered_results: list[aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult]
+) -> aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
 ```
 
 </CodeBlock>
@@ -186,7 +189,45 @@ aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._defaul
 
 <Indent>
 
-Returns default backends.
+Aggregate profiling results into a deterministic distributed result.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_default_aot_backends">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._default_aot_backends(
+    distributed: bool = False
+) -> list[aitune.torch.backend.Backend]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Compare supported export and compiler alternatives for AOT; performance varies by model.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_default_jit_backends">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._default_jit_backends(
+    distributed: bool = False
+) -> list[aitune.torch.backend.Backend]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Compare supported export and compiler alternatives for JIT; performance varies by model.
 
 
 </Indent>
@@ -289,14 +330,14 @@ Emit an explicit message when the TorchEager baseline is the selected backend.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_measure">
 
-<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._measure(
     backend: aitune.torch.backend.Backend,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     profiling_cfg: aitune.torch.task.profiling.ProfilingConfig
 ) -> aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
 ```
@@ -312,16 +353,39 @@ Profiles the backend and returns its result.
 
 
 </Indent>
+<Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_measure_distributed">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._measure_distributed(
+    backend: aitune.torch.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    profiling_cfg: aitune.torch.task.profiling.ProfilingConfig
+) -> aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Measure locally and return an aggregated result only if every rank succeeds.
+
+
+</Indent>
 <Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_post_tune">
 
-<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._post_tune(
     backend: aitune.torch.backend.Backend | None,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample]
+    samples: aitune.torch.module.sample_store.SampleStore
 )
 ```
 
@@ -336,14 +400,14 @@ Emits a speedup line after tuning completes.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_pre_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._pre_tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 )
@@ -360,13 +424,13 @@ Calls super()._pre_tune() (finds max batch size) then profiles TorchEager as bas
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_record_perf_result">
 
-<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult","aitune.torch.tune_strategy.profiling_tune_strategy.BackendPerfResult":"#aitune-torch-tune_strategy-profiling_tune_strategy-BackendPerfResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._record_perf_result(
     backend: aitune.torch.backend.Backend,
     result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
-) -> None
+) -> aitune.torch.tune_strategy.profiling_tune_strategy.BackendPerfResult | None
 ```
 
 </CodeBlock>
@@ -374,7 +438,7 @@ aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._record
 
 <Indent>
 
-Appends a BackendPerfResult for the given backend if a baseline is available.
+Records and returns the eager comparison so profiling logs use the same speedup.
 
 
 </Indent>
@@ -399,14 +463,14 @@ Returns the winning candidate, falling back to the TorchEager baseline when appr
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_run_backends">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.tune_strategy.profiling_tune_strategy._TuneCandidate":"#aitune-torch-tune_strategy-profiling_tune_strategy-_TuneCandidate"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.tune_strategy.profiling_tune_strategy._TuneCandidate":"#aitune-torch-tune_strategy-profiling_tune_strategy-_TuneCandidate"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._run_backends(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path,
     batching: bool,
@@ -447,14 +511,14 @@ Returns the speedup of ``result`` relative to ``baseline_result`` (&gt;1 is fast
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 ) -> aitune.torch.backend.Backend
@@ -465,17 +529,17 @@ aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy._tune(
 
 <Indent>
 
-Tunes given torch module with provided graph_spec and data.
+Tune a torch module with the provided graph specification and samples.
 
 
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy-enable_performance_validation">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy":"#aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.performance_validation.PerformanceValidationMode":"/aitune/aitune/torch/tune_strategy/performance_validation#aitune-torch-tune_strategy-performance_validation-PerformanceValidationMode","aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy":"#aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.enable_performance_validation(
-    enable: bool = True
+    mode: aitune.torch.tune_strategy.performance_validation.PerformanceValidationMode | str | bool = PerformanceValidationMode.E...
 ) -> aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy
 ```
 
@@ -484,7 +548,15 @@ aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.enable_
 
 <Indent>
 
-Enables or disables baseline validation.
+Set how eager-baseline performance data affects backend selection.
+
+**Parameters:**
+
+<ParamField path="mode" type="PerformanceValidationMode | str | bool" default="PerformanceValidationMode.ENABLED">
+``ENABLED`` applies the eager comparison as a selection gate, ``DIAGNOSTIC`` records the
+comparison without affecting selection, and ``DISABLED`` skips eager-baseline profiling.
+For compatibility, ``True`` maps to ``ENABLED`` and ``False`` maps to ``DISABLED``.
+</ParamField>
 
 
 </Indent>

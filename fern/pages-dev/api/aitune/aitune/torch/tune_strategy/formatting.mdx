@@ -1,0 +1,84 @@
+---
+layout: overview
+slug: aitune/aitune/torch/tune_strategy/formatting
+title: aitune.torch.tune_strategy.formatting
+---
+
+Keep tuning progress messages consistent without depending on strategy implementations.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`fmt_speedup_comparison`](#aitune-torch-tune_strategy-formatting-fmt_speedup_comparison) | Keeps per-backend speedup formatting consistent across tuning strategies. |
+| [`fmt_speedup_msg`](#aitune-torch-tune_strategy-formatting-fmt_speedup_msg) | Returns the full speedup summary line with module/backend fields. |
+| [`fmt_speedup_msg_short`](#aitune-torch-tune_strategy-formatting-fmt_speedup_msg_short) | Returns a compact speedup line without module/backend fields. |
+
+### API
+
+<Anchor id="aitune-torch-tune_strategy-formatting-fmt_speedup_comparison">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.formatting.fmt_speedup_comparison(
+    speedup: float,
+    passed: bool
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Keeps per-backend speedup formatting consistent across tuning strategies.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-formatting-fmt_speedup_msg">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.formatting.fmt_speedup_msg(
+    speedup: float,
+    detail: str,
+    name: str,
+    backend_desc: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the full speedup summary line with module/backend fields.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-formatting-fmt_speedup_msg_short">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.formatting.fmt_speedup_msg_short(
+    speedup: float,
+    detail: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns a compact speedup line without module/backend fields.
+
+
+</Indent>

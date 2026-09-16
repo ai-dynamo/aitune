@@ -56,7 +56,13 @@ and required code changes from the user.
 <ParamField path="STATE_TYPE" type="= 'type'">
 </ParamField>
 
+<ParamField path="_build_mode" type="= BuildMode.JUST_IN_TIME">
+</ParamField>
+
 <ParamField path="_config" type="= config or TorchEagerBackendConfig()">
+</ParamField>
+
+<ParamField path="_execution_modes">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_activate">
 
@@ -77,13 +83,13 @@ Activates runner.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.torch_eager.TorchEagerBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
 ) -> aitune.torch.backend.backend.Backend
 ```
@@ -133,12 +139,12 @@ Deploys the backend.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_get_required_casting_dtype">
 
-<CodeBlock links={{"aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.torch_eager.TorchEagerBackend._get_required_casting_dtype(
     module: torch.nn.Module,
-    data: list[aitune.torch.module.recording_module.Sample]
+    samples: collections.abc.Sequence[aitune.torch.module.sample_store.Sample]
 ) -> torch.dtype | None
 ```
 
@@ -158,8 +164,8 @@ Otherwise, return None.
 The module to get the dtype from.
 </ParamField>
 
-<ParamField path="data" type="list[Sample]">
-List of sample inputs to run through the module.
+<ParamField path="samples" type="Sequence[Sample]">
+Recorded samples for the model.
 </ParamField>
 
 **Returns:** `torch.dtype | None`
@@ -238,25 +244,6 @@ The result of the inference.
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_save_config">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.torch_eager.TorchEagerBackend._save_config(
-    cache_dir: pathlib.Path
-)
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Store the backend configuration to a file.
-
-
-</Indent>
 <Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-describe">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -293,23 +280,6 @@ aitune.torch.backend.torch_eager.TorchEagerBackend.from_dict(
 <Badge>classmethod</Badge>
 
 Creates a backend from a state_dict.
-
-
-</Indent>
-<Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-is_jit">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.torch_eager.TorchEagerBackend.is_jit() -> bool
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Returns True if the backend is a JIT backend.
 
 
 </Indent>

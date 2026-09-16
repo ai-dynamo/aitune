@@ -1,0 +1,188 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/torch/torch_exporter
+title: aitune.torch.libs.torch.torch_exporter
+---
+
+Shared Torch Export functionality for ahead-of-time backends.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TorchExportResult`](#aitune-torch-libs-torch-torch_exporter-TorchExportResult) | Result of exporting a module and the exact inputs used for capture. |
+| [`TorchExporter`](#aitune-torch-libs-torch-torch_exporter-TorchExporter) | Prepare and export a module through ``torch.export.export``. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_as_dynamic_hints`](#aitune-torch-libs-torch-torch_exporter-_as_dynamic_hints) | Relax explicit dimensions, returning the original structure when nothing changes. |
+
+### Data
+
+[`__all__`](#aitune-torch-libs-torch-torch_exporter-__all__)
+
+[`logger`](#aitune-torch-libs-torch-torch_exporter-logger)
+
+### API
+
+<Anchor id="aitune-torch-libs-torch-torch_exporter-TorchExportResult">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.torch.torch_exporter.TorchExportResult(
+    exported_program: torch.export.ExportedProgram,
+    sample: aitune.torch.module.sample_store.Sample,
+    dynamic_shapes: dict[str, typing.Any] | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Result of exporting a module and the exact inputs used for capture.
+
+
+<ParamField path="dynamic_shapes" type="dict[str, Any] | None">
+</ParamField>
+
+<ParamField path="exported_program" type="ExportedProgram">
+</ParamField>
+
+<ParamField path="sample" type="Sample">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-libs-torch-torch_exporter-TorchExporter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.torch.torch_exporter.TorchExporter(
+    use_auto: bool = True,
+    strict: bool = True,
+    fallback_to_dynamic_hints: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare and export a module through ``torch.export.export``.
+
+**Parameters:**
+
+<ParamField path="use_auto" type="bool" default="True">
+Use automatic constraints for non-batch dynamic dimensions. Set to
+``False`` when a consumer requires explicit minimum and maximum bounds.
+</ParamField>
+
+<ParamField path="strict" type="bool" default="True">
+Whether Torch Export should use strict tracing.
+</ParamField>
+
+<ParamField path="fallback_to_dynamic_hints" type="bool" default="False">
+Retry constraint violations with bounded
+``Dim.DYNAMIC`` hints instead of explicit dimensions.
+</ParamField>
+
+
+<Anchor id="aitune-torch-libs-torch-torch_exporter-TorchExporter-export">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.libs.torch.torch_exporter.TorchExportResult":"#aitune-torch-libs-torch-torch_exporter-TorchExportResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.torch.torch_exporter.TorchExporter.export(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    device: torch.device | str | None = None
+) -> aitune.torch.libs.torch.torch_exporter.TorchExportResult
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare the sample, build matching shape constraints, and export the module.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+Module to export.
+</ParamField>
+
+<ParamField path="sample" type="Sample">
+Representative positional and keyword inputs.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+Recorded input and output metadata.
+</ParamField>
+
+<ParamField path="device" type="torch.device | str | None" default="None">
+Optional destination for every tensor leaf in the prepared sample.
+</ParamField>
+
+**Returns:** `TorchExportResult`
+
+The exported program and the exact sample and constraints used for capture.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-torch-torch_exporter-_as_dynamic_hints">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.torch.torch_exporter._as_dynamic_hints(
+    dynamic_shapes: dict[str, typing.Any] | None
+) -> dict[str, typing.Any] | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Relax explicit dimensions, returning the original structure when nothing changes.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-torch-torch_exporter-__all__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.torch.torch_exporter.__all__ = ['TorchExporter', 'TorchExportResult']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-libs-torch-torch_exporter-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.torch.torch_exporter.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

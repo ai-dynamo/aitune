@@ -1,0 +1,150 @@
+---
+layout: overview
+slug: aitune/aitune/utils/validation
+title: aitune.utils.validation
+---
+
+Validation helpers.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`in_range`](#aitune-utils-validation-in_range) | Validate that value is within the provided inclusive range. |
+| [`non_negative`](#aitune-utils-validation-non_negative) | Validate that value is greater than or equal to 0. |
+| [`positive`](#aitune-utils-validation-positive) | Validate that value is greater than 0. |
+
+### Data
+
+[`Number`](#aitune-utils-validation-Number)
+
+### API
+
+<Anchor id="aitune-utils-validation-in_range">
+
+<CodeBlock links={{"aitune.utils.validation.Number":"#aitune-utils-validation-Number"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.validation.in_range(
+    value: aitune.utils.validation.Number,
+    min_value: aitune.utils.validation.Number,
+    max_value: aitune.utils.validation.Number,
+    name: str | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that value is within the provided inclusive range.
+
+**Parameters:**
+
+<ParamField path="value" type="Number">
+Numeric value to validate.
+</ParamField>
+
+<ParamField path="min_value" type="Number">
+Inclusive lower bound.
+</ParamField>
+
+<ParamField path="max_value" type="Number">
+Inclusive upper bound.
+</ParamField>
+
+<ParamField path="name" type="str | None" default="None">
+Name of the value being validated.
+</ParamField>
+
+**Raises:**
+
+- `ValueError`: If value is outside the inclusive range.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-validation-non_negative">
+
+<CodeBlock links={{"aitune.utils.validation.Number":"#aitune-utils-validation-Number"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.validation.non_negative(
+    value: aitune.utils.validation.Number,
+    name: str | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that value is greater than or equal to 0.
+
+**Parameters:**
+
+<ParamField path="value" type="Number">
+Numeric value to validate.
+</ParamField>
+
+<ParamField path="name" type="str | None" default="None">
+Name of the value being validated.
+</ParamField>
+
+**Raises:**
+
+- `ValueError`: If value is less than 0.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-validation-positive">
+
+<CodeBlock links={{"aitune.utils.validation.Number":"#aitune-utils-validation-Number"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.validation.positive(
+    value: aitune.utils.validation.Number,
+    name: str | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate that value is greater than 0.
+
+**Parameters:**
+
+<ParamField path="value" type="Number">
+Numeric value to validate.
+</ParamField>
+
+<ParamField path="name" type="str | None" default="None">
+Name of the value being validated.
+</ParamField>
+
+**Raises:**
+
+- `ValueError`: If value is less than or equal to 0.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-validation-Number">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.validation.Number = TypeVar('Number', int, float)
+```
+
+</CodeBlock>
+</Anchor>
+

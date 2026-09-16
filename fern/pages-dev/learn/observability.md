@@ -50,7 +50,7 @@ So:
 
 ## Tuning telemetry
 
-AITune always collects tuning telemetry for each run, graph, and backend attempt. The report includes backend build status, selected backends, and failure information. When performance validation is enabled, it also includes throughput measurements and baseline throughput.
+AITune always collects tuning telemetry for each run, graph, and backend attempt. The report includes backend build status, selected backends, and failure information. When performance validation is enabled, it also includes throughput measurements and baseline throughput. See [Performance Validation](../guides/advanced/tuning_workflow.md#performance-validation) for advanced mode configuration.
 
 By default, telemetry is written to:
 
@@ -71,6 +71,9 @@ import aitune.torch as ait
 
 ait.config.tuning_data_output_path = "/tmp/aitune-report.json"
 ```
+
+In distributed runs, AITune adds the rank to its default report filename. Paths supplied through the environment,
+configuration, or `snapshot_tuning_data(path)` are used exactly as provided, so assign a distinct path on each rank.
 
 You can also snapshot telemetry during a long-running process:
 
@@ -118,13 +121,14 @@ See [Performance Profile](../guides/advanced/performance_profile.md) for the ful
 | `AITUNE_CACHE_DIR` | AOT cache directory, defaulting to `~/.cache/aitune` |
 | `AITUNE_JIT_CACHE_DIR` | JIT build-artifact and log directory, defaulting to `~/.cache/aitune.jit` |
 | `AITUNE_CACHE_MIN_FREE_BYTES` | Minimum free-space warning threshold for cache writes, defaulting to 50 GiB |
+| `AITUNE_KERNEL_GENERATION_TIMEOUT` | Maximum time in seconds to wait for kernel generators, defaulting to 21600 (six hours) |
 | `AITUNE_CONSOLE_OUTPUT=1` | Mirror backend build stdout/stderr to the console while still writing build logs |
 | `AITUNE_TUNING_DATA_PATH` | Override the tuning telemetry JSON output path |
 | `AITUNE_NVTX_EVENTS=1` | Enable NVTX profiling annotations |
 | `AITUNE_HARDWARE_METRICS=1` | Collect hardware metrics during annotated regions |
 | `AITUNE_HARDWARE_METRICS_PATH` | Override the hardware metrics CSV output path |
 | `AITUNE_TRANSFORMERS_INTEGRATION` | Enable or disable Transformers integration, defaulting to enabled |
-| `AITUNE_DIFFUSERS_INTEGRATION` | Enable or disable Diffusers integration, defaulting to disabled |
+| `AITUNE_DIFFUSERS_INTEGRATION` | Enable or disable Diffusers integration, defaulting to enabled |
 | `AITUNE_INSPECT_DEBUG=1` | Enable verbose AOT inspect traversal diagnostics |
 | `AITUNE_INSPECT_DEBUG_RAISE=1` | Raise inspect traversal errors instead of ignoring them |
 

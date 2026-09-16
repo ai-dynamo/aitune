@@ -1,0 +1,611 @@
+---
+layout: overview
+slug: aitune/aitune/torch/performance/attribution_hooks
+title: aitune.torch.performance.attribution_hooks
+---
+
+Hook-based instrumentation for performance profile regions (AOT and untuned).
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`_ActiveRegion`](#aitune-torch-performance-attribution_hooks-_ActiveRegion) | Per-module recording state. Holds the open record_function context and a depth counter. |
+| [`_RegionInstaller`](#aitune-torch-performance-attribution_hooks-_RegionInstaller) | Context manager installing forward hooks and method wrappers on a list of region targets. |
+| [`_RegionTarget`](#aitune-torch-performance-attribution_hooks-_RegionTarget) | One module to instrument with a record_function annotation during capture. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_aot_managed_module_ids`](#aitune-torch-performance-attribution_hooks-_aot_managed_module_ids) | Build the set of id(m) covering AITune AOT wrappers AND their wrapped subtrees. |
+| [`_close_and_delete_context`](#aitune-torch-performance-attribution_hooks-_close_and_delete_context) | Close any active region context stored on ``holder`` at ``attr_name`` and delete the attribute. |
+| [`_discover_aot_targets`](#aitune-torch-performance-attribution_hooks-_discover_aot_targets) | Discover AITune-managed AOT regions from the global module registry. |
+| [`_discover_in_subtree`](#aitune-torch-performance-attribution_hooks-_discover_in_subtree) | Walk one subtree and return targets for the topmost clean (non-managed) submodules. |
+| [`_discover_untuned_targets`](#aitune-torch-performance-attribution_hooks-_discover_untuned_targets) | Discover untuned module roots from obj. |
+| [`_enumerate_candidates`](#aitune-torch-performance-attribution_hooks-_enumerate_candidates) | Return (path, module) tuples for the top-level entry points into obj. |
+| [`_has_managed_descendant`](#aitune-torch-performance-attribution_hooks-_has_managed_descendant) | Return True if any strict descendant (excluding module itself) is AOT- or JIT-managed. |
+| [`_is_managed`](#aitune-torch-performance-attribution_hooks-_is_managed) | Return True if module itself is AOT-wrapped or JIT-patched. |
+| [`_is_transparent_container`](#aitune-torch-performance-attribution_hooks-_is_transparent_container) | Return True for ``nn.Module`` subclasses that are never themselves invoked as modules. |
+| [`_underlying_module`](#aitune-torch-performance-attribution_hooks-_underlying_module) | Return the underlying ``nn.Module``, unwrapping an AITune ``wrapt`` proxy if present. |
+| [`_user_defined_method_names`](#aitune-torch-performance-attribution_hooks-_user_defined_method_names) | Return method names visible on ``type(module)`` (including ancestors) beyond what ``nn.Module`` provides. |
+
+### Data
+
+[`_CONTEXT_ATTR`](#aitune-torch-performance-attribution_hooks-_CONTEXT_ATTR)
+
+### API
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_ActiveRegion">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.performance.attribution_hooks._ActiveRegion(
+    ctx: typing.Any
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Per-module recording state. Holds the open record_function context and a depth counter.
+
+
+<ParamField path="__slots__" type="= ('ctx', 'depth')">
+</ParamField>
+
+<ParamField path="depth" type="= 1">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionInstaller">
+
+<CodeBlock links={{"aitune.torch.performance.attribution_hooks._RegionTarget":"#aitune-torch-performance-attribution_hooks-_RegionTarget"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.performance.attribution_hooks._RegionInstaller(
+    targets: list[aitune.torch.performance.attribution_hooks._RegionTarget]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Context manager installing forward hooks and method wrappers on a list of region targets.
+
+For every target the installer registers pre/post forward hooks. For untuned
+targets it additionally monkey-patches the underlying module's user-defined
+methods (e.g. ``vae.decode``, ``model.generate``) with
+``torch.profiler.record_function`` wrappers. Untuned targets are leaves by
+construction (discovery does not emit a parent that contains another emitted
+region), so a method span cannot overlap a sibling region. AOT targets get
+forward hooks only — wrapping their user methods would overlap their own
+forward-hook span when the method internally calls ``forward``.
+
+Forward hooks and method wrappers share ``_CONTEXT_ATTR`` on each module. The
+first entry point (whether forward or a wrapped method) opens a
+``record_function`` span and stashes it on the module. Subsequent entries on
+the same module — for example ``decode`` calling ``self(...)``, or ``forward``
+calling ``self.decode(...)`` — find the attribute already set, bump a depth
+counter and return without opening a nested context. This prevents
+same-module double-counting in the per-run aggregation. The outer entry's
+annotation name is what appears in the trace.
+Post-hook (``always_call=True``) and the method wrapper's ``finally`` both
+decrement the depth and close+clear the context when it reaches zero.
+
+Pre-existing instance-level method overrides are preserved: the installer
+records whether a name was already in ``vars(module)`` before patching and
+restores it on ``__exit__`` (vs. ``delattr`` for class-defined methods).
+
+Caveat: monkey-patching happens at the instance attribute level, so a method
+reference bound *before* the installer enters (e.g. ``saved = pipe.vae.decode``)
+will bypass the wrapper if called later. Pipeline code that resolves the
+attribute at call site (``self.vae.decode(x)``) is captured normally.
+
+On ``__exit__`` the installer restores patched methods, removes hook handles,
+and sweeps any leftover context attributes. Cleanup failures are collected
+and re-raised as a single ``RuntimeError``.
+
+
+<ParamField path="_handles" type="list[RemovableHandle] = []">
+</ParamField>
+
+<ParamField path="_method_wraps" type="list[tuple[Module, str, Any, bool]] = []">
+</ParamField>
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionInstaller-__enter__">
+
+<CodeBlock links={{"aitune.torch.performance.attribution_hooks._RegionInstaller":"#aitune-torch-performance-attribution_hooks-_RegionInstaller"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._RegionInstaller.__enter__() -> aitune.torch.performance.attribution_hooks._RegionInstaller
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionInstaller-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._RegionInstaller.__exit__(
+    exc: typing.Any = ()
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionInstaller-_make_method_wrapper">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._RegionInstaller._make_method_wrapper(
+    underlying: torch.nn.Module,
+    annotation: str,
+    original: typing.Any
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionInstaller-_make_post_hook">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._RegionInstaller._make_post_hook() -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionInstaller-_make_pre_hook">
+
+<CodeBlock links={{"aitune.torch.performance.attribution_hooks._RegionTarget":"#aitune-torch-performance-attribution_hooks-_RegionTarget"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._RegionInstaller._make_pre_hook(
+    target: aitune.torch.performance.attribution_hooks._RegionTarget
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionInstaller-_remove_handles">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._RegionInstaller._remove_handles(
+    cleanup_errors: list[Exception]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionInstaller-_restore_methods">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._RegionInstaller._restore_methods(
+    cleanup_errors: list[Exception]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionInstaller-_sweep_active_contexts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._RegionInstaller._sweep_active_contexts(
+    cleanup_errors: list[Exception]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Close any leftover region context attributes on every target's underlying module.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_RegionTarget">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.performance.attribution_hooks._RegionTarget(
+    path: str,
+    module: torch.nn.Module,
+    module_type: str,
+    annotation_prefix: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+One module to instrument with a record_function annotation during capture.
+
+``annotation_prefix`` distinguishes the kind of region: AOT-managed modules
+use :data:`AOT_MODULE_REGION_PREFIX`, top-level untuned modules use
+:data:`UNTUNED_MODULE_REGION_PREFIX`. The full annotation name is
+``f"&#123;annotation_prefix&#125;&#123;path&#125;"``.
+
+
+<ParamField path="annotation_prefix" type="str">
+</ParamField>
+
+<ParamField path="module" type="Module">
+</ParamField>
+
+<ParamField path="module_type" type="str">
+</ParamField>
+
+<ParamField path="path" type="str">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_aot_managed_module_ids">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._aot_managed_module_ids() -> set[int]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the set of id(m) covering AITune AOT wrappers AND their wrapped subtrees.
+
+The wrapper proxy and the underlying ``nn.Module`` instance are distinct Python
+objects with different ids. Both must be included so that traversal correctly
+identifies an AOT-managed module whether it surfaces as the wrapper (via
+``parent.named_children()``) or as the wrapped instance (via ``module.modules()``).
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_close_and_delete_context">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._close_and_delete_context(
+    holder: typing.Any,
+    attr_name: str,
+    cleanup_errors: list[Exception]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Close any active region context stored on ``holder`` at ``attr_name`` and delete the attribute.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_discover_aot_targets">
+
+<CodeBlock links={{"aitune.torch.performance.attribution_hooks._RegionTarget":"#aitune-torch-performance-attribution_hooks-_RegionTarget"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._discover_aot_targets() -> list[aitune.torch.performance.attribution_hooks._RegionTarget]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Discover AITune-managed AOT regions from the global module registry.
+
+Each registered ``Module`` wrapper becomes one target whose path is the
+wrapper's user-given name. The hook is registered on the wrapper proxy
+itself; ``wrapt`` forwards the registration to ``wrapper.__wrapped__`` so
+the hook fires from the standard ``nn.Module.__call__`` machinery when the
+wrapper is invoked.
+
+All registered wrappers are instrumented unconditionally. If two wrappers
+are statically nested (one's underlying module is a descendant of another's
+subtree), they may emit overlapping spans on different modules during
+measurement. Whether that overlap actually happens depends on what the
+profiled workload calls — only the wrappers that fire in a given run can
+overlap. Event-time suppression in :meth:`_RuntimeProfile._classify_region_events`
+handles the dynamic case correctly: a nested AOT event observed as a
+descendant of another AOT event in the same profiled run is skipped from
+aggregation; events fired independently (e.g. the inner wrapper invoked
+directly while the outer never ran) are counted normally.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_discover_in_subtree">
+
+<CodeBlock links={{"aitune.torch.performance.attribution_hooks._RegionTarget":"#aitune-torch-performance-attribution_hooks-_RegionTarget"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._discover_in_subtree(
+    module: torch.nn.Module,
+    path: str,
+    aot_managed_ids: set[int]
+) -> list[aitune.torch.performance.attribution_hooks._RegionTarget]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Walk one subtree and return targets for the topmost clean (non-managed) submodules.
+
+Transparent containers (``nn.ModuleList``, ``nn.ModuleDict``) are never invoked
+as modules — caller code iterates their entries — so installing a hook on the
+container would never fire and the contained compute would land in residual.
+Recurse through them instead of attributing them as a single region.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_discover_untuned_targets">
+
+<CodeBlock links={{"aitune.torch.performance.attribution_hooks._RegionTarget":"#aitune-torch-performance-attribution_hooks-_RegionTarget"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._discover_untuned_targets(
+    obj: typing.Any
+) -> list[aitune.torch.performance.attribution_hooks._RegionTarget]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Discover untuned module roots from obj.
+
+For ``nn.Module`` objects, traversal starts from ``obj.named_children()``.
+For other objects (pipeline-like), it starts from direct ``vars(obj)`` attributes
+that are ``nn.Module`` instances. Plain Python ``list`` / ``dict`` attributes are
+not entered; ``nn.ModuleList`` / ``nn.ModuleDict`` are entered transparently
+because they're never invoked as modules themselves (their ``forward`` raises),
+so their children are what get attributed (see :func:`_is_transparent_container`).
+
+From each starting point, discovery walks the subtree to find the topmost
+untuned modules:
+
+- If a module is itself AITune-managed (AOT-wrapped or JIT-patched), it is skipped
+  (its time is already attributed via the wrapper).
+- If a module is a transparent container, discovery recurses into its children.
+- If a module is clean but contains an AOT/JIT-managed descendant, discovery
+  recurses into its children so siblings of the managed module are instrumented
+  individually at their natural depth.
+- Otherwise the module is instrumented as one untuned region.
+
+Results are deduped by ``id(module)``: if two attribute paths reach the same
+underlying instance (e.g. ``self.vae`` and an alias ``self.legacy_vae = self.vae``),
+the first-seen path wins. Aliases would otherwise double-instrument the same
+methods and corrupt restoration on teardown.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_enumerate_candidates">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._enumerate_candidates(
+    obj: typing.Any
+) -> list[tuple[str, torch.nn.Module]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return (path, module) tuples for the top-level entry points into obj.
+
+These are the starting points for subtree discovery — direct children for an
+``nn.Module`` object, or direct attributes for a pipeline-like object.
+
+Note: when ``obj`` is itself an ``nn.Module``, its own methods are not
+instrumented — discovery starts one level down. Per-child breakdown is
+preserved at the cost of root-level method capture. To attribute root-level
+method entry points (e.g. ``model.generate``), wrap the model in a small
+pipeline-like container that holds it as an attribute and pass that as the
+object to profile. Removing this limitation requires hierarchical attribution
+(overlapping spans) which is tracked as Layer 2 follow-up.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_has_managed_descendant">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._has_managed_descendant(
+    module: torch.nn.Module,
+    aot_managed_ids: set[int]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return True if any strict descendant (excluding module itself) is AOT- or JIT-managed.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_is_managed">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._is_managed(
+    module: torch.nn.Module,
+    aot_managed_ids: set[int]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return True if module itself is AOT-wrapped or JIT-patched.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_is_transparent_container">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._is_transparent_container(
+    module: torch.nn.Module
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return True for ``nn.Module`` subclasses that are never themselves invoked as modules.
+
+``ModuleList`` and ``ModuleDict`` raise ``NotImplementedError`` from their ``forward``
+by design — caller code iterates over their entries (``for layer in self.layers``)
+rather than calling them. Treating them as leaf attribution targets would install
+hooks that never fire.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_underlying_module">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._underlying_module(
+    module: torch.nn.Module
+) -> torch.nn.Module
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the underlying ``nn.Module``, unwrapping an AITune ``wrapt`` proxy if present.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_user_defined_method_names">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._user_defined_method_names(
+    module: torch.nn.Module
+) -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return method names visible on ``type(module)`` (including ancestors) beyond what ``nn.Module`` provides.
+
+Walks the full MRO via :func:`dir`, which is intentional — many framework
+entry points like HF Transformers' ``GenerationMixin.generate`` are defined
+on mixins rather than on the concrete model subclass. Filters out:
+
+- names also present in ``dir(nn.Module)`` (already covered by forward hooks or framework concerns)
+- dunder methods and leading-underscore names
+- the ``forward`` method (already hook-covered)
+- non-function descriptors (properties, classmethods, staticmethods, slot wrappers)
+
+Uses :func:`inspect.getattr_static` so accessing a property descriptor does not
+fire its underlying ``fget``.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-attribution_hooks-_CONTEXT_ATTR">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.attribution_hooks._CONTEXT_ATTR = '_aitune_performance_record_function'
+```
+
+</CodeBlock>
+</Anchor>
+

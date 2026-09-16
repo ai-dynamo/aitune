@@ -1,0 +1,483 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/sample_metadata
+title: aitune.torch.module.sample_metadata
+---
+
+Contains SampleMetadata which represents metadata of a function inputs (args and kwargs) or outputs.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`SampleMetadata`](#aitune-torch-module-sample_metadata-SampleMetadata) | Metadata description of inputs (args and kwargs) or outputs of a function. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_hash_value`](#aitune-torch-module-sample_metadata-_hash_value) | Hash nested values, falling back safely for unsupported unhashable objects. |
+| [`batch_tensor`](#aitune-torch-module-sample_metadata-batch_tensor) | Batch tensor so that instead of its own batch size it uses specified batch size. |
+
+### API
+
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"/aitune/aitune/torch/module/locator#aitune-torch-module-locator-Locator","aitune.torch.module.tensor_spec.TensorSpec":"/aitune/aitune/torch/module/tensor_spec#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.sample_metadata.SampleMetadata(
+    tensor_data: tuple[tuple[aitune.torch.module.locator.Locator, aitune.torch.module.tensor_spec.TensorSpec], ...],
+    other_data: tuple[tuple[aitune.torch.module.locator.Locator, typing.Any], ...],
+    strict: bool = False,
+    llm_phase: typing.Literal['prefill', 'decode'] | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Metadata description of inputs (args and kwargs) or outputs of a function.
+
+SampleMetadata captures and tracks metadata about function inputs (args and kwargs) and outputs. It serves
+several important purposes:
+
+- Tensor Tracking: Automatically discovers and tracks all tensors in nested structures
+  (tuples, lists, dicts, dataclasses, custom objects).
+- Shape Inference: Learns about dynamic dimensions and batch axes by observing multiple samples
+  with different shapes via `update_shapes_seen()`.
+- Dynamic Batching: Supports scaling tensors to different batch sizes based on learned patterns
+  using `make_batch()`.
+
+Note:
+1. The __init__ method should not be used directly. instead:
+    - for inputs - use SampleMetadata.from_inputs(bound_arguments)
+    - for outputs - use SampleMetadata.from_outputs(output)
+
+2. In order to support Hugging Face integrations with kv cache the following behavior is changed:
+    - the equality and hash operator ignore all tensors and return value corresponding to the llm_graph_type,
+    which is either "prefill" or "decode". This is deduced based on the cache_position tensor. It cannot be
+    done otherwise because even though kv cache is lazily initialized, it can be cached on subsequent generate
+    calls i.e. it can always have tensors irrespective of the phase.
+
+
+<ParamField path="llm_phase" type="Literal['prefill', 'decode', '']">
+Get LLM graph type.
+</ParamField>
+
+<ParamField path="other_data" type="tuple[tuple[Locator, Any], ...]">
+Get list of other data.
+</ParamField>
+
+<ParamField path="strict" type="bool">
+Return whether non-tensor leaves are included in this metadata.
+</ParamField>
+
+<ParamField path="tensor_data" type="tuple[tuple[Locator, TensorSpec]]">
+Get list of tensor data.
+</ParamField>
+
+<ParamField path="tensor_specs" type="list[TensorSpec]">
+Get list of tensor specs.
+</ParamField>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-__eq__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.__eq__(
+    __value: object
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Equality operator.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-__hash__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.__hash__() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Compute hash of sample metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.__repr__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return representation of metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-__str__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.__str__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert sample metadata to string.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-_hash_other_data">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata._hash_other_data() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Compute an order-independent hash for non-tensor data.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-describe">
+
+<CodeBlock links={{"aitune.torch.module.tensor_spec.InfoLevel":"/aitune/aitune/torch/module/tensor_spec#aitune-torch-module-tensor_spec-InfoLevel"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.describe(
+    info_level: aitune.torch.module.tensor_spec.InfoLevel = InfoLevel.FULL
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get information describing sample metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-detected_dynamic_axis">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.detected_dynamic_axis() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if dynamic axes are detected in the metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-from_dict">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.from_dict(
+    data: dict
+) -> aitune.torch.module.sample_metadata.SampleMetadata
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create SampleMetadata from dictionary.
+
+**Parameters:**
+
+<ParamField path="data" type="dict">
+Dictionary containing serialized metadata
+</ParamField>
+
+**Returns:** `SampleMetadata`
+
+A SampleMetadata instance
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-from_inputs">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.from_inputs(
+    inputs: dict[str, typing.Any],
+    strict: bool = False,
+    batch_size: int | None = None
+) -> aitune.torch.module.sample_metadata.SampleMetadata
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create SampleMetadata from inputs keyed by forward parameter name.
+
+If strict is True, then other data is also included.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-from_outputs">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.from_outputs(
+    output: typing.Any,
+    strict: bool = False,
+    batch_size: int | None = None
+) -> aitune.torch.module.sample_metadata.SampleMetadata
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create SampleMetadata from outputs.
+
+If strict is True, then other data is also included.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-has_batch_axis">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.has_batch_axis() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if metadata has batch axis.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-make_batch">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.make_batch(
+    inputs: dict[str, typing.Any],
+    batch_size: int
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Extrapolate all tensors in forward inputs to the specified batch size.
+
+**Parameters:**
+
+<ParamField path="inputs" type="dict[str, Any]">
+Inputs keyed by forward parameter name
+</ParamField>
+
+<ParamField path="batch_size" type="int">
+Batch size
+</ParamField>
+
+**Returns:** `dict[str, Any]`
+
+Bound inputs with all tensors having the specified batch size
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.to_dict() -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert sample metadata to a serializable dictionary.
+
+**Returns:** `dict`
+
+A dictionary representation of the metadata that can be serialized.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.to_json_dict() -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert sample metadata to a JSON-serializable dictionary.
+
+**Returns:** `dict`
+
+A dictionary representation safe for ``json.dumps``.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-update_max_batch_size">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.update_max_batch_size(
+    inputs: dict[str, typing.Any],
+    max_batch_size: int
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Update input spec with max batch size information.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-update_shapes_seen">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.update_shapes_seen(
+    other: aitune.torch.module.sample_metadata.SampleMetadata
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Update shapes seen from other SampleMetadata.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-sample_metadata-_hash_value">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata._hash_value(
+    value: typing.Any
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Hash nested values, falling back safely for unsupported unhashable objects.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-sample_metadata-batch_tensor">
+
+<CodeBlock links={{"aitune.torch.module.tensor_spec.TensorSpec":"/aitune/aitune/torch/module/tensor_spec#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.batch_tensor(
+    tensor: torch.Tensor,
+    tensor_spec: aitune.torch.module.tensor_spec.TensorSpec,
+    batch_size: int
+) -> torch.Tensor
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Batch tensor so that instead of its own batch size it uses specified batch size.
+
+**Parameters:**
+
+<ParamField path="tensor" type="torch.Tensor">
+Tensor to batch
+</ParamField>
+
+<ParamField path="tensor_spec" type="TensorSpec">
+Metadata to batch tensor according to
+</ParamField>
+
+<ParamField path="batch_size" type="int">
+Batch size
+</ParamField>
+
+**Returns:** `torch.Tensor`
+
+Tensor of specified batch size
+
+
+</Indent>

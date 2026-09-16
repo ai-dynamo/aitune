@@ -1,0 +1,219 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/tensorrt/modelopt_calibration
+title: aitune.torch.backend.tensorrt.modelopt_calibration
+---
+
+NVIDIA ModelOpt Calibration module for quantization and autocast.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_collect_per_sample_dicts`](#aitune-torch-backend-tensorrt-modelopt_calibration-_collect_per_sample_dicts) | Build list of per-sample dicts (ONNX name -&gt; array), skip empty, raise on batch size 0. |
+| [`_concatenate_per_sample`](#aitune-torch-backend-tensorrt-modelopt_calibration-_concatenate_per_sample) | Merge list of per-sample dicts into one dict with arrays concatenated on axis=0. |
+| [`_filter_to_representative_max_shape`](#aitune-torch-backend-tensorrt-modelopt_calibration-_filter_to_representative_max_shape) | Keep only samples whose non-batch shape matches the representative. |
+| [`_sample_shape_rank`](#aitune-torch-backend-tensorrt-modelopt_calibration-_sample_shape_rank) | Return a rank for this sample (larger = larger shape). Used to pick max-shape representative. |
+| [`_sample_to_input_dict`](#aitune-torch-backend-tensorrt-modelopt_calibration-_sample_to_input_dict) | Convert one (args, kwargs) sample to a dict of ONNX input name -&gt; numpy array. |
+| [`_shapes_match`](#aitune-torch-backend-tensorrt-modelopt_calibration-_shapes_match) | Return True if sample has the same non-batch shapes as reference for all keys. |
+| [`prepare_calibration_data`](#aitune-torch-backend-tensorrt-modelopt_calibration-prepare_calibration_data) | Prepare calibration data in ModelOpt format from 1..N samples and graph_spec. |
+
+### Data
+
+[`logger`](#aitune-torch-backend-tensorrt-modelopt_calibration-logger)
+
+### API
+
+<Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-_collect_per_sample_dicts">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.modelopt_calibration._collect_per_sample_dicts(
+    data: collections.abc.Sequence[aitune.torch.module.sample_store.Sample],
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> list[dict[str, numpy.ndarray]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build list of per-sample dicts (ONNX name -&gt; array), skip empty, raise on batch size 0.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-_concatenate_per_sample">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.modelopt_calibration._concatenate_per_sample(
+    per_sample: list[dict[str, numpy.ndarray]]
+) -> dict[str, numpy.ndarray]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Merge list of per-sample dicts into one dict with arrays concatenated on axis=0.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-_filter_to_representative_max_shape">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.modelopt_calibration._filter_to_representative_max_shape(
+    per_sample: list[dict[str, numpy.ndarray]]
+) -> list[dict[str, numpy.ndarray]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Keep only samples whose non-batch shape matches the representative.
+
+The representative is the sample with the largest total number of elements.
+Matching is on shape[1:] only, so different batch sizes are kept and
+concatenated along axis=0. Samples with different non-batch shapes are
+dropped with a warning.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-_sample_shape_rank">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.modelopt_calibration._sample_shape_rank(
+    sample: dict[str, numpy.ndarray]
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return a rank for this sample (larger = larger shape). Used to pick max-shape representative.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-_sample_to_input_dict">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.modelopt_calibration._sample_to_input_dict(
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> dict[str, numpy.ndarray]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert one (args, kwargs) sample to a dict of ONNX input name -&gt; numpy array.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-_shapes_match">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.modelopt_calibration._shapes_match(
+    sample: dict[str, numpy.ndarray],
+    reference: dict[str, numpy.ndarray]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return True if sample has the same non-batch shapes as reference for all keys.
+
+Compares shape[1:] only so different batch sizes (axis=0) are allowed and
+can be concatenated along axis=0.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-prepare_calibration_data">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.modelopt_calibration.prepare_calibration_data(
+    data: collections.abc.Sequence[aitune.torch.module.sample_store.Sample],
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> dict[str, numpy.ndarray]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare calibration data in ModelOpt format from 1..N samples and graph_spec.
+
+Builds a single dict of arrays (one per ONNX input) by mapping each sample to
+ONNX input names and concatenating all samples along axis=0. So you get one
+"large batch" per input, e.g. 3 samples of shapes (2,3,224,224), (1,3,224,224),
+(4,3,224,224) → one array of shape (7, 3, 224, 224). ModelOpt requires this
+format (dict of arrays, not a list of batches).
+
+Tensors are moved to CPU and converted to numpy. Uses graph_spec.input_spec
+for ONNX input names and locators into normalized forward arguments.
+
+**Parameters:**
+
+<ParamField path="data" type="Sequence[Sample]">
+List of 1..N Sample objects (args, kwargs); each can have any batch size.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+Graph specification whose input_spec defines ONNX input names
+and locators into normalized forward arguments.
+</ParamField>
+
+**Returns:** `dict[str, np.ndarray]`
+
+Single dict mapping ONNX input names to numpy arrays. Each value has
+
+**Raises:**
+
+- `ValueError`: If data is empty or graph_spec has no tensor inputs.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.modelopt_calibration.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

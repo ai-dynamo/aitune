@@ -1,0 +1,394 @@
+---
+layout: overview
+slug: aitune/aitune/torch/task/correctness
+title: aitune.torch.task.correctness
+---
+
+Correctness checking utilities.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`CorrectnessDynamicShapeError`](#aitune-torch-task-correctness-CorrectnessDynamicShapeError) | Error raised when dynamic-shape boundary inference fails. |
+| [`CorrectnessInputMutationError`](#aitune-torch-task-correctness-CorrectnessInputMutationError) | Error raised when a backend does not reproduce eager input mutations. |
+| [`CorrectnessTensorShapeError`](#aitune-torch-task-correctness-CorrectnessTensorShapeError) | Error raised when tensor shapes do not match. |
+| [`CorrectnessValueError`](#aitune-torch-task-correctness-CorrectnessValueError) | Error raised when value is not finite i.e. NaN or infinity. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_check_output_correctness`](#aitune-torch-task-correctness-_check_output_correctness) | Check if model outputs contain any NaN or infinity values. |
+| [`_check_output_tensor_shapes`](#aitune-torch-task-correctness-_check_output_tensor_shapes) | Check if the output tensor shapes are the same as the original output tensor shapes. |
+| [`_check_post_input_metadata`](#aitune-torch-task-correctness-_check_post_input_metadata) | Check that a backend reproduces the eager module's observable input mutations. |
+| [`_dynamic_shape_boundary_samples`](#aitune-torch-task-correctness-_dynamic_shape_boundary_samples) | Create min/max input samples for dynamic-shape correctness checks. |
+| [`_resize_sample_to_shape`](#aitune-torch-task-correctness-_resize_sample_to_shape) | Resize each tensor input in a sample to the requested TensorSpec shape attribute. |
+| [`_resize_tensor`](#aitune-torch-task-correctness-_resize_tensor) | Resize a tensor by slicing or repeating each axis to match a target shape. |
+| [`check_dynamic_shape_boundary_inference`](#aitune-torch-task-correctness-check_dynamic_shape_boundary_inference) | Check dynamic-shape boundary inference. |
+| [`check_inference_output_correctness`](#aitune-torch-task-correctness-check_inference_output_correctness) | Check recorded-sample output and post-call input correctness. |
+
+### API
+
+<Anchor id="aitune-torch-task-correctness-CorrectnessDynamicShapeError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.correctness.CorrectnessDynamicShapeError()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `ValueError`
+
+Error raised when dynamic-shape boundary inference fails.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-CorrectnessInputMutationError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.correctness.CorrectnessInputMutationError()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `ValueError`
+
+Error raised when a backend does not reproduce eager input mutations.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-CorrectnessTensorShapeError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.correctness.CorrectnessTensorShapeError()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `ValueError`
+
+Error raised when tensor shapes do not match.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-CorrectnessValueError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.correctness.CorrectnessValueError()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `ValueError`
+
+Error raised when value is not finite i.e. NaN or infinity.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-_check_output_correctness">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness._check_output_correctness(
+    output: typing.Any,
+    name: str = 'output',
+    depth: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if model outputs contain any NaN or infinity values.
+
+**Parameters:**
+
+<ParamField path="output" type="Any">
+Model outputs. Dict, list, tensors or scalars. Strings are ignored.
+</ParamField>
+
+<ParamField path="name" type="str" default="'output'">
+Name of the output. If not provided, the name will be inferred from the output type.
+</ParamField>
+
+<ParamField path="depth" type="int" default="0">
+Depth of the output. Auxiliary variable for recursive calls.
+</ParamField>
+
+**Raises:**
+
+- `CorrectnessCheckError`: If any output contains NaN or infinity values
+- `ValueError`: If output does not contain tensors or scalars
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-_check_output_tensor_shapes">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness._check_output_tensor_shapes(
+    expected: aitune.torch.module.sample_metadata.SampleMetadata,
+    actual: aitune.torch.module.sample_metadata.SampleMetadata
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the output tensor shapes are the same as the original output tensor shapes.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-_check_post_input_metadata">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness._check_post_input_metadata(
+    expected: aitune.torch.module.sample_metadata.SampleMetadata,
+    actual: aitune.torch.module.sample_metadata.SampleMetadata,
+    name: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check that a backend reproduces the eager module's observable input mutations.
+
+Stateful modules may populate caches or advance indices through their inputs. A backend can
+return a valid output while missing these mutations, causing later calls to fail. This check
+compares tensor locations and shapes, plus non-tensor values as order-independent mappings.
+Tensor contents are not compared when their location and shape remain unchanged.
+
+**Parameters:**
+
+<ParamField path="expected" type="SampleMetadata">
+Input metadata recorded after eager execution.
+</ParamField>
+
+<ParamField path="actual" type="SampleMetadata">
+Input metadata captured after backend execution.
+</ParamField>
+
+<ParamField path="name" type="str">
+Qualified backend name included in correctness errors.
+</ParamField>
+
+**Raises:**
+
+- `CorrectnessInputMutationError`: If post-call tensor metadata or non-tensor values differ.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-_dynamic_shape_boundary_samples">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness._dynamic_shape_boundary_samples(
+    sample: tuple[tuple, dict],
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> list[tuple[tuple, dict]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create min/max input samples for dynamic-shape correctness checks.
+
+Note: These samples are intended only for validating min and max shapes. Their tensor values may be
+numerically invalid and can produce NaN or Inf outputs.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-_resize_sample_to_shape">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness._resize_sample_to_shape(
+    sample: tuple[tuple, dict],
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    shape_attr: str
+) -> tuple[tuple, dict]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resize each tensor input in a sample to the requested TensorSpec shape attribute.
+
+Note: These samples are intended only for validating min and max shapes. Their tensor values may be
+numerically invalid and can produce NaN or Inf outputs.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-_resize_tensor">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness._resize_tensor(
+    tensor: torch.Tensor,
+    target_shape: list[int]
+) -> torch.Tensor
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resize a tensor by slicing or repeating each axis to match a target shape.
+
+Note: These samples are intended only for validating min and max shapes. Their tensor values may be
+numerically invalid and can produce NaN or Inf outputs.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-check_dynamic_shape_boundary_inference">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness.check_dynamic_shape_boundary_inference(
+    sample: tuple[tuple, dict],
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    infer: collections.abc.Callable[..., typing.Any],
+    name: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check dynamic-shape boundary inference.
+
+**Parameters:**
+
+<ParamField path="sample" type="tuple[tuple, dict]">
+Sample inputs used as a template for min and max shape checks.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+Recorded graph metadata used to construct and validate boundary inputs.
+</ParamField>
+
+<ParamField path="infer" type="Callable[..., Any]">
+Inference callable to validate.
+</ParamField>
+
+<ParamField path="name" type="str">
+Name of the module or backend being checked.
+</ParamField>
+
+**Returns:**
+
+None.
+
+**Raises:**
+
+- `CorrectnessDynamicShapeError`: If inference fails on min or max shape inputs.
+- `CorrectnessTensorShapeError`: If inferred output tensor shapes do not match the expected metadata.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-correctness-check_inference_output_correctness">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.correctness.check_inference_output_correctness(
+    data: collections.abc.Iterable[tuple[tuple, dict]],
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    infer: collections.abc.Callable[..., typing.Any],
+    name: str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check recorded-sample output and post-call input correctness.
+
+**Parameters:**
+
+<ParamField path="data" type="Iterable[tuple[tuple, dict]]">
+Recorded samples to run through inference.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+Recorded output metadata and pre/post-call input contract.
+</ParamField>
+
+<ParamField path="infer" type="Callable[..., Any]">
+Inference callable to validate.
+</ParamField>
+
+<ParamField path="name" type="str">
+Name of the module or backend being checked.
+</ParamField>
+
+**Returns:**
+
+None.
+
+**Raises:**
+
+- `CorrectnessValueError`: If any output value is NaN or infinite.
+- `CorrectnessTensorShapeError`: If inferred output tensor shapes do not match the expected metadata.
+- `CorrectnessInputMutationError`: If post-call inputs do not match eager execution.
+
+
+</Indent>

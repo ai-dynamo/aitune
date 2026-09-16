@@ -54,14 +54,14 @@ Describes what strategy is doing.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-DummyTuneStrategy-_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.tune_strategy.DummyTuneStrategy._tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 )
@@ -72,7 +72,7 @@ aitune.torch.tune_strategy.tune_strategy.DummyTuneStrategy._tune(
 
 <Indent>
 
-Tunes given torch module with provided graph_spec and data.
+Tune a torch module with the provided graph specification and samples.
 
 
 </Indent>
@@ -127,7 +127,7 @@ Get a logger specific to this backend implementation.
 </ParamField>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_build_and_validate_backend">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.tune_strategy.TuneStrategy._build_and_validate_backend(
@@ -135,7 +135,7 @@ aitune.torch.tune_strategy.tune_strategy.TuneStrategy._build_and_validate_backen
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path,
     raise_on_failure: bool = False
@@ -170,8 +170,8 @@ Module name.
 Graph specification.
 </ParamField>
 
-<ParamField path="data" type="list[Sample]">
-Sample data.
+<ParamField path="samples" type="SampleStore">
+Recorded samples.
 </ParamField>
 
 <ParamField path="device" type="torch.device">
@@ -189,6 +189,47 @@ If True, re-raise the original exception instead of returning None.
 **Returns:** `Backend | None`
 
 The built and validated backend, or None on failure.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_check_correctness">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._check_correctness(
+    backend: aitune.torch.backend.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run correctness checks for a built backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_configure_for_module">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.tune_strategy.TuneStrategy._configure_for_module(
+    module: torch.nn.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve any module-dependent defaults before reporting or tuning.
 
 
 </Indent>
@@ -213,14 +254,14 @@ aitune.torch.tune_strategy.tune_strategy.TuneStrategy._count_layers(
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_describe">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.tune_strategy.TuneStrategy._describe(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path,
     dry_run: bool = False
@@ -300,14 +341,14 @@ aitune.torch.tune_strategy.tune_strategy.TuneStrategy._log_file(
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_post_tune">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.tune_strategy.TuneStrategy._post_tune(
     backend: aitune.torch.backend.backend.Backend,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample]
+    samples: aitune.torch.module.sample_store.SampleStore
 )
 ```
 
@@ -322,14 +363,14 @@ Post-tune hook. Override to add custom logic after tuning.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_pre_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.tune_strategy.TuneStrategy._pre_tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 )
@@ -363,14 +404,14 @@ Returns a JSON-serializable summary of the shared profiling config.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.tune_strategy.TuneStrategy._tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 ) -> aitune.torch.backend.backend.Backend
@@ -383,7 +424,7 @@ aitune.torch.tune_strategy.tune_strategy.TuneStrategy._tune(
 
 <Badge>abstract</Badge>
 
-Tunes given torch module with provided graph_spec and data.
+Tune a torch module with the provided graph specification and samples.
 
 Note: each tuning operation should do a deep copy of a backend as tuning could be called multiple times for the
 same module i.e. if there are different graph specs
@@ -400,14 +441,14 @@ The tuned and activated backend.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-check_correctness">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.tune_strategy.TuneStrategy.check_correctness(
     backend: aitune.torch.backend.backend.Backend,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample]
+    samples: aitune.torch.module.sample_store.SampleStore
 )
 ```
 
@@ -432,8 +473,8 @@ The name of the module.
 The graph spec of the module.
 </ParamField>
 
-<ParamField path="data" type="list[Sample]">
-The data to check.
+<ParamField path="samples" type="SampleStore">
+Recorded samples to check.
 </ParamField>
 
 **Raises:**
@@ -520,14 +561,14 @@ JSON-serializable so it can be stored on tune-data events.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.tune_strategy.TuneStrategy.tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 ) -> aitune.torch.backend.backend.Backend
@@ -538,20 +579,20 @@ aitune.torch.tune_strategy.tune_strategy.TuneStrategy.tune(
 
 <Indent>
 
-Tunes given torch module with provided graph_spec and data.
+Tune a torch module with the provided graph specification and samples.
 
 
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-tune_dry_run">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.tune_strategy.TuneStrategy.tune_dry_run(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 )

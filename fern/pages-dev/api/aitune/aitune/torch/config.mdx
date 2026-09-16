@@ -23,8 +23,6 @@ Inplace configuration.
 
 ### Data
 
-[`DEFAULT_DEVICE`](#aitune-torch-config-DEFAULT_DEVICE)
-
 [`DEFAULT_DEVICE_AFTER_TUNING`](#aitune-torch-config-DEFAULT_DEVICE_AFTER_TUNING)
 
 [`DEFAULT_MAX_NUM_SAMPLES_STORED`](#aitune-torch-config-DEFAULT_MAX_NUM_SAMPLES_STORED)
@@ -59,7 +57,7 @@ AITune configuration.
 <ParamField path="_min_num_samples" type="int = DEFAULT_MIN_NUM_SAMPLES">
 </ParamField>
 
-<ParamField path="_tuning_data_output_path" type="Path">
+<ParamField path="_tuning_data_output_path" type="Path | None">
 </ParamField>
 
 <ParamField path="cache_dir" type="Path">
@@ -87,6 +85,10 @@ Get the minimum number of samples to collect before optimizing.
 
 <ParamField path="tuning_data_output_path" type="Path">
 Get the output path for tuning data.
+</ParamField>
+
+<ParamField path="uses_default_tuning_data_output_path" type="bool">
+Return whether AITune selected the tuning data output path.
 </ParamField>
 <Anchor id="aitune-torch-config-AITuneConfig-to_dict">
 
@@ -153,18 +155,6 @@ Cache dir from AITUNE_CACHE_DIR environment variable, or default.
 
 
 </Indent>
-
-<Anchor id="aitune-torch-config-DEFAULT_DEVICE">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.config.DEFAULT_DEVICE = 'cuda:0'
-```
-
-</CodeBlock>
-</Anchor>
-
 
 <Anchor id="aitune-torch-config-DEFAULT_DEVICE_AFTER_TUNING">
 

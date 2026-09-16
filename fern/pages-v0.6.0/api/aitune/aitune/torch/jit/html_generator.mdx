@@ -1,0 +1,239 @@
+---
+layout: overview
+slug: aitune/aitune/torch/jit/html_generator
+title: aitune.torch.jit.html_generator
+---
+
+HTML generation module for InspectModule visualization.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`HTMLGenerator`](#aitune-torch-jit-html_generator-HTMLGenerator) | HTML generator for InspectModule hierarchy visualization. |
+
+### API
+
+<Anchor id="aitune-torch-jit-html_generator-HTMLGenerator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.jit.html_generator.HTMLGenerator()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+HTML generator for InspectModule hierarchy visualization.
+
+
+<Anchor id="aitune-torch-jit-html_generator-HTMLGenerator-_calculate_module_stats">
+
+<CodeBlock links={{"aitune.torch.jit.inspect_module.InspectModule":"/aitune/aitune/torch/jit/inspect_module#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.html_generator.HTMLGenerator._calculate_module_stats(
+    inspect_module_class: type[aitune.torch.jit.inspect_module.InspectModule]
+) -> tuple[int, str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Calculate module statistics including total count and parameters.
+
+**Parameters:**
+
+<ParamField path="inspect_module_class" type="type[InspectModule]">
+The InspectModule class to calculate stats for.
+</ParamField>
+
+**Returns:** `tuple[int, str]`
+
+Tuple of (total_module_count, total_parameters_string).
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-html_generator-HTMLGenerator-_calculate_self_time">
+
+<CodeBlock links={{"aitune.torch.jit.inspect_module.InspectModule":"/aitune/aitune/torch/jit/inspect_module#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.html_generator.HTMLGenerator._calculate_self_time(
+    module: aitune.torch.jit.inspect_module.InspectModule
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Calculate self time for a module.
+
+Self time is the total execution time minus the sum of all children's execution times.
+
+**Parameters:**
+
+<ParamField path="module" type="InspectModule">
+The module to calculate self time for.
+</ParamField>
+
+**Returns:** `float`
+
+Self time in seconds.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-html_generator-HTMLGenerator-_generate_module_tree_html">
+
+<CodeBlock links={{"aitune.torch.jit.inspect_module.InspectModule":"/aitune/aitune/torch/jit/inspect_module#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.html_generator.HTMLGenerator._generate_module_tree_html(
+    inspect_module_class: type[aitune.torch.jit.inspect_module.InspectModule]
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Generate HTML for the module tree structure.
+
+**Parameters:**
+
+<ParamField path="inspect_module_class" type="type[InspectModule]">
+The InspectModule class to generate HTML for.
+</ParamField>
+
+**Returns:** `str`
+
+HTML string representing the module hierarchy.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-html_generator-HTMLGenerator-_get_css_styles">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.html_generator.HTMLGenerator._get_css_styles() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Get CSS styles for the HTML page.
+
+**Returns:** `str`
+
+CSS styles as a string.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-html_generator-HTMLGenerator-_get_javascript">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.html_generator.HTMLGenerator._get_javascript() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Get JavaScript for interactive functionality.
+
+**Returns:** `str`
+
+JavaScript code as a string.
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-html_generator-HTMLGenerator-_traverse_modules">
+
+<CodeBlock links={{"aitune.torch.jit.inspect_module.InspectModule":"/aitune/aitune/torch/jit/inspect_module#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.html_generator.HTMLGenerator._traverse_modules(
+    inspect_module_class: type[aitune.torch.jit.inspect_module.InspectModule]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Generator that traverses all modules in the hierarchy.
+
+**Parameters:**
+
+<ParamField path="inspect_module_class" type="type[InspectModule]">
+The InspectModule class to traverse.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-jit-html_generator-HTMLGenerator-generate_html_content">
+
+<CodeBlock links={{"aitune.torch.jit.inspect_module.InspectModule":"/aitune/aitune/torch/jit/inspect_module#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.html_generator.HTMLGenerator.generate_html_content(
+    inspect_module_class: type[aitune.torch.jit.inspect_module.InspectModule],
+    model_name: str = 'Model'
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Generate comprehensive HTML content for module hierarchy visualization.
+
+**Parameters:**
+
+<ParamField path="inspect_module_class" type="type[InspectModule]">
+The InspectModule class to generate HTML for.
+</ParamField>
+
+<ParamField path="model_name" type="str" default="'Model'">
+The name of the model to display in the subtitle.
+</ParamField>
+
+**Returns:** `str`
+
+Complete HTML document as a string with CSS and JavaScript.
+
+
+</Indent>
+</Indent>

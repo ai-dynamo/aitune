@@ -43,14 +43,14 @@ TuneStrategy mixin that finds max batch size.
 </ParamField>
 <Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin-_pre_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin._pre_tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 )
@@ -86,14 +86,14 @@ Enables or disables find max batch size.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin-find_max_batch_size">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin.find_max_batch_size(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 )

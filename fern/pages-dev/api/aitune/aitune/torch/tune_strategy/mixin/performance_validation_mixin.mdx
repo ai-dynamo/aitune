@@ -15,13 +15,6 @@ Performance validation mixin for tune strategy.
 | [`PerformanceValidationMixin`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin) | TuneStrategy mixin that validates each backend against a TorchEager throughput baseline. |
 | [`PerformanceValidationMixinResult`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixinResult) | Throughput and speedup result for a single backend. |
 
-### Functions
-
-| Name | Description |
-|------|-------------|
-| [`fmt_speedup_msg`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-fmt_speedup_msg) | Returns the full speedup summary line with module/backend fields. |
-| [`fmt_speedup_msg_short`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-fmt_speedup_msg_short) | Returns a compact speedup line without module/backend fields. |
-
 ### API
 
 <Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin">
@@ -45,10 +38,11 @@ class aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceV
 
 TuneStrategy mixin that validates each backend against a TorchEager throughput baseline.
 
-When performance validation is enabled, profiles TorchEager during _pre_tune with the strategy profiling
+Unless performance validation is disabled, profiles TorchEager during _pre_tune with the strategy profiling
 config narrowed to the resolved batch size (from graph_spec.get_max_batch_size()) to establish a baseline.
 For every candidate backend, profiles with the same task-local profiling config and appends a
-PerformanceValidationMixinResult. Backends with speedup below the configured threshold are rejected.
+PerformanceValidationMixinResult. In enabled mode, backends with speedup below the configured threshold
+are rejected. Diagnostic mode records the same results without affecting backend selection.
 
 
 <ParamField path="_baseline_backend" type="Backend | None = None">
@@ -57,7 +51,7 @@ PerformanceValidationMixinResult. Backends with speedup below the configured thr
 <ParamField path="_baseline_throughput" type="float | None = None">
 </ParamField>
 
-<ParamField path="_performance_validation_enabled" type="bool = True">
+<ParamField path="_performance_validation_mode" type="= PerformanceValidationMode.ENABLED">
 </ParamField>
 
 <ParamField path="_resolved_batch_size" type="int | None = None">
@@ -65,9 +59,13 @@ PerformanceValidationMixinResult. Backends with speedup below the configured thr
 
 <ParamField path="perf_validation_results" type="list[PerformanceValidationMixinResult] = []">
 </ParamField>
+
+<ParamField path="performance_validation_mode" type="PerformanceValidationMode">
+Return the configured performance validation mode.
+</ParamField>
 <Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_build_validate_and_check_perf">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin._build_validate_and_check_perf(
@@ -75,7 +73,7 @@ aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidat
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path,
     raise_on_failure: bool = False
@@ -116,14 +114,14 @@ Emit an explicit message when the TorchEager baseline is the selected backend.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_post_tune">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin._post_tune(
     backend: aitune.torch.backend.backend.Backend | None,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample]
+    samples: aitune.torch.module.sample_store.SampleStore
 )
 ```
 
@@ -138,14 +136,14 @@ Emits a speedup line after tuning completes.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_pre_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin._pre_tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path
 )
@@ -182,11 +180,11 @@ Returns the strategy profiling config narrowed to one validation batch size.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-enable_performance_validation">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin":"#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.performance_validation.PerformanceValidationMode":"/aitune/aitune/torch/tune_strategy/performance_validation#aitune-torch-tune_strategy-performance_validation-PerformanceValidationMode","aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin":"#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin.enable_performance_validation(
-    enable: bool = True
+    mode: aitune.torch.tune_strategy.performance_validation.PerformanceValidationMode | str | bool = PerformanceValidationMode.E...
 ) -> aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin
 ```
 
@@ -195,7 +193,15 @@ aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidat
 
 <Indent>
 
-Enables or disables TorchEager baseline profiling and candidate performance checks.
+Set how eager-baseline performance data affects backend selection.
+
+**Parameters:**
+
+<ParamField path="mode" type="PerformanceValidationMode | str | bool" default="PerformanceValidationMode.ENABLED">
+``ENABLED`` applies the eager comparison as a selection gate, ``DIAGNOSTIC`` records the
+comparison without affecting selection, and ``DISABLED`` skips eager-baseline profiling.
+For compatibility, ``True`` maps to ``ENABLED`` and ``False`` maps to ``DISABLED``.
+</ParamField>
 
 
 </Indent>
@@ -239,48 +245,4 @@ Throughput and speedup result for a single backend.
 
 <ParamField path="throughput" type="float">
 </ParamField>
-</Indent>
-
-<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-fmt_speedup_msg">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.tune_strategy.mixin.performance_validation_mixin.fmt_speedup_msg(
-    speedup: float,
-    detail: str,
-    name: str,
-    backend_desc: str
-) -> str
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Returns the full speedup summary line with module/backend fields.
-
-
-</Indent>
-
-<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-fmt_speedup_msg_short">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.tune_strategy.mixin.performance_validation_mixin.fmt_speedup_msg_short(
-    speedup: float,
-    detail: str
-) -> str
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Returns a compact speedup line without module/backend fields.
-
-
 </Indent>

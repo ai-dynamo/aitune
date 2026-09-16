@@ -1,0 +1,329 @@
+---
+layout: overview
+slug: aitune/aitune/torch/kernel_forge/kernel_provider/sage_attention_provider
+title: aitune.torch.kernel_forge.kernel_provider.sage_attention_provider
+---
+
+SageAttention kernel provider.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`SageAttentionKernelProvider`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider) | Run SageAttention with a sample-derived argument and layout plan. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_import_sageattention`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_import_sageattention) | Import and cache the optional SageAttention module. |
+| [`_is_diffusers_native_hnd_sample`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_is_diffusers_native_hnd_sample) | Check the representative sample for the Diffusers native-dispatch HND view pattern. |
+| [`_is_diffusers_native_hnd_view`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_is_diffusers_native_hnd_view) | Check for an HND tensor that is a cheap transpose view of contiguous NHD data. |
+| [`_needs_mapping_of_kwargs`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_needs_mapping_of_kwargs) | Return whether PyTorch SDPA keyword names must be mapped to SageAttention names. |
+| [`_normalize_sage_kwargs`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_normalize_sage_kwargs) | Map SDPA keyword names to SageAttention keyword names. |
+| [`_query_key_value_to_qkv`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_query_key_value_to_qkv) | Map query, key and value keyword arguments to q, k and v. |
+| [`_sample_replacement_plan`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_sample_replacement_plan) | Return the inference plan required by one sample. |
+
+### Data
+
+[`_RUNTIME_UNAVAILABLE_MESSAGE`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_RUNTIME_UNAVAILABLE_MESSAGE)
+
+[`logger`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-logger)
+
+### API
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [KernelProvider](/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
+
+Run SageAttention with a sample-derived argument and layout plan.
+
+
+<ParamField path="_backend" type="Callable[..., Any]">
+Load and validate the SageAttention runtime function lazily.
+</ParamField>
+
+<ParamField path="_version" type="str">
+Resolve the SageAttention version once.
+</ParamField>
+
+<ParamField path="name" type="str">
+Human-readable provider name.
+</ParamField>
+
+<ParamField path="supported_function" type="str">
+Name of the function replaced by this provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider":"#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider._from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore the selected inference plan.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run the selected SageAttention inference plan.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_load_runtime_dependencies">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider._load_runtime_dependencies() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load SageAttention dependencies before graph capture.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider._prepare(
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select one inference plan for all representative samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider._to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize the selected inference plan.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_import_sageattention">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider._import_sageattention() -> types.ModuleType | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Import and cache the optional SageAttention module.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_is_diffusers_native_hnd_sample">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider._is_diffusers_native_hnd_sample(
+    args,
+    kwargs
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check the representative sample for the Diffusers native-dispatch HND view pattern.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_is_diffusers_native_hnd_view">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider._is_diffusers_native_hnd_view(
+    tensor
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check for an HND tensor that is a cheap transpose view of contiguous NHD data.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_needs_mapping_of_kwargs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider._needs_mapping_of_kwargs(
+    args,
+    kwargs
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether PyTorch SDPA keyword names must be mapped to SageAttention names.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_normalize_sage_kwargs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider._normalize_sage_kwargs(
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Map SDPA keyword names to SageAttention keyword names.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_query_key_value_to_qkv">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider._query_key_value_to_qkv(
+    kwargs
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Map query, key and value keyword arguments to q, k and v.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_sample_replacement_plan">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider._sample_replacement_plan(
+    args,
+    kwargs
+) -> tuple[bool, bool]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the inference plan required by one sample.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-_RUNTIME_UNAVAILABLE_MESSAGE">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider._RUNTIME_UNAVAILABLE_MESSAGE = 'SageAttention is not available. Install it with `pip install sageattention`. No...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

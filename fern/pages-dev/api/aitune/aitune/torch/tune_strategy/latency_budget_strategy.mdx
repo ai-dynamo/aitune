@@ -179,14 +179,14 @@ aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy._is_bet
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_measure">
 
-<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult":"#aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult":"#aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetProfilingResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy._measure(
     backend: aitune.torch.backend.Backend,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     profiling_cfg: aitune.torch.task.profiling.ProfilingConfig
 ) -> aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult
 ```

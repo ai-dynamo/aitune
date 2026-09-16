@@ -10,3 +10,71 @@ Integrations module.
 
 - **[`aitune.torch.integrations.diffusers`](/aitune/aitune/torch/integrations/diffusers)**
 - **[`aitune.torch.integrations.transformers`](/aitune/aitune/torch/integrations/transformers)**
+
+## Package Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`is_integration_distributed_module`](#aitune-torch-integrations-is_integration_distributed_module) | Return whether any enabled integration recognizes a distributed module. |
+| [`register_distributed_module_detector`](#aitune-torch-integrations-register_distributed_module_detector) | Register an integration-owned distributed module detector. |
+
+### Data
+
+[`_DISTRIBUTED_MODULE_DETECTORS`](#aitune-torch-integrations-_DISTRIBUTED_MODULE_DETECTORS)
+
+### API
+
+<Anchor id="aitune-torch-integrations-is_integration_distributed_module">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.integrations.is_integration_distributed_module(
+    module: torch.nn.Module
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether any enabled integration recognizes a distributed module.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-integrations-register_distributed_module_detector">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.integrations.register_distributed_module_detector(
+    name: str,
+    detector: collections.abc.Callable[[nn.Module], bool]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Register an integration-owned distributed module detector.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-integrations-_DISTRIBUTED_MODULE_DETECTORS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.integrations._DISTRIBUTED_MODULE_DETECTORS: dict[str, Callable[[nn.Module], bool]] = {}
+```
+
+</CodeBlock>
+</Anchor>
+

@@ -1,0 +1,469 @@
+---
+layout: overview
+slug: aitune/aitune/torch/kernel_forge/kernel_provider/flash_attention4_provider
+title: aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider
+---
+
+FlashAttention-4 kernel provider.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`FlashAttention4KernelProvider`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider) | Run FlashAttention-4 with a sample-derived argument and layout plan. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_call_flash_attention4`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_call_flash_attention4) | Call FlashAttention-4 after copying HND inputs to NHD layout. |
+| [`_call_flash_attention4_copy_free`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_call_flash_attention4_copy_free) | Call FlashAttention-4 when HND inputs are NHD-contiguous views. |
+| [`_extract_qkv`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_extract_qkv) | Extract query, key and value from supported SDPA arguments. |
+| [`_hnd_to_nhd`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_hnd_to_nhd) | Map PyTorch SDPA HND layout to contiguous FlashAttention NHD layout. |
+| [`_hnd_to_nhd_view`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_hnd_to_nhd_view) | Map HND to NHD without forcing contiguous storage. |
+| [`_import_flash_attention4`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_import_flash_attention4) | Import and cache the optional FlashAttention-4 module. |
+| [`_nhd_to_hnd`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_nhd_to_hnd) | Map FlashAttention NHD output back to PyTorch SDPA HND layout. |
+| [`_normalize_sdpa_inputs`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_normalize_sdpa_inputs) | Normalize PyTorch SDPA arguments to FlashAttention-4 arguments. |
+| [`_qkv_source`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_qkv_source) | Return how q/k/v are passed in the representative sample. |
+| [`_sample_replacement_plan`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_sample_replacement_plan) | Build an inference plan for one representative sample. |
+| [`_validate_qkv`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_validate_qkv) | Validate the subset of PyTorch SDPA inputs handled by this provider. |
+
+### Data
+
+[`_CALL_IMPLS`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_CALL_IMPLS)
+
+[`_KEYWORD_QKV`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_KEYWORD_QKV)
+
+[`_POSITIONAL_QKV`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_POSITIONAL_QKV)
+
+[`_RUNTIME_UNAVAILABLE_MESSAGE`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_RUNTIME_UNAVAILABLE_MESSAGE)
+
+[`logger`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-logger)
+
+### API
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [KernelProvider](/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
+
+Run FlashAttention-4 with a sample-derived argument and layout plan.
+
+
+<ParamField path="_backend" type="Callable[..., Any]">
+Load and validate the FlashAttention-4 runtime function lazily.
+</ParamField>
+
+<ParamField path="_version" type="str">
+Resolve the FlashAttention-4 version once.
+</ParamField>
+
+<ParamField path="flash_kwargs" type="dict[str, Any] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="name" type="str">
+Human-readable provider name.
+</ParamField>
+
+<ParamField path="supported_function" type="str">
+Name of the function replaced by this provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider":"#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore the selected inference plan.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run the selected FlashAttention-4 inference plan.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_load_runtime_dependencies">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._load_runtime_dependencies() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load FlashAttention-4 dependencies before graph capture.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._prepare(
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select one inference plan for all representative samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize the selected inference plan.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_call_flash_attention4">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._call_flash_attention4(
+    flash_attn_func,
+    q,
+    k,
+    v,
+    flash_kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Call FlashAttention-4 after copying HND inputs to NHD layout.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_call_flash_attention4_copy_free">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._call_flash_attention4_copy_free(
+    flash_attn_func,
+    q,
+    k,
+    v,
+    flash_kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Call FlashAttention-4 when HND inputs are NHD-contiguous views.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_extract_qkv">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._extract_qkv(
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Extract query, key and value from supported SDPA arguments.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_hnd_to_nhd">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._hnd_to_nhd(
+    tensor: torch.Tensor
+) -> torch.Tensor
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Map PyTorch SDPA HND layout to contiguous FlashAttention NHD layout.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_hnd_to_nhd_view">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._hnd_to_nhd_view(
+    tensor: torch.Tensor
+) -> torch.Tensor
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Map HND to NHD without forcing contiguous storage.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_import_flash_attention4">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._import_flash_attention4() -> types.ModuleType | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Import and cache the optional FlashAttention-4 module.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_nhd_to_hnd">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._nhd_to_hnd(
+    tensor: torch.Tensor
+) -> torch.Tensor
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Map FlashAttention NHD output back to PyTorch SDPA HND layout.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_normalize_sdpa_inputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._normalize_sdpa_inputs(
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Normalize PyTorch SDPA arguments to FlashAttention-4 arguments.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_qkv_source">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._qkv_source(
+    args,
+    kwargs
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return how q/k/v are passed in the representative sample.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_sample_replacement_plan">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._sample_replacement_plan(
+    sample: aitune.torch.module.sample_store.Sample
+) -> tuple[str, tuple[tuple[str, typing.Any], ...], bool]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build an inference plan for one representative sample.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_validate_qkv">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._validate_qkv(
+    q,
+    k,
+    v,
+    enable_gqa: bool
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate the subset of PyTorch SDPA inputs handled by this provider.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_CALL_IMPLS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._CALL_IMPLS = {False: _call_flash_attention4, True: _call_flash_attention4_copy_free}
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_KEYWORD_QKV">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._KEYWORD_QKV = 'keyword_qkv'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_POSITIONAL_QKV">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._POSITIONAL_QKV = 'positional_qkv'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_RUNTIME_UNAVAILABLE_MESSAGE">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._RUNTIME_UNAVAILABLE_MESSAGE = 'FlashAttention-4 is not available. Install it with `pip install --pre flash-att...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

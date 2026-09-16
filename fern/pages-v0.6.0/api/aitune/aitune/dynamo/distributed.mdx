@@ -1,0 +1,300 @@
+---
+layout: overview
+slug: aitune/aitune/dynamo/distributed
+title: aitune.dynamo.distributed
+---
+
+Collective request execution for Dynamo workers.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_broadcast_collective_command`](#aitune-dynamo-distributed-_broadcast_collective_command) | Broadcast a request-control command from rank zero. |
+| [`_collective_errors`](#aitune-dynamo-distributed-_collective_errors) | Collect an error description from every worker rank. |
+| [`_collective_leader_serve`](#aitune-dynamo-distributed-_collective_leader_serve) | Serialize rank-zero requests and execute each request on every rank. |
+| [`_execute_collective_request`](#aitune-dynamo-distributed-_execute_collective_request) | Execute one request locally and report rank-local failures collectively. |
+| [`_receive_collective_command`](#aitune-dynamo-distributed-_receive_collective_command) | Receive and validate one request-control command on a follower rank. |
+| [`_receive_collective_requests`](#aitune-dynamo-distributed-_receive_collective_requests) | Execute rank-zero commands on a follower using one persistent event loop. |
+| [`_run_collective_follower`](#aitune-dynamo-distributed-_run_collective_follower) | Receive rank-zero commands and execute requests without starting an endpoint. |
+| [`_run_collective_setup`](#aitune-dynamo-distributed-_run_collective_setup) | Run a startup stage on every rank and prevent a partial worker from serving. |
+| [`is_rank_zero`](#aitune-dynamo-distributed-is_rank_zero) | Return whether the current process owns the Dynamo endpoint and responses. |
+| [`run_collective_dynamo_worker`](#aitune-dynamo-distributed-run_collective_dynamo_worker) | Serve one endpoint from rank zero while every rank executes each request. |
+| [`should_run_collectively`](#aitune-dynamo-distributed-should_run_collectively) | Return whether the application-owned process group requires collective serving. |
+
+### Data
+
+[`_RUN_COMMAND`](#aitune-dynamo-distributed-_RUN_COMMAND)
+
+[`_STOP_COMMAND`](#aitune-dynamo-distributed-_STOP_COMMAND)
+
+[`logger`](#aitune-dynamo-distributed-logger)
+
+### API
+
+<Anchor id="aitune-dynamo-distributed-_broadcast_collective_command">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._broadcast_collective_command(
+    command: str,
+    request: typing.Any = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Broadcast a request-control command from rank zero.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-_collective_errors">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._collective_errors(
+    error: Exception | None
+) -> list[str | None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Collect an error description from every worker rank.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-_collective_leader_serve">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._collective_leader_serve(
+    serve: collections.abc.Callable[[Any], collections.abc.AsyncGenerator[typing.Any, None]]
+) -> collections.abc.Callable[[Any], collections.abc.AsyncGenerator[typing.Any, None]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize rank-zero requests and execute each request on every rank.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-_execute_collective_request">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._execute_collective_request(
+    serve: collections.abc.Callable[[Any], collections.abc.AsyncGenerator[typing.Any, None]],
+    request: typing.Any,
+    collect_responses: bool = True
+) -> list[typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>async</Badge>
+
+Execute one request locally and report rank-local failures collectively.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-_receive_collective_command">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._receive_collective_command() -> tuple[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Receive and validate one request-control command on a follower rank.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-_receive_collective_requests">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._receive_collective_requests(
+    serve: collections.abc.Callable[[Any], collections.abc.AsyncGenerator[typing.Any, None]]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>async</Badge>
+
+Execute rank-zero commands on a follower using one persistent event loop.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-_run_collective_follower">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._run_collective_follower(
+    serve: collections.abc.Callable[[Any], collections.abc.AsyncGenerator[typing.Any, None]]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Receive rank-zero commands and execute requests without starting an endpoint.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-_run_collective_setup">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._run_collective_setup(
+    setup: collections.abc.Callable[[], None],
+    stage: str = 'setup'
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run a startup stage on every rank and prevent a partial worker from serving.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-is_rank_zero">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed.is_rank_zero() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether the current process owns the Dynamo endpoint and responses.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-run_collective_dynamo_worker">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed.run_collective_dynamo_worker(
+    setup: collections.abc.Callable[[], None],
+    serve: collections.abc.Callable[[Any], collections.abc.AsyncGenerator[typing.Any, None]],
+    namespace: str,
+    component: str,
+    endpoint: str,
+    enable_nats: bool,
+    on_ready: collections.abc.Callable[[Any, Any], collections.abc.Coroutine] | None,
+    warmup: collections.abc.Callable[[], None] | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serve one endpoint from rank zero while every rank executes each request.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-should_run_collectively">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed.should_run_collectively() -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether the application-owned process group requires collective serving.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-distributed-_RUN_COMMAND">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._RUN_COMMAND = 'run'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-dynamo-distributed-_STOP_COMMAND">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed._STOP_COMMAND = 'stop'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-dynamo-distributed-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.distributed.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

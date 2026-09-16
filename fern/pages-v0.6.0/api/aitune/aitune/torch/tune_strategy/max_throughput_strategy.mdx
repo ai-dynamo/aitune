@@ -1,0 +1,178 @@
+---
+layout: overview
+slug: aitune/aitune/torch/tune_strategy/max_throughput_strategy
+title: aitune.torch.tune_strategy.max_throughput_strategy
+---
+
+Max throughput tune strategy.
+
+1. Finds max batch size.
+2. Profiles TorchEager as a throughput baseline unless performance validation is disabled.
+3. Runs all user-provided backends with the same sweep.
+4. Returns the user backend with max throughput; in enabled mode, falls back to
+   TorchEager when no user backend beats the baseline.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`MaxThroughputProfilingResult`](#aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputProfilingResult) | Profiling result for max-throughput selection. |
+| [`MaxThroughputStrategy`](#aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy) | Searches and selects the backend with max throughput. |
+
+### API
+
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputProfilingResult">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputProfilingResult(
+    selected_batch_size: int,
+    throughput: float
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [BackendProfilingResult](/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult)
+
+Profiling result for max-throughput selection.
+
+
+<ParamField path="metric" type="float">
+Returns throughput as the comparison metric.
+</ParamField>
+
+<ParamField path="selected_batch_size" type="int">
+</ParamField>
+
+<ParamField path="throughput" type="float">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [ProfilingTuneStrategy](/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy)
+
+Searches and selects the backend with max throughput.
+
+TorchEager is profiled in _pre_tune as a throughput baseline unless performance validation is disabled
+(not injected into the backends list). In enabled mode, the strategy falls back to TorchEager when no
+user-provided backend beats it. In diagnostic or disabled mode, the best user-provided backend wins,
+and the strategy raises if all user backends fail.
+
+AOT candidates are inherited from ProfilingTuneStrategy. The JIT hook below uses
+fewer candidates to limit tuning work during inference.
+
+
+<ParamField path="_description">
+</ParamField>
+
+<ParamField path="_metric_label" type="= 'throughput'">
+</ParamField>
+
+<ParamField path="_metric_unit" type="= 'samples/s'">
+</ParamField>
+
+<ParamField path="_title" type="= 'Max Throughput Strategy'">
+</ParamField>
+
+<ParamField path="_value_fmt" type="= '.2f'">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy-_default_jit_backends">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputStrategy._default_jit_backends(
+    distributed: bool = False
+) -> list[aitune.torch.backend.Backend]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Limit JIT tuning work to a small set of backends that support the module.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy-_is_better">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputStrategy._is_better(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    other: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy-_measure">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputProfilingResult":"#aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputStrategy._measure(
+    backend: aitune.torch.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    profiling_cfg: aitune.torch.task.profiling.ProfilingConfig
+) -> aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputProfilingResult
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profiles the backend and returns throughput with the selected batch size.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy-_speedup">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputStrategy._speedup(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    baseline_result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+</Indent>

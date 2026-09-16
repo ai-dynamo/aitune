@@ -20,8 +20,6 @@ Inplace wrap modules.
 
 [`OUTPUT_METADATA_PREFIX`](#aitune-torch-module-recording_module-OUTPUT_METADATA_PREFIX)
 
-[`Sample`](#aitune-torch-module-recording_module-Sample)
-
 [`logger`](#aitune-torch-module-recording_module-logger)
 
 ### API
@@ -35,7 +33,8 @@ class aitune.torch.module.recording_module.RecordingModule(
     module: torch.nn.Module,
     name: str,
     config: aitune.torch.config.AITuneConfig | None = None,
-    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None = None
+    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None = None,
+    cache_dir_resolver: collections.abc.Callable[[], pathlib.Path]
 )
 ```
 
@@ -65,16 +64,7 @@ Module that records samples for tuning.
 <ParamField path="_graphs_counter" type="= itertools.count()">
 </ParamField>
 
-<ParamField path="_samples" type="= defaultdict(list)">
-</ParamField>
-
-<ParamField path="_samples_dir" type="= Path(self._temp_dir.name)">
-</ParamField>
-
-<ParamField path="_temp_dir">
-</ParamField>
-
-<ParamField path="_total_num_samples" type="= 0">
+<ParamField path="_samples" type="dict[SampleMetadata, SampleStore] = &#123;&#125;">
 </ParamField>
 
 <ParamField path="device" type="device">
@@ -182,14 +172,15 @@ represented by their ``TensorSpec`` and continue using shapes inferred from reco
 </Indent>
 <Anchor id="aitune-torch-module-recording_module-RecordingModule-record_sample">
 
-<CodeBlock links={{"aitune.torch.dynamic_shapes.DynamicShapes":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.dynamic_shapes.DynamicShapes":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-DynamicShapes","aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.module.recording_module.RecordingModule.record_sample(
     inputs,
     inputs_metadata,
     outputs_metadata,
-    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None = None
+    dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None = None,
+    post_inputs_metadata: aitune.torch.module.sample_metadata.SampleMetadata | None = None
 ) -> None
 ```
 
@@ -204,12 +195,12 @@ Record a sample from the module.
 </Indent>
 <Anchor id="aitune-torch-module-recording_module-RecordingModule-samples_for_graph_spec">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"#aitune-torch-module-recording_module-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.module.recording_module.RecordingModule.samples_for_graph_spec(
     graph_spec: aitune.torch.module.graph_spec.GraphSpec
-) -> list[aitune.torch.module.recording_module.Sample]
+) -> aitune.torch.module.sample_store.SampleStore
 ```
 
 </CodeBlock>
@@ -258,18 +249,6 @@ aitune.torch.module.recording_module.INPUT_METADATA_PREFIX = 'input'
 
 ```python
 aitune.torch.module.recording_module.OUTPUT_METADATA_PREFIX = 'output'
-```
-
-</CodeBlock>
-</Anchor>
-
-
-<Anchor id="aitune-torch-module-recording_module-Sample">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.module.recording_module.Sample = tuple[tuple, dict]
 ```
 
 </CodeBlock>

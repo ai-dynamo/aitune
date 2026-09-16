@@ -1,0 +1,119 @@
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: "Backends"
+---
+
+NVIDIA AITune supports multiple tuning backends, each with different characteristics and use cases. The backends align with a common interface for the build and inference process.
+
+## TensorRT Backend
+
+The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT engine. It offers the best performance for production deployments. The backend integrates [TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer) in a seamless flow.
+
+```python
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, ONNXAutoCastConfig
+
+config = TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig()) # FP16 autocast through ModelOpt
+backend = TensorRTBackend(config)
+```
+
+### CUDA Graphs Support
+
+The TensorRT backend supports CUDA Graphs for reduced CPU overhead and improved inference performance. CUDA Graphs automatically capture and replay GPU operations, eliminating kernel launch overhead for repeated inference calls. This feature is disabled by default.
+
+Keep in mind that graphs are automatically recaptured when input shapes change.
+
+```python
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+
+# Enable CUDA Graphs for optimized inference
+config = TensorRTBackendConfig(use_cuda_graphs=True)
+backend = TensorRTBackend(config)
+```
+
+## Torch-TensorRT Backend (JIT)
+
+The Torch-TensorRT JIT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through
+`torch.compile`.
+
+```python
+import torch
+from aitune.torch.backend import TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig, TorchTensorRTConfig
+
+config = TorchTensorRTJitBackendConfig(compile_config=TorchTensorRTConfig())
+backend = TorchTensorRTJitBackend(config)
+```
+
+## Torch-TensorRT Backend (AOT)
+
+The Torch-TensorRT backend integrates TensorRT tuning directly into PyTorch, providing seamless tuning without model conversion through `torch_tensorrt.compile`.
+
+```python
+import torch
+from aitune.torch.backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig, TorchTensorRTConfig
+
+config = TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTConfig())
+backend = TorchTensorRTAotBackend(config)
+```
+
+## TorchAO Backend
+
+The TorchAO backend leverages PyTorch's AO (Accelerated Optimization) framework for model tuning.
+
+```python
+from aitune.torch.backend import TorchAOBackend
+
+backend = TorchAOBackend()
+```
+
+## Torch Inductor Backend (JIT)
+
+The Torch Inductor JIT backend uses PyTorch's Inductor compiler through `torch.compile` for model tuning.
+
+```python
+from aitune.torch.backend import TorchInductorJitBackend
+
+backend = TorchInductorJitBackend()
+```
+
+## Torch Inductor Backend (AOT)
+
+The Torch Inductor AOT backend uses PyTorch's AOT Inductor compiler to produce a compiled artifact that can be saved and loaded with AITune checkpoints.
+
+```python
+from aitune.torch.backend import TorchInductorAotBackend
+
+backend = TorchInductorAotBackend()
+```
+
+## ONNXRuntime Backend
+
+The ONNXRuntime backend exports the selected module to ONNX and runs inference through ONNX Runtime with CUDA or TensorRT execution providers.
+
+```python
+from aitune.torch.backend import ONNXRuntimeBackend, ONNXRuntimeBackendConfig, ONNXExecutionProvider
+
+config = ONNXRuntimeBackendConfig(execution_provider=ONNXExecutionProvider.CUDA)
+backend = ONNXRuntimeBackend(config)
+```
+
+## Kernel Selector Backend
+
+The experimental Kernel Selector backend selects faster implementations of supported `torch.nn.functional` calls
+before building another AITune backend. It is a composite backend rather than a compiler: its JIT or AOT build mode and
+supported execution topology come from the delegate backend.
+
+```python
+from aitune.torch.backend import KernelSelectorBackend, KernelSelectorBackendConfig, TorchInductorJitBackend
+from aitune.torch.kernel_forge.kernel_provider import SageAttentionKernelProvider
+
+backend = KernelSelectorBackend(
+    config=KernelSelectorBackendConfig(
+        kernel_providers=SageAttentionKernelProvider(),
+    ),
+    delegate_backend=TorchInductorJitBackend(),
+)
+```
+
+See the [Kernel Selector Backend Guide](../guides/backends/kernel_selector_backend.md) for delegate lifecycle,
+checkpoint behavior, and provider compatibility.

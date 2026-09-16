@@ -1,0 +1,310 @@
+---
+layout: overview
+slug: aitune/aitune/torch/checkpoint/torch_checkpoint
+title: aitune.torch.checkpoint.torch_checkpoint
+---
+
+Torch checkpoint module.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TorchCheckpoint`](#aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint) | Class for storing tuned module using torch module's state serialization. |
+
+### API
+
+<Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint">
+
+<CodeBlock links={{"aitune.torch.checkpoint.storage.Storage":"/aitune/aitune/torch/checkpoint/storage#aitune-torch-checkpoint-storage-Storage"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint(
+    storage: aitune.torch.checkpoint.storage.Storage
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [Checkpoint](/aitune/aitune/torch/checkpoint/checkpoint#aitune-torch-checkpoint-checkpoint-Checkpoint)
+
+Class for storing tuned module using torch module's state serialization.
+
+It uses torch `state_dict` and `load_state_dict` to save and load the module state.
+
+
+<Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-get_pipeline_modules">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.get_pipeline_modules(
+    pipeline: typing.Any
+) -> dict[str, torch.nn.Module]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Get the modules from the pipeline.
+
+**Parameters:**
+
+<ParamField path="pipeline" type="Any">
+The pipeline object to extract modules from.
+</ParamField>
+
+**Returns:** `dict[str, torch.nn.Module]`
+
+A dictionary mapping attribute names to Module objects.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-load">
+
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.load(
+    module_or_pipeline: torch.nn.Module | typing.Any,
+    path: str | pathlib.Path,
+    device_map: dict[str, str | torch.device] | None = None
+) -> torch.nn.Module | aitune.torch.module.wrapper_module.Module
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load a module or pipeline from a saved state dictionary.
+
+This method handles both individual torch modules and pipelines containing modules.
+For individual modules, it uses the module's load_state_dict() method and handles
+any tuned modules appropriately.
+
+For pipelines, it loads state dictionaries into the corresponding modules in the pipeline.
+The pipeline is expected to be an object with attributes that are torch modules or
+tuned modules (WrapperModule instances).
+
+**Parameters:**
+
+<ParamField path="module_or_pipeline" type="TorchModule | Any">
+The module or pipeline to load the state into. This can be
+either a torch.nn.Module or a pipeline object with module attributes.
+</ParamField>
+
+<ParamField path="path" type="str | Path">
+The path from where the module state should be loaded.
+</ParamField>
+
+<ParamField path="device_map" type="dict[str, str | torch.device] | None" default="None">
+The device map to load module to.
+</ParamField>
+
+**Returns:** `TorchModule | WrapperModule`
+
+The loaded module, which may be either the original module type or a wrapped module
+
+**Raises:**
+
+- `ValueError`: If a module in the state_dict is not found in the pipeline or
+        if a matched attribute is not a torch.nn.Module or WrapperModule.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-load_state_dict_for_module">
+
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.load_state_dict_for_module(
+    module: torch.nn.Module | aitune.torch.module.wrapper_module.Module,
+    state_dict: dict,
+    device_map: dict[str, torch.device],
+    module_name: str = ''
+) -> torch.nn.Module | aitune.torch.module.wrapper_module.Module
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Load a state dictionary into a module.
+
+This method loads a state dictionary into a module, replacing regular torch modules
+with tuned modules where applicable. It handles both top-level modules and nested
+child modules.
+
+The methods has two phases:
+1. Traverse the module hierarchy and identify which parts of the state dictionary
+correspond to tuned modules. When a match is found, it replaces the original module
+with a wrapper module initialized from the state dictionary. Corresponding keys are
+removed from the state_dict. The tuned module is compiled is necessary (JIT type).
+2. Handle original torch modules not tuned with `load_state_dict(state_dict, strict=False)`,
+strict=False because wrapped module keys were removed and those modules have been already loaded.
+
+**Parameters:**
+
+<ParamField path="module" type="torch.nn.Module">
+The module to load the state dictionary into.
+This can be a regular torch module or a module that contains tuned submodules.
+</ParamField>
+
+<ParamField path="state_dict" type="dict">
+The state dictionary containing the tuned module states.
+The dictionary should have keys that correspond to the module structure,
+with tuned module states stored in a format recognized by WrapperModule.
+</ParamField>
+
+<ParamField path="device_map" type="dict">
+The device map to load module to.
+</ParamField>
+
+<ParamField path="module_name" type="str" default="''">
+The name of the module for device map matching.
+</ParamField>
+
+**Returns:** `TorchModule | WrapperModule`
+
+torch.nn.Module: The module with tuned components loaded from the state dictionary.
+If the top-level module was tuned, returns the new wrapper module.
+Otherwise, returns the original module with tuned submodules replaced.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-load_state_dict_for_pipeline">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.load_state_dict_for_pipeline(
+    pipeline,
+    state_dict,
+    device_map: dict[str, torch.device]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Load a state dictionary into a pipeline.
+
+This method loads the state dictionary into the pipeline by matching module names
+in the state dictionary with attributes in the pipeline. Each matched module is
+replaced with the tuned module.
+
+**Parameters:**
+
+<ParamField path="pipeline">
+The pipeline to load the state dictionary into.
+</ParamField>
+
+<ParamField path="state_dict">
+The state dictionary containing the module states.
+</ParamField>
+
+<ParamField path="device_map" type="dict[str, torch.device]">
+The device map to load module to.
+</ParamField>
+
+**Returns:**
+
+The pipeline with loaded modules.
+
+**Raises:**
+
+- `ValueError`: If a module in the state_dict is not found in the pipeline or
+        if a matched attribute is not a torch.nn.Module or WrapperModule.
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-save">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.save(
+    module_or_pipeline: torch.nn.Module | typing.Any,
+    path: str | pathlib.Path
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Save the module or pipeline state to the specified path.
+
+This method handles both individual torch modules and pipelines containing modules.
+For individual modules, it directly uses the module's state_dict() method.
+For pipelines, it extracts state dictionaries from all tuned modules in the pipeline.
+
+The pipeline is expected to be an object with attributes that are tuned modules (WrapperModule instances).
+Only tuned modules are saved in the state dictionary, as regular torch modules don't have tuning information.
+
+If no tuned modules are found in the pipeline, a ValueError is raised.
+
+**Parameters:**
+
+<ParamField path="module_or_pipeline" type="TorchModule | Any">
+The module or pipeline to save. This can be either a torch.nn.Module
+or a pipeline object with module attributes. For pipelines, only tuned modules
+(WrapperModule instances) will be saved.
+</ParamField>
+
+<ParamField path="path" type="str | Path">
+The path where the module state should be saved.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-state_dict_from_pipeline">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.state_dict_from_pipeline(
+    pipeline: typing.Any
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Extract the state_dict from a pipeline (e.g. HF Diffusers pipeline).
+
+**Parameters:**
+
+<ParamField path="pipeline" type="Any">
+The pipeline to extract the state_dict from.
+</ParamField>
+
+**Returns:** `dict[str, Any]`
+
+The state_dict from the pipeline.
+
+
+</Indent>
+</Indent>

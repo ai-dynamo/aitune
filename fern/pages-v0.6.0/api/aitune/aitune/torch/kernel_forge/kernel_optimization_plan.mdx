@@ -1,0 +1,124 @@
+---
+layout: overview
+slug: aitune/aitune/torch/kernel_forge/kernel_optimization_plan
+title: aitune.torch.kernel_forge.kernel_optimization_plan
+---
+
+Serializable plan of selected runtime kernel providers.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`KernelOptimizationPlan`](#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan) | Selected kernel providers ready to install without optimization. |
+
+### Data
+
+[`PROVIDERS_KEY`](#aitune-torch-kernel_forge-kernel_optimization_plan-PROVIDERS_KEY)
+
+### API
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan(
+    providers: tuple[aitune.torch.kernel_forge.kernel_provider.KernelProvider, ...] = ()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Selected kernel providers ready to install without optimization.
+
+
+<ParamField path="providers" type="tuple[KernelProvider, ...] = ()">
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan-apply">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan.apply(
+    module: torch.nn.Module
+) -> collections.abc.Generator[None, None, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Temporarily apply the plan to a module.
+
+This context activates providers and disables gradient calculation for
+inference. The runtime is torn down and the previous gradient state is
+restored when the context exits.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+Module whose functional calls should use the selected providers.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan-from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan.from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore a runtime plan without running kernel optimization.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize the complete runtime plan.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_optimization_plan-PROVIDERS_KEY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_optimization_plan.PROVIDERS_KEY = 'providers'
+```
+
+</CodeBlock>
+</Anchor>
+

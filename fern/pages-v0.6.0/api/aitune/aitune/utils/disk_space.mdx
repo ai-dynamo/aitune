@@ -1,0 +1,226 @@
+---
+layout: overview
+slug: aitune/aitune/utils/disk_space
+title: aitune.utils.disk_space
+---
+
+Disk-space checks for the AITune cache directory.
+
+Out-of-space errors used to fail silently during JIT tuning: the broad
+``except Exception`` in the tune loop caught ``OSError(ENOSPC)`` and fell back
+to eager mode without surfacing the cause. This module provides:
+
+* :class:`DiskSpaceError` — a clear, typed error carrying path + free-bytes context.
+* :func:`check_disk_space` — pre-flight warning when the cache device is low.
+* :func:`raise_if_out_of_space` — translator that turns caught ``OSError(ENOSPC)``
+  into :class:`DiskSpaceError` at the call site that swallowed it.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`DiskSpaceError`](#aitune-utils-disk_space-DiskSpaceError) | Raised when the AITune cache device has run out of (or very little) space. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_configured_min_free_bytes`](#aitune-utils-disk_space-_configured_min_free_bytes) | Resolve the minimum-free-bytes threshold, honouring the env override. |
+| [`_format_bytes`](#aitune-utils-disk_space-_format_bytes) | Render a byte count using the largest binary unit that keeps it &gt;= 1. |
+| [`_nearest_existing`](#aitune-utils-disk_space-_nearest_existing) | - |
+| [`check_disk_space`](#aitune-utils-disk_space-check_disk_space) | Inspect free space for the filesystem that hosts ``path``. |
+| [`raise_if_out_of_space`](#aitune-utils-disk_space-raise_if_out_of_space) | Re-raise ``exc`` as :class:`DiskSpaceError` when it represents ENOSPC. |
+
+### Data
+
+[`DEFAULT_MIN_FREE_BYTES`](#aitune-utils-disk_space-DEFAULT_MIN_FREE_BYTES)
+
+[`_ENV_VAR`](#aitune-utils-disk_space-_ENV_VAR)
+
+[`_logger`](#aitune-utils-disk_space-_logger)
+
+### API
+
+<Anchor id="aitune-utils-disk_space-DiskSpaceError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.disk_space.DiskSpaceError(
+    path: pathlib.Path | str | None = None,
+    free_bytes: int | None = None,
+    message: str | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `OSError`
+
+Raised when the AITune cache device has run out of (or very little) space.
+
+Inherits from :class:`OSError` so call sites that already handle I/O errors
+continue to catch it. The string form embeds the target path and, when
+known, the remaining free bytes — so a log line or traceback alone tells
+the operator exactly which device is full.
+
+
+<ParamField path="path" type="= Path(path) if path is not None else None">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-utils-disk_space-_configured_min_free_bytes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.disk_space._configured_min_free_bytes() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve the minimum-free-bytes threshold, honouring the env override.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-disk_space-_format_bytes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.disk_space._format_bytes(
+    num_bytes: int
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Render a byte count using the largest binary unit that keeps it &gt;= 1.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-disk_space-_nearest_existing">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.disk_space._nearest_existing(
+    path: pathlib.Path
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-disk_space-check_disk_space">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.disk_space.check_disk_space(
+    path: pathlib.Path | str,
+    min_free_bytes: int | None = None
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect free space for the filesystem that hosts ``path``.
+
+If ``path`` does not yet exist (the cache dir is typically created lazily),
+the nearest existing parent is probed instead — that's the device any future
+write would land on.
+
+A WARNING log is emitted when the free space is below ``min_free_bytes``
+(resolved from the ``AITUNE_CACHE_MIN_FREE_BYTES`` env var or the 50 GiB
+default). Returns the number of free bytes observed.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-disk_space-raise_if_out_of_space">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.disk_space.raise_if_out_of_space(
+    exc: BaseException,
+    path: pathlib.Path | str | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Re-raise ``exc`` as :class:`DiskSpaceError` when it represents ENOSPC.
+
+Use inside ``except`` blocks that otherwise suppress or swallow exceptions,
+so out-of-space failures stop propagating silently::
+
+    try:
+        write_artifact(...)
+    except Exception as e:
+        raise_if_out_of_space(e, path=cache_dir)
+        # ... existing fallback / best-effort handling ...
+
+
+</Indent>
+
+<Anchor id="aitune-utils-disk_space-DEFAULT_MIN_FREE_BYTES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.disk_space.DEFAULT_MIN_FREE_BYTES: int = 50 * 1024 ** 3
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-utils-disk_space-_ENV_VAR">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.disk_space._ENV_VAR = 'AITUNE_CACHE_MIN_FREE_BYTES'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-utils-disk_space-_logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.disk_space._logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

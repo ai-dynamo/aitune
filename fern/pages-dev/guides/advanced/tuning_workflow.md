@@ -152,11 +152,73 @@ For each module, each graph is tuned separately, i.e., a strategy is called for 
 
 - Strategy tries to build a backend or backends and select the best one
 - Each backend is validated against outputs, i.e., tensor shapes, values, NaNs (not a number)
-- Strategies also profile a Torch eager baseline and reject or fall back from correct backends that do not beat the baseline. Use `strategy.enable_performance_validation(False)` to skip Torch eager baseline profiling, performance checks, and speedup reporting.
+- Strategies also profile a Torch eager baseline and reject or fall back from correct backends that do not beat the
+  baseline
 
 ### 4. Strategy Execution
 
-The tuning strategy determines which backend(s) to try and how to select the best one. AITune provides three built-in strategies:
+The tuning strategy determines which backend(s) to try and how to select the best one. AITune provides five built-in strategies.
+
+#### Performance Validation
+
+AITune validates backend performance against Torch eager by default. Most users should keep this behavior unchanged:
+AITune profiles an eager baseline, compares correctness-passing backends against it, and avoids selecting an
+optimization that does not improve performance.
+
+Change the performance validation mode only when collecting comparison data, diagnosing backend performance, or
+intentionally skipping the eager comparison.
+
+Performance validation has three modes:
+
+| Mode | Eager baseline | Comparison metrics | Effect on backend selection |
+|---|---|---|---|
+| `ENABLED` (default) | Profiled | Reported | The eager comparison is used as a selection gate. |
+| `DIAGNOSTIC` | Profiled | Reported | The comparison is recorded but does not affect selection. |
+| `DISABLED` | Skipped | Not reported | Backend selection is independent of eager. |
+
+Configure the mode on a tune strategy:
+
+```python
+from aitune.torch import PerformanceValidationMode
+
+strategy.enable_performance_validation(PerformanceValidationMode.DIAGNOSTIC)
+```
+
+The method also accepts serialized string values:
+
+```python
+strategy.enable_performance_validation("diagnostic")
+```
+
+Boolean values remain available as a shorthand. `True` maps to `ENABLED`, and `False` maps to `DISABLED`:
+
+```python
+strategy.enable_performance_validation(False)
+```
+
+Use `DIAGNOSTIC` when you want eager and backend performance measurements for analytics but need backend selection to
+remain independent of that comparison. This is useful for evaluating thresholds, investigating benchmark noise, or
+collecting data before enabling a performance gate in a new environment.
+
+Use `DISABLED` when the eager comparison is not meaningful or when you intentionally want to avoid its tuning-time
+cost. This skips eager-baseline profiling, comparison, and speedup reporting. Profiling strategies still measure user
+backends because those measurements are required to select a winner.
+
+For `OneBackendStrategy` and `FirstWinsStrategy`, `ENABLED` rejects a correctness-passing backend when its throughput
+does not exceed the eager baseline by the configured threshold. The default threshold is 1%, controlled by
+`min_speedup_threshold_percent`.
+
+For `MaxThroughputStrategy`, `MinLatencyStrategy`, and `LatencyBudgetStrategy`, `ENABLED` includes eager in the final
+selection decision. `DIAGNOSTIC` records the eager comparison but selects the best successful user backend.
+`DISABLED` skips eager profiling and also selects among successful user backends only.
+
+In `DIAGNOSTIC` mode, profiling strategies can still use eager as a fallback when no user backend succeeds. The mode
+prevents performance comparison from affecting selection; it does not remove the available fallback.
+
+`ENABLED` and `DIAGNOSTIC` add the cost of building and profiling the eager baseline. Tuning telemetry records the
+baseline and backend performance metrics, from which speedup can be derived; AITune also writes the calculated speedup
+to its logs. `DISABLED` avoids that additional baseline work. See [Observability](../../learn/observability.md) for
+telemetry output and [Profiling and Hardware Metrics](profiling_and_hardware_metrics.md) for profiling tools.
 
 #### FirstWinsStrategy
 
@@ -303,16 +365,54 @@ To write a custom backend, extend the `Backend` base class and `BackendConfig` d
 
 - `key()` - Returns a stable identifier for the backend/config combination; used for caching and lookup.
 - `describe()` - Returns a short human-readable description of the backend/config changes.
-- `to_dict()` - Serializes backend state; includes `Path` objects for artifacts to bundle in checkpoints.
+- `to_dict()` - Serializes backend state; includes `ArtifactPath` objects for files or directories to bundle in
+  checkpoints.
 - `from_dict()` - Reconstructs a backend instance from the serialized state.
-- `is_jit` - Boolean property indicating whether the backend is of just-in-time type. This information helps AITune manage resources as just-in-time backends require the original torch module for activation. Otherwise, the original module can be offloaded to system memory.
 - `_build()` - Builds backend artifacts for a specific module/graph and returns a ready backend.
 - `_activate()` - Loads/initializes the backend for inference after it was inactive or checkpoint-loaded.
 - `_deactivate()` - Releases runtime resources and makes the backend inactive.
 - `_deploy()` - Finalizes the backend for deployment; after this it cannot change state.
 - `_infer()` - Executes inference with the backend for the provided inputs.
 
-For serialization with `ait.load` and `ait.save`, the `to_dict` and `from_dict` methods are used. Anything placed in the dictionary will be saved and restored as a checkpoint. Path objects will be copied to the checkpoints folder and can be used by a backend in the `_deploy` method.
+Every custom backend must declare its supported execution modes and build mode. Include `ExecutionMode.SINGLE_GPU` for
+ordinary modules and `ExecutionMode.MULTI_GPU` when the backend can preserve distributed module execution. If
+activation compiles or otherwise requires the original PyTorch module, declare the backend as just-in-time so AITune
+retains that module:
+
+```python
+from aitune.torch.backend import Backend, BuildMode, ExecutionMode
+
+
+class CustomJitBackend(Backend):
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
+    _build_mode = BuildMode.JUST_IN_TIME
+```
+
+For serialization with `ait.load` and `ait.save`, the `to_dict` and `from_dict` methods are used. Anything placed in
+the dictionary will be saved and restored as checkpoint state. Files and directories are copied only when explicitly
+represented by `ArtifactPath`; ordinary `Path` values remain regular serialized configuration values.
+
+Create a planned artifact from its owning cache directory and relative path. Both arguments accept strings and
+`Path` objects, while the `path` property returns the effective filesystem location used by the backend:
+
+```python
+from aitune.torch.backend import ArtifactPath
+
+engine_artifact = ArtifactPath(cache_dir, "tensorrt/model.engine")
+build_engine(output_path=engine_artifact.path)
+
+
+def to_dict(self):
+    return {"engine_path": engine_artifact}
+```
+
+If another API returns the path of an artifact it has already created, use
+`ArtifactPath.from_existing(engine_path, root=cache_dir)`. The explicit root preserves the intended directory
+structure and prevents accidentally including a file outside that directory. A backend's `from_dict()` receives
+ready-to-use `ArtifactPath` objects, so it should not construct or rebase them itself.
+
+AITune preserves `tensorrt/model.engine` inside the checkpoint and rebases the artifact root when loading it from a
+different location.
 
 ## Monitoring the Workflow
 

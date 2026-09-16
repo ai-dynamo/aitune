@@ -1,0 +1,799 @@
+---
+layout: overview
+slug: aitune/aitune/torch/performance/runtime_profile
+title: aitune.torch.performance.runtime_profile
+---
+
+PyTorch Profiler capture helpers for performance profiles.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`_ProfileWarning`](#aitune-torch-performance-runtime_profile-_ProfileWarning) | Structured warning emitted in ``PerformanceProfile.data["warnings"]``. |
+| [`_RegionAggregate`](#aitune-torch-performance-runtime_profile-_RegionAggregate) | Sum of one region's profiler events within one profiled run. Shares are derived at to_dict() time. |
+| [`_Residual`](#aitune-torch-performance-runtime_profile-_Residual) | Portion of one profiled run not attributed to any topmost-owned region, per time domain. |
+| [`_RunTiming`](#aitune-torch-performance-runtime_profile-_RunTiming) | Per-run timing block. device_time_us is None when the profiler reported no device time. |
+| [`_RuntimeProfile`](#aitune-torch-performance-runtime_profile-_RuntimeProfile) | Data captured from one PyTorch Profiler run plus its derived analysis. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_aot_region_id`](#aitune-torch-performance-runtime_profile-_aot_region_id) | Return the stable region id for an AOT-managed module name. |
+| [`_device_time_us`](#aitune-torch-performance-runtime_profile-_device_time_us) | Return positive PyTorch Profiler device time in microseconds when present. |
+| [`_event_float`](#aitune-torch-performance-runtime_profile-_event_float) | Read a profiler event numeric attribute as a float. |
+| [`_is_cpu_profiler_event`](#aitune-torch-performance-runtime_profile-_is_cpu_profiler_event) | Return whether a profiler event is a CPU-side event with parent ancestry. |
+| [`_profiler_activities`](#aitune-torch-performance-runtime_profile-_profiler_activities) | Return profiler activities supported by the current runtime. |
+| [`_profiler_device_type`](#aitune-torch-performance-runtime_profile-_profiler_device_type) | Return the profiler event device type label. |
+| [`_untuned_region_id`](#aitune-torch-performance-runtime_profile-_untuned_region_id) | Return the stable region id for an untuned module path. |
+
+### Data
+
+[`PROFILER_KEY_AVERAGES_ROW_LIMIT`](#aitune-torch-performance-runtime_profile-PROFILER_KEY_AVERAGES_ROW_LIMIT)
+
+### API
+
+<Anchor id="aitune-torch-performance-runtime_profile-_ProfileWarning">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.performance.runtime_profile._ProfileWarning
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `typing.TypedDict`
+
+Structured warning emitted in ``PerformanceProfile.data["warnings"]``.
+
+<ParamField path="code" type="str">
+
+</ParamField>
+
+<ParamField path="message" type="str">
+
+</ParamField>
+
+<ParamField path="source" type="str">
+
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_RegionAggregate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.performance.runtime_profile._RegionAggregate(
+    region_id: str,
+    calls: int = 0,
+    cpu_time_us: float = 0.0,
+    device_time_us: float | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Sum of one region's profiler events within one profiled run. Shares are derived at to_dict() time.
+
+
+<ParamField path="calls" type="int = 0">
+</ParamField>
+
+<ParamField path="cpu_time_us" type="float = 0.0">
+</ParamField>
+
+<ParamField path="device_time_us" type="float | None = None">
+</ParamField>
+
+<ParamField path="region_id" type="str">
+</ParamField>
+<Anchor id="aitune-torch-performance-runtime_profile-_RegionAggregate-accumulate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RegionAggregate.accumulate(
+    event: typing.Any
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Fold one profiler event into this aggregate.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RegionAggregate-to_dict">
+
+<CodeBlock links={{"aitune.torch.performance.runtime_profile._RunTiming":"#aitune-torch-performance-runtime_profile-_RunTiming"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RegionAggregate.to_dict(
+    run_timing: aitune.torch.performance.runtime_profile._RunTiming
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize to the JSON-facing dict shape, computing shares relative to the run timing.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_Residual">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.performance.runtime_profile._Residual(
+    cpu_time_us: float,
+    cpu_time_fraction: float,
+    device_time_us: float | None,
+    device_time_fraction: float | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Portion of one profiled run not attributed to any topmost-owned region, per time domain.
+
+
+<ParamField path="cpu_time_fraction" type="float">
+</ParamField>
+
+<ParamField path="cpu_time_us" type="float">
+</ParamField>
+
+<ParamField path="device_time_fraction" type="float | None">
+</ParamField>
+
+<ParamField path="device_time_us" type="float | None">
+</ParamField>
+<Anchor id="aitune-torch-performance-runtime_profile-_Residual-from_run">
+
+<CodeBlock links={{"aitune.torch.performance.runtime_profile._RunTiming":"#aitune-torch-performance-runtime_profile-_RunTiming","aitune.torch.performance.runtime_profile._RegionAggregate":"#aitune-torch-performance-runtime_profile-_RegionAggregate","aitune.torch.performance.runtime_profile._Residual":"#aitune-torch-performance-runtime_profile-_Residual"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._Residual.from_run(
+    timing: aitune.torch.performance.runtime_profile._RunTiming,
+    regions: collections.abc.Iterable[aitune.torch.performance.runtime_profile._RegionAggregate]
+) -> aitune.torch.performance.runtime_profile._Residual
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_Residual-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._Residual.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize to the JSON-facing dict shape, omitting unavailable device timing.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_RunTiming">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.performance.runtime_profile._RunTiming(
+    wall_time_us: float,
+    cpu_time_us: float,
+    device_time_us: float | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Per-run timing block. device_time_us is None when the profiler reported no device time.
+
+
+<ParamField path="cpu_time_us" type="float">
+</ParamField>
+
+<ParamField path="device_time_us" type="float | None = None">
+</ParamField>
+
+<ParamField path="wall_time_us" type="float">
+</ParamField>
+<Anchor id="aitune-torch-performance-runtime_profile-_RunTiming-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RunTiming.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize to the JSON-facing dict shape, omitting unavailable device timing.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.performance.runtime_profile._RuntimeProfile(
+    run_wall_times_us: list[float],
+    events: torch.autograd.profiler_util.EventList,
+    key_averages: torch.autograd.profiler_util.EventList,
+    activities: list[str],
+    untuned_module_types: dict[str, str] = dict()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Data captured from one PyTorch Profiler run plus its derived analysis.
+
+
+<ParamField path="_marker_events" type="list[Any] = field(init=False, repr=False)">
+</ParamField>
+
+<ParamField path="_observed_aot_region_names" type="list[str] = field(init=False, repr=False)">
+</ParamField>
+
+<ParamField path="_observed_untuned_region_paths" type="list[str] = field(init=False, repr=False)">
+</ParamField>
+
+<ParamField path="_run_region_aggregates" type="dict[int, dict[str, _RegionAggregate]] = field(init=False, repr=False)">
+</ParamField>
+
+<ParamField path="_unmapped_aot_event_count" type="int = field(init=False, repr=False)">
+</ParamField>
+
+<ParamField path="activities" type="list[str]">
+</ParamField>
+
+<ParamField path="events" type="EventList">
+</ParamField>
+
+<ParamField path="key_averages" type="EventList">
+</ParamField>
+
+<ParamField path="run_wall_times_us" type="list[float]">
+</ParamField>
+
+<ParamField path="untuned_module_types" type="dict[str, str] = field(default_factory=dict)">
+</ParamField>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-_aot_event_is_nested">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile._aot_event_is_nested(
+    event: typing.Any,
+    marker_indices: dict[int, int]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return True if a strict CPU ancestor of ``event`` is another AOT-region event.
+
+Walks ``cpu_parent`` up to (but not past) the profiled-run marker. The first
+ancestor matching :data:`AOT_MODULE_REGION_PREFIX` means this event is
+already enclosed by another AOT region in this run and its time would be
+double-counted if aggregated independently.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-_classify_aot_event">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile._classify_aot_event(
+    event: typing.Any,
+    name: str,
+    marker_indices: dict[int, int],
+    observed_owned: set[str],
+    observed_names: list[str]
+) -> tuple[int, str] | str | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Decide what to do with one AOT-prefixed event.
+
+Returns ``None`` if the event is nested under another AOT event (skip),
+the string ``"unmapped"`` if it has no profiled-run ancestor, or
+``(run_index, region_id)`` for aggregation.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-_classify_region_events">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile._classify_region_events() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Walk events once and bucket each region event (AOT or untuned) into its run.
+
+Events matching ``AOT_MODULE_REGION_PREFIX`` are tracked as AOT regions; events
+matching ``UNTUNED_MODULE_REGION_PREFIX`` are tracked as untuned regions. AOT
+events that cannot be mapped to a profiled-run ancestor are counted as
+unmapped; untuned events without a profiled-run ancestor are silently dropped
+(they fire outside the measured window, e.g. during warmup setup).
+
+Nested AOT events — an AOT-region event whose nearest AOT ancestor (before the
+profiled-run marker) is also an AOT-region event — are skipped from
+aggregation: the enclosing AOT region already owns that work, and counting
+both would double-count and break ``sum(fractions) + residual ≈ 1.0``. The
+wrapper's name is still recorded in ``_observed_aot_region_names`` only if at
+least one non-nested event was seen, so a wrapper that ever owned time
+appears in the regions metadata; one that only fired nested under another
+does not.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-_classify_untuned_event">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile._classify_untuned_event(
+    event: typing.Any,
+    name: str,
+    marker_indices: dict[int, int],
+    observed_seen: set[str],
+    observed_paths: list[str]
+) -> tuple[int, str] | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Decide what to do with one untuned-prefixed event.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-_key_averages_summary">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile._key_averages_summary(
+    sort_by: str
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return one bounded view over profiler key averages.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-_owning_run_index">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile._owning_run_index(
+    event: typing.Any,
+    marker_indices: dict[int, int]
+) -> int | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return the profiled run index that owns an event, walking CPU parents.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-_run_timing">
+
+<CodeBlock links={{"aitune.torch.performance.runtime_profile._RunTiming":"#aitune-torch-performance-runtime_profile-_RunTiming"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile._run_timing(
+    index: int,
+    wall_time_us: float
+) -> aitune.torch.performance.runtime_profile._RunTiming
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the timing record for one profiled run.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-_serialize_key_average_row">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile._serialize_key_average_row(
+    event: typing.Any
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Serialize one PyTorch Profiler key-average row.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-aot_region_names">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile.aot_region_names() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return observed AOT-managed module region names in profiler event order.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-capture">
+
+<CodeBlock links={{"aitune.torch.performance.runtime_profile._RuntimeProfile":"#aitune-torch-performance-runtime_profile-_RuntimeProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile.capture(
+    inference_function: collections.abc.Callable,
+    args: tuple[typing.Any, ...],
+    kwargs: dict[str, typing.Any],
+    trace_file: pathlib.Path | None,
+    warmup_runs: int,
+    measured_runs: int,
+    discovery_root: typing.Any | None = None
+) -> aitune.torch.performance.runtime_profile._RuntimeProfile
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Run warmup + measured iterations under PyTorch Profiler.
+
+PyTorch Profiler drives the iteration phases via ``torch.profiler.schedule``:
+``warmup_runs`` user-requested warmup iterations during which the profiler is
+idle (no event capture, no overhead), followed by 1 profiler-internal warmup
+iteration that absorbs the profiler's buffer-allocation cost, followed by
+``measured_runs`` recorded iterations. Only the recorded iterations contribute
+events to the captured trace and analysis.
+
+``discovery_root`` selects the object from which to discover top-level untuned
+module candidates for forward-hook instrumentation. Pass ``None`` to skip
+untuned instrumentation entirely (used for pure-callable targets and tests).
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-profiler_summary">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile.profiler_summary() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return bounded summaries from PyTorch Profiler's own aggregate events.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-runs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile.runs() -> list[dict[str, typing.Any]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return per-run timing and aggregated region measurements (AOT and untuned) plus residual.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-untuned_region_paths">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile.untuned_region_paths() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return observed untuned module region paths in profiler event order.
+
+
+</Indent>
+<Anchor id="aitune-torch-performance-runtime_profile-_RuntimeProfile-warnings">
+
+<CodeBlock links={{"aitune.torch.performance.runtime_profile._ProfileWarning":"#aitune-torch-performance-runtime_profile-_ProfileWarning"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._RuntimeProfile.warnings() -> list[aitune.torch.performance.runtime_profile._ProfileWarning]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return structured warnings for report integrity issues.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_aot_region_id">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._aot_region_id(
+    module_name: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the stable region id for an AOT-managed module name.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_device_time_us">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._device_time_us(
+    event: typing.Any
+) -> float | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return positive PyTorch Profiler device time in microseconds when present.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_event_float">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._event_float(
+    event: typing.Any,
+    attr: str
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Read a profiler event numeric attribute as a float.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_is_cpu_profiler_event">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._is_cpu_profiler_event(
+    event: typing.Any
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether a profiler event is a CPU-side event with parent ancestry.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_profiler_activities">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._profiler_activities() -> list[torch.profiler.ProfilerActivity]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return profiler activities supported by the current runtime.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_profiler_device_type">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._profiler_device_type(
+    event: typing.Any
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the profiler event device type label.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-_untuned_region_id">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile._untuned_region_id(
+    module_path: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the stable region id for an untuned module path.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-performance-runtime_profile-PROFILER_KEY_AVERAGES_ROW_LIMIT">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.performance.runtime_profile.PROFILER_KEY_AVERAGES_ROW_LIMIT = 20
+```
+
+</CodeBlock>
+</Anchor>
+

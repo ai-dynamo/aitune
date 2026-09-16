@@ -1,0 +1,233 @@
+---
+layout: overview
+slug: aitune/aitune/dynamo/protocol
+title: aitune.dynamo.protocol
+---
+
+Dynamo request wiring and response conversion.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_encode_media_response`](#aitune-dynamo-protocol-_encode_media_response) | Validate and base64-encode a media inference result. |
+| [`_pack_audio_response`](#aitune-dynamo-protocol-_pack_audio_response) | Pack a text-to-speech inference result. |
+| [`_pack_embedding_response`](#aitune-dynamo-protocol-_pack_embedding_response) | Pack an embedding inference result. |
+| [`_pack_image_response`](#aitune-dynamo-protocol-_pack_image_response) | Pack an image inference result. |
+| [`_pack_video_response`](#aitune-dynamo-protocol-_pack_video_response) | Pack a video inference result. |
+| [`get_register_model_kwargs`](#aitune-dynamo-protocol-get_register_model_kwargs) | Return arguments required by the installed Dynamo version. |
+| [`get_wiring`](#aitune-dynamo-protocol-get_wiring) | Return the Dynamo model input, model type, and request class for a modality. |
+| [`pack_response`](#aitune-dynamo-protocol-pack_response) | Convert an inference result to the Dynamo wire format. |
+
+### Data
+
+[`Modality`](#aitune-dynamo-protocol-Modality)
+
+[`SUPPORTED_MODALITIES`](#aitune-dynamo-protocol-SUPPORTED_MODALITIES)
+
+[`_RESPONSE_PACKERS`](#aitune-dynamo-protocol-_RESPONSE_PACKERS)
+
+### API
+
+<Anchor id="aitune-dynamo-protocol-_encode_media_response">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol._encode_media_response(
+    result: typing.Any,
+    modality: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate and base64-encode a media inference result.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-protocol-_pack_audio_response">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol._pack_audio_response(
+    result: typing.Any,
+    model: str
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Pack a text-to-speech inference result.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-protocol-_pack_embedding_response">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol._pack_embedding_response(
+    result: typing.Any,
+    model: str
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Pack an embedding inference result.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-protocol-_pack_image_response">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol._pack_image_response(
+    result: typing.Any,
+    _model: str
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Pack an image inference result.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-protocol-_pack_video_response">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol._pack_video_response(
+    result: typing.Any,
+    model: str
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Pack a video inference result.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-protocol-get_register_model_kwargs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol.get_register_model_kwargs() -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return arguments required by the installed Dynamo version.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-protocol-get_wiring">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol.get_wiring(
+    modality: str
+) -> tuple
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the Dynamo model input, model type, and request class for a modality.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-protocol-pack_response">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol.pack_response(
+    result: typing.Any,
+    modality: str,
+    model: str
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert an inference result to the Dynamo wire format.
+
+
+</Indent>
+
+<Anchor id="aitune-dynamo-protocol-Modality">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol.Modality = Literal['image', 'video', 'audio', 'embedding']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-dynamo-protocol-SUPPORTED_MODALITIES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol.SUPPORTED_MODALITIES: frozenset[str] = frozenset({'image', 'video', 'audio', 'embedding'})
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-dynamo-protocol-_RESPONSE_PACKERS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.protocol._RESPONSE_PACKERS: dict[str, Callable[[Any, str], dict]] = {'embedding': _pack_embedding_response, 'image': _pack_image_response, 'video': ...
+```
+
+</CodeBlock>
+</Anchor>
+

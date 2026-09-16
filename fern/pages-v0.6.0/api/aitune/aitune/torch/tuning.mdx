@@ -1,0 +1,328 @@
+---
+layout: overview
+slug: aitune/aitune/torch/tuning
+title: aitune.torch.tuning
+---
+
+Main tune function.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_activate_tuned_modules`](#aitune-torch-tuning-_activate_tuned_modules) | Activate all tuned modules after tuning is complete. |
+| [`_clear_cache`](#aitune-torch-tuning-_clear_cache) | Clear the cache. |
+| [`_describe_module`](#aitune-torch-tuning-_describe_module) | - |
+| [`_log_module_tuning_exception`](#aitune-torch-tuning-_log_module_tuning_exception) | Log a module-level tuning exception to the console and cache. |
+| [`_validate_and_normalize_batch_sizes`](#aitune-torch-tuning-_validate_and_normalize_batch_sizes) | Validate and normalize batch sizes for tuning. |
+| [`_write_module_error_log`](#aitune-torch-tuning-_write_module_error_log) | Persist a module-level tuning traceback in its rank-specific cache. |
+| [`load`](#aitune-torch-tuning-load) | Load the tuned module from a file. |
+| [`save`](#aitune-torch-tuning-save) | Save the tuned module to a file. |
+| [`tune`](#aitune-torch-tuning-tune) | Tune a callable which runs inference on a pipeline or a model. |
+
+### Data
+
+[`LOG_FORMAT`](#aitune-torch-tuning-LOG_FORMAT)
+
+[`logger`](#aitune-torch-tuning-logger)
+
+### API
+
+<Anchor id="aitune-torch-tuning-_activate_tuned_modules">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning._activate_tuned_modules() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Activate all tuned modules after tuning is complete.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-_clear_cache">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning._clear_cache()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Clear the cache.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-_describe_module">
+
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning._describe_module(
+    module: aitune.torch.module.wrapper_module.Module
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-_log_module_tuning_exception">
+
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning._log_module_tuning_exception(
+    module: aitune.torch.module.wrapper_module.Module,
+    exception: Exception
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log a module-level tuning exception to the console and cache.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-_validate_and_normalize_batch_sizes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning._validate_and_normalize_batch_sizes(
+    batch_sizes: list[int] | None
+) -> list[int]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate and normalize batch sizes for tuning.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-_write_module_error_log">
+
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning._write_module_error_log(
+    module: aitune.torch.module.wrapper_module.Module,
+    exception: Exception
+) -> pathlib.Path | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Persist a module-level tuning traceback in its rank-specific cache.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-load">
+
+<CodeBlock links={{"aitune.torch.checkpoint.storage.Storage":"/aitune/aitune/torch/checkpoint/storage#aitune-torch-checkpoint-storage-Storage","aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning.load(
+    module: torch.nn.Module,
+    path: str | pathlib.Path,
+    storage: aitune.torch.checkpoint.storage.Storage | None = None,
+    device_map: dict[str, torch.device] | None = None,
+    disable_external_logging: bool = True
+) -> torch.nn.Module | aitune.torch.module.wrapper_module.Module
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load the tuned module from a file.
+
+If storage is not provided, a default storage will be used. Check save function for more details.
+
+**Parameters:**
+
+<ParamField path="module" type="torch.nn.Module">
+The module to load.
+</ParamField>
+
+<ParamField path="path" type="str | Path">
+The path to load the module from.
+</ParamField>
+
+<ParamField path="storage" type="Storage | None" default="None">
+The storage to use to load the module. If not provided, a local storage will be used.
+</ParamField>
+
+<ParamField path="device_map" type="dict[str, torch.device] | None" default="None">
+The device map to load modules to. Overrides the device of stored in state dict.
+</ParamField>
+
+<ParamField path="disable_external_logging" type="bool" default="True">
+If True, libraries logging will be suppressed.
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-save">
+
+<CodeBlock links={{"aitune.torch.checkpoint.storage.Storage":"/aitune/aitune/torch/checkpoint/storage#aitune-torch-checkpoint-storage-Storage"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning.save(
+    module: torch.nn.Module,
+    path: str | pathlib.Path,
+    storage: aitune.torch.checkpoint.storage.Storage | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Save the tuned module to a file.
+
+If storage is not provided, a default storage will be used.
+
+If you would like to save the module to a different folder, you can use the storage parameter.
+For example, if you want to save the module to the `ckpt` folder, you can do the following:
+
+**Parameters:**
+
+<ParamField path="module" type="torch.nn.Module">
+The module to save.
+</ParamField>
+
+<ParamField path="path" type="str | Path">
+The path to save the module to.
+</ParamField>
+
+<ParamField path="storage" type="Storage | None" default="None">
+The storage to use to save the module. If not provided, a local storage will be used.
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-tune">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DataLoaderFactory"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning.tune(
+    func: collections.abc.Callable,
+    dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
+    batch_sizes: list[int] | None = None,
+    max_num_batches_per_batch_size: int | None = None,
+    device: str | torch.device | None = None,
+    dry_run: bool = False,
+    disable_external_logging: bool = False,
+    clear_cache: bool = False,
+    ignore_failing_modules: bool = True
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tune a callable which runs inference on a pipeline or a model.
+
+**Parameters:**
+
+<ParamField path="func" type="Callable">
+The function to tune.
+</ParamField>
+
+<ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
+The dataset to tune on. It can be DataLoaderFactory or any dataset/iterable and even torch.Tensor.
+Tensor will be treated as a single sample dataset.
+</ParamField>
+
+<ParamField path="batch_sizes" type="list[int] | None" default="None">
+The batch sizes to use for tuning. At least 2 different batch sizes are required for determining
+batch axis.
+</ParamField>
+
+<ParamField path="max_num_batches_per_batch_size" type="int | None" default="None">
+The maximum number of batches to use for tuning per batch size.
+</ParamField>
+
+<ParamField path="device" type="str | torch.device | None" default="None">
+The device to use for tuning.
+</ParamField>
+
+<ParamField path="dry_run" type="bool" default="False">
+If True, only dry run the tuning.
+</ParamField>
+
+<ParamField path="disable_external_logging" type="bool" default="False">
+If True, libraries logging will be suppressed.
+</ParamField>
+
+<ParamField path="clear_cache" type="bool" default="False">
+If True, the cache will be cleared before tuning.
+</ParamField>
+
+<ParamField path="ignore_failing_modules" type="bool" default="True">
+If True, failing modules will be ignored and tuning will continue.
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tuning-LOG_FORMAT">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning.LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-tuning-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

@@ -22,6 +22,7 @@ TorchTensorRT backend with AOT compilation and intermediate model save.
 | Name | Description |
 |------|-------------|
 | [`_is_primitive`](#aitune-torch-backend-torch_tensorrt_aot_backend-_is_primitive) | Check if a value is a primitive type (int, float, str, bool). |
+| [`_save_compiled_model`](#aitune-torch-backend-torch_tensorrt_aot_backend-_save_compiled_model) | Save a compiled graph and retry a known export error with retracing. |
 | [`assert_torch_tensorrt`](#aitune-torch-backend-torch_tensorrt_aot_backend-assert_torch_tensorrt) | Check if torch_tensorrt is installed. |
 
 ### Data
@@ -59,10 +60,19 @@ Backend that compiles model using TensorRT.
 <ParamField path="STATE_TYPE" type="= 'type'">
 </ParamField>
 
+<ParamField path="_build_mode" type="= BuildMode.AHEAD_OF_TIME">
+</ParamField>
+
 <ParamField path="_config" type="= config or TorchTensorRTAotBackendConfig()">
 </ParamField>
 
 <ParamField path="_devices" type="list[str] = ['cuda']">
+</ParamField>
+
+<ParamField path="_execution_modes">
+</ParamField>
+
+<ParamField path="_exported_model_artifact" type="ArtifactPath | None = None">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_activate">
 
@@ -83,13 +93,13 @@ Load compiled module.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.recording_module.Sample":"/aitune/aitune/torch/module/recording_module#aitune-torch-module-recording_module-Sample","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    data: list[aitune.torch.module.recording_module.Sample],
+    samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
 ) -> aitune.torch.backend.backend.Backend
 ```
@@ -114,14 +124,12 @@ revert to ``torch_tensorrt.compile(...)`` once that lands upstream.
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_create_exported_model_path">
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_compile_settings">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._create_exported_model_path(
-    cache_dir: pathlib.Path
-) -> pathlib.Path
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._compile_settings() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -129,7 +137,26 @@ aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._create_
 
 <Indent>
 
-Create path to exported model.
+Copy compile settings and isolate the timing cache by rank.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_create_exported_model_artifact">
+
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._create_exported_model_artifact(
+    cache_dir: pathlib.Path
+) -> aitune.torch.checkpoint.artifact.ArtifactPath
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create the exported model artifact.
 
 In order to avoid name clashes we create a unique path for each model and graph spec.
 
@@ -200,25 +227,6 @@ Inference keyword arguments
 **Returns:** `Any`
 
 Model outputs
-
-
-</Indent>
-<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_save_config">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._save_config(
-    cache_dir: pathlib.Path
-)
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Store the backend configuration to a file.
 
 
 </Indent>
@@ -423,7 +431,8 @@ Identifiers for discrete sub-steps of a TorchTensorRTAot backend build.
 class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig(
     enabled_precisions: set[torch.dtype] | None = None,
     use_explicit_typing: bool = True,
-    workspace_size: int = 0
+    workspace_size: int = 0,
+    use_distributed_mode_trace: bool = False
 )
 ```
 
@@ -438,6 +447,9 @@ Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 
 
 <ParamField path="enabled_precisions" type="set[dtype] | None = None">
+</ParamField>
+
+<ParamField path="use_distributed_mode_trace" type="bool = False">
 </ParamField>
 
 <ParamField path="use_explicit_typing" type="bool = True">
@@ -463,6 +475,30 @@ aitune.torch.backend.torch_tensorrt_aot_backend._is_primitive(
 <Indent>
 
 Check if a value is a primitive type (int, float, str, bool).
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-_save_compiled_model">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend._save_compiled_model(
+    module: torch.nn.Module,
+    path: pathlib.Path,
+    sample: aitune.torch.module.sample_store.Sample,
+    dynamic_shapes: dict[str, typing.Any] | None,
+    pickle_protocol: int
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Save a compiled graph and retry a known export error with retracing.
 
 
 </Indent>

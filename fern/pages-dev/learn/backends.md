@@ -96,3 +96,24 @@ from aitune.torch.backend import ONNXRuntimeBackend, ONNXRuntimeBackendConfig, O
 config = ONNXRuntimeBackendConfig(execution_provider=ONNXExecutionProvider.CUDA)
 backend = ONNXRuntimeBackend(config)
 ```
+
+## Kernel Selector Backend
+
+The experimental Kernel Selector backend selects faster implementations of supported `torch.nn.functional` calls
+before building another AITune backend. It is a composite backend rather than a compiler: its JIT or AOT build mode and
+supported execution topology come from the delegate backend.
+
+```python
+from aitune.torch.backend import KernelSelectorBackend, KernelSelectorBackendConfig, TorchInductorJitBackend
+from aitune.torch.kernel_forge.kernel_provider import SageAttentionKernelProvider
+
+backend = KernelSelectorBackend(
+    config=KernelSelectorBackendConfig(
+        kernel_providers=SageAttentionKernelProvider(),
+    ),
+    delegate_backend=TorchInductorJitBackend(),
+)
+```
+
+See the [Kernel Selector Backend Guide](../guides/backends/kernel_selector_backend.md) for delegate lifecycle,
+checkpoint behavior, and provider compatibility.

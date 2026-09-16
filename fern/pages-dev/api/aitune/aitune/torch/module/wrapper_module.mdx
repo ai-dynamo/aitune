@@ -103,6 +103,10 @@ This wrapper can be used in place of a torch module, and will behave identically
 <ParamField path="_self_state" type="= ModuleState.INIT">
 </ParamField>
 
+<ParamField path="cache_dir" type="Path">
+Get the module cache directory.
+</ParamField>
+
 <ParamField path="device" type="device">
 Get the device of the module.
 </ParamField>
@@ -313,14 +317,12 @@ they should be added to the existing ones but before the original hooks so that 
 
 
 </Indent>
-<Anchor id="aitune-torch-module-wrapper_module-Module-_offload">
+<Anchor id="aitune-torch-module-wrapper_module-Module-_module_cache_dir">
 
-<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._offload(
-    backends: collections.OrderedDict[aitune.torch.module.sample_metadata.SampleMetadata, aitune.torch.backend.backend.Backend]
-)
+aitune.torch.module.wrapper_module.Module._module_cache_dir() -> pathlib.Path
 ```
 
 </CodeBlock>
@@ -328,7 +330,7 @@ aitune.torch.module.wrapper_module.Module._offload(
 
 <Indent>
 
-Offload the module to the meta device only if no JIT backends are used.
+Return the cache directory identified by the configured module name.
 
 
 </Indent>
@@ -567,7 +569,7 @@ convention i.e. state_dict.
 
 ```python
 aitune.torch.module.wrapper_module.Module.tune(
-    device: torch.device | None = None,
+    device: str | torch.device | None = None,
     strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None,
     dry_run: bool = False
 )
@@ -582,7 +584,7 @@ Tunes the module.
 
 **Parameters:**
 
-<ParamField path="device" type="torch.device | None" default="None">
+<ParamField path="device" type="str | torch.device | None" default="None">
 the device to use for tuning
 </ParamField>
 
@@ -674,7 +676,7 @@ Sanitize model name to be used as a module name.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.DEFAULT_STRATEGY = FirstWinsStrategy()
+aitune.torch.module.wrapper_module.DEFAULT_STRATEGY = MaxThroughputStrategy.for_aot()
 ```
 
 </CodeBlock>

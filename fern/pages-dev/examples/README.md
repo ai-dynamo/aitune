@@ -6,6 +6,13 @@ title: "NVIDIA AITune Examples"
 
 This directory contains practical examples demonstrating how to use NVIDIA AITune to tune different types of AI models for inference performance.
 
+ESM2 and Parakeet CTC use AITune's default strategy without overrides.
+For AOT tuning, this selects `MaxThroughputStrategy` with automatic backend candidates and maximum-batch-size discovery.
+JIT also defaults to `MaxThroughputStrategy`, with fewer candidates and maximum-batch-size discovery disabled.
+Stable Diffusion and FLUX disable maximum-batch-size discovery to tune their recorded image batches. Stable Diffusion
+uses the default AOT backend candidates, as do FLUX's non-transformer modules.
+Explicit backend lists remain where models need quantization, precision settings, or specific compiler options.
+
 ## ResNet
 
 ### Computer Vision - Image Classification
@@ -49,10 +56,29 @@ Shows tuning of the FLUX text-to-image model, demonstrating advanced diffusion m
 - **Use Case**: Optimizing state-of-the-art text-to-image models
 - **Key Features**:
   - Advanced diffusion model tuning
+  - Single-GPU and Diffusers context-parallel execution
   - High-quality image generation
   - Efficient inference pipeline tuning
 - **More Info**:
   - https://huggingface.co/black-forest-labs/FLUX.1-dev
+
+## WAN
+
+### Generative AI - Text-to-Video
+
+Demonstrates distributed tuning and serving of the WAN 2.1 text-to-video model with Diffusers context parallelism.
+
+- **Location**: [`WAN`](./WAN/README.md)
+- **Model**: WAN 2.1 T2V 1.3B from Hugging Face
+- **Use Case**: Optimizing large text-to-video diffusion models across multiple GPUs
+- **Key Features**:
+  - Multi-GPU Ulysses and ring context parallelism
+  - Independent backend selection for the WAN transformer
+  - Rank-local distributed checkpoints
+  - Original and tuned MP4 generation
+  - Collective NVIDIA Dynamo serving
+- **More Info**:
+  - https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers
 
 ## ParakeetCTC
 
@@ -127,15 +153,16 @@ Demonstrates tuning of E5Large model for text embedding tasks.
 Demonstrates tuning of Large Language Models for text generation tasks. This example shows how to optimize LLMs for efficient inference with KV cache support.
 
 - **Location**: [`LLM`](./LLM/README.md)
-- **Model**: Microsoft Phi-3-mini-4k-instruct from HuggingFace
+- **Model**: Qwen3.5-0.8B from HuggingFace
 - **Use Case**: Optimizing LLMs for text generation and inference
 - **Key Features**:
   - LLM model tuning with AITune
+  - Single-GPU and Transformers native tensor-parallel execution
   - Static and dynamic KV cache optimization
   - Prefill and decode phase optimization
   - HuggingFace integration
 - **More Info**:
-  - https://huggingface.co/microsoft/Phi-3-mini-4k-instruct
+  - https://huggingface.co/Qwen/Qwen3.5-0.8B
 
 ## JIT Tuning
 

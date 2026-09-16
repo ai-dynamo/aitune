@@ -206,7 +206,7 @@ Create TensorSpec from dictionary.
 ```python
 aitune.torch.module.tensor_spec.TensorSpec.from_tensor(
     tensor: torch.Tensor,
-    batch_size: int
+    batch_size: int | float
 )
 ```
 
@@ -225,8 +225,8 @@ Create TensorSpec from tensor.
 Tensor to create TensorSpec from
 </ParamField>
 
-<ParamField path="batch_size" type="int">
-Batch size
+<ParamField path="batch_size" type="int | float">
+Batch size, float("nan") if batch size is unknown
 </ParamField>
 
 

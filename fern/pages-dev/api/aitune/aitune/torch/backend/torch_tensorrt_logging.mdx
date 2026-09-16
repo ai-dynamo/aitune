@@ -1,0 +1,58 @@
+---
+layout: overview
+slug: aitune/aitune/torch/backend/torch_tensorrt_logging
+title: aitune.torch.backend.torch_tensorrt_logging
+---
+
+Logging helpers shared by the Torch-TensorRT backends.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`torch_tensorrt_errors`](#aitune-torch-backend-torch_tensorrt_logging-torch_tensorrt_errors) | Hide very large Torch-TensorRT logs while saving or loading an artifact. |
+| [`torch_tensorrt_warnings`](#aitune-torch-backend-torch_tensorrt_logging-torch_tensorrt_warnings) | Limit Python and native Torch-TensorRT logs to warnings and errors. |
+
+### API
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_logging-torch_tensorrt_errors">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_logging.torch_tensorrt_errors(
+    torch_tensorrt_module: typing.Any
+) -> collections.abc.Iterator[None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Hide very large Torch-TensorRT logs while saving or loading an artifact.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-torch_tensorrt_logging-torch_tensorrt_warnings">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_logging.torch_tensorrt_warnings(
+    torch_tensorrt_module: typing.Any
+) -> collections.abc.Iterator[None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Limit Python and native Torch-TensorRT logs to warnings and errors.
+
+
+</Indent>

@@ -30,7 +30,7 @@ class aitune.torch.jit.config.Config(
     mode: aitune.torch.jit.config.JITMode = JITMode.TUNE_EAGER,
     dry_run: bool = False,
     dry_run_failure_probability: float = 0.2,
-    device: str | torch.device | None = DEFAULT_DEVICE,
+    device: str | torch.device | None = None,
     min_samples: int = 1,
     batch_axis_required: bool = True,
     max_depth_level: int = 1,
@@ -62,7 +62,7 @@ Configuration for JIT module.
 <ParamField path="detect_graph_breaks" type="bool = False">
 </ParamField>
 
-<ParamField path="device" type="str | device | None = DEFAULT_DEVICE">
+<ParamField path="device" type="str | device | None = None">
 </ParamField>
 
 <ParamField path="dry_run" type="bool = False">
@@ -141,9 +141,9 @@ aitune.torch.jit.config.Config.resolve_strategy() -> aitune.torch.tune_strategy.
 Return the tune strategy to use for JIT tuning.
 
 When ``strategy`` is set explicitly it is returned as-is. Otherwise the default is a
-``FirstWinsStrategy`` covering TensorRT (with and without dynamo) and TorchInductorJit —
-kept here so the contract is visible on the config and tune-data snapshots can reflect
-what will actually run.
+``MaxThroughputStrategy``. Ordinary modules profile TensorRT (with and without dynamo)
+and TorchInductor JIT. Distributed modules profile TorchInductor AOT and TorchInductor JIT.
+Candidates are resolved when the module is available.
 
 Strategy and backend modules are imported lazily to keep the JIT config a thin data
 layer that doesn't pull runtime modules at import time.

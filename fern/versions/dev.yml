@@ -23,6 +23,8 @@ navigation:
         path: ../pages-dev/guides/jit_tuning.md
       - page: Just-in-time Inspect
         path: ../pages-dev/guides/jit_inspect.md
+      - page: Multi-GPU Integration
+        path: ../pages-dev/guides/multi_gpu.md
       - section: Backends
         contents:
           - page: TensorRT Backend
@@ -31,6 +33,8 @@ navigation:
             path: ../pages-dev/guides/backends/tensorrt_optimization_profiles.md
           - page: ONNXRuntime Backend
             path: ../pages-dev/guides/backends/onnx_runtime_backend.md
+          - page: Kernel Selector Backend
+            path: ../pages-dev/guides/backends/kernel_selector_backend.md
           - page: Torch-TensorRT Backend (JIT)
             path: ../pages-dev/guides/backends/torch_tensorrt_jit_backend.md
           - page: Torch-TensorRT Backend (AOT)
@@ -55,6 +59,10 @@ navigation:
             path: ../pages-dev/guides/advanced/profiling_and_hardware_metrics.md
           - page: Performance Profile
             path: ../pages-dev/guides/advanced/performance_profile.md
+          - page: Module Function Kernel Profiler
+            path: ../pages-dev/guides/advanced/module_function_kernel_profiler.md
+          - page: Kernel Providers
+            path: ../pages-dev/guides/advanced/kernel_provider.md
       - section: AI Agents
         contents:
           - page: Tuning Assistant
@@ -81,6 +89,8 @@ navigation:
         path: ../pages-dev/examples/ResNet/README.md
       - page: StableDiffusion
         path: ../pages-dev/examples/StableDiffusion/README.md
+      - page: WAN
+        path: ../pages-dev/examples/WAN/README.md
   - section: API Reference
     contents:
       - section: Ahead-of-time Tuning API
@@ -113,6 +123,8 @@ navigation:
             path: ../pages-dev/api/aitune/aitune/torch/backend/torch_inductor_jit_backend.mdx
           - page: Torch Inductor AOT Backend
             path: ../pages-dev/api/aitune/aitune/torch/backend/torch_inductor_aot_backend.mdx
+          - page: Kernel Selector Backend
+            path: ../pages-dev/api/aitune/aitune/torch/backend/kernel_selector_backend.mdx
       - section: Tuning Strategies API
         contents:
           - page: FirstWinsStrategy
@@ -136,5 +148,3 @@ navigation:
         path: ../pages-dev/known_issues.md
       - page: Contributing
         path: ../pages-dev/CONTRIBUTING.md
-      - page: License
-        path: ../pages-dev/LICENSE

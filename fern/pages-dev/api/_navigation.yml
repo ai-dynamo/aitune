@@ -12,6 +12,30 @@
   slug: aitune/aitune/dynamo
   children:
     - type: section
+      title: distributed
+      slug: aitune/aitune/dynamo/distributed
+      children:
+        - type: page
+          title: distributed
+          slug: aitune/aitune/dynamo/distributed
+          pageId: aitune/aitune/dynamo/distributed.mdx
+    - type: section
+      title: protocol
+      slug: aitune/aitune/dynamo/protocol
+      children:
+        - type: page
+          title: protocol
+          slug: aitune/aitune/dynamo/protocol
+          pageId: aitune/aitune/dynamo/protocol.mdx
+    - type: section
+      title: runtime
+      slug: aitune/aitune/dynamo/runtime
+      children:
+        - type: page
+          title: runtime
+          slug: aitune/aitune/dynamo/runtime
+          pageId: aitune/aitune/dynamo/runtime.mdx
+    - type: section
       title: worker
       slug: aitune/aitune/dynamo/worker
       children:
@@ -36,6 +60,34 @@
       slug: aitune/aitune/global_context
       pageId: aitune/aitune/global_context.mdx
 - type: section
+  title: records
+  slug: aitune/aitune/records
+  children:
+    - type: section
+      title: artifact
+      slug: aitune/aitune/records/artifact
+      children:
+        - type: page
+          title: artifact
+          slug: aitune/aitune/records/artifact
+          pageId: aitune/aitune/records/artifact.mdx
+    - type: section
+      title: dtypes
+      slug: aitune/aitune/records/dtypes
+      children:
+        - type: page
+          title: dtypes
+          slug: aitune/aitune/records/dtypes
+          pageId: aitune/aitune/records/dtypes.mdx
+    - type: section
+      title: shapes
+      slug: aitune/aitune/records/shapes
+      children:
+        - type: page
+          title: shapes
+          slug: aitune/aitune/records/shapes
+          pageId: aitune/aitune/records/shapes.mdx
+- type: section
   title: torch
   slug: aitune/aitune/torch
   children:
@@ -52,6 +104,14 @@
               slug: aitune/aitune/torch/backend/backend
               pageId: aitune/aitune/torch/backend/backend.mdx
         - type: section
+          title: kernel_selector_backend
+          slug: aitune/aitune/torch/backend/kernel_selector_backend
+          children:
+            - type: page
+              title: kernel_selector_backend
+              slug: aitune/aitune/torch/backend/kernel_selector_backend
+              pageId: aitune/aitune/torch/backend/kernel_selector_backend.mdx
+        - type: section
           title: onnx_runtime_backend
           slug: aitune/aitune/torch/backend/onnx_runtime_backend
           children:
@@ -63,6 +123,14 @@
           title: tensorrt
           slug: aitune/aitune/torch/backend/tensorrt
           children:
+            - type: section
+              title: cuda_graphs
+              slug: aitune/aitune/torch/backend/tensorrt/cuda_graphs
+              children:
+                - type: page
+                  title: cuda_graphs
+                  slug: aitune/aitune/torch/backend/tensorrt/cuda_graphs
+                  pageId: aitune/aitune/torch/backend/tensorrt/cuda_graphs.mdx
             - type: section
               title: modelopt_calibration
               slug: aitune/aitune/torch/backend/tensorrt/modelopt_calibration
@@ -184,6 +252,14 @@
               slug: aitune/aitune/torch/backend/torch_tensorrt_jit_backend
               pageId: aitune/aitune/torch/backend/torch_tensorrt_jit_backend.mdx
         - type: section
+          title: torch_tensorrt_logging
+          slug: aitune/aitune/torch/backend/torch_tensorrt_logging
+          children:
+            - type: page
+              title: torch_tensorrt_logging
+              slug: aitune/aitune/torch/backend/torch_tensorrt_logging
+              pageId: aitune/aitune/torch/backend/torch_tensorrt_logging.mdx
+        - type: section
           title: torchao_backend
           slug: aitune/aitune/torch/backend/torchao_backend
           children:
@@ -195,6 +271,14 @@
       title: checkpoint
       slug: aitune/aitune/torch/checkpoint
       children:
+        - type: section
+          title: artifact
+          slug: aitune/aitune/torch/checkpoint/artifact
+          children:
+            - type: page
+              title: artifact
+              slug: aitune/aitune/torch/checkpoint/artifact
+              pageId: aitune/aitune/torch/checkpoint/artifact.mdx
         - type: section
           title: checkpoint
           slug: aitune/aitune/torch/checkpoint/checkpoint
@@ -251,6 +335,14 @@
           title: dataloader
           slug: aitune/aitune/torch/dataloader
           pageId: aitune/aitune/torch/dataloader.mdx
+    - type: section
+      title: distributed
+      slug: aitune/aitune/torch/distributed
+      children:
+        - type: page
+          title: distributed
+          slug: aitune/aitune/torch/distributed
+          pageId: aitune/aitune/torch/distributed.mdx
     - type: section
       title: dynamic_shapes
       slug: aitune/aitune/torch/dynamic_shapes
@@ -392,6 +484,102 @@
               slug: aitune/aitune/torch/jit/tune
               pageId: aitune/aitune/torch/jit/tune.mdx
     - type: section
+      title: kernel_forge
+      slug: aitune/aitune/torch/kernel_forge
+      children:
+        - type: section
+          title: kernel_optimization_plan
+          slug: aitune/aitune/torch/kernel_forge/kernel_optimization_plan
+          children:
+            - type: page
+              title: kernel_optimization_plan
+              slug: aitune/aitune/torch/kernel_forge/kernel_optimization_plan
+              pageId: aitune/aitune/torch/kernel_forge/kernel_optimization_plan.mdx
+        - type: section
+          title: kernel_optimizer
+          slug: aitune/aitune/torch/kernel_forge/kernel_optimizer
+          children:
+            - type: page
+              title: kernel_optimizer
+              slug: aitune/aitune/torch/kernel_forge/kernel_optimizer
+              pageId: aitune/aitune/torch/kernel_forge/kernel_optimizer.mdx
+        - type: section
+          title: kernel_provider
+          slug: aitune/aitune/torch/kernel_forge/kernel_provider
+          children:
+            - type: section
+              title: diffusers_attention_provider
+              slug: aitune/aitune/torch/kernel_forge/kernel_provider/diffusers_attention_provider
+              children:
+                - type: page
+                  title: diffusers_attention_provider
+                  slug: aitune/aitune/torch/kernel_forge/kernel_provider/diffusers_attention_provider
+                  pageId: aitune/aitune/torch/kernel_forge/kernel_provider/diffusers_attention_provider.mdx
+            - type: section
+              title: flash_attention4_provider
+              slug: aitune/aitune/torch/kernel_forge/kernel_provider/flash_attention4_provider
+              children:
+                - type: page
+                  title: flash_attention4_provider
+                  slug: aitune/aitune/torch/kernel_forge/kernel_provider/flash_attention4_provider
+                  pageId: aitune/aitune/torch/kernel_forge/kernel_provider/flash_attention4_provider.mdx
+            - type: section
+              title: kernel_generator
+              slug: aitune/aitune/torch/kernel_forge/kernel_provider/kernel_generator
+              children:
+                - type: page
+                  title: kernel_generator
+                  slug: aitune/aitune/torch/kernel_forge/kernel_provider/kernel_generator
+                  pageId: aitune/aitune/torch/kernel_forge/kernel_provider/kernel_generator.mdx
+            - type: section
+              title: kernel_provider
+              slug: aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider
+              children:
+                - type: page
+                  title: kernel_provider
+                  slug: aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider
+                  pageId: aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider.mdx
+            - type: section
+              title: sage_attention_provider
+              slug: aitune/aitune/torch/kernel_forge/kernel_provider/sage_attention_provider
+              children:
+                - type: page
+                  title: sage_attention_provider
+                  slug: aitune/aitune/torch/kernel_forge/kernel_provider/sage_attention_provider
+                  pageId: aitune/aitune/torch/kernel_forge/kernel_provider/sage_attention_provider.mdx
+            - type: section
+              title: torch_sdpa_provider
+              slug: aitune/aitune/torch/kernel_forge/kernel_provider/torch_sdpa_provider
+              children:
+                - type: page
+                  title: torch_sdpa_provider
+                  slug: aitune/aitune/torch/kernel_forge/kernel_provider/torch_sdpa_provider
+                  pageId: aitune/aitune/torch/kernel_forge/kernel_provider/torch_sdpa_provider.mdx
+        - type: section
+          title: kernel_provider_runtime
+          slug: aitune/aitune/torch/kernel_forge/kernel_provider_runtime
+          children:
+            - type: page
+              title: kernel_provider_runtime
+              slug: aitune/aitune/torch/kernel_forge/kernel_provider_runtime
+              pageId: aitune/aitune/torch/kernel_forge/kernel_provider_runtime.mdx
+        - type: section
+          title: kernel_utils
+          slug: aitune/aitune/torch/kernel_forge/kernel_utils
+          children:
+            - type: page
+              title: kernel_utils
+              slug: aitune/aitune/torch/kernel_forge/kernel_utils
+              pageId: aitune/aitune/torch/kernel_forge/kernel_utils.mdx
+        - type: section
+          title: module_function_kernel_profiler
+          slug: aitune/aitune/torch/kernel_forge/module_function_kernel_profiler
+          children:
+            - type: page
+              title: module_function_kernel_profiler
+              slug: aitune/aitune/torch/kernel_forge/module_function_kernel_profiler
+              pageId: aitune/aitune/torch/kernel_forge/module_function_kernel_profiler.mdx
+    - type: section
       title: libs
       slug: aitune/aitune/torch/libs
       children:
@@ -436,6 +624,18 @@
                   slug: aitune/aitune/torch/libs/onnx/onnx_model_info
                   pageId: aitune/aitune/torch/libs/onnx/onnx_model_info.mdx
         - type: section
+          title: torch
+          slug: aitune/aitune/torch/libs/torch
+          children:
+            - type: section
+              title: torch_exporter
+              slug: aitune/aitune/torch/libs/torch/torch_exporter
+              children:
+                - type: page
+                  title: torch_exporter
+                  slug: aitune/aitune/torch/libs/torch/torch_exporter
+                  pageId: aitune/aitune/torch/libs/torch/torch_exporter.mdx
+        - type: section
           title: torch_compile
           slug: aitune/aitune/torch/libs/torch_compile
           children:
@@ -447,6 +647,14 @@
       title: module
       slug: aitune/aitune/torch/module
       children:
+        - type: section
+          title: exact_sample_metadata
+          slug: aitune/aitune/torch/module/exact_sample_metadata
+          children:
+            - type: page
+              title: exact_sample_metadata
+              slug: aitune/aitune/torch/module/exact_sample_metadata
+              pageId: aitune/aitune/torch/module/exact_sample_metadata.mdx
         - type: section
           title: forward_signature
           slug: aitune/aitune/torch/module/forward_signature
@@ -495,6 +703,14 @@
               title: sample_metadata
               slug: aitune/aitune/torch/module/sample_metadata
               pageId: aitune/aitune/torch/module/sample_metadata.mdx
+        - type: section
+          title: sample_store
+          slug: aitune/aitune/torch/module/sample_store
+          children:
+            - type: page
+              title: sample_store
+              slug: aitune/aitune/torch/module/sample_store
+              pageId: aitune/aitune/torch/module/sample_store.mdx
         - type: section
           title: tensor_spec
           slug: aitune/aitune/torch/module/tensor_spec
@@ -672,6 +888,14 @@
               slug: aitune/aitune/torch/tune_strategy/first_wins_strategy
               pageId: aitune/aitune/torch/tune_strategy/first_wins_strategy.mdx
         - type: section
+          title: formatting
+          slug: aitune/aitune/torch/tune_strategy/formatting
+          children:
+            - type: page
+              title: formatting
+              slug: aitune/aitune/torch/tune_strategy/formatting
+              pageId: aitune/aitune/torch/tune_strategy/formatting.mdx
+        - type: section
           title: latency_budget_strategy
           slug: aitune/aitune/torch/tune_strategy/latency_budget_strategy
           children:
@@ -716,6 +940,14 @@
                   slug: aitune/aitune/torch/tune_strategy/mixin/performance_validation_mixin
                   pageId: aitune/aitune/torch/tune_strategy/mixin/performance_validation_mixin.mdx
         - type: section
+          title: multi_backend_strategy
+          slug: aitune/aitune/torch/tune_strategy/multi_backend_strategy
+          children:
+            - type: page
+              title: multi_backend_strategy
+              slug: aitune/aitune/torch/tune_strategy/multi_backend_strategy
+              pageId: aitune/aitune/torch/tune_strategy/multi_backend_strategy.mdx
+        - type: section
           title: one_backend_strategy
           slug: aitune/aitune/torch/tune_strategy/one_backend_strategy
           children:
@@ -723,6 +955,14 @@
               title: one_backend_strategy
               slug: aitune/aitune/torch/tune_strategy/one_backend_strategy
               pageId: aitune/aitune/torch/tune_strategy/one_backend_strategy.mdx
+        - type: section
+          title: performance_validation
+          slug: aitune/aitune/torch/tune_strategy/performance_validation
+          children:
+            - type: page
+              title: performance_validation
+              slug: aitune/aitune/torch/tune_strategy/performance_validation
+              pageId: aitune/aitune/torch/tune_strategy/performance_validation.mdx
         - type: section
           title: profiling_tune_strategy
           slug: aitune/aitune/torch/tune_strategy/profiling_tune_strategy

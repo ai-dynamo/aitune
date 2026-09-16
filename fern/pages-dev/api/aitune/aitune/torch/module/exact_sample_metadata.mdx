@@ -1,0 +1,97 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/exact_sample_metadata
+title: aitune.torch.module.exact_sample_metadata
+---
+
+Exact sample metadata for matching tensor shapes.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ExactSampleMetadata`](#aitune-torch-module-exact_sample_metadata-ExactSampleMetadata) | Contrary to SampleMetadata, ExactSampleMetadata requires exact tensor shapes to match. |
+
+### API
+
+<Anchor id="aitune-torch-module-exact_sample_metadata-ExactSampleMetadata">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.exact_sample_metadata.ExactSampleMetadata()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [SampleMetadata](/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata)
+
+Contrary to SampleMetadata, ExactSampleMetadata requires exact tensor shapes to match.
+
+This is useful for recording inputs and bucketing data by tensor shapes. This class has only one factory function: from_inputs
+and defines equality and hash based on locator and tensor shapes.
+
+
+<Anchor id="aitune-torch-module-exact_sample_metadata-ExactSampleMetadata-__eq__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.exact_sample_metadata.ExactSampleMetadata.__eq__(
+    __value: object
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Equality operator.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-exact_sample_metadata-ExactSampleMetadata-__hash__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.exact_sample_metadata.ExactSampleMetadata.__hash__() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Compute hash of sample metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-exact_sample_metadata-ExactSampleMetadata-from_inputs">
+
+<CodeBlock links={{"aitune.torch.module.exact_sample_metadata.ExactSampleMetadata":"#aitune-torch-module-exact_sample_metadata-ExactSampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.exact_sample_metadata.ExactSampleMetadata.from_inputs(
+    inputs: dict[str, typing.Any]
+) -> aitune.torch.module.exact_sample_metadata.ExactSampleMetadata
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create ExactSampleMetadata from inputs keyed by forward parameter name.
+
+
+</Indent>
+</Indent>

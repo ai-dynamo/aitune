@@ -13,6 +13,8 @@ Inspecting and patching modules.
 | Name | Description |
 |------|-------------|
 | [`_reset_total_execution_time`](#aitune-torch-inspecting-inspecting-_reset_total_execution_time) | Reset the timings of the modules. |
+| [`_run_inference`](#aitune-torch-inspecting-inspecting-_run_inference) | Run one complete inference in lockstep across distributed ranks. |
+| [`_synchronize_inspection_result`](#aitune-torch-inspecting-inspecting-_synchronize_inspection_result) | Order local modules and apply timings using rank zero's inspection result. |
 | [`_warmup`](#aitune-torch-inspecting-inspecting-_warmup) | Warmup the model by running it on a few samples. |
 | [`inspect`](#aitune-torch-inspecting-inspecting-inspect) | Inspect provided callable object searching for nn.Module members executed as part of forward pass. |
 
@@ -44,6 +46,49 @@ aitune.torch.inspecting.inspecting._reset_total_execution_time(
 <Indent>
 
 Reset the timings of the modules.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-inspecting-_run_inference">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting._run_inference(
+    obj: collections.abc.Callable,
+    args: collections.abc.Sequence[typing.Any],
+    kwargs: dict[str, typing.Any]
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run one complete inference in lockstep across distributed ranks.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-inspecting-_synchronize_inspection_result">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting._synchronize_inspection_result(
+    total_execution_time: float,
+    modules: list[aitune.torch.inspecting.module_info.ModuleInfo]
+) -> tuple[float, list[aitune.torch.inspecting.module_info.ModuleInfo]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Order local modules and apply timings using rank zero's inspection result.
 
 
 </Indent>

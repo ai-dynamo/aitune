@@ -1,0 +1,325 @@
+---
+layout: overview
+slug: aitune/aitune/torch/tune_strategy/latency_budget_strategy
+title: aitune.torch.tune_strategy.latency_budget_strategy
+---
+
+Latency budget tune strategy.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`LatencyBudgetProfilingResult`](#aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetProfilingResult) | Profiling result for latency-budget selection. |
+| [`LatencyBudgetStrategy`](#aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy) | Searches for max throughput while satisfying a latency budget. |
+| [`_LatencyBudgetProfilingStopStrategy`](#aitune-torch-tune_strategy-latency_budget_strategy-_LatencyBudgetProfilingStopStrategy) | - |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_find_best_latency_budget_candidate`](#aitune-torch-tune_strategy-latency_budget_strategy-_find_best_latency_budget_candidate) | Find the highest-throughput profiled batch size that satisfies the latency budget. |
+
+### API
+
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetProfilingResult">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult(
+    selected_batch_size: int,
+    throughput: float,
+    latency: float
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [BackendProfilingResult](/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult)
+
+Profiling result for latency-budget selection.
+
+
+<ParamField path="latency" type="float">
+</ParamField>
+
+<ParamField path="metric" type="float">
+Returns throughput as the comparison metric.
+</ParamField>
+
+<ParamField path="selected_batch_size" type="int">
+</ParamField>
+
+<ParamField path="throughput" type="float">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetProfilingResult-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult.to_json_dict(
+    metric_label: str
+) -> dict[str, int | float]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns strategy result fields for latency-budget profiling.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy(
+    latency_budget_ms: float,
+    args = (),
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [ProfilingTuneStrategy](/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy)
+
+Searches for max throughput while satisfying a latency budget.
+
+Each backend is profiled across the configured batch-size sweep. For each backend,
+the strategy keeps only batch sizes whose mean latency is less than or equal to
+``latency_budget_ms``, then uses the highest-throughput remaining batch size as
+that backend's score. The selected backend is the one with maximum throughput
+among all latency-compliant candidates.
+
+TorchEager is profiled as a performance-validation baseline when validation is enabled.
+If no user-provided backend satisfies the latency budget, the strategy raises.
+
+
+<ParamField path="_description">
+</ParamField>
+
+<ParamField path="_metric_label" type="= 'throughput'">
+</ParamField>
+
+<ParamField path="_metric_unit" type="= 'samples/s'">
+</ParamField>
+
+<ParamField path="_title" type="= 'Latency Budget Strategy'">
+</ParamField>
+
+<ParamField path="_value_fmt" type="= '.2f'">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_describe_parts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy._describe_parts() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_get_profiling_config">
+
+<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy._get_profiling_config(
+    batching: bool,
+    max_batch_size: int
+) -> aitune.torch.task.profiling.ProfilingConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_is_better">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy._is_better(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    other: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_measure">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult":"#aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy._measure(
+    backend: aitune.torch.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    profiling_cfg: aitune.torch.task.profiling.ProfilingConfig
+) -> aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profiles the backend and returns the max-throughput result within the latency budget.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_resolve_winner">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy._TuneCandidate":"/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-_TuneCandidate"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy._resolve_winner(
+    best: aitune.torch.tune_strategy.profiling_tune_strategy._TuneCandidate | None
+) -> aitune.torch.tune_strategy.profiling_tune_strategy._TuneCandidate
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_speedup">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy._speedup(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    baseline_result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetStrategy.to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns config dict for the strategy.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-_LatencyBudgetProfilingStopStrategy">
+
+<CodeBlock links={{"aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy":"/aitune/aitune/torch/task/profiling/measuring_stop_strategy#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy","aitune.torch.task.profiling.profiling_stop_strategy.ProfilingStopStrategy":"/aitune/aitune/torch/task/profiling/profiling_stop_strategy#aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.latency_budget_strategy._LatencyBudgetProfilingStopStrategy(
+    latency_budget_ms: float,
+    measurement_stop_strategy: aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy,
+    base_strategy: aitune.torch.task.profiling.profiling_stop_strategy.ProfilingStopStrategy
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [ProfilingStopStrategy](/aitune/aitune/torch/task/profiling/profiling_stop_strategy#aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy)
+
+<ParamField path="base_strategy" type="ProfilingStopStrategy">
+</ParamField>
+
+<ParamField path="latency_budget_ms" type="float">
+</ParamField>
+
+<ParamField path="measurement_stop_strategy" type="MeasuringStopStrategy">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-_LatencyBudgetProfilingStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy._LatencyBudgetProfilingStopStrategy.should_stop(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-_find_best_latency_budget_candidate">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent","aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy":"/aitune/aitune/torch/task/profiling/measuring_stop_strategy#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy","aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult":"#aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.latency_budget_strategy._find_best_latency_budget_candidate(
+    profiling_results: list[aitune.torch.task.profiling.events.ProfilingResultEvent],
+    measuring_stop_strategy: aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy,
+    latency_budget_ms: float
+) -> aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Find the highest-throughput profiled batch size that satisfies the latency budget.
+
+
+</Indent>
