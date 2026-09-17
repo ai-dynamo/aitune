@@ -69,12 +69,19 @@ class ModelFiles:
         if Path(destination.name) in self.additional_files:
             raise ValueError("The exported main file would overwrite one of its additional files")
         planned = [(self.path, destination)]
+        model_directory = self.path.parent.resolve()
+        additional_sources = tuple(
+            (self.path.parent / relative_path).resolve() for relative_path in self.additional_files
+        )
+        for source in additional_sources:
+            if not source.is_relative_to(model_directory):
+                raise ValueError(f"Additional file source must stay inside the model directory, got {source}")
         planned.extend(
             (
-                self.path.parent / relative_path,
+                source,
                 destination.parent / relative_path,
             )
-            for relative_path in self.additional_files
+            for source, relative_path in zip(additional_sources, self.additional_files, strict=True)
         )
         for source, target in planned:
             if source.resolve() == target.resolve():
