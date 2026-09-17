@@ -182,14 +182,15 @@ def _bounded_values(maximum: int, minimum: int = 1) -> tuple[int, ...]:
     """Return powers of two within the bounds, including both endpoints."""
     if not 1 <= minimum <= maximum:
         raise ModelAnalyzerConfigError(f"Invalid batch bounds: minimum={minimum}, maximum={maximum}")
-    values = []
+    values = [minimum]
     value = 1
-    while value <= maximum:
-        values.append(value)
+    while value < maximum:
+        if value > minimum:
+            values.append(value)
         value *= 2
     if values[-1] != maximum:
         values.append(maximum)
-    return tuple(sorted({minimum, *(value for value in values if value >= minimum)}))
+    return tuple(values)
 
 
 def _profiling_inputs(
