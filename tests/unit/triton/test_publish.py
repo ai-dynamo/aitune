@@ -163,6 +163,29 @@ def test_refuses_to_replace_an_existing_model(tmp_path):
     assert (published / "config.pbtxt").read_text() == original_config
 
 
+def test_repository_creation_failure_raises_publication_error(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    repository.write_text("not a directory")
+
+    with pytest.raises(aitriton.PublicationError, match="Failed to publish") as error:
+        aitriton.publish(artifact, path=repository, model_name="encoder")
+
+    assert isinstance(error.value.__cause__, OSError)
+
+
+def test_staging_directory_creation_failure_raises_publication_error(tmp_path, mocker):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    mocker.patch("aitune.triton.model_repository.tempfile.mkdtemp", side_effect=OSError("staging unavailable"))
+
+    with pytest.raises(aitriton.PublicationError, match="staging unavailable") as error:
+        aitriton.publish(artifact, path=repository, model_name="encoder")
+
+    assert isinstance(error.value.__cause__, OSError)
+    assert not (repository / "encoder").exists()
+
+
 def test_copy_failure_leaves_no_partial_model(tmp_path):
     artifact = _plan(tmp_path / "source.plan")
     artifact = replace(

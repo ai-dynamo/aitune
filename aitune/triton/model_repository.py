@@ -162,14 +162,15 @@ def publish(
         max_batch_size=max_batch_size,
     )
 
-    repository = Path(path)
-    model_directory = repository / model_name
-    if model_directory.exists():
-        raise PublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
-
-    repository.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".aitune-{model_name}-", dir=repository))
+    staging: Path | None = None
     try:
+        repository = Path(path)
+        model_directory = repository / model_name
+        if model_directory.exists():
+            raise PublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
+
+        repository.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=f".aitune-{model_name}-", dir=repository))
         staged_model = staging / model_name
         version_directory = staged_model / str(model_version)
         version_directory.mkdir(parents=True)
@@ -179,10 +180,13 @@ def publish(
             destination = destination / file_name
         artifact.model.export_files(destination)
         staged_model.rename(model_directory)
+    except PublicationError:
+        raise
     except Exception as error:
         raise PublicationError(f"Failed to publish Triton model {model_name!r}: {error}") from error
     finally:
-        shutil.rmtree(staging, ignore_errors=True)
+        if staging is not None:
+            shutil.rmtree(staging, ignore_errors=True)
 
     logger.info("Published Triton model to %s", model_directory)
     return model_directory
