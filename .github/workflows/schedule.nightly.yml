@@ -24,6 +24,7 @@ env:
   UV_PYTHON: &python_version "3.12"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
   PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+  ONNXRUNTIME_VERSION: 1.24.4
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
   # plugin. RTX runners have no EFA provider, so OFI initialization fails and
@@ -88,6 +89,7 @@ jobs:
         with:
           persist-credentials: false
       - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
+      - run: pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
       - run: pip list
       - run: nvidia-smi
       - run: python -c "import sys; print(sys.version)"
@@ -146,12 +148,17 @@ jobs:
       - run: uv venv
       - run: printf "tensorrt\n" > cu12-excludes.txt
       - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }}]" --group test ${{ matrix.variant.uv_extra_args }}
+      - run: |
+          if [ "${{ matrix.variant.uv_torch_backend }}" == "cu130" ]; then
+            uv pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+          fi
       - run: uv pip list
       - run: uv run python -c "import sys; print(sys.version)"
       - run: uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
       - run: uv run python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
       - run: uv run python -c "import tensorrt; print(tensorrt.__version__)"
       - run: uv run python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+      - run: uv run python -c "import onnxruntime; print(onnxruntime.__version__)"
       - run: uv run python -m pytest
 
   generate-functional-matrix:
