@@ -196,10 +196,9 @@ class ONNXRuntimeBackend(Backend):
             self._use_existing_onnx(module, graph_spec)
         else:
             self._export_onnx(module, graph_spec, samples, cache_dir)
-
-        data_file = Path(str(self._onnx_model_artifact.path) + ".data")
-        if data_file.exists():
-            self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=self._onnx_model_artifact.root)
+            data_file = Path(str(self._onnx_model_artifact.path) + ".data")
+            if data_file.exists():
+                self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=self._onnx_model_artifact.root)
 
         self._samples = samples
         offload(module, device="cpu")
@@ -296,10 +295,7 @@ class ONNXRuntimeBackend(Backend):
         )
         _validate_onnx_interface(input_nodes, inputs, "input")
         _validate_onnx_interface(output_nodes, outputs, "output")
-        additional_files = ()
-        if self._onnx_data_artifact is not None:
-            data_path = self._onnx_data_artifact.path
-            additional_files = (data_path.relative_to(model_path.parent),)
+        additional_files = self._artifact_additional_files(model_path)
         return DeploymentArtifact(
             model=ModelFiles(format="onnx", path=model_path, additional_files=additional_files),
             inputs=inputs,
@@ -309,6 +305,14 @@ class ONNXRuntimeBackend(Backend):
                 options={"execution_provider": (self._config.execution_provider or ONNXExecutionProvider.CUDA).value},
             ),
         )
+
+    def _artifact_additional_files(self, model_path: Path) -> tuple[Path, ...]:
+        """Return every tracked ONNX data file once, relative to the model."""
+        artifacts = list(self._external_data_artifacts)
+        if self._onnx_data_artifact is not None:
+            artifacts.append(self._onnx_data_artifact)
+        relative_paths = (artifact.path.relative_to(model_path.parent) for artifact in artifacts)
+        return tuple(dict.fromkeys(relative_paths))
 
     def _warmup(self, samples: Iterable[Sample]) -> None:
         """Run representative samples to initialize the execution provider.

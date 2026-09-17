@@ -305,6 +305,23 @@ def test_build_includes_onnx_external_data_in_the_artifact(
     assert (destination.parent / "model_raw.onnx.data").read_bytes() == b"external-data"
 
 
+def test_artifact_additional_files_include_discovered_and_exported_data_without_duplicates(tmp_path):
+    backend = ONNXRuntimeBackend()
+    model_path = tmp_path / "model.onnx"
+    backend._external_data_artifacts = [
+        ArtifactPath(tmp_path, "weights/first.data"),
+        ArtifactPath(tmp_path, "model.onnx.data"),
+        ArtifactPath(tmp_path, "weights/second.data"),
+    ]
+    backend._onnx_data_artifact = ArtifactPath(tmp_path, "model.onnx.data")
+
+    assert backend._artifact_additional_files(model_path) == (
+        Path("weights/first.data"),
+        Path("model.onnx.data"),
+        Path("weights/second.data"),
+    )
+
+
 @requires_cuda
 def test_artifact_metadata_failure_does_not_fail_backend_build(
     mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
@@ -518,9 +535,14 @@ def test_from_dict_restores_state(tmp_path, torch_device):
 
     config = ONNXRuntimeBackendConfig()
     onnx_artifact = ArtifactPath(tmp_path, "model_raw.onnx")
+    external_data_artifacts = [
+        ArtifactPath(tmp_path, "weights/first.data"),
+        ArtifactPath(tmp_path, "weights/second.data"),
+    ]
     state = {
         ONNXRuntimeBackend.STATE_TYPE: "ONNXRuntimeBackend",
         ONNXRuntimeBackend.STATE_ONNX_MODEL_PATH: onnx_artifact,
+        ONNXRuntimeBackend.STATE_EXTERNAL_DATA_PATHS: external_data_artifacts,
         ONNXRuntimeBackend.STATE_DEVICE: torch_device,
         ONNXRuntimeBackend.STATE_CONFIG: config.to_dict(),
         ONNXRuntimeBackend.STATE_GRAPH_SPEC: real_graph_spec.to_dict(),
@@ -528,6 +550,7 @@ def test_from_dict_restores_state(tmp_path, torch_device):
     }
     restored = ONNXRuntimeBackend.from_dict(None, state)
     assert restored._onnx_model_artifact == onnx_artifact
+    assert restored._external_data_artifacts == external_data_artifacts
     assert restored._device == torch_device
     assert restored._graph_spec is not None
     assert restored._output_object is not None

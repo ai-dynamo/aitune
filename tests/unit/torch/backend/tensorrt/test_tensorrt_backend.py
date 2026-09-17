@@ -346,6 +346,39 @@ def test_artifact_profiles_require_engine_input_names():
         backend._artifact_profiles()
 
 
+def test_artifact_profile_input_bounds_reject_ranges_beyond_recorded_graph():
+    inputs = (
+        BoundedTensorSpec(
+            name="input_x",
+            dtype=DType.FLOAT32,
+            min_shape=(1, IN_FEATURES),
+            max_shape=(4, IN_FEATURES),
+        ),
+    )
+    profiles = (
+        {"input_x": {"min_shape": (1, IN_FEATURES), "opt_shape": (4, IN_FEATURES), "max_shape": (8, IN_FEATURES)}},
+    )
+
+    with pytest.raises(ValueError, match=r"profile 0 input 'input_x' axis 0.*output bounds cannot be established"):
+        TensorRTBackend._validate_artifact_profile_input_bounds(inputs, profiles)
+
+
+def test_artifact_profile_input_bounds_allow_ranges_within_recorded_graph():
+    inputs = (
+        BoundedTensorSpec(
+            name="input_x",
+            dtype=DType.FLOAT32,
+            min_shape=(1, IN_FEATURES),
+            max_shape=(8, IN_FEATURES),
+        ),
+    )
+    profiles = (
+        {"input_x": {"min_shape": (2, IN_FEATURES), "opt_shape": (4, IN_FEATURES), "max_shape": (6, IN_FEATURES)}},
+    )
+
+    TensorRTBackend._validate_artifact_profile_input_bounds(inputs, profiles)
+
+
 @requires_cuda
 def test_artifact_metadata_failure_does_not_fail_tensorrt_build(mock_tensorrt_components, mocker, tmp_path):
     model = ToyTorchModel().to("cuda").eval()

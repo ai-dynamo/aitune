@@ -19,7 +19,7 @@ from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
 from aitune.exceptions import AITuneUserInputError
-from aitune.records import DeploymentArtifact, ModelFiles, RuntimeConfig
+from aitune.records import BoundedTensorSpec, DeploymentArtifact, ModelFiles, RuntimeConfig
 from aitune.torch.artifact import bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
@@ -776,9 +776,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         profiles = self._artifact_profiles()
         inputs = bounded_tensor_specs(self._graph_spec, "input", recorded_names=self._input_names)
-        for input_spec in inputs:
-            if any(len(profile[input_spec.name]["min_shape"]) != len(input_spec.min_shape) for profile in profiles):
-                raise ValueError(f"TensorRT profile rank does not match artifact input {input_spec.name!r}")
+        self._validate_artifact_profile_input_bounds(inputs, profiles)
         inputs = tuple(
             replace(
                 input_spec,
@@ -811,6 +809,28 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 },
             ),
         )
+
+    @staticmethod
+    def _validate_artifact_profile_input_bounds(
+        inputs: tuple[BoundedTensorSpec, ...],
+        profiles: tuple[dict[str, dict[str, tuple[int, ...]]], ...],
+    ) -> None:
+        """Require TensorRT input profiles to stay within recorded input bounds."""
+        for profile_index, profile in enumerate(profiles):
+            for input_spec in inputs:
+                minimum = profile[input_spec.name]["min_shape"]
+                maximum = profile[input_spec.name]["max_shape"]
+                if len(minimum) != len(input_spec.min_shape):
+                    raise ValueError(f"TensorRT profile rank does not match artifact input {input_spec.name!r}")
+                for axis, (profile_min, profile_max, graph_min, graph_max) in enumerate(
+                    zip(minimum, maximum, input_spec.min_shape, input_spec.max_shape, strict=True)
+                ):
+                    if profile_min < graph_min or profile_max > graph_max:
+                        raise ValueError(
+                            f"TensorRT profile {profile_index} input {input_spec.name!r} axis {axis} range "
+                            f"[{profile_min}, {profile_max}] exceeds the recorded graph range "
+                            f"[{graph_min}, {graph_max}]; output bounds cannot be established"
+                        )
 
     def _artifact_profiles(self) -> tuple[dict[str, dict[str, tuple[int, ...]]], ...]:
         """Describe exact profile ranges as plain data in engine input order."""

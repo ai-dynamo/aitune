@@ -80,6 +80,18 @@ def test_bounded_tensor_specs_reject_unknown_executable_names():
         bounded_tensor_specs(_graph_spec(), "input", recorded_names=("unknown",))
 
 
+def test_bounded_tensor_specs_use_preserved_executable_names():
+    graph_spec = _graph_spec()
+    graph_spec.input_spec.tensor_specs[0].name = "tokens"
+    graph_spec.input_spec.tensor_specs[1].name = "attention_mask"
+
+    specs = bounded_tensor_specs(graph_spec, "input", recorded_names=("attention_mask", "tokens"))
+
+    assert tuple(spec.name for spec in specs) == ("attention_mask", "tokens")
+    assert tuple(spec.dtype for spec in specs) == (DType.BOOL, DType.INT64)
+    assert tuple(spec.name for spec in bounded_tensor_specs(graph_spec, "input")) == ("tokens", "attention_mask")
+
+
 def test_output_bounds_follow_discovered_batch_size_recorded_in_graph_spec():
     graph_spec = _graph_spec()
     graph_spec.update_max_batch_size(8)
