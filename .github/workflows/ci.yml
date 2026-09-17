@@ -17,10 +17,6 @@ on:
       dist_run_id:
         description: Reusable workflow run ID for downloading the dist artifact
         value: ${{ jobs.wheel.outputs.run_id }}
-      pytorch_image:
-        description: SHA-tagged PyTorch CI image pushed to GHCR
-        value: ${{ jobs.pytorch-image.outputs.image }}
-
 
 permissions:
   contents: read
@@ -227,8 +223,6 @@ jobs:
     name: Build PyTorch image
     needs: wheel
     runs-on: linux-amd64-cpu4
-    outputs:
-      image: ${{ steps.image.outputs.image }}
     permissions:
       contents: read
       packages: write
