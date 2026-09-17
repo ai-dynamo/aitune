@@ -71,7 +71,9 @@ def bounded_tensor_specs(
     else:
         selected_indices = tuple(range(len(tensor_data))) if metadata_indices is None else tuple(metadata_indices)
         try:
-            default_names = tuple(graph_spec.tensor_name(*tensor_data[index], kind) for index in selected_indices)
+            default_names = tuple(
+                graph_spec.tensor_name(tensor_data[index][0], tensor_data[index][1], kind) for index in selected_indices
+            )
         except IndexError as error:
             raise ValueError(f"Artifact {kind} metadata index is outside the recorded graph") from error
 
