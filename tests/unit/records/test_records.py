@@ -286,6 +286,21 @@ def test_export_files_copies_current_additional_file_bytes(tmp_path):
     assert (destination.parent / "model.data").read_bytes() == b"changed-weights"
 
 
+def test_export_files_rejects_additional_file_symlink_outside_model_directory(tmp_path):
+    path = _write_artifact(tmp_path / "cache", b"model")
+    outside = tmp_path / "outside.data"
+    outside.write_bytes(b"outside")
+    link = path.parent / "weights.data"
+    link.symlink_to(outside)
+    model_files = ModelFiles(format="onnx", path=path, additional_files=(Path("weights.data"),))
+    destination = tmp_path / "repository" / "model.onnx"
+
+    with pytest.raises(ValueError, match="must stay inside the model directory"):
+        model_files.export_files(destination)
+
+    assert not destination.parent.exists()
+
+
 @pytest.mark.parametrize("relative_path", [Path(), Path("../model.data"), Path("/model.data")])
 def test_artifact_additional_file_must_stay_inside_artifact_directory(relative_path):
     with pytest.raises(ValueError, match="must stay inside"):
