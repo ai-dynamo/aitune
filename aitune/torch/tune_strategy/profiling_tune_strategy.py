@@ -24,7 +24,6 @@ from aitune.torch.backend import (
     Backend,
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchEagerBackend,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
     TorchTensorRTAotBackend,
@@ -33,12 +32,14 @@ from aitune.torch.backend import (
 from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTConfig
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
 from aitune.torch.tune_strategy.formatting import fmt_speedup_comparison, fmt_speedup_msg
 from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
+from aitune.torch.utils.module import get_default_backend_for_module
 from aitune.utils.logging import log
 
 
@@ -262,6 +263,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
     ):
         """Calls super()._pre_tune() (finds max batch size) then profiles TorchEager as baseline."""
         super()._pre_tune(module, name, graph_spec, samples, device, cache_dir)
+        module_type = "Onnx" if isinstance(module, OnnxModule) else "TorchEager"
         self.perf_validation_results = []
         self._baseline_backend = None
         self._baseline_result = None
@@ -284,7 +286,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         shutil.rmtree(baseline_cache_dir, ignore_errors=True)
         baseline_cache_dir.mkdir(parents=True)
         local_error: Exception | None = None
-        backend = TorchEagerBackend()
+        backend = get_default_backend_for_module(module)
         result: BackendProfilingResult | None = None
         try:
             with coordinator.raise_if_any_rank_fails("Building TorchEager baseline"):
@@ -300,7 +302,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             if backend.is_active:
                 backend.deactivate()
             log(
-                "⚠️ TorchEager baseline failed (log: %s), performance check skipped",
+                "⚠️ %s baseline failed (log: %s), performance check skipped",
+                module_type,
                 self._log_file(baseline_cache_dir, "error.log"),
                 sink=self._sink,
             )
@@ -311,7 +314,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         self._baseline_backend = backend
         self._baseline_result = result
         report_graph_baseline_metric(self._metric_label, result.metric)
-        log("📊 TorchEager baseline: %s", self._fmt(result.metric), sink=self._sink)
+        log("📊 %s baseline: %s", module_type, self._fmt(result.metric), sink=self._sink)
 
     def _tune(
         self,

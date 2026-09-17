@@ -22,6 +22,10 @@ This approach offers several advantages:
 - **Speed**: Save the tuned model to a deployable artifact to be loaded on the production environment
 - **Reproducibility**: Deterministic tuning results
 
+## Existing ONNX models
+
+Use `OnnxModule` to wrap an existing ONNX file. Only `ONNXRuntimeBackend` and `TensorRTBackend` support tuning it; configure an explicit backend list. See [ONNX Model Tuning](onnx_tuning.md) for a complete example.
+
 ## Quick Start
 
 Here's a complete example using Stable Diffusion:
