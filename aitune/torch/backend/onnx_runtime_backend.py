@@ -10,7 +10,6 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
-import numpy as np
 import nvtx
 import onnx
 import onnxruntime
@@ -45,19 +44,6 @@ class ONNXExecutionProvider(str, Enum):
     CUDA = "cuda"
     TENSORRT = "tensorrt"
 
-
-# Mapping from torch dtype to numpy dtype for ONNX Runtime IOBinding.
-_TORCH_DTYPE_TO_NUMPY: dict[torch.dtype, type] = {
-    torch.float16: np.float16,
-    torch.float32: np.float32,
-    torch.float64: np.float64,
-    torch.int8: np.int8,
-    torch.int16: np.int16,
-    torch.int32: np.int32,
-    torch.int64: np.int64,
-    torch.uint8: np.uint8,
-    torch.bool: np.bool_,
-}
 
 _ORT_TYPE_TO_DTYPE = {
     "tensor(bool)": DType.BOOL,
