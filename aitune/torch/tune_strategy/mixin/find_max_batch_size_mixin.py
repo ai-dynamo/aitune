@@ -18,6 +18,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
+from aitune.torch.utils.module import get_default_backend_for_module
 from aitune.utils.logging import control_output
 
 
@@ -65,6 +66,15 @@ class FindMaxBatchSizeMixin(TuneStrategy):
             try:
                 with coordinator.raise_if_any_rank_fails("Building find-max-batch-size backend"):
                     backend = self._find_max_batch_size_backend_class()
+                    try:
+                        backend._assert_supported_modules(module)
+                    except Exception:
+                        self._logger.warning(
+                            "⚠️ Backend %s does not support %s modules", backend.name, backend._supported_modules
+                        )
+                        backend = get_default_backend_for_module(module)
+                        self._logger.warning("⚠️ Using default backend %s", backend.name)
+
                     with control_output(log_file=build_log_file):
                         backend.build(module, graph_spec, samples, device, find_max_batch_size_cache_dir)
 

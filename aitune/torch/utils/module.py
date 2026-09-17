@@ -13,6 +13,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from aitune.torch.integrations import is_integration_distributed_module
 from aitune.torch.module.locator import Locator
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.utils.memory import cleanup_memory
 from aitune.utils.monitoring import annotate
 
@@ -144,14 +145,23 @@ def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
     """Offload an ordinary module while preserving distributed placement.
 
     Args:
-        model: Model to offload.
-        device: Device to offload to.
+        model: Model to offload, including any nested ONNX Runtime sessions.
+        device: Device to offload to. ONNX modules use CPU for meta.
     """
     if is_distributed_module(model):
         return
 
     with annotate("Offloading module"):
         model.to(device)
+
+        if isinstance(model, OnnxModule):
+            model.offload(device)
+            return
+
+        # TODO(kn): go deeper?
+        for module in model.modules():
+            if isinstance(module, OnnxModule):
+                module.offload(device)
         cleanup_memory()
 
 
@@ -168,3 +178,10 @@ def offload_after_tuning(
         return
 
     offload(model, device=device)
+
+
+def get_default_backend_for_module(module: nn.Module) -> "Backend":
+    """Gets the default backend for a module."""
+    from aitune.torch.backend import ONNXRuntimeBackend, TorchEagerBackend
+
+    return ONNXRuntimeBackend() if isinstance(module, OnnxModule) else TorchEagerBackend()

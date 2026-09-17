@@ -55,11 +55,15 @@ AITune provides five built-in strategies:
 - **MinLatencyStrategy**: Profiles all backends, selects the one with the lowest latency
 - **LatencyBudgetStrategy**: Profiles all backends, selects the highest throughput result that stays within a latency budget
 
+## Existing ONNX models
+
+For `OnnxModule`, explicitly pass only `ONNXRuntimeBackend` and/or `TensorRTBackend` as tuning candidates. Default backend lists are not filtered for ONNX input and include incompatible backends. See [ONNX Model Tuning](../onnx_tuning.md) for a complete `MaxThroughputStrategy` example.
+
 ## Why Backends Can Fail
 
 Not every backend can successfully tune every model. Each backend relies on a different compilation or export technology, and each has its own limitations:
 
-- **TensorRT** requires exporting the model to ONNX. Models with unsupported operators, complex dynamic control flow, or symbolic shape constraints may fail during ONNX export or TensorRT engine building. Memory constraints can also prevent the engine from being built.
+- **TensorRT** exports PyTorch modules to ONNX; existing `OnnxModule` graphs skip export. Models with unsupported operators, complex dynamic control flow, or symbolic shape constraints may fail during ONNX export or TensorRT engine building. Memory constraints can also prevent the engine from being built.
 - **Torch Inductor** uses `torch.compile`, which may encounter *graph breaks* on unsupported Python constructs or operations, causing partial or failed compilation.
 - **TorchAO** applies quantization transformations that may not support all layer types or model architectures.
 - **Torch-TensorRT** combines PyTorch's compiler with TensorRT, inheriting potential limitations from both.
