@@ -89,6 +89,11 @@ AITune's profile sidecar remains part of its checkpoint, and is not needed to ex
 the finalized tensor names and profile metadata after deactivation, so generation does not require
 reloading the engine. The method also works after restoring and deploying a checkpoint.
 
+Output bounds come from the shapes recorded while tuning. `model.artifact()` therefore validates each
+custom TensorRT input profile against the recorded input bounds. It rejects a profile that extends an
+input beyond those bounds because sound output bounds cannot be inferred in general. Include the profile
+boundary shapes in the tuning samples when the engine must also be exported as a deployment artifact.
+
 ## Configuration Options
 
 ### TensorRTBackendConfig
