@@ -9,7 +9,11 @@ from typing import Any
 import nvtx.nvtx as nvtx
 
 from aitune.utils.env_vars import AITUNE_CACHE_DIR as _AITUNE_CACHE_DIR
-from aitune.utils.env_vars import AITUNE_DIFFUSERS_INTEGRATION, AITUNE_TRANSFORMERS_INTEGRATION, TUNING_DATA_PATH
+from aitune.utils.env_vars import (
+    AITUNE_DIFFUSERS_INTEGRATION,
+    AITUNE_TRANSFORMERS_INTEGRATION,
+    TUNING_DATA_PATH,
+)
 
 DEFAULT_MIN_NUM_SAMPLES = 100
 DEFAULT_MAX_NUM_SAMPLES_STORED = 1  # you can set infinity if you want to store/use all samples

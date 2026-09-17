@@ -66,6 +66,8 @@ class ModelFiles:
             OSError: If directory creation or copying fails.
         """
         destination = Path(path)
+        if Path(destination.name) in self.additional_files:
+            raise ValueError("The exported main file would overwrite one of its additional files")
         planned = [(self.path, destination)]
         planned.extend(
             (
@@ -74,10 +76,6 @@ class ModelFiles:
             )
             for relative_path in self.additional_files
         )
-        destinations = tuple(target for _, target in planned)
-        if len(destinations) != len(set(destinations)):
-            raise ValueError("The exported main file would overwrite one of its additional files")
-
         for source, target in planned:
             if source.resolve() == target.resolve():
                 continue

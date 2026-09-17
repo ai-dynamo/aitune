@@ -20,6 +20,8 @@ navigation:
     contents:
       - page: Ahead-of-time Tuning
         path: ../docs/guides/aot_tuning.md
+      - page: ONNX Model Tuning
+        path: ../docs/guides/onnx_tuning.md
       - page: Ahead-of-time Inspect
         path: ../docs/guides/aot_inspect.md
       - page: Just-in-time Tuning

@@ -74,7 +74,7 @@ def backend() -> ONNXRuntimeBackend:
 def mock_onnx(mocker, graph_spec):
     """Mock torch.onnx.export, onnx.checker.check_model, and onnxruntime.InferenceSession.
 
-    memcpy_to_torch is patched to return a fixed tensor so _collect_outputs works
+    memcpy_to_torch is patched to return a fixed tensor so shared output collection works
     in CPU-only test environments without a real CUDA device or libcudart.
     """
 
@@ -84,7 +84,7 @@ def mock_onnx(mocker, graph_spec):
     export = mocker.patch("torch.onnx.export", side_effect=_export)
     mocker.patch("onnx.checker.check_model")
     mocker.patch(
-        "aitune.torch.backend.onnx_runtime_backend.memcpy_to_torch",
+        "aitune.torch.libs.onnx.runtime.memcpy_to_torch",
         return_value=torch.zeros(1, 5),
     )
     input_name = format_tensor_name(graph_spec.input_spec.tensor_data[0][0].path, "input")
@@ -454,16 +454,13 @@ def test_infer_binds_cuda_inputs_via_pointer(
 
 
 @requires_cuda
-def test_infer_binds_outputs_on_cuda(mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path):
-    """Outputs are bound to the CUDA device; ORT handles allocation and shape resolution."""
+def test_infer_returns_outputs_on_cuda(mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path):
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
     args, kwargs = sample_data[0]
     backend.infer(*args, **kwargs)
-
-    io_binding = backend._session.io_binding.return_value
-    assert io_binding.bind_output.called
-    for call in io_binding.bind_output.call_args_list:
-        assert call.args[1] == "cuda"
+    binding = backend._session.io_binding.return_value
+    assert binding.bind_output.called
+    assert all(call.args[1] == "cuda" for call in binding.bind_output.call_args_list)
 
 
 @requires_cuda
