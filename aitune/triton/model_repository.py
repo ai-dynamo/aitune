@@ -8,7 +8,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from aitune.exceptions import AITuneError, AITuneUserInputError
+from aitune.exceptions import AITunePublicationError, AITuneUserInputError
 from aitune.records import DeploymentArtifact
 from aitune.triton.config import (
     ONNXRuntimeModelConfig,
@@ -20,13 +20,6 @@ from aitune.triton.model_analyzer import _write_model_analyzer_configs
 
 logger = logging.getLogger(__name__)
 
-__all__ = [
-    "ONNXRuntimeModelConfig",
-    "PublicationError",
-    "TensorRTModelConfig",
-    "TorchAOTIModelConfig",
-    "publish",
-]
 
 _CONFIG_FILE_NAME = "config.pbtxt"
 _MODEL_CONFIGS: dict[str, type[_BaseModelConfig]] = {
@@ -34,10 +27,6 @@ _MODEL_CONFIGS: dict[str, type[_BaseModelConfig]] = {
     "onnxruntime": ONNXRuntimeModelConfig,
     "aotinductor": TorchAOTIModelConfig,
 }
-
-
-class PublicationError(AITuneError):
-    """Raised when an artifact cannot be published as a Triton model."""
 
 
 def _artifact_layout(artifact: DeploymentArtifact) -> tuple[str, bool]:
@@ -49,7 +38,7 @@ def _artifact_layout(artifact: DeploymentArtifact) -> tuple[str, bool]:
         return "model.onnx", True
     if format_runtime == ("pt2", "aotinductor"):
         return "model.pt2", False
-    raise PublicationError(
+    raise AITunePublicationError(
         f"Unsupported Triton model format/runtime pair: {format_runtime!r}. "
         "Supported pairs are tensorrt_plan/tensorrt, onnx/onnxruntime, and pt2/aotinductor"
     )
@@ -58,7 +47,7 @@ def _artifact_layout(artifact: DeploymentArtifact) -> tuple[str, bool]:
 def _validate_artifact_files(artifact: DeploymentArtifact, *, multi_file: bool) -> None:
     """Reject additional files when Triton's format has no defined layout."""
     if artifact.model.additional_files and not multi_file:
-        raise PublicationError(
+        raise AITunePublicationError(
             f"{artifact.model.format!r} is a single-file Triton format, but the artifact has additional files"
         )
 
@@ -73,14 +62,14 @@ def _batch_size(artifact: DeploymentArtifact, dynamic_batching: bool, requested:
     supported = artifact.max_batch_size
     required = 2 if dynamic_batching else 1
     if supported is None or supported < required:
-        raise PublicationError(
+        raise AITunePublicationError(
             "Cannot publish a batched model: every input and output must have a batch axis starting at 1 "
             f"and support a batch size of at least {required}"
         )
     if any(tensor.batch_axis != 0 for tensor in artifact.inputs + artifact.outputs):
-        raise PublicationError("Triton implicit batching requires batch_axis=0 for every input and output")
+        raise AITunePublicationError("Triton implicit batching requires batch_axis=0 for every input and output")
     if requested is not None and requested > supported:
-        raise PublicationError(
+        raise AITunePublicationError(
             f"max_batch_size {requested} exceeds the artifact's bounded batch maximum of {supported}"
         )
     batch_size = supported if requested is None else requested
@@ -98,17 +87,17 @@ def _model_config(
 ) -> _BaseModelConfig:
     """Build a validated Triton configuration from an artifact."""
     if not artifact.inputs or not artifact.outputs:
-        raise PublicationError("Triton publication requires at least one input and one output")
+        raise AITunePublicationError("Triton publication requires at least one input and one output")
     batch_size = _batch_size(artifact, dynamic_batching, max_batch_size)
     config_type = _MODEL_CONFIGS.get(artifact.runtime.name)
     if config_type is None:
-        raise PublicationError(f"Unsupported Triton runtime: {artifact.runtime.name!r}")
+        raise AITunePublicationError(f"Unsupported Triton runtime: {artifact.runtime.name!r}")
     try:
         return config_type.from_artifact(
             artifact, name=model_name, max_batch_size=batch_size, dynamic_batching=dynamic_batching
         )
     except (KeyError, TypeError, ValueError) as error:
-        raise PublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
+        raise AITunePublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
 
 
 def publish(
@@ -148,7 +137,7 @@ def publish(
 
     Raises:
         AITuneUserInputError: If publication arguments are invalid.
-        PublicationError: If the artifact cannot be represented or publication fails.
+        AITunePublicationError: If the artifact cannot be represented or publication fails.
     """
     if (
         not isinstance(model_name, str)
@@ -170,14 +159,15 @@ def publish(
         max_batch_size=max_batch_size,
     )
 
-    repository = Path(path)
-    model_directory = repository / model_name
-    if model_directory.exists():
-        raise PublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
-
-    repository.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".aitune-{model_name}-", dir=repository))
+    staging: Path | None = None
     try:
+        repository = Path(path)
+        model_directory = repository / model_name
+        if model_directory.exists():
+            raise AITunePublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
+
+        repository.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=f".aitune-{model_name}-", dir=repository))
         staged_model = staging / model_name
         version_directory = staged_model / str(model_version)
         version_directory.mkdir(parents=True)
@@ -194,10 +184,13 @@ def publish(
             staging=staged_model / "model_analyzer",
         )
         staged_model.rename(model_directory)
+    except AITunePublicationError:
+        raise
     except Exception as error:
-        raise PublicationError(f"Failed to publish Triton model {model_name!r}: {error}") from error
+        raise AITunePublicationError(f"Failed to publish Triton model {model_name!r}: {error}") from error
     finally:
-        shutil.rmtree(staging, ignore_errors=True)
+        if staging is not None:
+            shutil.rmtree(staging, ignore_errors=True)
 
     logger.info("Published Triton model to %s", model_directory)
     return model_directory

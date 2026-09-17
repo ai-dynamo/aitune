@@ -12,7 +12,6 @@ from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.tensor_spec import TensorSpec
-from aitune.torch.utils.tensor import format_tensor_name
 
 _TORCH_DTYPE_TO_RECORD = {
     torch.bool: DType.BOOL,
@@ -61,7 +60,8 @@ def bounded_tensor_specs(
     tensor_data = metadata.tensor_data
     if recorded_names is not None:
         indices_by_name = {
-            format_tensor_name(locator.path, kind): index for index, (locator, _) in enumerate(tensor_data)
+            graph_spec.tensor_name(locator, tensor_spec, kind): index
+            for index, (locator, tensor_spec) in enumerate(tensor_data)
         }
         try:
             selected_indices = tuple(indices_by_name[name] for name in recorded_names)
@@ -71,7 +71,9 @@ def bounded_tensor_specs(
     else:
         selected_indices = tuple(range(len(tensor_data))) if metadata_indices is None else tuple(metadata_indices)
         try:
-            default_names = tuple(format_tensor_name(tensor_data[index][0].path, kind) for index in selected_indices)
+            default_names = tuple(
+                graph_spec.tensor_name(tensor_data[index][0], tensor_data[index][1], kind) for index in selected_indices
+            )
         except IndexError as error:
             raise ValueError(f"Artifact {kind} metadata index is outside the recorded graph") from error
 

@@ -120,6 +120,8 @@ class TorchInductorAotBackend(Backend):
             export_result = TorchExporter().export(module, samples[0], graph_spec, device=self._device)
             exported = export_result.exported_program
 
+        # FIXME: This extra forward pass can mutate model state. Replace it with the shared export contract once the
+        # exporter exposes the recorded output structure and tensor ordering.
         self._capture_call_contract(module, export_result.sample)
 
         with self._track_build_step(TorchInductorAotBuildStep.AOT_COMPILE) as result:
@@ -149,7 +151,7 @@ class TorchInductorAotBackend(Backend):
             with torch.no_grad():
                 output = module(*args, **kwargs)
             self._pt2_call_contract = PT2CallContract.capture(cast(GraphSpec, self._graph_spec), sample, output)
-        except (RuntimeError, TypeError, ValueError) as error:
+        except Exception as error:
             self._pt2_call_contract_error = str(error)
             logger.info("PT2 package will not be available for deployment: %s", error)
 

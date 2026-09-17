@@ -151,7 +151,7 @@ def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_pat
     published = aitriton.publish(artifact, path=tmp_path / "unbatched", model_name="encoder")
     assert (published / "1" / "model.pt2").is_file()
 
-    with pytest.raises(aitriton.PublicationError, match="structured calls"):
+    with pytest.raises(aitriton.AITunePublicationError, match="structured calls"):
         aitriton.publish(
             artifact,
             path=tmp_path / "repository",
@@ -168,10 +168,33 @@ def test_refuses_to_replace_an_existing_model(tmp_path):
     published = aitriton.publish(artifact, path=repository, model_name="encoder")
     original_config = (published / "config.pbtxt").read_text()
 
-    with pytest.raises(aitriton.PublicationError, match="never replaces"):
+    with pytest.raises(aitriton.AITunePublicationError, match="never replaces"):
         aitriton.publish(artifact, path=repository, model_name="encoder")
 
     assert (published / "config.pbtxt").read_text() == original_config
+
+
+def test_repository_creation_failure_raises_publication_error(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    repository.write_text("not a directory")
+
+    with pytest.raises(aitriton.AITunePublicationError, match="Failed to publish") as error:
+        aitriton.publish(artifact, path=repository, model_name="encoder")
+
+    assert isinstance(error.value.__cause__, OSError)
+
+
+def test_staging_directory_creation_failure_raises_publication_error(tmp_path, mocker):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    mocker.patch("aitune.triton.model_repository.tempfile.mkdtemp", side_effect=OSError("staging unavailable"))
+
+    with pytest.raises(aitriton.AITunePublicationError, match="staging unavailable") as error:
+        aitriton.publish(artifact, path=repository, model_name="encoder")
+
+    assert isinstance(error.value.__cause__, OSError)
+    assert not (repository / "encoder").exists()
 
 
 def test_copy_failure_leaves_no_partial_model(tmp_path):
@@ -182,7 +205,7 @@ def test_copy_failure_leaves_no_partial_model(tmp_path):
         runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="Failed to publish"):
+    with pytest.raises(aitriton.AITunePublicationError, match="Failed to publish"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not tuple((tmp_path / "repository").iterdir())
@@ -200,7 +223,7 @@ def test_rejects_unsupported_format_runtime_pairs(tmp_path, model_format, runtim
         runtime=RuntimeConfig(name=runtime),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="Unsupported Triton model format/runtime pair"):
+    with pytest.raises(aitriton.AITunePublicationError, match="Unsupported Triton model format/runtime pair"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()
@@ -211,7 +234,7 @@ def test_rejects_invalid_tensorrt_profile_count(tmp_path, count):
     artifact = _plan(tmp_path / "source.plan")
     artifact = replace(artifact, model=replace(artifact.model, metadata={"optimization_profile_count": count}))
 
-    with pytest.raises(aitriton.PublicationError, match="optimization_profile_count"):
+    with pytest.raises(aitriton.AITunePublicationError, match="optimization_profile_count"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()
@@ -226,7 +249,7 @@ def test_rejects_additional_files_for_single_file_formats(tmp_path, model_format
         runtime=RuntimeConfig(name=runtime),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="artifact has additional files"):
+    with pytest.raises(aitriton.AITunePublicationError, match="artifact has additional files"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()
@@ -241,7 +264,7 @@ def test_rejects_invalid_onnx_runtime_options(tmp_path, options):
         runtime=RuntimeConfig(name="onnxruntime", options=options),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="execution_provider"):
+    with pytest.raises(aitriton.AITunePublicationError, match="execution_provider"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()
@@ -256,7 +279,7 @@ def test_requires_pt2_call_metadata(tmp_path):
         runtime=RuntimeConfig(name="aotinductor"),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="structured_call"):
+    with pytest.raises(aitriton.AITunePublicationError, match="structured_call"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()

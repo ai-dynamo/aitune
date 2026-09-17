@@ -22,7 +22,11 @@ from aitune.torch.module.tensor_spec import TensorSpec
 
 
 class PT2CallContractState(TypedDict):
-    """Checkpoint representation of a temporary PT2 call contract."""
+    """Checkpoint representation of a temporary PT2 call contract.
+
+    ``structured`` is true when an input argument or the output is a container instead of a tensor. For example, the
+    call may pass tensors inside a dictionary or return tensors in a tuple.
+    """
 
     input_order: tuple[int, ...]
     output_order: tuple[int, ...]
@@ -128,9 +132,6 @@ def _metadata_order(
         if not candidates:
             raise ValueError(f"PyTorch and GraphSpec disagree about the flattened {label} tensor order")
         order.append(candidates.pop(0))
-    if len(order) != len(tensor_data) or any(candidates for candidates in indices_by_identity.values()):
+    if len(order) != len(tensor_data) or any(candidate for candidate in indices_by_identity.values()):
         raise ValueError(f"PyTorch and GraphSpec disagree about the flattened {label} tensor count")
     return tuple(order)
-
-
-__all__ = ["PT2CallContract", "PT2CallContractState"]
