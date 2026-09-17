@@ -17,6 +17,7 @@ import torch.nn as nn
 
 from aitune.records import DeploymentArtifact
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_backend_build
 from aitune.torch.utils.memory import release_transient_memory
@@ -103,6 +104,13 @@ class ExecutionMode(str, Enum):
     MULTI_GPU = "multi_gpu"
 
 
+class ModuleFormat(str, Enum):
+    """Source module formats supported by a backend."""
+
+    TORCH = "torch"
+    ONNX = "onnx"
+
+
 class BuildMode(str, Enum):
     """Timing used by a backend to build the tuned module."""
 
@@ -181,6 +189,7 @@ class Backend(ABC):
     _devices: ClassVar[list[str]] = ["cpu", "cuda"]
     _execution_modes: ClassVar[frozenset[ExecutionMode]]
     _build_mode: ClassVar[BuildMode]
+    _supported_modules: ClassVar[frozenset[ModuleFormat]] = frozenset({ModuleFormat.TORCH})
 
     def __init_subclass__(cls, **kwargs) -> None:
         """Require each backend subclass to declare its execution and build modes."""
@@ -242,6 +251,7 @@ class Backend(ABC):
         with release_transient_memory():
             with report_backend_build(self, log_file=log_file):
                 try:
+                    self._assert_supported_modules(module)
                     self._assert_device(device)
                     self._assert_execution_mode(module)
                     self._set_device(device)
@@ -257,6 +267,12 @@ class Backend(ABC):
                         exc_info=True,
                     )
                     raise
+
+    def _assert_supported_modules(self, module: nn.Module) -> None:
+        """Reject source module formats that the backend does not support."""
+        module_format = ModuleFormat.ONNX if isinstance(module, OnnxModule) else ModuleFormat.TORCH
+        if module_format not in self._supported_modules:
+            raise RuntimeError(f"Backend {self.name} does not support {module_format.value} modules")
 
     def _assert_execution_mode(self, module: nn.Module) -> None:
         """Reject the module execution mode when the backend does not support it."""

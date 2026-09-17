@@ -218,6 +218,21 @@ def test_export_files_raises_for_missing_source(tmp_path):
         model_files.export_files(tmp_path / "repository" / "model.plan")
 
 
+def test_export_files_rejects_main_file_renamed_to_additional_file(tmp_path):
+    path = _write_artifact(tmp_path / "cache", b"model")
+    weights = path.parent / "weights.data"
+    weights.write_bytes(b"weights")
+    model_files = ModelFiles(format="onnx", path=path, additional_files=(Path("weights.data"),))
+    destination = tmp_path / "repository" / "weights.data"
+
+    with pytest.raises(ValueError, match="overwrite one of its additional files"):
+        model_files.export_files(destination)
+
+    assert not destination.parent.exists()
+    assert path.read_bytes() == b"model"
+    assert weights.read_bytes() == b"weights"
+
+
 def test_export_files_copies_current_bytes(tmp_path):
     path = _write_artifact(tmp_path / "cache", b"plan")
     model_files = ModelFiles(format="tensorrt_plan", path=path)
