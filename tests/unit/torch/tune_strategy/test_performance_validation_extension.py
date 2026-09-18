@@ -11,7 +11,9 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
@@ -381,6 +383,36 @@ def test_find_max_batch_size_uses_strategy_profiling_config(
         ext.find_max_batch_size(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
 
     assert mock_profile.call_args.args[4] is profiling_config
+
+
+def test_find_max_batch_size_records_output_bounds(tmp_path):
+    module = TinyModel()
+    signature = ForwardSignature.from_callable(module.forward)
+    graph_spec = GraphSpec(
+        name="graph",
+        input_spec=SampleMetadata.from_inputs({"x": torch.zeros(1, 4)}, batch_size=1),
+        output_spec=SampleMetadata.from_outputs(torch.zeros(1, 4), batch_size=1),
+        forward_signature=signature,
+    )
+    graph_spec.update_shapes_seen(
+        SampleMetadata.from_inputs({"x": torch.zeros(4, 4)}, batch_size=4),
+        SampleMetadata.from_outputs(torch.zeros(4, 4), batch_size=4),
+    )
+    samples = MagicMock(spec=SampleStore)
+    ext = _ConcreteExtension(profiling_config=_profiling_config())
+
+    with (
+        patch.object(TorchEagerBackend, "build"),
+        patch(
+            "aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.find_max_throughput_for_backend",
+            return_value=(8, 80.0, MagicMock()),
+        ),
+    ):
+        ext.find_max_batch_size(module, "mod", graph_spec, samples, torch.device("cpu"), tmp_path)
+
+    assert graph_spec.input_spec.tensor_specs[0].max_shape == [8, 4]
+    assert graph_spec.output_spec.tensor_specs[0].min_shape == [1, 4]
+    assert graph_spec.output_spec.tensor_specs[0].max_shape == [8, 4]
 
 
 def test_performance_validation_profiles_baseline_by_default(torch_device):

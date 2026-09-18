@@ -100,7 +100,7 @@ class FindMaxBatchSizeMixin(TuneStrategy):
                 max_batch_size,
                 max_throughput,
             )
-            graph_spec.update_max_batch_size(samples[0], max_batch_size)
+            graph_spec.update_max_batch_size(max_batch_size)
 
     def _pre_tune(
         self,

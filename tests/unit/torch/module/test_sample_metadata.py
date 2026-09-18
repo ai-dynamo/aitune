@@ -153,6 +153,24 @@ def test_make_batch():
         assert inputs_bs3["t"].shape == (3,)
 
 
+@pytest.mark.parametrize(
+    "from_sample", [SampleMetadata.from_inputs, SampleMetadata.from_outputs], ids=["inputs", "outputs"]
+)
+@pytest.mark.parametrize("max_batch_size", [1, 8])
+def test_update_max_batch_size_extends_only_known_batch_bounds(from_sample, max_batch_size):
+    metadata = from_sample({"scaled": torch.zeros(2, 7), "static": torch.zeros(5)}, batch_size=1)
+    metadata.update_shapes_seen(from_sample({"scaled": torch.zeros(4, 11), "static": torch.zeros(5)}, batch_size=2))
+
+    metadata.update_max_batch_size(max_batch_size)
+
+    scaled, static = metadata.tensor_specs
+    assert scaled.shape == ["batch0", "dim1"]
+    assert scaled.min_shape == [2, 7]
+    assert scaled.max_shape == [2 * max(2, max_batch_size), 11]
+    assert scaled.get_batch_axis_multipliers() == {0: 2}
+    assert static.min_shape == static.max_shape == [5]
+
+
 def test_update_shapes_seen_matches_tensors_by_path():
     metadata = SampleMetadata.from_inputs({"x": torch.randn(1, 2), "y": torch.randn(3)})
     other = SampleMetadata.from_inputs({"y": torch.randn(5), "x": torch.randn(4, 2)})

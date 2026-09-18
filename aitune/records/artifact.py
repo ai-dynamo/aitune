@@ -63,11 +63,10 @@ class ModelFiles:
             The destination main file path.
 
         Raises:
+            ValueError: If export targets collide with each other or with model source files.
             OSError: If directory creation or copying fails.
         """
         destination = Path(path)
-        if Path(destination.name) in self.additional_files:
-            raise ValueError("The exported main file would overwrite one of its additional files")
         planned = [(self.path, destination)]
         model_directory = self.path.parent.resolve()
         additional_sources = tuple(
@@ -83,6 +82,14 @@ class ModelFiles:
             )
             for source, relative_path in zip(additional_sources, self.additional_files, strict=True)
         )
+        resolved_plan = tuple((source.resolve(), target.resolve()) for source, target in planned)
+        resolved_sources = {source for source, _ in resolved_plan}
+        resolved_targets = tuple(target for _, target in resolved_plan)
+        if len(resolved_targets) != len(set(resolved_targets)):
+            raise ValueError("Multiple model files would be exported to the same target")
+        for resolved_source, resolved_target in resolved_plan:
+            if resolved_target != resolved_source and resolved_target in resolved_sources:
+                raise ValueError(f"Exporting to {resolved_target} would overwrite one of the model's source files")
         for source, target in planned:
             if source.resolve() == target.resolve():
                 continue

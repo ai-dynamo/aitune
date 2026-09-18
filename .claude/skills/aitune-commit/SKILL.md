@@ -21,9 +21,13 @@ license: Apache-2.0
    - If commits span unrelated areas, omit scope and describe the branch goal abstractly
    - Present as: `**MR title suggestion:** <title>`
 
+If commit signing is not configured, explain how the user can configure GPG or SSH signing and refer them to
+[GitHub's signing guide](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits).
+The user must run the configuration steps. Do not modify their Git or signing-key configuration.
+
 **Never ask the user to confirm the commit message.** Commit directly once the message is selected.
 **Never offer multiple commit options or ask whether to split.** Always produce a single message.
-**Always use both `-s` and `-S` for commits, including amendments.** `-s` adds the `Signed-off-by` trailer; `-S` cryptographically signs the commit. If signing fails, report the error and resolve the signing setup before retrying; do not fall back to an unsigned commit.
+**Always use both `-s` and `-S` for commits, including amendments.** `-s` adds the `Signed-off-by` trailer; `-S` cryptographically signs the commit. If signing fails, report the error, suggest how the user can fix the signing setup, and wait for them to complete the configuration before retrying; do not fall back to an unsigned commit.
 **Never run `git push`.** Pushing is a manual step for the user.
 
 ## Format

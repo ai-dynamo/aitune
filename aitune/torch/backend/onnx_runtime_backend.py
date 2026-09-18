@@ -17,6 +17,8 @@ import torch
 import torch.nn as nn
 from onnx.external_data_helper import _get_all_tensors
 
+from aitune.records import DeploymentArtifact, DType, ModelFiles, RuntimeConfig
+from aitune.torch.artifact import bounded_tensor_specs
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode, ModuleFormat
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
@@ -41,6 +43,38 @@ class ONNXExecutionProvider(str, Enum):
 
     CUDA = "cuda"
     TENSORRT = "tensorrt"
+
+
+_ORT_TYPE_TO_DTYPE = {
+    "tensor(bool)": DType.BOOL,
+    "tensor(uint8)": DType.UINT8,
+    "tensor(int8)": DType.INT8,
+    "tensor(int16)": DType.INT16,
+    "tensor(int32)": DType.INT32,
+    "tensor(int64)": DType.INT64,
+    "tensor(float16)": DType.FLOAT16,
+    "tensor(float)": DType.FLOAT32,
+    "tensor(double)": DType.FLOAT64,
+}
+
+
+def _validate_onnx_interface(nodes: list[onnxruntime.NodeArg], specs, kind: str) -> None:
+    """Validate the finalized ONNX interface against the recorded Torch contract."""
+    for node, spec in zip(nodes, specs, strict=True):
+        try:
+            dtype = _ORT_TYPE_TO_DTYPE[node.type]
+        except KeyError as error:
+            raise ValueError(f"ONNX {kind} {node.name!r} uses unsupported element type {node.type!r}") from error
+        if dtype is not spec.dtype:
+            raise ValueError(f"ONNX {kind} {node.name!r} dtype does not match the recorded graph")
+        if node.shape is None or len(node.shape) != len(spec.min_shape):
+            raise ValueError(f"ONNX {kind} {node.name!r} rank does not match the recorded graph")
+        for axis, dimension in enumerate(node.shape):
+            if isinstance(dimension, int) and (spec.min_shape[axis], spec.max_shape[axis]) != (dimension, dimension):
+                raise ValueError(
+                    f"ONNX {kind} {node.name!r} axis {axis} is fixed at {dimension}, "
+                    f"but AITune recorded bounds {spec.min_shape[axis]}..{spec.max_shape[axis]}"
+                )
 
 
 @dataclass
@@ -136,6 +170,8 @@ class ONNXRuntimeBackend(Backend):
         self._external_data_artifacts: list[ArtifactPath] = []
         self._graph_spec: GraphSpec | None = None
         self._samples: SampleStore | None = None
+        self._input_nodes: list[onnxruntime.NodeArg] | None = None
+        self._output_nodes: list[onnxruntime.NodeArg] | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -145,6 +181,13 @@ class ONNXRuntimeBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
+    def artifact(self) -> DeploymentArtifact:
+        """Create the deployment record on request, including after deactivation."""
+        try:
+            return self._create_artifact()
+        except (OSError, RuntimeError, ValueError) as error:
+            raise RuntimeError(f"ONNX artifact is not available: {error}") from error
+
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Use an existing ONNX file or export Torch, then load the session."""
         self._graph_spec = graph_spec
@@ -153,10 +196,9 @@ class ONNXRuntimeBackend(Backend):
             self._use_existing_onnx(module, graph_spec)
         else:
             self._export_onnx(module, graph_spec, samples, cache_dir)
-
-        data_file = Path(str(self._onnx_model_artifact.path) + ".data")
-        if data_file.exists():
-            self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=self._onnx_model_artifact.root)
+            data_file = Path(str(self._onnx_model_artifact.path) + ".data")
+            if data_file.exists():
+                self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=self._onnx_model_artifact.root)
 
         self._samples = samples
         offload(module, device="cpu")
@@ -224,6 +266,53 @@ class ONNXRuntimeBackend(Backend):
             except Exception:
                 self._deactivate()
                 raise
+        # Keep the finalized interface when the session is released; validate it only on artifact().
+        self._input_nodes = self._session.get_inputs()
+        self._output_nodes = self._session.get_outputs()
+
+    def _create_artifact(self) -> DeploymentArtifact:
+        """Create an artifact from the saved interface and recorded shape bounds."""
+        if (
+            self._onnx_model_artifact is None
+            or self._input_nodes is None
+            or self._output_nodes is None
+            or self._graph_spec is None
+        ):
+            raise RuntimeError("ONNX artifact requires a built or deployed backend with a recorded interface")
+
+        model_path = self._onnx_model_artifact.path
+        input_nodes = self._input_nodes
+        output_nodes = self._output_nodes
+        inputs = bounded_tensor_specs(
+            self._graph_spec,
+            "input",
+            recorded_names=tuple(node.name for node in input_nodes),
+        )
+        outputs = bounded_tensor_specs(
+            self._graph_spec,
+            "output",
+            recorded_names=tuple(node.name for node in output_nodes),
+        )
+        _validate_onnx_interface(input_nodes, inputs, "input")
+        _validate_onnx_interface(output_nodes, outputs, "output")
+        additional_files = self._artifact_additional_files(model_path)
+        return DeploymentArtifact(
+            model=ModelFiles(format="onnx", path=model_path, additional_files=additional_files),
+            inputs=inputs,
+            outputs=outputs,
+            runtime=RuntimeConfig(
+                name="onnxruntime",
+                options={"execution_provider": (self._config.execution_provider or ONNXExecutionProvider.CUDA).value},
+            ),
+        )
+
+    def _artifact_additional_files(self, model_path: Path) -> tuple[Path, ...]:
+        """Return every tracked ONNX data file once, relative to the model."""
+        artifacts = list(self._external_data_artifacts)
+        if self._onnx_data_artifact is not None:
+            artifacts.append(self._onnx_data_artifact)
+        relative_paths = (artifact.path.relative_to(model_path.parent) for artifact in artifacts)
+        return tuple(dict.fromkeys(relative_paths))
 
     def _warmup(self, samples: Iterable[Sample]) -> None:
         """Run representative samples to initialize the execution provider.
