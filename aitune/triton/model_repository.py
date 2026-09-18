@@ -93,7 +93,7 @@ def publish(
             raise AITunePublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
 
         repository.mkdir(parents=True, exist_ok=True)
-        staging_root = repository.parent if staging_path is None else Path(staging_path)
+        staging_root = repository.resolve().parent if staging_path is None else Path(staging_path)
         _prepare_staging_root(repository, staging_root)
         # Stage outside the repository so Triton cannot discover an incomplete model.
         staging = Path(tempfile.mkdtemp(dir=staging_root))

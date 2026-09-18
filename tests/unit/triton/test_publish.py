@@ -222,6 +222,17 @@ def test_staging_directory_creation_failure_raises_publication_error(tmp_path, m
     assert not (repository / "encoder").exists()
 
 
+def test_publishes_to_current_directory(tmp_path, monkeypatch):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    monkeypatch.chdir(repository)
+
+    aitriton.publish(artifact, path=".", model_name="encoder")
+
+    assert (repository / "encoder" / "1" / "model.plan").read_bytes() == b"TensorRT plan"
+
+
 def test_uses_explicit_staging_path_outside_repository(tmp_path):
     artifact = _plan(tmp_path / "source.plan")
     repository = tmp_path / "repository"
