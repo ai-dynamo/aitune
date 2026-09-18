@@ -34,7 +34,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     rm -rf ${TMP_DIR} && \
     pip install pydantic tomli --break-system-packages && \
     if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install --break-system-packages $ADDITIONAL_PACKAGES; fi && \
-    pip install onnxruntime-gpu==$ONNXRUNTIME_VERSION --break-system-packages --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/ && \
+    pip install onnxruntime-gpu==$ONNXRUNTIME_VERSION --no-deps --force-reinstall --break-system-packages --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/ && \
     groupadd -g $_GROUP_ID runner && useradd -m -u $_USER_ID -g $_GROUP_ID runner && \
     chown -R runner:runner ${AIT_DIR} && \
     chmod -R ug+rw ${AIT_DIR}

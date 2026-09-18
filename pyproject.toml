@@ -38,7 +38,7 @@ keywords = [
     "automation",
 ]
 license = { text = "Apache 2.0" }
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11, <3.14"
 dependencies = [
     "autowrapt>=1.0",
     "dill>=0.3.8",
@@ -157,6 +157,7 @@ aitune = ["**/*"]
 
 [tool.uv]
 managed = true
+environments = ["'tegra' not in platform_release"]
 conflicts = [
     [
         { extra = "torch28" },

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-name: Examples
+name: Functional tests
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ permissions:
   actions: read # Download the caller's wheel artifact.
 
 concurrency:
-  group: examples-${{ github.ref }}
+  group: integration-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -51,8 +51,8 @@ defaults:
     shell: bash
 
 jobs:
-  generate-examples-matrix:
-    name: Generate examples matrix
+  generate-functional-matrix:
+    name: Generate functional matrix
     runs-on: linux-amd64-cpu4
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
@@ -73,7 +73,7 @@ jobs:
       - uses: *actions_upload_artifact
         if: inputs.dist_run_id == ''
         with:
-          name: examples-dist
+          name: integration-dist
           path: dist/
           if-no-files-found: error
       - name: Generate functional matrix
@@ -84,7 +84,12 @@ jobs:
         run: |
           uv run --script tests/functional/scripts/generate.py \
             --default-docker-image "${{ env.PYTORCH_CI_IMAGE }}" \
-            --projects-path examples \
+            --scripts-path tests/functional/pytorch \
+            --scripts-path tests/functional/pytorch/jit \
+            --scripts-path tests/functional/pytorch/kernel_forge \
+            --scripts-path tests/functional/onnx \
+            --scripts-path tests/functional/dataloader \
+            --scripts-path tests/functional/dynamo \
             --github-output "$GITHUB_OUTPUT" \
             --output-json jobs.json
 
@@ -92,7 +97,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "### Examples List"
+            echo "### Functional Matrix"
             echo -ne "\nTotal matrix items: ${{ steps.generate.outputs.matrix_count }}\n\n"
             echo "| ID | Path | Kind | Docker Image | Runner | Test Number |"
             echo "|----|------|------|--------------|--------|-------------|"
@@ -100,17 +105,17 @@ jobs:
             echo ""
           } >> $GITHUB_STEP_SUMMARY
 
-  examples:
+  functional:
     name: ${{ matrix.id }}
-    needs: generate-examples-matrix
-    if: needs.generate-examples-matrix.outputs.matrix_count != '0'
+    needs: generate-functional-matrix
+    if: needs.generate-functional-matrix.outputs.matrix_count != '0'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
     continue-on-error: ${{ matrix.allow_failure }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.generate-examples-matrix.outputs.matrix) }}
+        include: ${{ fromJSON(needs.generate-functional-matrix.outputs.matrix) }}
     container:
       image: ${{ matrix.docker_image }}
       credentials:
@@ -123,7 +128,7 @@ jobs:
           persist-credentials: false
       - uses: *actions_download_artifact
         with:
-          name: ${{ inputs.dist_run_id != '' && 'dist' || 'examples-dist' }}
+          name: ${{ inputs.dist_run_id != '' && 'dist' || 'integration-dist' }}
           path: dist
           run-id: ${{ inputs.dist_run_id || github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -146,7 +151,7 @@ jobs:
       - if: always()
         uses: *actions_upload_artifact
         with:
-          name: examples-${{ matrix.id }}
+          name: integration-${{ matrix.id }}
           path: |
             artifacts/**
             .cache/aitune/**/*.log

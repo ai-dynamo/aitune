@@ -34,19 +34,19 @@ jobs:
     needs: ci
     uses: ./.github/workflows/dispatch.compatibility.yml
 
-  integration:
-    name: Integration
+  functional:
+    name: Functional tests
     needs: ci
-    uses: ./.github/workflows/dispatch.integration.yml
+    uses: ./.github/workflows/dispatch.functional.yml
     with:
       dist_run_id: ${{ needs.ci.outputs.dist_run_id }}
     secrets:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
-  examples:
-    name: Examples
+  integration:
+    name: Integration tests
     needs: ci
-    uses: ./.github/workflows/dispatch.examples.yml
+    uses: ./.github/workflows/dispatch.integration.yml
     with:
       dist_run_id: ${{ needs.ci.outputs.dist_run_id }}
     secrets:

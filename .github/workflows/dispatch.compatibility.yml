@@ -72,7 +72,7 @@ jobs:
         with:
           persist-credentials: false
       - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
-      - run: pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --force-reinstall --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+      - run: pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --no-deps --force-reinstall --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
       - run: pip list
       - run: nvidia-smi
       - run: python -c "import sys; print(sys.version)"
@@ -132,7 +132,7 @@ jobs:
       - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }}]" --group test ${{ matrix.variant.uv_extra_args }}
       - run: |
           if [ "${{ matrix.variant.uv_torch_backend }}" == "cu130" ]; then
-            uv pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --reinstall-package onnxruntime-gpu --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+            uv pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --no-deps --reinstall-package onnxruntime-gpu --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
           fi
       - run: uv pip list
       - run: uv run python -c "import sys; print(sys.version)"
