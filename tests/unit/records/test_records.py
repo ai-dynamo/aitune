@@ -225,7 +225,7 @@ def test_export_files_rejects_main_file_renamed_to_additional_file(tmp_path):
     model_files = ModelFiles(format="onnx", path=path, additional_files=(Path("weights.data"),))
     destination = tmp_path / "repository" / "weights.data"
 
-    with pytest.raises(ValueError, match="overwrite one of the model's source files"):
+    with pytest.raises(ValueError, match="exported to the same target"):
         model_files.export_files(destination)
 
     assert not destination.parent.exists()
