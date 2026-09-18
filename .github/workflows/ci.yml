@@ -295,7 +295,7 @@ jobs:
           name: dist
           path: dist
       - run: python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
-      - run: python -m pytest -q -rfn auto tests/unit --junitxml=pytorch-cpu.test-report.xml
+      - run: python -m pytest -q -rf -n auto tests/unit --junitxml=pytorch-cpu.test-report.xml
       - if: always()
         uses: *actions_upload_artifact
         with:
@@ -327,6 +327,10 @@ jobs:
         with:
           name: dist
           path: dist
+      - run: |
+          echo "Container image: ${{ needs.wheel.outputs.image }}"
+          echo "Checking onnxruntime_providers_cuda.so dependencies:"
+          ldd /usr/local/lib/python3.12/dist-packages/onnxruntime/capi/libonnxruntime_providers_cuda.so
       - run: python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
       - run: >-
           python -m pytest -q -rf tests/unit
