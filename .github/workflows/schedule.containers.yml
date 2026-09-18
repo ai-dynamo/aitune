@@ -84,9 +84,10 @@ jobs:
           push: true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/pytorch:${{ matrix.torch_ci_image_base }}
-          tags: ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}
+            AITUNE_CI_IMAGE_CREATION_DATE=${{ github.event.head_commit.timestamp }}
+          tags: ghcr.io/ai-dynamo/aitune/nvcr-torch-${{ matrix.torch_ci_image_base }}:latest
       - id: image
-        run: echo "image=ghcr.io/ai-dynamo/aitune:nvcr-torch-${{ matrix.torch_ci_image_base }}" >> "$GITHUB_OUTPUT"
+        run: echo "image=ghcr.io/ai-dynamo/aitune/nvcr-torch-${{ matrix.torch_ci_image_base }}:latest" >> "$GITHUB_OUTPUT"
 
   create-cuda-base-images:
     name: create cuda ${{ matrix.cuda_ci_image_base }} based AITune image
@@ -122,6 +123,7 @@ jobs:
           push: true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/cuda:${{ matrix.cuda_ci_image_base }}
-          tags: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}
+            AITUNE_CI_IMAGE_CREATION_DATE=${{ github.event.head_commit.timestamp }}
+          tags: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda_ci_image_base }}:latest
       - id: image
-        run: echo "image=ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.cuda_ci_image_base }}" >> "$GITHUB_OUTPUT"
+        run: echo "image=ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda_ci_image_base }}:latest" >> "$GITHUB_OUTPUT"
