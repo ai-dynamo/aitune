@@ -363,3 +363,5 @@ docs/superpowers/
 .claude/specs
 .worklogs/
 
+# act tool
+.actrc
