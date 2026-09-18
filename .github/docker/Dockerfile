@@ -23,6 +23,8 @@ ENV AIT_DIST_DIR=${AIT_DIR}/dist
 ENV AIT_TEST_DIR=${AIT_DIR}/tests
 ENV TMP_DIR="/tmp/ai-tune"
 
+USER root
+
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -30,6 +32,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     export WHEEL_PATH=$(ls /aitune_dist/*aitune*.whl) && \
     mkdir -p ${TMP_DIR} && \
     tar xf /aitune_dist/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
+    rm -rf ${AIT_DIR}/examples ${AIT_DIR}/tests && \
     mv ${TMP_DIR}/examples ${AIT_DIR} && \
     mv ${TMP_DIR}/tests ${AIT_DIR} && \
     (cd ${TMP_DIR} && pip install ".[triton]" --group test --break-system-packages) && \
@@ -38,7 +41,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install pydantic tomli --break-system-packages && \
     if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install --break-system-packages $ADDITIONAL_PACKAGES; fi && \
     pip install onnxruntime-gpu==$ONNXRUNTIME_VERSION --no-deps --force-reinstall --break-system-packages --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/ && \
-    groupadd -g $_GROUP_ID runner && useradd -m -u $_USER_ID -g $_GROUP_ID runner && \
+    groupadd -g $_GROUP_ID runner -f && useradd -m -u $_USER_ID -g $_GROUP_ID runner || true && \
     chown -R runner:runner ${AIT_DIR} && \
     chmod -R ug+rw ${AIT_DIR}
 

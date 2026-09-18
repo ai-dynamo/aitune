@@ -48,19 +48,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.08-py3
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-25.08-py3:latest
             extra_packages: "numpy<2.0"
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.10-py3
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-25.10-py3:latest
             extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.01-py3
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3:latest
             extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.03-py3
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.03-py3:latest
             extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.05-py3
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.05-py3:latest
             extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.06-py3
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.06-py3:latest
             extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.08-py3
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.08-py3:latest
             extra_packages: ""
     container:
       image: ${{ matrix.torch_ci_image }}
@@ -117,7 +117,7 @@ jobs:
             aitune_extras: torch212
             uv_extra_args: ""
     container:
-      image: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.variant.cuda_image }}
+      image: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.variant.cuda_image }}:latest
     steps:
       - uses: *actions_checkout
         with:
