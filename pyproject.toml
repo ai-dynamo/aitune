@@ -157,6 +157,7 @@ aitune = ["**/*"]
 
 [tool.uv]
 managed = true
+environments = ["'tegra' not in platform_release"]
 conflicts = [
     [
         { extra = "torch28" },
