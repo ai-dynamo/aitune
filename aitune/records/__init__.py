@@ -48,7 +48,7 @@ custom formats and runtimes use the same records without subclassing.
     8
 """
 
-from aitune.records.artifact import DeploymentArtifact, ModelFiles, RuntimeConfig
+from aitune.records.artifact import DeploymentArtifact, ModelFiles, RuntimeConfig, TensorSample
 from aitune.records.dtypes import DType
 from aitune.records.shapes import BoundedTensorSpec
 
@@ -58,4 +58,5 @@ __all__ = [
     "DeploymentArtifact",
     "ModelFiles",
     "RuntimeConfig",
+    "TensorSample",
 ]

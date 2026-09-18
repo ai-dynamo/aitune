@@ -191,6 +191,7 @@ dynamo = [
 triton = [
     { name = "protobuf" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "tritonclient", version = "2.71.0", source = { registry = "https://pypi.org/simple" }, extra = ["grpc"], marker = "python_full_version < '3.12'" },
     { name = "tritonclient", version = "2.72.0", source = { registry = "https://pypi.org/simple" }, extra = ["grpc"], marker = "python_full_version >= '3.12'" },
 ]
@@ -282,6 +283,7 @@ requires-dist = [
     { name = "protobuf", marker = "extra == 'triton'", specifier = ">=6.33.5" },
     { name = "pydantic", marker = "extra == 'triton'", specifier = ">=2" },
     { name = "psutil" },
+    { name = "pyyaml", marker = "extra == 'triton'", specifier = ">=6.0" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "tensorrt", specifier = ">=10.3" },
     { name = "torch", specifier = ">=2.8a0" },

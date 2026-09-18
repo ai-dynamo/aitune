@@ -6,6 +6,45 @@ title: "Deployment Guide"
 
 This guide covers the full deployment story for AITune-tuned models: saving a tuned model to a checkpoint, loading it in production, and optionally serving it as an OpenAI-compatible HTTP endpoint via [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo).
 
+## Publish a Tuned Artifact to Triton
+
+Publishing an artifact also generates Model Analyzer configurations. No separate
+configuration object or generation call is required:
+
+```python
+from aitune.triton import publish
+
+# artifact is the ONNX, TensorRT, or PT2 artifact produced by tuning.
+model_path = publish(artifact, path="model_repository", model_name="encoder")
+```
+
+The model directory contains the versioned model, `config.pbtxt`, and
+`model_analyzer/fast.yaml` and `model_analyzer/manual.yaml`. Publication stages
+these files together; a failure leaves no partial model directory.
+
+The generated configurations derive concrete input shapes from the artifact:
+TensorRT uses the first compatible optimization profile's optimum shapes;
+ONNX and PT2 use their recorded minimum shapes. Batched deployments omit the
+leading batch dimension in Perf Analyzer's shape flags. Search batch sizes stay
+within the deployment limit and the selected TensorRT profile's bounds.
+
+When the backend retained a representative tuning sample, publication writes it
+to `model_analyzer/input-data.json` and configures Perf Analyzer to use those
+values. Batched samples are reduced to one example and resized to the selected
+profiling shape by repeating or truncating values. This keeps embedding indices
+and other value-constrained inputs within values already observed during tuning.
+See the [Model Analyzer configuration reference](https://github.com/triton-inference-server/model_analyzer/blob/main/docs/config.md).
+
+`fast.yaml` uses quick search where possible, with a reduced explicit sweep when
+TensorRT profile constraints require it. `manual.yaml` provides a larger explicit
+sweep. AITune generates the configurations; it does not run Model Analyzer.
+Checkpoint, result, and generated model-repository paths are under
+`model_repository-model-analyzer/encoder/`, outside the serving repository.
+
+For custom instance-count or queue-delay limits, the existing
+`generate_model_analyzer_configs(artifact, model_path=model_path, path=...)`
+function can write another configuration pair to a new directory.
+
 ## Save a Tuned Model
 
 ### Basic Save
