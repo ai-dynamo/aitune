@@ -72,6 +72,38 @@ def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("minimum", "maximum", "batch_axis", "dynamic_batching"),
+    [
+        ((), (), None, False),
+        ((1,), (8,), 0, True),
+    ],
+)
+def test_publishes_scalar_tensors_with_triton_reshape(tmp_path, minimum, maximum, batch_axis, dynamic_batching):
+    artifact = _plan(tmp_path / "source.plan")
+    scalar = BoundedTensorSpec(
+        name="scalar",
+        dtype=DType.FLOAT32,
+        min_shape=minimum,
+        max_shape=maximum,
+        batch_axis=batch_axis,
+    )
+    artifact = replace(artifact, inputs=(scalar,), outputs=(scalar,))
+
+    model = aitriton.publish(
+        artifact,
+        path=tmp_path / "repository",
+        model_name="scalar",
+        dynamic_batching=dynamic_batching,
+    )
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    for tensor in (parsed.input[0], parsed.output[0]):
+        assert tuple(tensor.dims) == (1,)
+        assert tensor.HasField("reshape")
+        assert tuple(tensor.reshape.shape) == ()
+
+
+@pytest.mark.parametrize(
     ("provider", "expected_accelerators"),
     [
         ("cuda", ()),

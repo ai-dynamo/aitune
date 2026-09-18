@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Shared fields for backend-specific Triton model configurations."""
 
+from abc import abstractmethod
 from enum import Enum
 from typing import Any, Literal
 
@@ -47,6 +48,7 @@ class TritonTensorConfig(BaseModel):
     name: str = Field(min_length=1)
     data_type: TritonDataType
     dims: tuple[int, ...]
+    reshape: tuple[int, ...] | None = None
 
     @field_validator("dims")
     @classmethod
@@ -86,7 +88,7 @@ class _BaseModelConfig(BaseModel):
     def _validate_batching(self) -> "_BaseModelConfig":
         """Keep the scheduler setting consistent with the declared batch size."""
         if self.dynamic_batching != (self.max_batch_size > 0):
-            raise ValueError("dynamic_batching requires a positive max_batch_size, and vice versa")
+            raise ValueError("dynamic_batching must be enabled exactly when max_batch_size is positive")
         return self
 
     def to_protobuf(self) -> model_config_pb2.ModelConfig:
@@ -99,11 +101,14 @@ class _BaseModelConfig(BaseModel):
         for field_name, tensors in (("input", self.inputs), ("output", self.outputs)):
             target = getattr(config, field_name)
             for tensor in tensors:
-                target.add(
+                target_tensor = target.add(
                     name=tensor.name,
                     data_type=model_config_pb2.DataType.Value(tensor.data_type.value),
                     dims=tensor.dims,
                 )
+                if tensor.reshape is not None:
+                    target_tensor.reshape.shape.extend(tensor.reshape)
+                    target_tensor.reshape.SetInParent()
         if self.dynamic_batching:
             config.dynamic_batching.SetInParent()
         return config
@@ -117,9 +122,9 @@ class _BaseModelConfig(BaseModel):
         return content
 
     @classmethod
+    @abstractmethod
     def _artifact_options(cls, artifact: DeploymentArtifact) -> dict[str, Any]:
         """Read settings owned by the specialized Triton config."""
-        raise NotImplementedError
 
 
 def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConfig:
@@ -130,4 +135,9 @@ def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConf
     dimensions = tuple(minimum if minimum == maximum else -1 for minimum, maximum in bounds)
     if batched:
         dimensions = dimensions[1:]
-    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions)
+    reshape = None
+    if not dimensions:
+        # Triton's API requires non-empty dims; reshape preserves the scalar shape expected by the backend.
+        dimensions = (1,)
+        reshape = ()
+    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions, reshape=reshape)
