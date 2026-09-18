@@ -19,20 +19,101 @@ from aitune.triton.config.common import _BaseModelConfig
 
 logger = logging.getLogger(__name__)
 
-__all__ = [
-    "AITunePublicationError",
-    "ONNXRuntimeModelConfig",
-    "TensorRTModelConfig",
-    "TorchAOTIModelConfig",
-    "publish",
-]
-
 _CONFIG_FILE_NAME = "config.pbtxt"
 _MODEL_CONFIGS: dict[str, type[_BaseModelConfig]] = {
     "tensorrt": TensorRTModelConfig,
     "onnxruntime": ONNXRuntimeModelConfig,
     "aotinductor": TorchAOTIModelConfig,
 }
+
+
+def publish(
+    artifact: DeploymentArtifact,
+    /,
+    *,
+    path: str | os.PathLike[str],
+    model_name: str,
+    model_version: int = 1,
+    dynamic_batching: bool = False,
+    max_batch_size: int | None = None,
+    staging_path: str | os.PathLike[str] | None = None,
+) -> Path:
+    """Publish one tuned artifact into a new Triton model repository entry.
+
+    The operation never replaces an existing model. Files are copied and staged
+    before the completed model directory is moved into the repository.
+
+    Supported model format/runtime pairs are ``onnx``/``onnxruntime``,
+    ``tensorrt_plan``/``tensorrt``, and ``pt2``/``aotinductor``. ONNX provider
+    selection comes from ``runtime.options["execution_provider"]``. TensorRT uses
+    ``model.metadata["optimization_profile_count"]`` and the optional runtime
+    setting ``use_cuda_graphs``. PT2 uses ``model.metadata["structured_call"]``.
+
+    Args:
+        artifact: Deployment record containing model files, tensor specs, and runtime settings.
+        path: Triton model repository root.
+        model_name: New model directory name.
+        model_version: Positive Triton model version.
+        dynamic_batching: Let Triton combine independent client requests.
+        max_batch_size: Optional cap within the artifact's tuned batch bounds.
+        staging_path: Directory outside the repository on the same filesystem. Defaults to the repository's parent.
+
+    Returns:
+        Path to the generated model directory.
+
+    Raises:
+        AITuneUserInputError: If publication arguments are invalid.
+        AITunePublicationError: If the artifact cannot be represented or publication fails.
+    """
+    if (
+        not isinstance(model_name, str)
+        or not model_name
+        or model_name != model_name.strip()
+        or Path(model_name).name != model_name
+        or model_name in {".", ".."}
+    ):
+        raise AITuneUserInputError(f"Invalid Triton model name: {model_name!r}")
+    if not isinstance(model_version, int) or isinstance(model_version, bool) or model_version < 1:
+        raise AITuneUserInputError(f"model_version must be a positive integer, got {model_version!r}")
+
+    file_name, multi_file = _artifact_layout(artifact)
+    _validate_artifact_files(artifact, multi_file=multi_file)
+    config = _model_config(
+        artifact,
+        model_name=model_name,
+        dynamic_batching=dynamic_batching,
+        max_batch_size=max_batch_size,
+    )
+
+    staging: Path | None = None
+    try:
+        repository = Path(path)
+        model_directory = repository / model_name
+        if model_directory.exists():
+            raise AITunePublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
+
+        repository.mkdir(parents=True, exist_ok=True)
+        staging_root = repository.parent if staging_path is None else Path(staging_path)
+        _prepare_staging_root(repository, staging_root)
+        # Stage outside the repository so Triton cannot discover an incomplete model.
+        staging = Path(tempfile.mkdtemp(dir=staging_root))
+        version_directory = staging / str(model_version)
+        version_directory.mkdir(parents=True)
+        (staging / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
+        destination = version_directory / file_name
+        if artifact.model.additional_files:
+            destination = destination / file_name
+        artifact.model.export_files(destination)
+        staging.rename(model_directory)
+    except Exception as error:
+        if staging is not None:
+            _cleanup_failed_publication(staging, model_name, error)
+        if isinstance(error, AITunePublicationError):
+            raise
+        raise AITunePublicationError(f"Failed to publish Triton model {model_name!r}: {error}") from error
+
+    logger.info("Published Triton model to %s", model_directory)
+    return model_directory
 
 
 def _artifact_layout(artifact: DeploymentArtifact) -> tuple[str, bool]:
@@ -113,86 +194,15 @@ def _cleanup_failed_publication(staging: Path, model_name: str, publication_erro
         ) from cleanup_error
 
 
-def publish(
-    artifact: DeploymentArtifact,
-    /,
-    *,
-    path: str | os.PathLike[str],
-    model_name: str,
-    model_version: int = 1,
-    dynamic_batching: bool = False,
-    max_batch_size: int | None = None,
-) -> Path:
-    """Publish one tuned artifact into a new Triton model repository entry.
+def _same_filesystem(left: Path, right: Path) -> bool:
+    """Return whether two existing paths support an atomic rename between them."""
+    return left.stat().st_dev == right.stat().st_dev
 
-    The operation never replaces an existing model. Files are copied and staged
-    before the completed model directory is moved into the repository.
 
-    Supported model format/runtime pairs are ``onnx``/``onnxruntime``,
-    ``tensorrt_plan``/``tensorrt``, and ``pt2``/``aotinductor``. ONNX provider
-    selection comes from ``runtime.options["execution_provider"]``. TensorRT uses
-    ``model.metadata["optimization_profile_count"]`` and the optional runtime
-    setting ``use_cuda_graphs``. PT2 uses ``model.metadata["structured_call"]``.
-
-    Args:
-        artifact: Deployment record containing model files, tensor specs, and runtime settings.
-        path: Triton model repository root.
-        model_name: New model directory name.
-        model_version: Positive Triton model version.
-        dynamic_batching: Let Triton combine independent client requests.
-        max_batch_size: Optional cap within the artifact's tuned batch bounds.
-
-    Returns:
-        Path to the generated model directory.
-
-    Raises:
-        AITuneUserInputError: If publication arguments are invalid.
-        AITunePublicationError: If the artifact cannot be represented or publication fails.
-    """
-    if (
-        not isinstance(model_name, str)
-        or not model_name
-        or model_name != model_name.strip()
-        or Path(model_name).name != model_name
-        or model_name in {".", ".."}
-    ):
-        raise AITuneUserInputError(f"Invalid Triton model name: {model_name!r}")
-    if not isinstance(model_version, int) or isinstance(model_version, bool) or model_version < 1:
-        raise AITuneUserInputError(f"model_version must be a positive integer, got {model_version!r}")
-
-    file_name, multi_file = _artifact_layout(artifact)
-    _validate_artifact_files(artifact, multi_file=multi_file)
-    config = _model_config(
-        artifact,
-        model_name=model_name,
-        dynamic_batching=dynamic_batching,
-        max_batch_size=max_batch_size,
-    )
-
-    staging: Path | None = None
-    try:
-        repository = Path(path)
-        model_directory = repository / model_name
-        if model_directory.exists():
-            raise AITunePublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
-
-        repository.mkdir(parents=True, exist_ok=True)
-        # Stage beside the repository so Triton cannot discover an incomplete model.
-        staging = Path(tempfile.mkdtemp(dir=repository.parent))
-        version_directory = staging / str(model_version)
-        version_directory.mkdir(parents=True)
-        (staging / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
-        destination = version_directory / file_name
-        if artifact.model.additional_files:
-            destination = destination / file_name
-        artifact.model.export_files(destination)
-        staging.rename(model_directory)
-    except Exception as error:
-        if staging is not None:
-            _cleanup_failed_publication(staging, model_name, error)
-        if isinstance(error, AITunePublicationError):
-            raise
-        raise AITunePublicationError(f"Failed to publish Triton model {model_name!r}: {error}") from error
-
-    logger.info("Published Triton model to %s", model_directory)
-    return model_directory
+def _prepare_staging_root(repository: Path, staging_root: Path) -> None:
+    """Create a staging root that is hidden from Triton and supports atomic publication."""
+    if staging_root.resolve().is_relative_to(repository.resolve()):
+        raise AITunePublicationError("Triton staging_path must be outside the model repository")
+    staging_root.mkdir(parents=True, exist_ok=True)
+    if not _same_filesystem(repository, staging_root):
+        raise AITunePublicationError("Triton staging_path must be on the same filesystem as the model repository")

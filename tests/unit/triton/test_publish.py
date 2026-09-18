@@ -221,6 +221,54 @@ def test_staging_directory_creation_failure_raises_publication_error(tmp_path, m
     assert not (repository / "encoder").exists()
 
 
+def test_uses_explicit_staging_path_outside_repository(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    staging_root = tmp_path / "staging"
+
+    published = aitriton.publish(
+        artifact,
+        path=repository,
+        model_name="encoder",
+        staging_path=staging_root,
+    )
+
+    assert published == repository / "encoder"
+    assert not tuple(staging_root.iterdir())
+
+
+def test_rejects_staging_path_inside_repository_before_export(tmp_path, mocker):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    export_files = mocker.patch.object(ModelFiles, "export_files")
+
+    with pytest.raises(aitriton.AITunePublicationError, match="outside the model repository"):
+        aitriton.publish(
+            artifact,
+            path=repository,
+            model_name="encoder",
+            staging_path=repository / "staging",
+        )
+
+    export_files.assert_not_called()
+
+
+def test_rejects_staging_path_on_different_filesystem_before_export(tmp_path, mocker):
+    artifact = _plan(tmp_path / "source.plan")
+    export_files = mocker.patch.object(ModelFiles, "export_files")
+    mocker.patch("aitune.triton.model_repository._same_filesystem", return_value=False)
+
+    with pytest.raises(aitriton.AITunePublicationError, match="same filesystem"):
+        aitriton.publish(
+            artifact,
+            path=tmp_path / "repository",
+            model_name="encoder",
+            staging_path=tmp_path / "staging",
+        )
+
+    export_files.assert_not_called()
+
+
 def test_copy_failure_leaves_no_partial_model(tmp_path):
     artifact = _plan(tmp_path / "source.plan")
     artifact = replace(
