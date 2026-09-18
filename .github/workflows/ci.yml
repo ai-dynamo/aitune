@@ -35,6 +35,7 @@ env:
   UV_PYTHON: &python_version "3.11"
   NODE_VERSION: &node_version "25"
   FERN_VERSION: "5.110.0"
+  TORCH_BASE_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
   TORCH_CI_IMAGE: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3:latest # daily updated image AITune container image
   PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
@@ -263,7 +264,7 @@ jobs:
           file: .github/docker/Dockerfile
           push: true
           build-args: |
-            FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
+            FROM_IMAGE=${{ env.TORCH_BASE_IMAGE }}
             ADDITIONAL_PACKAGES=pytest
           tags: ${{ env.PYTORCH_CI_IMAGE }}
           cache-from: |

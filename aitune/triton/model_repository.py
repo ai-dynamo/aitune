@@ -11,16 +11,16 @@ from pathlib import Path
 from aitune.exceptions import AITunePublicationError, AITuneUserInputError
 from aitune.records import DeploymentArtifact
 from aitune.triton.config import (
+    BaseModelConfig,
     ONNXRuntimeModelConfig,
     TensorRTModelConfig,
     TorchAOTIModelConfig,
 )
-from aitune.triton.config.common import _BaseModelConfig
 
 logger = logging.getLogger(__name__)
 
 _CONFIG_FILE_NAME = "config.pbtxt"
-_MODEL_CONFIGS: dict[str, type[_BaseModelConfig]] = {
+_MODEL_CONFIGS: dict[str, type[BaseModelConfig]] = {
     "tensorrt": TensorRTModelConfig,
     "onnxruntime": ONNXRuntimeModelConfig,
     "aotinductor": TorchAOTIModelConfig,
@@ -169,7 +169,7 @@ def _model_config(
     model_name: str,
     dynamic_batching: bool,
     max_batch_size: int | None,
-) -> _BaseModelConfig:
+) -> BaseModelConfig:
     """Build a validated Triton configuration from an artifact."""
     if not artifact.inputs or not artifact.outputs:
         raise AITunePublicationError("Triton publication requires at least one input and one output")

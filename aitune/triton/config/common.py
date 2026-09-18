@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Shared fields for backend-specific Triton model configurations."""
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Literal
 
@@ -75,7 +75,7 @@ def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConf
     return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions, reshape=reshape)
 
 
-class _BaseModelConfig(BaseModel):
+class BaseModelConfig(BaseModel, ABC):
     """Internal fields and validation shared by supported Triton backends."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -88,7 +88,7 @@ class _BaseModelConfig(BaseModel):
     dynamic_batching: bool = False
 
     @classmethod
-    def from_artifact(cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int) -> "_BaseModelConfig":
+    def from_artifact(cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int) -> "BaseModelConfig":
         """Combine the tensor interface with runtime-specific artifact settings."""
         batched = max_batch_size > 0
         return cls(
@@ -131,7 +131,7 @@ class _BaseModelConfig(BaseModel):
         return content
 
     @model_validator(mode="after")
-    def _validate_batching(self) -> "_BaseModelConfig":
+    def _validate_batching(self) -> "BaseModelConfig":
         """Keep the scheduler setting consistent with the declared batch size."""
         if self.dynamic_batching != (self.max_batch_size > 0):
             raise ValueError("dynamic_batching must be enabled exactly when max_batch_size is positive")

@@ -7,10 +7,10 @@ from typing import Any, Literal
 from pydantic import model_validator
 
 from aitune.records import DeploymentArtifact
-from aitune.triton.config.common import _BaseModelConfig
+from aitune.triton.config.common import BaseModelConfig
 
 
-class TorchAOTIModelConfig(_BaseModelConfig):
+class TorchAOTIModelConfig(BaseModelConfig):
     """Triton configuration specialized for AOTInductor PT2 packages."""
 
     platform: Literal["torch_aoti"] = "torch_aoti"
