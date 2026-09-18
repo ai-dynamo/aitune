@@ -17,8 +17,8 @@ import torch
 import torch.nn as nn
 from onnx.external_data_helper import _get_all_tensors
 
-from aitune.records import DeploymentArtifact, DType, ModelFiles, RuntimeConfig
-from aitune.torch.artifact import bounded_tensor_specs
+from aitune.records import DeploymentArtifact, DType, ModelFiles, RuntimeConfig, TensorSample
+from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode, ModuleFormat
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
@@ -304,7 +304,18 @@ class ONNXRuntimeBackend(Backend):
                 name="onnxruntime",
                 options={"execution_provider": (self._config.execution_provider or ONNXExecutionProvider.CUDA).value},
             ),
+            sample_inputs=self._artifact_sample_inputs(),
         )
+
+    def _artifact_sample_inputs(self) -> tuple[TensorSample, ...]:
+        """Derive portable values from the checkpointed sample and GraphSpec."""
+        if self._samples is None:
+            return ()
+        try:
+            return artifact_input_sample(cast(GraphSpec, self._graph_spec), self._samples[0])
+        except Exception as error:
+            logger.info("Perf Analyzer will use synthetic inputs: %s", error)
+            return ()
 
     def _artifact_additional_files(self, model_path: Path) -> tuple[Path, ...]:
         """Return every tracked ONNX data file once, relative to the model."""
@@ -389,7 +400,6 @@ class ONNXRuntimeBackend(Backend):
     def _deploy(self):
         """Deploy backend."""
         self._activate()
-        self._samples = None
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""

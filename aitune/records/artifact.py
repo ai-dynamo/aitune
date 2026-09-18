@@ -6,6 +6,7 @@ import os
 import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from math import prod
 from pathlib import Path
 from typing import Any
 
@@ -112,6 +113,31 @@ class RuntimeConfig:
 
 
 @dataclass(frozen=True, kw_only=True)
+class TensorSample:
+    """Portable values for one representative input tensor."""
+
+    name: str
+    shape: tuple[int, ...]
+    values: tuple[bool | int | float, ...]
+
+    def __post_init__(self) -> None:
+        """Require the flattened values to match the recorded shape."""
+        if not self.name:
+            raise ValueError("TensorSample.name must be a non-empty string")
+        if any(dimension < 0 for dimension in self.shape) or prod(self.shape) != len(self.values):
+            raise ValueError(f"TensorSample values do not match shape {self.shape}")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return checkpoint-safe primitive values."""
+        return {"name": self.name, "shape": self.shape, "values": self.values}
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "TensorSample":
+        """Restore representative tensor values from checkpoint state."""
+        return cls(name=data["name"], shape=tuple(data["shape"]), values=tuple(data["values"]))
+
+
+@dataclass(frozen=True, kw_only=True)
 class DeploymentArtifact:
     """Describe one tuned model for built-in or user-defined deployment adapters.
 
@@ -123,12 +149,14 @@ class DeploymentArtifact:
         inputs: Input tensor specifications in executable order.
         outputs: Output tensor specifications in executable order.
         runtime: Runtime identifier and options selected during tuning.
+        sample_inputs: Representative input values in executable order, when retained.
     """
 
     model: ModelFiles
     inputs: tuple[BoundedTensorSpec, ...]
     outputs: tuple[BoundedTensorSpec, ...]
     runtime: RuntimeConfig
+    sample_inputs: tuple[TensorSample, ...] = ()
 
     def __post_init__(self) -> None:
         """Require unique names within each side of the tensor interface."""
@@ -136,6 +164,8 @@ class DeploymentArtifact:
             names = tuple(tensor.name for tensor in tensors)
             if len(names) != len(set(names)):
                 raise ValueError(f"{label} tensor names must be unique, got {names}")
+        if self.sample_inputs and tuple(sample.name for sample in self.sample_inputs) != self.input_names:
+            raise ValueError("Representative sample names must match artifact inputs in executable order")
 
     @property
     def input_names(self) -> tuple[str, ...]:

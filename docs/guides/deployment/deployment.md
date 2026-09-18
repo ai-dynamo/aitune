@@ -28,10 +28,12 @@ ONNX and PT2 use their recorded minimum shapes. Batched deployments omit the
 leading batch dimension in Perf Analyzer's shape flags. Search batch sizes stay
 within the deployment limit and the selected TensorRT profile's bounds.
 
-These are synthetic-input benchmarks at one concrete shape, not a replay of the
-tuning dataset. Artifacts do not retain input values. Models requiring particular
-input values need an appropriate `perf_analyzer_flags.input-data` setting in the
-generated YAML. See the [Model Analyzer configuration reference](https://github.com/triton-inference-server/model_analyzer/blob/main/docs/config.md).
+When the backend retained a representative tuning sample, publication writes it
+to `model_analyzer/input-data.json` and configures Perf Analyzer to use those
+values. Batched samples are reduced to one example and resized to the selected
+profiling shape by repeating or truncating values. This keeps embedding indices
+and other value-constrained inputs within values already observed during tuning.
+See the [Model Analyzer configuration reference](https://github.com/triton-inference-server/model_analyzer/blob/main/docs/config.md).
 
 `fast.yaml` uses quick search where possible, with a reduced explicit sweep when
 TensorRT profile constraints require it. `manual.yaml` provides a larger explicit

@@ -293,6 +293,7 @@ def test_tensorrt_artifact_after_deactivation_exposes_the_final_engine_interface
         "max_cuda_graphs": 3,
         "cuda_graph_cache_policy": "lru",
     }
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
     destination = tmp_path / "export" / "model.plan"
     assert artifact.model.export_files(destination).read_bytes() == b"fake"
 
@@ -418,18 +419,23 @@ def test_checkpoint_loaded_backend_reconstructs_tensorrt_artifact(mock_tensorrt_
         engine_info,
     )
     model = ToyTorchModel().to("cuda").eval()
+    samples = model.sample_store(tmp_path, batch_sizes=[BATCH_SIZE], device="cuda")
     backend = TensorRTBackend().build(
         model,
         model.graph_spec(device="cuda"),
-        model.samples(device="cuda"),
+        samples,
         device=torch.device("cuda"),
         cache_dir=tmp_path,
     )
-    restored = TensorRTBackend.from_dict(model, backend.to_dict())
+    state = backend.to_dict()
+    assert state[TensorRTBackend.STATE_SAMPLES] == samples.to_dict()
+    assert "sample_inputs" not in state
+    restored = TensorRTBackend.from_dict(model, state)
 
     restored.deploy(torch.device("cuda"))
 
     artifact = restored.artifact()
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
     assert artifact.model.format == "tensorrt_plan"
     assert artifact.model.metadata["optimization_profiles"] == (
         {

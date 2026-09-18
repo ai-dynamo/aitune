@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Generate bounded Triton Model Analyzer configurations."""
 
+import json
 import os
 import shutil
 import tempfile
+from math import prod
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from google.protobuf import text_format
@@ -26,6 +28,7 @@ __all__ = [
 _CONFIG_FILE_NAME = "config.pbtxt"
 _FAST_CONFIG_FILE_NAME = "fast.yaml"
 _MANUAL_CONFIG_FILE_NAME = "manual.yaml"
+_INPUT_DATA_FILE_NAME = "input-data.json"
 _DEFAULT_CONCURRENCY = (1, 2, 4, 8, 16, 32)
 _DEFAULT_QUEUE_DELAYS_MICROSECONDS = (0, 100, 500)
 
@@ -195,7 +198,7 @@ def _bounded_values(maximum: int, minimum: int = 1) -> tuple[int, ...]:
 
 def _profiling_inputs(
     artifact: DeploymentArtifact, config: model_config_pb2.ModelConfig
-) -> tuple[dict[str, tuple[str, ...]], int, int]:
+) -> tuple[dict[str, tuple[str, ...]], int, int, dict[str, Any] | None]:
     """Select concrete input shapes and compatible batch bounds from the artifact."""
     minimum_batch, maximum_batch = 1, config.max_batch_size
     shapes = {tensor.name: tensor.min_shape for tensor in artifact.inputs}
@@ -222,7 +225,38 @@ def _profiling_inputs(
     for name, shape in shapes.items():
         dimensions = shape[1:] if config.max_batch_size else shape
         flags.append(f"{name}:{','.join(str(dimension) for dimension in dimensions)}")
-    return {"shape": tuple(flags)}, minimum_batch, maximum_batch
+    input_data = _input_data(artifact, shapes, batched=config.max_batch_size > 0)
+    return {"shape": tuple(flags)}, minimum_batch, maximum_batch, input_data
+
+
+def _input_data(
+    artifact: DeploymentArtifact, shapes: dict[str, tuple[int, ...]], *, batched: bool
+) -> dict[str, Any] | None:
+    """Create one Perf Analyzer request from representative backend inputs."""
+    if not artifact.sample_inputs:
+        return None
+
+    tensors: dict[str, Any] = {}
+    for sample in artifact.sample_inputs:
+        target_shape = tuple(shapes[sample.name])
+        source_shape = sample.shape
+        source_values = sample.values
+        if batched:
+            if not source_shape or source_shape[0] < 1:
+                raise ModelAnalyzerConfigError(f"Representative input {sample.name!r} has no batch values")
+            source_shape = source_shape[1:]
+            source_values = source_values[: prod(source_shape)]
+            target_shape = target_shape[1:]
+
+        target_size = prod(target_shape)
+        if not source_values:
+            raise ModelAnalyzerConfigError(f"Representative input {sample.name!r} has no values")
+        repeats = (target_size + len(source_values) - 1) // len(source_values)
+        tensors[sample.name] = {
+            "content": list((source_values * repeats)[:target_size]),
+            "shape": list(target_shape),
+        }
+    return {"data": [tensors]}
 
 
 def _profile_indices(config: model_config_pb2.ModelConfig) -> tuple[str, ...]:
@@ -239,10 +273,16 @@ def _configs(
     config: model_config_pb2.ModelConfig,
     max_instance_count: int,
     queue_delay_microseconds: tuple[int, ...],
-) -> tuple[QuickModelAnalyzerConfig | ManualModelAnalyzerConfig, ManualModelAnalyzerConfig]:
+) -> tuple[
+    QuickModelAnalyzerConfig | ManualModelAnalyzerConfig,
+    ManualModelAnalyzerConfig,
+    dict[str, Any] | None,
+]:
     """Build fast and exhaustive configurations from a published model."""
     _validate_model(artifact, model_directory, config)
-    perf_flags, minimum_batch, maximum_batch = _profiling_inputs(artifact, config)
+    perf_flags, minimum_batch, maximum_batch, input_data = _profiling_inputs(artifact, config)
+    if input_data is not None:
+        perf_flags["input-data"] = (str((destination / _INPUT_DATA_FILE_NAME).resolve()),)
 
     repository = model_directory.parent.resolve()
     model_name = config.name
@@ -321,7 +361,7 @@ def _configs(
             run_config_search_max_instance_count=max_instance_count,
             **batch_range,
         )
-    return fast, manual
+    return fast, manual, input_data
 
 
 def generate_model_analyzer_configs(
@@ -397,7 +437,7 @@ def _write_model_analyzer_configs(
     queue_delay_microseconds: tuple[int, ...] = _DEFAULT_QUEUE_DELAYS_MICROSECONDS,
 ) -> None:
     """Write staged configs with paths pointing to their final deployment location."""
-    fast, manual = _configs(
+    fast, manual, input_data = _configs(
         artifact,
         model_directory,
         destination,
@@ -408,3 +448,5 @@ def _write_model_analyzer_configs(
     staging.mkdir(parents=True, exist_ok=True)
     (staging / _FAST_CONFIG_FILE_NAME).write_text(fast.to_yaml())
     (staging / _MANUAL_CONFIG_FILE_NAME).write_text(manual.to_yaml())
+    if input_data is not None:
+        (staging / _INPUT_DATA_FILE_NAME).write_text(json.dumps(input_data, indent=2) + "\n")

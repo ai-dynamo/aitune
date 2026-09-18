@@ -11,6 +11,7 @@ from aitune.records import (
     DType,
     ModelFiles,
     RuntimeConfig,
+    TensorSample,
 )
 
 INPUTS = (
@@ -100,6 +101,17 @@ def test_bounded_tensor_spec_requires_a_valid_batch_axis(batch_axis):
         )
 
 
+def test_tensor_sample_round_trips_checkpoint_values():
+    sample = TensorSample(name="input_ids", shape=(2, 3), values=(1, 2, 3, 4, 5, 6))
+
+    assert TensorSample.from_dict(sample.to_dict()) == sample
+
+
+def test_tensor_sample_requires_values_matching_its_shape():
+    with pytest.raises(ValueError, match="values do not match shape"):
+        TensorSample(name="input_ids", shape=(2, 3), values=(1, 2, 3))
+
+
 def test_artifact_preserves_tensor_order_and_shared_batch_limit(tmp_path):
     path = _write_artifact(tmp_path, b"onnx")
     second_input = BoundedTensorSpec(
@@ -171,6 +183,20 @@ def test_artifact_rejects_duplicate_tensor_names(tmp_path):
             outputs=OUTPUTS,
             model=ModelFiles(format="onnx", path=path),
             runtime=RuntimeConfig(name="onnxruntime"),
+        )
+
+
+def test_artifact_requires_representative_values_in_input_order(tmp_path):
+    path = _write_artifact(tmp_path)
+    sample = TensorSample(name="mask", shape=(1, 8), values=(True,) * 8)
+
+    with pytest.raises(ValueError, match="sample names must match artifact inputs"):
+        DeploymentArtifact(
+            inputs=INPUTS,
+            outputs=OUTPUTS,
+            model=ModelFiles(format="onnx", path=path),
+            runtime=RuntimeConfig(name="onnxruntime"),
+            sample_inputs=(sample,),
         )
 
 
