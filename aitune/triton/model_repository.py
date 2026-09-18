@@ -102,6 +102,17 @@ def _model_config(
         raise AITunePublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
 
 
+def _cleanup_failed_publication(staging: Path, model_name: str, publication_error: Exception) -> None:
+    """Remove an incomplete staged model and report cleanup failures."""
+    try:
+        shutil.rmtree(staging)
+    except OSError as cleanup_error:
+        raise AITunePublicationError(
+            f"Failed to publish Triton model {model_name!r}: {publication_error}; "
+            f"failed to clean staging directory {staging}: {cleanup_error}"
+        ) from cleanup_error
+
+
 def publish(
     artifact: DeploymentArtifact,
     /,
@@ -166,23 +177,22 @@ def publish(
             raise AITunePublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
 
         repository.mkdir(parents=True, exist_ok=True)
-        staging = Path(tempfile.mkdtemp(prefix=f".aitune-{model_name}-", dir=repository))
-        staged_model = staging / model_name
-        version_directory = staged_model / str(model_version)
+        # Stage beside the repository so Triton cannot discover an incomplete model.
+        staging = Path(tempfile.mkdtemp(dir=repository.parent))
+        version_directory = staging / str(model_version)
         version_directory.mkdir(parents=True)
-        (staged_model / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
+        (staging / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
         destination = version_directory / file_name
         if artifact.model.additional_files:
             destination = destination / file_name
         artifact.model.export_files(destination)
-        staged_model.rename(model_directory)
-    except AITunePublicationError:
-        raise
+        staging.rename(model_directory)
     except Exception as error:
-        raise AITunePublicationError(f"Failed to publish Triton model {model_name!r}: {error}") from error
-    finally:
         if staging is not None:
-            shutil.rmtree(staging, ignore_errors=True)
+            _cleanup_failed_publication(staging, model_name, error)
+        if isinstance(error, AITunePublicationError):
+            raise
+        raise AITunePublicationError(f"Failed to publish Triton model {model_name!r}: {error}") from error
 
     logger.info("Published Triton model to %s", model_directory)
     return model_directory

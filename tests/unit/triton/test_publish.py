@@ -209,12 +209,15 @@ def test_repository_creation_failure_raises_publication_error(tmp_path):
 def test_staging_directory_creation_failure_raises_publication_error(tmp_path, mocker):
     artifact = _plan(tmp_path / "source.plan")
     repository = tmp_path / "repository"
-    mocker.patch("aitune.triton.model_repository.tempfile.mkdtemp", side_effect=OSError("staging unavailable"))
+    make_staging = mocker.patch(
+        "aitune.triton.model_repository.tempfile.mkdtemp", side_effect=OSError("staging unavailable")
+    )
 
     with pytest.raises(aitriton.AITunePublicationError, match="staging unavailable") as error:
         aitriton.publish(artifact, path=repository, model_name="encoder")
 
     assert isinstance(error.value.__cause__, OSError)
+    make_staging.assert_called_once_with(dir=tmp_path)
     assert not (repository / "encoder").exists()
 
 
@@ -230,6 +233,22 @@ def test_copy_failure_leaves_no_partial_model(tmp_path):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not tuple((tmp_path / "repository").iterdir())
+
+
+def test_cleanup_failure_is_reported(tmp_path, mocker):
+    artifact = _plan(tmp_path / "source.plan")
+    artifact = replace(
+        artifact,
+        model=ModelFiles(format="onnx", path=artifact.model.path, additional_files=(Path("missing.bin"),)),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+    )
+    mocker.patch("aitune.triton.model_repository.shutil.rmtree", side_effect=OSError("cleanup unavailable"))
+
+    with pytest.raises(aitriton.AITunePublicationError, match="failed to clean staging directory") as error:
+        aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
+
+    assert isinstance(error.value.__cause__, OSError)
+    assert "cleanup unavailable" in str(error.value)
 
 
 @pytest.mark.parametrize(
