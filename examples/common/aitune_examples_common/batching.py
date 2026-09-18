@@ -244,7 +244,7 @@ class _BatchQueue:
             try:
                 # Wait for new arrivals.
                 await asyncio.wait_for(self.requests_available_event.wait(), remaining_batch_time_s)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
             # Add all new arrivals to the batch.

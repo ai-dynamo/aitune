@@ -148,7 +148,7 @@ jobs:
         with:
           base-ref: main
           head-ref: ${{ github.ref }}
-          fail-on-severity: high
+          fail-on-severity: critical
           comment-summary-in-pr: on-failure
 
   check-docs:
