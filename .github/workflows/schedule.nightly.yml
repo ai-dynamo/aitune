@@ -40,6 +40,7 @@ jobs:
     uses: ./.github/workflows/dispatch.functional.yml
     with:
       dist_run_id: ${{ needs.ci.outputs.dist_run_id }}
+      pytorch_ci_image: ${{ needs.ci.outputs.pytorch_ci_image }}
     secrets:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
@@ -49,5 +50,6 @@ jobs:
     uses: ./.github/workflows/dispatch.integration.yml
     with:
       dist_run_id: ${{ needs.ci.outputs.dist_run_id }}
+      pytorch_ci_image: ${{ needs.ci.outputs.pytorch_ci_image }}
     secrets:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
