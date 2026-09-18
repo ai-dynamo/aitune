@@ -71,7 +71,7 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
-      - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
+      - run: pip install ".[triton]" --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
       - run: pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --no-deps --force-reinstall --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
       - run: pip list
       - run: nvidia-smi
@@ -129,7 +129,7 @@ jobs:
       - run: nvidia-smi
       - run: uv venv
       - run: printf "tensorrt\n" > cu12-excludes.txt
-      - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }}]" --group test ${{ matrix.variant.uv_extra_args }}
+      - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }},triton]" --group test ${{ matrix.variant.uv_extra_args }}
       - run: |
           if [ "${{ matrix.variant.uv_torch_backend }}" == "cu130" ]; then
             uv pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --no-deps --reinstall-package onnxruntime-gpu --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/

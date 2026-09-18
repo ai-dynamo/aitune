@@ -29,7 +29,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     tar xf /aitune_dist/*.tar.gz --strip-components 1 -C ${TMP_DIR} && \
     mv ${TMP_DIR}/examples ${AIT_DIR} && \
     mv ${TMP_DIR}/tests ${AIT_DIR} && \
-    (cd ${TMP_DIR} && pip install . --group test --break-system-packages) && \
+    (cd ${TMP_DIR} && pip install ".[triton]" --group test --break-system-packages) && \
     pip install --no-deps ${WHEEL_PATH} --break-system-packages && \
     rm -rf ${TMP_DIR} && \
     pip install pydantic tomli --break-system-packages && \
