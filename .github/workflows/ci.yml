@@ -29,7 +29,7 @@ env:
   PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_VERSION: 0.11.8
-  UV_PYTHON: &python_version "3.10"
+  UV_PYTHON: &python_version "3.11"
   NODE_VERSION: &node_version "25"
   FERN_VERSION: "5.110.0"
   TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
@@ -194,7 +194,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - python-version: "3.10"
           - python-version: "3.11"
           - python-version: "3.12"
           # - python-version: "3.13"

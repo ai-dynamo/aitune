@@ -38,12 +38,12 @@ keywords = [
     "automation",
 ]
 license = { text = "Apache 2.0" }
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "autowrapt>=1.0",
     "dill>=0.3.8",
     "nvidia-ml-py",
-    "nvidia-modelopt[onnx]>=0.33.0",
+    "nvidia-modelopt[onnx]>=0.33.0", # sets onnxruntime-gpu version
     "numpy>=1.26.4",
     "onnxscript>=0.2.0",
     "onnx-ir>=0.1.11",
@@ -107,7 +107,6 @@ test = [
     "datasets>=3.3.2",
     "transformers>=4.54,<5",
     "setuptools",
-    "importlib-metadata; python_version < '3.10'",
 ]
 dev = [
     "build >= 0.8",

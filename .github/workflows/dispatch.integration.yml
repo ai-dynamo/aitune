@@ -86,6 +86,8 @@ jobs:
             --default-docker-image "${{ env.PYTORCH_CI_IMAGE }}" \
             --scripts-path tests/functional/pytorch \
             --scripts-path tests/functional/pytorch/jit \
+            --scripts-path tests/functional/pytorch/kernel_forge \
+            --scripts-path tests/functional/onnx \
             --scripts-path tests/functional/dataloader \
             --scripts-path tests/functional/dynamo \
             --github-output "$GITHUB_OUTPUT" \

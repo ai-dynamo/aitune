@@ -60,6 +60,8 @@ jobs:
             extra_packages: ""
           - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.06-py3
             extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.08-py3
+            extra_packages: ""
     container:
       image: ${{ matrix.torch_ci_image }}
       options: -u 1000
@@ -70,7 +72,7 @@ jobs:
         with:
           persist-credentials: false
       - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
-      - run: pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+      - run: pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --force-reinstall --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
       - run: pip list
       - run: nvidia-smi
       - run: python -c "import sys; print(sys.version)"
@@ -87,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.10", "3.11", "3.12"]
+        python_version: ["3.11", "3.12"]
         variant:
           - uv_torch_backend: cu128
             cuda_image: 12.9.2-devel-ubuntu24.04
@@ -130,7 +132,7 @@ jobs:
       - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }}]" --group test ${{ matrix.variant.uv_extra_args }}
       - run: |
           if [ "${{ matrix.variant.uv_torch_backend }}" == "cu130" ]; then
-            uv pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+            uv pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --reinstall-package onnxruntime-gpu --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
           fi
       - run: uv pip list
       - run: uv run python -c "import sys; print(sys.version)"
