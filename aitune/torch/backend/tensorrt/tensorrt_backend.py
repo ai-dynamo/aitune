@@ -8,7 +8,7 @@ import json
 import logging
 from collections import OrderedDict
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, cast
@@ -19,6 +19,8 @@ from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
 from aitune.exceptions import AITuneUserInputError
+from aitune.records import BoundedTensorSpec, DeploymentArtifact, ModelFiles, RuntimeConfig
+from aitune.torch.artifact import bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
     BackendBuildStep,
@@ -288,6 +290,13 @@ class TensorRTBackend(Backend, TensorRTRunner):
     def describe(self) -> str:
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
+
+    def artifact(self) -> DeploymentArtifact:
+        """Create the deployment record on request, including after deactivation."""
+        try:
+            return self._create_artifact()
+        except (OSError, RuntimeError, ValueError) as error:
+            raise RuntimeError(f"TensorRT artifact is not available: {error}") from error
 
     def _timing_cache_path(self) -> Path | None:
         """Return a timing cache path that is safe for this process."""
@@ -755,6 +764,107 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         return allocator
 
+    def _create_artifact(self) -> DeploymentArtifact:
+        """Create an artifact from the saved engine interface and recorded bounds."""
+        if (
+            self._engine_artifact is None
+            or self._graph_spec is None
+            or self._input_names is None
+            or self._output_names is None
+        ):
+            raise RuntimeError("TensorRT artifact requires a built or deployed backend with a recorded interface")
+
+        profiles = self._artifact_profiles()
+        inputs = bounded_tensor_specs(self._graph_spec, "input", recorded_names=self._input_names)
+        self._validate_artifact_profile_input_bounds(inputs, profiles)
+        inputs = tuple(
+            replace(
+                input_spec,
+                min_shape=tuple(
+                    min(profile[input_spec.name]["min_shape"][axis] for profile in profiles)
+                    for axis in range(len(input_spec.min_shape))
+                ),
+                max_shape=tuple(
+                    max(profile[input_spec.name]["max_shape"][axis] for profile in profiles)
+                    for axis in range(len(input_spec.max_shape))
+                ),
+            )
+            for input_spec in inputs
+        )
+        engine_path = self._engine_artifact.path
+        return DeploymentArtifact(
+            model=ModelFiles(
+                format="tensorrt_plan",
+                path=engine_path,
+                metadata={"optimization_profiles": profiles, "optimization_profile_count": len(profiles)},
+            ),
+            inputs=inputs,
+            outputs=bounded_tensor_specs(self._graph_spec, "output", recorded_names=self._output_names),
+            runtime=RuntimeConfig(
+                name="tensorrt",
+                options={
+                    "use_cuda_graphs": self._config.use_cuda_graphs,
+                    "max_cuda_graphs": self._config.max_cuda_graphs,
+                    "cuda_graph_cache_policy": self._config.cuda_graph_cache_policy,
+                },
+            ),
+        )
+
+    @staticmethod
+    def _validate_artifact_profile_input_bounds(
+        inputs: tuple[BoundedTensorSpec, ...],
+        profiles: tuple[dict[str, dict[str, tuple[int, ...]]], ...],
+    ) -> None:
+        """Require TensorRT input profiles to stay within recorded input bounds."""
+        for profile_index, profile in enumerate(profiles):
+            for input_spec in inputs:
+                minimum = profile[input_spec.name]["min_shape"]
+                maximum = profile[input_spec.name]["max_shape"]
+                if len(minimum) != len(input_spec.min_shape):
+                    raise ValueError(f"TensorRT profile rank does not match artifact input {input_spec.name!r}")
+                for axis, (profile_min, profile_max, graph_min, graph_max) in enumerate(
+                    zip(minimum, maximum, input_spec.min_shape, input_spec.max_shape, strict=True)
+                ):
+                    if profile_min < graph_min or profile_max > graph_max:
+                        raise ValueError(
+                            f"TensorRT profile {profile_index} input {input_spec.name!r} axis {axis} range "
+                            f"[{profile_min}, {profile_max}] exceeds the recorded graph range "
+                            f"[{graph_min}, {graph_max}]; output bounds cannot be established"
+                        )
+
+    def _artifact_profiles(self) -> tuple[dict[str, dict[str, tuple[int, ...]]], ...]:
+        """Describe exact profile ranges as plain data in engine input order."""
+        if not self._trt_optimization_profiles or not self._input_names:
+            raise RuntimeError("TensorRT artifact requires its optimization profiles")
+
+        result = []
+        for profile in self._trt_optimization_profiles:
+            unknown_names = set(profile) - set(self._input_names)
+            missing_names = set(self._input_names) - set(profile)
+            if unknown_names or missing_names:
+                raise ValueError(
+                    f"TensorRT profile inputs do not match the engine (missing: {sorted(missing_names)}, "
+                    f"unknown: {sorted(unknown_names)})"
+                )
+            result.append({name: self._artifact_profile_shapes(name, profile[name]) for name in self._input_names})
+        return tuple(result)
+
+    @staticmethod
+    def _artifact_profile_shapes(name: str, shape_range: Any) -> dict[str, tuple[int, ...]]:
+        """Validate and copy a Polygraphy shape range into portable metadata."""
+        minimum, optimum, maximum = tuple(shape_range.min), tuple(shape_range.opt), tuple(shape_range.max)
+        if len({len(minimum), len(optimum), len(maximum)}) != 1:
+            raise ValueError(f"TensorRT profile shapes for {name!r} must have the same rank")
+        if any(
+            not isinstance(dimension, int) or isinstance(dimension, bool) or dimension <= 0
+            for shape in (minimum, optimum, maximum)
+            for dimension in shape
+        ):
+            raise ValueError(f"TensorRT profile shapes for {name!r} must contain positive integers")
+        if any(not low <= opt <= high for low, opt, high in zip(minimum, optimum, maximum, strict=True)):
+            raise ValueError(f"TensorRT profile shapes for {name!r} must satisfy min <= opt <= max")
+        return {"min_shape": minimum, "opt_shape": optimum, "max_shape": maximum}
+
     def _deactivate(self):
         """Deactivate the TensorRT engine."""
         logger.debug("Deactivating TensorRT backend")
@@ -775,11 +885,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._base_context = None
             self._base_output_allocator = None
 
-            # Safely delete attributes if they exist
+            # Retain tensor names and profiles for artifact generation after deactivation.
             for attr_name in [
                 "_io_tensors",
-                "_input_names",
-                "_output_names",
                 "_engine_info",
                 "_cuda_stream",
                 "_start_time",
