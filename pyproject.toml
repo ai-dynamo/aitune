@@ -63,6 +63,11 @@ dynamo = [
     "ai-dynamo-runtime>=0.1",
     "uvloop",
 ]
+triton = [
+    "pydantic>=2",
+    "protobuf>=6.33.5",
+    "tritonclient[grpc]",
+]
 
 torch28 = [ # nvcr.io/nvidia/pytorch:25.08-py3 is based on 2.8.0a0+34c6371d24.
     "torch>=2.8.0a0,<2.9",
@@ -107,6 +112,10 @@ test = [
     "datasets>=3.3.2",
     "transformers>=4.57.6,<5",
     "setuptools",
+    "importlib-metadata; python_version < '3.10'",
+    "pydantic>=2",
+    "protobuf>=6.33.5",
+    "tritonclient[grpc]",
 ]
 dev = [
     "build >= 0.8",
