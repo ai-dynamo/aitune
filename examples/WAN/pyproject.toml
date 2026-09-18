@@ -7,7 +7,7 @@ version = "0.1.0"
 description = "NVIDIA AITune WAN 2.1 text-to-video example"
 readme = "README.md"
 license = { text = "Apache 2.0" }
-requires-python = ">=3.11, <3.13"
+requires-python = ">=3.11, <3.14"
 
 dependencies = [
     "accelerate",
