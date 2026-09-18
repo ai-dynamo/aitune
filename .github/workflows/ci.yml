@@ -221,7 +221,7 @@ jobs:
   pytorch-image:
     name: Build PyTorch image
     needs: wheel
-    runs-on: linux-amd64-cpu4
+    runs-on: linux-amd64-cpu16
     permissions:
       contents: read
       packages: write
@@ -247,6 +247,11 @@ jobs:
             FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
             ADDITIONAL_PACKAGES=pytest
           tags: ${{ env.PYTORCH_CI_IMAGE }}
+          cache-from: |
+            type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
+          cache-to: |
+            type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd
+
       - id: image
         run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
 
