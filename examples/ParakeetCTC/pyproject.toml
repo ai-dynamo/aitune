@@ -11,6 +11,7 @@ requires-python = ">=3.12, <3.14"
 dependencies = [
     "aitune",
     "aitune-examples-common",
+    "GitPython>=3.1.59",
     "megatron-core==0.17.0",
     "nemo-toolkit[asr]==2.7.3",
 ]
