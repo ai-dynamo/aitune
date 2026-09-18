@@ -9,6 +9,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from aitune.records import BoundedTensorSpec, DeploymentArtifact, DType, RuntimeConfig
 from aitune.torch.backend import ArtifactPath
 from aitune.torch.backend.backend import BackendState
 from aitune.torch.backend.torch_inductor_aot_backend import (
@@ -16,8 +17,11 @@ from aitune.torch.backend.torch_inductor_aot_backend import (
     TorchInductorAotBackendConfig,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import Sample
+from aitune.torch.utils.pt2_artifact import PT2CallContract
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -50,6 +54,25 @@ def backend() -> TorchInductorAotBackend:
 
 def _fake_aoti_compile(*args, **kwargs):
     Path(kwargs["package_path"]).write_bytes(b"fake")
+
+
+def _graph_spec_for(model: nn.Module, samples: list[Sample]) -> GraphSpec:
+    """Record one graph specification from already batched samples."""
+    forward_signature = ForwardSignature.from_callable(model.forward)
+    graph_spec = None
+    for args, kwargs in samples:
+        normalized = forward_signature.normalize(args, kwargs)
+        with torch.no_grad():
+            output = model(*args, **kwargs)
+        inputs = SampleMetadata.from_inputs(normalized.arguments, batch_size=args[0].shape[0])
+        outputs = SampleMetadata.from_outputs(output, batch_size=args[0].shape[0])
+        if graph_spec is None:
+            graph_spec = GraphSpec("structured", inputs, outputs, forward_signature)
+        else:
+            graph_spec.update_shapes_seen(inputs, outputs)
+    if graph_spec is None:
+        raise ValueError("At least one sample is required")
+    return graph_spec
 
 
 @pytest.fixture
@@ -113,6 +136,177 @@ def test_build_returns_active_backend(mock_aoti, backend, model, graph_spec, sam
     assert built is backend
     assert backend.is_active
     assert backend._compiled_model_artifact == ArtifactPath(tmp_path, Path("model.pt2"))
+
+
+@requires_cuda
+def test_artifact_after_deactivation_exposes_pt2_ordinal_tensor_interface(
+    mock_aoti, backend, model, graph_spec, sample_data, torch_device, tmp_path
+):
+    backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+    backend.deactivate()
+
+    artifact = backend.artifact()
+
+    assert isinstance(artifact, DeploymentArtifact)
+    assert artifact.inputs == (
+        BoundedTensorSpec(
+            name="INPUT__0",
+            dtype=DType.FLOAT32,
+            min_shape=(1, 32),
+            max_shape=(2, 32),
+            batch_axis=0,
+        ),
+    )
+    assert artifact.outputs == (
+        BoundedTensorSpec(
+            name="OUTPUT__0",
+            dtype=DType.FLOAT32,
+            min_shape=(1, 5),
+            max_shape=(2, 5),
+            batch_axis=0,
+        ),
+    )
+    assert artifact.model.format == "pt2"
+    assert artifact.model.path == tmp_path / "model.pt2"
+    assert artifact.model.additional_files == ()
+    assert artifact.model.files == (artifact.model.path,)
+    assert artifact.model.metadata == {"structured_call": False}
+    assert artifact.runtime == RuntimeConfig(name="aotinductor")
+    destination = tmp_path / "exported" / "renamed.pt2"
+    assert artifact.model.export_files(destination) == destination
+    assert destination.read_bytes() == b"fake"
+
+
+def test_artifact_before_build_raises(backend):
+    with pytest.raises(RuntimeError, match="requires a compiled package"):
+        backend.artifact()
+
+
+@requires_cuda
+def test_artifact_metadata_failure_does_not_fail_backend_build(
+    mock_aoti, mocker, backend, model, graph_spec, sample_data, torch_device, tmp_path
+):
+    create_artifact = mocker.patch.object(
+        backend,
+        "_create_artifact",
+        side_effect=ValueError("unsupported interface"),
+    )
+
+    backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+    assert backend.is_active
+    create_artifact.assert_not_called()
+    backend.deactivate()
+    backend.activate()
+    create_artifact.assert_not_called()
+
+    with pytest.raises(RuntimeError, match="unsupported interface"):
+        backend.artifact()
+    create_artifact.assert_called_once()
+    assert backend.is_active
+
+
+def test_build_exposes_structured_pt2_call_in_pytree_order(mocker, tmp_path):
+    class StructuredModel(nn.Module):
+        def forward(self, hidden, options, *, bias):
+            total = hidden + options["mask"] + options["residuals"][0] + bias
+            return {"total": total, "parts": (hidden - bias, options["mask"] * options["residuals"][0])}
+
+    model = StructuredModel().eval()
+    samples = []
+    for batch_size in (1, 2):
+        tensors = [torch.full((batch_size, 4), value) for value in (1.0, 2.0, 3.0, 4.0)]
+        samples.append(((tensors[0], {"mask": tensors[1], "residuals": [tensors[2]]}), {"bias": tensors[3]}))
+    graph_spec = _graph_spec_for(model, samples)
+    mocker.patch("torch.export.export", return_value=Mock())
+    mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
+    mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
+
+    backend = TorchInductorAotBackend().build(
+        model,
+        graph_spec,
+        samples,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
+
+    artifact = backend.artifact()
+    assert artifact.input_names == ("INPUT__0", "INPUT__1", "INPUT__2", "INPUT__3")
+    assert artifact.output_names == ("OUTPUT__0", "OUTPUT__1", "OUTPUT__2")
+    assert artifact.model.metadata == {"structured_call": True}
+    assert artifact.runtime == RuntimeConfig(name="aotinductor")
+
+
+def test_call_contract_maps_repeated_tensor_arguments_to_distinct_metadata():
+    class SharedTensorModel(nn.Module):
+        def forward(self, left, right):
+            return left + right
+
+    model = SharedTensorModel().eval()
+    shared = torch.ones(1, 4)
+    sample = ((shared, shared), {})
+    graph_spec = _graph_spec_for(model, [sample])
+
+    contract = PT2CallContract.capture(graph_spec, sample, model(*sample[0], **sample[1]))
+
+    assert contract.input_order == (0, 1)
+
+
+def test_unsupported_pt2_call_does_not_fail_backend_build(mocker, tmp_path):
+    class ScalarArgumentModel(nn.Module):
+        def forward(self, value, scale):
+            return value * scale
+
+    model = ScalarArgumentModel().eval()
+    samples = [((torch.ones(1, 4), 2), {})]
+    graph_spec = _graph_spec_for(model, samples)
+    mocker.patch("torch.export.export", return_value=Mock())
+    mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
+    mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
+
+    backend = TorchInductorAotBackend().build(
+        model,
+        graph_spec,
+        samples,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
+
+    assert backend.is_active
+    with pytest.raises(RuntimeError, match="got int"):
+        backend.artifact()
+
+
+def test_call_contract_capture_exception_does_not_fail_backend_build(mocker, tmp_path):
+    class CallContractCaptureError(Exception):
+        pass
+
+    class CaptureFailureModel(nn.Module):
+        fail = False
+
+        def forward(self, value):
+            if self.fail:
+                raise CallContractCaptureError("capture failed")
+            return value
+
+    model = CaptureFailureModel().eval()
+    samples = [((torch.ones(1, 4),), {})]
+    graph_spec = _graph_spec_for(model, samples)
+    model.fail = True
+    mocker.patch("torch.export.export", return_value=Mock())
+    mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
+    mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
+
+    backend = TorchInductorAotBackend().build(
+        model,
+        graph_spec,
+        samples,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
+
+    assert backend.is_active
+    with pytest.raises(RuntimeError, match="capture failed"):
+        backend.artifact()
 
 
 def test_build_delegates_placement_preserving_module_operations(mocker, tmp_path):
@@ -223,20 +417,52 @@ def test_to_dict_contains_required_keys(mock_aoti, backend, model, graph_spec, s
     assert state[TorchInductorAotBackend.STATE_TYPE] == "TorchInductorAotBackend"
     assert state[TorchInductorAotBackend.STATE_COMPILED_MODEL_PATH] == ArtifactPath(tmp_path, Path("model.pt2"))
     assert state[TorchInductorAotBackend.STATE_DEVICE] == torch_device
+    assert state[TorchInductorAotBackend.STATE_GRAPH_SPEC] == graph_spec.to_dict()
+    assert state[TorchInductorAotBackend.STATE_PT2_CALL_CONTRACT] == {
+        "input_order": (0,),
+        "output_order": (0,),
+        "structured": False,
+    }
 
 
 @requires_cuda
-def test_from_dict_restores_state(tmp_path, torch_device):
+def test_from_dict_restores_state(tmp_path, torch_device, graph_spec):
     compiled_artifact = ArtifactPath(tmp_path, "model.pt2")
     state = {
         TorchInductorAotBackend.STATE_TYPE: "TorchInductorAotBackend",
         TorchInductorAotBackend.STATE_COMPILED_MODEL_PATH: compiled_artifact,
         TorchInductorAotBackend.STATE_DEVICE: torch_device,
+        TorchInductorAotBackend.STATE_GRAPH_SPEC: graph_spec.to_dict(),
+        TorchInductorAotBackend.STATE_PT2_CALL_CONTRACT: {
+            "input_order": (0,),
+            "output_order": (0,),
+            "structured": False,
+        },
     }
     restored = TorchInductorAotBackend.from_dict(None, state)
     assert restored._compiled_model_artifact == compiled_artifact
     assert restored._device == torch_device
+    assert restored._graph_spec == graph_spec
+    assert restored._pt2_call_contract is not None
     assert restored.state == BackendState.CHECKPOINT_LOADED
+
+
+@requires_cuda
+def test_checkpoint_loaded_backend_reconstructs_pt2_artifact(
+    mock_aoti, backend, model, graph_spec, sample_data, torch_device, tmp_path
+):
+    backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
+    restored = TorchInductorAotBackend.from_dict(None, backend.to_dict())
+
+    artifact = restored.artifact()
+    assert artifact.input_names == ("INPUT__0",)
+    assert artifact.output_names == ("OUTPUT__0",)
+    assert artifact.model.metadata == {"structured_call": False}
+    assert artifact == backend.artifact()
+    assert restored.state == BackendState.CHECKPOINT_LOADED
+
+    restored.deploy(torch_device)
+    assert restored.artifact() == artifact
 
 
 @requires_cuda
