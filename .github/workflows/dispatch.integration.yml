@@ -4,10 +4,19 @@ name: Integration tests
 
 on:
   workflow_dispatch:
+    inputs:
+      pytorch_ci_image:
+        description: PyTorch image selected by CI; empty uses the commit image
+        type: string
+        default: ''
   merge_group:
     branches: [main]
   workflow_call:
     inputs:
+      pytorch_ci_image:
+        description: PyTorch image selected by CI; empty uses the commit image
+        type: string
+        default: ''
       dist_run_id:
         description: Run containing the dist artifact for this commit; empty builds a fresh wheel
         type: string
@@ -30,7 +39,7 @@ env:
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_VERSION: 0.12.8
   UV_PYTHON: &python_version "3.12"
-  PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+  PYTORCH_CI_IMAGE: ${{ inputs.pytorch_ci_image || format('ghcr.io/{0}:{1}', github.repository, github.sha) }}
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
   # plugin. RTX runners have no EFA provider, so OFI initialization fails and
