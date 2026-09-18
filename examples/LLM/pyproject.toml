@@ -7,13 +7,13 @@ version = "0.1.0"
 description = "NVIDIA AITune LLM Example"
 readme = "README.md"
 license = { text = "Apache 2.0" }
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.11, <3.13"
 
 dependencies = [
     "aitune",
     "accelerate",
     "torch",
-    "transformers>=4.54,<5",
+    "transformers>=4.57.6,<5",
 ]
 
 [tool.uv.sources]

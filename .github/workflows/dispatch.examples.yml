@@ -1,0 +1,157 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: Examples
+
+on:
+  workflow_dispatch:
+  merge_group:
+    branches: [main]
+  workflow_call:
+    inputs:
+      dist_run_id:
+        description: Run containing the dist artifact for this commit; empty builds a fresh wheel
+        type: string
+        default: ''
+    secrets:
+      HF_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+  actions: read # Download the caller's wheel artifact.
+
+concurrency:
+  group: examples-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
+  UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
+  UV_VERSION: 0.12.8
+  UV_PYTHON: &python_version "3.12"
+  PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+  # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
+  # plugin. RTX runners have no EFA provider, so OFI initialization fails and
+  # NCCL segfaults during process-group creation. Use NCCL's built-in Socket
+  # transport for this single-node, 4xGPU sanity check.
+  # fix for error: Segmentation fault: address not mapped to object at address (nil)
+  NCCL_NET_PLUGIN: none
+  NCCL_NET: Socket
+
+  # Actions version pins
+  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+  _ACTIONS_DOWNLOAD_ARTIFACT: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+  _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  generate-examples-matrix:
+    name: Generate examples matrix
+    runs-on: linux-amd64-cpu4
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+      matrix_count: ${{ steps.generate.outputs.matrix_count }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_setup_uv
+        with:
+          python-version: *python_version
+          version: ${{ env.UV_VERSION }}
+      # Standalone dispatches and merge groups build the selected commit's wheel.
+      # Nightly supplies its CI artifact instead.
+      - name: Build wheel
+        if: inputs.dist_run_id == ''
+        run: uv build
+      - uses: *actions_upload_artifact
+        if: inputs.dist_run_id == ''
+        with:
+          name: examples-dist
+          path: dist/
+          if-no-files-found: error
+      - name: Generate functional matrix
+        id: generate
+        env:
+          AITUNE_TEST_SCOPE: L0
+          AITUNE_EXAMPLE_SCOPE: L1
+        run: |
+          uv run --script tests/functional/scripts/generate.py \
+            --default-docker-image "${{ env.PYTORCH_CI_IMAGE }}" \
+            --projects-path examples \
+            --github-output "$GITHUB_OUTPUT" \
+            --output-json jobs.json
+
+      - name: Display generated functional matrix
+        if: always()
+        run: |
+          {
+            echo "### Examples List"
+            echo -ne "\nTotal matrix items: ${{ steps.generate.outputs.matrix_count }}\n\n"
+            echo "| ID | Path | Kind | Docker Image | Runner | Test Number |"
+            echo "|----|------|------|--------------|--------|-------------|"
+            jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.docker_image) | \(.runner) | \(.test_number) |"' jobs.json
+            echo ""
+          } >> $GITHUB_STEP_SUMMARY
+
+  examples:
+    name: ${{ matrix.id }}
+    needs: generate-examples-matrix
+    if: needs.generate-examples-matrix.outputs.matrix_count != '0'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    continue-on-error: ${{ matrix.allow_failure }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.generate-examples-matrix.outputs.matrix) }}
+    container:
+      image: ${{ matrix.docker_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env: ${{ fromJSON(matrix.environment) }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_download_artifact
+        with:
+          name: ${{ inputs.dist_run_id != '' && 'dist' || 'examples-dist' }}
+          path: dist
+          run-id: ${{ inputs.dist_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      # Replace AITune baked into the base/custom image with this commit's wheel.
+      - name: Install wheel
+        run: python -m pip install --force-reinstall --no-deps dist/*.whl
+      - run: nvidia-smi
+      - name: Run functional job
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
+
+          python tests/functional/scripts/execute.py \
+            "${{ matrix.path }}" \
+            --kind "${{ matrix.kind }}" \
+            --test-number "${{ matrix.test_number }}" \
+            --verbose
+
+      - if: always()
+        uses: *actions_upload_artifact
+        with:
+          name: examples-${{ matrix.id }}
+          path: |
+            artifacts/**
+            .cache/aitune/**/*.log
+            .cache/aitune.jit/**/*.log
+            hardware_metrics.csv
+            script_metadata.json
+            functional_test_requirements.txt
+          if-no-files-found: ignore

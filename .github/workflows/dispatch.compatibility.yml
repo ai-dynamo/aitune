@@ -1,0 +1,144 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: Compatibility
+
+on:
+  workflow_dispatch:
+  merge_group:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
+  UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
+  UV_VERSION: 0.12.8
+  UV_PYTHON: "3.12"
+  ONNXRUNTIME_VERSION: 1.24.4
+
+  # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
+  # plugin. RTX runners have no EFA provider, so OFI initialization fails and
+  # NCCL segfaults during process-group creation. Use NCCL's built-in Socket
+  # transport for this single-node, 4xGPU sanity check.
+  # fix for error: Segmentation fault: address not mapped to object at address (nil)
+  NCCL_NET_PLUGIN: none
+  NCCL_NET: Socket
+
+  # Actions version pins
+  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  pytorch-gpu-nvcr-container:
+    name: PyTorch GPU ${{ matrix.torch_ci_image }}
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.08-py3
+            extra_packages: "numpy<2.0"
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-25.10-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.01-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.03-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.05-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.06-py3
+            extra_packages: ""
+          - torch_ci_image: ghcr.io/ai-dynamo/aitune:nvcr-torch-26.08-py3
+            extra_packages: ""
+    container:
+      image: ${{ matrix.torch_ci_image }}
+      options: -u 1000
+    env:
+      EXTRA_PACKAGES: ${{ matrix.extra_packages }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - run: pip install . --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
+      - run: pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --force-reinstall --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+      - run: pip list
+      - run: nvidia-smi
+      - run: python -c "import sys; print(sys.version)"
+      - run: python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
+      - run: python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
+      - run: python -c "import tensorrt; print(tensorrt.__version__)"
+      - run: python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+      - run: pytest
+
+  pytorch-gpu-cuda-python-matrix:
+    name: CUDA ${{ matrix.variant.uv_torch_backend }} Python ${{ matrix.python_version }} ${{ matrix.variant.aitune_extras }}
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.11", "3.12"]
+        variant:
+          - uv_torch_backend: cu128
+            cuda_image: 12.9.2-devel-ubuntu24.04
+            aitune_extras: torch29
+            uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
+          # no torch-tensorrt==2.10 in pypi
+          - uv_torch_backend: cu128
+            cuda_image: 12.9.2-devel-ubuntu24.04
+            aitune_extras: torch211
+            uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch29
+            uv_extra_args: ""
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch210
+            uv_extra_args: ""
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch211
+            uv_extra_args: ""
+          - uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            aitune_extras: torch212
+            uv_extra_args: ""
+    container:
+      image: ghcr.io/ai-dynamo/aitune:cuda-${{ matrix.variant.cuda_image }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_setup_uv
+        with:
+          python-version: ${{ matrix.python_version }}
+          version: ${{ env.UV_VERSION }}
+      - run: nvidia-smi
+      - run: uv venv
+      - run: printf "tensorrt\n" > cu12-excludes.txt
+      - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }}]" --group test ${{ matrix.variant.uv_extra_args }}
+      - run: |
+          if [ "${{ matrix.variant.uv_torch_backend }}" == "cu130" ]; then
+            uv pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --reinstall-package onnxruntime-gpu --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+          fi
+      - run: uv pip list
+      - run: uv run python -c "import sys; print(sys.version)"
+      - run: uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
+      - run: uv run python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
+      - run: uv run python -c "import tensorrt; print(tensorrt.__version__)"
+      - run: uv run python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+      - run: uv run python -c "import onnxruntime; print(onnxruntime.__version__)"
+      - run: uv run python -m pytest
