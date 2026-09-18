@@ -188,7 +188,7 @@ jobs:
         run: |
           base=$(git merge-base origin/main HEAD)
           if [[ "$GITHUB_EVENT_NAME" == "schedule" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] ||
-             [ -n "$(git diff --name-only "$base" HEAD -- uv.lock)" ]; then
+             [ -n "$(git diff --name-only "$base" HEAD -- uv.lock .github/docker/Dockerfile )" ]; then
             echo "build_image=true" >> "$GITHUB_OUTPUT"
             echo "image=$PYTORCH_CI_IMAGE" >> "$GITHUB_OUTPUT"
           else
@@ -228,7 +228,7 @@ jobs:
           path: dist
       - run: uv sync --frozen --group test --extra torch29
       - run: uv pip install --reinstall --no-deps dist/*.whl
-      - run: uv run pytest -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
+      - run: .venv/bin/python -m pytest -q -rf -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
       - if: always()
         uses: *actions_upload_artifact
         with:
@@ -295,7 +295,7 @@ jobs:
           name: dist
           path: dist
       - run: python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
-      - run: python -m pytest -n auto tests/unit --junitxml=pytorch-cpu.test-report.xml
+      - run: python -m pytest -q -rfn auto tests/unit --junitxml=pytorch-cpu.test-report.xml
       - if: always()
         uses: *actions_upload_artifact
         with:
@@ -329,7 +329,7 @@ jobs:
           path: dist
       - run: python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
       - run: >-
-          python -m pytest tests/unit
+          python -m pytest -q -rf tests/unit
           --cov=aitune
           --cov-report=xml:coverage.xml
           --junitxml=pytorch-gpu.test-report.xml
