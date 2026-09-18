@@ -77,7 +77,7 @@ jobs:
       - uses: *actions_setup_uv
         with:
           python-version: *python_version
-      - run: uv sync --frozen --group dev --group test
+      - run: uv sync --frozen --group dev --group test --extra triton
       - name: Pytype checker
         run: |
           set -o pipefail
@@ -130,7 +130,7 @@ jobs:
       - uses: *actions_setup_uv
         with:
           python-version: *python_version
-      - run: uv sync --frozen --group dev --group test --group doc
+      - run: uv sync --frozen --group dev --group test --group doc --extra triton
       - run: uv pip install pip-licenses==5.5.5 toml==0.10.2
       - name: Check package licenses
         run: |
@@ -226,7 +226,7 @@ jobs:
         with:
           name: dist
           path: dist
-      - run: uv sync --frozen --group test --extra torch29
+      - run: uv sync --frozen --group test --extra torch29 --extra triton
       - run: uv pip install --reinstall --no-deps dist/*.whl
       - run: .venv/bin/python -m pytest -q -rf -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
       - if: always()
@@ -345,4 +345,3 @@ jobs:
             coverage.xml
             pytorch-gpu.test-report.xml
           if-no-files-found: ignore
-

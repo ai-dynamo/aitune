@@ -45,7 +45,6 @@ clean-pyc: ## remove Python file artifacts
 	find . -name '__pycache__' -not -path "./.cache/*" -exec rm -fr {} +
 
 clean-test: ## remove test and coverage artifacts
-	rm -fr .tox/
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
@@ -114,10 +113,6 @@ run-functional-test: ## run a functional test in the container, arguments: TEST=
 
 test: ## run tests on
 	pytest
-
-
-all-tests: ## run all tests for all python versions
-	tox --develop --skip-missing-interpreters
 
 
 coverage: ## check code coverage quickly with the default Python

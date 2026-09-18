@@ -52,3 +52,7 @@ class AITuneUserInputError(AITuneError):
     """
 
     pass
+
+
+class AITunePublicationError(AITuneError):
+    """Raised when an artifact cannot be published."""
