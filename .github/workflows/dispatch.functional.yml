@@ -4,6 +4,11 @@ name: Functional tests
 
 on:
   workflow_dispatch:
+    inputs:
+      pytorch_ci_image:
+        description: PyTorch image selected by CI; empty uses the commit image
+        type: string
+        default: ''
   merge_group:
     branches: [main]
   workflow_call:
