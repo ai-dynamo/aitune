@@ -82,20 +82,29 @@ To target a specific CUDA version, add the matching PyTorch index:
 pip install --extra-index-url https://pypi.nvidia.com --extra-index-url https://download.pytorch.org/whl/cu130 "aitune[torch211]"
 ```
 
-### ONNX Runtime for CUDA 13
+### ONNX Runtime CUDA version
 
-ModelOpt installs ONNX Runtime with CUDA 12 by default. CUDA 13 needs the ORT CUDA 13 build.
-
-Use UV from a source checkout. It uses the `onnxruntime-cu13` extra and its configured CUDA 13 package source:
+**UV** installs the CUDA 13 ORT build by default from a source checkout:
 
 ```bash
-uv pip install --torch-backend=cu130 ".[torch210,onnxruntime-cu13]"
+uv pip install --torch-backend=cu130 ".[torch210]"
 ```
 
-**pip** does not use UV package sources. Install AITune, then replace ONNX Runtime from the CUDA 13 feed:
+Use the `onnxruntime-gpu-cuda12` extra for the CUDA 12 PyPI build:
 
 ```bash
-pip install --extra-index-url https://pypi.nvidia.com "aitune[torch210,onnxruntime-cu13]"
+uv pip install --no-sources --torch-backend=cu128 ".[torch29,onnxruntime-gpu-cuda12]"
+```
+
+**pip** uses PyPI and therefore installs CUDA 12. Use the same extra explicitly:
+
+```bash
+pip install --extra-index-url https://pypi.nvidia.com "aitune[torch29,onnxruntime-gpu-cuda12]"
+```
+
+CUDA 13 with pip needs an explicit ORT reinstall from the CUDA 13 feed:
+
+```bash
 pip install onnxruntime-gpu==1.24.4 --no-deps --force-reinstall --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
 ```
 
