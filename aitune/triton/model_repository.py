@@ -16,7 +16,7 @@ from aitune.triton.config import (
     TensorRTModelConfig,
     TorchAOTIModelConfig,
 )
-from aitune.triton.model_analyzer.generator import write_model_analyzer_configs
+from aitune.triton.model_analyzer import write_model_analyzer_configs
 
 logger = logging.getLogger(__name__)
 
