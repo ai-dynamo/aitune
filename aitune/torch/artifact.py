@@ -190,6 +190,3 @@ def artifact_input_sample(
         values = cast(list[bool | int | float], tensor.detach().cpu().reshape(-1).tolist())
         result.append(TensorSample(name=name, shape=tuple(tensor.shape), values=tuple(values)))
     return tuple(result)
-
-
-__all__ = ["artifact_input_sample", "bounded_tensor_specs"]
