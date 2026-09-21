@@ -4,10 +4,27 @@ name: Compatibility
 
 on:
   workflow_dispatch:
+    inputs:
+      run_nvcr_container:
+        description: Run NVCR container
+        type: boolean
+        default: true
+      run_cuda_matrix:
+        description: Run CUDA Python matrix
+        type: boolean
+        default: true
   merge_group:
     branches: [main]
   workflow_call:
-
+    inputs:
+      run_nvcr_container:
+        description: Run NVCR container
+        type: boolean
+        default: true
+      run_cuda_matrix:
+        description: Run CUDA Python matrix
+        type: boolean
+        default: true
 permissions:
   contents: read
   packages: read
@@ -44,6 +61,7 @@ jobs:
     name: PyTorch GPU ${{ matrix.torch_ci_image }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
+    if: inputs.run_nvcr_container == true
     strategy:
       fail-fast: false
       matrix:
@@ -86,6 +104,7 @@ jobs:
     name: CUDA ${{ matrix.variant.uv_torch_backend }} Python ${{ matrix.python_version }} ${{ matrix.variant.aitune_extras }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
+    if: inputs.run_cuda_matrix == true
     strategy:
       fail-fast: false
       matrix:
