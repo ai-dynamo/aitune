@@ -179,7 +179,15 @@ conflicts = [
 ]
 
 [tool.uv.sources]
-onnxruntime-gpu = { index = "ort-cuda-13-nightly" }
+onnxruntime-gpu = [
+    { index = "pypi", extra = "onnxruntime-gpu-cuda12" },
+    { index = "ort-cuda-13-nightly", marker = "extra != 'onnxruntime-gpu-cuda12'" },
+]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+explicit = true
 
 [[tool.uv.index]]
 name = "ort-cuda-13-nightly"
