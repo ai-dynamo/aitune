@@ -13,9 +13,9 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Unix",
 ]
@@ -63,11 +63,6 @@ dynamo = [
     "ai-dynamo-runtime>=0.1",
     "uvloop",
 ]
-triton = [
-    "pydantic>=2",
-    "protobuf>=6.33.5",
-    "tritonclient[grpc]",
-]
 
 torch28 = [ # nvcr.io/nvidia/pytorch:25.08-py3 is based on 2.8.0a0+34c6371d24.
     "torch>=2.8.0a0,<2.9",
@@ -95,6 +90,7 @@ torch212 = [ # nvcr.io/nvidia/pytorch:26.05-py3 is based on 2.12.0a0+5aff3928d8
     "torch-tensorrt>=2.12.0a0,<2.13",
     "torchao>=0.17,<0.18",
 ]
+
 onnxruntime-cu13 = [
     "onnxruntime-gpu==1.24.4",
 ]
@@ -126,6 +122,7 @@ dev = [
     "pre-commit",
     "pre-commit-uv",
     "pytype",
+    "tox",
     "uv>=0.9.0",
 ]
 functional-test = [

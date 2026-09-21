@@ -9,7 +9,7 @@ title: "Install"
 Before installing NVIDIA AITune, make sure your system meets these requirements:
 
 * **Operating System**: Linux (Ubuntu 22.04+ recommended)
-* **Python**: Version `3.10` or newer
+* **Python**: Version `3.11` or newer
 * **PyTorch**: Version `2.8` or newer
 * **TensorRT**: Version `10.3` or higher (for TensorRT backend)
 * **NVIDIA GPU**: Required for GPU-accelerated tuning

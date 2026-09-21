@@ -6,7 +6,7 @@
 # NVIDIA AITune
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.8+-red.svg)](https://pytorch.org/)
 
 **NVIDIA AITune** is an inference toolkit designed for tuning and deploying Deep Learning models with a focus on NVIDIA GPUs. It provides model tuning capabilities through compilation and conversion paths that can significantly improve inference speed and efficiency across various AI workloads including Computer Vision, Natural Language Processing, Speech Recognition, and Generative AI.
@@ -44,7 +44,7 @@ If your model is supported by a dedicated serving framework and benefits from ru
 Before installing NVIDIA AITune, make sure your system meets these requirements:
 
 * **Operating System**: Linux (Ubuntu 22.04+ recommended)
-* **Python**: Version `3.10` or newer
+* **Python**: Version `3.11` or newer
 * **PyTorch**: Version `2.8` or newer
 * **TensorRT**: Version `10.3` or higher (for TensorRT backend)
 * **NVIDIA GPU**: Required for GPU-accelerated tuning
