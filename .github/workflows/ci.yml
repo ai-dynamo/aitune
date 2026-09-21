@@ -198,6 +198,7 @@ jobs:
       - uses: *actions_setup_uv
         with:
           python-version: *python_version
+      - run: echo "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_AITUNE=$(sh .github/scripts/scm_minor_version.sh)" >> "$GITHUB_ENV"
       - run: uv build
       - uses: *actions_upload_artifact
         with:
