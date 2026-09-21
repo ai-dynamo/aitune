@@ -194,18 +194,18 @@ def _validate_model(artifact: DeploymentArtifact, model_directory: Path, config:
         )
 
 
-def _bounded_values(maximum: int, minimum: int = 1) -> tuple[int, ...]:
+def _bounded_values(min_batch: int, max_batch: int) -> tuple[int, ...]:
     """Return powers of two within the bounds, including both endpoints."""
-    if not 1 <= minimum <= maximum:
-        raise ModelAnalyzerConfigError(f"Invalid batch bounds: minimum={minimum}, maximum={maximum}")
-    values = [minimum]
-    value = 1
-    while value < maximum:
-        if value > minimum:
-            values.append(value)
-        value *= 2
-    if values[-1] != maximum:
-        values.append(maximum)
+    if not 1 <= min_batch <= max_batch:
+        raise ModelAnalyzerConfigError(f"Invalid batch bounds: minimum={min_batch}, maximum={max_batch}")
+    values = [min_batch]
+    batch_size = 1
+    while batch_size < max_batch:
+        if batch_size > min_batch:
+            values.append(batch_size)
+        batch_size *= 2
+    if min_batch < max_batch:
+        values.append(max_batch)
     return tuple(values)
 
 
@@ -301,7 +301,7 @@ def _configs(
 
     repository = model_directory.parent.resolve()
     model_name = config.name
-    batch_sizes = _bounded_values(maximum_batch, minimum_batch) if maximum_batch > 0 else (1,)
+    batch_sizes = _bounded_values(minimum_batch, maximum_batch) if maximum_batch > 0 else (1,)
     batch_range = {
         "run_config_search_min_model_batch_size": minimum_batch,
         "run_config_search_max_model_batch_size": maximum_batch,
