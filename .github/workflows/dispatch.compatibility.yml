@@ -105,6 +105,8 @@ jobs:
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
     if: inputs.run_cuda_matrix == true
+    env:
+      SETUPTOOLS_SCM_PRETEND_VERSION_FOR_AITUNE: 0.0.0a0
     strategy:
       fail-fast: false
       matrix:
@@ -138,22 +140,30 @@ jobs:
     container:
       image: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.variant.cuda_image }}:latest
     steps:
+      - name: Install Node for local act
+        if: ${{ env.ACT == 'true' }}
+        run: |
+          node_dir="$RUNNER_TEMP/node"
+          mkdir -p "$node_dir"
+          curl -fsSL https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz \
+            | tar -xz --strip-components=1 -C "$node_dir"
+          echo "$node_dir/bin" >> "$GITHUB_PATH"
+          "$node_dir/bin/node" --version
       - uses: *actions_checkout
         with:
           persist-credentials: false
       - uses: *actions_setup_uv
+        env:
+          RUNNER_TOOL_CACHE: ${{ runner.temp }}/tool-cache
         with:
           python-version: ${{ matrix.python_version }}
           version: ${{ env.UV_VERSION }}
-      - run: nvidia-smi
-      - run: uv venv
-      - run: printf "tensorrt\n" > cu12-excludes.txt
-      - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }},triton]" --group test ${{ matrix.variant.uv_extra_args }}
-      - run: uv pip list
-      - run: uv run python -c "import sys; print(sys.version)"
-      - run: uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
-      - run: uv run python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
-      - run: uv run python -c "import tensorrt; print(tensorrt.__version__)"
-      - run: uv run python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
-      - run: uv run python -c "import onnxruntime; print(onnxruntime.__version__)"
-      - run: uv run python -m pytest
+      # - run: nvidia-smi
+      - run: |
+          uv venv
+          printf "tensorrt\n" > cu12-excludes.txt
+          uv -v pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }},triton]" --group test ${{ matrix.variant.uv_extra_args }}
+          uv pip list
+          .venv/bin/python .github/scripts/sanity/print_versions.py
+          .venv/bin/python .github/scripts/sanity/check_onnxruntime_cuda.py --cuda-major-version=${{ contains(matrix.variant.uv_torch_backend, 'cu128') && '12' || '13' }}
+          .venv/bin/python -m pytest -q -rf 
