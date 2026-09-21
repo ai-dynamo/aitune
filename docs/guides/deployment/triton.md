@@ -58,17 +58,20 @@ does not leave a partially published model. Publication never replaces an existi
 
 Choose one of the following ways to serve the repository. Repository generation is the same for both.
 
+Choose an image whose Triton, backend, CUDA, and NVIDIA driver versions are compatible with the system where the model
+was exported. The setup for each deployment option is described below.
+
 ### Run Triton through Dynamo
 
 Dynamo adds service discovery and routing to the Triton repository. Triton still loads and
 executes the model. Requests use the KServe gRPC protocol rather than Dynamo's OpenAI-compatible HTTP API.
 
 Prepare an environment containing both Dynamo and Triton using the
-[official Dynamo Triton documentation](https://docs.nvidia.com/dynamo/dev/knowledge-base/modular-components/backends/triton/overview)
-for the supported release and container setup. Installing `aitune[dynamo]` alone does not provide a Triton server.
+[Dynamo Triton container quick start](https://docs.nvidia.com/dynamo/dev/knowledge-base/modular-components/backends/triton/overview#quick-start-prebuilt--release-container).
+It explains how to build the combined Dynamo and Triton image and start it with NVIDIA GPU access.
 
-Mount the local `model_repository/` directory at `/models` in that environment. The following commands run inside
-that environment. Start Dynamo's KServe gRPC frontend:
+When starting the container, add `-v "$PWD/model_repository:/models"` to mount the generated repository at `/models`.
+The following commands run inside that container. Start Dynamo's KServe gRPC frontend:
 
 ```bash
 python3 -m dynamo.frontend \
@@ -91,15 +94,24 @@ registered workers. The repository contents are the same as for standalone Trito
 
 ### Run Triton standalone
 
-In an environment with Triton and the required backend installed, start Triton against the repository root:
+The [Triton quick start](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/getting_started/quickstart.html)
+explains the container prerequisites and release selection. After choosing a compatible release, start the server with
+the generated repository mounted at `/models`:
 
 ```bash
-tritonserver --model-repository="$PWD/model_repository"
+docker run --gpus all --rm \
+  --shm-size=1g \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  -p 8002:8002 \
+  -v "$PWD/model_repository:/models" \
+  nvcr.io/nvidia/tritonserver:<release>-py3 \
+  tritonserver --model-repository=/models
 ```
 
-You can run the same command in an NVIDIA Triton container by mounting `model_repository` at a path inside the
-container. The command's path must refer to that mount inside the container. Use a Triton release whose backend and
-CUDA versions are compatible with the exported artifact and deployment system.
+Replace `<release>` with a Triton release such as `YY.MM`. Ports `8000`, `8001`, and `8002` expose Triton's HTTP,
+gRPC, and metrics endpoints. If Triton is already installed in the current environment, run
+`tritonserver --model-repository="$PWD/model_repository"` directly instead.
 
 ## Use a Python model instead
 
