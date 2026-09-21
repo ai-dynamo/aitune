@@ -10,7 +10,14 @@ if [ -z "$tag" ]; then
     exec git describe --dirty --tags --long --match '*[0-9]*'
 fi
 
+# If the current commit is a tag, return the tag
+if [ -n "$exact" ]; then
+    printf '%s\n' "$exact"
+    exit 0
+fi
+
 distance=$(git rev-list --count "$tag..HEAD")
+
 # An older checkout must not masquerade as a release it does not contain.
 if [ -z "$exact" ] && [ "$distance" -eq 0 ]; then
     distance=1
