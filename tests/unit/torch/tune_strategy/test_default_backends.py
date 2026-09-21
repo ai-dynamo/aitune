@@ -10,7 +10,6 @@ from aitune.torch.backend import (
     TorchEagerBackend,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
-    TorchTensorRTAotBackend,
 )
 from aitune.torch.jit.config import Config
 from aitune.torch.module.forward_signature import ForwardSignature
@@ -28,12 +27,6 @@ from aitune.torch.tune_strategy import (
 
 class DistributedModule(torch.nn.Identity):
     __module__ = "torch.distributed.test"
-
-
-@pytest.fixture(autouse=True)
-def backend_availability(mocker):
-    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
-    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
 
 
 @pytest.fixture(params=[FirstWinsStrategy, MaxThroughputStrategy, MinLatencyStrategy, LatencyBudgetStrategy])
@@ -72,15 +65,7 @@ def test_distributed_dry_run_excludes_native_tensorrt(strategy_factory, mocker, 
     descriptions = dry_run(strategy, DistributedModule())
 
     native_tensorrt.assert_not_called()
-    expected = (
-        [TorchInductorAotBackend, TorchInductorJitBackend]
-        if isinstance(strategy, FirstWinsStrategy)
-        else [
-            TorchInductorAotBackend,
-            TorchTensorRTAotBackend,
-            TorchInductorJitBackend,
-        ]
-    )
+    expected = [TorchInductorAotBackend, TorchInductorJitBackend]
     assert [type(backend) for backend in strategy._backends] == expected
     assert descriptions == [backend.describe() for backend in strategy._backends]
 
@@ -119,19 +104,26 @@ def test_aot_and_jit_default_to_max_throughput_with_separate_instances(dry_run):
 
 
 @pytest.mark.parametrize("distributed", [False, True])
-@pytest.mark.parametrize("factory", [FirstWinsStrategy, FirstWinsStrategy.for_aot, FirstWinsStrategy.for_jit])
-def test_first_wins_owns_its_fallback_order(distributed, factory, dry_run):
+@pytest.mark.parametrize(
+    "factory,workflow",
+    [
+        (FirstWinsStrategy, "aot"),
+        (FirstWinsStrategy.for_aot, "aot"),
+        (FirstWinsStrategy.for_jit, "jit"),
+    ],
+)
+def test_first_wins_owns_its_fallback_order(distributed, factory, workflow, dry_run):
     strategy = factory()
     dry_run(strategy, DistributedModule() if distributed else torch.nn.Identity())
 
     if distributed:
         assert [type(backend) for backend in strategy._backends] == [TorchInductorAotBackend, TorchInductorJitBackend]
     else:
-        assert [type(backend) for backend in strategy._backends] == [
-            TensorRTBackend,
-            TensorRTBackend,
-            TorchInductorJitBackend,
-        ]
+        expected = [TensorRTBackend, TensorRTBackend]
+        if workflow == "aot":
+            expected.append(TorchInductorAotBackend)
+        expected.append(TorchInductorJitBackend)
+        assert [type(backend) for backend in strategy._backends] == expected
         assert [backend._config.use_dynamo for backend in strategy._backends[:2]] == [True, False]
 
 
@@ -188,17 +180,12 @@ def test_aot_default_candidate_configuration(distributed, dry_run):
     dry_run(strategy, wrapped.__wrapped__)
     backends = strategy._backends
 
-    expected = [
-        TorchInductorAotBackend,
-        TorchTensorRTAotBackend,
-        TorchInductorJitBackend,
-    ]
+    expected = [TorchInductorAotBackend, TorchInductorJitBackend]
     assert [type(backend) for backend in backends] == (expected if distributed else [TensorRTBackend] * 2 + expected)
     if not distributed:
         assert [backend._config.use_dynamo for backend in backends[:2]] == [True, False]
-    aot, torch_trt, jit = backends[-3:]
+    aot, jit = backends[-2:]
     assert aot._config.inductor_configs is None
-    assert torch_trt._compile_settings()["use_distributed_mode_trace"] is distributed
     assert jit._config.mode is None
     assert len({backend.key() for backend in backends}) == len(backends)
 
