@@ -112,12 +112,12 @@ jobs:
         variant:
           - uv_torch_backend: cu128
             cuda_image: 12.9.2-devel-ubuntu24.04
-            aitune_extras: torch29
+            aitune_extras: "torch29,onnxruntime-gpu-cuda12"
             uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
           # no torch-tensorrt==2.10 in pypi
           - uv_torch_backend: cu128
             cuda_image: 12.9.2-devel-ubuntu24.04
-            aitune_extras: torch211
+            aitune_extras: "torch211,onnxruntime-gpu-cuda12"
             uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
           - uv_torch_backend: cu130
             cuda_image: 13.0.3-devel-ubuntu24.04
@@ -149,10 +149,6 @@ jobs:
       - run: uv venv
       - run: printf "tensorrt\n" > cu12-excludes.txt
       - run: uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }},triton]" --group test ${{ matrix.variant.uv_extra_args }}
-      - run: |
-          if [ "${{ matrix.variant.uv_torch_backend }}" == "cu130" ]; then
-            uv pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --no-deps --reinstall-package onnxruntime-gpu --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
-          fi
       - run: uv pip list
       - run: uv run python -c "import sys; print(sys.version)"
       - run: uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
