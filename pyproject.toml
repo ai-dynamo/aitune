@@ -95,6 +95,9 @@ torch212 = [ # nvcr.io/nvidia/pytorch:26.05-py3 is based on 2.12.0a0+5aff3928d8
     "torch-tensorrt>=2.12.0a0,<2.13",
     "torchao>=0.17,<0.18",
 ]
+onnxruntime-cu13 = [
+    "onnxruntime-gpu==1.24.4",
+]
 
 
 [project.urls]
@@ -171,6 +174,14 @@ conflicts = [
         { extra = "torch212" },
     ]
 ]
+
+[tool.uv.sources]
+onnxruntime-gpu = [{ index = "ort-cuda-13-nightly", extra = "onnxruntime-cu13" }]
+
+[[tool.uv.index]]
+name = "ort-cuda-13-nightly"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"
+explicit = true
 
 [tool.pytest.ini_options]
 log_cli = true
