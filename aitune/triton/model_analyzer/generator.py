@@ -25,6 +25,7 @@ _MANUAL_CONFIG_FILE_NAME = "manual.yaml"
 _INPUT_DATA_FILE_NAME = "input-data.json"
 _DEFAULT_CONCURRENCY = (1, 2, 4, 8, 16, 32)
 _DEFAULT_MAX_INSTANCE_COUNT = 5
+_DEFAULT_INSTANCE_COUNTS = tuple(range(1, _DEFAULT_MAX_INSTANCE_COUNT + 1))
 _DEFAULT_QUEUE_DELAYS_MICROSECONDS = (0, 100, 500)
 
 
@@ -67,15 +68,15 @@ def _bounded_values(min_batch: int, max_batch: int) -> tuple[int, ...]:
 
 def _profiling_inputs(
     artifact: DeploymentArtifact, config: model_config_pb2.ModelConfig
-) -> tuple[dict[str, tuple[str, ...]], int, int, dict[str, Any] | None]:
-    """Select concrete input shapes and compatible batch bounds from the artifact."""
+) -> tuple[dict[str, tuple[str, ...]], dict[str, Any] | None]:
+    """Select concrete input shapes and representative values from the artifact."""
     shapes = {tensor.name: tensor.min_shape for tensor in artifact.inputs}
     flags = []
     for name, shape in shapes.items():
         dimensions = shape[1:] if config.max_batch_size else shape
         flags.append(f"{name}:{','.join(str(dimension) for dimension in dimensions)}")
     input_data = _input_data(artifact, shapes, batched=config.max_batch_size > 0)
-    return {"shape": tuple(flags)}, 1, config.max_batch_size, input_data
+    return {"shape": tuple(flags)}, input_data
 
 
 def _input_data(
@@ -129,81 +130,91 @@ def _configs(
     dict[str, Any] | None,
 ]:
     """Build fast and exhaustive configurations from a published model."""
-    perf_flags, minimum_batch, maximum_batch, input_data = _profiling_inputs(artifact, config)
+    perf_flags, input_data = _profiling_inputs(artifact, config)
     if input_data is not None:
         perf_flags["input-data"] = (str(input_data_path.resolve()),)
 
-    repository = model_directory.parent.resolve()
-    model_name = config.name
-    batch_sizes = _bounded_values(minimum_batch, maximum_batch) if maximum_batch > 0 else (1,)
-    batch_range = {
-        "run_config_search_min_model_batch_size": minimum_batch,
-        "run_config_search_max_model_batch_size": maximum_batch,
-    }
-    if config.max_batch_size == 0:
-        batch_range = {}
-
-    profiles = _optimization_profiles(config)
-
-    def manual_config(
-        label: str,
-        *,
-        selected_batch_sizes: tuple[int, ...],
-        concurrency: tuple[int, ...],
-        instance_counts: tuple[int, ...],
-        queue_delays: tuple[int, ...],
-    ) -> _ManualModelAnalyzerConfig:
-        model_parameters = _ModelConfigParameters(
-            max_batch_size=selected_batch_sizes if config.max_batch_size > 0 else None,
-            instance_group=(_InstanceGroupParameters(count=instance_counts, profile=profiles),),
-            dynamic_batching=(
-                _DynamicBatchingParameters(max_queue_delay_microseconds=queue_delays)
-                if config.max_batch_size > 0
-                else None
-            ),
-        )
-        return _ManualModelAnalyzerConfig(
-            model_repository=repository,
-            perf_analyzer_flags=perf_flags,
-            profile_models={
-                model_name: _ManualModelProfile(
-                    parameters=_LoadParameters(batch_sizes=selected_batch_sizes, concurrency=concurrency),
-                    model_config_parameters=model_parameters,
-                )
-            },
-            checkpoint_directory=(destination / f"{label}-checkpoints").resolve(),
-            output_model_repository_path=(destination / f"{label}-model-repository").resolve(),
-            export_path=(destination / f"{label}-results").resolve(),
-        )
-
-    manual = manual_config(
-        "manual",
-        selected_batch_sizes=batch_sizes,
-        concurrency=_DEFAULT_CONCURRENCY,
-        instance_counts=tuple(range(1, _DEFAULT_MAX_INSTANCE_COUNT + 1)),
-        queue_delays=_DEFAULT_QUEUE_DELAYS_MICROSECONDS,
+    max_batch = config.max_batch_size
+    batch_sizes = _bounded_values(1, max_batch) if max_batch > 0 else (1,)
+    manual = _manual_config(
+        config,
+        model_directory,
+        destination,
+        perf_flags,
+        label="manual",
+        batch_sizes=batch_sizes,
     )
-    if profiles is not None:
+    if _optimization_profiles(config) is not None:
         # Quick search replaces instance_group and can discard the profiles enabled
         # by the published model. Keep every profile available in a smaller explicit
         # sweep without using profile shape bounds to constrain the search.
-        fast_batch_sizes = tuple(dict.fromkeys((1, maximum_batch))) if maximum_batch > 0 else (1,)
-        fast = manual_config(
-            "fast",
-            selected_batch_sizes=fast_batch_sizes,
+        fast_batch_sizes = (1, max_batch) if max_batch > 1 else (1,)
+        fast = _manual_config(
+            config,
+            model_directory,
+            destination,
+            perf_flags,
+            label="fast",
+            batch_sizes=fast_batch_sizes,
             concurrency=(1, 8, 32),
             instance_counts=(1, 2),
             queue_delays=(0,),
         )
     else:
-        fast = _QuickModelAnalyzerConfig(
-            model_repository=repository,
-            perf_analyzer_flags=perf_flags,
-            profile_models=(model_name,),
-            checkpoint_directory=(destination / "fast-checkpoints").resolve(),
-            output_model_repository_path=(destination / "fast-model-repository").resolve(),
-            export_path=(destination / "fast-results").resolve(),
-            run_config_search_max_instance_count=_DEFAULT_MAX_INSTANCE_COUNT,
-            **batch_range,
-        )
+        fast = _quick_config(config, model_directory, destination, perf_flags)
     return fast, manual, input_data
+
+
+def _manual_config(
+    config: model_config_pb2.ModelConfig,
+    model_directory: Path,
+    destination: Path,
+    perf_flags: dict[str, tuple[str, ...]],
+    *,
+    label: str,
+    batch_sizes: tuple[int, ...],
+    concurrency: tuple[int, ...] = _DEFAULT_CONCURRENCY,
+    instance_counts: tuple[int, ...] = _DEFAULT_INSTANCE_COUNTS,
+    queue_delays: tuple[int, ...] = _DEFAULT_QUEUE_DELAYS_MICROSECONDS,
+) -> _ManualModelAnalyzerConfig:
+    """Build an explicit sweep, retaining the published TensorRT profile set."""
+    batched = config.max_batch_size > 0
+    model_parameters = _ModelConfigParameters(
+        max_batch_size=batch_sizes if batched else None,
+        instance_group=(_InstanceGroupParameters(count=instance_counts, profile=_optimization_profiles(config)),),
+        dynamic_batching=_DynamicBatchingParameters(max_queue_delay_microseconds=queue_delays) if batched else None,
+    )
+    return _ManualModelAnalyzerConfig(
+        model_repository=model_directory.parent.resolve(),
+        perf_analyzer_flags=perf_flags,
+        profile_models={
+            config.name: _ManualModelProfile(
+                parameters=_LoadParameters(batch_sizes=batch_sizes, concurrency=concurrency),
+                model_config_parameters=model_parameters,
+            )
+        },
+        checkpoint_directory=(destination / f"{label}-checkpoints").resolve(),
+        output_model_repository_path=(destination / f"{label}-model-repository").resolve(),
+        export_path=(destination / f"{label}-results").resolve(),
+    )
+
+
+def _quick_config(
+    config: model_config_pb2.ModelConfig,
+    model_directory: Path,
+    destination: Path,
+    perf_flags: dict[str, tuple[str, ...]],
+) -> _QuickModelAnalyzerConfig:
+    """Build a quick search within the published model's batch limit."""
+    batched = config.max_batch_size > 0
+    return _QuickModelAnalyzerConfig(
+        model_repository=model_directory.parent.resolve(),
+        perf_analyzer_flags=perf_flags,
+        profile_models=(config.name,),
+        checkpoint_directory=(destination / "fast-checkpoints").resolve(),
+        output_model_repository_path=(destination / "fast-model-repository").resolve(),
+        export_path=(destination / "fast-results").resolve(),
+        run_config_search_max_instance_count=_DEFAULT_MAX_INSTANCE_COUNT,
+        run_config_search_min_model_batch_size=1 if batched else None,
+        run_config_search_max_model_batch_size=config.max_batch_size if batched else None,
+    )
