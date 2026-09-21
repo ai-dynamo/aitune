@@ -166,4 +166,4 @@ jobs:
           uv pip list
           .venv/bin/python .github/scripts/sanity/print_versions.py
           .venv/bin/python .github/scripts/sanity/check_onnxruntime_cuda.py --cuda-major-version=${{ contains(matrix.variant.uv_torch_backend, 'cu128') && '12' || '13' }}
-          .venv/bin/python -m pytest -q -rf 
+          .venv/bin/python -m pytest -q -rf

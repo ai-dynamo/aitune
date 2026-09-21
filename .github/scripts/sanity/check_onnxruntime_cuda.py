@@ -26,10 +26,10 @@ def main(cuda_major_version: int) -> None:
         cuda_version = match.group(1).strip()
         print("onnxruntime-gpu CUDA build version:", cuda_version)
         if not cuda_version.startswith(f"{cuda_major_version}"):
-            print(f"CUDA major version mismatch: {cuda_version} != {cuda_major_version}.x")
+            print(f"    CUDA major version mismatch: {cuda_version} != {cuda_major_version}.x")
             sys.exit(1)
     else:
-        print("Could not find CUDA version in onnxruntime debug info.")
+        print("   Could not find CUDA version in onnxruntime debug info.")
         sys.exit(1)
 
 
