@@ -16,7 +16,7 @@ from aitune.triton.config import (
     TensorRTModelConfig,
     TorchAOTIModelConfig,
 )
-from aitune.triton.model_analyzer import _write_model_analyzer_configs
+from aitune.triton.model_analyzer.generator import write_model_analyzer_configs
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ def publish(
             destination = destination / file_name
         artifact.model.export_files(destination)
         repository_path = repository.resolve()
-        _write_model_analyzer_configs(
+        write_model_analyzer_configs(
             artifact,
             config=config.to_protobuf(),
             model_directory=model_directory,
