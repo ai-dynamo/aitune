@@ -239,7 +239,7 @@ requires-dist = [
     { name = "nvidia-modelopt", extras = ["onnx"], specifier = ">=0.33.0" },
     { name = "nvtx" },
     { name = "onnx-ir", specifier = ">=0.1.11" },
-    { name = "onnxruntime-gpu", marker = "extra == 'onnxruntime-cu13'", specifier = "==1.24.4", index = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/", conflict = { package = "aitune", extra = "onnxruntime-cu13" } },
+    { name = "onnxruntime-gpu", marker = "extra == 'onnxruntime-gpu-cuda12'", index = "https://pypi.org/simple", conflict = { package = "aitune", extra = "onnxruntime-gpu-cuda12" } },
     { name = "onnxscript", specifier = ">=0.2.0" },
     { name = "pandas", specifier = ">=2.3" },
     { name = "protobuf", marker = "extra == 'triton'", specifier = ">=6.33.5" },
@@ -269,7 +269,7 @@ requires-dist = [
     { name = "uvloop", marker = "extra == 'dynamo'" },
     { name = "wrapt", specifier = "~=2.0" },
 ]
-provides-extras = ["dynamo", "triton", "torch28", "torch29", "torch210", "torch211", "torch212", "onnxruntime-cu13"]
+provides-extras = ["dynamo", "triton", "torch28", "torch29", "torch210", "torch211", "torch212", "onnxruntime-gpu-cuda12"]
 
 [package.metadata.requires-dev]
 dev = [
