@@ -324,6 +324,27 @@ def test_artifact_additional_files_include_discovered_and_exported_data_without_
     )
 
 
+def test_artifact_samples_follow_finalized_onnx_input_order(mocker, backend):
+    sample = Mock()
+    second = Mock()
+    second.name = "second"
+    first = Mock()
+    first.name = "first"
+    backend._samples = (sample,)
+    backend._graph_spec = Mock(spec=GraphSpec)
+    backend._input_nodes = [second, first]
+    artifact_input_sample = mocker.patch(
+        "aitune.torch.backend.onnx_runtime_backend.artifact_input_sample", return_value=()
+    )
+
+    assert backend._artifact_sample_inputs() == ()
+    artifact_input_sample.assert_called_once_with(
+        backend._graph_spec,
+        sample,
+        recorded_names=("second", "first"),
+    )
+
+
 @requires_cuda
 def test_artifact_metadata_failure_does_not_fail_backend_build(
     mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path

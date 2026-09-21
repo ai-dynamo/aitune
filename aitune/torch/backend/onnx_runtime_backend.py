@@ -312,7 +312,12 @@ class ONNXRuntimeBackend(Backend):
         if self._samples is None:
             return ()
         try:
-            return artifact_input_sample(cast(GraphSpec, self._graph_spec), self._samples[0])
+            input_nodes = cast(list[onnxruntime.NodeArg], self._input_nodes)
+            return artifact_input_sample(
+                cast(GraphSpec, self._graph_spec),
+                self._samples[0],
+                recorded_names=tuple(node.name for node in input_nodes),
+            )
         except Exception as error:
             logger.info("Perf Analyzer will use synthetic inputs: %s", error)
             return ()

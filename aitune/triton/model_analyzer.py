@@ -16,7 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, 
 from tritonclient.grpc import model_config_pb2
 
 from aitune.exceptions import AITuneError, AITuneUserInputError
-from aitune.records import DeploymentArtifact
+from aitune.records import BoundedTensorSpec, DeploymentArtifact
+from aitune.triton.config import tensor_config
 
 _CONFIG_FILE_NAME = "config.pbtxt"
 _FAST_CONFIG_FILE_NAME = "fast.yaml"
@@ -151,6 +152,22 @@ def _read_published_config(model_directory: Path) -> model_config_pb2.ModelConfi
         raise ModelAnalyzerConfigError(f"Cannot read Triton model configuration at {config_path}: {error}") from error
 
 
+def _validate_tensor_interface(
+    specs: tuple[BoundedTensorSpec, ...], tensors: Any, *, label: str, batched: bool
+) -> None:
+    """Ensure published tensor types and dimensions match an artifact interface."""
+    for spec, tensor in zip(specs, tensors, strict=True):
+        try:
+            expected = tensor_config(spec, batched=batched)
+        except (KeyError, ValueError) as error:
+            raise ModelAnalyzerConfigError(f"Invalid artifact {label} {spec.name!r}: {error}") from error
+        expected_data_type = model_config_pb2.DataType.Value(expected.data_type.value)
+        if tensor.data_type != expected_data_type:
+            raise ModelAnalyzerConfigError(f"Triton model {label} {spec.name!r} data type does not match the artifact")
+        if tuple(tensor.dims) != expected.dims:
+            raise ModelAnalyzerConfigError(f"Triton model {label} {spec.name!r} dimensions do not match the artifact")
+
+
 def _validate_model(artifact: DeploymentArtifact, model_directory: Path, config: model_config_pb2.ModelConfig) -> None:
     """Ensure the artifact and published model describe the same deployment."""
     if config.name != model_directory.name:
@@ -166,6 +183,9 @@ def _validate_model(artifact: DeploymentArtifact, model_directory: Path, config:
         raise ModelAnalyzerConfigError("Triton model inputs do not match the artifact")
     if tuple(tensor.name for tensor in config.output) != artifact.output_names:
         raise ModelAnalyzerConfigError("Triton model outputs do not match the artifact")
+    batched = config.max_batch_size > 0
+    _validate_tensor_interface(artifact.inputs, config.input, label="input", batched=batched)
+    _validate_tensor_interface(artifact.outputs, config.output, label="output", batched=batched)
 
     supported_batch_size = artifact.max_batch_size
     if config.max_batch_size > 0 and (supported_batch_size is None or config.max_batch_size > supported_batch_size):

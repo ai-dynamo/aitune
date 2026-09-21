@@ -144,6 +144,29 @@ def test_refuses_an_artifact_that_does_not_match_the_published_model(tmp_path):
         )
 
 
+@pytest.mark.parametrize(
+    ("inputs", "message"),
+    [
+        ((_spec("input", DType.INT64, 8),), "data type does not match"),
+        (
+            (BoundedTensorSpec(name="input", dtype=DType.FLOAT32, min_shape=(1, 16), max_shape=(8, 16)),),
+            "dimensions do not match",
+        ),
+    ],
+)
+def test_refuses_an_artifact_with_a_different_tensor_interface(tmp_path, inputs, message):
+    artifact = _plan(tmp_path / "source.plan")
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
+    mismatched = replace(artifact, inputs=inputs)
+
+    with pytest.raises(aitriton.ModelAnalyzerConfigError, match=message):
+        aitriton.generate_model_analyzer_configs(
+            mismatched,
+            model_path=model,
+            path=tmp_path / "model-analyzer",
+        )
+
+
 def test_fast_search_preserves_multiple_tensorrt_profiles(tmp_path):
     artifact = _plan(tmp_path / "source.plan", profiles=2)
     model = aitriton.publish(

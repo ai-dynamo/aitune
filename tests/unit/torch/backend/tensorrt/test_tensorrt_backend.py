@@ -347,6 +347,24 @@ def test_artifact_profiles_require_engine_input_names():
         backend._artifact_profiles()
 
 
+def test_artifact_samples_follow_tensorrt_engine_input_order(mocker):
+    backend = TensorRTBackend()
+    sample = mocker.Mock()
+    backend._samples = (sample,)
+    backend._graph_spec = mocker.Mock()
+    backend._input_names = ["input_mask", "input_x"]
+    artifact_input_sample = mocker.patch(
+        "aitune.torch.backend.tensorrt.tensorrt_backend.artifact_input_sample", return_value=()
+    )
+
+    assert backend._artifact_sample_inputs() == ()
+    artifact_input_sample.assert_called_once_with(
+        backend._graph_spec,
+        sample,
+        recorded_names=["input_mask", "input_x"],
+    )
+
+
 def test_artifact_profile_input_bounds_reject_ranges_beyond_recorded_graph():
     inputs = (
         BoundedTensorSpec(

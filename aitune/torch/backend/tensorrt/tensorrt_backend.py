@@ -819,7 +819,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
         if self._samples is None:
             return ()
         try:
-            return artifact_input_sample(cast(GraphSpec, self._graph_spec), self._samples[0])
+            return artifact_input_sample(
+                cast(GraphSpec, self._graph_spec),
+                self._samples[0],
+                recorded_names=cast(list[str], self._input_names),
+            )
         except Exception as error:
             logger.info("Perf Analyzer will use synthetic inputs: %s", error)
             return ()
