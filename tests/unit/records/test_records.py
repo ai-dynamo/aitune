@@ -251,12 +251,27 @@ def test_export_files_rejects_main_file_renamed_to_additional_file(tmp_path):
     model_files = ModelFiles(format="onnx", path=path, additional_files=(Path("weights.data"),))
     destination = tmp_path / "repository" / "weights.data"
 
-    with pytest.raises(ValueError, match="overwrite one of its additional files"):
+    with pytest.raises(ValueError, match="exported to the same target"):
         model_files.export_files(destination)
 
     assert not destination.parent.exists()
     assert path.read_bytes() == b"model"
     assert weights.read_bytes() == b"weights"
+
+
+def test_export_files_rejects_destination_matching_nested_additional_source(tmp_path):
+    path = _write_artifact(tmp_path / "cache", b"model")
+    weights = path.parent / "weights" / "model.data"
+    weights.parent.mkdir()
+    weights.write_bytes(b"weights")
+    model_files = ModelFiles(format="onnx", path=path, additional_files=(Path("weights/model.data"),))
+
+    with pytest.raises(ValueError, match="overwrite one of the model's source files"):
+        model_files.export_files(weights)
+
+    assert path.read_bytes() == b"model"
+    assert weights.read_bytes() == b"weights"
+    assert not (weights.parent / "weights" / "model.data").exists()
 
 
 def test_export_files_copies_current_bytes(tmp_path):

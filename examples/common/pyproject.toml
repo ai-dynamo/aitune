@@ -5,7 +5,7 @@
 name = "aitune-examples-common"
 version = "0.1.0"
 description = "NVIDIA AITune Examples Common"
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.11, <3.14"
 
 [build-system]
 requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]

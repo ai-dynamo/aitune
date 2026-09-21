@@ -38,12 +38,12 @@ keywords = [
     "automation",
 ]
 license = { text = "Apache 2.0" }
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.11, <3.14"
 dependencies = [
     "autowrapt>=1.0",
     "dill>=0.3.8",
     "nvidia-ml-py",
-    "nvidia-modelopt[onnx]>=0.33.0",
+    "nvidia-modelopt[onnx]>=0.33.0", # sets onnxruntime-gpu version
     "numpy>=1.26.4",
     "onnxscript>=0.2.0",
     "onnx-ir>=0.1.11",
@@ -66,7 +66,6 @@ dynamo = [
 triton = [
     "pydantic>=2",
     "protobuf>=6.33.5",
-    "PyYAML>=6.0",
     "tritonclient[grpc]",
 ]
 
@@ -111,12 +110,8 @@ test = [
     "pytest-xdist",
     "pillow",
     "datasets>=3.3.2",
-    "transformers>=4.54,<5",
+    "transformers>=4.57.6,<5",
     "setuptools",
-    "importlib-metadata; python_version < '3.10'",
-    "pydantic>=2",
-    "protobuf>=6.33.5",
-    "tritonclient[grpc]",
 ]
 dev = [
     "build >= 0.8",
@@ -128,15 +123,14 @@ dev = [
     "pre-commit",
     "pre-commit-uv",
     "pytype",
-    "tox",
     "uv>=0.9.0",
 ]
 functional-test = [
     "fire",
     "timm",
-    "diffusers>=0.35.0",
+    "diffusers>=0.35.0,!=0.37.1",
     "datasets>=3.3.2",
-    "transformers>=4.54,<5",
+    "transformers>=4.57.6,<5",
     "sentencepiece>=0.2.0",
     "urllib3>=2.6.3", # sec
     "kernels>=0.12",
@@ -167,6 +161,7 @@ aitune = ["**/*"]
 
 [tool.uv]
 managed = true
+environments = ["'tegra' not in platform_release"]
 conflicts = [
     [
         { extra = "torch28" },
@@ -180,7 +175,7 @@ conflicts = [
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = "INFO"
-addopts = ["--import-mode=importlib", "--doctest-modules"]
+addopts = ["--quiet", "--import-mode=importlib", "--doctest-modules"]
 pythonpath = ["."]
 testpaths = ["aitune", "tests/unit"]
 markers = [

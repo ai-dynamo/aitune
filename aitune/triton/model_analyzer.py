@@ -271,6 +271,7 @@ def _configs(
     destination: Path,
     *,
     config: model_config_pb2.ModelConfig,
+    input_data_path: Path | None,
     max_instance_count: int,
     queue_delay_microseconds: tuple[int, ...],
 ) -> tuple[
@@ -282,7 +283,8 @@ def _configs(
     _validate_model(artifact, model_directory, config)
     perf_flags, minimum_batch, maximum_batch, input_data = _profiling_inputs(artifact, config)
     if input_data is not None:
-        perf_flags["input-data"] = (str((destination / _INPUT_DATA_FILE_NAME).resolve()),)
+        input_data_path = destination / _INPUT_DATA_FILE_NAME if input_data_path is None else input_data_path
+        perf_flags["input-data"] = (str(input_data_path.resolve()),)
 
     repository = model_directory.parent.resolve()
     model_name = config.name
@@ -433,6 +435,7 @@ def _write_model_analyzer_configs(
     model_directory: Path,
     destination: Path,
     staging: Path,
+    input_data_path: Path | None = None,
     max_instance_count: int = 5,
     queue_delay_microseconds: tuple[int, ...] = _DEFAULT_QUEUE_DELAYS_MICROSECONDS,
 ) -> None:
@@ -442,6 +445,7 @@ def _write_model_analyzer_configs(
         model_directory,
         destination,
         config=config,
+        input_data_path=input_data_path,
         max_instance_count=max_instance_count,
         queue_delay_microseconds=queue_delay_microseconds,
     )

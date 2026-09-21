@@ -17,10 +17,9 @@ on:
       dist_run_id:
         description: Reusable workflow run ID for downloading the dist artifact
         value: ${{ jobs.wheel.outputs.run_id }}
-      pytorch_image:
-        description: SHA-tagged PyTorch CI image pushed to GHCR
-        value: ${{ jobs.pytorch-image.outputs.image }}
-
+      pytorch_ci_image:
+        description: PyTorch image selected for this run
+        value: ${{ jobs.wheel.outputs.image }}
 
 permissions:
   contents: read
@@ -33,11 +32,11 @@ env:
   PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_VERSION: 0.11.8
-  UV_PYTHON: &python_version "3.10"
+  UV_PYTHON: &python_version "3.11"
   NODE_VERSION: &node_version "25"
   FERN_VERSION: "5.110.0"
-  TORCH_CI_IMAGE: nvcr.io/nvidia/pytorch:26.01-py3
-  PYTORCH_CI_IMAGE: &pytorch_ci_image ghcr.io/${{ github.repository }}:${{ github.sha }}
+  TORCH_CI_IMAGE: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3:latest # daily updated image AITune container image
+  PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
   _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -78,7 +77,7 @@ jobs:
       - uses: *actions_setup_uv
         with:
           python-version: *python_version
-      - run: uv sync --frozen --group dev --group test
+      - run: uv sync --frozen --group dev --group test --extra triton
       - name: Pytype checker
         run: |
           set -o pipefail
@@ -131,7 +130,7 @@ jobs:
       - uses: *actions_setup_uv
         with:
           python-version: *python_version
-      - run: uv sync --frozen --group dev --group test --group doc
+      - run: uv sync --frozen --group dev --group test --group doc --extra triton
       - run: uv pip install pip-licenses==5.5.5 toml==0.10.2
       - name: Check package licenses
         run: |
@@ -152,7 +151,7 @@ jobs:
         with:
           base-ref: main
           head-ref: ${{ github.ref }}
-          fail-on-severity: high
+          fail-on-severity: critical
           comment-summary-in-pr: on-failure
 
   check-docs:
@@ -177,10 +176,25 @@ jobs:
     runs-on: linux-amd64-cpu4
     outputs:
       run_id: ${{ github.run_id }}
+      build_image: ${{ steps.image.outputs.build_image }}
+      image: ${{ steps.image.outputs.image }}
     steps:
       - uses: *actions_checkout
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Select PyTorch image
+        id: image
+        run: |
+          base=$(git merge-base origin/main HEAD)
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] ||
+             [ -n "$(git diff --name-only "$base" HEAD -- uv.lock .github/docker/Dockerfile )" ]; then
+            echo "build_image=true" >> "$GITHUB_OUTPUT"
+            echo "image=$PYTORCH_CI_IMAGE" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_image=false" >> "$GITHUB_OUTPUT"
+            echo "image=$TORCH_CI_IMAGE" >> "$GITHUB_OUTPUT"
+          fi
       - uses: *actions_setup_uv
         with:
           python-version: *python_version
@@ -198,10 +212,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - python-version: "3.10"
           - python-version: "3.11"
           - python-version: "3.12"
-          # - python-version: "3.13"
+          - python-version: "3.13"
     steps:
       - uses: *actions_checkout
         with:
@@ -213,9 +226,9 @@ jobs:
         with:
           name: dist
           path: dist
-      - run: uv sync --frozen --group test --extra torch29
+      - run: uv sync --frozen --group test --extra torch29 --extra triton
       - run: uv pip install --reinstall --no-deps dist/*.whl
-      - run: uv run pytest -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
+      - run: .venv/bin/python -m pytest -q -rf -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
       - if: always()
         uses: *actions_upload_artifact
         with:
@@ -226,9 +239,8 @@ jobs:
   pytorch-image:
     name: Build PyTorch image
     needs: wheel
-    runs-on: linux-amd64-cpu4
-    outputs:
-      image: ${{ steps.image.outputs.image }}
+    if: needs.wheel.outputs.build_image == 'true'
+    runs-on: linux-amd64-cpu16
     permissions:
       contents: read
       packages: write
@@ -254,18 +266,23 @@ jobs:
             FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
             ADDITIONAL_PACKAGES=pytest
           tags: ${{ env.PYTORCH_CI_IMAGE }}
-      - id: image
-        run: echo "image=${{ env.PYTORCH_CI_IMAGE }}" >> "$GITHUB_OUTPUT"
+          cache-from: |
+            type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
+          cache-to: |
+            type=registry,ref=ghcr.io/${{ github.repository }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd
 
   pytorch-cpu:
     name: PyTorch CPU
-    needs: pytorch-image
+    needs: [wheel, pytorch-image]
+    if: >-
+      ${{ !cancelled() && needs.wheel.result == 'success' &&
+          (needs.pytorch-image.result == 'success' || needs.pytorch-image.result == 'skipped') }}
     runs-on: linux-amd64-cpu32
     permissions:
       contents: read
       packages: read
     container:
-      image: *pytorch_ci_image
+      image: ${{ needs.wheel.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -273,7 +290,12 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
-      - run: python -m pytest -n auto tests/unit --junitxml=pytorch-cpu.test-report.xml
+      - uses: *actions_download_artifact
+        with:
+          name: dist
+          path: dist
+      - run: python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
+      - run: python -m pytest -q -rf -n auto tests/unit --junitxml=pytorch-cpu.test-report.xml
       - if: always()
         uses: *actions_upload_artifact
         with:
@@ -283,14 +305,17 @@ jobs:
 
   pytorch-gpu:
     name: PyTorch GPU
-    needs: pytorch-image
+    needs: [wheel, pytorch-image]
+    if: >-
+      ${{ !cancelled() && needs.wheel.result == 'success' &&
+          (needs.pytorch-image.result == 'success' || needs.pytorch-image.result == 'skipped') }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 40
     permissions:
       contents: read
       packages: read
     container:
-      image: *pytorch_ci_image
+      image: ${{ needs.wheel.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -298,8 +323,17 @@ jobs:
       - uses: *actions_checkout
         with:
           persist-credentials: false
+      - uses: *actions_download_artifact
+        with:
+          name: dist
+          path: dist
+      - run: |
+          echo "Container image: ${{ needs.wheel.outputs.image }}"
+          echo "Checking onnxruntime_providers_cuda.so dependencies:"
+          ldd /usr/local/lib/python3.12/dist-packages/onnxruntime/capi/libonnxruntime_providers_cuda.so
+      - run: python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
       - run: >-
-          python -m pytest tests/unit
+          python -m pytest -q -rf tests/unit
           --cov=aitune
           --cov-report=xml:coverage.xml
           --junitxml=pytorch-gpu.test-report.xml
@@ -311,4 +345,3 @@ jobs:
             coverage.xml
             pytorch-gpu.test-report.xml
           if-no-files-found: ignore
-

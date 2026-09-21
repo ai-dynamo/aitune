@@ -2,6 +2,9 @@
 ARG FROM_IMAGE=nvcr.io/nvidia/cuda:12.9.2-devel-ubuntu26.04
 FROM ${FROM_IMAGE}
 
+ARG AITUNE_CI_IMAGE_CREATION_DATE=unset
+ENV AITUNE_CI_IMAGE_CREATION_DATE=${AITUNE_CI_IMAGE_CREATION_DATE}
+
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 RUN apt-get update && \

@@ -11,6 +11,7 @@ from google.protobuf import text_format
 from tritonclient.grpc import model_config_pb2
 
 from aitune import triton as aitriton
+from aitune.exceptions import AITunePublicationError
 from aitune.records import (
     BoundedTensorSpec,
     DeploymentArtifact,
@@ -286,7 +287,7 @@ def test_analyzer_generation_failure_leaves_no_published_model(tmp_path, monkeyp
     monkeypatch.setattr(model_repository, "_write_model_analyzer_configs", fail)
     artifact = _plan(tmp_path / "source.plan")
     repository = tmp_path / "repository"
-    with pytest.raises(aitriton.PublicationError, match="cannot write analyzer config"):
+    with pytest.raises(AITunePublicationError, match="cannot write analyzer config"):
         aitriton.publish(artifact, path=repository, model_name="encoder")
     assert list(repository.iterdir()) == []
     assert not (tmp_path / "repository-model-analyzer").exists()
@@ -364,7 +365,7 @@ def test_analyzer_requires_a_common_batch_range_for_all_inputs(tmp_path, compati
     artifact = _with_profiles(artifact, *profiles)
     repository = tmp_path / "repository"
     if not compatible_fallback:
-        with pytest.raises(aitriton.PublicationError, match="common batch size"):
+        with pytest.raises(AITunePublicationError, match="common batch size"):
             aitriton.publish(artifact, path=repository, model_name="encoder", max_batch_size=8)
         assert list(repository.iterdir()) == []
         return
