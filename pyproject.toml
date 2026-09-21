@@ -64,6 +64,12 @@ dynamo = [
     "uvloop",
 ]
 
+triton = [
+    "pydantic>=2",
+    "protobuf>=6.33.5",
+    "tritonclient[grpc]",
+]
+
 torch28 = [ # nvcr.io/nvidia/pytorch:25.08-py3 is based on 2.8.0a0+34c6371d24.
     "torch>=2.8.0a0,<2.9",
     "torch-tensorrt>=2.8.0a0,<2.9",
