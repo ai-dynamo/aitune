@@ -43,11 +43,12 @@ class FirstWinsStrategy(PerformanceValidationMixin, MultiBackendStrategy):
 
     def _default_aot_backends(self, distributed: bool = False) -> list[Backend]:
         """Try TensorRT before Inductor for AOT; distributed modules need Inductor backends."""
-        if distributed:
-            return [TorchInductorAotBackend(), TorchInductorJitBackend()]
+        backends: list[Backend] = []
+        if not distributed:
+            backends = [TensorRTBackend(), TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False))]
         return [
-            TensorRTBackend(),
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
+            *backends,
+            TorchInductorAotBackend(),
             TorchInductorJitBackend(),
         ]
 
