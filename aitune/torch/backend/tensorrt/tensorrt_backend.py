@@ -19,8 +19,8 @@ from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
 from aitune.exceptions import AITuneUserInputError
-from aitune.records import BoundedTensorSpec, DeploymentArtifact, ModelFiles, RuntimeConfig
-from aitune.torch.artifact import bounded_tensor_specs
+from aitune.records import BoundedTensorSpec, DeploymentArtifact, ModelFiles, RuntimeConfig, TensorSample
+from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
     BackendBuildStep,
@@ -232,6 +232,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
     STATE_QUANTIZATION_CONFIG = "quantization_config"
     STATE_CONFIG = "config"
     STATE_USE_CUDA_GRAPHS = "use_cuda_graphs"
+    STATE_SAMPLES = "samples"
 
     # Supported devices
     _devices: ClassVar[list[str]] = ["cuda"]
@@ -273,6 +274,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._trt_optimization_profiles_artifact: ArtifactPath | None = None
         self._output_object = None
         self._graph_spec = None
+        self._samples: Sequence[Sample] | None = None
 
         # runtime variables
         self._output_allocator = None
@@ -364,6 +366,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """
         logger.info("Starting TensorRT backend building")
         self._graph_spec = graph_spec
+        self._samples = samples
 
         cuda_set_device(self._device)
         if isinstance(module, OnnxModule):
@@ -808,7 +811,22 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     "cuda_graph_cache_policy": self._config.cuda_graph_cache_policy,
                 },
             ),
+            sample_inputs=self._artifact_sample_inputs(),
         )
+
+    def _artifact_sample_inputs(self) -> tuple[TensorSample, ...]:
+        """Derive portable values from the checkpointed sample and GraphSpec."""
+        if self._samples is None:
+            return ()
+        try:
+            return artifact_input_sample(
+                cast(GraphSpec, self._graph_spec),
+                self._samples[0],
+                recorded_names=cast(list[str], self._input_names),
+            )
+        except Exception as error:
+            logger.info("Perf Analyzer will use synthetic inputs: %s", error)
+            return ()
 
     @staticmethod
     def _validate_artifact_profile_input_bounds(
@@ -1252,6 +1270,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_USE_CUDA_GRAPHS: self._config.use_cuda_graphs,
             self.STATE_TRT_OPTIMIZATION_PROFILES_PATH: self._trt_optimization_profiles_artifact,
+            self.STATE_SAMPLES: (self._samples.to_dict() if isinstance(self._samples, SampleStore) else self._samples),
         }
 
     @classmethod
@@ -1262,6 +1281,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
         backend._trt_optimization_profiles_artifact = state_dict[cls.STATE_TRT_OPTIMIZATION_PROFILES_PATH]
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend._device = state_dict[cls.STATE_DEVICE]
+        samples_state = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore.from_dict(samples_state) if isinstance(samples_state, dict) else samples_state
         backend.state = BackendState.CHECKPOINT_LOADED
 
         # Reconstruct config with quantization settings

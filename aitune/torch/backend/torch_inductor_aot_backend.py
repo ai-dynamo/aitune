@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch Inductor AOT backend."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
@@ -11,8 +12,8 @@ import nvtx
 import torch
 import torch.nn as nn
 
-from aitune.records import DeploymentArtifact, ModelFiles, RuntimeConfig
-from aitune.torch.artifact import bounded_tensor_specs
+from aitune.records import DeploymentArtifact, ModelFiles, RuntimeConfig, TensorSample
+from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
     BackendBuildStep,
@@ -80,6 +81,7 @@ class TorchInductorAotBackend(Backend):
     STATE_DEVICE = "device"
     STATE_GRAPH_SPEC = "graph_spec"
     STATE_PT2_CALL_CONTRACT = "pt2_call_contract"
+    STATE_SAMPLES = "samples"
 
     def __init__(self, config: TorchInductorAotBackendConfig | None = None):
         """Initialize TorchInductorAotBackend.
@@ -94,6 +96,7 @@ class TorchInductorAotBackend(Backend):
         self._graph_spec: GraphSpec | None = None
         self._pt2_call_contract: PT2CallContract | None = None
         self._pt2_call_contract_error: str | None = None
+        self._samples: Sequence[Sample] | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -113,6 +116,7 @@ class TorchInductorAotBackend(Backend):
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Export and compile the model with AOT Inductor, then load the runner."""
         self._graph_spec = graph_spec
+        self._samples = samples
         module = module.eval()
         move_module_to_device(module, self._device)
 
@@ -150,7 +154,9 @@ class TorchInductorAotBackend(Backend):
             args, kwargs = sample
             with torch.no_grad():
                 output = module(*args, **kwargs)
-            self._pt2_call_contract = PT2CallContract.capture(cast(GraphSpec, self._graph_spec), sample, output)
+            graph_spec = cast(GraphSpec, self._graph_spec)
+            contract = PT2CallContract.capture(graph_spec, sample, output)
+            self._pt2_call_contract = contract
         except Exception as error:
             self._pt2_call_contract_error = str(error)
             logger.info("PT2 package will not be available for deployment: %s", error)
@@ -192,7 +198,25 @@ class TorchInductorAotBackend(Backend):
                 artifact_names=output_names,
             ),
             runtime=RuntimeConfig(name="aotinductor"),
+            sample_inputs=self._artifact_sample_inputs(contract, input_names),
         )
+
+    def _artifact_sample_inputs(
+        self, contract: PT2CallContract, input_names: tuple[str, ...]
+    ) -> tuple[TensorSample, ...]:
+        """Derive portable values from the checkpointed sample and PT2 input order."""
+        if self._samples is None:
+            return ()
+        try:
+            return artifact_input_sample(
+                cast(GraphSpec, self._graph_spec),
+                self._samples[0],
+                metadata_indices=contract.input_order,
+                artifact_names=input_names,
+            )
+        except Exception as error:
+            logger.info("Perf Analyzer will use synthetic inputs: %s", error)
+            return ()
 
     @nvtx.annotate(message="TorchInductorAotBackend.infer", domain="AITune", color="orange")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
@@ -228,6 +252,7 @@ class TorchInductorAotBackend(Backend):
             self.STATE_PT2_CALL_CONTRACT: (
                 self._pt2_call_contract.to_dict() if self._pt2_call_contract is not None else None
             ),
+            self.STATE_SAMPLES: (self._samples.to_dict() if isinstance(self._samples, SampleStore) else self._samples),
         }
 
     @classmethod
@@ -242,5 +267,7 @@ class TorchInductorAotBackend(Backend):
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         contract: PT2CallContractState | None = state_dict[cls.STATE_PT2_CALL_CONTRACT]
         backend._pt2_call_contract = PT2CallContract.from_dict(contract) if contract is not None else None
+        samples_state = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore.from_dict(samples_state) if isinstance(samples_state, dict) else samples_state
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend

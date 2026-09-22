@@ -16,6 +16,7 @@ from aitune.triton.config import (
     TensorRTModelConfig,
     TorchAOTIModelConfig,
 )
+from aitune.triton.model_analyzer import write_model_analyzer_config
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +35,16 @@ def publish(
     path: str | os.PathLike[str],
     model_name: str,
     model_version: int = 1,
-    dynamic_batching: bool = False,
+    dynamic_batching: bool = True,
     max_batch_size: int | None = None,
     staging_path: str | os.PathLike[str] | None = None,
 ) -> Path:
     """Publish one tuned artifact into a new Triton model repository entry.
 
     The operation never replaces an existing model. Files are copied and staged
-    before the completed model directory is moved into the repository.
+    before the completed model directory is moved into the repository. A Model Analyzer
+    config is generated automatically under ``model_analyzer/config.yaml``, with
+    input shapes derived from the artifact.
 
     Supported model format/runtime pairs are ``onnx``/``onnxruntime``,
     ``tensorrt_plan``/``tensorrt``, and ``pt2``/``aotinductor``. ONNX provider
@@ -54,8 +57,9 @@ def publish(
         path: Triton model repository root.
         model_name: New model directory name.
         model_version: Positive Triton model version.
-        dynamic_batching: Let Triton combine independent client requests.
-        max_batch_size: Optional cap within the artifact's tuned batch bounds.
+        dynamic_batching: Let Triton combine independent client requests. Enabled by default.
+        max_batch_size: Optional implicit batch limit within the artifact's tuned bounds.
+            It can be set without enabling the dynamic batcher.
         staging_path: Directory outside the repository on the same filesystem. Defaults to the repository's parent.
 
     Returns:
@@ -104,6 +108,15 @@ def publish(
         if artifact.model.additional_files:
             destination = destination / file_name
         artifact.model.export_files(destination)
+        repository_path = repository.resolve()
+        write_model_analyzer_config(
+            artifact,
+            config=config.to_protobuf(),
+            model_directory=model_directory,
+            destination=repository_path.parent / f"{repository_path.name}-model-analyzer" / model_name,
+            staging=staging / "model_analyzer",
+            input_data_path=model_directory / "model_analyzer" / "input-data.json",
+        )
         staging.rename(model_directory)
     except Exception as error:
         if staging is not None:
@@ -141,26 +154,28 @@ def _validate_artifact_files(artifact: DeploymentArtifact, *, multi_file: bool) 
 
 def _batch_size(artifact: DeploymentArtifact, dynamic_batching: bool, requested: int | None) -> int:
     """Resolve and validate the Triton deployment batch limit."""
-    if not dynamic_batching:
-        if requested is not None:
-            raise AITuneUserInputError("max_batch_size requires dynamic_batching=True")
+    if requested is None and not dynamic_batching:
         return 0
-    if requested is not None and (not isinstance(requested, int) or isinstance(requested, bool) or requested < 2):
-        raise AITuneUserInputError(f"max_batch_size must be an integer of at least 2, got {requested!r}")
+    if requested is not None and (not isinstance(requested, int) or isinstance(requested, bool) or requested < 1):
+        raise AITuneUserInputError(f"max_batch_size must be a positive integer, got {requested!r}")
 
     supported = artifact.max_batch_size
-    if supported is None or supported < 2:
+    required = 2 if dynamic_batching else 1
+    if supported is None or supported < required:
         raise AITunePublicationError(
-            "Cannot enable dynamic batching: every input and output must have a batch axis starting at 1 "
-            "and support a batch size of at least 2"
+            "Cannot publish a batched model: every input and output must have a batch axis starting at 1 "
+            f"and support a batch size of at least {required}"
         )
     if any(tensor.batch_axis != 0 for tensor in artifact.inputs + artifact.outputs):
-        raise AITunePublicationError("Triton dynamic batching requires batch_axis=0 for every input and output")
+        raise AITunePublicationError("Triton implicit batching requires batch_axis=0 for every input and output")
     if requested is not None and requested > supported:
         raise AITunePublicationError(
             f"max_batch_size {requested} exceeds the artifact's bounded batch maximum of {supported}"
         )
-    return supported if requested is None else requested
+    batch_size = supported if requested is None else requested
+    if dynamic_batching and batch_size < 2:
+        raise AITuneUserInputError("dynamic_batching requires max_batch_size of at least 2")
+    return batch_size
 
 
 def _model_config(
@@ -178,7 +193,12 @@ def _model_config(
     if config_type is None:
         raise AITunePublicationError(f"Unsupported Triton runtime: {artifact.runtime.name!r}")
     try:
-        return config_type.from_artifact(artifact, name=model_name, max_batch_size=batch_size)
+        return config_type.from_artifact(
+            artifact,
+            name=model_name,
+            max_batch_size=batch_size,
+            dynamic_batching=dynamic_batching,
+        )
     except (KeyError, TypeError, ValueError) as error:
         raise AITunePublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
 

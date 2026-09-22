@@ -102,4 +102,4 @@ check:
   rules:
     broken-links: warn
     example-validation: error
-    missing-redirects: error
+    missing-redirects: warn

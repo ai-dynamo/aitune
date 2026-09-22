@@ -20,7 +20,7 @@ from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.pt2_artifact import PT2CallContract
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
@@ -36,9 +36,8 @@ def model(torch_device) -> nn.Module:
 
 
 @pytest.fixture
-def sample_data(torch_device) -> list[Sample]:
-    toy = ToyTorchModel()
-    return toy.samples(batch_sizes=[1], device=torch_device)
+def sample_data(torch_device, tmp_path) -> SampleStore:
+    return ToyTorchModel().sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
 
 @pytest.fixture
@@ -172,6 +171,7 @@ def test_artifact_after_deactivation_exposes_pt2_ordinal_tensor_interface(
     assert artifact.model.files == (artifact.model.path,)
     assert artifact.model.metadata == {"structured_call": False}
     assert artifact.runtime == RuntimeConfig(name="aotinductor")
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("INPUT__0",)
     destination = tmp_path / "exported" / "renamed.pt2"
     assert artifact.model.export_files(destination) == destination
     assert destination.read_bytes() == b"fake"
@@ -423,6 +423,8 @@ def test_to_dict_contains_required_keys(mock_aoti, backend, model, graph_spec, s
         "output_order": (0,),
         "structured": False,
     }
+    assert state[TorchInductorAotBackend.STATE_SAMPLES] == sample_data.to_dict()
+    assert "sample_inputs" not in state
 
 
 @requires_cuda

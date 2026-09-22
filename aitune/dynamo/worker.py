@@ -30,11 +30,15 @@ logger = getLogger(__name__)
 
 @dataclass
 class DynamoWorkerConfig:
-    """Configuration for the high-level :func:`dynamo_worker` entrypoint.
+    """Configure how an application-provided callable is exposed through Dynamo.
+
+    The application creates and loads the callable passed to :func:`dynamo_worker`.
+    This configuration only describes its Dynamo endpoint and registration.
 
     Args:
         type: Modality type. One of ``"image"``, ``"video"``, ``"audio"``, ``"embedding"``.
-        model_path: Hugging Face model ID or local path passed to ``register_model``.
+        model_path: Registration reference passed unchanged to Dynamo's
+            ``register_model``. It is not used to create or load the callable.
         mapping: Optional adapter ``fn(DynamoRequest) -> dict``. The result is
             unpacked as keyword arguments when calling the model. Without a mapping,
             a plain callable receives the deserialized request object.
@@ -42,7 +46,8 @@ class DynamoWorkerConfig:
         component: Component name within the namespace.
         endpoint: Endpoint name within the component.
         enable_nats: Enable NATS JetStream for KV cache events.
-        model_name: Name advertised to the Dynamo frontend. Defaults to ``model_path``.
+        model_name: Optional public name advertised to clients. Defaults to the
+            ``model_path`` registration reference.
     """
 
     type: Modality

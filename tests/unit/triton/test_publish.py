@@ -39,21 +39,32 @@ def _plan(path: Path, *, profiles: int = 1, use_cuda_graphs: bool = False) -> De
     path.write_bytes(b"TensorRT plan")
     inputs, outputs = _interface()
     return DeploymentArtifact(
-        model=ModelFiles(format="tensorrt_plan", path=path, metadata={"optimization_profile_count": profiles}),
+        model=ModelFiles(
+            format="tensorrt_plan",
+            path=path,
+            metadata={
+                "optimization_profile_count": profiles,
+                "optimization_profiles": (
+                    {"input_ids": {"min_shape": (1, 8), "opt_shape": (4, 128), "max_shape": (8, 512)}},
+                )
+                * profiles,
+            },
+        ),
         inputs=inputs,
         outputs=outputs,
         runtime=RuntimeConfig(name="tensorrt", options={"use_cuda_graphs": use_cuda_graphs}),
     )
 
 
-def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path):
+@pytest.mark.parametrize("dynamic_batching", [False, True])
+def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path, dynamic_batching):
     artifact = _plan(tmp_path / "source.plan", profiles=2, use_cuda_graphs=True)
 
     model = aitriton.publish(
         artifact,
         path=tmp_path / "repository",
         model_name="encoder",
-        dynamic_batching=True,
+        dynamic_batching=dynamic_batching,
         max_batch_size=4,
     )
 
@@ -69,7 +80,7 @@ def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path):
     assert tuple(parsed.input[0].dims) == (-1,)
     assert tuple(parsed.instance_group[0].profile) == ("0", "1")
     assert parsed.optimization.cuda.graphs
-    assert parsed.HasField("dynamic_batching")
+    assert parsed.HasField("dynamic_batching") == dynamic_batching
 
 
 @pytest.mark.parametrize(
@@ -134,8 +145,9 @@ def test_publishes_onnx_external_data_and_runtime_provider(tmp_path, provider, e
     config = (published / "config.pbtxt").read_text()
     parsed = text_format.Parse(config, model_config_pb2.ModelConfig())
     assert 'platform: "onnxruntime_onnx"' in config
-    assert parsed.max_batch_size == 0
-    assert tuple(parsed.input[0].dims) == (-1, -1)
+    assert parsed.max_batch_size == 8
+    assert parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (-1,)
     accelerators = parsed.optimization.execution_accelerators.gpu_execution_accelerator
     assert tuple(accelerator.name for accelerator in accelerators) == expected_accelerators
 
@@ -157,6 +169,7 @@ def test_publishes_pt2_using_torch_aoti_names(tmp_path):
     assert 'platform: "torch_aoti"' in config
     assert 'name: "INPUT__0"' in config
     assert 'name: "OUTPUT__0"' in config
+    assert "dynamic_batching" in config
 
 
 def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_path):
@@ -170,7 +183,12 @@ def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_pat
         runtime=RuntimeConfig(name="aotinductor"),
     )
 
-    published = aitriton.publish(artifact, path=tmp_path / "unbatched", model_name="encoder")
+    published = aitriton.publish(
+        artifact,
+        path=tmp_path / "unbatched",
+        model_name="encoder",
+        dynamic_batching=False,
+    )
     assert (published / "1" / "model.pt2").is_file()
 
     with pytest.raises(AITunePublicationError, match="structured calls"):

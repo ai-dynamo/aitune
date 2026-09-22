@@ -85,10 +85,17 @@ class BaseModelConfig(BaseModel, ABC):
     max_batch_size: int = Field(ge=0)
     inputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
     outputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
-    dynamic_batching: bool = False
+    dynamic_batching: bool = True
 
     @classmethod
-    def from_artifact(cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int) -> "BaseModelConfig":
+    def from_artifact(
+        cls,
+        artifact: DeploymentArtifact,
+        *,
+        name: str,
+        max_batch_size: int,
+        dynamic_batching: bool = True,
+    ) -> "BaseModelConfig":
         """Combine the tensor interface with runtime-specific artifact settings."""
         batched = max_batch_size > 0
         return cls(
@@ -96,7 +103,7 @@ class BaseModelConfig(BaseModel, ABC):
             max_batch_size=max_batch_size,
             inputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.inputs),
             outputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.outputs),
-            dynamic_batching=batched,
+            dynamic_batching=dynamic_batching,
             **cls._artifact_options(artifact),
         )
 
@@ -132,9 +139,9 @@ class BaseModelConfig(BaseModel, ABC):
 
     @model_validator(mode="after")
     def _validate_batching(self) -> "BaseModelConfig":
-        """Keep the scheduler setting consistent with the declared batch size."""
-        if self.dynamic_batching != (self.max_batch_size > 0):
-            raise ValueError("dynamic_batching must be enabled exactly when max_batch_size is positive")
+        """Require a batched model contract before enabling the scheduler."""
+        if self.dynamic_batching and self.max_batch_size == 0:
+            raise ValueError("dynamic_batching requires a positive max_batch_size")
         return self
 
     @classmethod
