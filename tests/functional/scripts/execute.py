@@ -25,15 +25,7 @@ except ImportError:
 def main() -> None:
     """Run the selected functional matrix entry."""
     args = parse_args()
-    run(
-        args.path,
-        args.kind,
-        args.test_number,
-        verbose=args.verbose,
-        dry_run=args.dry_run,
-        workflow=args.workflow,
-        phase=args.phase,
-    )
+    run(args.path, args.kind, args.test_number, args.verbose, args.dry_run, args.workflow)
 
 
 def run(
@@ -43,7 +35,6 @@ def run(
     verbose: bool = False,
     dry_run: bool = False,
     workflow: str | None = None,
-    phase: str = "all",
 ) -> None:
     """Run one zero-based entry from a functional script or example project."""
     config = _load_config(path, kind)
@@ -53,13 +44,13 @@ def run(
         raise ValueError(f"entry {test_number} does not exist for {path}") from exc
 
     env = os.environ | {"AITUNE_CONSOLE_OUTPUT": "1"} | config.environment
-    _validate_requested_workflow(path, kind, config, workflow, phase)
-    _install_dependencies(path, kind, config, verbose, dry_run, workflow, phase)
+    _validate_requested_workflow(path, kind, config, workflow)
+    _install_dependencies(path, kind, config, verbose, dry_run, workflow)
     _save_requirements(verbose, dry_run)
 
     run_kwargs: dict[str, Any] = {"cwd": path if kind == "project" else None, "env": env}
     if kind == "project":
-        _run_project(path, entry, workflow, phase, verbose, dry_run, run_kwargs)
+        _run_project(path, entry, workflow, verbose, dry_run, run_kwargs)
     else:
         _run_command(_command(path, kind, entry), verbose, dry_run, **run_kwargs)
 
@@ -69,15 +60,13 @@ def _validate_requested_workflow(
     kind: str,
     config: FunctionalTestConfig,
     workflow: str | None,
-    phase: str,
 ) -> None:
-    if phase != "all" and (kind != "project" or workflow != "triton"):
-        raise ValueError(f"Phase {phase} is only supported for the triton project workflow")
     if kind != "project":
         return
+    configured_workflows = [configured_workflow.name for configured_workflow in config.workflows]
     if workflow is None and config.workflows:
-        raise ValueError(f"Project {path} requires one of its configured workflows: {', '.join(config.workflows)}")
-    if workflow is not None and workflow not in config.workflows:
+        raise ValueError(f"Project {path} requires one of its configured workflows: {', '.join(configured_workflows)}")
+    if workflow is not None and workflow not in configured_workflows:
         raise ValueError(f"Workflow {workflow} is not configured for project {path}")
 
 
@@ -85,7 +74,6 @@ def _run_project(
     path: Path,
     entry: FunctionalVariantConfig,
     workflow: str | None,
-    phase: str,
     verbose: bool,
     dry_run: bool,
     run_kwargs: dict[str, Any],
@@ -95,10 +83,6 @@ def _run_project(
             _run_command(_command(path, "project", entry, script), verbose, dry_run, **run_kwargs)
         if (path / "run_dynamo.sh").is_file():
             _run_command(["./run_dynamo.sh"], verbose, dry_run, **run_kwargs)
-        return
-
-    if workflow == "triton" and phase == "validate":
-        _run_triton_validation(path, entry, verbose, dry_run, run_kwargs)
         return
 
     target = "python" if workflow == "dynamo" else "triton"
@@ -125,8 +109,7 @@ def _run_project(
         dry_run,
         **run_kwargs,
     )
-    if phase != "build":
-        _run_triton_validation(path, entry, verbose, dry_run, run_kwargs)
+    _run_triton_validation(path, entry, verbose, dry_run, run_kwargs)
 
 
 def _run_triton_validation(
@@ -154,14 +137,9 @@ def _install_dependencies(
     verbose: bool,
     dry_run: bool,
     workflow: str | None = None,
-    phase: str = "all",
 ) -> None:
-    if phase == "validate":
-        _run_command([sys.executable, "-m", "pip", "install", "examples/common"], verbose, dry_run)
-        _run_command([sys.executable, "-m", "pip", "install", f"{path}[triton]"], verbose, dry_run)
-        return
-
-    _run_command([sys.executable, "-m", "pip", "install", "--group", "functional-test"], verbose, dry_run)
+    if kind != "project" or workflow != "triton":
+        _run_command([sys.executable, "-m", "pip", "install", "--group", "functional-test"], verbose, dry_run)
 
     if kind == "project":
         _run_command([sys.executable, "-m", "pip", "install", "examples/common"], verbose, dry_run)
@@ -265,7 +243,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--kind", choices=("script", "project"), required=True)
     parser.add_argument("--test-number", type=int, required=True)
     parser.add_argument("--workflow", choices=("legacy", "dynamo", "triton"), default="legacy")
-    parser.add_argument("--phase", choices=("all", "build", "validate"), default="all")
     parser.add_argument("--is-custom-docker-image", type=json.loads, default=False)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

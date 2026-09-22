@@ -62,7 +62,8 @@ def _validate_project_contract(path: Path, config: FunctionalTestConfig, scripts
             raise ValueError(f"missing [project.scripts] entries: {', '.join(missing_scripts)}")
         return
 
-    for workflow in config.workflows:
+    for workflow_config in config.workflows:
+        workflow = workflow_config.name
         required_scripts = {"tune"}
         required_files = {f"run_{workflow}.sh"}
         if workflow == "triton":

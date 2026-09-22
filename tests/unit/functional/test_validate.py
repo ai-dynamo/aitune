@@ -75,8 +75,7 @@ tune = "demo:tune"
 triton-model-store = "demo:model_store"
 
 [tool.aitune]
-workflows = ["dynamo", "triton"]
-triton_image = "nvcr.io/nvidia/tritonserver:26.05-py3"
+workflows = [{ name = "dynamo" }, { name = "triton" }]
 """.strip(),
         encoding="utf-8",
     )
@@ -98,8 +97,7 @@ version = "0.1.0"
 tune = "demo:tune"
 
 [tool.aitune]
-workflows = ["triton"]
-triton_image = "nvcr.io/nvidia/tritonserver:26.05-py3"
+workflows = [{ name = "triton" }]
 """.strip(),
         encoding="utf-8",
     )

@@ -60,8 +60,15 @@ def test_project_workflows_expand_each_entry_into_independent_jobs() -> None:
         Path("examples/Demo/pyproject.toml"),
         _config({
             "arguments": [{"name": "first"}, {"name": "second"}],
-            "workflows": ["dynamo", "triton"],
-            "triton_image": "nvcr.io/nvidia/tritonserver:26.05-py3",
+            "workflows": [
+                {"name": "dynamo"},
+                {
+                    "name": "triton",
+                    "install_aitune_dependencies": True,
+                    "aitune_extras": ["triton", "torch212", "onnxruntime-gpu-cuda13"],
+                },
+            ],
+            "docker_image": "nvcr.io/nvidia/pytorch:26.05-py3",
         }),
         Scope.ALWAYS,
     )
@@ -72,18 +79,32 @@ def test_project_workflows_expand_each_entry_into_independent_jobs() -> None:
         ("examples_Demo_dynamo_002", 1, "dynamo"),
         ("examples_Demo_triton_002", 1, "triton"),
     ]
-    assert jobs[0]["triton_image"] == ""
-    assert jobs[1]["triton_image"] == "nvcr.io/nvidia/tritonserver:26.05-py3"
+    assert jobs[0]["docker_image"] == "ghcr.io/ai-dynamo/aitune/nvcr-torch-26.05-py3:latest"
+    assert jobs[1]["docker_image"] == "nvcr.io/nvidia/tritonserver:26.05-py3"
+    assert jobs[0]["install_aitune_dependencies"] is False
+    assert jobs[1]["install_aitune_dependencies"] is True
+    assert jobs[0]["aitune_extras"] == ""
+    assert jobs[1]["aitune_extras"] == "triton,torch212,onnxruntime-gpu-cuda13"
     assert "container_options" not in jobs[1]
 
 
 def test_project_workflows_reject_unknown_and_duplicate_values() -> None:
     with pytest.raises(ValueError, match="Unsupported project workflows: unknown"):
-        _config({"workflows": ["unknown"]})
+        _config({"workflows": [{"name": "unknown"}]})
     with pytest.raises(ValueError, match="Project workflows must be unique"):
-        _config({"workflows": ["triton", "triton"]})
-    with pytest.raises(ValueError, match="triton_image is required"):
-        _config({"workflows": ["triton"]})
+        _config({"workflows": [{"name": "triton"}, {"name": "triton"}]})
+    with pytest.raises(ValueError, match="aitune_extras require install_aitune_dependencies"):
+        _config({"workflows": [{"name": "triton", "aitune_extras": ["triton"]}]})
+
+
+def test_triton_workflow_rejects_an_image_without_an_nvidia_release() -> None:
+    with pytest.raises(ValueError, match=r"Triton workflow requires an nvcr\.io/nvidia/pytorch:"):
+        generate._make_project_entries(
+            "examples",
+            Path("examples/Demo/pyproject.toml"),
+            _config({"workflows": [{"name": "triton"}], "docker_image": "example/custom:latest"}),
+            Scope.ALWAYS,
+        )
 
 
 def test_script_arguments_expand_to_multiple_jobs() -> None:

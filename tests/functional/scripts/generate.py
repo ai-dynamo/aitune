@@ -27,6 +27,7 @@ from metadata import (  # noqa: E402
     DEFAULT_DOCKER_IMAGE,
     FunctionalTestConfig,
     FunctionalVariantConfig,
+    FunctionalWorkflowConfig,
     Scope,
     get_runner,
     get_scope,
@@ -70,33 +71,49 @@ def _matrix_entry(
     config: FunctionalTestConfig,
     variant: FunctionalVariantConfig,
     requested_scope: Scope,
-    workflow: str = "legacy",
+    workflow: FunctionalWorkflowConfig | None = None,
     default_docker_image: str = DEFAULT_DOCKER_IMAGE,
 ) -> dict[str, Any]:
     docker_image = config.docker_image or DEFAULT_DOCKER_IMAGE
     runner = variant.runner or config.runner or get_runner([*config.tags, *variant.tags])
+    workflow_name = workflow.name if workflow else "legacy"
+    workflow_docker_image = _workflow_docker_image(docker_image, workflow_name)
 
     return {
         "id": entry_id,
         "test_number": test_number,
-        "docker_image": _replace_custome_docker_image(docker_image),
+        "docker_image": _replace_custom_docker_image(workflow_docker_image),
         "is_custom_docker_image": docker_image != default_docker_image,
         "runner": runner,
         "environment": json.dumps(_environment_for_job(config)),
         "kind": kind,
         "path": path,
-        "workflow": workflow,
-        "triton_image": config.triton_image if workflow == "triton" else "",
+        "workflow": workflow_name,
+        "install_aitune_dependencies": workflow.install_aitune_dependencies if workflow else False,
+        "aitune_extras": ",".join(workflow.aitune_extras) if workflow else "",
         "allow_failure": config.allow_failure,
         "timeout_minutes": _timeout_to_minutes(config.timeout),
         "use_gated_hf_token": config.use_gated_hf_token,
     }
 
 
-def _replace_custome_docker_image(docker_image: str) -> str:
+def _workflow_docker_image(docker_image: str, workflow: str) -> str:
+    if workflow != "triton":
+        return docker_image
+    pytorch_prefix = "nvcr.io/nvidia/pytorch:"
+    if not docker_image.startswith(pytorch_prefix):
+        raise ValueError(f"Triton workflow requires an {pytorch_prefix}<release>-py3 image, got {docker_image}")
+    return docker_image.replace(pytorch_prefix, "nvcr.io/nvidia/tritonserver:", 1)
+
+
+def _replace_custom_docker_image(docker_image: str) -> str:
     if docker_image.startswith("ghcr.io/"):
         return docker_image
-    return docker_image.replace("nvcr.io/nvidia/pytorch:", "ghcr.io/ai-dynamo/aitune:nvcr-torch-")
+    pytorch_prefix = "nvcr.io/nvidia/pytorch:"
+    if not docker_image.startswith(pytorch_prefix):
+        return docker_image
+    image_tag = docker_image.removeprefix(pytorch_prefix)
+    return f"ghcr.io/ai-dynamo/aitune/nvcr-torch-{image_tag}:latest"
 
 
 def _make_script_entries(
@@ -153,11 +170,12 @@ def _make_project_entries(
     for index, variant in enumerate(config.entries, start=1):
         if only_tags and only_tags.isdisjoint([*config.tags, *variant.tags]):
             continue
-        workflows = config.workflows or ["legacy"]
+        workflows = config.workflows or [FunctionalWorkflowConfig(name="legacy")]
         jobs.extend([
             _matrix_entry(
                 entry_id=(
-                    f"{namespace}_{parent_dir.name}_{workflow if workflow != 'legacy' else 'inference'}_{index:03d}"
+                    f"{namespace}_{parent_dir.name}_"
+                    f"{workflow.name if workflow.name != 'legacy' else 'inference'}_{index:03d}"
                 ),
                 test_number=index - 1,
                 kind="project",

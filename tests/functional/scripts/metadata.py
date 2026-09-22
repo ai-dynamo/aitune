@@ -104,6 +104,22 @@ class FunctionalVariantConfig(BaseModel):
     runner: str | None = None
 
 
+class FunctionalWorkflowConfig(BaseModel):
+    """One project workflow and its AITune installation settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    install_aitune_dependencies: bool = False
+    aitune_extras: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_aitune_extras(self) -> FunctionalWorkflowConfig:
+        if self.aitune_extras and not self.install_aitune_dependencies:
+            raise ValueError("aitune_extras require install_aitune_dependencies=true")
+        return self
+
+
 class FunctionalTestConfig(BaseModel):
     """Functional test or project configuration."""
 
@@ -123,11 +139,7 @@ class FunctionalTestConfig(BaseModel):
     pip_install: list[dict[str, Any]] = Field(default_factory=list)
     arguments: list[dict[str, Any]] = Field(default_factory=list)
     variants: list[FunctionalVariantConfig] = Field(default_factory=list)
-    workflows: list[str] = Field(default_factory=list)
-    triton_image: str | None = Field(
-        default=None,
-        description="Container image used to validate an exported Triton model repository.",
-    )
+    workflows: list[FunctionalWorkflowConfig] = Field(default_factory=list)
     use_gated_hf_token: bool = False
 
     @property
@@ -156,19 +168,14 @@ class FunctionalTestConfig(BaseModel):
 
     @field_validator("workflows")
     @classmethod
-    def _validate_workflows(cls, workflows: list[str]) -> list[str]:
-        unsupported = sorted(set(workflows) - set(SUPPORTED_PROJECT_WORKFLOWS))
+    def _validate_workflows(cls, workflows: list[FunctionalWorkflowConfig]) -> list[FunctionalWorkflowConfig]:
+        names = [workflow.name for workflow in workflows]
+        unsupported = sorted(set(names) - set(SUPPORTED_PROJECT_WORKFLOWS))
         if unsupported:
             raise ValueError(f"Unsupported project workflows: {', '.join(unsupported)}")
-        if len(workflows) != len(set(workflows)):
+        if len(names) != len(set(names)):
             raise ValueError("Project workflows must be unique")
         return workflows
-
-    @model_validator(mode="after")
-    def _validate_workflow_images(self) -> FunctionalTestConfig:
-        if "triton" in self.workflows and not self.triton_image:
-            raise ValueError("triton_image is required for the triton workflow")
-        return self
 
     @classmethod
     def from_toml(

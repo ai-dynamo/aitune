@@ -66,8 +66,6 @@ jobs:
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
       matrix_count: ${{ steps.generate.outputs.matrix_count }}
-      triton_matrix: ${{ steps.triton-matrix.outputs.matrix }}
-      triton_matrix_count: ${{ steps.triton-matrix.outputs.matrix_count }}
     steps:
       - uses: *actions_checkout
         with:
@@ -99,13 +97,6 @@ jobs:
             --github-output "$GITHUB_OUTPUT" \
             --output-json jobs.json
 
-      - name: Prepare Triton validation matrix
-        id: triton-matrix
-        run: |
-          matrix="$(jq -c '[.[] | select(.workflow == "triton")]' jobs.json)"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "matrix_count=$(jq 'length' <<< "$matrix")" >> "$GITHUB_OUTPUT"
-
       - name: Display generated functional matrix
         if: always()
         run: |
@@ -131,9 +122,10 @@ jobs:
         include: ${{ fromJSON(needs.generate-examples-matrix.outputs.matrix) }}
     container:
       image: ${{ matrix.docker_image }}
+      # An empty username makes the runner omit credentials for public images.
       credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        username: ${{ startsWith(matrix.docker_image, 'ghcr.io/') && github.actor || '' }}
+        password: ${{ startsWith(matrix.docker_image, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
     env: ${{ fromJSON(matrix.environment) }}
     steps:
       - uses: *actions_checkout
@@ -147,7 +139,17 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       # Replace AITune baked into the base/custom image with this commit's wheel.
       - name: Install wheel
-        run: python -m pip install --force-reinstall --no-deps dist/*.whl
+        run: |
+          wheel="$(realpath dist/*.whl)"
+          extras="${{ matrix.aitune_extras }}"
+          if [[ "${{ matrix.install_aitune_dependencies }}" == true ]]; then
+            if [[ -n "$extras" ]]; then
+              wheel="${wheel}[${extras}]"
+            fi
+            python -m pip install "$wheel"
+          else
+            python -m pip install --force-reinstall --no-deps "$wheel"
+          fi
       - run: nvidia-smi
       - name: Run functional job
         env:
@@ -160,7 +162,6 @@ jobs:
             --kind "${{ matrix.kind }}" \
             --test-number "${{ matrix.test_number }}" \
             --workflow "${{ matrix.workflow }}" \
-            --phase "${{ matrix.workflow == 'triton' && 'build' || 'all' }}" \
             --verbose
 
       - if: always()
@@ -173,57 +174,5 @@ jobs:
             .cache/aitune.jit/**/*.log
             hardware_metrics.csv
             script_metadata.json
-            functional_test_requirements.txt
-          if-no-files-found: ignore
-
-  triton-validation:
-    name: ${{ matrix.id }} validation
-    needs: [generate-examples-matrix, examples]
-    if: always() && needs.generate-examples-matrix.outputs.triton_matrix_count != '0'
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ matrix.timeout_minutes }}
-    continue-on-error: ${{ matrix.allow_failure }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.generate-examples-matrix.outputs.triton_matrix) }}
-    container:
-      image: ${{ matrix.triton_image }}
-    env: ${{ fromJSON(matrix.environment) }}
-    steps:
-      - uses: *actions_checkout
-        with:
-          persist-credentials: false
-      - uses: *actions_download_artifact
-        with:
-          name: ${{ inputs.dist_run_id != '' && 'dist' || 'examples-dist' }}
-          path: dist
-          run-id: ${{ inputs.dist_run_id || github.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: *actions_download_artifact
-        with:
-          name: examples-${{ matrix.id }}
-          path: .
-      - name: Install wheel
-        run: python -m pip install --force-reinstall --no-deps dist/*.whl
-      - run: nvidia-smi
-      - name: Validate Triton model repository
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          python tests/functional/scripts/execute.py \
-            "${{ matrix.path }}" \
-            --kind "${{ matrix.kind }}" \
-            --test-number "${{ matrix.test_number }}" \
-            --workflow triton \
-            --phase validate \
-            --verbose
-
-      - if: always()
-        uses: *actions_upload_artifact
-        with:
-          name: triton-validation-${{ matrix.id }}
-          path: |
-            artifacts/**
             functional_test_requirements.txt
           if-no-files-found: ignore

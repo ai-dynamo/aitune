@@ -110,28 +110,18 @@ The service uses dynamic batching — requests are grouped and processed togethe
 
 ## Triton inference
 
-For local testing, use the same NVIDIA monthly release for tuning and serving. The preparation script runs tuning
-inside the PyTorch container and generates the model repository from the resulting `resnet50.ait` package:
+For local testing, the preparation script runs the complete workflow in a full Triton Server container. It installs
+the matching PyTorch tuning stack, tunes the model, generates the model repository, starts Triton, and validates an
+inference request:
 
 ```bash
 export NVIDIA_RELEASE=26.05
 ./prepare_triton.sh
 ```
 
-It uses `nvcr.io/nvidia/pytorch:${NVIDIA_RELEASE}-py3`. Run the validation phase inside the matching
-`nvcr.io/nvidia/tritonserver:${NVIDIA_RELEASE}-py3` container, with this repository and the generated model
-repository available in its filesystem:
-
-```bash
-python -m pip install ../../dist/*.whl
-python -m pip install ../common ".[triton]"
-./run_triton.sh
-```
-
-The validation script starts `/opt/tritonserver/bin/tritonserver` in the current container, waits for the model to
-become ready, invokes the client, and stops the server on exit. Set `TRITONSERVER` when the executable is installed
-elsewhere. The preparation script defaults to release `26.05`; use the matching Triton image when changing
-`NVIDIA_RELEASE`.
+It uses `nvcr.io/nvidia/tritonserver:${NVIDIA_RELEASE}-py3` and defaults to release `26.05`. The validation script
+starts `/opt/tritonserver/bin/tritonserver` in the current container, waits for the model to become ready, invokes
+the client, and stops the server on exit. Set `TRITONSERVER` when the executable is installed elsewhere.
 
 Triton loads the published models at startup with `--model-control-mode=none`; no load API call is needed.
 The server and client run sequentially in the same CI job container and communicate over `localhost`.

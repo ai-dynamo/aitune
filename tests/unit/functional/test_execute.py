@@ -154,7 +154,7 @@ version = "0.1.0"
 tune = "demo.tune:main"
 
 [tool.aitune]
-workflows = ["dynamo"]
+workflows = [{ name = "dynamo" }]
 arguments = [{ image-path = "dog.webp" }]
 """.strip(),
         encoding="utf-8",
@@ -176,7 +176,7 @@ arguments = [{ image-path = "dog.webp" }]
     assert len(run.call_args_list) == 6
 
 
-def test_run_triton_build_phase_publishes_model_repository(
+def test_run_triton_project_workflow_builds_and_validates_model_repository(
     mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -194,8 +194,7 @@ tune = "demo.tune:main"
 triton-model-store = "demo.triton.model_store:main"
 
 [tool.aitune]
-workflows = ["triton"]
-triton_image = "nvcr.io/nvidia/tritonserver:26.05-py3"
+workflows = [{ name = "triton" }]
 variants = [{ arguments = { image-path = "dog.webp" }, launcher = "torchrun", processes = 2 }]
 """.strip(),
         encoding="utf-8",
@@ -203,11 +202,12 @@ variants = [{ arguments = { image-path = "dog.webp" }, launcher = "torchrun", pr
     (project / "run_triton.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     run = mocker.patch.object(execute.subprocess, "run")
 
-    execute.run(project, "project", 0, workflow="triton", phase="build")
+    execute.run(project, "project", 0, workflow="triton")
 
     model_repository = tmp_path / "artifacts" / "Demo" / "model_repository"
-    assert run.call_args_list[2].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[triton]"]
-    assert run.call_args_list[4].args[0] == [
+    assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "examples/common"]
+    assert run.call_args_list[1].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[triton]"]
+    assert run.call_args_list[3].args[0] == [
         sys.executable,
         "-m",
         "torch.distributed.run",
@@ -218,51 +218,16 @@ variants = [{ arguments = { image-path = "dog.webp" }, launcher = "torchrun", pr
         "--image-path=dog.webp",
         "--target=triton",
     ]
-    assert run.call_args_list[5].args[0] == [
+    assert run.call_args_list[4].args[0] == [
         sys.executable,
         "-m",
         "demo.triton.model_store",
         f"--model-repository={model_repository}",
     ]
+    assert run.call_args_list[5].args[0] == ["./run_triton.sh", "--image-path=dog.webp"]
+    assert run.call_args_list[5].kwargs["env"]["MODEL_REPOSITORY"] == str(model_repository)
+    assert "TRITON_NETWORK" not in run.call_args_list[5].kwargs["env"]
     assert len(run.call_args_list) == 6
-
-
-def test_run_triton_validate_phase_runs_only_server_validation(
-    mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("AITUNE_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
-    project = tmp_path / "Demo"
-    project.mkdir()
-    (project / "pyproject.toml").write_text(
-        """
-[project]
-name = "demo"
-version = "0.1.0"
-
-[project.scripts]
-tune = "demo.tune:main"
-triton-model-store = "demo.triton.model_store:main"
-
-[tool.aitune]
-workflows = ["triton"]
-triton_image = "nvcr.io/nvidia/tritonserver:26.05-py3"
-arguments = [{ image-path = "dog.webp" }]
-""".strip(),
-        encoding="utf-8",
-    )
-    (project / "run_triton.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-    run = mocker.patch.object(execute.subprocess, "run")
-
-    execute.run(project, "project", 0, workflow="triton", phase="validate")
-
-    model_repository = tmp_path / "artifacts" / "Demo" / "model_repository"
-    assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "examples/common"]
-    assert run.call_args_list[1].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[triton]"]
-    assert run.call_args_list[3].args[0] == ["./run_triton.sh", "--image-path=dog.webp"]
-    assert run.call_args_list[3].kwargs["env"]["MODEL_REPOSITORY"] == str(model_repository)
-    assert "TRITON_NETWORK" not in run.call_args_list[3].kwargs["env"]
-    assert len(run.call_args_list) == 4
 
 
 def test_run_verbose_dry_run_prints_without_executing(
