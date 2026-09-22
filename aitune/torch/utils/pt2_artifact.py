@@ -128,6 +128,6 @@ def _metadata_order(
         if not candidates:
             raise ValueError(f"PyTorch and GraphSpec disagree about the flattened {label} tensor order")
         order.append(candidates.pop(0))
-    if len(order) != len(tensor_data) or any(candidates for candidates in indices_by_identity.values()):
+    if len(order) != len(tensor_data) or any(candidate for candidate in indices_by_identity.values()):
         raise ValueError(f"PyTorch and GraphSpec disagree about the flattened {label} tensor count")
     return tuple(order)

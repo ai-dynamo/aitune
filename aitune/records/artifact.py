@@ -64,8 +64,8 @@ class ModelFiles:
             The destination main file path.
 
         Raises:
-            OSError: If directory creation or copying fails.
             ValueError: If export targets collide with each other or with model source files.
+            OSError: If directory creation or copying fails.
         """
         destination = Path(path)
         planned = [(self.path, destination)]
@@ -91,7 +91,6 @@ class ModelFiles:
         for resolved_source, resolved_target in resolved_plan:
             if resolved_target != resolved_source and resolved_target in resolved_sources:
                 raise ValueError(f"Exporting to {resolved_target} would overwrite one of the model's source files")
-
         for source, target in planned:
             if source.resolve() == target.resolve():
                 continue
@@ -172,8 +171,7 @@ class DeploymentArtifact:
             names = tuple(tensor.name for tensor in tensors)
             if len(names) != len(set(names)):
                 raise ValueError(f"{label} tensor names must be unique, got {names}")
-        sample_names = tuple(sample.name for sample in self.sample_inputs)
-        if sample_names and sample_names != self.input_names:
+        if self.sample_inputs and tuple(sample.name for sample in self.sample_inputs) != self.input_names:
             raise ValueError("Representative sample names must match artifact inputs in executable order")
 
     @property

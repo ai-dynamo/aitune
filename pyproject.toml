@@ -100,7 +100,6 @@ torch212 = [ # nvcr.io/nvidia/pytorch:26.05-py3 is based on 2.12.0a0+5aff3928d8
 onnxruntime-gpu-cuda12 = ["onnxruntime-gpu"]
 onnxruntime-gpu-cuda13 = ["onnxruntime-gpu"]
 
-
 [project.urls]
 "Documentation" = "https://ai-dynamo.github.io/aitune"
 "Repository" = "https://github.com/ai-dynamo/aitune.git"

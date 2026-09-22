@@ -114,12 +114,44 @@ def artifact_input_sample(
     metadata_indices: Sequence[int] | None = None,
     artifact_names: Sequence[str] | None = None,
 ) -> tuple[TensorSample, ...]:
-    """Capture one recorded Torch call as portable deployment input values."""
+    """Capture one recorded Torch call as portable deployment input values.
+
+    A recorded sample follows the module's Python call signature, while an exported
+    executable can expose a different input order or different names. This function
+    uses ``GraphSpec`` locators to read the original tensors, reorders them to match
+    the executable, and stores their shape and flattened values in ``TensorSample``
+    records. The result contains no Torch objects, so it can be kept in a deployment
+    artifact and later converted to input formats such as Perf Analyzer JSON.
+
+    By default, the result uses the input order and original tensor names stored in
+    ``GraphSpec``. A backend whose executable selects or reorders named inputs can
+    provide ``recorded_names``. Positional formats such as PT2 instead provide
+    ``metadata_indices`` and use ``artifact_names`` for their final public names.
+    The two explicit selection methods are mutually exclusive.
+
+    Args:
+        graph_spec: Recorded graph metadata containing tensor names and locators.
+        sample: Original module call represented as ``(args, kwargs)``.
+        recorded_names: Recorded graph input names in executable order.
+        metadata_indices: Graph input positions in executable order.
+        artifact_names: Final executable names for the selected inputs. Recorded
+            names are used when this is omitted.
+
+    Returns:
+        Portable input samples in executable order.
+
+    Raises:
+        ValueError: If selection is ambiguous, an input cannot be found, names and
+            selected inputs have different lengths, or a selected value is not a
+            tensor.
+    """
     if recorded_names is not None and metadata_indices is not None:
         raise ValueError("Select artifact tensors by recorded name or metadata index, not both")
 
     tensor_data = graph_spec.input_spec.tensor_data
     if recorded_names is not None:
+        # Graph metadata is stored in discovery order. Resolve names back to metadata
+        # positions so the result follows the executable's requested order.
         indices_by_name = {
             graph_spec.tensor_name(locator, tensor_spec, "input"): index
             for index, (locator, tensor_spec) in enumerate(tensor_data)
@@ -144,6 +176,8 @@ def artifact_input_sample(
         raise ValueError("Artifact input names and selected tensors must have the same length")
 
     args, kwargs = sample
+    # Bind positional and keyword arguments to one mapping because GraphSpec locators
+    # describe paths from normalized forward parameters, not directly from args/kwargs.
     normalized = graph_spec.forward_signature.normalize(args, kwargs)
     result = []
     for name, index in zip(names, selected_indices, strict=True):
@@ -151,6 +185,8 @@ def artifact_input_sample(
         tensor = locator.get_value(normalized.arguments)
         if not isinstance(tensor, torch.Tensor):
             raise ValueError(f"Recorded artifact input {name!r} is not a tensor")
+        # Deployment records must not retain a device allocation or a Torch object.
+        # Flattening keeps the original shape explicit while making values portable.
         values = cast(list[bool | int | float], tensor.detach().cpu().reshape(-1).tolist())
         result.append(TensorSample(name=name, shape=tuple(tensor.shape), values=tuple(values)))
     return tuple(result)

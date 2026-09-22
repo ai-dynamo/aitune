@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Shared fields for backend-specific Triton model configurations."""
 
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Literal
 
@@ -58,7 +59,23 @@ class TritonTensorConfig(BaseModel):
         return dims
 
 
-class _BaseModelConfig(BaseModel):
+def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConfig:
+    """Translate an artifact tensor spec into Triton's tensor representation."""
+    if batched and spec.batch_axis != 0:
+        raise ValueError(f"Triton batching requires batch_axis=0 for tensor {spec.name!r}")
+    bounds = zip(spec.min_shape, spec.max_shape, strict=True)
+    dimensions = tuple(minimum if minimum == maximum else -1 for minimum, maximum in bounds)
+    if batched:
+        dimensions = dimensions[1:]
+    reshape = None
+    if not dimensions:
+        # Triton's API requires non-empty dims; reshape preserves the scalar shape expected by the backend.
+        dimensions = (1,)
+        reshape = ()
+    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions, reshape=reshape)
+
+
+class BaseModelConfig(BaseModel, ABC):
     """Internal fields and validation shared by supported Triton backends."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -68,12 +85,17 @@ class _BaseModelConfig(BaseModel):
     max_batch_size: int = Field(ge=0)
     inputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
     outputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
-    dynamic_batching: bool = False
+    dynamic_batching: bool = True
 
     @classmethod
     def from_artifact(
-        cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int, dynamic_batching: bool = False
-    ) -> "_BaseModelConfig":
+        cls,
+        artifact: DeploymentArtifact,
+        *,
+        name: str,
+        max_batch_size: int,
+        dynamic_batching: bool = True,
+    ) -> "BaseModelConfig":
         """Combine the tensor interface with runtime-specific artifact settings."""
         batched = max_batch_size > 0
         return cls(
@@ -84,13 +106,6 @@ class _BaseModelConfig(BaseModel):
             dynamic_batching=dynamic_batching,
             **cls._artifact_options(artifact),
         )
-
-    @model_validator(mode="after")
-    def _validate_batching(self) -> "_BaseModelConfig":
-        """Require a batched model contract before enabling the scheduler."""
-        if self.dynamic_batching and self.max_batch_size == 0:
-            raise ValueError("dynamic_batching requires a positive max_batch_size")
-        return self
 
     def to_protobuf(self) -> model_config_pb2.ModelConfig:
         """Build Triton's protobuf representation."""
@@ -122,22 +137,14 @@ class _BaseModelConfig(BaseModel):
         text_format.Parse(content, model_config_pb2.ModelConfig())
         return content
 
+    @model_validator(mode="after")
+    def _validate_batching(self) -> "BaseModelConfig":
+        """Require a batched model contract before enabling the scheduler."""
+        if self.dynamic_batching and self.max_batch_size == 0:
+            raise ValueError("dynamic_batching requires a positive max_batch_size")
+        return self
+
     @classmethod
+    @abstractmethod
     def _artifact_options(cls, artifact: DeploymentArtifact) -> dict[str, Any]:
         """Read settings owned by the specialized Triton config."""
-        raise NotImplementedError
-
-
-def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConfig:
-    """Translate an artifact tensor spec into Triton's tensor representation."""
-    if batched and spec.batch_axis != 0:
-        raise ValueError(f"Triton batching requires batch_axis=0 for tensor {spec.name!r}")
-    bounds = zip(spec.min_shape, spec.max_shape, strict=True)
-    dimensions = tuple(minimum if minimum == maximum else -1 for minimum, maximum in bounds)
-    if batched:
-        dimensions = dimensions[1:]
-    reshape = None
-    if not dimensions:
-        dimensions = (1,)
-        reshape = ()
-    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions, reshape=reshape)

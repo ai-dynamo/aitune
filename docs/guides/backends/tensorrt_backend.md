@@ -6,6 +6,12 @@ title: "TensorRT Backend Guide"
 
 The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT engine. It offers the best performance for production deployments on NVIDIA GPUs and seamlessly integrates [TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer) for advanced quantization workflows.
 
+## Existing ONNX models
+
+`TensorRTBackend` accepts an existing ONNX file through `OnnxModule` and builds an engine without PyTorch export. Export settings such as `use_dynamo` and `opset_version` do not apply to this path.
+
+Only `TensorRTBackend` and `ONNXRuntimeBackend` support tuning `OnnxModule`. Configure an explicit backend list, as shown in [ONNX Model Tuning](../onnx_tuning.md).
+
 ## Overview
 
 The TensorRT backend:
@@ -253,6 +259,8 @@ config = TensorRTBackendConfig(
 ```
 
 ### quantization_config
+
+For `OnnxModule`, use `ONNXAutoCastConfig` or `ONNXQuantizationConfig`. `TorchQuantizationConfig` requires a PyTorch module and raises an error for `OnnxModule`.
 
 TensorRT backend supports multiple quantization methods through TensorRT Model Optimizer integration. Use `ONNXAutoCastConfig` for FP16/BF16 mixed precision, `ONNXQuantizationConfig` for ONNX INT8/FP8/INT4 quantization, and `TorchQuantizationConfig` for ModelOpt PyTorch quantization presets.
 

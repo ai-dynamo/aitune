@@ -8,10 +8,10 @@ from pydantic import Field
 from tritonclient.grpc import model_config_pb2
 
 from aitune.records import DeploymentArtifact
-from aitune.triton.config.common import _BaseModelConfig
+from aitune.triton.config.common import BaseModelConfig
 
 
-class TensorRTModelConfig(_BaseModelConfig):
+class TensorRTModelConfig(BaseModelConfig):
     """Triton configuration specialized for serialized TensorRT plans."""
 
     platform: Literal["tensorrt_plan"] = "tensorrt_plan"

@@ -22,12 +22,6 @@ def get_parser():
         default=Path("model_repository"),
         help="Triton model repository (default: model_repository)",
     )
-    parser.add_argument(
-        "--model-analyzer-configs",
-        type=Path,
-        default=Path("model_analyzer"),
-        help="Model Analyzer configuration directory (default: model_analyzer)",
-    )
     return parser
 
 
@@ -44,12 +38,7 @@ def main():
             max_batch_size=artifact.max_batch_size,
         )
         print(f"Triton model: {model_path}", flush=True)
-        configs_path = aitune.triton.generate_model_analyzer_configs(
-            artifact,
-            model_path=model_path,
-            path=args.model_analyzer_configs,
-        )
-        print(f"Model Analyzer configurations: {configs_path}", flush=True)
+        print(f"Model Analyzer configuration: {model_path / 'model_analyzer' / 'config.yaml'}", flush=True)
     finally:
         tuned_model.deactivate()
 

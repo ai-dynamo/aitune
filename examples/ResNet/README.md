@@ -145,8 +145,8 @@ uv run --extra triton triton-model-store --tuned-model-path resnet50.ait
 
 Model-store generation loads the package, extracts its selected artifact, and creates
 `model_repository/resnet50`. The `config.pbtxt`, tensor bounds, and maximum batch size all come from that artifact.
-It also creates `model_analyzer/fast.yaml` for a quick search and `model_analyzer/manual.yaml` for the complete
-recommended search space. Neither operation replaces an existing output directory.
+It also creates `model_repository/resnet50/model_analyzer/config.yaml` for a bounded quick search. Publication does
+not replace an existing model directory.
 
 The command explicitly deactivates the loaded module before exiting to release its backend runtime.
 
@@ -165,14 +165,11 @@ Keeping releases aligned is required for TensorRT plans: by default, a plan only
 version that built it and the same GPU compute capability. Matching releases also keeps the PyTorch runtime aligned
 for AOTInductor artifacts.
 
-To optimize the deployment, install Triton Model Analyzer and start with the generated fast configuration:
+To optimize the deployment, install Triton Model Analyzer and use the generated configuration:
 
 ```bash
-model-analyzer profile --config-file model_analyzer/fast.yaml
+model-analyzer profile --config-file model_repository/resnet50/model_analyzer/config.yaml
 ```
-
-Use `manual.yaml` afterward when a wider search over batch sizes, dynamic batching, queue delay, and model instance
-count is worth the additional profiling time.
 
 Compatibility references:
 
