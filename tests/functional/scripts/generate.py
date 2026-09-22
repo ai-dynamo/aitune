@@ -91,6 +91,7 @@ def _matrix_entry(
         "workflow": workflow_name,
         "install_aitune_dependencies": workflow.install_aitune_dependencies if workflow else False,
         "aitune_extras": ",".join(workflow.aitune_extras) if workflow else "",
+        "install_script": workflow.install_script if workflow and workflow.install_script else "",
         "allow_failure": config.allow_failure,
         "timeout_minutes": _timeout_to_minutes(config.timeout),
         "use_gated_hf_token": config.use_gated_hf_token,

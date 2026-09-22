@@ -17,8 +17,9 @@ docker run --rm --gpus all --ipc host \
   -w /workspace/examples/ResNet \
   "nvcr.io/nvidia/tritonserver:$NVIDIA_RELEASE-py3" \
   bash -lc '
-    python -m venv --system-site-packages /tmp/aitune-resnet
+    python3 -m venv --system-site-packages /tmp/aitune-resnet
     source /tmp/aitune-resnet/bin/activate
+    ./install.sh
     python -m pip install --extra-index-url https://pypi.nvidia.com \
       -e "/workspace[triton,torch212]" \
       -e /workspace/examples/common \

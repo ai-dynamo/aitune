@@ -75,14 +75,39 @@ tune = "demo:tune"
 triton-model-store = "demo:model_store"
 
 [tool.aitune]
-workflows = [{ name = "dynamo" }, { name = "triton" }]
+workflows = [{ name = "dynamo" }, { name = "triton", install_script = "install.sh" }]
 """.strip(),
         encoding="utf-8",
     )
-    (tmp_path / "run_dynamo.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-    (tmp_path / "run_triton.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    for name in ("run_dynamo.sh", "run_triton.sh", "install.sh"):
+        script = tmp_path / name
+        script.write_text("#!/bin/sh\n", encoding="utf-8")
+        script.chmod(0o755)
 
     assert validate.validate_one(project) is None
+
+
+def test_project_workflow_requires_executable_script(tmp_path: Path) -> None:
+    project = tmp_path / "pyproject.toml"
+    project.write_text(
+        """
+[project]
+name = "demo"
+version = "0.1.0"
+
+[project.scripts]
+tune = "demo:tune"
+
+[tool.aitune]
+workflows = [{ name = "dynamo" }]
+""".strip(),
+        encoding="utf-8",
+    )
+    script = tmp_path / "run_dynamo.sh"
+    script.write_text("#!/bin/sh\n", encoding="utf-8")
+    script.chmod(0o644)
+
+    assert validate.validate_one(project) == (f"{project}: dynamo workflow requires non-executable file: run_dynamo.sh")
 
 
 def test_project_workflow_requires_its_entry_points(tmp_path: Path) -> None:

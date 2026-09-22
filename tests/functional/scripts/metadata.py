@@ -112,6 +112,7 @@ class FunctionalWorkflowConfig(BaseModel):
     name: str
     install_aitune_dependencies: bool = False
     aitune_extras: list[str] = Field(default_factory=list)
+    install_script: str | None = None
 
     @model_validator(mode="after")
     def _validate_aitune_extras(self) -> FunctionalWorkflowConfig:

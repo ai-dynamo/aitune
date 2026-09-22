@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -66,10 +67,17 @@ def _validate_project_contract(path: Path, config: FunctionalTestConfig, scripts
         workflow = workflow_config.name
         required_scripts = {"tune"}
         required_files = {f"run_{workflow}.sh"}
+        if workflow_config.install_script:
+            required_files.add(workflow_config.install_script)
         if workflow == "triton":
             required_scripts.add("triton-model-store")
         missing_scripts = sorted(required_scripts - scripts.keys())
         missing_files = sorted(file_name for file_name in required_files if not (path.parent / file_name).is_file())
+        non_executable_files = sorted(
+            file_name
+            for file_name in required_files
+            if (path.parent / file_name).is_file() and not os.access(path.parent / file_name, os.X_OK)
+        )
         errors = []
         if missing_scripts:
             label = "entry" if len(missing_scripts) == 1 else "entries"
@@ -77,6 +85,9 @@ def _validate_project_contract(path: Path, config: FunctionalTestConfig, scripts
         if missing_files:
             label = "file" if len(missing_files) == 1 else "files"
             errors.append(f"required {label}: {', '.join(missing_files)}")
+        if non_executable_files:
+            label = "file" if len(non_executable_files) == 1 else "files"
+            errors.append(f"non-executable {label}: {', '.join(non_executable_files)}")
         if errors:
             raise ValueError(f"{workflow} workflow requires {'; '.join(errors)}")
 

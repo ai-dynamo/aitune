@@ -133,6 +133,9 @@ jobs:
           path: dist
           run-id: ${{ inputs.dist_run_id || github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install workflow container dependencies
+        if: matrix.install_script != ''
+        run: "${{ matrix.path }}/${{ matrix.install_script }}"
       # Replace AITune baked into the base/custom image with this commit's wheel.
       - name: Install wheel
         run: |
@@ -142,18 +145,18 @@ jobs:
             if [[ -n "$extras" ]]; then
               wheel="${wheel}[${extras}]"
             fi
-            python -m pip install "$wheel"
+            python3 -m pip install "$wheel"
           else
-            python -m pip install --force-reinstall --no-deps "$wheel"
+            python3 -m pip install --force-reinstall --no-deps "$wheel"
           fi
       - run: nvidia-smi
       - name: Run functional job
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
+          python3 tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
 
-          python tests/functional/scripts/execute.py \
+          python3 tests/functional/scripts/execute.py \
             "${{ matrix.path }}" \
             --kind "${{ matrix.kind }}" \
             --test-number "${{ matrix.test_number }}" \

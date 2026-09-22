@@ -66,6 +66,7 @@ def test_project_workflows_expand_each_entry_into_independent_jobs() -> None:
                     "name": "triton",
                     "install_aitune_dependencies": True,
                     "aitune_extras": ["triton", "torch212"],
+                    "install_script": "install.sh",
                 },
             ],
             "docker_image": "nvcr.io/nvidia/pytorch:26.05-py3",
@@ -85,6 +86,8 @@ def test_project_workflows_expand_each_entry_into_independent_jobs() -> None:
     assert jobs[1]["install_aitune_dependencies"] is True
     assert jobs[0]["aitune_extras"] == ""
     assert jobs[1]["aitune_extras"] == "triton,torch212"
+    assert jobs[0]["install_script"] == ""
+    assert jobs[1]["install_script"] == "install.sh"
     assert "container_options" not in jobs[1]
 
 
