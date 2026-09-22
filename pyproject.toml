@@ -13,9 +13,9 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Unix",
 ]
@@ -63,6 +63,7 @@ dynamo = [
     "ai-dynamo-runtime>=0.1",
     "uvloop",
 ]
+
 triton = [
     "pydantic>=2",
     "protobuf>=6.33.5",
@@ -96,6 +97,8 @@ torch212 = [ # nvcr.io/nvidia/pytorch:26.05-py3 is based on 2.12.0a0+5aff3928d8
     "torchao>=0.17,<0.18",
 ]
 
+onnxruntime-gpu-cuda12 = ["onnxruntime-gpu"]
+onnxruntime-gpu-cuda13 = ["onnxruntime-gpu"]
 
 [project.urls]
 "Documentation" = "https://ai-dynamo.github.io/aitune"
@@ -123,6 +126,7 @@ dev = [
     "pre-commit",
     "pre-commit-uv",
     "pytype",
+    "tox",
     "uv>=0.9.0",
 ]
 functional-test = [
@@ -169,8 +173,28 @@ conflicts = [
         { extra = "torch210" },
         { extra = "torch211" },
         { extra = "torch212" },
-    ]
+    ],
+    [
+        { extra = "onnxruntime-gpu-cuda13" },
+        { extra = "onnxruntime-gpu-cuda12" },
+    ],
 ]
+
+[tool.uv.sources]
+onnxruntime-gpu = [
+    { index = "ort-cuda-13-nightly", extra = "onnxruntime-gpu-cuda13" },
+    { index = "pypi", extra = "onnxruntime-gpu-cuda12" },
+]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+explicit = true
+
+[[tool.uv.index]]
+name = "ort-cuda-13-nightly"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"
+explicit = true
 
 [tool.pytest.ini_options]
 log_cli = true

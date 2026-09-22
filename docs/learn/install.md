@@ -9,7 +9,7 @@ title: "Install"
 Before installing NVIDIA AITune, make sure your system meets these requirements:
 
 * **Operating System**: Linux (Ubuntu 22.04+ recommended)
-* **Python**: Version `3.10` or newer
+* **Python**: Version `3.11` or newer
 * **PyTorch**: Version `2.8` or newer
 * **TensorRT**: Version `10.3` or higher (for TensorRT backend)
 * **NVIDIA GPU**: Required for GPU-accelerated tuning
@@ -44,6 +44,38 @@ To target a specific CUDA version, add the matching PyTorch index:
 
 ```bash
 pip install --extra-index-url https://pypi.nvidia.com --extra-index-url https://download.pytorch.org/whl/cu130 "aitune[torch211]"
+```
+
+### ONNX Runtime CUDA version
+
+Select the CUDA 13 extra when installing from a source checkout with **UV**:
+
+```bash
+uv pip install --torch-backend=cu130 ".[torch210,onnxruntime-gpu-cuda13]"
+```
+
+Use the `onnxruntime-gpu-cuda12` extra for the CUDA 12 PyPI build:
+
+```bash
+uv pip install --no-sources --torch-backend=cu128 ".[torch29,onnxruntime-gpu-cuda12]"
+```
+
+**pip** uses PyPI and therefore installs CUDA 12. Use the same extra explicitly:
+
+```bash
+pip install --extra-index-url https://pypi.nvidia.com "aitune[torch29,onnxruntime-gpu-cuda12]"
+```
+
+CUDA 13 with pip needs an explicit ORT reinstall from the CUDA 13 feed:
+
+```bash
+pip install onnxruntime-gpu==1.24.4 --no-deps --force-reinstall --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+```
+
+If ORT is already installed, use UV's targeted reinstall option with the CUDA 13 extra:
+
+```bash
+uv pip install --torch-backend=cu130 --reinstall-package onnxruntime-gpu ".[torch210,onnxruntime-gpu-cuda13]"
 ```
 
 ### NGC container install
