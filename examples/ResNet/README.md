@@ -119,7 +119,9 @@ export NVIDIA_RELEASE=26.05
 ./prepare_triton.sh
 ```
 
-It uses `nvcr.io/nvidia/tritonserver:${NVIDIA_RELEASE}-py3` and defaults to release `26.05`. The validation script
+It uses `nvcr.io/nvidia/tritonserver:${NVIDIA_RELEASE}-py3` and defaults to release `26.05`. This image supplies the
+CUDA 13.2.1, TensorRT 10.16.1.11, and ONNX Runtime 1.24.4 libraries used for both tuning and serving. The example
+installs the matching PyTorch 2.12 tuning stack without replacing those runtime libraries. The validation script
 starts `/opt/tritonserver/bin/tritonserver` in the current container, waits for the model to become ready, invokes
 the client, and stops the server on exit. Set `TRITONSERVER` when the executable is installed elsewhere.
 

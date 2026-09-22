@@ -20,7 +20,7 @@ docker run --rm --gpus all --ipc host \
     python -m venv --system-site-packages /tmp/aitune-resnet
     source /tmp/aitune-resnet/bin/activate
     python -m pip install --extra-index-url https://pypi.nvidia.com \
-      -e "/workspace[triton,torch212,onnxruntime-gpu-cuda13]" \
+      -e "/workspace[triton,torch212]" \
       -e /workspace/examples/common \
       -e ".[triton]"
     tune --target triton
