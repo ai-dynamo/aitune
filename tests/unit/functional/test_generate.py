@@ -81,7 +81,7 @@ def test_project_workflows_expand_each_entry_into_independent_jobs() -> None:
         ("examples_Demo_triton_002", 1, "triton"),
     ]
     assert jobs[0]["docker_image"] == "ghcr.io/ai-dynamo/aitune/nvcr-torch-26.05-py3:latest"
-    assert jobs[1]["docker_image"] == "nvcr.io/nvidia/tritonserver:26.05-py3"
+    assert jobs[1]["docker_image"] == "ghcr.io/ai-dynamo/aitune/nvcr-triton-26.05-py3:latest"
     assert jobs[0]["install_aitune_dependencies"] is False
     assert jobs[1]["install_aitune_dependencies"] is True
     assert jobs[0]["aitune_extras"] == ""

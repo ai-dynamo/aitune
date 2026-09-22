@@ -110,11 +110,15 @@ def _workflow_docker_image(docker_image: str, workflow: str) -> str:
 def _replace_custom_docker_image(docker_image: str) -> str:
     if docker_image.startswith("ghcr.io/"):
         return docker_image
-    pytorch_prefix = "nvcr.io/nvidia/pytorch:"
-    if not docker_image.startswith(pytorch_prefix):
-        return docker_image
-    image_tag = docker_image.removeprefix(pytorch_prefix)
-    return f"ghcr.io/ai-dynamo/aitune/nvcr-torch-{image_tag}:latest"
+    image_prefixes = {
+        "nvcr.io/nvidia/pytorch:": "nvcr-torch",
+        "nvcr.io/nvidia/tritonserver:": "nvcr-triton",
+    }
+    for source_prefix, target_name in image_prefixes.items():
+        if docker_image.startswith(source_prefix):
+            image_tag = docker_image.removeprefix(source_prefix)
+            return f"ghcr.io/ai-dynamo/aitune/{target_name}-{image_tag}:latest"
+    return docker_image
 
 
 def _make_script_entries(

@@ -154,11 +154,6 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          if [[ "${{ matrix.workflow }}" == "triton" ]]; then
-            export USER="${TRITON_SERVER_USER:-triton-server}"
-            export LOGNAME="$USER"
-          fi
-
           python3 tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
 
           python3 tests/functional/scripts/execute.py \

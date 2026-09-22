@@ -89,6 +89,34 @@ jobs:
       - id: image
         run: echo "image=ghcr.io/ai-dynamo/aitune/nvcr-torch-${{ matrix.torch_ci_image_base }}:latest" >> "$GITHUB_OUTPUT"
 
+  create-triton-base-images:
+    name: create triton ${{ matrix.triton_ci_image_base }} based CI image
+    runs-on: linux-amd64-cpu4
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        triton_ci_image_base: [26.05-py3]
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_docker_login
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: *actions_docker_build_push
+        with:
+          context: .
+          file: .github/docker/triton.Dockerfile
+          push: true
+          build-args: FROM_IMAGE=nvcr.io/nvidia/tritonserver:${{ matrix.triton_ci_image_base }}
+          tags: ghcr.io/ai-dynamo/aitune/nvcr-triton-${{ matrix.triton_ci_image_base }}:latest
+
   create-cuda-base-images:
     name: create cuda ${{ matrix.cuda_ci_image_base }} based AITune image
     runs-on: linux-amd64-cpu4
