@@ -71,11 +71,6 @@ triton = [
     "tritonclient[grpc]",
 ]
 
-torch28 = [ # nvcr.io/nvidia/pytorch:25.08-py3 is based on 2.8.0a0+34c6371d24.
-    "torch>=2.8.0a0,<2.9",
-    "torch-tensorrt>=2.8.0a0,<2.9",
-    "torchao>=0.12,<0.13",
-]
 torch29 = [ # nvcr.io/nvidia/pytorch:25.10-py3 is based on 2.9.0a0+145a3a7bda.
     "torch>=2.9.0a0,<2.10",
     "torch-tensorrt>=2.9.0a0,<2.10",
@@ -176,7 +171,10 @@ aitune = ["**/*"]
 
 [tool.uv]
 managed = true
-environments = ["'tegra' not in platform_release"]
+environments = [
+    "'tegra' not in platform_release",
+    "(platform_machine != 'ARM64' and 'tegra' in platform_release) or ('tegra' in platform_release and sys_platform != 'win32')",
+]
 conflicts = [
     [
         { extra = "torch28" },

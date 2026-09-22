@@ -133,6 +133,8 @@ install-dev: clean-build clean-pyc clean-test
 	$(PIP_INSTALL) --upgrade pip
 	$(PIP_INSTALL) -e --group dev .
 
+
+UV_LOCK_ARGS ?= --extra-index-url https://download.pytorch.org/whl/cu130/ --index-strategy unsafe-best-match
 uv-locks-upgrade:
-	uv lock --upgrade
-	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock --upgrade); done
+	uv lock --upgrade $(UV_LOCK_ARGS)
+	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock --upgrade $(UV_LOCK_ARGS)); done
