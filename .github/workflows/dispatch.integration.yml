@@ -66,6 +66,8 @@ jobs:
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
       matrix_count: ${{ steps.generate.outputs.matrix_count }}
+      triton_matrix: ${{ steps.triton-matrix.outputs.matrix }}
+      triton_matrix_count: ${{ steps.triton-matrix.outputs.matrix_count }}
     steps:
       - uses: *actions_checkout
         with:
@@ -97,6 +99,13 @@ jobs:
             --github-output "$GITHUB_OUTPUT" \
             --output-json jobs.json
 
+      - name: Prepare Triton validation matrix
+        id: triton-matrix
+        run: |
+          matrix="$(jq -c '[.[] | select(.workflow == "triton")]' jobs.json)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "matrix_count=$(jq 'length' <<< "$matrix")" >> "$GITHUB_OUTPUT"
+
       - name: Display generated functional matrix
         if: always()
         run: |
@@ -122,8 +131,6 @@ jobs:
         include: ${{ fromJSON(needs.generate-examples-matrix.outputs.matrix) }}
     container:
       image: ${{ matrix.docker_image }}
-      # Triton jobs use the mounted runner daemon to start the server beside this job container.
-      options: ${{ matrix.container_options }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -141,13 +148,6 @@ jobs:
       # Replace AITune baked into the base/custom image with this commit's wheel.
       - name: Install wheel
         run: python -m pip install --force-reinstall --no-deps dist/*.whl
-      - name: Install Docker CLI
-        if: matrix.workflow == 'triton'
-        run: |
-          if ! command -v docker >/dev/null; then
-            apt-get update
-            apt-get install -y --no-install-recommends docker.io
-          fi
       - run: nvidia-smi
       - name: Run functional job
         env:
@@ -160,6 +160,7 @@ jobs:
             --kind "${{ matrix.kind }}" \
             --test-number "${{ matrix.test_number }}" \
             --workflow "${{ matrix.workflow }}" \
+            --phase "${{ matrix.workflow == 'triton' && 'build' || 'all' }}" \
             --verbose
 
       - if: always()
@@ -172,5 +173,57 @@ jobs:
             .cache/aitune.jit/**/*.log
             hardware_metrics.csv
             script_metadata.json
+            functional_test_requirements.txt
+          if-no-files-found: ignore
+
+  triton-validation:
+    name: ${{ matrix.id }} validation
+    needs: [generate-examples-matrix, examples]
+    if: always() && needs.generate-examples-matrix.outputs.triton_matrix_count != '0'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    continue-on-error: ${{ matrix.allow_failure }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.generate-examples-matrix.outputs.triton_matrix) }}
+    container:
+      image: ${{ matrix.triton_image }}
+    env: ${{ fromJSON(matrix.environment) }}
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - uses: *actions_download_artifact
+        with:
+          name: ${{ inputs.dist_run_id != '' && 'dist' || 'examples-dist' }}
+          path: dist
+          run-id: ${{ inputs.dist_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: *actions_download_artifact
+        with:
+          name: examples-${{ matrix.id }}
+          path: .
+      - name: Install wheel
+        run: python -m pip install --force-reinstall --no-deps dist/*.whl
+      - run: nvidia-smi
+      - name: Validate Triton model repository
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python tests/functional/scripts/execute.py \
+            "${{ matrix.path }}" \
+            --kind "${{ matrix.kind }}" \
+            --test-number "${{ matrix.test_number }}" \
+            --workflow triton \
+            --phase validate \
+            --verbose
+
+      - if: always()
+        uses: *actions_upload_artifact
+        with:
+          name: triton-validation-${{ matrix.id }}
+          path: |
+            artifacts/**
             functional_test_requirements.txt
           if-no-files-found: ignore

@@ -118,24 +118,23 @@ export NVIDIA_RELEASE=26.05
 ./prepare_triton.sh
 ```
 
-It uses `nvcr.io/nvidia/pytorch:${NVIDIA_RELEASE}-py3`. Start the matching
-`nvcr.io/nvidia/tritonserver:${NVIDIA_RELEASE}-py3` server and run the test client with:
+It uses `nvcr.io/nvidia/pytorch:${NVIDIA_RELEASE}-py3`. Run the validation phase inside the matching
+`nvcr.io/nvidia/tritonserver:${NVIDIA_RELEASE}-py3` container, with this repository and the generated model
+repository available in its filesystem:
 
 ```bash
-uv sync --extra triton
-uv run --extra triton ./run_triton.sh
+python -m pip install ../../dist/*.whl
+python -m pip install ../common ".[triton]"
+./run_triton.sh
 ```
 
-The runner copies the published repository into the Triton container before starting it,
-waits for the model to become ready, invokes the client, and removes the container on exit.
-Copying also works when the repository is inside a CI job container and the Docker daemon runs on its host.
-Both scripts default to release `26.05`; set
-`NVIDIA_RELEASE` once in the calling shell to use another matching pair.
+The validation script starts `/opt/tritonserver/bin/tritonserver` in the current container, waits for the model to
+become ready, invokes the client, and stops the server on exit. Set `TRITONSERVER` when the executable is installed
+elsewhere. The preparation script defaults to release `26.05`; use the matching Triton image when changing
+`NVIDIA_RELEASE`.
 
 Triton loads the published models at startup with `--model-control-mode=none`; no load API call is needed.
-The runner uses host networking locally and shares the job container's network in GitLab Docker jobs, so the
-readiness checks and client reach the same `localhost`. When running inside another Docker container, set
-`TRITON_NETWORK=container:<name-or-id>` to share that container's network.
+The server and client run sequentially in the same CI job container and communicate over `localhost`.
 
 The equivalent package-to-repository command is available independently:
 

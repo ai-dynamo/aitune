@@ -57,4 +57,5 @@ resnet = ["**/*"]
 [tool.aitune]
 docker_image = "nvcr.io/nvidia/pytorch:26.05-py3"
 workflows = ["dynamo", "triton"]
+triton_image = "nvcr.io/nvidia/tritonserver:26.05-py3"
 arguments = [{ "image-path" = "dog.webp" }, { "image-path" = "dog.webp", "dynamic-shapes" = 1 }]

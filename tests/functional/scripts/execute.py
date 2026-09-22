@@ -25,7 +25,15 @@ except ImportError:
 def main() -> None:
     """Run the selected functional matrix entry."""
     args = parse_args()
-    run(args.path, args.kind, args.test_number, args.verbose, args.dry_run, args.workflow)
+    run(
+        args.path,
+        args.kind,
+        args.test_number,
+        verbose=args.verbose,
+        dry_run=args.dry_run,
+        workflow=args.workflow,
+        phase=args.phase,
+    )
 
 
 def run(
@@ -35,6 +43,7 @@ def run(
     verbose: bool = False,
     dry_run: bool = False,
     workflow: str | None = None,
+    phase: str = "all",
 ) -> None:
     """Run one zero-based entry from a functional script or example project."""
     config = _load_config(path, kind)
@@ -44,18 +53,26 @@ def run(
         raise ValueError(f"entry {test_number} does not exist for {path}") from exc
 
     env = os.environ | {"AITUNE_CONSOLE_OUTPUT": "1"} | config.environment
-    _validate_requested_workflow(path, kind, config, workflow)
-    _install_dependencies(path, kind, config, verbose, dry_run, workflow)
+    _validate_requested_workflow(path, kind, config, workflow, phase)
+    _install_dependencies(path, kind, config, verbose, dry_run, workflow, phase)
     _save_requirements(verbose, dry_run)
 
     run_kwargs: dict[str, Any] = {"cwd": path if kind == "project" else None, "env": env}
     if kind == "project":
-        _run_project(path, entry, workflow, verbose, dry_run, run_kwargs)
+        _run_project(path, entry, workflow, phase, verbose, dry_run, run_kwargs)
     else:
         _run_command(_command(path, kind, entry), verbose, dry_run, **run_kwargs)
 
 
-def _validate_requested_workflow(path: Path, kind: str, config: FunctionalTestConfig, workflow: str | None) -> None:
+def _validate_requested_workflow(
+    path: Path,
+    kind: str,
+    config: FunctionalTestConfig,
+    workflow: str | None,
+    phase: str,
+) -> None:
+    if phase != "all" and (kind != "project" or workflow != "triton"):
+        raise ValueError(f"Phase {phase} is only supported for the triton project workflow")
     if kind != "project":
         return
     if workflow is None and config.workflows:
@@ -68,6 +85,7 @@ def _run_project(
     path: Path,
     entry: FunctionalVariantConfig,
     workflow: str | None,
+    phase: str,
     verbose: bool,
     dry_run: bool,
     run_kwargs: dict[str, Any],
@@ -77,6 +95,10 @@ def _run_project(
             _run_command(_command(path, "project", entry, script), verbose, dry_run, **run_kwargs)
         if (path / "run_dynamo.sh").is_file():
             _run_command(["./run_dynamo.sh"], verbose, dry_run, **run_kwargs)
+        return
+
+    if workflow == "triton" and phase == "validate":
+        _run_triton_validation(path, entry, verbose, dry_run, run_kwargs)
         return
 
     target = "python" if workflow == "dynamo" else "triton"
@@ -103,21 +125,26 @@ def _run_project(
         dry_run,
         **run_kwargs,
     )
+    if phase != "build":
+        _run_triton_validation(path, entry, verbose, dry_run, run_kwargs)
+
+
+def _run_triton_validation(
+    path: Path,
+    entry: FunctionalVariantConfig,
+    verbose: bool,
+    dry_run: bool,
+    run_kwargs: dict[str, Any],
+) -> None:
+    model_repository = _model_repository_path(path)
     triton_run_kwargs = dict(run_kwargs)
-    triton_run_kwargs["env"] = _triton_environment(run_kwargs["env"], model_repository)
+    triton_run_kwargs["env"] = run_kwargs["env"] | {"MODEL_REPOSITORY": str(model_repository)}
     _run_command(["./run_triton.sh", *_arguments(entry.arguments)], verbose, dry_run, **triton_run_kwargs)
 
 
 def _model_repository_path(path: Path) -> Path:
     artifacts_dir = Path(os.environ.get("AITUNE_ARTIFACTS_DIR", "artifacts")).resolve()
     return artifacts_dir / path.name / "model_repository"
-
-
-def _triton_environment(environment: dict[str, str], model_repository: Path) -> dict[str, str]:
-    triton_environment = environment | {"MODEL_REPOSITORY": str(model_repository)}
-    if environment.get("GITHUB_ACTIONS") == "true" and environment.get("HOSTNAME"):
-        triton_environment.setdefault("TRITON_NETWORK", f"container:{environment['HOSTNAME']}")
-    return triton_environment
 
 
 def _install_dependencies(
@@ -127,7 +154,13 @@ def _install_dependencies(
     verbose: bool,
     dry_run: bool,
     workflow: str | None = None,
+    phase: str = "all",
 ) -> None:
+    if phase == "validate":
+        _run_command([sys.executable, "-m", "pip", "install", "examples/common"], verbose, dry_run)
+        _run_command([sys.executable, "-m", "pip", "install", f"{path}[triton]"], verbose, dry_run)
+        return
+
     _run_command([sys.executable, "-m", "pip", "install", "--group", "functional-test"], verbose, dry_run)
 
     if kind == "project":
@@ -232,6 +265,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--kind", choices=("script", "project"), required=True)
     parser.add_argument("--test-number", type=int, required=True)
     parser.add_argument("--workflow", choices=("legacy", "dynamo", "triton"), default="legacy")
+    parser.add_argument("--phase", choices=("all", "build", "validate"), default="all")
     parser.add_argument("--is-custom-docker-image", type=json.loads, default=False)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

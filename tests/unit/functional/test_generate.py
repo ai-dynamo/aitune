@@ -61,6 +61,7 @@ def test_project_workflows_expand_each_entry_into_independent_jobs() -> None:
         _config({
             "arguments": [{"name": "first"}, {"name": "second"}],
             "workflows": ["dynamo", "triton"],
+            "triton_image": "nvcr.io/nvidia/tritonserver:26.05-py3",
         }),
         Scope.ALWAYS,
     )
@@ -71,8 +72,9 @@ def test_project_workflows_expand_each_entry_into_independent_jobs() -> None:
         ("examples_Demo_dynamo_002", 1, "dynamo"),
         ("examples_Demo_triton_002", 1, "triton"),
     ]
-    assert jobs[0]["container_options"] == ""
-    assert jobs[1]["container_options"] == "--volume /var/run/docker.sock:/var/run/docker.sock"
+    assert jobs[0]["triton_image"] == ""
+    assert jobs[1]["triton_image"] == "nvcr.io/nvidia/tritonserver:26.05-py3"
+    assert "container_options" not in jobs[1]
 
 
 def test_project_workflows_reject_unknown_and_duplicate_values() -> None:
@@ -80,6 +82,8 @@ def test_project_workflows_reject_unknown_and_duplicate_values() -> None:
         _config({"workflows": ["unknown"]})
     with pytest.raises(ValueError, match="Project workflows must be unique"):
         _config({"workflows": ["triton", "triton"]})
+    with pytest.raises(ValueError, match="triton_image is required"):
+        _config({"workflows": ["triton"]})
 
 
 def test_script_arguments_expand_to_multiple_jobs() -> None:

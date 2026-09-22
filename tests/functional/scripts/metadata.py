@@ -15,7 +15,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 logger = logging.getLogger("metadata")
 
@@ -124,6 +124,10 @@ class FunctionalTestConfig(BaseModel):
     arguments: list[dict[str, Any]] = Field(default_factory=list)
     variants: list[FunctionalVariantConfig] = Field(default_factory=list)
     workflows: list[str] = Field(default_factory=list)
+    triton_image: str | None = Field(
+        default=None,
+        description="Container image used to validate an exported Triton model repository.",
+    )
     use_gated_hf_token: bool = False
 
     @property
@@ -159,6 +163,12 @@ class FunctionalTestConfig(BaseModel):
         if len(workflows) != len(set(workflows)):
             raise ValueError("Project workflows must be unique")
         return workflows
+
+    @model_validator(mode="after")
+    def _validate_workflow_images(self) -> FunctionalTestConfig:
+        if "triton" in self.workflows and not self.triton_image:
+            raise ValueError("triton_image is required for the triton workflow")
+        return self
 
     @classmethod
     def from_toml(

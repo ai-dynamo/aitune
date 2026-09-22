@@ -75,8 +75,6 @@ def _matrix_entry(
 ) -> dict[str, Any]:
     docker_image = config.docker_image or DEFAULT_DOCKER_IMAGE
     runner = variant.runner or config.runner or get_runner([*config.tags, *variant.tags])
-    # Triton runs as a sibling container, so its job container needs access to the runner's Docker daemon.
-    container_options = "--volume /var/run/docker.sock:/var/run/docker.sock" if workflow == "triton" else ""
 
     return {
         "id": entry_id,
@@ -88,7 +86,7 @@ def _matrix_entry(
         "kind": kind,
         "path": path,
         "workflow": workflow,
-        "container_options": container_options,
+        "triton_image": config.triton_image if workflow == "triton" else "",
         "allow_failure": config.allow_failure,
         "timeout_minutes": _timeout_to_minutes(config.timeout),
         "use_gated_hf_token": config.use_gated_hf_token,
