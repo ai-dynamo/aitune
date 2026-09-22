@@ -146,10 +146,10 @@ jobs:
         include:
           - python_version: 3.14
             variant:
-              - uv_torch_backend: cu130
-                cuda_image: 13.0.3-devel-ubuntu24.04
-                aitune_extras: torch214,onnxruntime-gpu-cuda13
-                uv_extra_args: ""
+              uv_torch_backend: cu130
+              cuda_image: 13.0.3-devel-ubuntu24.04
+              aitune_extras: torch214,onnxruntime-gpu-cuda13
+              uv_extra_args: ""
 
     container:
       image: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.variant.cuda_image }}:latest

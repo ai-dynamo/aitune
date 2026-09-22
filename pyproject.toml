@@ -72,28 +72,28 @@ triton = [
 ]
 
 torch29 = [ # nvcr.io/nvidia/pytorch:25.10-py3 is based on 2.9.0a0+145a3a7bda.
-    "torch>=2.9.0a0,<2.10",
+    "torch>=2.9.0a0,<2.10; python_version < '3.14'",
     "torch-tensorrt>=2.9.0a0,<2.10",
     "torchao>=0.14,<0.15",
 ]
 torch210 = [ # nvcr.io/nvidia/pytorch:26.01-py3 is based on 2.10.0a0+a36e1d39eb.
-    "torch>=2.10.0a0,<2.11",
+    "torch>=2.10.0a0,<2.11; python_version < '3.14'",
     "torch-tensorrt>=2.10.0a0,<2.11",
     "torchao>=0.15,<0.16",
     "nvidia-cuda-runtime-cu13==0.0.0a0",
 ]
 torch211 = [ # nvcr.io/nvidia/pytorch:26.03-py3 is based on 2.11.0a0+a6c236b9fd1.
-    "torch>=2.11.0a0,<2.12",
+    "torch>=2.11.0a0,<2.12; python_version < '3.14'",
     "torch-tensorrt>=2.11.0a0,<2.12",
     "torchao>=0.16,<0.17",
 ]
 torch212 = [ # nvcr.io/nvidia/pytorch:26.05-py3 is based on 2.12.0a0+5aff3928d8
-    "torch>=2.12.0a0,<2.13",
+    "torch>=2.12.0a0,<2.13; python_version < '3.14'",
     "torch-tensorrt>=2.12.0a0,<2.13",
     "torchao>=0.17,<0.18",
 ]
 torch213 = [
-    "torch>=2.13.0a0,<2.14",
+    "torch>=2.13.0a0,<2.14; python_version < '3.14'",
     "torch-tensorrt>=2.13.0a0,<2.14",
     "torchao>=0.17",
 ]

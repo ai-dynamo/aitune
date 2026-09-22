@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-.PHONY: clean clean-build clean-pyc clean-docs clean-test clean-notebooks docs docs-serve lint test coverage release dist install install-dev install-dev-deps help validate-functional
+.PHONY: clean clean-build clean-pyc clean-docs clean-test clean-notebooks lint test coverage release 
+.PHONY: dist install install-dev help fern-setup docs fern-push-dev docs-serve lint test coverage release 
+.PHONY: uv-locks-upgrade validate-functional list-functional-tests build-functional-image run-functional-test
 .DEFAULT_GOAL := help
 
 define BROWSER_PYSCRIPT
