@@ -15,4 +15,6 @@ RUN groupadd --gid ${GROUP_ID} runner && \
 
 ENV HOME=/home/runner
 
+RUN python3 -m pip install --extra-index-url https://pypi.nvidia.com "tensorrt==$TRT_VERSION"
+
 USER runner
