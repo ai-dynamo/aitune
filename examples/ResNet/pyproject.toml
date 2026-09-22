@@ -29,7 +29,6 @@ dynamo = [
 ]
 triton = [
     "aitune[triton]",
-    "triton-model-analyzer==1.54.0",
 ]
 
 [tool.uv.sources]

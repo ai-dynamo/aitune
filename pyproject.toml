@@ -67,6 +67,7 @@ triton = [
     "pydantic>=2",
     "protobuf>=6.33.5",
     "PyYAML>=6.0",
+    "triton-model-analyzer[perf-analyzer]==1.54.0",
     "tritonclient[grpc]",
 ]
 

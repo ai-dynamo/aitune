@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_REPOSITORY="${MODEL_REPOSITORY:-$SCRIPT_DIR/model_repository}"
 MODEL_NAME="${MODEL_NAME:-resnet50}"
 TRITONSERVER="${TRITONSERVER:-/opt/tritonserver/bin/tritonserver}"
-PERF_ANALYZER="${PERF_ANALYZER:-$(dirname "$TRITONSERVER")/perf_analyzer}"
+PERF_ANALYZER="${PERF_ANALYZER:-$(command -v perf_analyzer || true)}"
 if [[ ! -f "$MODEL_REPOSITORY/$MODEL_NAME/config.pbtxt" ]]; then
   echo "Missing $MODEL_REPOSITORY/$MODEL_NAME/config.pbtxt; run triton-model-store first" >&2
   exit 1
@@ -21,8 +21,8 @@ if [[ ! -x "$TRITONSERVER" ]]; then
   echo "Missing Triton server executable: $TRITONSERVER" >&2
   exit 1
 fi
-if [[ ! -x "$PERF_ANALYZER" ]]; then
-  echo "Missing Perf Analyzer executable: $PERF_ANALYZER" >&2
+if [[ -z "$PERF_ANALYZER" || ! -x "$PERF_ANALYZER" ]]; then
+  echo "Missing Perf Analyzer executable; install perf-analyzer or set PERF_ANALYZER" >&2
   exit 1
 fi
 

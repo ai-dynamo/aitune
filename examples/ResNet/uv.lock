@@ -189,6 +189,7 @@ triton = [
     { name = "protobuf" },
     { name = "pydantic" },
     { name = "pyyaml" },
+    { name = "triton-model-analyzer", extra = ["perf-analyzer"] },
     { name = "tritonclient", extra = ["grpc"] },
 ]
 
@@ -231,6 +232,7 @@ requires-dist = [
     { name = "torchao", marker = "extra == 'torch212'", specifier = ">=0.17,<0.18" },
     { name = "torchao", marker = "extra == 'torch28'", specifier = ">=0.12,<0.13" },
     { name = "torchao", marker = "extra == 'torch29'", specifier = ">=0.14,<0.15" },
+    { name = "triton-model-analyzer", extras = ["perf-analyzer"], marker = "extra == 'triton'", specifier = "==1.54.0" },
     { name = "tritonclient", extras = ["grpc"], marker = "extra == 'triton'" },
     { name = "uvloop", marker = "extra == 'dynamo'" },
     { name = "wrapt", specifier = "~=2.0" },
@@ -306,7 +308,6 @@ dynamo = [
 ]
 triton = [
     { name = "aitune", extra = ["triton"] },
-    { name = "triton-model-analyzer" },
 ]
 
 [package.metadata]
@@ -325,7 +326,6 @@ requires-dist = [
     { name = "timm" },
     { name = "torch" },
     { name = "torchvision" },
-    { name = "triton-model-analyzer", marker = "extra == 'triton'", specifier = "==1.54.0" },
     { name = "uvicorn", marker = "extra == 'dynamo'" },
 ]
 provides-extras = ["dynamo", "triton"]
@@ -3532,6 +3532,11 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bd/a9/9c1461bb6f22066a87606e027e4f81ba05cdd171c4f311f3bd67b7a8ef8a/triton_model_analyzer-1.54.0-py3-none-any.whl", hash = "sha256:7a7838dd8d44df0a590313fa182582dd04b6d834c98ef1eca0b0817dd2403a7f", size = 410410, upload-time = "2026-06-02T17:46:46.023Z" },
+]
+
+[package.optional-dependencies]
+perf-analyzer = [
+    { name = "perf-analyzer" },
 ]
 
 [[package]]

@@ -15,6 +15,12 @@ RUN groupadd --gid ${GROUP_ID} runner && \
 
 ENV HOME=/home/runner
 
-RUN python3 -m pip install --extra-index-url https://pypi.nvidia.com "tensorrt==$TRT_VERSION"
+RUN python3 -m pip install --extra-index-url https://pypi.nvidia.com \
+        "tensorrt==$TRT_VERSION" && \
+    python3 -m pip install \
+        onnxruntime-gpu \
+        --force-reinstall \
+        --upgrade \
+        --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
 
 USER runner
