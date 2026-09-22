@@ -122,10 +122,6 @@ jobs:
         include: ${{ fromJSON(needs.generate-examples-matrix.outputs.matrix) }}
     container:
       image: ${{ matrix.docker_image }}
-      # An empty username makes the runner omit credentials for public images.
-      credentials:
-        username: ${{ startsWith(matrix.docker_image, 'ghcr.io/') && github.actor || '' }}
-        password: ${{ startsWith(matrix.docker_image, 'ghcr.io/') && secrets.GITHUB_TOKEN || '' }}
     env: ${{ fromJSON(matrix.environment) }}
     steps:
       - uses: *actions_checkout
