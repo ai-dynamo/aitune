@@ -16,6 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Unix",
 ]
@@ -38,7 +39,7 @@ keywords = [
     "automation",
 ]
 license = { text = "Apache 2.0" }
-requires-python = ">=3.11, <3.14"
+requires-python = ">=3.11, <3.15"
 dependencies = [
     "autowrapt>=1.0",
     "dill>=0.3.8",
@@ -95,6 +96,16 @@ torch212 = [ # nvcr.io/nvidia/pytorch:26.05-py3 is based on 2.12.0a0+5aff3928d8
     "torch>=2.12.0a0,<2.13",
     "torch-tensorrt>=2.12.0a0,<2.13",
     "torchao>=0.17,<0.18",
+]
+torch213 = [
+    "torch>=2.13.0a0,<2.14",
+    "torch-tensorrt>=2.13.0a0,<2.14",
+    "torchao>=0.17",
+]
+torch214 = [
+    "torch>=2.14.0a0,<2.15",
+    "torch-tensorrt>=2.14.0a0,<2.15",
+    "torchao>=0.17",
 ]
 
 onnxruntime-gpu-cuda12 = ["onnxruntime-gpu"]
@@ -173,6 +184,8 @@ conflicts = [
         { extra = "torch210" },
         { extra = "torch211" },
         { extra = "torch212" },
+        { extra = "torch213" },
+        { extra = "torch214" },
     ],
     [
         { extra = "onnxruntime-gpu-cuda13" },
