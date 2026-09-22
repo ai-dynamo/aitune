@@ -85,7 +85,7 @@ class BaseModelConfig(BaseModel, ABC):
     max_batch_size: int = Field(ge=0)
     inputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
     outputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
-    dynamic_batching: bool = False
+    dynamic_batching: bool = True
 
     @classmethod
     def from_artifact(
@@ -94,7 +94,7 @@ class BaseModelConfig(BaseModel, ABC):
         *,
         name: str,
         max_batch_size: int,
-        dynamic_batching: bool = False,
+        dynamic_batching: bool = True,
     ) -> "BaseModelConfig":
         """Combine the tensor interface with runtime-specific artifact settings."""
         batched = max_batch_size > 0

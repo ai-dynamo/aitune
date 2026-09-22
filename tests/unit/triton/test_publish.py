@@ -145,8 +145,9 @@ def test_publishes_onnx_external_data_and_runtime_provider(tmp_path, provider, e
     config = (published / "config.pbtxt").read_text()
     parsed = text_format.Parse(config, model_config_pb2.ModelConfig())
     assert 'platform: "onnxruntime_onnx"' in config
-    assert parsed.max_batch_size == 0
-    assert tuple(parsed.input[0].dims) == (-1, -1)
+    assert parsed.max_batch_size == 8
+    assert parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (-1,)
     accelerators = parsed.optimization.execution_accelerators.gpu_execution_accelerator
     assert tuple(accelerator.name for accelerator in accelerators) == expected_accelerators
 
@@ -168,6 +169,7 @@ def test_publishes_pt2_using_torch_aoti_names(tmp_path):
     assert 'platform: "torch_aoti"' in config
     assert 'name: "INPUT__0"' in config
     assert 'name: "OUTPUT__0"' in config
+    assert "dynamic_batching" in config
 
 
 def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_path):
@@ -181,7 +183,12 @@ def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_pat
         runtime=RuntimeConfig(name="aotinductor"),
     )
 
-    published = aitriton.publish(artifact, path=tmp_path / "unbatched", model_name="encoder")
+    published = aitriton.publish(
+        artifact,
+        path=tmp_path / "unbatched",
+        model_name="encoder",
+        dynamic_batching=False,
+    )
     assert (published / "1" / "model.pt2").is_file()
 
     with pytest.raises(AITunePublicationError, match="structured calls"):

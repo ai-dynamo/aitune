@@ -16,7 +16,7 @@ from aitune.triton.config import (
     TensorRTModelConfig,
     TorchAOTIModelConfig,
 )
-from aitune.triton.model_analyzer import write_model_analyzer_configs
+from aitune.triton.model_analyzer import write_model_analyzer_config
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +35,16 @@ def publish(
     path: str | os.PathLike[str],
     model_name: str,
     model_version: int = 1,
-    dynamic_batching: bool = False,
+    dynamic_batching: bool = True,
     max_batch_size: int | None = None,
     staging_path: str | os.PathLike[str] | None = None,
 ) -> Path:
     """Publish one tuned artifact into a new Triton model repository entry.
 
     The operation never replaces an existing model. Files are copied and staged
-    before the completed model directory is moved into the repository. Model Analyzer
-    configs are generated automatically under ``model_analyzer/fast.yaml`` and
-    ``model_analyzer/manual.yaml``, with input shapes derived from the artifact.
+    before the completed model directory is moved into the repository. A Model Analyzer
+    config is generated automatically under ``model_analyzer/config.yaml``, with
+    input shapes derived from the artifact.
 
     Supported model format/runtime pairs are ``onnx``/``onnxruntime``,
     ``tensorrt_plan``/``tensorrt``, and ``pt2``/``aotinductor``. ONNX provider
@@ -57,7 +57,7 @@ def publish(
         path: Triton model repository root.
         model_name: New model directory name.
         model_version: Positive Triton model version.
-        dynamic_batching: Let Triton combine independent client requests.
+        dynamic_batching: Let Triton combine independent client requests. Enabled by default.
         max_batch_size: Optional implicit batch limit within the artifact's tuned bounds.
             It can be set without enabling the dynamic batcher.
         staging_path: Directory outside the repository on the same filesystem. Defaults to the repository's parent.
@@ -109,7 +109,7 @@ def publish(
             destination = destination / file_name
         artifact.model.export_files(destination)
         repository_path = repository.resolve()
-        write_model_analyzer_configs(
+        write_model_analyzer_config(
             artifact,
             config=config.to_protobuf(),
             model_directory=model_directory,

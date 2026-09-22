@@ -42,8 +42,7 @@ model_repository/
     │   └── model.onnx  # model.plan or model.pt2 for other runtimes
     ├── config.pbtxt
     └── model_analyzer/
-        ├── fast.yaml
-        └── manual.yaml
+        └── config.yaml
 ```
 
 AITune copies the executable and any required additional files, preserving their relative paths. ONNX models with
@@ -131,44 +130,39 @@ repository layout, configuration, and request-handling API. Once prepared, the r
 [standalone Triton](#run-triton-standalone) or a [Dynamo Triton environment](#run-triton-through-dynamo) that includes
 the Python backend and those dependencies.
 
-## Optional batching overrides
+## Batching overrides
 
-The basic publication call keeps the model's full tensor shapes and leaves Triton's implicit and dynamic batching
-disabled. No batch limit needs to be supplied for that call.
-
-Enable `dynamic_batching` when Triton should combine independent requests. AITune reads the supported batch range from
-the tuned artifact and uses its recorded maximum, so the deployment limit normally does not need to be provided:
+Dynamic batching is enabled by default. AITune reads the supported batch range from the tuned artifact and uses its
+recorded maximum, so the deployment limit normally does not need to be provided. Disable it explicitly for artifacts
+that must retain their full tensor shapes:
 
 ```python
 model_path = publish(
     artifact,
     path="model_repository",
     model_name="encoder",
-    dynamic_batching=True,
+    dynamic_batching=False,
 )
 ```
 
-Set `max_batch_size` only to lower the deployment limit from the recorded maximum. It can also enable Triton's implicit
-batch dimension without enabling the dynamic batcher. The override must stay within the artifact's recorded bounds,
-and every input and output must use the first axis as its batch dimension.
+Set `max_batch_size` only to lower the deployment limit from the recorded maximum. With `dynamic_batching=False`, it
+can also enable Triton's implicit batch dimension without enabling the dynamic batcher. The override must stay within
+the artifact's recorded bounds, and every input and output must use the first axis as its batch dimension.
 
 TensorRT model configurations retain the complete optimization-profile set so Triton can select a compatible profile
 for each request.
 
 ## Profile with Model Analyzer
 
-Publication generates two configurations under `model_analyzer/`:
+Publication generates `model_analyzer/config.yaml` for a bounded search. Perf Analyzer concurrency is capped at twice
+the published maximum batch size.
 
-- `fast.yaml` provides a smaller search for quick feedback.
-- `manual.yaml` provides a larger explicit sweep over request batch size, model maximum batch size, request concurrency,
-  instance count, and dynamic-batching queue delay.
-
-The configurations use the artifact's recorded minimum input shapes. Batched deployments omit the leading batch
+The configuration uses the artifact's recorded minimum input shapes. Batched deployments omit the leading batch
 dimension from Perf Analyzer shape flags. Model Analyzer skips combinations where the Perf Analyzer request batch size
 exceeds the candidate model maximum.
 
-TensorRT optimization-profile shape bounds do not constrain the search. For plans with multiple profiles, the complete
-profile set remains static while Model Analyzer varies Triton settings such as instance count.
+TensorRT optimization-profile shape bounds do not constrain the generated quick search. Users can copy and modify the
+generated configuration when they need a custom search space.
 
 When a backend retained representative tuning inputs, publication also writes `model_analyzer/input-data.json` and
 configures Perf Analyzer to use those values. This is important for embeddings and other inputs whose values must stay
