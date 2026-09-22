@@ -8,7 +8,7 @@ on:
       pytorch_ci_image:
         description: PyTorch image selected by CI; empty uses the commit image
         type: string
-        default: ''
+        default: 'ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3:latest'
   merge_group:
     branches: [main]
   workflow_call:
