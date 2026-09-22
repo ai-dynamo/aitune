@@ -361,3 +361,7 @@ docs/superpowers/
 .worktrees/
 .claude/plans
 .claude/specs
+.worklogs/
+
+# act tool
+.actrc

@@ -20,7 +20,8 @@ from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore
+from aitune.torch.utils.pt2_artifact import PT2CallContract
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
@@ -35,9 +36,8 @@ def model(torch_device) -> nn.Module:
 
 
 @pytest.fixture
-def sample_data(torch_device) -> list[Sample]:
-    toy = ToyTorchModel()
-    return toy.samples(batch_sizes=[1], device=torch_device)
+def sample_data(torch_device, tmp_path) -> SampleStore:
+    return ToyTorchModel().sample_store(tmp_path, batch_sizes=[1], device=torch_device)
 
 
 @pytest.fixture
@@ -171,6 +171,7 @@ def test_artifact_after_deactivation_exposes_pt2_ordinal_tensor_interface(
     assert artifact.model.files == (artifact.model.path,)
     assert artifact.model.metadata == {"structured_call": False}
     assert artifact.runtime == RuntimeConfig(name="aotinductor")
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("INPUT__0",)
     destination = tmp_path / "exported" / "renamed.pt2"
     assert artifact.model.export_files(destination) == destination
     assert destination.read_bytes() == b"fake"
@@ -235,6 +236,21 @@ def test_build_exposes_structured_pt2_call_in_pytree_order(mocker, tmp_path):
     assert artifact.runtime == RuntimeConfig(name="aotinductor")
 
 
+def test_call_contract_maps_repeated_tensor_arguments_to_distinct_metadata():
+    class SharedTensorModel(nn.Module):
+        def forward(self, left, right):
+            return left + right
+
+    model = SharedTensorModel().eval()
+    shared = torch.ones(1, 4)
+    sample = ((shared, shared), {})
+    graph_spec = _graph_spec_for(model, [sample])
+
+    contract = PT2CallContract.capture(graph_spec, sample, model(*sample[0], **sample[1]))
+
+    assert contract.input_order == (0, 1)
+
+
 def test_unsupported_pt2_call_does_not_fail_backend_build(mocker, tmp_path):
     class ScalarArgumentModel(nn.Module):
         def forward(self, value, scale):
@@ -257,6 +273,39 @@ def test_unsupported_pt2_call_does_not_fail_backend_build(mocker, tmp_path):
 
     assert backend.is_active
     with pytest.raises(RuntimeError, match="got int"):
+        backend.artifact()
+
+
+def test_call_contract_capture_exception_does_not_fail_backend_build(mocker, tmp_path):
+    class CallContractCaptureError(Exception):
+        pass
+
+    class CaptureFailureModel(nn.Module):
+        fail = False
+
+        def forward(self, value):
+            if self.fail:
+                raise CallContractCaptureError("capture failed")
+            return value
+
+    model = CaptureFailureModel().eval()
+    samples = [((torch.ones(1, 4),), {})]
+    graph_spec = _graph_spec_for(model, samples)
+    model.fail = True
+    mocker.patch("torch.export.export", return_value=Mock())
+    mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
+    mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
+
+    backend = TorchInductorAotBackend().build(
+        model,
+        graph_spec,
+        samples,
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
+
+    assert backend.is_active
+    with pytest.raises(RuntimeError, match="capture failed"):
         backend.artifact()
 
 
@@ -387,6 +436,8 @@ def test_to_dict_contains_required_keys(mock_aoti, backend, model, graph_spec, s
         "output_order": (0,),
         "structured": False,
     }
+    assert state[TorchInductorAotBackend.STATE_SAMPLES] == sample_data.to_dict()
+    assert "sample_inputs" not in state
 
 
 @requires_cuda

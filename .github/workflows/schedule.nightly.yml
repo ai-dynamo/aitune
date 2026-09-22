@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: Nightly CI
+
+on:
+  schedule:
+    - cron: "0 2 * * 1,2,3,4,5"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    secrets:
+      FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write # for dependency review (but it's not run)
+
+  compatibility:
+    name: Compatibility
+    needs: ci
+    uses: ./.github/workflows/dispatch.compatibility.yml
+
+  functional:
+    name: Functional tests
+    needs: ci
+    uses: ./.github/workflows/dispatch.functional.yml
+    with:
+      dist_run_id: ${{ needs.ci.outputs.dist_run_id }}
+      pytorch_ci_image: ${{ needs.ci.outputs.pytorch_ci_image }}
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  integration:
+    name: Integration tests
+    needs: ci
+    uses: ./.github/workflows/dispatch.integration.yml
+    with:
+      dist_run_id: ${{ needs.ci.outputs.dist_run_id }}
+      pytorch_ci_image: ${{ needs.ci.outputs.pytorch_ci_image }}
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}

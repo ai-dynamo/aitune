@@ -47,6 +47,7 @@ class TritonTensorConfig(BaseModel):
     name: str = Field(min_length=1)
     data_type: TritonDataType
     dims: tuple[int, ...]
+    reshape: tuple[int, ...] | None = None
 
     @field_validator("dims")
     @classmethod
@@ -101,11 +102,14 @@ class _BaseModelConfig(BaseModel):
         for field_name, tensors in (("input", self.inputs), ("output", self.outputs)):
             target = getattr(config, field_name)
             for tensor in tensors:
-                target.add(
+                target_tensor = target.add(
                     name=tensor.name,
                     data_type=model_config_pb2.DataType.Value(tensor.data_type.value),
                     dims=tensor.dims,
                 )
+                if tensor.reshape is not None:
+                    target_tensor.reshape.shape.extend(tensor.reshape)
+                    target_tensor.reshape.SetInParent()
         if self.dynamic_batching:
             config.dynamic_batching.SetInParent()
         return config
@@ -132,4 +136,8 @@ def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConf
     dimensions = tuple(minimum if minimum == maximum else -1 for minimum, maximum in bounds)
     if batched:
         dimensions = dimensions[1:]
-    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions)
+    reshape = None
+    if not dimensions:
+        dimensions = (1,)
+        reshape = ()
+    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions, reshape=reshape)

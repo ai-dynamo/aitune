@@ -131,6 +131,3 @@ def _metadata_order(
     if len(order) != len(tensor_data) or any(candidates for candidates in indices_by_identity.values()):
         raise ValueError(f"PyTorch and GraphSpec disagree about the flattened {label} tensor count")
     return tuple(order)
-
-
-__all__ = ["PT2CallContract", "PT2CallContractState"]

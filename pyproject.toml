@@ -13,9 +13,9 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Unix",
 ]
@@ -38,12 +38,12 @@ keywords = [
     "automation",
 ]
 license = { text = "Apache 2.0" }
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.11, <3.14"
 dependencies = [
     "autowrapt>=1.0",
     "dill>=0.3.8",
     "nvidia-ml-py",
-    "nvidia-modelopt[onnx]>=0.33.0",
+    "nvidia-modelopt[onnx]>=0.33.0", # sets onnxruntime-gpu version
     "numpy>=1.26.4",
     "onnxscript>=0.2.0",
     "onnx-ir>=0.1.11",
@@ -97,6 +97,9 @@ torch212 = [ # nvcr.io/nvidia/pytorch:26.05-py3 is based on 2.12.0a0+5aff3928d8
     "torchao>=0.17,<0.18",
 ]
 
+onnxruntime-gpu-cuda12 = ["onnxruntime-gpu"]
+onnxruntime-gpu-cuda13 = ["onnxruntime-gpu"]
+
 
 [project.urls]
 "Documentation" = "https://ai-dynamo.github.io/aitune"
@@ -111,12 +114,8 @@ test = [
     "pytest-xdist",
     "pillow",
     "datasets>=3.3.2",
-    "transformers>=4.54,<5",
+    "transformers>=4.57.6,<5",
     "setuptools",
-    "importlib-metadata; python_version < '3.10'",
-    "pydantic>=2",
-    "protobuf>=6.33.5",
-    "tritonclient[grpc]",
 ]
 dev = [
     "build >= 0.8",
@@ -134,9 +133,9 @@ dev = [
 functional-test = [
     "fire",
     "timm",
-    "diffusers>=0.35.0",
+    "diffusers>=0.35.0,!=0.37.1",
     "datasets>=3.3.2",
-    "transformers>=4.54,<5",
+    "transformers>=4.57.6,<5",
     "sentencepiece>=0.2.0",
     "urllib3>=2.6.3", # sec
     "kernels>=0.12",
@@ -167,6 +166,7 @@ aitune = ["**/*"]
 
 [tool.uv]
 managed = true
+environments = ["'tegra' not in platform_release"]
 conflicts = [
     [
         { extra = "torch28" },
@@ -174,13 +174,33 @@ conflicts = [
         { extra = "torch210" },
         { extra = "torch211" },
         { extra = "torch212" },
-    ]
+    ],
+    [
+        { extra = "onnxruntime-gpu-cuda13" },
+        { extra = "onnxruntime-gpu-cuda12" },
+    ],
 ]
+
+[tool.uv.sources]
+onnxruntime-gpu = [
+    { index = "ort-cuda-13-nightly", extra = "onnxruntime-gpu-cuda13" },
+    { index = "pypi", extra = "onnxruntime-gpu-cuda12" },
+]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+explicit = true
+
+[[tool.uv.index]]
+name = "ort-cuda-13-nightly"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"
+explicit = true
 
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = "INFO"
-addopts = ["--import-mode=importlib", "--doctest-modules"]
+addopts = ["--quiet", "--import-mode=importlib", "--doctest-modules"]
 pythonpath = ["."]
 testpaths = ["aitune", "tests/unit"]
 markers = [
@@ -214,7 +234,7 @@ select = [
     "CPY",
     "G004"
 ]
-ignore = ["E266", "E501", "N818"]
+ignore = ["D420", "D421", "E266", "E501", "N818"]
 exclude = ["**/*.ipynb"]
 
 [tool.ruff.lint.per-file-ignores]

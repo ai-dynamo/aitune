@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from aitune.records import (
     DType,
     ModelFiles,
     RuntimeConfig,
+    TensorSample,
 )
 
 
@@ -234,6 +236,28 @@ def test_publish_uses_concrete_shapes_for_dynamic_onnx_inputs(tmp_path, batched)
     for name in ("fast", "manual"):
         config = yaml.safe_load((model / "model_analyzer" / f"{name}.yaml").read_text())
         assert config["perf_analyzer_flags"] == {"shape": [f"tokens:{dimensions}", f"mask:{dimensions}"]}
+
+
+def test_publish_uses_representative_backend_inputs(tmp_path):
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"ONNX graph")
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+        inputs=(BoundedTensorSpec(name="input_ids", dtype=DType.INT64, min_shape=(1, 4), max_shape=(8, 4)),),
+        outputs=(_spec("output", DType.FLOAT32, 8),),
+        sample_inputs=(TensorSample(name="input_ids", shape=(2, 4), values=(17, 23, 42, 9, 3, 5, 7, 11)),),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
+
+    input_data_path = model / "model_analyzer/input-data.json"
+    assert json.loads(input_data_path.read_text()) == {
+        "data": [{"input_ids": {"content": [17, 23, 42, 9], "shape": [4]}}]
+    }
+    for name in ("fast", "manual"):
+        config = yaml.safe_load((model / "model_analyzer" / f"{name}.yaml").read_text())
+        assert config["perf_analyzer_flags"]["input-data"] == [str(input_data_path.resolve())]
 
 
 def test_publish_uses_tensorrt_optimum_shape_and_profile_batch_bounds(tmp_path):

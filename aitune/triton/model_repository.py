@@ -20,14 +20,6 @@ from aitune.triton.model_analyzer import _write_model_analyzer_configs
 
 logger = logging.getLogger(__name__)
 
-__all__ = [
-    "ONNXRuntimeModelConfig",
-    "PublicationError",
-    "TensorRTModelConfig",
-    "TorchAOTIModelConfig",
-    "publish",
-]
-
 _CONFIG_FILE_NAME = "config.pbtxt"
 _MODEL_CONFIGS: dict[str, type[_BaseModelConfig]] = {
     "tensorrt": TensorRTModelConfig,
@@ -192,6 +184,7 @@ def publish(
             model_directory=model_directory,
             destination=repository.resolve().parent / f"{repository.resolve().name}-model-analyzer" / model_name,
             staging=staged_model / "model_analyzer",
+            config_directory=model_directory / "model_analyzer",
         )
         staged_model.rename(model_directory)
     except Exception as error:

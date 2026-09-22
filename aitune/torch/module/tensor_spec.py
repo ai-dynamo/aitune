@@ -23,6 +23,7 @@ class TensorSpec:
     """TensorSpec is used to describe tensor metadata.
 
     Attributes:
+        name - original graph tensor name, independent of its Python access path
         shape (list[Union[str, int]]) - shape of the tensor, int is a real dimension, str is a symbolic dimension
         min_shape (list[int]) - minimum dimensions seen so far
         max_shape (list[int]) - maximum dimensions seen so far
@@ -35,6 +36,12 @@ class TensorSpec:
     max_shape: list[int]
     dtype: torch.dtype | None
     _bs_multipliers: list[float]
+    name: str | None = None
+
+    def __setstate__(self, state: tuple[None, dict[str, Any]]) -> None:
+        """Restore metadata from checkpoints written before tensor names were stored."""
+        for name, value in ({"name": None} | state[1]).items():
+            setattr(self, name, value)
 
     @staticmethod
     def from_tensor(tensor: torch.Tensor, batch_size: int | float):
