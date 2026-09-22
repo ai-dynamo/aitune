@@ -123,11 +123,11 @@ To target a specific CUDA version, add the matching PyTorch index:
 ONNX Runtime CUDA version
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**UV** installs the CUDA 13 ORT build by default from a source checkout:
+Select the CUDA 13 extra when installing from a source checkout with **UV**:
 
 .. code-block:: bash
 
-    uv pip install --torch-backend=cu130 ".[torch210]"
+    uv pip install --torch-backend=cu130 ".[torch210,onnxruntime-gpu-cuda13]"
 
 Use the ``onnxruntime-gpu-cuda12`` extra for the CUDA 12 PyPI build:
 
@@ -146,6 +146,12 @@ CUDA 13 with pip needs an explicit ORT reinstall from the CUDA 13 feed:
 .. code-block:: bash
 
     pip install onnxruntime-gpu==1.24.4 --no-deps --force-reinstall --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+
+If ORT is already installed, use UV's targeted reinstall option with the CUDA 13 extra:
+
+.. code-block:: bash
+
+    uv pip install --torch-backend=cu130 --reinstall-package onnxruntime-gpu ".[torch210,onnxruntime-gpu-cuda13]"
 
 
 NGC container install
