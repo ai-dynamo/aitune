@@ -22,7 +22,11 @@ from aitune.torch.module.tensor_spec import TensorSpec
 
 
 class PT2CallContractState(TypedDict):
-    """Checkpoint representation of a temporary PT2 call contract."""
+    """Checkpoint representation of a temporary PT2 call contract.
+
+    ``structured`` is true when an input argument or the output is a container instead of a tensor. For example, the
+    call may pass tensors inside a dictionary or return tensors in a tuple.
+    """
 
     input_order: tuple[int, ...]
     output_order: tuple[int, ...]
