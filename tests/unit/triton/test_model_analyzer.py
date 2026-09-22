@@ -70,7 +70,7 @@ def test_generates_quick_search_with_tuned_bounds_and_concurrency(tmp_path):
     assert quick["run_config_search_min_model_batch_size"] == 1
     assert quick["run_config_search_max_model_batch_size"] == 6
     assert quick["run_config_search_min_instance_count"] == 1
-    assert quick["run_config_search_max_instance_count"] == 5
+    assert quick["run_config_search_max_instance_count"] == 3
     assert quick["run_config_search_max_concurrency"] == 12
     assert {path.name for path in output.iterdir()} == {"config.yaml"}
 

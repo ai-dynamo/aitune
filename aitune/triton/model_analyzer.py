@@ -15,7 +15,7 @@ from aitune.records import DeploymentArtifact
 
 _CONFIG_FILE_NAME = "config.yaml"
 _INPUT_DATA_FILE_NAME = "input-data.json"
-_DEFAULT_MAX_INSTANCE_COUNT = 5
+_DEFAULT_MAX_INSTANCE_COUNT = 3
 
 
 class _ModelAnalyzerConfig(BaseModel):
@@ -32,7 +32,7 @@ class _ModelAnalyzerConfig(BaseModel):
     perf_analyzer_flags: dict[str, tuple[str, ...]] = Field(default_factory=dict)
     run_config_search_mode: Literal["quick"] = "quick"
     run_config_search_min_instance_count: int = Field(default=1, ge=1)
-    run_config_search_max_instance_count: int = Field(default=5, ge=1)
+    run_config_search_max_instance_count: int = Field(default=3, ge=1)
     run_config_search_min_model_batch_size: int | None = Field(default=None, ge=1)
     run_config_search_max_model_batch_size: int | None = Field(default=None, ge=1)
     run_config_search_max_concurrency: int = Field(ge=1)
