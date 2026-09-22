@@ -8,6 +8,9 @@ title: "Changelog"
 ## 0.7.0 (unreleased)
 
 - feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
+- feat: resolve default AOT and JIT strategies per module using source format, execution topology, and compilation mode
+- feat: add tuning objectives and composable constraints through `resolve_strategy`, initially supporting maximum latency
+- breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
 
 ## 0.6.0
 

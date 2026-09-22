@@ -6,11 +6,11 @@ title: "NVIDIA AITune Examples"
 
 This directory contains practical examples demonstrating how to use NVIDIA AITune to tune different types of AI models for inference performance.
 
-ESM2 and Parakeet CTC use AITune's default strategy without overrides.
-For AOT tuning, this selects `MaxThroughputStrategy` with automatic backend candidates and maximum-batch-size discovery.
-JIT also defaults to `MaxThroughputStrategy`, with fewer candidates and maximum-batch-size discovery disabled.
+ESM2, Parakeet CTC, and the WAN transformer use AITune's default strategy without overrides.
+For AOT tuning, this dynamically creates `MaxThroughputStrategy` with module-compatible backend candidates and
+maximum-batch-size discovery. JIT uses the same dynamic resolution and disables maximum-batch-size discovery.
 Stable Diffusion and FLUX disable maximum-batch-size discovery to tune their recorded image batches. Stable Diffusion
-uses the default AOT backend candidates, as do FLUX's non-transformer modules.
+uses the default dynamic backend candidates, as do FLUX's non-transformer modules.
 Explicit backend lists remain where models need quantization, precision settings, or specific compiler options.
 
 ## ResNet

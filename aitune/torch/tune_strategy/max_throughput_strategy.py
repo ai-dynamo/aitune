@@ -11,13 +11,7 @@
 
 from dataclasses import dataclass
 
-from aitune.torch.backend import (
-    Backend,
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchInductorAotBackend,
-    TorchInductorJitBackend,
-)
+from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
@@ -46,8 +40,8 @@ class MaxThroughputStrategy(ProfilingTuneStrategy):
     user-provided backend beats it. In diagnostic or disabled mode, the best user-provided backend wins,
     and the strategy raises if all user backends fail.
 
-    AOT candidates are inherited from ProfilingTuneStrategy. The JIT hook below uses
-    fewer candidates to limit tuning work during inference.
+    Callers either supply candidates explicitly or use ``resolve_strategy()`` to
+    select and configure candidates for each module.
     """
 
     _title = "Max Throughput Strategy"
@@ -55,16 +49,6 @@ class MaxThroughputStrategy(ProfilingTuneStrategy):
     _metric_label = "throughput"
     _metric_unit = "samples/s"
     _value_fmt = ".2f"
-
-    def _default_jit_backends(self, distributed: bool = False) -> list[Backend]:
-        """Limit JIT tuning work to a small set of backends that support the module."""
-        if distributed:
-            return [TorchInductorAotBackend(), TorchInductorJitBackend()]
-        return [
-            TensorRTBackend(),
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorJitBackend(),
-        ]
 
     def _measure(
         self,

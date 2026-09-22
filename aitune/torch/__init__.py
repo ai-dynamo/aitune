@@ -13,6 +13,7 @@ from aitune.torch.inspecting import inspect, wrap
 from aitune.torch.module import Module
 from aitune.torch.performance import PerformanceProfile, profile
 from aitune.torch.tune_strategy import (
+    Constraint,
     FirstWinsStrategy,
     LatencyBudgetStrategy,
     MaxThroughputStrategy,
@@ -20,6 +21,7 @@ from aitune.torch.tune_strategy import (
     OneBackendStrategy,
     PerformanceValidationMode,
     TuneStrategy,
+    resolve_strategy,
 )
 from aitune.torch.tune_data.reporting import snapshot_tuning_data
 from aitune.torch.tuning import load, save, tune
@@ -46,11 +48,13 @@ __all__ = [
     "PatchedModule",
     "TuneStrategy",
     "OneBackendStrategy",
+    "Constraint",
     "FirstWinsStrategy",
     "LatencyBudgetStrategy",
     "MaxThroughputStrategy",
     "MinLatencyStrategy",
     "PerformanceValidationMode",
+    "resolve_strategy",
     "LocalTorchStorage",
     "DataLoaderFactory",
     "patch_for_jit_tuning",

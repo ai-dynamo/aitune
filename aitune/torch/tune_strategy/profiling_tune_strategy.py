@@ -20,13 +20,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend import (
-    Backend,
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchInductorAotBackend,
-    TorchInductorJitBackend,
-)
+from aitune.torch.backend import Backend
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
@@ -99,7 +93,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
 
     def __init__(
         self,
-        backends: list[Backend] | None = None,
+        backends: list[Backend],
         profiling_config: ProfilingConfig | None = None,
         **kwargs: Any,
     ):
@@ -144,27 +138,6 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             "performance_validation_mode": self._performance_validation_mode.value,
             "profiling_config": self._profiling_config_to_json_dict(),
         }
-
-    def _default_aot_backends(self, distributed: bool = False) -> list[Backend]:
-        """Compare supported export and compiler alternatives for AOT; performance varies by model."""
-        backends: list[Backend] = []
-        if not distributed:
-            backends = [TensorRTBackend(), TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False))]
-        return [
-            *backends,
-            TorchInductorAotBackend(),
-            TorchInductorJitBackend(),
-        ]
-
-    def _default_jit_backends(self, distributed: bool = False) -> list[Backend]:
-        """Compare supported export and compiler alternatives for JIT; performance varies by model."""
-        if distributed:
-            return [TorchInductorAotBackend(), TorchInductorJitBackend()]
-        return [
-            TensorRTBackend(),
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorJitBackend(),
-        ]
 
     @abstractmethod
     def _measure(

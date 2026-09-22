@@ -103,12 +103,10 @@ def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
         return json_serialize(config.to_dict())
     elif mode == AITuneMode.JIT:
         from aitune.torch.jit.config import config as jit_config
+        from aitune.torch.tune_strategy.resolver import resolve_strategy
 
         snapshot = {f.name: getattr(jit_config, f.name) for f in fields(jit_config)}
-        # Resolve `strategy` to the actual strategy that will run (the default when unset),
-        # so the snapshot reflects reality rather than a sentinel. The strategy's own
-        # `to_json_dict()` already exposes its backends list, so no separate `backends` key.
-        snapshot["strategy"] = _describe_strategy(jit_config.resolve_strategy())
+        snapshot["strategy"] = _describe_strategy(jit_config.strategy or resolve_strategy())
         return json_serialize(snapshot)
     raise ValueError(f"Invalid tuning mode: {mode}")  # pyright: ignore[reportUnreachable]
 
