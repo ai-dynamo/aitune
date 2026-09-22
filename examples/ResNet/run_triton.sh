@@ -27,6 +27,12 @@ if [[ -z "${TRITON_NETWORK:-}" ]]; then
       exit 1
     fi
     TRITON_NETWORK="container:$JOB_CONTAINER_ID"
+  elif [[ -f /.dockerenv && "${GITHUB_ACTIONS:-}" == true ]]; then
+    if [[ -z "${HOSTNAME:-}" ]]; then
+      echo "Cannot identify the GitHub Actions job container; set TRITON_NETWORK=container:<name-or-id>" >&2
+      exit 1
+    fi
+    TRITON_NETWORK="container:$HOSTNAME"
   fi
 fi
 

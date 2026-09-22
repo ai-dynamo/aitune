@@ -70,10 +70,13 @@ def _matrix_entry(
     config: FunctionalTestConfig,
     variant: FunctionalVariantConfig,
     requested_scope: Scope,
+    workflow: str = "legacy",
     default_docker_image: str = DEFAULT_DOCKER_IMAGE,
 ) -> dict[str, Any]:
     docker_image = config.docker_image or DEFAULT_DOCKER_IMAGE
     runner = variant.runner or config.runner or get_runner([*config.tags, *variant.tags])
+    # Triton runs as a sibling container, so its job container needs access to the runner's Docker daemon.
+    container_options = "--volume /var/run/docker.sock:/var/run/docker.sock" if workflow == "triton" else ""
 
     return {
         "id": entry_id,
@@ -84,6 +87,8 @@ def _matrix_entry(
         "environment": json.dumps(_environment_for_job(config)),
         "kind": kind,
         "path": path,
+        "workflow": workflow,
+        "container_options": container_options,
         "allow_failure": config.allow_failure,
         "timeout_minutes": _timeout_to_minutes(config.timeout),
         "use_gated_hf_token": config.use_gated_hf_token,
@@ -150,18 +155,23 @@ def _make_project_entries(
     for index, variant in enumerate(config.entries, start=1):
         if only_tags and only_tags.isdisjoint([*config.tags, *variant.tags]):
             continue
-        jobs.append(
+        workflows = config.workflows or ["legacy"]
+        jobs.extend([
             _matrix_entry(
-                entry_id=f"{namespace}_{parent_dir.name}_inference_{index:03d}",
+                entry_id=(
+                    f"{namespace}_{parent_dir.name}_{workflow if workflow != 'legacy' else 'inference'}_{index:03d}"
+                ),
                 test_number=index - 1,
                 kind="project",
                 path=parent_dir.as_posix(),
                 config=config,
                 variant=variant,
                 requested_scope=requested_scope,
+                workflow=workflow,
                 default_docker_image=default_docker_image,
             )
-        )
+            for workflow in workflows
+        ])
     return jobs
 
 

@@ -62,6 +62,51 @@ inference = "demo:inference"
     assert validate.validate_one(project) is None
 
 
+def test_project_accepts_dynamo_and_triton_workflow_contracts(tmp_path: Path) -> None:
+    project = tmp_path / "pyproject.toml"
+    project.write_text(
+        """
+[project]
+name = "demo"
+version = "0.1.0"
+
+[project.scripts]
+tune = "demo:tune"
+triton-model-store = "demo:model_store"
+
+[tool.aitune]
+workflows = ["dynamo", "triton"]
+""".strip(),
+        encoding="utf-8",
+    )
+    (tmp_path / "run_dynamo.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "run_triton.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+
+    assert validate.validate_one(project) is None
+
+
+def test_project_workflow_requires_its_entry_points(tmp_path: Path) -> None:
+    project = tmp_path / "pyproject.toml"
+    project.write_text(
+        """
+[project]
+name = "demo"
+version = "0.1.0"
+
+[project.scripts]
+tune = "demo:tune"
+
+[tool.aitune]
+workflows = ["triton"]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert validate.validate_one(project) == (
+        f"{project}: triton workflow requires [project.scripts] entry: triton-model-store; required file: run_triton.sh"
+    )
+
+
 def test_skipped_project_does_not_require_scripts(tmp_path: Path) -> None:
     project = tmp_path / "pyproject.toml"
     project.write_text(

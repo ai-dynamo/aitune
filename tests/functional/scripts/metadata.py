@@ -31,6 +31,7 @@ RUNNERS_BY_TAG = {
 }
 
 RUNNER_TAG_PRIORITY = ("gpu/8", "gpu/4", "gpu/2", "gpu/sm/120", "sm120", "gpu")
+SUPPORTED_PROJECT_WORKFLOWS = ("dynamo", "triton")
 
 try:
     import tomllib
@@ -122,6 +123,7 @@ class FunctionalTestConfig(BaseModel):
     pip_install: list[dict[str, Any]] = Field(default_factory=list)
     arguments: list[dict[str, Any]] = Field(default_factory=list)
     variants: list[FunctionalVariantConfig] = Field(default_factory=list)
+    workflows: list[str] = Field(default_factory=list)
     use_gated_hf_token: bool = False
 
     @property
@@ -148,6 +150,16 @@ class FunctionalTestConfig(BaseModel):
             return {}
         return {str(key): str(item) for key, item in dict(value).items()}
 
+    @field_validator("workflows")
+    @classmethod
+    def _validate_workflows(cls, workflows: list[str]) -> list[str]:
+        unsupported = sorted(set(workflows) - set(SUPPORTED_PROJECT_WORKFLOWS))
+        if unsupported:
+            raise ValueError(f"Unsupported project workflows: {', '.join(unsupported)}")
+        if len(workflows) != len(set(workflows)):
+            raise ValueError("Project workflows must be unique")
+        return workflows
+
     @classmethod
     def from_toml(
         cls,
@@ -171,12 +183,15 @@ class FunctionalTestConfig(BaseModel):
         default_docker_image: str = DEFAULT_DOCKER_IMAGE,
     ) -> FunctionalTestConfig:
         """Create config from a PEP-723 script file."""
-        return cls.from_toml(
+        config = cls.from_toml(
             script,
             read_script_metadata(script.read_text(), script),
             default_scope,
             default_docker_image,
         )
+        if config.workflows:
+            raise ValueError(f"Project workflows are not supported for script test {script}")
+        return config
 
     @classmethod
     def from_project(

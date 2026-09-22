@@ -103,9 +103,9 @@ jobs:
           {
             echo "### Examples List"
             echo -ne "\nTotal matrix items: ${{ steps.generate.outputs.matrix_count }}\n\n"
-            echo "| ID | Path | Kind | Docker Image | Runner | Test Number |"
-            echo "|----|------|------|--------------|--------|-------------|"
-            jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.docker_image) | \(.runner) | \(.test_number) |"' jobs.json
+            echo "| ID | Path | Kind | Workflow | Docker Image | Runner | Test Number |"
+            echo "|----|------|------|----------|--------------|--------|-------------|"
+            jq -r '.[] | "| \(.id) | \(.path) | \(.kind) | \(.workflow) | \(.docker_image) | \(.runner) | \(.test_number) |"' jobs.json
             echo ""
           } >> $GITHUB_STEP_SUMMARY
 
@@ -122,6 +122,8 @@ jobs:
         include: ${{ fromJSON(needs.generate-examples-matrix.outputs.matrix) }}
     container:
       image: ${{ matrix.docker_image }}
+      # Triton jobs use the mounted runner daemon to start the server beside this job container.
+      options: ${{ matrix.container_options }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -139,6 +141,13 @@ jobs:
       # Replace AITune baked into the base/custom image with this commit's wheel.
       - name: Install wheel
         run: python -m pip install --force-reinstall --no-deps dist/*.whl
+      - name: Install Docker CLI
+        if: matrix.workflow == 'triton'
+        run: |
+          if ! command -v docker >/dev/null; then
+            apt-get update
+            apt-get install -y --no-install-recommends docker.io
+          fi
       - run: nvidia-smi
       - name: Run functional job
         env:
@@ -150,6 +159,7 @@ jobs:
             "${{ matrix.path }}" \
             --kind "${{ matrix.kind }}" \
             --test-number "${{ matrix.test_number }}" \
+            --workflow "${{ matrix.workflow }}" \
             --verbose
 
       - if: always()

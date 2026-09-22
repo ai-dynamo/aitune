@@ -54,6 +54,34 @@ def test_skipped_project_does_not_generate_jobs() -> None:
     assert jobs == []
 
 
+def test_project_workflows_expand_each_entry_into_independent_jobs() -> None:
+    jobs = generate._make_project_entries(
+        "examples",
+        Path("examples/Demo/pyproject.toml"),
+        _config({
+            "arguments": [{"name": "first"}, {"name": "second"}],
+            "workflows": ["dynamo", "triton"],
+        }),
+        Scope.ALWAYS,
+    )
+
+    assert [(job["id"], job["test_number"], job["workflow"]) for job in jobs] == [
+        ("examples_Demo_dynamo_001", 0, "dynamo"),
+        ("examples_Demo_triton_001", 0, "triton"),
+        ("examples_Demo_dynamo_002", 1, "dynamo"),
+        ("examples_Demo_triton_002", 1, "triton"),
+    ]
+    assert jobs[0]["container_options"] == ""
+    assert jobs[1]["container_options"] == "--volume /var/run/docker.sock:/var/run/docker.sock"
+
+
+def test_project_workflows_reject_unknown_and_duplicate_values() -> None:
+    with pytest.raises(ValueError, match="Unsupported project workflows: unknown"):
+        _config({"workflows": ["unknown"]})
+    with pytest.raises(ValueError, match="Project workflows must be unique"):
+        _config({"workflows": ["triton", "triton"]})
+
+
 def test_script_arguments_expand_to_multiple_jobs() -> None:
     jobs = generate._make_script_entries(
         "pytorch",

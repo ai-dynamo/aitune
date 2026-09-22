@@ -47,14 +47,37 @@ def validate_one(path: Path) -> str | None:
             if not config.skip:
                 project = tomllib.loads(path.read_text(encoding="utf-8"))
                 scripts = project.get("project", {}).get("scripts", {})
-                missing_scripts = sorted({"tune", "inference"} - scripts.keys())
-                if missing_scripts:
-                    raise ValueError(f"missing [project.scripts] entries: {', '.join(missing_scripts)}")
+                _validate_project_contract(path, config, scripts)
         else:
             FunctionalTestConfig.from_script(path)
     except (ValidationError, ValueError, tomllib.TOMLDecodeError) as exc:
         return f"{path}: {exc}"
     return None
+
+
+def _validate_project_contract(path: Path, config: FunctionalTestConfig, scripts: dict[str, str]) -> None:
+    if not config.workflows:
+        missing_scripts = sorted({"tune", "inference"} - scripts.keys())
+        if missing_scripts:
+            raise ValueError(f"missing [project.scripts] entries: {', '.join(missing_scripts)}")
+        return
+
+    for workflow in config.workflows:
+        required_scripts = {"tune"}
+        required_files = {f"run_{workflow}.sh"}
+        if workflow == "triton":
+            required_scripts.add("triton-model-store")
+        missing_scripts = sorted(required_scripts - scripts.keys())
+        missing_files = sorted(file_name for file_name in required_files if not (path.parent / file_name).is_file())
+        errors = []
+        if missing_scripts:
+            label = "entry" if len(missing_scripts) == 1 else "entries"
+            errors.append(f"[project.scripts] {label}: {', '.join(missing_scripts)}")
+        if missing_files:
+            label = "file" if len(missing_files) == 1 else "files"
+            errors.append(f"required {label}: {', '.join(missing_files)}")
+        if errors:
+            raise ValueError(f"{workflow} workflow requires {'; '.join(errors)}")
 
 
 def validate(scripts: list[Path], projects: list[Path]) -> int:
