@@ -1,221 +1,159 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for module-dependent strategy defaults."""
+"""Tests for dynamic strategy and backend resolution."""
+
+from unittest.mock import Mock
 
 import pytest
 import torch
 
 from aitune.torch.backend import (
+    ModuleFormat,
+    ONNXRuntimeBackend,
     TensorRTBackend,
-    TorchEagerBackend,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
 )
-from aitune.torch.jit.config import Config
-from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.tune_strategy import (
-    FirstWinsStrategy,
+    Constraint,
     LatencyBudgetStrategy,
     MaxThroughputStrategy,
     MinLatencyStrategy,
+    resolve_strategy,
 )
+from aitune.torch.tune_strategy.resolver import materialize_strategy
 
 
 class DistributedModule(torch.nn.Identity):
     __module__ = "torch.distributed.test"
 
 
-@pytest.fixture(params=[FirstWinsStrategy, MaxThroughputStrategy, MinLatencyStrategy, LatencyBudgetStrategy])
-def strategy_factory(request):
-    strategy_type = request.param
-    if strategy_type is LatencyBudgetStrategy:
-        return lambda **kwargs: strategy_type(latency_budget_ms=10, **kwargs)
-    return strategy_type
+def test_resolve_strategy_captures_dynamic_request():
+    strategy = resolve_strategy(objective="throughput", compilation="mixed")
+
+    assert strategy.to_json_dict() == {
+        "objective": "throughput",
+        "compilation": "mixed",
+        "constraints": [],
+        "backends": "resolved for each module",
+    }
 
 
-@pytest.fixture
-def dry_run(tmp_path):
-    inputs = torch.ones(1, 2)
-    samples = SampleStore.from_samples([((inputs,), {})], tmp_path, "samples")
-    graph_spec = GraphSpec(
-        name="identity",
-        input_spec=SampleMetadata.from_inputs({"input": inputs}),
-        output_spec=SampleMetadata.from_outputs(inputs),
-        forward_signature=ForwardSignature.from_callable(torch.nn.Identity().forward),
-    )
-
-    def run(strategy, module):
-        strategy.tune_dry_run(module, "identity", graph_spec, samples, torch.device("cpu"), tmp_path)
-        return strategy.to_json_dict()["backends"]
-
-    return run
-
-
-def test_distributed_dry_run_excludes_native_tensorrt(strategy_factory, mocker, dry_run):
-    strategy = strategy_factory()
-    defaults_module = "first_wins_strategy" if isinstance(strategy, FirstWinsStrategy) else "profiling_tune_strategy"
-    native_tensorrt = mocker.patch(
-        f"aitune.torch.tune_strategy.{defaults_module}.TensorRTBackend",
-        side_effect=AssertionError,
-    )
-    descriptions = dry_run(strategy, DistributedModule())
-
-    native_tensorrt.assert_not_called()
-    expected = [TorchInductorAotBackend, TorchInductorJitBackend]
-    assert [type(backend) for backend in strategy._backends] == expected
-    assert descriptions == [backend.describe() for backend in strategy._backends]
-
-
-@pytest.mark.parametrize("empty", [False, True])
-def test_explicit_candidates_are_preserved(strategy_factory, empty, dry_run):
-    backends = [] if empty else [TorchEagerBackend()]
-    strategy = strategy_factory(backends=backends)
-
-    descriptions = dry_run(strategy, DistributedModule())
-
-    assert descriptions == [backend.describe() for backend in backends]
-
-
-def test_reused_strategy_restores_ordinary_defaults(strategy_factory, dry_run):
-    strategy = strategy_factory()
-    ordinary = dry_run(strategy, torch.nn.Identity())
-    distributed = dry_run(strategy, DistributedModule())
-
-    assert distributed != ordinary
-    assert dry_run(strategy, torch.nn.Identity()) == ordinary
-
-
-def test_aot_and_jit_default_to_max_throughput_with_separate_instances(dry_run):
-    first = Module(torch.nn.Identity(), "first")
-    second = Module(torch.nn.Identity(), "second")
-    jit = Config().resolve_strategy()
-
-    assert isinstance(first._self_strategy, MaxThroughputStrategy)
-    assert isinstance(second._self_strategy, MaxThroughputStrategy)
-    assert first._self_strategy is not second._self_strategy
-    assert isinstance(jit, MaxThroughputStrategy)
-    assert jit is not first._self_strategy
-    dry_run(jit, DistributedModule())
-    assert [type(backend) for backend in jit._backends] == [TorchInductorAotBackend, TorchInductorJitBackend]
-
-
-@pytest.mark.parametrize("distributed", [False, True])
 @pytest.mark.parametrize(
-    "factory,workflow",
+    "compilation,expected",
     [
-        (FirstWinsStrategy, "aot"),
-        (FirstWinsStrategy.for_aot, "aot"),
-        (FirstWinsStrategy.for_jit, "jit"),
+        ("aot", [TensorRTBackend, TensorRTBackend, TorchInductorAotBackend]),
+        ("jit", [TorchInductorJitBackend]),
+        ("mixed", [TensorRTBackend, TensorRTBackend, TorchInductorAotBackend, TorchInductorJitBackend]),
     ],
 )
-def test_first_wins_owns_its_fallback_order(distributed, factory, workflow, dry_run):
-    strategy = factory()
-    dry_run(strategy, DistributedModule() if distributed else torch.nn.Identity())
+def test_dynamic_strategy_uses_compilation_mode(compilation, expected):
+    strategy = materialize_strategy(resolve_strategy(compilation=compilation), torch.nn.Identity())
 
-    if distributed:
-        assert [type(backend) for backend in strategy._backends] == [TorchInductorAotBackend, TorchInductorJitBackend]
-    else:
-        expected = [TensorRTBackend, TensorRTBackend]
-        if workflow == "aot":
-            expected.append(TorchInductorAotBackend)
-        expected.append(TorchInductorJitBackend)
-        assert [type(backend) for backend in strategy._backends] == expected
-        assert [backend._config.use_dynamo for backend in strategy._backends[:2]] == [True, False]
-
-
-def test_jit_strategy_clone_preserves_mode_across_topology_changes(dry_run):
-    original = MaxThroughputStrategy.for_jit()
-    ordinary = dry_run(original, torch.nn.Identity())
-    strategy = original.clone()
     assert isinstance(strategy, MaxThroughputStrategy)
-
-    distributed = dry_run(strategy, DistributedModule())
-    assert distributed == [TorchInductorAotBackend().describe(), TorchInductorJitBackend().describe()]
-    assert original.to_json_dict()["backends"] == ordinary
-    assert dry_run(strategy, torch.nn.Identity()) == ordinary
-
-    strategy.enable_performance_validation(False)
-    assert strategy.to_json_dict() != original.to_json_dict()
+    assert [type(backend) for backend in strategy._backends] == expected
 
 
-def test_jit_defaults_are_available_during_construction():
-    class ReportingStrategy(MaxThroughputStrategy):
-        def __init__(self, **kwargs):
-            super().__init__(**kwargs)
-            self.initial_configuration = self.to_json_dict()
+def test_dynamic_strategy_uses_distributed_candidates():
+    strategy = materialize_strategy(resolve_strategy(), DistributedModule())
 
-    expected = MaxThroughputStrategy.for_jit().to_json_dict()
-    strategy = ReportingStrategy.for_jit()
-
-    assert strategy.initial_configuration == expected
-    assert strategy.to_json_dict() == expected
+    assert [type(backend) for backend in strategy._backends] == [TorchInductorAotBackend, TorchInductorJitBackend]
 
 
-@pytest.mark.parametrize("distributed", [False, True])
-def test_jit_default_candidate_configuration(distributed, dry_run):
-    strategy = Config().resolve_strategy()
-    assert isinstance(strategy, MaxThroughputStrategy)
+def test_dynamic_strategy_uses_only_onnx_compatible_candidates(tmp_path):
+    module = OnnxModule(tmp_path / "model.onnx")
+
+    strategy = materialize_strategy(resolve_strategy(), module)
+
+    assert [type(backend) for backend in strategy._backends] == [
+        TensorRTBackend,
+        ONNXRuntimeBackend,
+    ]
+    assert all(ModuleFormat.ONNX in backend._supported_modules for backend in strategy._backends)
+
+
+def test_dynamic_strategy_rejects_jit_compilation_for_onnx_module(tmp_path):
+    module = OnnxModule(tmp_path / "model.onnx")
+
+    with pytest.raises(RuntimeError, match="No default backends support module 'OnnxModule'.*compilation='jit'"):
+        materialize_strategy(resolve_strategy(compilation="jit"), module)
+
+
+def test_dynamic_strategy_returns_fresh_backends():
+    request = resolve_strategy()
+    first = materialize_strategy(request, torch.nn.Identity())
+    second = materialize_strategy(request, torch.nn.Identity())
+
+    assert first is not second
+    assert all(left is not right for left, right in zip(first._backends, second._backends, strict=True))
+
+
+def test_aot_wrapper_materializes_strategy_for_each_module():
+    request = resolve_strategy()
+    ordinary = Module(torch.nn.Identity(), "ordinary", strategy=request)
+    distributed = Module(DistributedModule(), "distributed", strategy=request)
+    graph_spec = Mock(spec=GraphSpec)
+
+    ordinary_strategy = ordinary._get_strategies_for_graph_specs(None, [graph_spec], dry_run=False)[0]
+    distributed_strategy = distributed._get_strategies_for_graph_specs(None, [graph_spec], dry_run=False)[0]
+
+    assert [type(backend) for backend in ordinary_strategy._backends] == [
+        TensorRTBackend,
+        TensorRTBackend,
+        TorchInductorAotBackend,
+        TorchInductorJitBackend,
+    ]
+    assert [type(backend) for backend in distributed_strategy._backends] == [
+        TorchInductorAotBackend,
+        TorchInductorJitBackend,
+    ]
+
+
+def test_dynamic_strategy_applies_find_max_batch_size_configuration():
+    request = resolve_strategy().enable_find_max_batch_size(False)
+
+    strategy = materialize_strategy(request, torch.nn.Identity())
+
     assert strategy._enable_find_max_batch_size is False
-    dry_run(strategy, DistributedModule() if distributed else torch.nn.Identity())
-    backends = strategy._backends
-
-    if distributed:
-        assert [type(backend) for backend in backends] == [TorchInductorAotBackend, TorchInductorJitBackend]
-        assert backends[0]._config.inductor_configs is None
-    else:
-        assert [type(backend) for backend in backends] == [TensorRTBackend, TensorRTBackend, TorchInductorJitBackend]
-        assert [backend._config.use_dynamo for backend in backends[:2]] == [True, False]
-    assert backends[-1]._config.mode is None
 
 
-@pytest.mark.parametrize("distributed", [False, True])
-def test_aot_default_candidate_configuration(distributed, dry_run):
-    wrapped = Module(DistributedModule() if distributed else torch.nn.Identity(), "model")
-    strategy = wrapped._self_strategy
-    assert isinstance(strategy, MaxThroughputStrategy)
-    dry_run(strategy, wrapped.__wrapped__)
-    backends = strategy._backends
+def test_dynamic_strategy_maps_latency_objective():
+    strategy = materialize_strategy(resolve_strategy(objective="latency"), torch.nn.Identity())
 
-    expected = [TorchInductorAotBackend, TorchInductorJitBackend]
-    assert [type(backend) for backend in backends] == (expected if distributed else [TensorRTBackend] * 2 + expected)
-    if not distributed:
-        assert [backend._config.use_dynamo for backend in backends[:2]] == [True, False]
-    aot, jit = backends[-2:]
-    assert aot._config.inductor_configs is None
-    assert jit._config.mode is None
-    assert len({backend.key() for backend in backends}) == len(backends)
+    assert isinstance(strategy, MinLatencyStrategy)
+
+
+def test_dynamic_strategy_maps_latency_limit():
+    strategy = materialize_strategy(resolve_strategy(constraints=[Constraint.max_latency_ms(20)]), torch.nn.Identity())
+
+    assert isinstance(strategy, LatencyBudgetStrategy)
+    assert strategy.latency_budget_ms == 20
 
 
 @pytest.mark.parametrize(
-    "strategy_type", [FirstWinsStrategy, MaxThroughputStrategy, MinLatencyStrategy, LatencyBudgetStrategy]
+    "kwargs,error",
+    [
+        ({"objective": "unknown"}, "Unknown objective"),
+        ({"compilation": "unknown"}, "Unknown compilation"),
+        (
+            {"objective": "latency", "constraints": [Constraint.max_latency_ms(20)]},
+            "only valid with objective='throughput'",
+        ),
+    ],
 )
-@pytest.mark.parametrize("empty", [False, True])
-@pytest.mark.parametrize("workflow", ["aot", "jit"])
-def test_workflow_factory_preserves_explicit_configuration(strategy_type, empty, workflow, dry_run):
-    backends = [] if empty else [TorchEagerBackend()]
-    kwargs = {"latency_budget_ms": 10} if strategy_type is LatencyBudgetStrategy else {}
-    factory = {"aot": strategy_type.for_aot, "jit": strategy_type.for_jit}[workflow]
-    strategy = factory(backends=backends, **kwargs)
-
-    assert type(strategy) is strategy_type
-    assert strategy._enable_find_max_batch_size is (workflow == "aot" and strategy_type is not MinLatencyStrategy)
-    expected = [backend.describe() for backend in backends]
-    assert dry_run(strategy, torch.nn.Identity()) == expected
-    assert dry_run(strategy, DistributedModule()) == expected
+def test_resolve_strategy_rejects_invalid_options(kwargs, error):
+    with pytest.raises(ValueError, match=error):
+        resolve_strategy(**kwargs)  # pytype: disable=wrong-arg-types
 
 
-@pytest.mark.parametrize("strategy_type", [MinLatencyStrategy, LatencyBudgetStrategy])
-@pytest.mark.parametrize("distributed", [False, True])
-def test_latency_strategies_compare_the_same_candidates_in_both_workflows(strategy_type, distributed, dry_run):
-    kwargs = {"latency_budget_ms": 10} if strategy_type is LatencyBudgetStrategy else {}
-    aot = strategy_type.for_aot(**kwargs)
-    jit = strategy_type.for_jit(**kwargs)
-    module = DistributedModule() if distributed else torch.nn.Identity()
-    assert dry_run(jit, module) == dry_run(aot, module)
+def test_max_latency_constraint_rejects_non_positive_value():
+    with pytest.raises(ValueError, match="Maximum latency must be greater than zero"):
+        Constraint.max_latency_ms(0)
 
-    jit.enable_performance_validation(False)
-    assert jit.to_json_dict() != aot.to_json_dict()
+
+def test_resolve_strategy_rejects_duplicate_constraint_types():
+    with pytest.raises(ValueError, match="Only one constraint with metric='latency' and relation='at_most'"):
+        resolve_strategy(constraints=[Constraint.max_latency_ms(10), Constraint.max_latency_ms(20)])

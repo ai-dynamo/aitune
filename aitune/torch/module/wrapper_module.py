@@ -25,7 +25,7 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import report_graph_tune, report_module_tune
-from aitune.torch.tune_strategy import MaxThroughputStrategy
+from aitune.torch.tune_strategy.resolver import StrategyInput, materialize_strategy, resolve_strategy
 from aitune.torch.tune_strategy.tune_strategy import (
     DummyTuneStrategy,
     TuneStrategy,
@@ -38,8 +38,6 @@ from aitune.torch.utils.module import (
 
 logger = getLogger(__name__)
 
-DEFAULT_STRATEGY = MaxThroughputStrategy.for_aot()
-
 
 class ModuleState(Enum):
     """Possible states of the Module class."""
@@ -50,8 +48,8 @@ class ModuleState(Enum):
     TUNED = "tuned"
 
 
-StrategyList = list[TuneStrategy]
-StrategyMap = dict[SampleMetadata, TuneStrategy]
+StrategyList = list[StrategyInput]
+StrategyMap = dict[SampleMetadata, StrategyInput]
 
 
 class Module(wrapt.CallableObjectProxy):
@@ -83,7 +81,7 @@ class Module(wrapt.CallableObjectProxy):
         self,
         module: torch.nn.Module,
         name: str | None = None,
-        strategy: TuneStrategy | None = None,
+        strategy: StrategyInput | None = None,
         strategies: StrategyList | StrategyMap | None = None,
         dynamic_shapes: DynamicShapes | None = None,
     ):
@@ -307,7 +305,7 @@ class Module(wrapt.CallableObjectProxy):
     def tune(
         self,
         device: str | torch.device | None = None,
-        strategy: TuneStrategy | None = None,
+        strategy: StrategyInput | None = None,
         dry_run: bool = False,
     ):
         """Tunes the module.
@@ -477,12 +475,12 @@ class Module(wrapt.CallableObjectProxy):
 
     def _setup_strategies(
         self,
-        strategy: TuneStrategy | None,
+        strategy: StrategyInput | None,
         strategies: StrategyList | StrategyMap | None,
     ):
         """Sets up strategy or strategy_map or strategy_list depending on input args."""
         if strategy is None and strategies is None:
-            strategy = DEFAULT_STRATEGY.clone()
+            strategy = resolve_strategy()
 
         if strategy is not None and strategies is not None:
             raise ValueError("Only one of strategy or strategies should be provided")
@@ -501,7 +499,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def _get_strategies_for_graph_specs(
         self,
-        strategy: TuneStrategy | None,
+        strategy: StrategyInput | None,
         graph_specs: list[GraphSpec],
         dry_run: bool,
     ) -> list[TuneStrategy]:
@@ -511,7 +509,7 @@ class Module(wrapt.CallableObjectProxy):
         The function checks if there is sufficient strategies (list/dict).
         """
         if strategy is not None:
-            return [strategy] * len(graph_specs)
+            return [materialize_strategy(strategy, self.__wrapped__) for _ in graph_specs]
 
         if self._self_strategy_list:
             if len(self._self_strategy_list) < len(graph_specs):
@@ -523,7 +521,7 @@ class Module(wrapt.CallableObjectProxy):
                     f"Expected at least {len(graph_specs)}, got {len(self._self_strategy_list)}.\n"
                     f"Captured graph specs:\n{graph_specs_description}"
                 )
-            return self._self_strategy_list
+            return [materialize_strategy(item, self.__wrapped__) for item in self._self_strategy_list]
 
         if self._self_strategy_map:
             errors = []
@@ -532,10 +530,10 @@ class Module(wrapt.CallableObjectProxy):
                     errors.append(f"missing strategy for graph:{graph_spec.input_spec}")
             if errors:
                 raise RuntimeError("The are following errors:\n" + "\n- ".join(errors))
-            return list(self._self_strategy_map.values())
+            return [materialize_strategy(item, self.__wrapped__) for item in self._self_strategy_map.values()]
 
         if self._self_strategy is not None:
-            return [self._self_strategy] * len(graph_specs)
+            return [materialize_strategy(self._self_strategy, self.__wrapped__) for _ in graph_specs]
 
         if dry_run:
             return [DummyTuneStrategy()] * len(graph_specs)

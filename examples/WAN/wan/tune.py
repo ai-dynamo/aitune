@@ -9,15 +9,6 @@ import torch
 from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 
 import aitune.torch as ait
-from aitune.torch.backend import (
-    TorchInductorAotBackend,
-    TorchInductorJitBackend,
-    TorchTensorRTAotBackend,
-    TorchTensorRTAotBackendConfig,
-    TorchTensorRTConfig,
-    TorchTensorRTJitBackend,
-    TorchTensorRTJitBackendConfig,
-)
 from wan.cmd_args import parse_args
 from wan.context_parallel import ContextParallelMode
 from wan.defaults import DEFAULT_BATCH_SIZE
@@ -27,36 +18,6 @@ from wan.distributed import shutdown as shutdown_distributed
 from wan.model import get_pipeline
 
 logger = getLogger(__name__)
-
-
-def _transformer_strategy(multi_gpu: bool):
-    """Compare compile backends that support distributed transformer execution."""
-    strategy = ait.MaxThroughputStrategy(
-        backends=[
-            TorchTensorRTAotBackend(
-                config=TorchTensorRTAotBackendConfig(
-                    compile_config=TorchTensorRTConfig(
-                        use_distributed_mode_trace=multi_gpu,
-                        min_block_size=50,
-                        truncate_double=True,
-                    )
-                )
-            ),
-            TorchTensorRTJitBackend(
-                config=TorchTensorRTJitBackendConfig(
-                    compile_config=TorchTensorRTConfig(
-                        use_distributed_mode_trace=multi_gpu,
-                        min_block_size=50,
-                        truncate_double=True,
-                    )
-                )
-            ),
-            TorchInductorAotBackend(),
-            TorchInductorJitBackend(),
-        ]
-    )
-    strategy.enable_find_max_batch_size(enable=False)
-    return strategy
 
 
 def tune_model(
@@ -111,7 +72,6 @@ def tune_model(
             ait.module.Module(
                 getattr(pipeline, name),
                 name=name,
-                strategy=_transformer_strategy(multi_gpu),
             ),
         )
 

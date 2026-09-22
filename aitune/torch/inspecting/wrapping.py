@@ -7,7 +7,7 @@ from logging import getLogger
 from aitune.torch.inspecting.module_info import ModuleInfo
 from aitune.torch.module.wrapper_module import Module, StrategyList, StrategyMap
 from aitune.torch.module_registry import MODULE_REGISTRY
-from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
+from aitune.torch.tune_strategy.resolver import StrategyInput
 from aitune.utils.logging import setup_logging
 
 logger = getLogger(__name__)
@@ -18,7 +18,7 @@ LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 def wrap(
     obj: object,
     modules: list[ModuleInfo],
-    strategy: TuneStrategy | None = None,
+    strategy: StrategyInput | None = None,
     strategies: StrategyList | StrategyMap | None = None,
 ) -> object:
     """Wrap provided modules with inspection logic.
