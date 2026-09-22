@@ -61,6 +61,6 @@ resnet = ["**/*"]
 docker_image = "nvcr.io/nvidia/pytorch:26.05-py3"
 workflows = [
     { name = "dynamo" },
-    { name = "triton", install_aitune_dependencies = true, aitune_extras = ["triton", "torch212"], install_script = "install.sh" },
+    { name = "triton", install_script = "install.sh" },
 ]
 arguments = [{ "image-path" = "dog.webp" }, { "image-path" = "dog.webp", "dynamic-shapes" = 1 }]

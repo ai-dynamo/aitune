@@ -11,8 +11,11 @@ else
 fi
 
 # The PyPI ONNX Runtime GPU wheel targets CUDA 12. Install the CUDA 13 build used by the Triton container.
-python3 -m pip install \
-  onnxruntime-gpu \
-  --force-reinstall \
-  --upgrade \
-  --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+onnxruntime_wheel_dir="$(mktemp -d)"
+trap 'rm -r -- "$onnxruntime_wheel_dir"' EXIT
+python3 -m pip download \
+  --no-deps \
+  --dest "$onnxruntime_wheel_dir" \
+  --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/ \
+  onnxruntime-gpu
+python3 -m pip install --force-reinstall "$onnxruntime_wheel_dir"/onnxruntime_gpu-*.whl
