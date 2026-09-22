@@ -111,8 +111,9 @@ The service uses dynamic batching — requests are grouped and processed togethe
 ## Triton inference
 
 For local testing, the preparation script runs the complete workflow in a full Triton Server container. It installs
-the matching PyTorch tuning stack, tunes the model, generates the model repository, starts Triton, and validates an
-inference request:
+the matching PyTorch tuning stack, tunes the model, generates the model repository, profiles its configurations with
+Model Analyzer, promotes the configuration with the highest measured throughput, starts Triton from the deployment
+repository, and validates an inference request:
 
 ```bash
 export NVIDIA_RELEASE=26.05
@@ -121,8 +122,9 @@ export NVIDIA_RELEASE=26.05
 
 It uses `nvcr.io/nvidia/tritonserver:${NVIDIA_RELEASE}-py3` and defaults to release `26.05`. This image supplies the
 CUDA 13.2.1, TensorRT 10.16.1.11, and ONNX Runtime 1.24.4 libraries used for both tuning and serving. The example
-installs the matching PyTorch 2.12 tuning stack without replacing those runtime libraries. The validation script
-starts `/opt/tritonserver/bin/tritonserver` in the current container, waits for the model to become ready, invokes
+installs the matching PyTorch 2.12 tuning stack without replacing those runtime libraries. Model Analyzer runs Triton
+and Perf Analyzer from `/opt/tritonserver/bin`. The validation script then starts
+`/opt/tritonserver/bin/tritonserver` in the current container, waits for the promoted model to become ready, invokes
 the client, and stops the server on exit. Set `TRITONSERVER` when the executable is installed elsewhere.
 
 Triton loads the published models at startup with `--model-control-mode=none`; no load API call is needed.
@@ -137,7 +139,8 @@ uv run --extra triton triton-model-store --tuned-model-path resnet50.ait
 Model-store generation loads the package, extracts its selected artifact, and creates
 `model_repository/resnet50`. The `config.pbtxt`, tensor bounds, and maximum batch size all come from that artifact.
 It also creates `model_repository/resnet50/model_analyzer/config.yaml` for a bounded quick search. Publication does
-not replace an existing model directory.
+not replace an existing model directory. The automated Triton workflow invokes `run_triton.sh`, so profiling must
+complete successfully before the inference validation starts.
 
 The command explicitly deactivates the loaded module before exiting to release its backend runtime.
 
@@ -156,11 +159,23 @@ Keeping releases aligned is required for TensorRT plans: by default, a plan only
 version that built it and the same GPU compute capability. Matching releases also keeps the PyTorch runtime aligned
 for AOTInductor artifacts.
 
-To optimize the deployment, install Triton Model Analyzer and use the generated configuration:
+The preparation and automated test workflows run the equivalent profiling and promotion commands:
 
 ```bash
-model-analyzer profile --config-file model_repository/resnet50/model_analyzer/config.yaml
+model-analyzer profile \
+  --config-file model_repository/resnet50/model_analyzer/config.yaml \
+  --triton-server-path /opt/tritonserver/bin/tritonserver \
+  --perf-analyzer-path /opt/tritonserver/bin/perf_analyzer
+uv run --extra triton triton-promote \
+  --analyzer-config model_repository/resnet50/model_analyzer/config.yaml \
+  --deployment-model-repository model_repository-deployment
 ```
+
+Model Analyzer writes its measurements and generated configuration variants outside the source repository under
+`model_repository-model-analyzer/resnet50`. With no latency constraint, the promotion command selects the ResNet
+configuration with the highest measured throughput, copies the original model files into
+`model_repository-deployment/resnet50`, and replaces its `config.pbtxt` with that configuration. Model Analyzer and
+promotion refuse to overwrite existing output, so remove or archive previous results before repeating the workflow.
 
 Compatibility references:
 

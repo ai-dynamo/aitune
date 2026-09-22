@@ -27,7 +27,10 @@ dynamo = [
     "python-multipart",
     "pydantic-tensor",
 ]
-triton = ["aitune[triton]"]
+triton = [
+    "aitune[triton]",
+    "triton-model-analyzer==1.54.0",
+]
 
 [tool.uv.sources]
 aitune = { path = "../../" }
@@ -38,6 +41,7 @@ tune = "resnet.tune:main"
 python-inference = "resnet.python_inference:main"
 dynamo-inference = "resnet.dynamo.client:main"
 triton-model-store = "resnet.triton.model_store:main"
+triton-promote = "resnet.triton.promote:main"
 triton-inference = "resnet.triton.client:main"
 
 [build-system]
