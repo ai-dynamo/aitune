@@ -133,6 +133,6 @@ install-dev: clean-build clean-pyc clean-test
 	$(PIP_INSTALL) --upgrade pip
 	$(PIP_INSTALL) -e --group dev .
 
-uv-locks-update:
-	uv lock
-	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock); done
+uv-locks-upgrade:
+	uv lock --upgrade
+	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock --upgrade); done
