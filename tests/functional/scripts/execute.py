@@ -127,7 +127,9 @@ def _run_triton_validation(
     model_repository = _model_repository_path(path)
     triton_run_kwargs = dict(run_kwargs)
     triton_run_kwargs["env"] = run_kwargs["env"] | {"MODEL_REPOSITORY": str(model_repository)}
-    _run_command(["./run_triton.sh", *_arguments(entry.arguments)], verbose, dry_run, **triton_run_kwargs)
+    # Source chooses the input to tune; the deployed Triton model is source-independent.
+    validation_arguments = {name: value for name, value in entry.arguments.items() if name != "source"}
+    _run_command(["./run_triton.sh", *_arguments(validation_arguments)], verbose, dry_run, **triton_run_kwargs)
 
 
 def _model_repository_path(path: Path) -> Path:

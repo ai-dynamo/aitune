@@ -30,6 +30,30 @@ Shows how to tune ResNet models for image classification tasks. This example dem
 - **More Info**:
   - https://huggingface.co/microsoft/resnet-50
 
+## BERT
+
+Triton-only example for tuning BERT-base-uncased from Torch or ONNX. Both origins run in functional CI.
+
+- **Location**: [`BERT`](./BERT/README.md)
+- **Model**: BERT-base-uncased
+- **Key Features**:
+  - Select a deployment-capable backend from Torch or ONNX inputs
+  - Validate the saved checkpoint with standalone Python inference
+  - Generate a Triton model repository, profile a three-length mixed workload with Model Analyzer, and promote the fastest configuration
+  - Validate deployed inference through Triton gRPC
+
+## YOLO
+
+Triton-only example for tuning YOLOv10n from Torch or ONNX. Both origins run in functional CI.
+
+- **Location**: [`YOLO`](./YOLO/README.md)
+- **Model**: YOLOv10n object detection
+- **Key Features**:
+  - Select a deployment-capable backend from Torch or ONNX inputs
+  - Validate the saved checkpoint with standalone Python inference
+  - Generate a fixed-batch Triton model repository, profile with Model Analyzer, and promote the fastest configuration
+  - Validate deployed detections through Triton gRPC
+
 ## StableDiffusion
 
 ### Generative AI - Text-to-Image

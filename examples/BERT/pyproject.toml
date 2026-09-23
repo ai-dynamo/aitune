@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+[project]
+name = "aitune-bert-triton-example"
+version = "0.1.0"
+description = "BERT Torch and ONNX Triton tuning example"
+readme = "README.md"
+license = { text = "Apache 2.0" }
+requires-python = ">=3.11, <3.14"
+dependencies = [
+    "aitune",
+    "torch",
+    "transformers",
+]
+
+[project.optional-dependencies]
+triton = ["aitune[triton,torch212]"]
+
+[tool.uv.sources]
+aitune = { path = "../../" }
+
+[project.scripts]
+tune = "bert.tune:main"
+python-inference = "bert.python_inference:main"
+triton-model-store = "bert.triton.model_store:main"
+bert-tune = "bert.tune:main"
+bert-python-inference = "bert.python_inference:main"
+bert-triton-model-store = "bert.triton.model_store:main"
+bert-triton-promote = "bert.triton.promote:main"
+bert-triton-inference = "bert.triton.client:main"
+
+[build-system]
+requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+namespaces = false
+include = ["bert", "bert.*"]
+
+[tool.aitune]
+docker_image = "nvcr.io/nvidia/pytorch:26.05-py3"
+timeout = "2h"
+workflows = [{ name = "triton", install_script = "install.sh" }]
+arguments = [{ source = "torch" }, { source = "onnx" }]
