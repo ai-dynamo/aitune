@@ -121,8 +121,11 @@ export NVIDIA_RELEASE=26.05
 ./prepare_triton.sh
 ```
 
-For Triton, AITune searches for the maximum batch size, then chooses the highest-throughput backend and batch size
-whose mean inference latency is at most 50 ms. The same numeric budget is passed to Model Analyzer as a p99 service
+For Triton, omitting `--max-batch-size` lets AITune discover a batch-size ceiling, starting with recorded batches
+1, 2, and 4 and probing larger batches while baseline throughput improves. Passing `--max-batch-size N` disables
+discovery and treats N as a hard ceiling; the final selection may use a smaller batch. Explicit dynamic shapes require
+an explicit ceiling. AITune then chooses the highest-throughput backend and batch size whose mean inference latency
+is at most 50 ms. The same numeric budget is passed to Model Analyzer as a p99 service
 latency constraint; promotion rejects configurations that exceed it. Mean model latency and p99 service latency are
 different measurements, so neither search guarantees production latency without testing on the deployment hardware.
 
