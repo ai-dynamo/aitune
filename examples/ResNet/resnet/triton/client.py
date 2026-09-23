@@ -35,7 +35,7 @@ def main():
         batch = torch.nn.functional.interpolate(batch, size=(256, 256), mode="bilinear", align_corners=False).repeat(
             2, 1, 1, 1
         )
-    batch = batch.numpy()
+    batch = batch.half().numpy()
 
     client = grpcclient.InferenceServerClient(url=args.triton_url)
     metadata = client.get_model_metadata(args.model_name)

@@ -25,8 +25,8 @@ def add_common_args(parser):
     parser.add_argument(
         "--max-batch-size",
         type=int,
-        default=4,
-        help="Maximum batch size (default: 4)",
+        default=None,
+        help="Optional batch-size ceiling; Triton discovers a ceiling when omitted",
     )
     parser.add_argument(
         "--dynamic-shapes",

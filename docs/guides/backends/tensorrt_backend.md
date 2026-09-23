@@ -6,6 +6,12 @@ title: "TensorRT Backend Guide"
 
 The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT engine. It offers the best performance for production deployments on NVIDIA GPUs and seamlessly integrates [TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer) for advanced quantization workflows.
 
+## Existing ONNX models
+
+`TensorRTBackend` accepts an existing ONNX file through `OnnxModule` and builds an engine without PyTorch export. Export settings such as `use_dynamo` and `opset_version` do not apply to this path.
+
+Only `TensorRTBackend` and `ONNXRuntimeBackend` support tuning `OnnxModule`. Configure an explicit backend list, as shown in [ONNX Model Tuning](../onnx_tuning.md).
+
 ## Overview
 
 The TensorRT backend:
@@ -82,6 +88,11 @@ AITune's profile sidecar remains part of its checkpoint, and is not needed to ex
 `model.artifact()` constructs and validates the deployment record when called. The backend retains
 the finalized tensor names and profile metadata after deactivation, so generation does not require
 reloading the engine. The method also works after restoring and deploying a checkpoint.
+
+Output bounds come from the shapes recorded while tuning. `model.artifact()` therefore validates each
+custom TensorRT input profile against the recorded input bounds. It rejects a profile that extends an
+input beyond those bounds because sound output bounds cannot be inferred in general. Include the profile
+boundary shapes in the tuning samples when the engine must also be exported as a deployment artifact.
 
 ## Configuration Options
 
@@ -248,6 +259,8 @@ config = TensorRTBackendConfig(
 ```
 
 ### quantization_config
+
+For `OnnxModule`, use `ONNXAutoCastConfig` or `ONNXQuantizationConfig`. `TorchQuantizationConfig` requires a PyTorch module and raises an error for `OnnxModule`.
 
 TensorRT backend supports multiple quantization methods through TensorRT Model Optimizer integration. Use `ONNXAutoCastConfig` for FP16/BF16 mixed precision, `ONNXQuantizationConfig` for ONNX INT8/FP8/INT4 quantization, and `TorchQuantizationConfig` for ModelOpt PyTorch quantization presets.
 

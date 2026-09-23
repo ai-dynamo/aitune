@@ -74,7 +74,7 @@ def backend() -> ONNXRuntimeBackend:
 def mock_onnx(mocker, graph_spec):
     """Mock torch.onnx.export, onnx.checker.check_model, and onnxruntime.InferenceSession.
 
-    memcpy_to_torch is patched to return a fixed tensor so _collect_outputs works
+    memcpy_to_torch is patched to return a fixed tensor so shared output collection works
     in CPU-only test environments without a real CUDA device or libcudart.
     """
 
@@ -84,7 +84,7 @@ def mock_onnx(mocker, graph_spec):
     export = mocker.patch("torch.onnx.export", side_effect=_export)
     mocker.patch("onnx.checker.check_model")
     mocker.patch(
-        "aitune.torch.backend.onnx_runtime_backend.memcpy_to_torch",
+        "aitune.torch.libs.onnx.runtime.memcpy_to_torch",
         return_value=torch.zeros(1, 5),
     )
     input_name = format_tensor_name(graph_spec.input_spec.tensor_data[0][0].path, "input")
@@ -279,6 +279,8 @@ def test_artifact_after_deactivation_exposes_the_final_onnx_interface(
     expected_provider = (execution_provider or ONNXExecutionProvider.CUDA).value
     assert artifact.runtime.options == {"execution_provider": expected_provider}
     assert type(artifact.runtime.options["execution_provider"]) is str
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
+    assert artifact.sample_inputs[0].shape == (1, 32)
     assert artifact.model.additional_files == ()
     assert artifact.model.files == (artifact.model.path,)
 
@@ -303,6 +305,44 @@ def test_build_includes_onnx_external_data_in_the_artifact(
     assert artifact.model.export_files(destination) == destination
     assert destination.read_bytes() == b"onnx-model"
     assert (destination.parent / "model_raw.onnx.data").read_bytes() == b"external-data"
+
+
+def test_artifact_additional_files_include_discovered_and_exported_data_without_duplicates(tmp_path):
+    backend = ONNXRuntimeBackend()
+    model_path = tmp_path / "model.onnx"
+    backend._external_data_artifacts = [
+        ArtifactPath(tmp_path, "weights/first.data"),
+        ArtifactPath(tmp_path, "model.onnx.data"),
+        ArtifactPath(tmp_path, "weights/second.data"),
+    ]
+    backend._onnx_data_artifact = ArtifactPath(tmp_path, "model.onnx.data")
+
+    assert backend._artifact_additional_files(model_path) == (
+        Path("weights/first.data"),
+        Path("model.onnx.data"),
+        Path("weights/second.data"),
+    )
+
+
+def test_artifact_samples_follow_finalized_onnx_input_order(mocker, backend):
+    sample = Mock()
+    second = Mock()
+    second.name = "second"
+    first = Mock()
+    first.name = "first"
+    backend._samples = (sample,)
+    backend._graph_spec = Mock(spec=GraphSpec)
+    backend._input_nodes = [second, first]
+    artifact_input_sample = mocker.patch(
+        "aitune.torch.backend.onnx_runtime_backend.artifact_input_sample", return_value=()
+    )
+
+    assert backend._artifact_sample_inputs() == ()
+    artifact_input_sample.assert_called_once_with(
+        backend._graph_spec,
+        sample,
+        recorded_names=("second", "first"),
+    )
 
 
 @requires_cuda
@@ -454,16 +494,13 @@ def test_infer_binds_cuda_inputs_via_pointer(
 
 
 @requires_cuda
-def test_infer_binds_outputs_on_cuda(mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path):
-    """Outputs are bound to the CUDA device; ORT handles allocation and shape resolution."""
+def test_infer_returns_outputs_on_cuda(mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path):
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
     args, kwargs = sample_data[0]
     backend.infer(*args, **kwargs)
-
-    io_binding = backend._session.io_binding.return_value
-    assert io_binding.bind_output.called
-    for call in io_binding.bind_output.call_args_list:
-        assert call.args[1] == "cuda"
+    binding = backend._session.io_binding.return_value
+    assert binding.bind_output.called
+    assert all(call.args[1] == "cuda" for call in binding.bind_output.call_args_list)
 
 
 @requires_cuda
@@ -511,6 +548,7 @@ def test_to_dict_contains_required_keys(mock_onnx, backend, model, graph_spec, s
     assert ONNXRuntimeBackend.STATE_GRAPH_SPEC in state
     assert ONNXRuntimeBackend.STATE_OUTPUT_OBJECT in state
     assert state[ONNXRuntimeBackend.STATE_SAMPLES] == backend._samples.to_dict()
+    assert "sample_inputs" not in state
 
 
 @requires_cuda
@@ -521,9 +559,14 @@ def test_from_dict_restores_state(tmp_path, torch_device):
 
     config = ONNXRuntimeBackendConfig()
     onnx_artifact = ArtifactPath(tmp_path, "model_raw.onnx")
+    external_data_artifacts = [
+        ArtifactPath(tmp_path, "weights/first.data"),
+        ArtifactPath(tmp_path, "weights/second.data"),
+    ]
     state = {
         ONNXRuntimeBackend.STATE_TYPE: "ONNXRuntimeBackend",
         ONNXRuntimeBackend.STATE_ONNX_MODEL_PATH: onnx_artifact,
+        ONNXRuntimeBackend.STATE_EXTERNAL_DATA_PATHS: external_data_artifacts,
         ONNXRuntimeBackend.STATE_DEVICE: torch_device,
         ONNXRuntimeBackend.STATE_CONFIG: config.to_dict(),
         ONNXRuntimeBackend.STATE_GRAPH_SPEC: real_graph_spec.to_dict(),
@@ -531,6 +574,7 @@ def test_from_dict_restores_state(tmp_path, torch_device):
     }
     restored = ONNXRuntimeBackend.from_dict(None, state)
     assert restored._onnx_model_artifact == onnx_artifact
+    assert restored._external_data_artifacts == external_data_artifacts
     assert restored._device == torch_device
     assert restored._graph_spec is not None
     assert restored._output_object is not None

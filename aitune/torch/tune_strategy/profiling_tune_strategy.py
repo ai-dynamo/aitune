@@ -24,7 +24,6 @@ from aitune.torch.backend import (
     Backend,
     TensorRTBackend,
     TensorRTBackendConfig,
-    TorchEagerBackend,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
     TorchTensorRTAotBackend,
@@ -33,12 +32,14 @@ from aitune.torch.backend import (
 from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTConfig
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
 from aitune.torch.tune_strategy.formatting import fmt_speedup_comparison, fmt_speedup_msg
 from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
+from aitune.torch.utils.module import get_default_backend_for_module
 from aitune.utils.logging import log
 
 
@@ -205,6 +206,14 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         """Formats a metric value with its unit, e.g. ``12.34 samples/s``."""
         return f"{format(value, self._value_fmt)} {self._metric_unit}"
 
+    def _fmt_result(self, result: BackendProfilingResult) -> str:
+        """Include mean latency when a throughput result also records it."""
+        formatted = self._fmt(result.metric)
+        metrics = result.to_json_dict(self._metric_label)
+        if self._metric_label == "throughput" and "latency" in metrics:
+            formatted += f", mean latency: {metrics['latency']:.3f} ms"
+        return formatted
+
     def _aggregate_result(
         self,
         gathered_results: list[BackendProfilingResult],
@@ -262,6 +271,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
     ):
         """Calls super()._pre_tune() (finds max batch size) then profiles TorchEager as baseline."""
         super()._pre_tune(module, name, graph_spec, samples, device, cache_dir)
+        module_type = "Onnx" if isinstance(module, OnnxModule) else "TorchEager"
         self.perf_validation_results = []
         self._baseline_backend = None
         self._baseline_result = None
@@ -284,7 +294,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         shutil.rmtree(baseline_cache_dir, ignore_errors=True)
         baseline_cache_dir.mkdir(parents=True)
         local_error: Exception | None = None
-        backend = TorchEagerBackend()
+        backend = get_default_backend_for_module(module)
         result: BackendProfilingResult | None = None
         try:
             with coordinator.raise_if_any_rank_fails("Building TorchEager baseline"):
@@ -300,7 +310,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             if backend.is_active:
                 backend.deactivate()
             log(
-                "⚠️ TorchEager baseline failed (log: %s), performance check skipped",
+                "⚠️ %s baseline failed (log: %s), performance check skipped",
+                module_type,
                 self._log_file(baseline_cache_dir, "error.log"),
                 sink=self._sink,
             )
@@ -310,8 +321,11 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         result = self._aggregate_result(gathered_results)
         self._baseline_backend = backend
         self._baseline_result = result
-        report_graph_baseline_metric(self._metric_label, result.metric)
-        log("📊 TorchEager baseline: %s", self._fmt(result.metric), sink=self._sink)
+        metrics = result.to_json_dict(self._metric_label)
+        for metric in ("throughput", "latency"):
+            if metric in metrics:
+                report_graph_baseline_metric(metric, metrics[metric])
+        log("📊 %s baseline: %s", module_type, self._fmt_result(result), sink=self._sink)
 
     def _tune(
         self,
@@ -348,10 +362,16 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             "   Batch size: %s, %s: %s",
             winner.result.selected_batch_size,
             self._metric_label,
-            self._fmt(winner.result.metric),
+            self._fmt_result(winner.result),
             sink=self._sink,
         )
         return winner.backend
+
+    def _report_backend_metrics(self, backend_description: str, metrics: dict[str, int | float]) -> None:
+        """Record every measured performance metric for a backend."""
+        for metric in ("throughput", "latency"):
+            if metric in metrics:
+                report_backend_metric(metric, backend_description, metrics[metric])
 
     def _run_backends(
         self,
@@ -386,8 +406,9 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                 continue
 
             try:
-                self.backend_results[-1].update(result.to_json_dict(self._metric_label))
-                report_backend_metric(self._metric_label, built.describe(), result.metric)
+                metrics = result.to_json_dict(self._metric_label)
+                self.backend_results[-1].update(metrics)
+                self._report_backend_metrics(built.describe(), metrics)
                 batch_size = result.selected_batch_size
                 perf_result = self._record_perf_result(built, result)
                 speedup = (
@@ -398,7 +419,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                 log(
                     "✅ backend profiled - %s: %s, speedup=%s, batch size: %s",
                     self._metric_label,
-                    self._fmt(result.metric),
+                    self._fmt_result(result),
                     speedup,
                     batch_size,
                     depth=2,
@@ -411,7 +432,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                         "🎯 new best %s for %s is %s, speedup=%s, batch size: %s",
                         self._metric_label,
                         built.describe(),
-                        self._fmt(result.metric),
+                        self._fmt_result(result),
                         speedup,
                         batch_size,
                         depth=2,
@@ -464,11 +485,11 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             reason = (
                 "no user backend succeeded"
                 if best is None
-                else f"best user backend ({self._fmt(best.result.metric)}) did not beat baseline"
+                else f"best user backend ({self._fmt_result(best.result)}) did not beat baseline"
             )
             log(
                 "ℹ️ Falling back to TorchEager baseline (%s): %s",
-                self._fmt(self._baseline_result.metric),
+                self._fmt_result(self._baseline_result),
                 reason,
                 sink=self._sink,
             )
@@ -508,7 +529,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
 
     def _log_baseline_selected(self, backend: Backend) -> None:
         """Emit an explicit message when the TorchEager baseline is the selected backend."""
-        value = f" ({self._fmt(self._baseline_result.metric)})" if self._baseline_result is not None else ""
+        value = f" ({self._fmt_result(self._baseline_result)})" if self._baseline_result is not None else ""
         msg = f"ℹ️ Baseline was selected: {backend.describe()}{value}"
         if not self._logger.isEnabledFor(logging.INFO):
             return

@@ -93,7 +93,7 @@ class TritonTensorConfig(BaseModel):
         return dims
 
 
-class _BaseModelConfig(BaseModel):
+class BaseModelConfig(BaseModel):
     """Internal fields and validation shared by supported Triton backends."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -130,7 +130,7 @@ class _BaseModelConfig(BaseModel):
     @classmethod
     def from_artifact(
         cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int, dynamic_batching: bool = False
-    ) -> "_BaseModelConfig":
+    ) -> "BaseModelConfig":
         """Combine the tensor interface with runtime-specific artifact settings."""
         batched = max_batch_size > 0
         return cls(
@@ -143,7 +143,7 @@ class _BaseModelConfig(BaseModel):
         )
 
     @model_validator(mode="after")
-    def _validate_batching(self) -> "_BaseModelConfig":
+    def _validate_batching(self) -> "BaseModelConfig":
         """Require a batched model contract before enabling the scheduler."""
         if self.dynamic_batching and self.max_batch_size == 0:
             raise ValueError("dynamic_batching requires a positive max_batch_size")
@@ -230,4 +230,9 @@ def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConf
     dimensions = tuple(minimum if minimum == maximum else -1 for minimum, maximum in bounds)
     if batched:
         dimensions = dimensions[1:]
-    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions)
+    reshape = None
+    if not dimensions:
+        # Triton's API requires non-empty dims; reshape preserves the backend's scalar shape.
+        dimensions = (1,)
+        reshape = ()
+    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions, reshape=reshape)

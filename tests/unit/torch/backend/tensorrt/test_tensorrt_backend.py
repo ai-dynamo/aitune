@@ -293,6 +293,7 @@ def test_tensorrt_artifact_after_deactivation_exposes_the_final_engine_interface
         "max_cuda_graphs": 3,
         "cuda_graph_cache_policy": "lru",
     }
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
     destination = tmp_path / "export" / "model.plan"
     assert artifact.model.export_files(destination).read_bytes() == b"fake"
 
@@ -346,6 +347,57 @@ def test_artifact_profiles_require_engine_input_names():
         backend._artifact_profiles()
 
 
+def test_artifact_samples_follow_tensorrt_engine_input_order(mocker):
+    backend = TensorRTBackend()
+    sample = mocker.Mock()
+    backend._samples = (sample,)
+    backend._graph_spec = mocker.Mock()
+    backend._input_names = ["input_mask", "input_x"]
+    artifact_input_sample = mocker.patch(
+        "aitune.torch.backend.tensorrt.tensorrt_backend.artifact_input_sample", return_value=()
+    )
+
+    assert backend._artifact_sample_inputs() == ()
+    artifact_input_sample.assert_called_once_with(
+        backend._graph_spec,
+        sample,
+        recorded_names=["input_mask", "input_x"],
+    )
+
+
+def test_artifact_profile_input_bounds_reject_ranges_beyond_recorded_graph():
+    inputs = (
+        BoundedTensorSpec(
+            name="input_x",
+            dtype=DType.FLOAT32,
+            min_shape=(1, IN_FEATURES),
+            max_shape=(4, IN_FEATURES),
+        ),
+    )
+    profiles = (
+        {"input_x": {"min_shape": (1, IN_FEATURES), "opt_shape": (4, IN_FEATURES), "max_shape": (8, IN_FEATURES)}},
+    )
+
+    with pytest.raises(ValueError, match=r"profile 0 input 'input_x' axis 0.*output bounds cannot be established"):
+        TensorRTBackend._validate_artifact_profile_input_bounds(inputs, profiles)
+
+
+def test_artifact_profile_input_bounds_allow_ranges_within_recorded_graph():
+    inputs = (
+        BoundedTensorSpec(
+            name="input_x",
+            dtype=DType.FLOAT32,
+            min_shape=(1, IN_FEATURES),
+            max_shape=(8, IN_FEATURES),
+        ),
+    )
+    profiles = (
+        {"input_x": {"min_shape": (2, IN_FEATURES), "opt_shape": (4, IN_FEATURES), "max_shape": (6, IN_FEATURES)}},
+    )
+
+    TensorRTBackend._validate_artifact_profile_input_bounds(inputs, profiles)
+
+
 @requires_cuda
 def test_artifact_metadata_failure_does_not_fail_tensorrt_build(mock_tensorrt_components, mocker, tmp_path):
     model = ToyTorchModel().to("cuda").eval()
@@ -385,18 +437,23 @@ def test_checkpoint_loaded_backend_reconstructs_tensorrt_artifact(mock_tensorrt_
         engine_info,
     )
     model = ToyTorchModel().to("cuda").eval()
+    samples = model.sample_store(tmp_path, batch_sizes=[BATCH_SIZE], device="cuda")
     backend = TensorRTBackend().build(
         model,
         model.graph_spec(device="cuda"),
-        model.samples(device="cuda"),
+        samples,
         device=torch.device("cuda"),
         cache_dir=tmp_path,
     )
-    restored = TensorRTBackend.from_dict(model, backend.to_dict())
+    state = backend.to_dict()
+    assert state[TensorRTBackend.STATE_SAMPLES] == samples.to_dict()
+    assert "sample_inputs" not in state
+    restored = TensorRTBackend.from_dict(model, state)
 
     restored.deploy(torch.device("cuda"))
 
     artifact = restored.artifact()
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
     assert artifact.model.format == "tensorrt_plan"
     assert artifact.model.metadata["optimization_profiles"] == (
         {

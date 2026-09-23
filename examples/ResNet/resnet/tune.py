@@ -12,6 +12,7 @@ from PIL import Image
 from aitune.torch import (
     BatchDim,
     DynamicDim,
+    LatencyBudgetStrategy,
     LocalTorchStorage,
     MaxThroughputStrategy,
     Module,
@@ -30,13 +31,15 @@ from aitune.torch.backend import (
     TorchInductorJitBackend,
     TorchInductorJitBackendConfig,
 )
+from aitune.torch.task.profiling import ProfilingConfig
 from resnet.cmd_args import get_parser
 from resnet.model import get_model, get_transform
+from resnet.triton import TRITON_LATENCY_BUDGET_MS
 
 logger = getLogger(__name__)
 
 
-def _strategy(target):
+def _strategy(target, max_batch_size, batch_sizes):
     """Select backends compatible with the requested deployment target."""
     if target == "triton":
         backends = [
@@ -44,6 +47,11 @@ def _strategy(target):
             ONNXRuntimeBackend(),
             TorchInductorAotBackend(),
         ]
+        return LatencyBudgetStrategy(
+            latency_budget_ms=TRITON_LATENCY_BUDGET_MS,
+            backends=backends,
+            profiling_config=ProfilingConfig(batch_sizes=batch_sizes) if max_batch_size is not None else None,
+        ).enable_find_max_batch_size(max_batch_size is None)
     else:
         backends = [
             TensorRTBackend(
@@ -90,24 +98,32 @@ def tune_model(
         model_name: Name of the model to tune.
         image_path: Path to the input image file.
         tuned_model_path: Path to save the tuned model.
-        max_batch_size: Maximum batch size.
+        max_batch_size: Optional batch-size ceiling. Triton discovers a ceiling when omitted.
         dynamic_shapes: Whether to use user-provided dynamic shapes.
         target: Runtime family for which the package is tuned.
     """
-    batch_sizes = [2**n for n in range(max_batch_size.bit_length())]
+    if max_batch_size is not None and max_batch_size < 2:
+        raise ValueError("max_batch_size must be at least 2 to identify the batch axis")
+    if target == "triton" and dynamic_shapes and max_batch_size is None:
+        raise ValueError("dynamic shapes require an explicit max_batch_size for Triton tuning")
+
+    initial_max_batch_size = max_batch_size if max_batch_size is not None else 4
+    batch_sizes = [2**n for n in range(initial_max_batch_size.bit_length())]
+    if initial_max_batch_size not in batch_sizes:
+        batch_sizes.append(initial_max_batch_size)
     logger.info("Tuning with batch sizes: %s", batch_sizes)
 
     model = get_model(model_name=model_name, pretrained=True)
     transform = get_transform(model)
 
     img = Image.open(image_path)
-    dataset = transform(img).to("cuda")
+    dataset = transform(img).to(device="cuda", dtype=torch.float16)
 
     module_name = f"example-{model_name}"
 
     shape_definitions = None
     if dynamic_shapes:
-        batch = BatchDim("batch", min=1, opt=max_batch_size, max=max_batch_size)
+        batch = BatchDim("batch", min=1, opt=initial_max_batch_size, max=initial_max_batch_size)
         height = DynamicDim("spatial", min=224, opt=224, max=256)
         width = DynamicDim("spatial", min=224, opt=224, max=256)
         shape_definitions = {"x": (batch, 3, height, width)}
@@ -115,7 +131,7 @@ def tune_model(
     module = Module(
         model,
         module_name,
-        strategy=_strategy(target),
+        strategy=_strategy(target, max_batch_size, batch_sizes),
         dynamic_shapes=shape_definitions,
     )
 

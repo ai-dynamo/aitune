@@ -2,7 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Generate Triton model repositories from artifacts and existing model files."""
 
-from aitune.triton.config import ONNXRuntimeModelConfig, TensorRTModelConfig, TorchAOTIModelConfig
+from aitune.triton.config import (
+    ONNXRuntimeModelConfig,
+    TensorRTModelConfig,
+    TorchAOTIModelConfig,
+    TritonDataType,
+    TritonTensorConfig,
+)
 from aitune.triton.config.options import (
     DynamicBatcher,
     ExecutionAccelerator,
@@ -33,6 +39,8 @@ __all__ = [
     "QuickModelAnalyzerConfig",
     "TensorRTModelConfig",
     "TorchAOTIModelConfig",
+    "TritonDataType",
+    "TritonTensorConfig",
     "generate_model_analyzer_configs",
     "publish",
 ]

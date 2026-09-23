@@ -22,6 +22,10 @@ This approach offers several advantages:
 - **Speed**: Save the tuned model to a deployable artifact to be loaded on the production environment
 - **Reproducibility**: Deterministic tuning results
 
+## Existing ONNX models
+
+Use `OnnxModule` to wrap an existing ONNX file. Only `ONNXRuntimeBackend` and `TensorRTBackend` support tuning it; configure an explicit backend list. See [ONNX Model Tuning](onnx_tuning.md) for a complete example.
+
 ## Quick Start
 
 Here's a complete example using Stable Diffusion:
@@ -169,7 +173,7 @@ ait.tune(
 - **func**: The wrapped callable (model or pipeline)
 - **dataset**: Dataset for tuning. It can be a list of samples, `torch.utils.data.Dataset`, `DataLoaderFactory`,  `Tensor` or sequence of tensors, dictionaries, strings
 - **batch_sizes**: List of batch sizes to tune against. If not specified, values [1, 2] will be used
-- **max_num_batches_per_batch_size**: Maximum number of batches per batch size. If None, all batches will be used
+- **max_num_batches_per_batch_size**: Maximum number of batches per batch size. If None, all batches will be used; zero uses none.
 - **device**: Device to use for tuning. Defaults to "cuda:0"
 - **dry_run**: If True, performs a dry run without actual tuning
 - **disable_external_logging**: Disable logging from external libraries

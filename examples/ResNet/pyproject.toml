@@ -6,7 +6,7 @@ version = "0.1.0"
 description = "NVIDIA AITune ResNet Example"
 readme = "README.md"
 license = { text = "Apache 2.0" }
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.11, <3.14"
 dependencies = [
     "aitune",
     "aitune-examples-common",
@@ -27,7 +27,9 @@ dynamo = [
     "python-multipart",
     "pydantic-tensor",
 ]
-triton = ["aitune[triton]"]
+triton = [
+    "aitune[triton,torch212]",
+]
 
 [tool.uv.sources]
 aitune = { path = "../../" }
@@ -38,6 +40,7 @@ tune = "resnet.tune:main"
 python-inference = "resnet.python_inference:main"
 dynamo-inference = "resnet.dynamo.client:main"
 triton-model-store = "resnet.triton.model_store:main"
+triton-promote = "resnet.triton.promote:main"
 triton-inference = "resnet.triton.client:main"
 
 [build-system]
@@ -56,5 +59,8 @@ resnet = ["**/*"]
 
 [tool.aitune]
 docker_image = "nvcr.io/nvidia/pytorch:26.05-py3"
-workflows = ["dynamo", "triton"]
-arguments = [{ "image-path" = "dog.webp" }, { "image-path" = "dog.webp", "dynamic-shapes" = 1 }]
+workflows = [
+    { name = "dynamo" },
+    { name = "triton", install_script = "install.sh" },
+]
+arguments = [{ "image-path" = "dog.webp" }]

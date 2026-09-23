@@ -57,7 +57,7 @@ for batch_size, args, kwargs in samples_generator(dataset, batch_sizes, max_num_
 
 - **`batch_size`**: Current batch size being processed
 - **`args`, `kwargs`**: Actual data samples for this batch
-- **`max_num_batches_per_batch_size`**: Limits how many model executions are done per batch size (useful to limit large datasets)
+- **`max_num_batches_per_batch_size`**: Limits how many model executions are done per batch size (useful to limit large datasets). `None` uses every batch; zero uses none.
 
 The global context tracks the current batch size, allowing wrapped modules to correlate shape changes with batch size changes.
 

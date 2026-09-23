@@ -9,6 +9,7 @@ from google.protobuf import text_format
 from tritonclient.grpc import model_config_pb2
 
 from aitune import triton as aitriton
+from aitune.exceptions import AITunePublicationError
 from aitune.records import (
     BoundedTensorSpec,
     DeploymentArtifact,
@@ -83,40 +84,35 @@ def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path, dyn
 
 
 @pytest.mark.parametrize(
-    ("model_format", "runtime", "metadata", "options"),
+    ("minimum", "maximum", "batch_axis", "dynamic_batching"),
     [
-        ("onnx", "onnxruntime", {}, {"execution_provider": "cuda"}),
-        ("pt2", "aotinductor", {"structured_call": False}, {}),
+        ((), (), None, False),
+        ((1,), (8,), 0, True),
     ],
 )
-@pytest.mark.parametrize("dynamic_batching", [False, True])
-def test_artifact_batch_limit_is_independent_of_scheduler(
-    tmp_path, model_format, runtime, metadata, options, dynamic_batching
-):
-    source = tmp_path / f"source.{model_format}"
-    source.write_bytes(b"model")
-    artifact = DeploymentArtifact(
-        model=ModelFiles(format=model_format, path=source, metadata=metadata),
-        inputs=(_spec("INPUT__0", DType.FLOAT32, (1, 16), (8, 16)),),
-        outputs=(_spec("OUTPUT__0", DType.FLOAT32, (1, 8), (8, 8)),),
-        runtime=RuntimeConfig(name=runtime, options=options),
+def test_publishes_scalar_tensors_with_triton_reshape(tmp_path, minimum, maximum, batch_axis, dynamic_batching):
+    artifact = _plan(tmp_path / "source.plan")
+    scalar = BoundedTensorSpec(
+        name="scalar",
+        dtype=DType.FLOAT32,
+        min_shape=minimum,
+        max_shape=maximum,
+        batch_axis=batch_axis,
     )
+    artifact = replace(artifact, inputs=(scalar,), outputs=(scalar,))
 
-    published = aitriton.publish(
+    model = aitriton.publish(
         artifact,
         path=tmp_path / "repository",
-        model_name="encoder",
-        max_batch_size=4,
+        model_name="scalar",
         dynamic_batching=dynamic_batching,
     )
 
-    config = text_format.Parse((published / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
-    assert config.max_batch_size == 4
-    assert tuple(config.input[0].dims) == (16,)
-    assert tuple(config.output[0].dims) == (8,)
-    assert config.HasField("dynamic_batching") == dynamic_batching
-    assert (published / "model_analyzer/fast.yaml").is_file()
-    assert (published / "model_analyzer/manual.yaml").is_file()
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    for tensor in (parsed.input[0], parsed.output[0]):
+        assert tuple(tensor.dims) == (1,)
+        assert tensor.HasField("reshape")
+        assert tuple(tensor.reshape.shape) == ()
 
 
 @pytest.mark.parametrize(
@@ -149,8 +145,9 @@ def test_publishes_onnx_external_data_and_runtime_provider(tmp_path, provider, e
     config = (published / "config.pbtxt").read_text()
     parsed = text_format.Parse(config, model_config_pb2.ModelConfig())
     assert 'platform: "onnxruntime_onnx"' in config
-    assert parsed.max_batch_size == 0
-    assert tuple(parsed.input[0].dims) == (-1, -1)
+    assert parsed.max_batch_size == 8
+    assert parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (-1,)
     accelerators = parsed.optimization.execution_accelerators.gpu_execution_accelerator
     assert tuple(accelerator.name for accelerator in accelerators) == expected_accelerators
 
@@ -172,6 +169,7 @@ def test_publishes_pt2_using_torch_aoti_names(tmp_path):
     assert 'platform: "torch_aoti"' in config
     assert 'name: "INPUT__0"' in config
     assert 'name: "OUTPUT__0"' in config
+    assert "dynamic_batching" in config
 
 
 def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_path):
@@ -185,10 +183,15 @@ def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_pat
         runtime=RuntimeConfig(name="aotinductor"),
     )
 
-    published = aitriton.publish(artifact, path=tmp_path / "unbatched", model_name="encoder")
+    published = aitriton.publish(
+        artifact,
+        path=tmp_path / "unbatched",
+        model_name="encoder",
+        dynamic_batching=False,
+    )
     assert (published / "1" / "model.pt2").is_file()
 
-    with pytest.raises(aitriton.PublicationError, match="structured calls"):
+    with pytest.raises(AITunePublicationError, match="structured calls"):
         aitriton.publish(
             artifact,
             path=tmp_path / "repository",
@@ -205,13 +208,35 @@ def test_refuses_to_replace_an_existing_model(tmp_path):
     published = aitriton.publish(artifact, path=repository, model_name="encoder")
     original_config = (published / "config.pbtxt").read_text()
 
-    with pytest.raises(aitriton.PublicationError, match="never replaces"):
+    with pytest.raises(AITunePublicationError, match="never replaces"):
         aitriton.publish(artifact, path=repository, model_name="encoder")
 
     assert (published / "config.pbtxt").read_text() == original_config
 
 
-def test_copy_failure_leaves_no_partial_model(tmp_path):
+def test_repository_creation_failure_raises_publication_error(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    repository.write_text("not a directory")
+
+    with pytest.raises(AITunePublicationError, match="Failed to publish") as error:
+        aitriton.publish(artifact, path=repository, model_name="encoder")
+
+    assert isinstance(error.value.__cause__, OSError)
+
+
+def test_publishes_to_current_directory(tmp_path, monkeypatch):
+    artifact = _plan(tmp_path / "source.plan")
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    monkeypatch.chdir(repository)
+
+    aitriton.publish(artifact, path=".", model_name="encoder")
+
+    assert (repository / "encoder" / "1" / "model.plan").read_bytes() == b"TensorRT plan"
+
+
+def test_copy_failure_leaves_partial_model_for_caller_to_remove(tmp_path):
     artifact = _plan(tmp_path / "source.plan")
     artifact = replace(
         artifact,
@@ -219,10 +244,10 @@ def test_copy_failure_leaves_no_partial_model(tmp_path):
         runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="Failed to publish"):
+    with pytest.raises(AITunePublicationError, match="An incomplete model directory may remain"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
-    assert not tuple((tmp_path / "repository").iterdir())
+    assert (tmp_path / "repository" / "encoder" / "config.pbtxt").is_file()
 
 
 @pytest.mark.parametrize(
@@ -237,7 +262,7 @@ def test_rejects_unsupported_format_runtime_pairs(tmp_path, model_format, runtim
         runtime=RuntimeConfig(name=runtime),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="Unsupported Triton model format/runtime pair"):
+    with pytest.raises(AITunePublicationError, match="Unsupported Triton model format/runtime pair"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()
@@ -248,7 +273,7 @@ def test_rejects_invalid_tensorrt_profile_count(tmp_path, count):
     artifact = _plan(tmp_path / "source.plan")
     artifact = replace(artifact, model=replace(artifact.model, metadata={"optimization_profile_count": count}))
 
-    with pytest.raises(aitriton.PublicationError, match="optimization_profile_count"):
+    with pytest.raises(AITunePublicationError, match="optimization_profile_count"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()
@@ -263,7 +288,7 @@ def test_rejects_additional_files_for_single_file_formats(tmp_path, model_format
         runtime=RuntimeConfig(name=runtime),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="artifact has additional files"):
+    with pytest.raises(AITunePublicationError, match="artifact has additional files"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()
@@ -278,7 +303,7 @@ def test_rejects_invalid_onnx_runtime_options(tmp_path, options):
         runtime=RuntimeConfig(name="onnxruntime", options=options),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="execution_provider"):
+    with pytest.raises(AITunePublicationError, match="execution_provider"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert not (tmp_path / "repository").exists()
@@ -293,205 +318,7 @@ def test_requires_pt2_call_metadata(tmp_path):
         runtime=RuntimeConfig(name="aotinductor"),
     )
 
-    with pytest.raises(aitriton.PublicationError, match="structured_call"):
+    with pytest.raises(AITunePublicationError, match="structured_call"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
-    assert not (tmp_path / "repository").exists()
-
-
-def _file_config(backend="onnx", **overrides):
-    fields = {
-        "name": "external",
-        "max_batch_size": 8,
-        "inputs": ({"name": "x", "data_type": "TYPE_FP32", "dims": (16,)},),
-        "outputs": ({"name": "y", "data_type": "TYPE_FP32", "dims": (4,)},),
-        "dynamic_batching": True,
-    }
-    fields.update(overrides)
-    if backend == "tensorrt":
-        return aitriton.TensorRTModelConfig(**fields, optimization_profile_indices=(0, 1), cuda_graphs=True)
-    if backend == "pt2":
-        return aitriton.TorchAOTIModelConfig(**fields, structured_call=False)
-    return aitriton.ONNXRuntimeModelConfig(**fields, execution_provider="tensorrt")
-
-
-@pytest.mark.parametrize(
-    ("backend", "filename"), [("onnx", "model.onnx"), ("tensorrt", "model.plan"), ("pt2", "model.pt2")]
-)
-@pytest.mark.parametrize("dynamic_batching", [False, True])
-def test_publish_file_preserves_config_and_copies_to_backend_layout(tmp_path, backend, filename, dynamic_batching):
-    source = tmp_path / "custom_filename.bin"
-    source.write_bytes(b"prebuilt model")
-    config = _file_config(backend, dynamic_batching=dynamic_batching)
-
-    published = aitriton.publish(str(source), path=tmp_path / "repository", config=config, model_version=3)
-
-    assert published == tmp_path / "repository" / config.name
-    assert (published / "3" / filename).read_bytes() == source.read_bytes()
-    assert (published / "config.pbtxt").read_text() == config.to_pbtxt()
-    parsed = text_format.Parse((published / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
-    assert parsed.max_batch_size == 8
-    assert parsed.HasField("dynamic_batching") == dynamic_batching
-    assert not (published / "model_analyzer").exists()
-    assert source.read_bytes() == b"prebuilt model"
-
-
-def test_publish_file_copies_nested_onnx_external_data(tmp_path):
-    source = tmp_path / "encoder.onnx"
-    source.write_bytes(b"graph")
-    (tmp_path / "data").mkdir()
-    (tmp_path / "data" / "weights.bin").write_bytes(b"weights")
-
-    published = aitriton.publish(
-        source, path=tmp_path / "repository", config=_file_config(), additional_files=["data/weights.bin"]
-    )
-
-    assert (published / "1/model.onnx/model.onnx").read_bytes() == b"graph"
-    assert (published / "1/model.onnx/data/weights.bin").read_bytes() == b"weights"
-
-
-@pytest.mark.parametrize(
-    "additional_files", [["../weights"], ["/weights"], ["."], ["source.onnx"], ["model.onnx"], ["a", "a"]]
-)
-def test_publish_file_rejects_invalid_additional_file_paths(tmp_path, additional_files):
-    from aitune.exceptions import AITuneUserInputError
-
-    with pytest.raises(AITuneUserInputError):
-        aitriton.publish(
-            tmp_path / "source.onnx",
-            path=tmp_path / "repository",
-            config=_file_config(),
-            additional_files=additional_files,
-        )
-    assert not (tmp_path / "repository").exists()
-
-
-@pytest.mark.parametrize("backend", ["tensorrt", "pt2"])
-def test_publish_file_rejects_additional_files_for_single_file_formats(tmp_path, backend):
-    with pytest.raises(aitriton.PublicationError, match="Only ONNX"):
-        aitriton.publish(
-            tmp_path / "source",
-            path=tmp_path / "repository",
-            config=_file_config(backend),
-            additional_files=["weights"],
-        )
-
-
-@pytest.mark.parametrize("missing_additional_file", [False, True])
-def test_publish_file_copy_failure_leaves_no_partial_model(tmp_path, missing_additional_file):
-    source = tmp_path / "source.onnx"
-    if missing_additional_file:
-        source.write_bytes(b"graph")
-    repository = tmp_path / "repository"
-    with pytest.raises(aitriton.PublicationError, match="Failed to publish"):
-        aitriton.publish(
-            source,
-            path=repository,
-            config=_file_config(),
-            additional_files=["missing.bin"] if missing_additional_file else [],
-        )
-    assert list(repository.iterdir()) == []
-
-
-def test_publish_file_does_not_replace_existing_model(tmp_path):
-    source = tmp_path / "source.onnx"
-    source.write_bytes(b"original")
-    published = aitriton.publish(source, path=tmp_path / "repository", config=_file_config())
-    source.write_bytes(b"replacement")
-    with pytest.raises(aitriton.PublicationError, match="never replaces"):
-        aitriton.publish(source, path=tmp_path / "repository", config=_file_config(), model_version=2)
-    assert (published / "1/model.onnx").read_bytes() == b"original"
-    assert not (published / "2").exists()
-
-
-@pytest.mark.parametrize(("name", "version"), [("../escape", 1), ("external", 0), ("external", True)])
-def test_publish_file_rejects_invalid_target(tmp_path, name, version):
-    from aitune.exceptions import AITuneUserInputError
-
-    with pytest.raises(AITuneUserInputError):
-        aitriton.publish(
-            tmp_path / "source", path=tmp_path / "repository", config=_file_config(name=name), model_version=version
-        )
-    assert not (tmp_path / "repository").exists()
-
-
-@pytest.mark.parametrize("options", [{}, {"model_name": "external"}, {"max_batch_size": 4}, {"dynamic_batching": True}])
-def test_publish_file_requires_config_and_rejects_artifact_options(tmp_path, options):
-    from aitune.exceptions import AITuneUserInputError
-
-    if options:
-        options = {**options, "config": _file_config()}
-    with pytest.raises(AITuneUserInputError):
-        aitriton.publish(tmp_path / "source", path=tmp_path / "repository", **options)
-    assert not (tmp_path / "repository").exists()
-
-
-@pytest.mark.parametrize("options", [{"config": _file_config()}, {"additional_files": ["weights"]}])
-def test_publish_artifact_rejects_file_options(tmp_path, options):
-    from aitune.exceptions import AITuneUserInputError
-
-    artifact = _plan(tmp_path / "source.plan")
-    with pytest.raises(AITuneUserInputError):
-        aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", **options)
-    assert not (tmp_path / "repository").exists()
-
-
-@pytest.mark.parametrize(
-    "kind,destination", [("label", "labels.txt"), ("warmup", "warmup/data.bin"), ("state", "initial_state/data.bin")]
-)
-def test_publish_config_resources(tmp_path, kind, destination):
-    from aitune.exceptions import AITuneUserInputError
-
-    source = tmp_path / "source.onnx"
-    source.write_bytes(b"model")
-    data = tmp_path / "data.bin"
-    data.write_bytes(b"sample data")
-    options = {"default_model_filename": "custom.onnx"}
-    if kind == "label":
-        options["outputs"] = ({"name": "y", "data_type": "TYPE_FP32", "dims": (4,), "label_filename": destination},)
-    elif kind == "warmup":
-        options["warmup"] = (
-            aitriton.ModelWarmup(
-                name="warm", inputs={"x": {"data_type": "TYPE_FP32", "dims": [16], "input_data_file": "data.bin"}}
-            ),
-        )
-    else:
-        options["dynamic_batching"] = False
-        options["sequence_batching"] = aitriton.SequenceBatcher(
-            state=(
-                {
-                    "input_name": "state_in",
-                    "output_name": "state_out",
-                    "data_type": "TYPE_FP32",
-                    "dims": [4],
-                    "initial_state": [
-                        {"name": "initial", "data_type": "TYPE_FP32", "dims": [4], "data_file": "data.bin"}
-                    ],
-                },
-            )
-        )
-    model_config = _file_config(**options)
-    repository = tmp_path / "repository"
-    with pytest.raises(AITuneUserInputError, match="Missing model resources"):
-        aitriton.publish(source, path=repository, config=model_config)
-    assert not repository.exists()
-    published = aitriton.publish(source, path=repository, config=model_config, resources={destination: data})
-    assert (published / destination).read_bytes() == b"sample data"
-    assert (published / "1" / "custom.onnx").read_bytes() == b"model"
-    assert (
-        text_format.Parse((published / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
-        == model_config.to_protobuf()
-    )
-
-
-@pytest.mark.parametrize(
-    "destination", [".", "../escape", "/absolute", "config.pbtxt", "config.pbtxt/child", "1/model.onnx"]
-)
-def test_publish_rejects_invalid_resource_destination(tmp_path, destination):
-    from aitune.exceptions import AITuneUserInputError
-
-    source = tmp_path / "source.onnx"
-    source.write_bytes(b"model")
-    with pytest.raises(AITuneUserInputError, match="Invalid model resource destination"):
-        aitriton.publish(source, path=tmp_path / "repository", config=_file_config(), resources={destination: source})
     assert not (tmp_path / "repository").exists()

@@ -8,11 +8,11 @@ from google.protobuf import json_format
 from tritonclient.grpc import model_config_pb2
 
 from aitune.records import DeploymentArtifact
-from aitune.triton.config.common import _BaseModelConfig
+from aitune.triton.config.common import BaseModelConfig
 from aitune.triton.config.options import ExecutionAccelerator
 
 
-class ONNXRuntimeModelConfig(_BaseModelConfig):
+class ONNXRuntimeModelConfig(BaseModelConfig):
     """Triton configuration specialized for ONNX Runtime artifacts."""
 
     platform: Literal["onnxruntime_onnx"] = "onnxruntime_onnx"

@@ -19,8 +19,8 @@ from polygraphy.backend.trt import Profile
 from polygraphy.logger import G_LOGGER
 
 from aitune.exceptions import AITuneUserInputError
-from aitune.records import DeploymentArtifact, ModelFiles, RuntimeConfig
-from aitune.torch.artifact import bounded_tensor_specs
+from aitune.records import BoundedTensorSpec, DeploymentArtifact, ModelFiles, RuntimeConfig, TensorSample
+from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
     BackendBuildStep,
@@ -28,6 +28,7 @@ from aitune.torch.backend.backend import (
     BackendState,
     BuildMode,
     ExecutionMode,
+    ModuleFormat,
 )
 from aitune.torch.backend.tensorrt.cuda_graphs import CudaGraphCachePolicy, TensorRTCudaGraphCache
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCast, ONNXAutoCastConfig
@@ -42,6 +43,7 @@ from aitune.torch.config import config as global_config
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
 from aitune.torch.utils.module import offload
@@ -212,12 +214,12 @@ class TensorRTBackendConfig(BackendConfig):
 class TensorRTBackend(Backend, TensorRTRunner):
     """TensorRT backend for model acceleration.
 
-    This class provides functionality to build and run TensorRT engines from PyTorch models.
-    It handles the process of exporting models to ONNX and then converting them to TensorRT
-    engines for optimized inference.
+    This class builds and runs TensorRT engines from PyTorch models or existing OnnxModule graphs.
+    Torch models are exported to ONNX; OnnxModule uses its source path directly.
     """
 
     _build_mode = BuildMode.AHEAD_OF_TIME
+    _supported_modules = frozenset({ModuleFormat.TORCH, ModuleFormat.ONNX})
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
 
     # State dictionary keys
@@ -230,6 +232,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
     STATE_QUANTIZATION_CONFIG = "quantization_config"
     STATE_CONFIG = "config"
     STATE_USE_CUDA_GRAPHS = "use_cuda_graphs"
+    STATE_SAMPLES = "samples"
 
     # Supported devices
     _devices: ClassVar[list[str]] = ["cuda"]
@@ -271,6 +274,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._trt_optimization_profiles_artifact: ArtifactPath | None = None
         self._output_object = None
         self._graph_spec = None
+        self._samples: Sequence[Sample] | None = None
 
         # runtime variables
         self._output_allocator = None
@@ -362,9 +366,20 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """
         logger.info("Starting TensorRT backend building")
         self._graph_spec = graph_spec
+        self._samples = samples
 
         cuda_set_device(self._device)
-        self._output_object = self._get_output_object(module=module, sample=samples[0])
+        if isinstance(module, OnnxModule):
+            module.deactivate()
+            if isinstance(self._config.quantization_config, TorchQuantizationConfig):
+                raise AITuneUserInputError(
+                    "Torch quantization requires a Torch module; use ONNX quantization for OnnxModule."
+                )
+        self._output_object = (
+            {spec.name: None for _, spec in graph_spec.output_spec.tensor_data}
+            if isinstance(module, OnnxModule)
+            else self._get_output_object(module=module, sample=samples[0])
+        )
 
         if isinstance(self._config.quantization_config, TorchQuantizationConfig):
             engine_path = self._build_modelopt_torch(module, graph_spec, samples, cache_dir)
@@ -413,17 +428,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     config=self._config.quantization_config,
                 )
 
-            step = TensorRTBuildStep.ONNX_EXPORT
-            with annotate(step.annotation), self._track_build_step(step) as result:
-                onnx_path_quantized = self._prepare_onnx_model_path(cache_dir, suffix="ptq")
-
-                onnx_exporter = ONNXExporter(
-                    use_dynamo=self._config.use_dynamo,
-                    opset_version=self._config.opset_version,
-                    output_path=onnx_path_quantized,
-                )
-                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
-                result["onnx_size_bytes"] = onnx_path_quantized.stat().st_size
+            onnx_path_quantized = self._export_onnx(module, graph_spec, samples[0], cache_dir, suffix="ptq")
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -471,19 +476,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            step = TensorRTBuildStep.ONNX_EXPORT
-            with annotate(step.annotation), self._track_build_step(step) as result:
-                logger.info("Initializing ONNX exporter")
-
-                onnx_path = self._prepare_onnx_model_path(cache_dir)
-                onnx_exporter = ONNXExporter(
-                    use_dynamo=self._config.use_dynamo,
-                    opset_version=self._config.opset_version,
-                    output_path=onnx_path,
-                )
-
-                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
-                result["onnx_size_bytes"] = onnx_path.stat().st_size
+            onnx_path = self._export_onnx(module, graph_spec, samples[0], cache_dir)
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -548,19 +541,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            step = TensorRTBuildStep.ONNX_EXPORT
-            with annotate(step.annotation), self._track_build_step(step) as result:
-                logger.info("Initializing ONNX exporter")
-
-                onnx_path = self._prepare_onnx_model_path(cache_dir)
-                onnx_exporter = ONNXExporter(
-                    use_dynamo=self._config.use_dynamo,
-                    opset_version=self._config.opset_version,
-                    output_path=onnx_path,
-                )
-
-                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
-                result["onnx_size_bytes"] = onnx_path.stat().st_size
+            onnx_path = self._export_onnx(module, graph_spec, samples[0], cache_dir)
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -609,6 +590,28 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self._deactivate()
             raise e
 
+    def _export_onnx(
+        self, module: nn.Module, graph_spec: GraphSpec, sample: Sample, cache_dir: Path, suffix: str = ""
+    ) -> Path:
+        """Export Torch or copy an ONNX graph and its external weights into the backend cache."""
+        step = TensorRTBuildStep.ONNX_EXPORT
+        with annotate(step.annotation), self._track_build_step(step) as result:
+            path = self._prepare_onnx_model_path(cache_dir, suffix)
+            if isinstance(module, OnnxModule):
+                path, size = (Path(module.path), module.path.stat().st_size)
+            else:
+                exporter = ONNXExporter(
+                    use_dynamo=self._config.use_dynamo,
+                    opset_version=self._config.opset_version,
+                    output_path=path,
+                )
+                exporter.export(module=module, sample=sample, graph_spec=graph_spec)
+                size = path.stat().st_size
+
+            result["onnx_size_bytes"] = size
+
+        return path
+
     def _build_standard(
         self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
     ) -> Path:
@@ -624,19 +627,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             cache_dir (Path): The cache directory to store the TensorRT model.
         """
         try:
-            step = TensorRTBuildStep.ONNX_EXPORT
-            with annotate(step.annotation), self._track_build_step(step) as result:
-                logger.info("Initializing ONNX exporter")
-
-                onnx_path = self._prepare_onnx_model_path(cache_dir)
-                onnx_exporter = ONNXExporter(
-                    use_dynamo=self._config.use_dynamo,
-                    opset_version=self._config.opset_version,
-                    output_path=onnx_path,
-                )
-
-                onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
-                result["onnx_size_bytes"] = onnx_path.stat().st_size
+            onnx_path = self._export_onnx(module, graph_spec, samples[0], cache_dir)
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -788,9 +779,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         profiles = self._artifact_profiles()
         inputs = bounded_tensor_specs(self._graph_spec, "input", recorded_names=self._input_names)
-        for input_spec in inputs:
-            if any(len(profile[input_spec.name]["min_shape"]) != len(input_spec.min_shape) for profile in profiles):
-                raise ValueError(f"TensorRT profile rank does not match artifact input {input_spec.name!r}")
+        self._validate_artifact_profile_input_bounds(inputs, profiles)
         inputs = tuple(
             replace(
                 input_spec,
@@ -822,7 +811,44 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     "cuda_graph_cache_policy": self._config.cuda_graph_cache_policy,
                 },
             ),
+            sample_inputs=self._artifact_sample_inputs(),
         )
+
+    def _artifact_sample_inputs(self) -> tuple[TensorSample, ...]:
+        """Derive portable values from the checkpointed sample and GraphSpec."""
+        if self._samples is None:
+            return ()
+        try:
+            return artifact_input_sample(
+                cast(GraphSpec, self._graph_spec),
+                self._samples[0],
+                recorded_names=cast(list[str], self._input_names),
+            )
+        except Exception as error:
+            logger.info("Perf Analyzer will use synthetic inputs: %s", error)
+            return ()
+
+    @staticmethod
+    def _validate_artifact_profile_input_bounds(
+        inputs: tuple[BoundedTensorSpec, ...],
+        profiles: tuple[dict[str, dict[str, tuple[int, ...]]], ...],
+    ) -> None:
+        """Require TensorRT input profiles to stay within recorded input bounds."""
+        for profile_index, profile in enumerate(profiles):
+            for input_spec in inputs:
+                minimum = profile[input_spec.name]["min_shape"]
+                maximum = profile[input_spec.name]["max_shape"]
+                if len(minimum) != len(input_spec.min_shape):
+                    raise ValueError(f"TensorRT profile rank does not match artifact input {input_spec.name!r}")
+                for axis, (profile_min, profile_max, graph_min, graph_max) in enumerate(
+                    zip(minimum, maximum, input_spec.min_shape, input_spec.max_shape, strict=True)
+                ):
+                    if profile_min < graph_min or profile_max > graph_max:
+                        raise ValueError(
+                            f"TensorRT profile {profile_index} input {input_spec.name!r} axis {axis} range "
+                            f"[{profile_min}, {profile_max}] exceeds the recorded graph range "
+                            f"[{graph_min}, {graph_max}]; output bounds cannot be established"
+                        )
 
     def _artifact_profiles(self) -> tuple[dict[str, dict[str, tuple[int, ...]]], ...]:
         """Describe exact profile ranges as plain data in engine input order."""
@@ -956,8 +982,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
         outputs = self._output_allocator.outputs
 
         result = copy.deepcopy(self._output_object)  # make each results a unique copy of the original output object
-        for locator, _ in self._graph_spec.output_spec.tensor_data:
-            name = format_tensor_name(locator.path, "output")
+        for locator, tensor_spec in self._graph_spec.output_spec.tensor_data:
+            name = GraphSpec.tensor_name(locator, tensor_spec, "output")
             if name in outputs:
                 result = locator.set_value(result, outputs[name].clone())
                 del outputs[name]
@@ -992,8 +1018,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
         engine_input_names = set(self._engine_info.input_names)
         inputs = {}
         forward_inputs = self._graph_spec.forward_signature.normalize(args, kwargs)
-        for locator, _ in self._graph_spec.input_spec.tensor_data:
-            name = format_tensor_name(locator.path, "input")
+        for locator, tensor_spec in self._graph_spec.input_spec.tensor_data:
+            name = GraphSpec.tensor_name(locator, tensor_spec, "input")
             if name in engine_input_names:
                 inputs[name] = locator.get_value(forward_inputs.arguments)
             else:
@@ -1125,19 +1151,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         # if user provided profiles, return them
         if isinstance(self._config.profiles, list):
-            input_names = {
-                format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data
-            }
-            for profile in self._config.profiles:
-                profile_names = set(profile.profile)
-                missing_names = input_names - profile_names
-                unknown_names = profile_names - input_names
-                if missing_names or unknown_names:
-                    raise AITuneUserInputError(
-                        f"TensorRT profile inputs {sorted(profile_names)} do not match recorded tensor inputs "
-                        f"{sorted(input_names)} (missing: {sorted(missing_names)}, unknown: {sorted(unknown_names)})."
-                    )
-            return [user_config.profile for user_config in self._config.profiles]
+            return self._get_user_profiles(graph_spec)
 
         if self._config.profiles == ProfileMode.SINGLE:
             # this will create a single profile from the graph spec
@@ -1151,14 +1165,38 @@ class TensorRTBackend(Backend, TensorRTRunner):
             profile = TensorRTProfile()
             args, kwargs = sample
             forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
-            for locator, _ in graph_spec.input_spec.tensor_data:
+            for locator, tensor_spec in graph_spec.input_spec.tensor_data:
                 shape = locator.get_value(forward_inputs.arguments).shape
-                profile.add_input_shape(locator.path, shape, shape, shape)
+                profile.profile.add(GraphSpec.tensor_name(locator, tensor_spec, "input"), shape, shape, shape)
 
             logger.debug("Created profile %d: %s", idx, profile)
             profiles[profile] = True
 
         return [profile.profile for profile in profiles.keys()]
+
+    def _get_user_profiles(self, graph_spec: GraphSpec) -> list[Profile]:
+        """Resolve public profile paths to graph tensor names and validate the bindings."""
+        bindings = {
+            format_tensor_name(locator.path, "input"): GraphSpec.tensor_name(locator, spec, "input")
+            for locator, spec in graph_spec.input_spec.tensor_data
+        }
+        input_names = set(bindings)
+        for profile in self._config.profiles:
+            profile_names = set(profile.profile)
+            missing_names = input_names - profile_names
+            unknown_names = profile_names - input_names
+            if missing_names or unknown_names:
+                raise AITuneUserInputError(
+                    f"TensorRT profile inputs {sorted(profile_names)} do not match recorded tensor inputs "
+                    f"{sorted(input_names)} (missing: {sorted(missing_names)}, unknown: {sorted(unknown_names)})."
+                )
+        profiles = []
+        for user_config in self._config.profiles:
+            resolved = Profile()
+            for name, (minimum, optimal, maximum) in user_config.profile.items():
+                resolved.add(bindings[name], minimum, optimal, maximum)
+            profiles.append(resolved)
+        return profiles
 
     def _get_profiles_from_shapes(self) -> list[Profile]:
         """Create TensorRT optimization profiles.
@@ -1198,7 +1236,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         opt_shapes = {}
         max_shapes = {}
         for locator, tensor_spec in graph_spec.input_spec.tensor_data:
-            input_name = format_tensor_name(locator.path, "input")
+            input_name = GraphSpec.tensor_name(locator, tensor_spec, "input")
             min_shape, opt_shape, max_shape = graph_spec.get_effective_input_shapes(locator, tensor_spec)
             min_shapes[input_name] = tuple(min_shape)
             opt_shapes[input_name] = tuple(opt_shape)
@@ -1232,6 +1270,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_USE_CUDA_GRAPHS: self._config.use_cuda_graphs,
             self.STATE_TRT_OPTIMIZATION_PROFILES_PATH: self._trt_optimization_profiles_artifact,
+            self.STATE_SAMPLES: (self._samples.to_dict() if isinstance(self._samples, SampleStore) else self._samples),
         }
 
     @classmethod
@@ -1242,13 +1281,16 @@ class TensorRTBackend(Backend, TensorRTRunner):
         backend._trt_optimization_profiles_artifact = state_dict[cls.STATE_TRT_OPTIMIZATION_PROFILES_PATH]
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend._device = state_dict[cls.STATE_DEVICE]
+        samples_state = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore.from_dict(samples_state) if isinstance(samples_state, dict) else samples_state
         backend.state = BackendState.CHECKPOINT_LOADED
 
         # Reconstruct config with quantization settings
         backend._config = TensorRTBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]
-        # CUDA graphs cannot be serialized and must be re-captured.
+        # Ensure CUDA graphs are disabled when loading from checkpoint
+        # CUDA graphs cannot be serialized and must be re-captured
         if backend._config.use_cuda_graphs:
             logger.info("CUDA graphs were enabled in saved state, but will be re-captured on first inference")
             # CUDA graph state will be None initially, triggering re-capture

@@ -20,6 +20,8 @@ navigation:
     contents:
       - page: Ahead-of-time Tuning
         path: ../docs/guides/aot_tuning.md
+      - page: ONNX Model Tuning
+        path: ../docs/guides/onnx_tuning.md
       - page: Ahead-of-time Inspect
         path: ../docs/guides/aot_inspect.md
       - page: Just-in-time Tuning
@@ -50,8 +52,16 @@ navigation:
             path: ../docs/guides/backends/torch_inductor_aot_backend.md
       - page: Tune Strategies
         path: ../docs/guides/tune_strategies/tune_strategies.md
-      - page: Deployment
-        path: ../docs/guides/deployment/deployment.md
+      - section: Deployment
+        contents:
+          - page: Overview
+            path: ../docs/guides/deployment/deployment.md
+          - page: Dynamo
+            path: ../docs/guides/deployment/dynamo.md
+          - page: Triton
+            path: ../docs/guides/deployment/triton.md
+          - page: Save and Load Checkpoints
+            path: ../docs/guides/deployment/checkpoints.md
       - section: Advanced
         contents:
           - page: Tuning Workflow

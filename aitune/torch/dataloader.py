@@ -161,7 +161,8 @@ def samples_generator(
         dataset: The dataset to generate samples from. It can be DataLoaderFactory or any dataset/iterable and even torch.Tensor.
             Tensor will be treated as a single sample dataset.
         batch_sizes: The batch sizes to generate samples with.
-        max_num_batches_per_batch_size: The maximum number of batches to use for tuning per batch size.
+        max_num_batches_per_batch_size: The maximum number of batches per batch size. ``None`` uses all batches;
+            zero yields no batches.
 
     Returns:
         A generator of tuples of batch size, args and kwargs
@@ -169,7 +170,10 @@ def samples_generator(
     if isinstance(dataset, torch.Tensor):
         dataset = [dataset]
 
-    max_num_batches_per_batch_size = max_num_batches_per_batch_size or float("inf")
+    if max_num_batches_per_batch_size == 0:
+        return
+    if max_num_batches_per_batch_size is None:
+        max_num_batches_per_batch_size = float("inf")
     dataloader_factory = _make_dataloader_factory(dataset)
     for batch_size in batch_sizes:
         dataloader = dataloader_factory.create_dataloader(batch_size)

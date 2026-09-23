@@ -11,6 +11,7 @@ from aitune.records import (
     DType,
     ModelFiles,
     RuntimeConfig,
+    TensorSample,
 )
 
 INPUTS = (
@@ -100,6 +101,17 @@ def test_bounded_tensor_spec_requires_a_valid_batch_axis(batch_axis):
         )
 
 
+def test_tensor_sample_round_trips_checkpoint_values():
+    sample = TensorSample(name="input_ids", shape=(2, 3), values=(1, 2, 3, 4, 5, 6))
+
+    assert TensorSample.from_dict(sample.to_dict()) == sample
+
+
+def test_tensor_sample_requires_values_matching_its_shape():
+    with pytest.raises(ValueError, match="values do not match shape"):
+        TensorSample(name="input_ids", shape=(2, 3), values=(1, 2, 3))
+
+
 def test_artifact_preserves_tensor_order_and_shared_batch_limit(tmp_path):
     path = _write_artifact(tmp_path, b"onnx")
     second_input = BoundedTensorSpec(
@@ -174,6 +186,20 @@ def test_artifact_rejects_duplicate_tensor_names(tmp_path):
         )
 
 
+def test_artifact_requires_representative_values_in_input_order(tmp_path):
+    path = _write_artifact(tmp_path)
+    sample = TensorSample(name="mask", shape=(1, 8), values=(True,) * 8)
+
+    with pytest.raises(ValueError, match="sample names must match artifact inputs"):
+        DeploymentArtifact(
+            inputs=INPUTS,
+            outputs=OUTPUTS,
+            model=ModelFiles(format="onnx", path=path),
+            runtime=RuntimeConfig(name="onnxruntime"),
+            sample_inputs=(sample,),
+        )
+
+
 @pytest.mark.parametrize(
     ("model_format", "metadata", "runtime_name", "options"),
     [
@@ -216,6 +242,36 @@ def test_export_files_raises_for_missing_source(tmp_path):
 
     with pytest.raises(FileNotFoundError):
         model_files.export_files(tmp_path / "repository" / "model.plan")
+
+
+def test_export_files_rejects_main_file_renamed_to_additional_file(tmp_path):
+    path = _write_artifact(tmp_path / "cache", b"model")
+    weights = path.parent / "weights.data"
+    weights.write_bytes(b"weights")
+    model_files = ModelFiles(format="onnx", path=path, additional_files=(Path("weights.data"),))
+    destination = tmp_path / "repository" / "weights.data"
+
+    with pytest.raises(ValueError, match="exported to the same target"):
+        model_files.export_files(destination)
+
+    assert not destination.parent.exists()
+    assert path.read_bytes() == b"model"
+    assert weights.read_bytes() == b"weights"
+
+
+def test_export_files_rejects_destination_matching_nested_additional_source(tmp_path):
+    path = _write_artifact(tmp_path / "cache", b"model")
+    weights = path.parent / "weights" / "model.data"
+    weights.parent.mkdir()
+    weights.write_bytes(b"weights")
+    model_files = ModelFiles(format="onnx", path=path, additional_files=(Path("weights/model.data"),))
+
+    with pytest.raises(ValueError, match="overwrite one of the model's source files"):
+        model_files.export_files(weights)
+
+    assert path.read_bytes() == b"model"
+    assert weights.read_bytes() == b"weights"
+    assert not (weights.parent / "weights" / "model.data").exists()
 
 
 def test_export_files_copies_current_bytes(tmp_path):
@@ -269,6 +325,21 @@ def test_export_files_copies_current_additional_file_bytes(tmp_path):
 
     assert destination.read_bytes() == b"new-model"
     assert (destination.parent / "model.data").read_bytes() == b"changed-weights"
+
+
+def test_export_files_rejects_additional_file_symlink_outside_model_directory(tmp_path):
+    path = _write_artifact(tmp_path / "cache", b"model")
+    outside = tmp_path / "outside.data"
+    outside.write_bytes(b"outside")
+    link = path.parent / "weights.data"
+    link.symlink_to(outside)
+    model_files = ModelFiles(format="onnx", path=path, additional_files=(Path("weights.data"),))
+    destination = tmp_path / "repository" / "model.onnx"
+
+    with pytest.raises(ValueError, match="must stay inside the model directory"):
+        model_files.export_files(destination)
+
+    assert not destination.parent.exists()
 
 
 @pytest.mark.parametrize("relative_path", [Path(), Path("../model.data"), Path("/model.data")])
