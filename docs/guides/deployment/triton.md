@@ -159,24 +159,16 @@ repository layout, configuration, and request-handling API. Once prepared, the r
 [standalone Triton](#run-triton-standalone) or a [Dynamo Triton environment](#run-triton-through-dynamo) that includes
 the Python backend and those dependencies.
 
-## Batching overrides
+## Artifact batching
 
-Dynamic batching is enabled by default. AITune reads the supported batch range from the tuned artifact and uses its
-recorded maximum, so the deployment limit normally does not need to be provided. Disable it explicitly for artifacts
-that must retain their full tensor shapes:
+AITune derives Triton's batching configuration from the artifact. When every input and output has a batch axis on the
+first dimension, the generated `max_batch_size` is the smallest recorded maximum across those tensors. A batch-one
+artifact keeps `max_batch_size=1` and the implicit batch dimension, without a dynamic batcher. Dynamic batching is
+enabled when the supported maximum is at least 2. Artifacts without a compatible batch axis use `max_batch_size=0`
+and retain their full tensor shapes. Structured PT2 calls also use `max_batch_size=0`.
 
-```python
-model_path = publish(
-    artifact,
-    path="model_repository",
-    model_name="encoder",
-    dynamic_batching=False,
-)
-```
-
-Set `max_batch_size` only to lower the deployment limit from the recorded maximum. With `dynamic_batching=False`, it
-can also enable Triton's implicit batch dimension without enabling the dynamic batcher. The override must stay within
-the artifact's recorded bounds, and every input and output must use the first axis as its batch dimension.
+For an existing model file, supply the batching settings through its backend-specific `config`. Its `max_batch_size`
+and `batcher` fields control Triton's implicit batch dimension and scheduler.
 
 TensorRT model configurations retain the complete optimization-profile set so Triton can select a compatible profile
 for each request.

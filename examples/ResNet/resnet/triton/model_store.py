@@ -36,7 +36,6 @@ def main():
             artifact,
             path=args.model_repository,
             model_name=args.model_name,
-            max_batch_size=artifact.max_batch_size,
             latency_budget_ms=TRITON_LATENCY_BUDGET_MS,
         )
         print(f"Triton model: {model_path}", flush=True)

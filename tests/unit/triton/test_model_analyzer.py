@@ -60,7 +60,6 @@ def test_generates_quick_search_with_tuned_bounds_and_concurrency(tmp_path):
         artifact,
         path=tmp_path / "repository",
         model_name="encoder",
-        max_batch_size=6,
     )
     assert "dynamic_batching" in (model / "config.pbtxt").read_text()
 
@@ -70,10 +69,10 @@ def test_generates_quick_search_with_tuned_bounds_and_concurrency(tmp_path):
     assert quick["run_config_search_mode"] == "quick"
     assert quick["profile_models"] == ["encoder"]
     assert quick["run_config_search_min_model_batch_size"] == 1
-    assert quick["run_config_search_max_model_batch_size"] == 6
+    assert quick["run_config_search_max_model_batch_size"] == 8
     assert quick["run_config_search_min_instance_count"] == 1
     assert quick["run_config_search_max_instance_count"] == 3
-    assert quick["run_config_search_max_concurrency"] == 12
+    assert quick["run_config_search_max_concurrency"] == 16
     assert "latency_budget" not in quick
     assert {path.name for path in output.iterdir()} == {"config.yaml"}
 
@@ -103,14 +102,13 @@ def test_keeps_an_unbatched_model_unbatched(tmp_path):
     artifact = DeploymentArtifact(
         model=ModelFiles(format="onnx", path=source),
         runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
-        inputs=(_spec("input", DType.FLOAT32, 8),),
-        outputs=(_spec("output", DType.FLOAT32, 8),),
+        inputs=(replace(_spec("input", DType.FLOAT32, 8), batch_axis=None),),
+        outputs=(replace(_spec("output", DType.FLOAT32, 8), batch_axis=None),),
     )
     model = aitriton.publish(
         artifact,
         path=tmp_path / "repository",
         model_name="encoder",
-        dynamic_batching=False,
     )
 
     output = model / "model_analyzer"
@@ -132,7 +130,6 @@ def test_analyzer_uses_quick_search_for_multiple_tensorrt_profiles(tmp_path):
         artifact,
         path=tmp_path / "repository",
         model_name="encoder",
-        max_batch_size=8,
     )
 
     output = model / "model_analyzer"
@@ -147,13 +144,13 @@ def test_analyzer_uses_quick_search_for_multiple_tensorrt_profiles(tmp_path):
 
 def test_publish_generates_analyzer_config_automatically(tmp_path):
     artifact = _plan(tmp_path / "source.plan")
-    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=6)
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     text = (model / "model_analyzer/config.yaml").read_text()
     config = yaml.safe_load(text)
     assert config["model_repository"] == str(model.parent.resolve())
     assert config["perf_analyzer_flags"] == {"shape": ["input:8"]}
-    assert config["run_config_search_max_model_batch_size"] == 6
-    assert config["run_config_search_max_concurrency"] == 12
+    assert config["run_config_search_max_model_batch_size"] == 8
+    assert config["run_config_search_max_concurrency"] == 16
     assert ".aitune-" not in text
     output = Path(config["output_model_repository_path"])
     assert output == tmp_path / "repository-model-analyzer" / "encoder" / "model-repository"
@@ -179,12 +176,14 @@ def test_publish_uses_concrete_shapes_for_dynamic_onnx_inputs(tmp_path, batched)
         model=ModelFiles(format="onnx", path=source),
         runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
         inputs=tuple(
-            BoundedTensorSpec(name=name, dtype=DType.INT64, min_shape=(1, 16), max_shape=(8, 512))
+            BoundedTensorSpec(
+                name=name, dtype=DType.INT64, min_shape=(1, 16), max_shape=(8, 512), batch_axis=0 if batched else None
+            )
             for name in ("tokens", "mask")
         ),
-        outputs=(_spec("output", DType.FLOAT32, 8),),
+        outputs=(replace(_spec("output", DType.FLOAT32, 8), batch_axis=0 if batched else None),),
     )
-    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", dynamic_batching=batched)
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     dimensions = "16" if batched else "1,16"
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
     assert config["perf_analyzer_flags"] == {"shape": [f"tokens:{dimensions}", f"mask:{dimensions}"]}
@@ -201,7 +200,7 @@ def test_publish_uses_representative_backend_inputs(tmp_path):
         sample_inputs=(TensorSample(name="input_ids", shape=(2, 4), values=(17, 23, 42, 9, 3, 5, 7, 11)),),
     )
 
-    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     input_data_path = model / "model_analyzer/input-data.json"
     assert json.loads(input_data_path.read_text()) == {
@@ -219,7 +218,7 @@ def test_publish_encodes_fp16_representative_inputs_as_binary(tmp_path):
         sample_inputs=(TensorSample(name="input", shape=(1, 8), values=values),),
     )
 
-    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     input_data_path = model / "model_analyzer/input-data.json"
     assert json.loads(input_data_path.read_text()) == {
@@ -238,7 +237,7 @@ def test_analyzer_uses_artifact_shapes_and_batch_bounds_for_tensorrt(tmp_path):
         artifact,
         {"input": {"min_shape": (1, 8), "opt_shape": (2, 128), "max_shape": (4, 256)}},
     )
-    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
     assert config["perf_analyzer_flags"] == {"shape": ["input:8"]}
     assert config["run_config_search_max_model_batch_size"] == 8
@@ -267,7 +266,7 @@ def test_analyzer_ignores_tensorrt_profile_batch_bounds(tmp_path):
         artifact,
         {"input": {"min_shape": (3, 8), "opt_shape": (4, 8), "max_shape": (8, 8)}},
     )
-    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
     assert config["run_config_search_mode"] == "quick"
     assert config["run_config_search_min_model_batch_size"] == 1
@@ -287,7 +286,6 @@ def test_publish_pt2_generates_analyzer_config(tmp_path):
         artifact,
         path=tmp_path / "repository",
         model_name="encoder",
-        dynamic_batching=False,
     )
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
     assert config["perf_analyzer_flags"] == {"shape": ["input:1,8"]}
@@ -305,7 +303,7 @@ def test_analyzer_ignores_disjoint_tensorrt_profile_input_ranges(tmp_path):
         inputs=(_spec("input", DType.FLOAT32, 8), _spec("mask", DType.FLOAT32, 8)),
     )
     artifact = _with_profiles(artifact, incompatible)
-    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
     assert config["run_config_search_mode"] == "quick"
     assert config["run_config_search_max_model_batch_size"] == 8

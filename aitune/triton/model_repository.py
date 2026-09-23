@@ -10,13 +10,7 @@ from pathlib import Path
 
 from aitune.exceptions import AITunePublicationError, AITuneUserInputError
 from aitune.records import DeploymentArtifact
-from aitune.triton.config import (
-    BaseModelConfig,
-    DynamicBatcher,
-    ONNXRuntimeModelConfig,
-    TensorRTModelConfig,
-    TorchAOTIModelConfig,
-)
+from aitune.triton.config import BaseModelConfig, ONNXRuntimeModelConfig, TensorRTModelConfig, TorchAOTIModelConfig
 from aitune.triton.model_analyzer import write_model_analyzer_config
 
 logger = logging.getLogger(__name__)
@@ -38,8 +32,6 @@ def publish(
     path: str | os.PathLike[str],
     model_name: str | None = None,
     model_version: int = 1,
-    dynamic_batching: bool | None = None,
-    max_batch_size: int | None = None,
     latency_budget_ms: int | None = None,
     config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig | None = None,
     additional_files: Sequence[str | os.PathLike[str]] = (),
@@ -51,6 +43,8 @@ def publish(
     into the new model directory, so a failure can leave an incomplete directory.
     For artifacts, a Model Analyzer config is generated under
     ``model_analyzer/config.yaml`` with input shapes derived from the artifact.
+    The Triton batch limit and scheduler are derived from the artifact's tensor
+    bounds and runtime call structure.
     Existing model files require an explicit backend-specific ``config`` and
     are copied without compilation or tuning. Callers must keep generation
     separate from updates to a live Triton repository.
@@ -66,9 +60,6 @@ def publish(
         path: Triton model repository root.
         model_name: New model directory name for an artifact; file publication uses ``config.name``.
         model_version: Positive Triton model version.
-        dynamic_batching: Let Triton combine independent client requests. Enabled by default.
-        max_batch_size: Optional implicit batch limit within the artifact's tuned bounds.
-            It can be set without enabling the dynamic batcher.
         latency_budget_ms: Optional p99 latency limit for Model Analyzer, in milliseconds.
         config: Backend-specific configuration required for an existing file.
         additional_files: ONNX external-data paths relative to the source file's directory.
@@ -89,20 +80,13 @@ def publish(
             path=path,
             model_name=model_name,
             model_version=model_version,
-            dynamic_batching=dynamic_batching,
-            max_batch_size=max_batch_size,
             latency_budget_ms=latency_budget_ms,
         )
     if not isinstance(model, str | os.PathLike):
         raise AITuneUserInputError("model must be an artifact or a model file path")
     if config is None:
         raise AITuneUserInputError("config is required when publishing a model file")
-    if (
-        model_name is not None
-        or dynamic_batching is not None
-        or max_batch_size is not None
-        or latency_budget_ms is not None
-    ):
+    if model_name is not None or latency_budget_ms is not None:
         raise AITuneUserInputError("For a model file, specify deployment settings in config")
     return _publish_existing_model(
         model,
@@ -120,8 +104,6 @@ def _publish_deployment_artifact(
     path: str | os.PathLike[str],
     model_name: str | None,
     model_version: int,
-    dynamic_batching: bool | None,
-    max_batch_size: int | None,
     latency_budget_ms: int | None,
 ) -> Path:
     """Publish an artifact and generate its Model Analyzer configuration."""
@@ -131,17 +113,9 @@ def _publish_deployment_artifact(
     ):
         raise AITuneUserInputError(f"latency_budget_ms must be a positive integer, got {latency_budget_ms!r}")
 
-    if dynamic_batching is None:
-        dynamic_batching = True
-
     file_name, multi_file = _artifact_layout(artifact)
     _validate_artifact_files(artifact, multi_file=multi_file)
-    config = _model_config(
-        artifact,
-        model_name=model_name,
-        dynamic_batching=dynamic_batching,
-        max_batch_size=max_batch_size,
-    )
+    config = _model_config(artifact, model_name=model_name)
 
     try:
         repository = Path(path)
@@ -208,53 +182,15 @@ def _validate_artifact_files(artifact: DeploymentArtifact, *, multi_file: bool) 
         )
 
 
-def _batch_size(artifact: DeploymentArtifact, dynamic_batching: bool, requested: int | None) -> int:
-    """Resolve and validate the Triton deployment batch limit."""
-    if requested is None and not dynamic_batching:
-        return 0
-    if requested is not None and (not isinstance(requested, int) or isinstance(requested, bool) or requested < 1):
-        raise AITuneUserInputError(f"max_batch_size must be a positive integer, got {requested!r}")
-
-    supported = artifact.max_batch_size
-    required = 2 if dynamic_batching else 1
-    if supported is None or supported < required:
-        raise AITunePublicationError(
-            "Cannot publish a batched model: every input and output must have a batch axis starting at 1 "
-            f"and support a batch size of at least {required}"
-        )
-    if any(tensor.batch_axis != 0 for tensor in artifact.inputs + artifact.outputs):
-        raise AITunePublicationError("Triton implicit batching requires batch_axis=0 for every input and output")
-    if requested is not None and requested > supported:
-        raise AITunePublicationError(
-            f"max_batch_size {requested} exceeds the artifact's bounded batch maximum of {supported}"
-        )
-    batch_size = supported if requested is None else requested
-    if dynamic_batching and batch_size < 2:
-        raise AITuneUserInputError("dynamic_batching requires max_batch_size of at least 2")
-    return batch_size
-
-
-def _model_config(
-    artifact: DeploymentArtifact,
-    *,
-    model_name: str,
-    dynamic_batching: bool,
-    max_batch_size: int | None,
-) -> BaseModelConfig:
+def _model_config(artifact: DeploymentArtifact, *, model_name: str) -> BaseModelConfig:
     """Build a validated Triton configuration from an artifact."""
     if not artifact.inputs or not artifact.outputs:
         raise AITunePublicationError("Triton publication requires at least one input and one output")
-    batch_size = _batch_size(artifact, dynamic_batching, max_batch_size)
     config_type = _MODEL_CONFIGS.get(artifact.runtime.name)
     if config_type is None:
         raise AITunePublicationError(f"Unsupported Triton runtime: {artifact.runtime.name!r}")
     try:
-        return config_type.from_artifact(
-            artifact,
-            name=model_name,
-            max_batch_size=batch_size,
-            batcher=DynamicBatcher() if dynamic_batching else None,
-        )
+        return config_type.from_artifact(artifact, name=model_name)
     except (KeyError, TypeError, ValueError) as error:
         raise AITunePublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
 
