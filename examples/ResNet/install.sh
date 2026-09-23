@@ -5,7 +5,7 @@
 set -euo pipefail
 
 if [[ -n "${TRT_VERSION:-}" ]]; then
-  python3 -m pip install --extra-index-url https://pypi.nvidia.com "tensorrt==$TRT_VERSION"
+  pip install --extra-index-url https://pypi.nvidia.com "tensorrt==$TRT_VERSION"
 else
   echo "Triton container package versions are unavailable; skipping container-specific installation"
 fi
@@ -18,4 +18,4 @@ python3 -m pip download \
   --dest "$onnxruntime_wheel_dir" \
   --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/ \
   onnxruntime-gpu
-python3 -m pip install --force-reinstall "$onnxruntime_wheel_dir"/onnxruntime_gpu-*.whl 'protobuf>=6.33.5,<7'
+pip install --force-reinstall "$onnxruntime_wheel_dir"/onnxruntime_gpu-*.whl 'protobuf>=6.33.5,<7'

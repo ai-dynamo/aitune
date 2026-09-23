@@ -187,8 +187,8 @@ uv run --extra triton triton-promote \
 Model Analyzer writes its measurements and generated configuration variants outside the source repository under
 `model_repository-model-analyzer/resnet50`. Model Analyzer's Triton configuration search retains the 50 ms p99
 latency budget. The promotion command selects the compliant ResNet configuration with the highest measured throughput,
-prints the selected `config.pbtxt`, copies the original model files into `model_repository-deployment/resnet50`, and
-installs that config.
+prints its measured throughput and p99 latency alongside the selected `config.pbtxt`, copies the original model files
+into `model_repository-deployment/resnet50`, and installs that config.
 Model Analyzer and promotion refuse to overwrite existing output, so remove or archive previous results before
 repeating the workflow.
 

@@ -12,7 +12,7 @@ from google.protobuf import text_format
 from tritonclient.grpc import model_config_pb2
 
 
-def promote(analyzer_config: Path, deployment_repository: Path) -> tuple[str, Path]:
+def promote(analyzer_config: Path, deployment_repository: Path) -> tuple[str, Path, float, float]:
     """Create a deployment repository from the highest-throughput configuration."""
     config = yaml.safe_load(analyzer_config.read_text(encoding="utf-8"))
     model_name = config["profile_models"][0]
@@ -32,6 +32,8 @@ def promote(analyzer_config: Path, deployment_repository: Path) -> tuple[str, Pa
             )
 
     best = max(measurements, key=lambda row: float(row["Throughput (infer/sec)"]))
+    throughput = float(best["Throughput (infer/sec)"])
+    p99_latency_ms = float(best["p99 Latency (ms)"])
     variant_name = best["Model Config Path"]
     variant_config = Path(config["output_model_repository_path"]) / variant_name / "config.pbtxt"
 
@@ -43,7 +45,7 @@ def promote(analyzer_config: Path, deployment_repository: Path) -> tuple[str, Pa
     shutil.copytree(Path(config["model_repository"]) / model_name, deployed_model)
     deployed_config = deployed_model / "config.pbtxt"
     deployed_config.write_text(text_format.MessageToString(triton_config), encoding="utf-8")
-    return variant_name, deployed_config
+    return variant_name, deployed_config, throughput, p99_latency_ms
 
 
 def main() -> None:
@@ -52,8 +54,11 @@ def main() -> None:
     parser.add_argument("--analyzer-config", type=Path, required=True)
     parser.add_argument("--deployment-model-repository", type=Path, required=True)
     args = parser.parse_args()
-    variant, deployed_config = promote(args.analyzer_config, args.deployment_model_repository)
+    variant, deployed_config, throughput, p99_latency_ms = promote(
+        args.analyzer_config, args.deployment_model_repository
+    )
     print(f"Promoted Model Analyzer configuration: {variant}", flush=True)
+    print(f"Model Analyzer performance: {throughput:.2f} infer/sec, p99 latency {p99_latency_ms:.3f} ms", flush=True)
     print(
         f"Selected Triton configuration ({deployed_config}):\n{deployed_config.read_text(encoding='utf-8')}", flush=True
     )

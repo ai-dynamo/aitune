@@ -18,9 +18,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         echo "AITUNE_EXTRAS must match the Triton image's PyTorch backend" >&2; \
         exit 1; \
     fi && \
-    python3 -m pip install --extra-index-url https://pypi.nvidia.com "tensorrt==$TRT_VERSION" && \
+    pip install --extra-index-url https://pypi.nvidia.com "tensorrt==$TRT_VERSION" && \
     wheel="$(realpath /aitune_dist/*.whl)" && \
-    python3 -m pip install --extra-index-url https://pypi.nvidia.com \
+    pip install --extra-index-url https://pypi.nvidia.com \
         "${wheel}[${AITUNE_EXTRAS}]" && \
     onnxruntime_wheel_dir="$(mktemp -d)" && \
     python3 -m pip download \
@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         --dest "$onnxruntime_wheel_dir" \
         --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/ \
         onnxruntime-gpu && \
-    python3 -m pip install --force-reinstall "$onnxruntime_wheel_dir"/onnxruntime_gpu-*.whl 'protobuf>=6.33.5,<7' && \
+    pip install --force-reinstall "$onnxruntime_wheel_dir"/onnxruntime_gpu-*.whl 'protobuf>=6.33.5,<7' && \
     rm -r -- "$onnxruntime_wheel_dir"
 
 RUN groupadd --gid ${GROUP_ID} runner && \
