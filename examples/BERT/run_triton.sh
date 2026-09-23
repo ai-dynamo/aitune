@@ -5,13 +5,25 @@
 set -euo pipefail
 
 MODEL_ARGS=()
-if [[ $# -gt 0 ]]; then
-  if [[ $# -ne 2 || "$1" != "--model-name" ]]; then
-    echo "Usage: ./run_triton.sh [--model-name HUGGING_FACE_MODEL]" >&2
-    exit 2
-  fi
-  MODEL_ARGS=(--model-name "$2")
-fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --model-name)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for --model-name" >&2
+        exit 2
+      fi
+      MODEL_ARGS=(--model-name "$2")
+      shift 2
+      ;;
+    --model-name=*)
+      MODEL_ARGS=("$1")
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_NAME="bert"
 MODEL_REPOSITORY="${MODEL_REPOSITORY:-$SCRIPT_DIR/artifacts/model_repository}"

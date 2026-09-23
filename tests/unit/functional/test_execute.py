@@ -225,7 +225,7 @@ variants = [{ arguments = { image-path = "dog.webp", source = "onnx" }, launcher
         "demo.triton.model_store",
         f"--model-repository={model_repository}",
     ]
-    assert run.call_args_list[5].args[0] == ["./run_triton.sh", "--image-path=dog.webp"]
+    assert run.call_args_list[5].args[0] == ["./run_triton.sh", "--image-path=dog.webp", "--source=onnx"]
     assert run.call_args_list[5].kwargs["env"]["MODEL_REPOSITORY"] == str(model_repository)
     assert "TRITON_NETWORK" not in run.call_args_list[5].kwargs["env"]
     assert len(run.call_args_list) == 6

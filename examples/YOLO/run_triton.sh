@@ -4,10 +4,6 @@
 
 set -euo pipefail
 
-if [[ $# -ne 0 ]]; then
-  echo "Usage: ./run_triton.sh" >&2
-  exit 2
-fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_NAME="yolov10n"
 MODEL_REPOSITORY="${MODEL_REPOSITORY:-$SCRIPT_DIR/artifacts/model_repository}"
