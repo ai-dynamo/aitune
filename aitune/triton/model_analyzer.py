@@ -244,14 +244,10 @@ def _configs(
     config: model_config_pb2.ModelConfig,
     max_instance_count: int,
     queue_delay_microseconds: tuple[int, ...],
-    input_data_path: Path | None,
 ) -> tuple[QuickModelAnalyzerConfig | ManualModelAnalyzerConfig, ManualModelAnalyzerConfig]:
     """Build fast and exhaustive configurations from a published model."""
     _validate_model(artifact, model_directory, config)
     perf_flags, minimum_batch, maximum_batch = _profiling_inputs(artifact, config)
-    if input_data_path is not None:
-        # Each recorded request carries its own shape; a global --shape would override it.
-        perf_flags = {"input-data": (str(input_data_path.resolve()),)}
 
     repository = model_directory.parent.resolve()
     model_name = config.name
@@ -350,8 +346,7 @@ def generate_model_analyzer_configs(
     ``manual.yaml`` enumerates the complete recommended bounded search space.
     Publication already writes defaults; use this function only to customize them.
     Concrete input shapes use TensorRT profile optima or other artifacts' minimum
-    shapes when no recorded workload exists. Recorded requests are written as
-    Perf Analyzer input data instead of using one global shape.
+    shapes. Input values use Perf Analyzer's synthetic-data defaults.
 
     Args:
         artifact: Tuned artifact used to create the published model.
@@ -407,7 +402,6 @@ def _write_model_analyzer_configs(
     queue_delay_microseconds: tuple[int, ...] = _DEFAULT_QUEUE_DELAYS_MICROSECONDS,
 ) -> None:
     """Write staged configs with paths pointing to their final deployment location."""
-    input_data = _recorded_input_data(artifact, batched=config.max_batch_size > 0)
     fast, manual = _configs(
         artifact,
         model_directory,
@@ -415,13 +409,10 @@ def _write_model_analyzer_configs(
         config=config,
         max_instance_count=max_instance_count,
         queue_delay_microseconds=queue_delay_microseconds,
-        input_data_path=destination / _INPUT_DATA_FILE_NAME if input_data is not None else None,
     )
     staging.mkdir(parents=True, exist_ok=True)
     (staging / _FAST_CONFIG_FILE_NAME).write_text(fast.to_yaml())
     (staging / _MANUAL_CONFIG_FILE_NAME).write_text(manual.to_yaml())
-    if input_data is not None:
-        (staging / _INPUT_DATA_FILE_NAME).write_text(json.dumps(input_data, indent=2) + "\n")
 
 
 class _DeploymentQuickConfig(_ConfigModel):
@@ -460,9 +451,9 @@ def write_model_analyzer_config(
         for name, shape in shapes.items()
     )
     perf_flags = {"shape": flags}
-    input_data = _recorded_input_data(artifact, batched=config.max_batch_size > 0)
+    input_data = _representative_input_data(artifact, shapes, batched=config.max_batch_size > 0)
     if input_data is not None:
-        perf_flags = {"input-data": (str(input_data_path.resolve()),)}
+        perf_flags["input-data"] = (str(input_data_path.resolve()),)
 
     batched = config.max_batch_size > 0
     analyzer_config = _DeploymentQuickConfig(
@@ -483,28 +474,32 @@ def write_model_analyzer_config(
         (output_directory / _INPUT_DATA_FILE_NAME).write_text(json.dumps(input_data, indent=2) + "\n")
 
 
-def _recorded_input_data(artifact: DeploymentArtifact, *, batched: bool) -> dict[str, Any] | None:
-    """Create Perf Analyzer requests from the artifact's recorded inputs."""
+def _representative_input_data(
+    artifact: DeploymentArtifact, shapes: dict[str, tuple[int, ...]], *, batched: bool
+) -> dict[str, Any] | None:
+    """Create one Perf Analyzer request from representative backend inputs."""
     if not artifact.sample_inputs:
         return None
     dtypes = {tensor.name: tensor.dtype for tensor in artifact.inputs}
-    requests = []
-    for request in artifact.sample_inputs:
-        tensors: dict[str, Any] = {}
-        for sample in request:
-            shape = sample.shape
-            values = sample.values
-            if batched:
-                if not shape or shape[0] < 1:
-                    raise ValueError(f"Representative input {sample.name!r} has no batch values")
-                shape = shape[1:]
-                values = values[: prod(shape)]
-            if not values:
-                raise ValueError(f"Representative input {sample.name!r} has no values")
-            content: Any = list(values)
-            if dtypes[sample.name] is DType.FLOAT16:
-                # Perf Analyzer rejects numeric JSON for FP16; send little-endian half values as binary.
-                content = {"b64": b64encode(np.asarray(values, dtype="<f2").tobytes()).decode("ascii")}
-            tensors[sample.name] = {"content": content, "shape": list(shape)}
-        requests.append(tensors)
-    return {"data": requests}
+    tensors: dict[str, Any] = {}
+    for sample in artifact.sample_inputs:
+        target_shape = tuple(shapes[sample.name])
+        source_shape = sample.shape
+        source_values = sample.values
+        if batched:
+            if not source_shape or source_shape[0] < 1:
+                raise ValueError(f"Representative input {sample.name!r} has no batch values")
+            source_shape = source_shape[1:]
+            source_values = source_values[: prod(source_shape)]
+            target_shape = target_shape[1:]
+        target_size = prod(target_shape)
+        if not source_values:
+            raise ValueError(f"Representative input {sample.name!r} has no values")
+        repeats = (target_size + len(source_values) - 1) // len(source_values)
+        values = (source_values * repeats)[:target_size]
+        content: Any = list(values)
+        if dtypes[sample.name] is DType.FLOAT16:
+            # Perf Analyzer rejects numeric JSON for FP16; send little-endian half values as binary.
+            content = {"b64": b64encode(np.asarray(values, dtype="<f2").tobytes()).decode("ascii")}
+        tensors[sample.name] = {"content": content, "shape": list(target_shape)}
+    return {"data": [tensors]}

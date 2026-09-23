@@ -156,14 +156,14 @@ class DeploymentArtifact:
         inputs: Input tensor specifications in executable order.
         outputs: Output tensor specifications in executable order.
         runtime: Runtime identifier and options selected during tuning.
-        sample_inputs: Recorded requests, each containing tensors in executable input order.
+        sample_inputs: Representative input values in executable order, when retained.
     """
 
     model: ModelFiles
     inputs: tuple[BoundedTensorSpec, ...]
     outputs: tuple[BoundedTensorSpec, ...]
     runtime: RuntimeConfig
-    sample_inputs: tuple[tuple[TensorSample, ...], ...] = ()
+    sample_inputs: tuple[TensorSample, ...] = ()
 
     def __post_init__(self) -> None:
         """Require unique names within each side of the tensor interface."""
@@ -171,9 +171,8 @@ class DeploymentArtifact:
             names = tuple(tensor.name for tensor in tensors)
             if len(names) != len(set(names)):
                 raise ValueError(f"{label} tensor names must be unique, got {names}")
-        for request in self.sample_inputs:
-            if tuple(sample.name for sample in request) != self.input_names:
-                raise ValueError("Recorded request names must match artifact inputs in executable order")
+        if self.sample_inputs and tuple(sample.name for sample in self.sample_inputs) != self.input_names:
+            raise ValueError("Representative sample names must match artifact inputs in executable order")
 
     @property
     def input_names(self) -> tuple[str, ...]:

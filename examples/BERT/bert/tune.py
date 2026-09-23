@@ -8,15 +8,13 @@ from pathlib import Path
 import torch
 from transformers import AutoConfig
 
-from aitune.torch import MaxThroughputStrategy, Module, config, save, tune
+from aitune.torch import MaxThroughputStrategy, Module, save, tune
 from aitune.torch.backend import (
     ONNXRuntimeBackend,
     TensorRTBackend,
-    TensorRTBackendConfig,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
 )
-from aitune.torch.backend.tensorrt import ProfileMode
 from aitune.torch.dataloader import DynamicShapeDataset
 from aitune.torch.module import OnnxModule
 from bert.cmd_args import add_model_name_arg, add_output_path_arg
@@ -41,12 +39,7 @@ def tune_model(source_kind: str, target: str, checkpoint: Path, model_name: str)
     )
     requests = {length: values.cuda() for length, values in tokens.items()}
 
-    # Preserve one sample for each measured batch/sequence shape.
-    config.max_num_samples_stored = len(BATCH_SIZES) * len(SEQUENCE_LENGTHS)
-
-    backends = [
-        TensorRTBackend(TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED)),
-    ]
+    backends = [TensorRTBackend()]
     if source_kind == "torch":
         backends.append(TorchInductorAotBackend() if target == "triton" else TorchInductorJitBackend())
     else:
@@ -57,7 +50,8 @@ def tune_model(source_kind: str, target: str, checkpoint: Path, model_name: str)
     try:
         tune(
             module,
-            DynamicShapeDataset([{"input_ids": values[0]} for values in requests.values()]),
+            # The first sample supplies values for the single representative deployment input.
+            DynamicShapeDataset([{"input_ids": requests[length][0]} for length in (128, 64, 256)]),
             batch_sizes=BATCH_SIZES,
             device="cuda",
             ignore_failing_modules=False,

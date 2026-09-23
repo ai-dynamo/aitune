@@ -20,7 +20,7 @@ from polygraphy.logger import G_LOGGER
 
 from aitune.exceptions import AITuneUserInputError
 from aitune.records import BoundedTensorSpec, DeploymentArtifact, ModelFiles, RuntimeConfig, TensorSample
-from aitune.torch.artifact import artifact_input_samples, bounded_tensor_specs
+from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
     BackendBuildStep,
@@ -814,14 +814,14 @@ class TensorRTBackend(Backend, TensorRTRunner):
             sample_inputs=self._artifact_sample_inputs(),
         )
 
-    def _artifact_sample_inputs(self) -> tuple[tuple[TensorSample, ...], ...]:
-        """Derive one portable request per recorded input shape."""
+    def _artifact_sample_inputs(self) -> tuple[TensorSample, ...]:
+        """Derive portable values from the first recorded sample."""
         if self._samples is None:
             return ()
         try:
-            return artifact_input_samples(
+            return artifact_input_sample(
                 cast(GraphSpec, self._graph_spec),
-                self._samples,
+                self._samples[0],
                 recorded_names=cast(list[str], self._input_names),
             )
         except Exception as error:

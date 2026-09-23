@@ -293,7 +293,7 @@ def test_tensorrt_artifact_after_deactivation_exposes_the_final_engine_interface
         "max_cuda_graphs": 3,
         "cuda_graph_cache_policy": "lru",
     }
-    assert tuple(sample.name for sample in artifact.sample_inputs[0]) == ("input_x",)
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
     destination = tmp_path / "export" / "model.plan"
     assert artifact.model.export_files(destination).read_bytes() == b"fake"
 
@@ -353,14 +353,14 @@ def test_artifact_samples_follow_tensorrt_engine_input_order(mocker):
     backend._samples = (sample,)
     backend._graph_spec = mocker.Mock()
     backend._input_names = ["input_mask", "input_x"]
-    artifact_input_samples = mocker.patch(
-        "aitune.torch.backend.tensorrt.tensorrt_backend.artifact_input_samples", return_value=()
+    artifact_input_sample = mocker.patch(
+        "aitune.torch.backend.tensorrt.tensorrt_backend.artifact_input_sample", return_value=()
     )
 
     assert backend._artifact_sample_inputs() == ()
-    artifact_input_samples.assert_called_once_with(
+    artifact_input_sample.assert_called_once_with(
         backend._graph_spec,
-        backend._samples,
+        sample,
         recorded_names=["input_mask", "input_x"],
     )
 
@@ -453,7 +453,7 @@ def test_checkpoint_loaded_backend_reconstructs_tensorrt_artifact(mock_tensorrt_
     restored.deploy(torch.device("cuda"))
 
     artifact = restored.artifact()
-    assert tuple(sample.name for sample in artifact.sample_inputs[0]) == ("input_x",)
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
     assert artifact.model.format == "tensorrt_plan"
     assert artifact.model.metadata["optimization_profiles"] == (
         {

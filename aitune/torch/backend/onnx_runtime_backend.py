@@ -18,7 +18,7 @@ import torch.nn as nn
 from onnx.external_data_helper import _get_all_tensors
 
 from aitune.records import DeploymentArtifact, DType, ModelFiles, RuntimeConfig, TensorSample
-from aitune.torch.artifact import artifact_input_samples, bounded_tensor_specs
+from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode, ModuleFormat
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
@@ -307,15 +307,15 @@ class ONNXRuntimeBackend(Backend):
             sample_inputs=self._artifact_sample_inputs(),
         )
 
-    def _artifact_sample_inputs(self) -> tuple[tuple[TensorSample, ...], ...]:
-        """Derive one portable request per recorded input shape."""
+    def _artifact_sample_inputs(self) -> tuple[TensorSample, ...]:
+        """Derive portable values from the checkpointed sample and GraphSpec."""
         if self._samples is None:
             return ()
         try:
             input_nodes = cast(list[onnxruntime.NodeArg], self._input_nodes)
-            return artifact_input_samples(
+            return artifact_input_sample(
                 cast(GraphSpec, self._graph_spec),
-                self._samples,
+                self._samples[0],
                 recorded_names=tuple(node.name for node in input_nodes),
             )
         except Exception as error:

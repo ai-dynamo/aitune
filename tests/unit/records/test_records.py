@@ -190,28 +190,13 @@ def test_artifact_requires_representative_values_in_input_order(tmp_path):
     path = _write_artifact(tmp_path)
     sample = TensorSample(name="mask", shape=(1, 8), values=(True,) * 8)
 
-    with pytest.raises(ValueError, match="request names must match artifact inputs"):
+    with pytest.raises(ValueError, match="Representative input names must match artifact inputs"):
         DeploymentArtifact(
             inputs=INPUTS,
             outputs=OUTPUTS,
             model=ModelFiles(format="onnx", path=path),
             runtime=RuntimeConfig(name="onnxruntime"),
-            sample_inputs=((sample,),),
-        )
-
-
-def test_artifact_validates_each_recorded_request(tmp_path):
-    path = _write_artifact(tmp_path)
-    valid = TensorSample(name="input_ids", shape=(1, 8), values=(1,) * 8)
-    invalid = TensorSample(name="mask", shape=(1, 8), values=(True,) * 8)
-
-    with pytest.raises(ValueError, match="request names must match artifact inputs"):
-        DeploymentArtifact(
-            inputs=INPUTS,
-            outputs=OUTPUTS,
-            model=ModelFiles(format="onnx", path=path),
-            runtime=RuntimeConfig(name="onnxruntime"),
-            sample_inputs=((valid,), (invalid,)),
+            sample_inputs=(sample,),
         )
 
 

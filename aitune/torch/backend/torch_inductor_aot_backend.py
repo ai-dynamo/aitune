@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 from aitune.records import DeploymentArtifact, ModelFiles, RuntimeConfig, TensorSample
-from aitune.torch.artifact import artifact_input_samples, bounded_tensor_specs
+from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
     BackendBuildStep,
@@ -203,14 +203,14 @@ class TorchInductorAotBackend(Backend):
 
     def _artifact_sample_inputs(
         self, contract: PT2CallContract, input_names: tuple[str, ...]
-    ) -> tuple[tuple[TensorSample, ...], ...]:
-        """Derive portable requests from recorded samples in PT2 input order."""
+    ) -> tuple[TensorSample, ...]:
+        """Derive portable values from the checkpointed sample and PT2 input order."""
         if self._samples is None:
             return ()
         try:
-            return artifact_input_samples(
+            return artifact_input_sample(
                 cast(GraphSpec, self._graph_spec),
-                self._samples,
+                self._samples[0],
                 metadata_indices=contract.input_order,
                 artifact_names=input_names,
             )
