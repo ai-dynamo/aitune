@@ -68,6 +68,10 @@ config = ONNXRuntimeModelConfig(
 model_path = publish("encoder.onnx", path="model_repository", config=config)
 ```
 
+The default `batcher=DynamicBatcher()` combines independent requests. For a stateful model, set
+`batcher=SequenceBatcher(...)` instead. Set `batcher=None` to omit both schedulers; a positive `max_batch_size` still
+allows batched requests, while `max_batch_size=0` disables batching and requires `batcher=None`.
+
 Use `additional_files` for ONNX external data and `resources` for referenced labels or warmup files. Existing-file
 publication writes `config.pbtxt` but has no artifact from which to derive Model Analyzer input shapes or samples.
 

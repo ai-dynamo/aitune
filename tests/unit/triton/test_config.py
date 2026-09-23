@@ -44,12 +44,21 @@ def roundtrip(model):
 )
 @pytest.mark.parametrize("batched", [False, True])
 def test_backend_roundtrip(backend, platform, batched):
-    result = roundtrip(config(backend, max_batch_size=8 if batched else 0, dynamic_batching=batched))
+    result = roundtrip(
+        config(backend, max_batch_size=8 if batched else 0, batcher=DynamicBatcher() if batched else None)
+    )
     assert result.platform == platform
     assert result.max_batch_size == (8 if batched else 0)
     assert result.HasField("dynamic_batching") == batched
     assert result.input[0].name == "x"
     assert result.output[0].dims == [4]
+
+
+def test_batched_model_without_scheduler():
+    result = roundtrip(config(batcher=None))
+    assert result.max_batch_size == 8
+    assert not result.HasField("dynamic_batching")
+    assert not result.HasField("sequence_batching")
 
 
 @pytest.mark.parametrize("dtype", list(TritonDataType))
@@ -90,7 +99,7 @@ def test_tensor_options():
 def test_dynamic_batching_policies():
     result = roundtrip(
         config(
-            dynamic_batching=DynamicBatcher(
+            batcher=DynamicBatcher(
                 preferred_batch_size=(2, 8),
                 max_queue_delay_microseconds=123,
                 preserve_ordering=True,
@@ -123,7 +132,7 @@ def test_dynamic_batching_policies():
 def test_sequence_batching(strategy):
     result = roundtrip(
         config(
-            sequence_batching=SequenceBatcher(**{
+            batcher=SequenceBatcher(**{
                 strategy: {"max_queue_delay_microseconds": 42},
                 "max_sequence_idle_microseconds": 1000,
                 "control_input": (
@@ -279,15 +288,16 @@ def test_invalid_helper_options(factory, kwargs):
     "kwargs,match",
     [
         ({"max_batch_size": -1}, "greater than or equal"),
-        ({"max_batch_size": 0, "dynamic_batching": True}, "positive max_batch_size"),
-        ({"dynamic_batching": True, "sequence_batching": SequenceBatcher()}, "mutually exclusive"),
-        ({"dynamic_batching": DynamicBatcher(preferred_batch_size=(9,))}, "cannot exceed"),
+        ({"max_batch_size": 0}, "positive max_batch_size"),
+        ({"max_batch_size": 0, "batcher": SequenceBatcher()}, "positive max_batch_size"),
+        ({"batcher": True}, "valid"),
+        ({"batcher": DynamicBatcher(preferred_batch_size=(9,))}, "cannot exceed"),
         ({"outputs": (tensor(optional=True),)}, "input-only"),
         ({"inputs": (tensor(label_filename="labels.txt"),)}, "output-only"),
         ({"instance_groups": (InstanceGroup(profile=("0",)),)}, "only supported by TensorRT"),
         ({"optimization": {"unknown": True}}, "no field named"),
         ({"version_policy": {"latest": {}, "all": {}}}, "oneof"),
-        ({"sequence_batching": SequenceBatcher(direct={"unknown": True})}, "no field named"),
+        ({"batcher": SequenceBatcher(direct={"unknown": True})}, "no field named"),
         ({"warmup": (ModelWarmup(name="w", inputs={"x": {"zero_data": True, "random_data": True}}),)}, "oneof"),
         ({"unknown": True}, "Extra inputs"),
     ],
@@ -329,7 +339,7 @@ def test_warmup_limits():
     with pytest.raises(ValidationError, match="unique"):
         config(warmup=(warmup, warmup))
     with pytest.raises(ValidationError, match="batch limit"):
-        config(max_batch_size=0, warmup=(warmup,))
+        config(max_batch_size=0, batcher=None, warmup=(warmup,))
 
 
 def test_batch_io_mappings():
