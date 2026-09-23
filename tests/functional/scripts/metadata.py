@@ -105,7 +105,7 @@ class FunctionalVariantConfig(BaseModel):
 
 
 class FunctionalWorkflowConfig(BaseModel):
-    """One project workflow and its optional raw-container installer."""
+    """One project workflow and its optional install script."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -169,10 +169,8 @@ class FunctionalTestConfig(BaseModel):
         if len(names) != len(set(names)):
             raise ValueError("Project workflows must be unique")
         for workflow in workflows:
-            if workflow.install_script and (
-                workflow.name != "triton" or Path(workflow.install_script).name != workflow.install_script
-            ):
-                raise ValueError("install_script must be a file name in the Triton example directory")
+            if workflow.install_script and Path(workflow.install_script).name != workflow.install_script:
+                raise ValueError("install_script must be a file name in the example directory")
         return workflows
 
     @classmethod

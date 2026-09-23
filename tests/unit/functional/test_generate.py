@@ -72,17 +72,12 @@ def test_project_workflows_expand_each_entry_into_independent_jobs() -> None:
     assert [(job["id"], job["test_number"], job["workflow"]) for job in jobs] == [
         ("examples_Demo_dynamo_001", 0, "dynamo"),
         ("examples_Demo_triton_001", 0, "triton"),
-        ("examples_Demo_triton_install_001", 0, "triton"),
         ("examples_Demo_dynamo_002", 1, "dynamo"),
         ("examples_Demo_triton_002", 1, "triton"),
-        ("examples_Demo_triton_install_002", 1, "triton"),
     ]
     assert jobs[0]["docker_image"] == "ghcr.io/ai-dynamo/aitune/nvcr-torch-26.05-py3:latest"
     assert jobs[1]["docker_image"] == "ghcr.io/ai-dynamo/aitune/nvcr-triton-26.05-py3:latest"
-    assert jobs[1]["install_script"] == ""
-    assert jobs[2]["docker_image"] == "ghcr.io/ai-dynamo/aitune/nvcr-triton-26.05-py3-raw:latest"
-    assert jobs[2]["install_script"] == "install.sh"
-    assert "container_options" not in jobs[2]
+    assert "container_options" not in jobs[1]
 
 
 def test_project_workflows_reject_unknown_and_duplicate_values() -> None:
@@ -90,8 +85,10 @@ def test_project_workflows_reject_unknown_and_duplicate_values() -> None:
         _config({"workflows": [{"name": "unknown"}]})
     with pytest.raises(ValueError, match="Project workflows must be unique"):
         _config({"workflows": [{"name": "triton"}, {"name": "triton"}]})
-    with pytest.raises(ValueError, match="install_script must be a file name"):
-        _config({"workflows": [{"name": "dynamo", "install_script": "install.sh"}]})
+    assert (
+        _config({"workflows": [{"name": "dynamo", "install_script": "install.sh"}]}).workflows[0].install_script
+        == "install.sh"
+    )
     with pytest.raises(ValueError, match="install_script must be a file name"):
         _config({"workflows": [{"name": "triton", "install_script": "../install.sh"}]})
 

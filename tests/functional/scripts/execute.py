@@ -25,7 +25,7 @@ except ImportError:
 def main() -> None:
     """Run the selected functional matrix entry."""
     args = parse_args()
-    run(args.path, args.kind, args.test_number, args.verbose, args.dry_run, args.workflow, args.install_script)
+    run(args.path, args.kind, args.test_number, args.verbose, args.dry_run, args.workflow)
 
 
 def run(
@@ -35,7 +35,6 @@ def run(
     verbose: bool = False,
     dry_run: bool = False,
     workflow: str | None = None,
-    install_script: str = "",
 ) -> None:
     """Run one zero-based entry from a functional script or example project."""
     config = _load_config(path, kind)
@@ -46,14 +45,12 @@ def run(
 
     env = os.environ | {"AITUNE_CONSOLE_OUTPUT": "1"} | config.environment
     _validate_requested_workflow(path, kind, config, workflow)
-    if install_script:
-        configured = next((item.install_script for item in config.workflows if item.name == workflow), None)
-        if kind != "project" or workflow != "triton" or install_script != configured:
-            raise ValueError(f"Install script {install_script!r} is not configured for the Triton workflow in {path}")
     _install_dependencies(path, kind, config, verbose, dry_run, workflow)
-    if install_script:
-        # Install after project dependencies so CUDA 13 ONNX Runtime is the final wheel selected.
-        _run_command([f"./{install_script}"], verbose, dry_run, cwd=path, env=env)
+    if kind == "project" and workflow is not None:
+        install_script = next(item.install_script for item in config.workflows if item.name == workflow)
+        if install_script:
+            # Run after project dependencies so the workflow's installer makes the final package selection.
+            _run_command([f"./{install_script}"], verbose, dry_run, cwd=path, env=env)
     _save_requirements(verbose, dry_run)
 
     run_kwargs: dict[str, Any] = {"cwd": path if kind == "project" else None, "env": env}
@@ -251,7 +248,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--kind", choices=("script", "project"), required=True)
     parser.add_argument("--test-number", type=int, required=True)
     parser.add_argument("--workflow", choices=("legacy", "dynamo", "triton"), default="legacy")
-    parser.add_argument("--install-script", default="", help="Run the configured raw-container installer")
     parser.add_argument("--is-custom-docker-image", type=json.loads, default=False)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

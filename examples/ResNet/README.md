@@ -135,10 +135,9 @@ the client, and stops the server on exit. Set `TRITONSERVER` when the executable
 
 Triton loads the published models at startup with `--model-control-mode=none`; no load API call is needed.
 The server and client run sequentially in the same CI job container and communicate over `localhost`.
-CI runs two Triton jobs: one uses the prebuilt image without changing its runtime packages, and the other uses a
-runner-compatible raw Triton image. In the raw-image job, the functional executor installs the example dependencies,
-runs `install.sh` to select the container's TensorRT and CUDA 13 ONNX Runtime packages, and then runs the same tuning,
-Model Analyzer, and inference checks. This also validates the installer used by `prepare_triton.sh` locally.
+The single Triton CI job uses the prebuilt image. Its functional executor installs the example dependencies, then runs
+`install.sh` to select the container's TensorRT and CUDA 13 ONNX Runtime packages before tuning, Model Analyzer, and
+inference. This also validates the installer used by `prepare_triton.sh` locally.
 
 The equivalent package-to-repository command is available independently:
 

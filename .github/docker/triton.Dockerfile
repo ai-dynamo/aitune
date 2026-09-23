@@ -8,16 +8,12 @@ FROM ${FROM_IMAGE}
 ARG USER_ID=1001
 ARG GROUP_ID=1001
 ARG AITUNE_EXTRAS
-ARG INSTALL_RUNTIME=true
 
 USER root
-
-RUN python3 -m pip install pydantic
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=dist,target=/aitune_dist \
     export PIP_CACHE_DIR=/root/.cache/pip && \
-    if [ "$INSTALL_RUNTIME" != "true" ]; then exit 0; fi && \
     if [ -z "$AITUNE_EXTRAS" ]; then \
         echo "AITUNE_EXTRAS must match the Triton image's PyTorch backend" >&2; \
         exit 1; \

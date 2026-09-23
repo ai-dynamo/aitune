@@ -230,7 +230,7 @@ variants = [{ arguments = { image-path = "dog.webp" }, launcher = "torchrun", pr
     assert len(run.call_args_list) == 6
 
 
-def test_triton_raw_container_installs_after_project_dependencies(
+def test_triton_workflow_installs_after_project_dependencies(
     mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -253,7 +253,7 @@ workflows = [{ name = "triton", install_script = "install.sh" }]
     )
     run = mocker.patch.object(execute.subprocess, "run")
 
-    execute.run(project, "project", 0, workflow="triton", install_script="install.sh")
+    execute.run(project, "project", 0, workflow="triton")
 
     assert run.call_args_list[1].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[triton]"]
     assert run.call_args_list[2].args[0] == ["./install.sh"]

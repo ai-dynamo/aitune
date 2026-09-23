@@ -148,7 +148,6 @@ jobs:
             --kind "${{ matrix.kind }}" \
             --test-number "${{ matrix.test_number }}" \
             --workflow "${{ matrix.workflow }}" \
-            --install-script "${{ matrix.install_script }}" \
             --verbose
 
       - if: always()

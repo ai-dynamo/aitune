@@ -72,7 +72,6 @@ def _matrix_entry(
     variant: FunctionalVariantConfig,
     requested_scope: Scope,
     workflow: FunctionalWorkflowConfig | None = None,
-    install_script: str = "",
     default_docker_image: str = DEFAULT_DOCKER_IMAGE,
 ) -> dict[str, Any]:
     docker_image = config.docker_image or DEFAULT_DOCKER_IMAGE
@@ -90,7 +89,6 @@ def _matrix_entry(
         "kind": kind,
         "path": path,
         "workflow": workflow_name,
-        "install_script": install_script,
         "allow_failure": config.allow_failure,
         "timeout_minutes": _timeout_to_minutes(config.timeout),
         "use_gated_hf_token": config.use_gated_hf_token,
@@ -175,8 +173,8 @@ def _make_project_entries(
         if only_tags and only_tags.isdisjoint([*config.tags, *variant.tags]):
             continue
         workflows = config.workflows or [FunctionalWorkflowConfig(name="legacy")]
-        for workflow in workflows:
-            entry = _matrix_entry(
+        jobs.extend([
+            _matrix_entry(
                 entry_id=(
                     f"{namespace}_{parent_dir.name}_"
                     f"{workflow.name if workflow.name != 'legacy' else 'inference'}_{index:03d}"
@@ -190,14 +188,8 @@ def _make_project_entries(
                 workflow=workflow,
                 default_docker_image=default_docker_image,
             )
-            jobs.append(entry)
-            if workflow.install_script:
-                raw_entry = entry | {
-                    "id": f"{namespace}_{parent_dir.name}_triton_install_{index:03d}",
-                    "docker_image": entry["docker_image"].replace(":latest", "-raw:latest"),
-                    "install_script": workflow.install_script,
-                }
-                jobs.append(raw_entry)
+            for workflow in workflows
+        ])
     return jobs
 
 
