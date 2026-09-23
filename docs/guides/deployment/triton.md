@@ -50,8 +50,12 @@ external data use a directory beneath the version entry. The generated `config.p
 inputs, outputs, and runtime settings. AITune also generates Model Analyzer configurations and includes representative
 input data when the backend retained a sample.
 
-Publication stages all files outside the repository and moves the completed directory into place. A failure therefore
-does not leave a partially published model. Publication never replaces an existing model directory.
+`publish()` generates files directly in the new model directory; it does not make a live deployment update. It never
+replaces an existing model directory. If generation fails or is interrupted, an incomplete directory can remain and
+must be removed or archived before retrying. Generate into a repository that Triton is not watching, then make the
+completed repository available using your deployment process and Triton's
+[model-control policy](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_management.md).
+Triton's `poll` mode can observe incomplete changes, so do not rely on it to protect an in-progress generation.
 
 ## Serve the repository
 

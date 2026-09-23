@@ -5,6 +5,7 @@ title: "ResNet models tuning"
 ---
 
 This example demonstrates how to use NVIDIA AITune to tune a ResNet model.
+ResNet-50 uses FP16 weights and inputs on CUDA for tuning and inference in the Python, Dynamo, and Triton workflows.
 
 ## Environment Setup
 
@@ -134,6 +135,10 @@ the client, and stops the server on exit. Set `TRITONSERVER` when the executable
 
 Triton loads the published models at startup with `--model-control-mode=none`; no load API call is needed.
 The server and client run sequentially in the same CI job container and communicate over `localhost`.
+CI runs two Triton jobs: one uses the prebuilt image without changing its runtime packages, and the other uses a
+runner-compatible raw Triton image. In the raw-image job, the functional executor installs the example dependencies,
+runs `install.sh` to select the container's TensorRT and CUDA 13 ONNX Runtime packages, and then runs the same tuning,
+Model Analyzer, and inference checks. This also validates the installer used by `prepare_triton.sh` locally.
 
 The equivalent package-to-repository command is available independently:
 
@@ -144,8 +149,9 @@ uv run --extra triton triton-model-store --tuned-model-path resnet50.ait
 Model-store generation loads the package, extracts its selected artifact, and creates
 `model_repository/resnet50`. The `config.pbtxt`, tensor bounds, and maximum batch size all come from that artifact.
 It also creates `model_repository/resnet50/model_analyzer/config.yaml` for a bounded quick search. Publication does
-not replace an existing model directory. The automated Triton workflow invokes `run_triton.sh`, so profiling must
-complete successfully before the inference validation starts.
+not replace an existing model directory. Generation writes directly into that directory; if it fails, remove or
+archive the incomplete directory before retrying. The automated Triton workflow invokes `run_triton.sh`, so profiling
+must complete successfully before the inference validation starts.
 
 The command explicitly deactivates the loaded module before exiting to release its backend runtime.
 

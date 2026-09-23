@@ -50,19 +50,19 @@ def write_model_analyzer_config(
     model_directory: Path,
     destination: Path,
     latency_budget_ms: int | None,
-    staging: Path,
+    output_directory: Path,
     input_data_path: Path,
 ) -> None:
-    """Write the Model Analyzer config into an in-progress model publication."""
+    """Write the Model Analyzer config into the new model directory."""
     perf_flags, input_data = _profiling_inputs(artifact, config)
     if input_data is not None:
         perf_flags["input-data"] = (str(input_data_path.resolve()),)
 
     analyzer_config = _quick_config(config, model_directory, destination, perf_flags, latency_budget_ms)
-    staging.mkdir(parents=True, exist_ok=True)
-    (staging / _CONFIG_FILE_NAME).write_text(analyzer_config.to_yaml())
+    output_directory.mkdir(parents=True, exist_ok=True)
+    (output_directory / _CONFIG_FILE_NAME).write_text(analyzer_config.to_yaml())
     if input_data is not None:
-        (staging / _INPUT_DATA_FILE_NAME).write_text(json.dumps(input_data, indent=2) + "\n")
+        (output_directory / _INPUT_DATA_FILE_NAME).write_text(json.dumps(input_data, indent=2) + "\n")
 
 
 def _profiling_inputs(

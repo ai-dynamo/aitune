@@ -225,7 +225,7 @@ def test_analyzer_uses_artifact_shapes_and_batch_bounds_for_tensorrt(tmp_path):
     assert config["run_config_search_max_concurrency"] == 16
 
 
-def test_analyzer_generation_failure_leaves_no_published_model(tmp_path, monkeypatch):
+def test_analyzer_generation_failure_leaves_partial_model(tmp_path, monkeypatch):
     from aitune.triton import model_repository
 
     def fail(*args, **kwargs):
@@ -236,7 +236,8 @@ def test_analyzer_generation_failure_leaves_no_published_model(tmp_path, monkeyp
     repository = tmp_path / "repository"
     with pytest.raises(AITunePublicationError, match="cannot write analyzer config"):
         aitriton.publish(artifact, path=repository, model_name="encoder")
-    assert list(repository.iterdir()) == []
+    assert (repository / "encoder" / "1" / "model.plan").is_file()
+    assert not (repository / "encoder" / "model_analyzer" / "config.yaml").exists()
     assert not (tmp_path / "repository-model-analyzer").exists()
 
 

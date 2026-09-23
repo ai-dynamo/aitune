@@ -28,7 +28,7 @@ dynamo = [
     "pydantic-tensor",
 ]
 triton = [
-    "aitune[triton]",
+    "aitune[triton,torch212]",
 ]
 
 [tool.uv.sources]

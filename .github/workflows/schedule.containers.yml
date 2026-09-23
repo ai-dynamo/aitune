@@ -104,6 +104,13 @@ jobs:
           # Triton images bundle a specific PyTorch backend, so keep the Torch extra aligned with the image release.
           - triton_ci_image_base: 26.05-py3
             aitune_extras: triton,torch212
+            install_runtime: true
+            image_suffix: ''
+          # The raw image retains only the CI user and metadata parser; execute.py installs the example dependencies.
+          - triton_ci_image_base: 26.05-py3
+            aitune_extras: triton,torch212
+            install_runtime: false
+            image_suffix: '-raw'
     steps:
       - uses: *actions_checkout
         with:
@@ -125,7 +132,8 @@ jobs:
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/tritonserver:${{ matrix.triton_ci_image_base }}
             AITUNE_EXTRAS=${{ matrix.aitune_extras }}
-          tags: ghcr.io/ai-dynamo/aitune/nvcr-triton-${{ matrix.triton_ci_image_base }}:latest
+            INSTALL_RUNTIME=${{ matrix.install_runtime }}
+          tags: ghcr.io/ai-dynamo/aitune/nvcr-triton-${{ matrix.triton_ci_image_base }}${{ matrix.image_suffix }}:latest
 
   create-cuda-base-images:
     name: create cuda ${{ matrix.cuda_ci_image_base }} based AITune image

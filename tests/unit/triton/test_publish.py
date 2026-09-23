@@ -225,21 +225,6 @@ def test_repository_creation_failure_raises_publication_error(tmp_path):
     assert isinstance(error.value.__cause__, OSError)
 
 
-def test_staging_directory_creation_failure_raises_publication_error(tmp_path, mocker):
-    artifact = _plan(tmp_path / "source.plan")
-    repository = tmp_path / "repository"
-    make_staging = mocker.patch(
-        "aitune.triton.model_repository.tempfile.mkdtemp", side_effect=OSError("staging unavailable")
-    )
-
-    with pytest.raises(AITunePublicationError, match="staging unavailable") as error:
-        aitriton.publish(artifact, path=repository, model_name="encoder")
-
-    assert isinstance(error.value.__cause__, OSError)
-    make_staging.assert_called_once_with(dir=tmp_path)
-    assert not (repository / "encoder").exists()
-
-
 def test_publishes_to_current_directory(tmp_path, monkeypatch):
     artifact = _plan(tmp_path / "source.plan")
     repository = tmp_path / "repository"
@@ -251,55 +236,7 @@ def test_publishes_to_current_directory(tmp_path, monkeypatch):
     assert (repository / "encoder" / "1" / "model.plan").read_bytes() == b"TensorRT plan"
 
 
-def test_uses_explicit_staging_path_outside_repository(tmp_path):
-    artifact = _plan(tmp_path / "source.plan")
-    repository = tmp_path / "repository"
-    staging_root = tmp_path / "staging"
-
-    published = aitriton.publish(
-        artifact,
-        path=repository,
-        model_name="encoder",
-        staging_path=staging_root,
-    )
-
-    assert published == repository / "encoder"
-    assert not tuple(staging_root.iterdir())
-
-
-def test_rejects_staging_path_inside_repository_before_export(tmp_path, mocker):
-    artifact = _plan(tmp_path / "source.plan")
-    repository = tmp_path / "repository"
-    export_files = mocker.patch.object(ModelFiles, "export_files")
-
-    with pytest.raises(AITunePublicationError, match="outside the model repository"):
-        aitriton.publish(
-            artifact,
-            path=repository,
-            model_name="encoder",
-            staging_path=repository / "staging",
-        )
-
-    export_files.assert_not_called()
-
-
-def test_rejects_staging_path_on_different_filesystem_before_export(tmp_path, mocker):
-    artifact = _plan(tmp_path / "source.plan")
-    export_files = mocker.patch.object(ModelFiles, "export_files")
-    mocker.patch("aitune.triton.model_repository._same_filesystem", return_value=False)
-
-    with pytest.raises(AITunePublicationError, match="same filesystem"):
-        aitriton.publish(
-            artifact,
-            path=tmp_path / "repository",
-            model_name="encoder",
-            staging_path=tmp_path / "staging",
-        )
-
-    export_files.assert_not_called()
-
-
-def test_copy_failure_leaves_no_partial_model(tmp_path):
+def test_copy_failure_leaves_partial_model_for_caller_to_remove(tmp_path):
     artifact = _plan(tmp_path / "source.plan")
     artifact = replace(
         artifact,
@@ -307,26 +244,10 @@ def test_copy_failure_leaves_no_partial_model(tmp_path):
         runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
     )
 
-    with pytest.raises(AITunePublicationError, match="Failed to publish"):
+    with pytest.raises(AITunePublicationError, match="An incomplete model directory may remain"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
-    assert not tuple((tmp_path / "repository").iterdir())
-
-
-def test_cleanup_failure_is_reported(tmp_path, mocker):
-    artifact = _plan(tmp_path / "source.plan")
-    artifact = replace(
-        artifact,
-        model=ModelFiles(format="onnx", path=artifact.model.path, additional_files=(Path("missing.bin"),)),
-        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
-    )
-    mocker.patch("aitune.triton.model_repository.shutil.rmtree", side_effect=OSError("cleanup unavailable"))
-
-    with pytest.raises(AITunePublicationError, match="failed to clean staging directory") as error:
-        aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
-
-    assert isinstance(error.value.__cause__, OSError)
-    assert "cleanup unavailable" in str(error.value)
+    assert (tmp_path / "repository" / "encoder" / "config.pbtxt").is_file()
 
 
 @pytest.mark.parametrize(

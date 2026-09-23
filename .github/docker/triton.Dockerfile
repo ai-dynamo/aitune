@@ -8,16 +8,19 @@ FROM ${FROM_IMAGE}
 ARG USER_ID=1001
 ARG GROUP_ID=1001
 ARG AITUNE_EXTRAS
+ARG INSTALL_RUNTIME=true
 
 USER root
 
-RUN python3 -m pip install --extra-index-url https://pypi.nvidia.com "tensorrt==$TRT_VERSION"
+RUN python3 -m pip install pydantic
 
 RUN --mount=type=bind,source=dist,target=/aitune_dist \
+    if [ "$INSTALL_RUNTIME" != "true" ]; then exit 0; fi && \
     if [ -z "$AITUNE_EXTRAS" ]; then \
         echo "AITUNE_EXTRAS must match the Triton image's PyTorch backend" >&2; \
         exit 1; \
     fi && \
+    python3 -m pip install --extra-index-url https://pypi.nvidia.com "tensorrt==$TRT_VERSION" && \
     wheel="$(realpath /aitune_dist/*.whl)" && \
     python3 -m pip install --extra-index-url https://pypi.nvidia.com \
         "${wheel}[${AITUNE_EXTRAS}]" && \

@@ -106,7 +106,7 @@ def tune_model(
     transform = get_transform(model)
 
     img = Image.open(image_path)
-    dataset = transform(img).to("cuda")
+    dataset = transform(img).to(device="cuda", dtype=torch.float16)
 
     module_name = f"example-{model_name}"
 

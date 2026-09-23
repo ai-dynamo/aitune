@@ -19,11 +19,11 @@ docker run --rm --gpus all --ipc host \
   bash -lc '
     python3 -m venv --system-site-packages /tmp/aitune-resnet
     source /tmp/aitune-resnet/bin/activate
-    ./install.sh
     python -m pip install --extra-index-url https://pypi.nvidia.com \
       -e "/workspace[triton,torch212]" \
       -e /workspace/examples/common \
       -e ".[triton]"
+    ./install.sh
     tune --target triton
     triton-model-store
     ./run_triton.sh

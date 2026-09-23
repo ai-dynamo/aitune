@@ -230,6 +230,37 @@ variants = [{ arguments = { image-path = "dog.webp" }, launcher = "torchrun", pr
     assert len(run.call_args_list) == 6
 
 
+def test_triton_raw_container_installs_after_project_dependencies(
+    mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    project = tmp_path / "Demo"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        """
+[project]
+name = "demo"
+version = "0.1.0"
+
+[project.scripts]
+tune = "demo.tune:main"
+triton-model-store = "demo.triton.model_store:main"
+
+[tool.aitune]
+workflows = [{ name = "triton", install_script = "install.sh" }]
+""".strip(),
+        encoding="utf-8",
+    )
+    run = mocker.patch.object(execute.subprocess, "run")
+
+    execute.run(project, "project", 0, workflow="triton", install_script="install.sh")
+
+    assert run.call_args_list[1].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[triton]"]
+    assert run.call_args_list[2].args[0] == ["./install.sh"]
+    assert run.call_args_list[2].kwargs["cwd"] == project
+    assert run.call_args_list[4].args[0] == [sys.executable, "-m", "demo.tune", "--target=triton"]
+
+
 def test_run_verbose_dry_run_prints_without_executing(
     mocker: MockerFixture,
     tmp_path: Path,

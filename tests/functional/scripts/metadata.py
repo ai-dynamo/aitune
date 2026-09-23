@@ -15,7 +15,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger("metadata")
 
@@ -105,20 +105,12 @@ class FunctionalVariantConfig(BaseModel):
 
 
 class FunctionalWorkflowConfig(BaseModel):
-    """One project workflow and its AITune installation settings."""
+    """One project workflow and its optional raw-container installer."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    install_aitune_dependencies: bool = False
-    aitune_extras: list[str] = Field(default_factory=list)
     install_script: str | None = None
-
-    @model_validator(mode="after")
-    def _validate_aitune_extras(self) -> FunctionalWorkflowConfig:
-        if self.aitune_extras and not self.install_aitune_dependencies:
-            raise ValueError("aitune_extras require install_aitune_dependencies=true")
-        return self
 
 
 class FunctionalTestConfig(BaseModel):
@@ -176,6 +168,11 @@ class FunctionalTestConfig(BaseModel):
             raise ValueError(f"Unsupported project workflows: {', '.join(unsupported)}")
         if len(names) != len(set(names)):
             raise ValueError("Project workflows must be unique")
+        for workflow in workflows:
+            if workflow.install_script and (
+                workflow.name != "triton" or Path(workflow.install_script).name != workflow.install_script
+            ):
+                raise ValueError("install_script must be a file name in the Triton example directory")
         return workflows
 
     @classmethod
