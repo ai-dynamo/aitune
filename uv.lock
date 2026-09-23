@@ -303,7 +303,7 @@ requires-dist = [
     { name = "onnxruntime-gpu", marker = "extra == 'onnxruntime-gpu-cuda13'", index = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/", conflict = { package = "aitune", extra = "onnxruntime-gpu-cuda13" } },
     { name = "onnxscript", specifier = ">=0.2.0" },
     { name = "pandas", specifier = ">=2.3" },
-    { name = "protobuf", marker = "extra == 'triton'", specifier = ">=6.33.5" },
+    { name = "protobuf", marker = "extra == 'triton'", specifier = ">=6.33.5,<7" },
     { name = "psutil" },
     { name = "pydantic", marker = "extra == 'triton'", specifier = ">=2" },
     { name = "pyyaml", marker = "extra == 'triton'", specifier = ">=6.0" },
