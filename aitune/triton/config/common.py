@@ -133,19 +133,27 @@ class BaseModelConfig(BaseModel, ABC):
         artifact: DeploymentArtifact,
         *,
         name: str,
-        max_batch_size: int,
-        batcher: DynamicBatcher | SequenceBatcher | None,
     ) -> "BaseModelConfig":
-        """Combine the tensor interface with runtime-specific artifact settings."""
+        """Derive Triton batching and runtime settings from the artifact."""
+        max_batch_size = artifact.max_batch_size or 0
+        if any(
+            tensor.batch_axis != 0 for tensor in artifact.inputs + artifact.outputs
+        ) or not cls._supports_artifact_batching(artifact):
+            max_batch_size = 0
         batched = max_batch_size > 0
         return cls(
             name=name,
             max_batch_size=max_batch_size,
             inputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.inputs),
             outputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.outputs),
-            batcher=batcher,
+            batcher=DynamicBatcher() if max_batch_size >= 2 else None,
             **cls._artifact_options(artifact),
         )
+
+    @classmethod
+    def _supports_artifact_batching(cls, artifact: DeploymentArtifact) -> bool:
+        """Allow runtime-specific configs to reject Triton's implicit batch dimension."""
+        return True
 
     @model_validator(mode="after")
     def _validate_batching(self) -> "BaseModelConfig":

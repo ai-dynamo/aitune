@@ -56,31 +56,75 @@ def _plan(path: Path, *, profiles: int = 1, use_cuda_graphs: bool = False) -> De
     )
 
 
-@pytest.mark.parametrize("dynamic_batching", [False, True])
-def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path, dynamic_batching):
+def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path):
     artifact = _plan(tmp_path / "source.plan", profiles=2, use_cuda_graphs=True)
 
-    model = aitriton.publish(
-        artifact,
-        path=tmp_path / "repository",
-        model_name="encoder",
-        dynamic_batching=dynamic_batching,
-        max_batch_size=4,
-    )
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert (model / "1" / "model.plan").read_bytes() == b"TensorRT plan"
     config = (model / "config.pbtxt").read_text()
     parsed = text_format.Parse(config, model_config_pb2.ModelConfig())
     assert parsed.name == "encoder"
-    assert parsed.max_batch_size == 4
+    assert parsed.max_batch_size == 8
     assert 'platform: "tensorrt_plan"' in config
-    assert "max_batch_size: 4" in config
+    assert "max_batch_size: 8" in config
     assert parsed.input[0].name == "input_ids"
     assert parsed.input[0].data_type == model_config_pb2.TYPE_INT64
     assert tuple(parsed.input[0].dims) == (-1,)
     assert tuple(parsed.instance_group[0].profile) == ("0", "1")
     assert parsed.optimization.cuda.graphs
-    assert parsed.HasField("dynamic_batching") == dynamic_batching
+    assert parsed.HasField("dynamic_batching")
+
+
+def test_publish_keeps_implicit_batch_axis_for_batch_one_artifact(tmp_path):
+    """A batch-one artifact retains Triton's batch axis without a dynamic batcher."""
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"ONNX graph")
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        inputs=(_spec("input_ids", DType.INT64, (1, 8), (1, 8)),),
+        outputs=(_spec("logits", DType.FLOAT32, (1, 4), (1, 4)),),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 1
+    assert not parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (8,)
+    assert tuple(parsed.output[0].dims) == (4,)
+
+
+def test_publish_uses_smallest_batch_bound_across_inputs_and_outputs(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    artifact = replace(artifact, outputs=(_spec("logits", DType.FLOAT32, (1, 4), (4, 4)),))
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 4
+    assert parsed.HasField("dynamic_batching")
+
+
+def test_publish_keeps_nonleading_batch_axis_in_full_shape(tmp_path):
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"ONNX graph")
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        inputs=(
+            BoundedTensorSpec(name="images", dtype=DType.FLOAT32, min_shape=(3, 1), max_shape=(3, 8), batch_axis=1),
+        ),
+        outputs=(_spec("logits", DType.FLOAT32, (1, 4), (8, 4)),),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 0
+    assert not parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (3, -1)
 
 
 @pytest.mark.parametrize(
@@ -101,14 +145,10 @@ def test_publishes_scalar_tensors_with_triton_reshape(tmp_path, minimum, maximum
     )
     artifact = replace(artifact, inputs=(scalar,), outputs=(scalar,))
 
-    model = aitriton.publish(
-        artifact,
-        path=tmp_path / "repository",
-        model_name="scalar",
-        dynamic_batching=dynamic_batching,
-    )
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="scalar")
 
     parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.HasField("dynamic_batching") == dynamic_batching
     for tensor in (parsed.input[0], parsed.output[0]):
         assert tuple(tensor.dims) == (1,)
         assert tensor.HasField("reshape")
@@ -172,7 +212,7 @@ def test_publishes_pt2_using_torch_aoti_names(tmp_path):
     assert "dynamic_batching" in config
 
 
-def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_path):
+def test_structured_pt2_publishes_without_batching(tmp_path):
     package = tmp_path / "source.pt2"
     package.write_bytes(b"PT2 package")
     inputs, outputs = _interface()
@@ -183,23 +223,11 @@ def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_pat
         runtime=RuntimeConfig(name="aotinductor"),
     )
 
-    published = aitriton.publish(
-        artifact,
-        path=tmp_path / "unbatched",
-        model_name="encoder",
-        dynamic_batching=False,
-    )
+    published = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     assert (published / "1" / "model.pt2").is_file()
-
-    with pytest.raises(AITunePublicationError, match="structured calls"):
-        aitriton.publish(
-            artifact,
-            path=tmp_path / "repository",
-            model_name="encoder",
-            dynamic_batching=True,
-        )
-
-    assert not (tmp_path / "repository" / "encoder").exists()
+    parsed = text_format.Parse((published / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 0
+    assert not parsed.HasField("dynamic_batching")
 
 
 def test_refuses_to_replace_an_existing_model(tmp_path):
