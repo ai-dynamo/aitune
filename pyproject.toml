@@ -63,10 +63,11 @@ dynamo = [
     "ai-dynamo-runtime>=0.1",
     "uvloop",
 ]
-
 triton = [
     "pydantic>=2",
-    "protobuf>=6.33.5",
+    "protobuf>=6.33.5,<7", # Model Analyzer 1.54.0 uses FieldDescriptor.label, removed in protobuf 7.
+    "PyYAML>=6.0",
+    "triton-model-analyzer[perf-analyzer]==1.54.0",
     "tritonclient[grpc]",
 ]
 

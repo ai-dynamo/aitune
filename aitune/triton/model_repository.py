@@ -4,8 +4,6 @@
 
 import logging
 import os
-import shutil
-import tempfile
 from pathlib import Path
 
 from aitune.exceptions import AITunePublicationError, AITuneUserInputError
@@ -37,14 +35,15 @@ def publish(
     model_version: int = 1,
     dynamic_batching: bool = True,
     max_batch_size: int | None = None,
-    staging_path: str | os.PathLike[str] | None = None,
+    latency_budget_ms: int | None = None,
 ) -> Path:
     """Publish one tuned artifact into a new Triton model repository entry.
 
-    The operation never replaces an existing model. Files are copied and staged
-    before the completed model directory is moved into the repository. A Model Analyzer
-    config is generated automatically under ``model_analyzer/config.yaml``, with
-    input shapes derived from the artifact.
+    The operation never replaces an existing model. Files are written directly
+    into the new model directory, so a failure can leave an incomplete directory.
+    A Model Analyzer config is generated under ``model_analyzer/config.yaml``,
+    with input shapes derived from the artifact. Callers must keep generation
+    separate from updates to a live Triton repository.
 
     Supported model format/runtime pairs are ``onnx``/``onnxruntime``,
     ``tensorrt_plan``/``tensorrt``, and ``pt2``/``aotinductor``. ONNX provider
@@ -60,7 +59,7 @@ def publish(
         dynamic_batching: Let Triton combine independent client requests. Enabled by default.
         max_batch_size: Optional implicit batch limit within the artifact's tuned bounds.
             It can be set without enabling the dynamic batcher.
-        staging_path: Directory outside the repository on the same filesystem. Defaults to the repository's parent.
+        latency_budget_ms: Optional p99 latency limit for Model Analyzer, in milliseconds.
 
     Returns:
         Path to the generated model directory.
@@ -79,6 +78,10 @@ def publish(
         raise AITuneUserInputError(f"Invalid Triton model name: {model_name!r}")
     if not isinstance(model_version, int) or isinstance(model_version, bool) or model_version < 1:
         raise AITuneUserInputError(f"model_version must be a positive integer, got {model_version!r}")
+    if latency_budget_ms is not None and (
+        not isinstance(latency_budget_ms, int) or isinstance(latency_budget_ms, bool) or latency_budget_ms < 1
+    ):
+        raise AITuneUserInputError(f"latency_budget_ms must be a positive integer, got {latency_budget_ms!r}")
 
     file_name, multi_file = _artifact_layout(artifact)
     _validate_artifact_files(artifact, multi_file=multi_file)
@@ -89,7 +92,6 @@ def publish(
         max_batch_size=max_batch_size,
     )
 
-    staging: Path | None = None
     try:
         repository = Path(path)
         model_directory = repository / model_name
@@ -97,13 +99,10 @@ def publish(
             raise AITunePublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
 
         repository.mkdir(parents=True, exist_ok=True)
-        staging_root = repository.resolve().parent if staging_path is None else Path(staging_path)
-        _prepare_staging_root(repository, staging_root)
-        # Stage outside the repository so Triton cannot discover an incomplete model.
-        staging = Path(tempfile.mkdtemp(dir=staging_root))
-        version_directory = staging / str(model_version)
+        model_directory.mkdir()
+        version_directory = model_directory / str(model_version)
         version_directory.mkdir(parents=True)
-        (staging / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
+        (model_directory / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
         destination = version_directory / file_name
         if artifact.model.additional_files:
             destination = destination / file_name
@@ -114,16 +113,17 @@ def publish(
             config=config.to_protobuf(),
             model_directory=model_directory,
             destination=repository_path.parent / f"{repository_path.name}-model-analyzer" / model_name,
-            staging=staging / "model_analyzer",
+            latency_budget_ms=latency_budget_ms,
+            output_directory=model_directory / "model_analyzer",
             input_data_path=model_directory / "model_analyzer" / "input-data.json",
         )
-        staging.rename(model_directory)
     except Exception as error:
-        if staging is not None:
-            _cleanup_failed_publication(staging, model_name, error)
         if isinstance(error, AITunePublicationError):
             raise
-        raise AITunePublicationError(f"Failed to publish Triton model {model_name!r}: {error}") from error
+        raise AITunePublicationError(
+            f"Failed to publish Triton model {model_name!r}: {error}. "
+            f"An incomplete model directory may remain at {Path(path) / model_name}"
+        ) from error
 
     logger.info("Published Triton model to %s", model_directory)
     return model_directory
@@ -201,28 +201,3 @@ def _model_config(
         )
     except (KeyError, TypeError, ValueError) as error:
         raise AITunePublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
-
-
-def _cleanup_failed_publication(staging: Path, model_name: str, publication_error: Exception) -> None:
-    """Remove an incomplete staged model and report cleanup failures."""
-    try:
-        shutil.rmtree(staging)
-    except OSError as cleanup_error:
-        raise AITunePublicationError(
-            f"Failed to publish Triton model {model_name!r}: {publication_error}; "
-            f"failed to clean staging directory {staging}: {cleanup_error}"
-        ) from cleanup_error
-
-
-def _same_filesystem(left: Path, right: Path) -> bool:
-    """Return whether two existing paths support an atomic rename between them."""
-    return left.stat().st_dev == right.stat().st_dev
-
-
-def _prepare_staging_root(repository: Path, staging_root: Path) -> None:
-    """Create a staging root that is hidden from Triton and supports atomic publication."""
-    if staging_root.resolve().is_relative_to(repository.resolve()):
-        raise AITunePublicationError("Triton staging_path must be outside the model repository")
-    staging_root.mkdir(parents=True, exist_ok=True)
-    if not _same_filesystem(repository, staging_root):
-        raise AITunePublicationError("Triton staging_path must be on the same filesystem as the model repository")

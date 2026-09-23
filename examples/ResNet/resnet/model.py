@@ -3,12 +3,13 @@
 """Model utilities."""
 
 import timm
+import torch
 
 
 def get_model(model_name: str = "resnet50", pretrained: bool = True):
-    """Get a pretrained resnet50 model."""
+    """Get a ResNet model for FP16 inference on CUDA."""
     model = timm.create_model(model_name, pretrained=pretrained)
-    model.to("cuda")
+    model.to(device="cuda", dtype=torch.float16)
     model.eval()
     return model
 

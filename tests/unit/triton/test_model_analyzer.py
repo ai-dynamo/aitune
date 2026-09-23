@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from base64 import b64encode
 from dataclasses import replace
 from pathlib import Path
+from struct import pack
 
 import pytest
 import yaml
 
 from aitune import triton as aitriton
-from aitune.exceptions import AITunePublicationError
+from aitune.exceptions import AITunePublicationError, AITuneUserInputError
 from aitune.records import (
     BoundedTensorSpec,
     DeploymentArtifact,
@@ -72,7 +74,27 @@ def test_generates_quick_search_with_tuned_bounds_and_concurrency(tmp_path):
     assert quick["run_config_search_min_instance_count"] == 1
     assert quick["run_config_search_max_instance_count"] == 3
     assert quick["run_config_search_max_concurrency"] == 12
+    assert "latency_budget" not in quick
     assert {path.name for path in output.iterdir()} == {"config.yaml"}
+
+
+def test_publish_preserves_optional_model_analyzer_latency_budget(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    model = aitriton.publish(
+        artifact,
+        path=tmp_path / "repository",
+        model_name="encoder",
+        latency_budget_ms=50,
+    )
+
+    config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
+    assert config["latency_budget"] == 50
+
+
+def test_publish_rejects_invalid_model_analyzer_latency_budget(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    with pytest.raises(AITuneUserInputError, match="latency_budget_ms must be a positive integer"):
+        aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", latency_budget_ms=0)
 
 
 def test_keeps_an_unbatched_model_unbatched(tmp_path):
@@ -189,6 +211,24 @@ def test_publish_uses_representative_backend_inputs(tmp_path):
     assert config["perf_analyzer_flags"]["input-data"] == [str(input_data_path.resolve())]
 
 
+def test_publish_encodes_fp16_representative_inputs_as_binary(tmp_path):
+    values = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0)
+    artifact = replace(
+        _plan(tmp_path / "source.plan"),
+        inputs=(_spec("input", DType.FLOAT16, 8),),
+        sample_inputs=(TensorSample(name="input", shape=(1, 8), values=values),),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
+
+    input_data_path = model / "model_analyzer/input-data.json"
+    assert json.loads(input_data_path.read_text()) == {
+        "data": [{"input": {"content": {"b64": b64encode(pack("<8e", *values)).decode("ascii")}, "shape": [8]}}]
+    }
+    config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
+    assert config["perf_analyzer_flags"]["input-data"] == [str(input_data_path.resolve())]
+
+
 def test_analyzer_uses_artifact_shapes_and_batch_bounds_for_tensorrt(tmp_path):
     artifact = replace(
         _plan(tmp_path / "source.plan"),
@@ -205,7 +245,7 @@ def test_analyzer_uses_artifact_shapes_and_batch_bounds_for_tensorrt(tmp_path):
     assert config["run_config_search_max_concurrency"] == 16
 
 
-def test_analyzer_generation_failure_leaves_no_published_model(tmp_path, monkeypatch):
+def test_analyzer_generation_failure_leaves_partial_model(tmp_path, monkeypatch):
     from aitune.triton import model_repository
 
     def fail(*args, **kwargs):
@@ -216,7 +256,8 @@ def test_analyzer_generation_failure_leaves_no_published_model(tmp_path, monkeyp
     repository = tmp_path / "repository"
     with pytest.raises(AITunePublicationError, match="cannot write analyzer config"):
         aitriton.publish(artifact, path=repository, model_name="encoder")
-    assert list(repository.iterdir()) == []
+    assert (repository / "encoder" / "1" / "model.plan").is_file()
+    assert not (repository / "encoder" / "model_analyzer" / "config.yaml").exists()
     assert not (tmp_path / "repository-model-analyzer").exists()
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -47,14 +48,48 @@ def validate_one(path: Path) -> str | None:
             if not config.skip:
                 project = tomllib.loads(path.read_text(encoding="utf-8"))
                 scripts = project.get("project", {}).get("scripts", {})
-                missing_scripts = sorted({"tune", "inference"} - scripts.keys())
-                if missing_scripts:
-                    raise ValueError(f"missing [project.scripts] entries: {', '.join(missing_scripts)}")
+                _validate_project_contract(path, config, scripts)
         else:
             FunctionalTestConfig.from_script(path)
     except (ValidationError, ValueError, tomllib.TOMLDecodeError) as exc:
         return f"{path}: {exc}"
     return None
+
+
+def _validate_project_contract(path: Path, config: FunctionalTestConfig, scripts: dict[str, str]) -> None:
+    if not config.workflows:
+        missing_scripts = sorted({"tune", "inference"} - scripts.keys())
+        if missing_scripts:
+            raise ValueError(f"missing [project.scripts] entries: {', '.join(missing_scripts)}")
+        return
+
+    for workflow_config in config.workflows:
+        workflow = workflow_config.name
+        required_scripts = {"tune"}
+        required_files = {f"run_{workflow}.sh"}
+        if workflow_config.install_script:
+            required_files.add(workflow_config.install_script)
+        if workflow == "triton":
+            required_scripts.add("triton-model-store")
+        missing_scripts = sorted(required_scripts - scripts.keys())
+        missing_files = sorted(file_name for file_name in required_files if not (path.parent / file_name).is_file())
+        non_executable_files = sorted(
+            file_name
+            for file_name in required_files
+            if (path.parent / file_name).is_file() and not os.access(path.parent / file_name, os.X_OK)
+        )
+        errors = []
+        if missing_scripts:
+            label = "entry" if len(missing_scripts) == 1 else "entries"
+            errors.append(f"[project.scripts] {label}: {', '.join(missing_scripts)}")
+        if missing_files:
+            label = "file" if len(missing_files) == 1 else "files"
+            errors.append(f"required {label}: {', '.join(missing_files)}")
+        if non_executable_files:
+            label = "file" if len(non_executable_files) == 1 else "files"
+            errors.append(f"non-executable {label}: {', '.join(non_executable_files)}")
+        if errors:
+            raise ValueError(f"{workflow} workflow requires {'; '.join(errors)}")
 
 
 def validate(scripts: list[Path], projects: list[Path]) -> int:

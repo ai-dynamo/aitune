@@ -140,6 +140,127 @@ inference = "demo.inference:main"
     assert run.call_args_list[-1].kwargs["cwd"] == project
 
 
+def test_run_dynamo_project_workflow(mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    project = tmp_path / "Demo"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        """
+[project]
+name = "demo"
+version = "0.1.0"
+
+[project.scripts]
+tune = "demo.tune:main"
+
+[tool.aitune]
+workflows = [{ name = "dynamo" }]
+arguments = [{ image-path = "dog.webp" }]
+""".strip(),
+        encoding="utf-8",
+    )
+    (project / "run_dynamo.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    run = mocker.patch.object(execute.subprocess, "run")
+
+    execute.run(project, "project", 0, workflow="dynamo")
+
+    assert run.call_args_list[2].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[dynamo]"]
+    assert run.call_args_list[4].args[0] == [
+        sys.executable,
+        "-m",
+        "demo.tune",
+        "--image-path=dog.webp",
+        "--target=python",
+    ]
+    assert run.call_args_list[5].args[0] == ["./run_dynamo.sh"]
+    assert len(run.call_args_list) == 6
+
+
+def test_run_triton_project_workflow_builds_and_validates_model_repository(
+    mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AITUNE_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
+    project = tmp_path / "Demo"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        """
+[project]
+name = "demo"
+version = "0.1.0"
+
+[project.scripts]
+tune = "demo.tune:main"
+triton-model-store = "demo.triton.model_store:main"
+
+[tool.aitune]
+workflows = [{ name = "triton" }]
+variants = [{ arguments = { image-path = "dog.webp" }, launcher = "torchrun", processes = 2 }]
+""".strip(),
+        encoding="utf-8",
+    )
+    (project / "run_triton.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    run = mocker.patch.object(execute.subprocess, "run")
+
+    execute.run(project, "project", 0, workflow="triton")
+
+    model_repository = tmp_path / "artifacts" / "Demo" / "model_repository"
+    assert run.call_args_list[0].args[0] == [sys.executable, "-m", "pip", "install", "examples/common"]
+    assert run.call_args_list[1].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[triton]"]
+    assert run.call_args_list[3].args[0] == [
+        sys.executable,
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nproc-per-node=2",
+        "--module",
+        "demo.tune",
+        "--image-path=dog.webp",
+        "--target=triton",
+    ]
+    assert run.call_args_list[4].args[0] == [
+        sys.executable,
+        "-m",
+        "demo.triton.model_store",
+        f"--model-repository={model_repository}",
+    ]
+    assert run.call_args_list[5].args[0] == ["./run_triton.sh", "--image-path=dog.webp"]
+    assert run.call_args_list[5].kwargs["env"]["MODEL_REPOSITORY"] == str(model_repository)
+    assert "TRITON_NETWORK" not in run.call_args_list[5].kwargs["env"]
+    assert len(run.call_args_list) == 6
+
+
+def test_triton_workflow_installs_after_project_dependencies(
+    mocker: MockerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    project = tmp_path / "Demo"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        """
+[project]
+name = "demo"
+version = "0.1.0"
+
+[project.scripts]
+tune = "demo.tune:main"
+triton-model-store = "demo.triton.model_store:main"
+
+[tool.aitune]
+workflows = [{ name = "triton", install_script = "install.sh" }]
+""".strip(),
+        encoding="utf-8",
+    )
+    run = mocker.patch.object(execute.subprocess, "run")
+
+    execute.run(project, "project", 0, workflow="triton")
+
+    assert run.call_args_list[1].args[0] == [sys.executable, "-m", "pip", "install", f"{project}[triton]"]
+    assert run.call_args_list[2].args[0] == ["./install.sh"]
+    assert run.call_args_list[2].kwargs["cwd"] == project
+    assert run.call_args_list[4].args[0] == [sys.executable, "-m", "demo.tune", "--target=triton"]
+
+
 def test_run_verbose_dry_run_prints_without_executing(
     mocker: MockerFixture,
     tmp_path: Path,
