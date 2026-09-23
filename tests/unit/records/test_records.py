@@ -190,7 +190,7 @@ def test_artifact_requires_representative_values_in_input_order(tmp_path):
     path = _write_artifact(tmp_path)
     sample = TensorSample(name="mask", shape=(1, 8), values=(True,) * 8)
 
-    with pytest.raises(ValueError, match="Representative input names must match artifact inputs"):
+    with pytest.raises(ValueError, match="Representative sample names must match artifact inputs"):
         DeploymentArtifact(
             inputs=INPUTS,
             outputs=OUTPUTS,
