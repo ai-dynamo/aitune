@@ -120,6 +120,11 @@ export NVIDIA_RELEASE=26.05
 ./prepare_triton.sh
 ```
 
+For Triton, AITune searches for the maximum batch size, then chooses the highest-throughput backend and batch size
+whose mean inference latency is at most 50 ms. The same numeric budget is passed to Model Analyzer as a p99 service
+latency constraint; promotion rejects configurations that exceed it. Mean model latency and p99 service latency are
+different measurements, so neither search guarantees production latency without testing on the deployment hardware.
+
 It uses `nvcr.io/nvidia/tritonserver:${NVIDIA_RELEASE}-py3` and defaults to release `26.05`. This image supplies the
 CUDA 13.2.1, TensorRT 10.16.1.11, and ONNX Runtime 1.24.4 libraries used for both tuning and serving. The example
 installs the matching PyTorch 2.12 tuning stack without replacing those runtime libraries. Model Analyzer runs Triton
@@ -172,10 +177,12 @@ uv run --extra triton triton-promote \
 ```
 
 Model Analyzer writes its measurements and generated configuration variants outside the source repository under
-`model_repository-model-analyzer/resnet50`. With no latency constraint, the promotion command selects the ResNet
-configuration with the highest measured throughput, copies the original model files into
-`model_repository-deployment/resnet50`, and replaces its `config.pbtxt` with that configuration. Model Analyzer and
-promotion refuse to overwrite existing output, so remove or archive previous results before repeating the workflow.
+`model_repository-model-analyzer/resnet50`. Model Analyzer's Triton configuration search retains the 50 ms p99
+latency budget. The promotion command selects the compliant ResNet configuration with the highest measured throughput,
+prints the selected `config.pbtxt`, copies the original model files into `model_repository-deployment/resnet50`, and
+installs that config.
+Model Analyzer and promotion refuse to overwrite existing output, so remove or archive previous results before
+repeating the workflow.
 
 Compatibility references:
 

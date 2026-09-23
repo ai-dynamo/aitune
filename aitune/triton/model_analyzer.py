@@ -30,6 +30,7 @@ class _ModelAnalyzerConfig(BaseModel):
     override_output_model_repository: Literal[False] = False
     export_path: Path
     perf_analyzer_flags: dict[str, tuple[str, ...]] = Field(default_factory=dict)
+    latency_budget: int | None = Field(default=None, ge=1)
     run_config_search_mode: Literal["quick"] = "quick"
     run_config_search_min_instance_count: int = Field(default=1, ge=1)
     run_config_search_max_instance_count: int = Field(default=3, ge=1)
@@ -48,6 +49,7 @@ def write_model_analyzer_config(
     config: model_config_pb2.ModelConfig,
     model_directory: Path,
     destination: Path,
+    latency_budget_ms: int | None,
     staging: Path,
     input_data_path: Path,
 ) -> None:
@@ -56,7 +58,7 @@ def write_model_analyzer_config(
     if input_data is not None:
         perf_flags["input-data"] = (str(input_data_path.resolve()),)
 
-    analyzer_config = _quick_config(config, model_directory, destination, perf_flags)
+    analyzer_config = _quick_config(config, model_directory, destination, perf_flags, latency_budget_ms)
     staging.mkdir(parents=True, exist_ok=True)
     (staging / _CONFIG_FILE_NAME).write_text(analyzer_config.to_yaml())
     if input_data is not None:
@@ -111,12 +113,14 @@ def _quick_config(
     model_directory: Path,
     destination: Path,
     perf_flags: dict[str, tuple[str, ...]],
+    latency_budget_ms: int | None,
 ) -> _ModelAnalyzerConfig:
     """Build a quick search within the published model's batch limit."""
     batched = config.max_batch_size > 0
     return _ModelAnalyzerConfig(
         model_repository=model_directory.parent.resolve(),
         perf_analyzer_flags=perf_flags,
+        latency_budget=latency_budget_ms,
         profile_models=(config.name,),
         checkpoint_directory=(destination / "checkpoints").resolve(),
         output_model_repository_path=(destination / "model-repository").resolve(),

@@ -63,4 +63,4 @@ workflows = [
     { name = "dynamo" },
     { name = "triton", install_script = "install.sh" },
 ]
-arguments = [{ "image-path" = "dog.webp" }, { "image-path" = "dog.webp", "dynamic-shapes" = 1 }]
+arguments = [{ "image-path" = "dog.webp" }]

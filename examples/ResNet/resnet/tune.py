@@ -12,6 +12,7 @@ from PIL import Image
 from aitune.torch import (
     BatchDim,
     DynamicDim,
+    LatencyBudgetStrategy,
     LocalTorchStorage,
     MaxThroughputStrategy,
     Module,
@@ -32,6 +33,7 @@ from aitune.torch.backend import (
 )
 from resnet.cmd_args import get_parser
 from resnet.model import get_model, get_transform
+from resnet.triton import TRITON_LATENCY_BUDGET_MS
 
 logger = getLogger(__name__)
 
@@ -44,6 +46,9 @@ def _strategy(target):
             ONNXRuntimeBackend(),
             TorchInductorAotBackend(),
         ]
+        return LatencyBudgetStrategy(
+            latency_budget_ms=TRITON_LATENCY_BUDGET_MS, backends=backends
+        ).enable_find_max_batch_size()
     else:
         backends = [
             TensorRTBackend(

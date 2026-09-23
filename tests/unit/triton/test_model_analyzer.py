@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from aitune import triton as aitriton
-from aitune.exceptions import AITunePublicationError
+from aitune.exceptions import AITunePublicationError, AITuneUserInputError
 from aitune.records import (
     BoundedTensorSpec,
     DeploymentArtifact,
@@ -72,7 +72,27 @@ def test_generates_quick_search_with_tuned_bounds_and_concurrency(tmp_path):
     assert quick["run_config_search_min_instance_count"] == 1
     assert quick["run_config_search_max_instance_count"] == 3
     assert quick["run_config_search_max_concurrency"] == 12
+    assert "latency_budget" not in quick
     assert {path.name for path in output.iterdir()} == {"config.yaml"}
+
+
+def test_publish_preserves_optional_model_analyzer_latency_budget(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    model = aitriton.publish(
+        artifact,
+        path=tmp_path / "repository",
+        model_name="encoder",
+        latency_budget_ms=50,
+    )
+
+    config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
+    assert config["latency_budget"] == 50
+
+
+def test_publish_rejects_invalid_model_analyzer_latency_budget(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    with pytest.raises(AITuneUserInputError, match="latency_budget_ms must be a positive integer"):
+        aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", latency_budget_ms=0)
 
 
 def test_keeps_an_unbatched_model_unbatched(tmp_path):

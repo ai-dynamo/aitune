@@ -12,7 +12,7 @@ from google.protobuf import text_format
 from tritonclient.grpc import model_config_pb2
 
 
-def promote(analyzer_config: Path, deployment_repository: Path) -> str:
+def promote(analyzer_config: Path, deployment_repository: Path) -> tuple[str, Path]:
     """Create a deployment repository from the highest-throughput configuration."""
     config = yaml.safe_load(analyzer_config.read_text(encoding="utf-8"))
     model_name = config["profile_models"][0]
@@ -22,6 +22,14 @@ def promote(analyzer_config: Path, deployment_repository: Path) -> str:
         measurements = [row for row in csv.DictReader(handle) if row["Model"] == model_name]
     if not measurements:
         raise ValueError(f"no Model Analyzer measurements found for {model_name}")
+
+    latency_budget_ms = config.get("latency_budget")
+    if latency_budget_ms is not None:
+        measurements = [row for row in measurements if float(row["p99 Latency (ms)"]) <= latency_budget_ms]
+        if not measurements:
+            raise ValueError(
+                f"no Model Analyzer measurements for {model_name} satisfy the {latency_budget_ms} ms p99 latency budget"
+            )
 
     best = max(measurements, key=lambda row: float(row["Throughput (infer/sec)"]))
     variant_name = best["Model Config Path"]
@@ -33,8 +41,9 @@ def promote(analyzer_config: Path, deployment_repository: Path) -> str:
 
     deployed_model = deployment_repository / model_name
     shutil.copytree(Path(config["model_repository"]) / model_name, deployed_model)
-    (deployed_model / "config.pbtxt").write_text(text_format.MessageToString(triton_config), encoding="utf-8")
-    return variant_name
+    deployed_config = deployed_model / "config.pbtxt"
+    deployed_config.write_text(text_format.MessageToString(triton_config), encoding="utf-8")
+    return variant_name, deployed_config
 
 
 def main() -> None:
@@ -43,8 +52,11 @@ def main() -> None:
     parser.add_argument("--analyzer-config", type=Path, required=True)
     parser.add_argument("--deployment-model-repository", type=Path, required=True)
     args = parser.parse_args()
-    variant = promote(args.analyzer_config, args.deployment_model_repository)
+    variant, deployed_config = promote(args.analyzer_config, args.deployment_model_repository)
     print(f"Promoted Model Analyzer configuration: {variant}", flush=True)
+    print(
+        f"Selected Triton configuration ({deployed_config}):\n{deployed_config.read_text(encoding='utf-8')}", flush=True
+    )
     print(f"Deployment model repository: {args.deployment_model_repository.resolve()}", flush=True)
 
 

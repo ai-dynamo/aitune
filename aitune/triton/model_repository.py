@@ -37,6 +37,7 @@ def publish(
     model_version: int = 1,
     dynamic_batching: bool = True,
     max_batch_size: int | None = None,
+    latency_budget_ms: int | None = None,
     staging_path: str | os.PathLike[str] | None = None,
 ) -> Path:
     """Publish one tuned artifact into a new Triton model repository entry.
@@ -60,6 +61,7 @@ def publish(
         dynamic_batching: Let Triton combine independent client requests. Enabled by default.
         max_batch_size: Optional implicit batch limit within the artifact's tuned bounds.
             It can be set without enabling the dynamic batcher.
+        latency_budget_ms: Optional p99 latency limit for Model Analyzer, in milliseconds.
         staging_path: Directory outside the repository on the same filesystem. Defaults to the repository's parent.
 
     Returns:
@@ -79,6 +81,10 @@ def publish(
         raise AITuneUserInputError(f"Invalid Triton model name: {model_name!r}")
     if not isinstance(model_version, int) or isinstance(model_version, bool) or model_version < 1:
         raise AITuneUserInputError(f"model_version must be a positive integer, got {model_version!r}")
+    if latency_budget_ms is not None and (
+        not isinstance(latency_budget_ms, int) or isinstance(latency_budget_ms, bool) or latency_budget_ms < 1
+    ):
+        raise AITuneUserInputError(f"latency_budget_ms must be a positive integer, got {latency_budget_ms!r}")
 
     file_name, multi_file = _artifact_layout(artifact)
     _validate_artifact_files(artifact, multi_file=multi_file)
@@ -114,6 +120,7 @@ def publish(
             config=config.to_protobuf(),
             model_directory=model_directory,
             destination=repository_path.parent / f"{repository_path.name}-model-analyzer" / model_name,
+            latency_budget_ms=latency_budget_ms,
             staging=staging / "model_analyzer",
             input_data_path=model_directory / "model_analyzer" / "input-data.json",
         )
