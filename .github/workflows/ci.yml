@@ -57,6 +57,8 @@ jobs:
     runs-on: linux-amd64-cpu4
     env:
       SKIP: no-commit-to-branch
+      UV_EXTRA_INDEX_URL: https://pypi.nvidia.com https://download.pytorch.org/whl/cu130/
+      UV_INDEX_STRATEGY: unsafe-best-match
     steps:
       - uses: *actions_checkout
         with:
@@ -70,6 +72,9 @@ jobs:
   pytype:
     name: Pytype
     runs-on: linux-amd64-cpu16
+    env:
+      UV_EXTRA_INDEX_URL: https://pypi.nvidia.com https://download.pytorch.org/whl/cu130/
+      UV_INDEX_STRATEGY: unsafe-best-match
     steps:
       - uses: *actions_checkout
         with:
@@ -123,6 +128,9 @@ jobs:
   packages-python:
     name: Packages licenses
     runs-on: linux-amd64-cpu4
+    env:
+      UV_EXTRA_INDEX_URL: https://pypi.nvidia.com https://download.pytorch.org/whl/cu130/
+      UV_INDEX_STRATEGY: unsafe-best-match
     steps:
       - uses: *actions_checkout
         with:

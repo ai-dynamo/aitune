@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-name: Compatibility
+name: Compatibility tests
 
 on:
   workflow_dispatch:
@@ -110,17 +110,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12"]
+        python_version: ["3.11", "3.12", "3.13"]
         variant:
-          - uv_torch_backend: cu128
+          - uv_torch_backend: cu128 # no cu129 for torch-tensorrt 2.9
             cuda_image: 12.9.2-devel-ubuntu24.04
             aitune_extras: torch29,onnxruntime-gpu-cuda12
             uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
-          # no torch-tensorrt==2.10 in pypi
-          - uv_torch_backend: cu128
+      
+          - uv_torch_backend: cu129
+            cuda_image: 12.9.2-devel-ubuntu24.04
+            aitune_extras: torch210,onnxruntime-gpu-cuda12
+            uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
+          
+          - uv_torch_backend: cu129
             cuda_image: 12.9.2-devel-ubuntu24.04
             aitune_extras: torch211,onnxruntime-gpu-cuda12
             uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
+          
           - uv_torch_backend: cu130
             cuda_image: 13.0.3-devel-ubuntu24.04
             aitune_extras: torch29,onnxruntime-gpu-cuda13
@@ -137,33 +143,30 @@ jobs:
             cuda_image: 13.0.3-devel-ubuntu24.04
             aitune_extras: torch212,onnxruntime-gpu-cuda13
             uv_extra_args: ""
+        include:
+          - python_version: 3.14
+            variant:
+              uv_torch_backend: cu130
+              cuda_image: 13.0.3-devel-ubuntu24.04
+              aitune_extras: torch214,onnxruntime-gpu-cuda13
+              uv_extra_args: ""
+
     container:
       image: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.variant.cuda_image }}:latest
     steps:
-      - name: Install Node for local act
-        if: ${{ env.ACT == 'true' }}
-        run: |
-          node_dir="$RUNNER_TEMP/node"
-          mkdir -p "$node_dir"
-          curl -fsSL https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz \
-            | tar -xz --strip-components=1 -C "$node_dir"
-          echo "$node_dir/bin" >> "$GITHUB_PATH"
-          "$node_dir/bin/node" --version
       - uses: *actions_checkout
         with:
           persist-credentials: false
       - uses: *actions_setup_uv
-        env:
-          RUNNER_TOOL_CACHE: ${{ runner.temp }}/tool-cache
         with:
           python-version: ${{ matrix.python_version }}
           version: ${{ env.UV_VERSION }}
-      # - run: nvidia-smi
       - run: |
+          nvidia-smi || true
           uv venv
           printf "tensorrt\n" > cu12-excludes.txt
           uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }},triton]" --group test ${{ matrix.variant.uv_extra_args }}
           uv pip list
           .venv/bin/python .github/scripts/sanity/print_versions.py
-          .venv/bin/python .github/scripts/sanity/check_onnxruntime_cuda.py --cuda-major-version=${{ contains(matrix.variant.uv_torch_backend, 'cu128') && '12' || '13' }}
+          .venv/bin/python .github/scripts/sanity/check_onnxruntime_cuda.py --cuda-major-version=${{ startsWith(matrix.variant.uv_torch_backend, 'cu12') && '12' || '13' }}
           .venv/bin/python -m pytest -q -rf
