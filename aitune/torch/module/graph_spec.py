@@ -136,10 +136,7 @@ class GraphSpec:
 
             for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
                 multiplier = multiplier if normalized else 1
-                yield (
-                    (tensor_spec.min_shape[axis] + multiplier - 1) // multiplier,
-                    tensor_spec.max_shape[axis] // multiplier,
-                )
+                yield tensor_spec.min_shape[axis] // multiplier, tensor_spec.max_shape[axis] // multiplier
 
     def get_max_batch_size(self, normalized: bool = False) -> int:
         """Get max batch size from input spec.
