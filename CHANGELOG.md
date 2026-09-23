@@ -9,8 +9,8 @@ title: "Changelog"
 
 - feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
 - feat: expose portable deployment artifacts for ONNX Runtime, TensorRT, and TorchInductor AOT models, including required additional files and representative inputs
-- feat: publish deployment artifacts as atomic Triton model repositories with generated backend-specific model configurations
-- feat: generate Triton Model Analyzer configurations and representative Perf Analyzer input data during model publication
+- feat: publish tuned artifacts or existing ONNX, TensorRT, and PT2 files as Triton model repositories with backend-specific configurations
+- feat: generate Triton Model Analyzer configurations and representative Perf Analyzer input data during artifact publication
 
 ## 0.6.0
 
