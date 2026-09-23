@@ -17,16 +17,34 @@ class OnnxModule(nn.Module):
 
     Wrap with ``aitune.torch.Module`` to record calls and select a backend with
     ``MaxThroughputStrategy``. Inputs must match the ONNX graph's names and dtypes.
+    Use ``for_checkpoint()`` with ``aitune.torch.load`` when the checkpoint
+    contains a self-contained AOT backend and the ONNX file is not needed.
     """
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path | None = None, *, _checkpoint: bool = False) -> None:
         """Keep the ONNX path and create a session lazily on the input device."""
+        if path is None and not _checkpoint:
+            raise TypeError("An ONNX file is required; use OnnxModule.for_checkpoint() to load an AOT checkpoint")
+        if path is not None and _checkpoint:
+            raise ValueError("A checkpoint placeholder cannot have an ONNX file")
         super().__init__()
-        self.path = Path(path).resolve()
+        self._path = Path(path).resolve() if path is not None else None
         self._input_names: tuple[str, ...] = ()
         self._output_names: tuple[str, ...] = ()
         self._session = None
         self._device = None
+
+    @classmethod
+    def for_checkpoint(cls) -> "OnnxModule":
+        """Create a placeholder for loading a self-contained AOT checkpoint."""
+        return cls(_checkpoint=True)
+
+    @property
+    def path(self) -> Path:
+        """Return the ONNX source path, required for direct inference and tuning."""
+        if self._path is None:
+            raise RuntimeError("OnnxModule has no ONNX file; pass a path for direct inference or tuning")
+        return self._path
 
     def preserve_tensor_names(self, graph_spec: GraphSpec) -> None:
         """Attach original ONNX names to recorded tensors without altering their observed shapes."""

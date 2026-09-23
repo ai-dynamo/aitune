@@ -9,31 +9,28 @@ from typing import cast
 import numpy as np
 import torch
 import tritonclient.grpc as grpcclient
+from transformers import AutoConfig
 
 from aitune.torch import Module, load
+from aitune.torch.module import OnnxModule
+from bert.cmd_args import add_model_name_arg, add_output_path_arg
 from bert.tune import BATCH_SIZES, SEQUENCE_LENGTHS
 
 
-@torch.inference_mode()
-def main() -> None:
+def run_inference(checkpoint: Path, triton_url: str, model_name: str) -> None:
     """Compare Triton outputs with the restored compiled checkpoint."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path)
-    parser.add_argument("--triton-url", default="localhost:8001")
-    args = parser.parse_args()
-    output_dir = args.output_dir or Path(__file__).resolve().parents[2] / "artifacts"
-    checkpoint = output_dir / "bert.ait"
     if not checkpoint.is_file():
-        parser.error(f"Missing {checkpoint}; run bert-tune first")
+        raise FileNotFoundError(f"Missing {checkpoint}; run bert-tune first")
     generator = torch.Generator().manual_seed(1)
+    vocab_size = AutoConfig.from_pretrained(model_name).vocab_size
     samples = [
-        torch.randint(30522, (batch_size, length), generator=generator)
+        torch.randint(vocab_size, (batch_size, length), generator=generator)
         for length in SEQUENCE_LENGTHS
         for batch_size in [*BATCH_SIZES, 3]
     ]
-    tuned_model = cast(Module, load(torch.nn.Identity(), checkpoint))
+    tuned_model = cast(Module, load(OnnxModule.for_checkpoint(), checkpoint))
     try:
-        client = grpcclient.InferenceServerClient(url=args.triton_url)
+        client = grpcclient.InferenceServerClient(url=triton_url)
         model_name = "bert"
         metadata = client.get_model_metadata(model_name)
         if len(metadata.inputs) != 1 or len(metadata.outputs) != 2:
@@ -56,6 +53,16 @@ def main() -> None:
             print(f"Validated Triton inference: batch={tokens.shape[0]}, sequence={tokens.shape[1]}", flush=True)
     finally:
         tuned_model.deactivate()
+
+
+def main() -> None:
+    """Parse arguments and check Triton inference."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_model_name_arg(parser)
+    add_output_path_arg(parser)
+    parser.add_argument("--triton-url", default="localhost:8001")
+    args = parser.parse_args()
+    run_inference(args.output_path, args.triton_url, args.model_name)
 
 
 if __name__ == "__main__":

@@ -9,23 +9,18 @@ from typing import cast
 import torch
 
 from aitune.torch import Module, load
-from yolo.tune import _image, _processor
+from aitune.torch.module import OnnxModule
+from yolo.cmd_args import add_output_path_arg
+from yolo.model import sample_input
 
 
-@torch.inference_mode()
-def main() -> None:
-    """Check that the compiled checkpoint produces detections."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path, help="Directory used by yolo-tune")
-    args = parser.parse_args()
-
-    output_dir = args.output_dir or Path(__file__).resolve().parents[1] / "artifacts"
-    checkpoint = output_dir / "yolov10n.ait"
+def run_inference(checkpoint: Path) -> None:
+    """Check that the compiled checkpoint produces finite outputs."""
     if not checkpoint.is_file():
-        parser.error(f"Missing {checkpoint}; run yolo-tune first")
+        raise FileNotFoundError(f"Missing {checkpoint}; run yolo-tune first")
 
-    images = _image(_processor())
-    tuned_model = cast(Module, load(torch.nn.Identity(), checkpoint))
+    images = sample_input()
+    tuned_model = cast(Module, load(OnnxModule.for_checkpoint(), checkpoint))
     try:
         artifact_input_name = tuned_model.artifact().input_names[0]
         if artifact_input_name not in {"images", "input_x"}:
@@ -36,12 +31,17 @@ def main() -> None:
         detections = output[0]
         if detections.ndim != 2 or detections.shape[1] != 6 or not torch.isfinite(detections).all():
             raise RuntimeError("Unexpected YOLO detection output")
-        detections = detections[detections[:, 4] >= 0.4]
-        if not len(detections):
-            raise RuntimeError("The street image produced no detections above the 0.4 confidence threshold")
-        print(f"Validated Python inference: {len(detections)} detections above confidence 0.4", flush=True)
+        print(f"Validated Python inference: output shape {tuple(output.shape)}", flush=True)
     finally:
         tuned_model.deactivate()
+
+
+def main() -> None:
+    """Parse arguments and run Python inference."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_output_path_arg(parser)
+    args = parser.parse_args()
+    run_inference(args.output_path)
 
 
 if __name__ == "__main__":

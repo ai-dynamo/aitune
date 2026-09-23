@@ -406,7 +406,8 @@ config = TensorRTBackendConfig(
 
 #### SAMPLES_USED
 
-Generates one profile per unique input shape:
+Generates one exact profile per unique recorded input shape. For dynamic inputs, a wide fallback follows the exact
+profiles and covers the observed range. If find-max-batch-size is enabled, it also covers the discovered batch bound:
 
 ```python
 config = TensorRTBackendConfig(

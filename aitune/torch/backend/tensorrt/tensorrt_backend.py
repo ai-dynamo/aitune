@@ -20,7 +20,7 @@ from polygraphy.logger import G_LOGGER
 
 from aitune.exceptions import AITuneUserInputError
 from aitune.records import BoundedTensorSpec, DeploymentArtifact, ModelFiles, RuntimeConfig, TensorSample
-from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
+from aitune.torch.artifact import artifact_input_samples, bounded_tensor_specs
 from aitune.torch.backend.backend import (
     Backend,
     BackendBuildStep,
@@ -97,7 +97,7 @@ class ProfileMode(Enum):
 
     Attributes:
         SINGLE: auto-generate single profile from graph spec, default mode.
-        SAMPLES_USED: auto-generated multiple profiles from shapes of samples used for tuning.
+        SAMPLES_USED: exact profiles for recorded samples plus a wide fallback for their shape range.
     """
 
     SINGLE = "single"
@@ -117,7 +117,7 @@ class TensorRTBackendConfig(BackendConfig):
         timing_cache: The path to the timing cache for the TensorRT engine.
         profiles: How TensorRT optimization profiles are generated.
             - SINGLE: auto-generate a single profile from the graph spec (default).
-            - SAMPLES_USED: auto-generate multiple profiles from shapes of samples used for tuning.
+            - SAMPLES_USED: use exact sample profiles and a wide fallback for unrecorded shapes.
             - list[TensorRTProfile]: use user-provided profiles directly.
         device: The device to use for the TensorRT engine.
         quantization_config: The quantization configuration for the TensorRT engine.
@@ -814,14 +814,14 @@ class TensorRTBackend(Backend, TensorRTRunner):
             sample_inputs=self._artifact_sample_inputs(),
         )
 
-    def _artifact_sample_inputs(self) -> tuple[TensorSample, ...]:
-        """Derive portable values from the checkpointed sample and GraphSpec."""
+    def _artifact_sample_inputs(self) -> tuple[tuple[TensorSample, ...], ...]:
+        """Derive one portable request per recorded input shape."""
         if self._samples is None:
             return ()
         try:
-            return artifact_input_sample(
+            return artifact_input_samples(
                 cast(GraphSpec, self._graph_spec),
-                self._samples[0],
+                self._samples,
                 recorded_names=cast(list[str], self._input_names),
             )
         except Exception as error:
@@ -1131,7 +1131,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         If self._config.profiles is a list, return the user provided profiles.
         If self._config.profiles is ProfileMode.SINGLE, create a single profile from the graph spec.
-        If self._config.profiles is ProfileMode.SAMPLES_USED, create profiles from shapes seen in samples.
+        If self._config.profiles is ProfileMode.SAMPLES_USED, create exact profiles from samples and a wide fallback
+        for the graph's shape range, including the discovered maximum batch size.
         Explicit module shape definitions always produce a single authoritative profile and cannot be combined with
         user-provided TensorRT profiles.
 
@@ -1147,7 +1148,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 raise AITuneUserInputError(
                     "TensorRT profiles cannot be provided together with module dynamic shape definitions."
                 )
-            return self._get_profiles_from_shapes()
+            return self._get_profiles_from_shapes(graph_spec)
 
         # if user provided profiles, return them
         if isinstance(self._config.profiles, list):
@@ -1155,7 +1156,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         if self._config.profiles == ProfileMode.SINGLE:
             # this will create a single profile from the graph spec
-            return self._get_profiles_from_shapes()
+            return self._get_profiles_from_shapes(graph_spec)
 
         profiles = OrderedDict()
         logger.info("Creating profiles from samples used for tuning")
@@ -1172,7 +1173,11 @@ class TensorRTBackend(Backend, TensorRTRunner):
             logger.debug("Created profile %d: %s", idx, profile)
             profiles[profile] = True
 
-        return [profile.profile for profile in profiles.keys()]
+        result = [profile.profile for profile in profiles.keys()]
+        if graph_spec.input_spec.detected_dynamic_axis():
+            # Exact profiles win for recorded shapes; the final profile covers gaps between them.
+            result.extend(self._get_profiles_from_shapes(graph_spec))
+        return result
 
     def _get_user_profiles(self, graph_spec: GraphSpec) -> list[Profile]:
         """Resolve public profile paths to graph tensor names and validate the bindings."""
@@ -1198,7 +1203,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             profiles.append(resolved)
         return profiles
 
-    def _get_profiles_from_shapes(self) -> list[Profile]:
+    def _get_profiles_from_shapes(self, graph_spec: GraphSpec) -> list[Profile]:
         """Create TensorRT optimization profiles.
 
         Returns:
@@ -1206,7 +1211,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """
         profiles = []
 
-        min_shapes, opt_shapes, max_shapes = self._get_shapes(self._graph_spec)
+        min_shapes, opt_shapes, max_shapes = self._get_shapes(graph_spec)
 
         if any([min_shapes, opt_shapes, max_shapes]):
             profile = Profile()

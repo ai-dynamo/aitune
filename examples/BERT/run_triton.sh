@@ -4,9 +4,13 @@
 
 set -euo pipefail
 
-if [[ $# -ne 0 ]]; then
-  echo "Usage: ./run_triton.sh" >&2
-  exit 2
+MODEL_ARGS=()
+if [[ $# -gt 0 ]]; then
+  if [[ $# -ne 2 || "$1" != "--model-name" ]]; then
+    echo "Usage: ./run_triton.sh [--model-name HUGGING_FACE_MODEL]" >&2
+    exit 2
+  fi
+  MODEL_ARGS=(--model-name "$2")
 fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_NAME="bert"
@@ -24,7 +28,7 @@ fi
 
 MODEL_REPOSITORY="$(realpath "$MODEL_REPOSITORY")"
 ANALYZER_WORKSPACE="$MODEL_REPOSITORY-model-analyzer/$MODEL_NAME"
-SEARCH_CONFIG="$ANALYZER_WORKSPACE/search/fast.yaml"
+SEARCH_CONFIG="$MODEL_REPOSITORY/$MODEL_NAME/model_analyzer/config.yaml"
 DEPLOYMENT_REPOSITORY="${DEPLOYMENT_REPOSITORY:-$MODEL_REPOSITORY-deployment}"
 TRITON_LOG="${TRITON_LOG:-$(dirname "$MODEL_REPOSITORY")/tritonserver.log}"
 if [[ ! -f "$SEARCH_CONFIG" ]]; then
@@ -32,7 +36,7 @@ if [[ ! -f "$SEARCH_CONFIG" ]]; then
   exit 1
 fi
 mkdir -p "$ANALYZER_WORKSPACE"
-python3 -m bert.python_inference
+python3 -m bert.python_inference "${MODEL_ARGS[@]}"
 model-analyzer profile --config-file "$SEARCH_CONFIG" \
   --triton-server-path "$TRITONSERVER" --perf-analyzer-path "$PERF_ANALYZER"
 python3 -m bert.triton.promote \
@@ -48,7 +52,7 @@ for attempt in {1..100}; do
     http://localhost:8000/v2/health/ready >/dev/null 2>&1 && \
     curl --noproxy '*' --connect-timeout 1 --max-time 2 -fsS \
       "http://localhost:8000/v2/models/$MODEL_NAME/ready" >/dev/null 2>&1; then
-    python3 -m bert.triton.client
+    python3 -m bert.triton.client "${MODEL_ARGS[@]}"
     exit 0
   fi
   if ! kill -0 "$TRITON_PID" >/dev/null 2>&1; then

@@ -3,16 +3,14 @@
 [project]
 name = "aitune-yolo-triton-example"
 version = "0.1.0"
-description = "YOLOv10n Torch and ONNX Triton tuning example"
+description = "YOLOv10n ONNX Triton tuning example"
 readme = "README.md"
 license = { text = "Apache 2.0" }
 requires-python = ">=3.11, <3.14"
 dependencies = [
     "aitune",
     "torch",
-    "ultralytics",
     "huggingface-hub",
-    "pillow",
     "numpy",
 ]
 
@@ -44,4 +42,3 @@ include = ["yolo", "yolo.*"]
 docker_image = "nvcr.io/nvidia/pytorch:26.05-py3"
 timeout = "1h"
 workflows = [{ name = "triton", install_script = "install.sh" }]
-arguments = [{ source = "torch" }, { source = "onnx" }]

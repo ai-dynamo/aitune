@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from aitune.records import BoundedTensorSpec, DType, TensorSample
-from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
+from aitune.torch.artifact import artifact_input_samples, bounded_tensor_specs
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
@@ -97,17 +97,37 @@ def test_artifact_input_sample_preserves_values_in_executable_order():
     tokens = torch.tensor([[11, 12, 13, 14, 15, 16, 17, 18]], dtype=torch.int64)
     mask = torch.tensor([[True, False] * 4, [False, True] * 4])
 
-    samples = artifact_input_sample(
+    samples = artifact_input_samples(
         graph_spec,
-        ((tokens, mask), {}),
+        [((tokens, mask), {})],
         recorded_names=("input_mask", "input_tokens"),
         artifact_names=("mask", "input_ids"),
     )
 
     assert samples == (
-        TensorSample(name="mask", shape=(2, 8), values=tuple(mask.reshape(-1).tolist())),
-        TensorSample(name="input_ids", shape=(1, 8), values=tuple(tokens.reshape(-1).tolist())),
+        (
+            TensorSample(name="mask", shape=(2, 8), values=tuple(mask.reshape(-1).tolist())),
+            TensorSample(name="input_ids", shape=(1, 8), values=tuple(tokens.reshape(-1).tolist())),
+        ),
     )
+
+
+def test_artifact_input_samples_keeps_distinct_shapes_without_repeating_a_request():
+    graph_spec = _graph_spec()
+    first = torch.ones((1, 8), dtype=torch.int64)
+    second = torch.ones((1, 16), dtype=torch.int64)
+
+    requests = artifact_input_samples(
+        graph_spec,
+        [((first, first), {}), ((first + 1, first + 1), {}), ((second, second), {})],
+    )
+
+    assert len(requests) == 2
+    assert [tuple(sample.shape for sample in request) for request in requests] == [
+        ((1, 8), (1, 8)),
+        ((1, 16), (1, 16)),
+    ]
+    assert requests[0][0].values == (1,) * 8
 
 
 def test_output_bounds_follow_discovered_batch_size_recorded_in_graph_spec():

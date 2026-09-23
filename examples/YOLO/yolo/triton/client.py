@@ -11,22 +11,17 @@ import torch
 import tritonclient.grpc as grpcclient
 
 from aitune.torch import Module, load
-from yolo.tune import _image, _processor
+from aitune.torch.module import OnnxModule
+from yolo.cmd_args import add_output_path_arg
+from yolo.model import sample_input
 
 
-@torch.inference_mode()
-def main() -> None:
-    """Compare Triton detections with the restored compiled checkpoint."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path)
-    parser.add_argument("--triton-url", default="localhost:8001")
-    args = parser.parse_args()
-    output_dir = args.output_dir or Path(__file__).resolve().parents[2] / "artifacts"
-    checkpoint = output_dir / "yolov10n.ait"
+def run_inference(checkpoint: Path, triton_url: str) -> None:
+    """Compare Triton outputs with the restored compiled checkpoint."""
     if not checkpoint.is_file():
-        parser.error(f"Missing {checkpoint}; run yolo-tune first")
-    tuned_model = cast(Module, load(torch.nn.Identity(), checkpoint))
-    images = _image(_processor())
+        raise FileNotFoundError(f"Missing {checkpoint}; run yolo-tune first")
+    tuned_model = cast(Module, load(OnnxModule.for_checkpoint(), checkpoint))
+    images = sample_input()
     try:
         artifact_input_name = tuned_model.artifact().input_names[0]
         if artifact_input_name not in {"images", "input_x"}:
@@ -35,11 +30,11 @@ def main() -> None:
         result = tuned_model(**{input_name: images})
         output = next(iter(result.values())) if isinstance(result, dict) else result
         reference = output[0]
-        reference = reference[reference[:, 4] >= 0.4].cpu().numpy()
-        if not len(reference):
-            raise RuntimeError("The street image produced no detections above the 0.4 confidence threshold")
+        if reference.ndim != 2 or reference.shape[1] != 6 or not torch.isfinite(reference).all():
+            raise RuntimeError("Unexpected YOLO checkpoint output")
+        reference = reference.cpu().numpy()
 
-        client = grpcclient.InferenceServerClient(url=args.triton_url)
+        client = grpcclient.InferenceServerClient(url=triton_url)
         model_name = "yolov10n"
         metadata = client.get_model_metadata(model_name)
         if len(metadata.inputs) != 1 or len(metadata.outputs) != 1:
@@ -49,11 +44,19 @@ def main() -> None:
         output_name = metadata.outputs[0].name
         result = client.infer(model_name, inputs=[model_input], outputs=[grpcclient.InferRequestedOutput(output_name)])
         predictions = result.as_numpy(output_name)[0]
-        predictions = predictions[predictions[:, 4] >= 0.4]
         np.testing.assert_allclose(predictions, reference, rtol=1e-2, atol=1e-2)
-        print(f"Validated {len(predictions)} detections above confidence 0.4", flush=True)
+        print(f"Validated Triton inference: output shape {predictions.shape}", flush=True)
     finally:
         tuned_model.deactivate()
+
+
+def main() -> None:
+    """Parse arguments and check Triton inference."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_output_path_arg(parser)
+    parser.add_argument("--triton-url", default="localhost:8001")
+    args = parser.parse_args()
+    run_inference(args.output_path, args.triton_url)
 
 
 if __name__ == "__main__":

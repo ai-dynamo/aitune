@@ -40,6 +40,16 @@ def test_onnx_module_simple_inference(onnx_add_path, device):
     torch.testing.assert_close(source(x=x)["y"], x * 2)
 
 
+def test_onnx_module_without_file_rejects_direct_inference():
+    with pytest.raises(TypeError, match="for_checkpoint"):
+        OnnxModule()
+
+    source = OnnxModule.for_checkpoint()
+
+    with pytest.raises(RuntimeError, match="no ONNX file"):
+        source(torch.ones(1, 3))
+
+
 def test_onnx_module_record_and_tune(onnx_add_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
@@ -144,7 +154,7 @@ def test_onnx_module_external_weights_checkpoint(tmp_path):
         module.deactivate()
         path.unlink()
         (tmp_path / "weights.bin").unlink()
-        module = load(module, checkpoint)
+        module = load(OnnxModule.for_checkpoint(), checkpoint)
         (backend,) = module.module.backends.values()
         assert isinstance(backend, ONNXRuntimeBackend)
         torch.testing.assert_close(module(x=x[:2])["y"], x[:2] * 2)

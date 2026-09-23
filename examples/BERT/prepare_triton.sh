@@ -18,7 +18,7 @@ docker run --rm --gpus all --ipc host \
   -e HF_HOME=/tmp/huggingface-cache \
   -e TORCH_HOME=/tmp/torch-cache \
   -e SOURCE="$SOURCE" \
-  -e ONNX_PATH="${ONNX_PATH:-}" \
+  -e BERT_MODEL_NAME="${BERT_MODEL_NAME:-bert-base-uncased}" \
   -v "$REPOSITORY_ROOT:/workspace" \
   -w /workspace/examples/BERT \
   "nvcr.io/nvidia/tritonserver:$NVIDIA_RELEASE-py3" \
@@ -28,9 +28,7 @@ docker run --rm --gpus all --ipc host \
     pip install --extra-index-url https://pypi.nvidia.com \
       -e "/workspace[triton,torch212]" -e ".[triton]"
     ./install.sh
-    onnx_args=()
-    if [[ -n "$ONNX_PATH" ]]; then onnx_args=(--onnx-path "$ONNX_PATH"); fi
-    bert-tune --source "$SOURCE" "${onnx_args[@]}"
+    bert-tune --source "$SOURCE" --target triton --model-name "$BERT_MODEL_NAME"
     bert-triton-model-store
-    ./run_triton.sh
+    ./run_triton.sh --model-name "$BERT_MODEL_NAME"
   '

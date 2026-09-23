@@ -293,7 +293,7 @@ def test_tensorrt_artifact_after_deactivation_exposes_the_final_engine_interface
         "max_cuda_graphs": 3,
         "cuda_graph_cache_policy": "lru",
     }
-    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
+    assert tuple(sample.name for sample in artifact.sample_inputs[0]) == ("input_x",)
     destination = tmp_path / "export" / "model.plan"
     assert artifact.model.export_files(destination).read_bytes() == b"fake"
 
@@ -353,14 +353,14 @@ def test_artifact_samples_follow_tensorrt_engine_input_order(mocker):
     backend._samples = (sample,)
     backend._graph_spec = mocker.Mock()
     backend._input_names = ["input_mask", "input_x"]
-    artifact_input_sample = mocker.patch(
-        "aitune.torch.backend.tensorrt.tensorrt_backend.artifact_input_sample", return_value=()
+    artifact_input_samples = mocker.patch(
+        "aitune.torch.backend.tensorrt.tensorrt_backend.artifact_input_samples", return_value=()
     )
 
     assert backend._artifact_sample_inputs() == ()
-    artifact_input_sample.assert_called_once_with(
+    artifact_input_samples.assert_called_once_with(
         backend._graph_spec,
-        sample,
+        backend._samples,
         recorded_names=["input_mask", "input_x"],
     )
 
@@ -453,7 +453,7 @@ def test_checkpoint_loaded_backend_reconstructs_tensorrt_artifact(mock_tensorrt_
     restored.deploy(torch.device("cuda"))
 
     artifact = restored.artifact()
-    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
+    assert tuple(sample.name for sample in artifact.sample_inputs[0]) == ("input_x",)
     assert artifact.model.format == "tensorrt_plan"
     assert artifact.model.metadata["optimization_profiles"] == (
         {
@@ -996,7 +996,7 @@ def test_get_profiles_multiple_profiles(global_config_max_num_samples_all):
             ((torch.randn(8, IN_FEATURES),), {}),
         ],
     )
-    assert len(profiles) == 2
+    assert len(profiles) == 3
 
     input_name = format_tensor_name("x", "input")
     pr = profiles[0]
@@ -1008,6 +1008,47 @@ def test_get_profiles_multiple_profiles(global_config_max_num_samples_all):
     assert pr[input_name].min == (8, IN_FEATURES)
     assert pr[input_name].opt == (8, IN_FEATURES)
     assert pr[input_name].max == (8, IN_FEATURES)
+
+    fallback = profiles[2][input_name]
+    assert fallback.min == (1, IN_FEATURES)
+    assert fallback.max == (8, IN_FEATURES)
+
+
+def test_samples_used_profiles_include_wide_fallback(global_config_max_num_samples_all):
+    """Exact sample profiles also need a range for unrecorded shapes."""
+    samples = [((torch.randn(batch, length),), {}) for batch, length in ((1, 64), (2, 128), (4, 256))]
+    backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+    graph_spec = make_graph_spec(_single_input, samples[0], (torch.randn(1, 64),), batch_size=1)
+    for batch_size, sample in zip((2, 4), samples[1:], strict=True):
+        update_input_spec(graph_spec, sample, batch_size=batch_size)
+    graph_spec.update_max_batch_size(8)
+
+    profiles = backend.get_profiles(graph_spec=graph_spec, samples=samples)
+
+    input_name = format_tensor_name("x", "input")
+    assert len(profiles) == 4
+    assert [profile[input_name].opt for profile in profiles[:3]] == [(1, 64), (2, 128), (4, 256)]
+    fallback = profiles[-1][input_name]
+    assert fallback.min == (1, 64)
+    assert fallback.max == (8, 256)
+    assert all(
+        minimum <= optimal <= maximum
+        for minimum, optimal, maximum in zip(fallback.min, fallback.opt, fallback.max, strict=True)
+    )
+    backend._trt_optimization_profiles = profiles
+    assert backend._find_optimization_profile({input_name: torch.randn(2, 128)}) == 1
+    assert backend._find_optimization_profile({input_name: torch.randn(3, 128)}) == 3
+
+
+def test_samples_used_static_shape_has_no_fallback(global_config_max_num_samples_all):
+    """A fixed-shape sample needs no additional range profile."""
+    sample = ((torch.randn(1, IN_FEATURES),), {})
+    graph_spec = make_graph_spec(_single_input, sample, (torch.randn(1, IN_FEATURES),), batch_size=1)
+    backend = TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+
+    profiles = backend.get_profiles(graph_spec=graph_spec, samples=[sample])
+
+    assert len(profiles) == 1
 
 
 def test_get_profiles_multiple_profiles_with_kwargs(global_config_max_num_samples_all):
@@ -1028,7 +1069,7 @@ def test_get_profiles_multiple_profiles_with_kwargs(global_config_max_num_sample
     update_input_spec(backend._graph_spec, samples[1], batch_size=8)
 
     profiles = backend.get_profiles(graph_spec=backend._graph_spec, samples=samples)
-    assert len(profiles) == 2
+    assert len(profiles) == 3
 
     x_name = format_tensor_name("x", "input")
     input_tensor_name = format_tensor_name("input_tensor", "input")
@@ -1049,6 +1090,10 @@ def test_get_profiles_multiple_profiles_with_kwargs(global_config_max_num_sample
     assert pr[input_tensor_name].min == (8, IN_FEATURES)
     assert pr[input_tensor_name].opt == (8, IN_FEATURES)
     assert pr[input_tensor_name].max == (8, IN_FEATURES)
+
+    for name in (x_name, input_tensor_name):
+        assert profiles[2][name].min == (1, IN_FEATURES)
+        assert profiles[2][name].max == (8, IN_FEATURES)
 
 
 def test_get_profiles_with_user_provided_profiles():
@@ -1118,7 +1163,7 @@ def test_save_and_load_trt_optimization_profiles(tmp_path, global_config_max_num
         ((torch.randn(8, IN_FEATURES),), {"input_tensor": torch.randn(8, IN_FEATURES)}),
     ]
     profiles = backend.get_profiles(graph_spec=backend._graph_spec, samples=samples)
-    assert len(profiles) == 2
+    assert len(profiles) == 3
 
     trt_optimization_profiles_path = backend._save_trt_optimization_profiles(profiles, tmp_path)
 
@@ -1126,7 +1171,7 @@ def test_save_and_load_trt_optimization_profiles(tmp_path, global_config_max_num
 
     loaded_profiles = backend._load_trt_optimization_profiles(trt_optimization_profiles_path)
 
-    assert len(loaded_profiles) == 2
+    assert len(loaded_profiles) == 3
     input_name = format_tensor_name("x", "input")
     assert loaded_profiles[0][input_name].min == (1, IN_FEATURES)
     assert loaded_profiles[0][input_name].opt == (1, IN_FEATURES)
@@ -1135,6 +1180,9 @@ def test_save_and_load_trt_optimization_profiles(tmp_path, global_config_max_num
     assert loaded_profiles[1][input_name].min == (8, IN_FEATURES)
     assert loaded_profiles[1][input_name].opt == (8, IN_FEATURES)
     assert loaded_profiles[1][input_name].max == (8, IN_FEATURES)
+
+    assert loaded_profiles[2][input_name].min == (1, IN_FEATURES)
+    assert loaded_profiles[2][input_name].max == (8, IN_FEATURES)
 
 
 def test_set_optimization_profiles_01(mocker, global_config_max_num_samples_all):

@@ -29,14 +29,45 @@ _TORCH_DTYPE_TO_RECORD = {
 TensorKind = Literal["input", "output"]
 
 
-def _batch_axis(graph_spec: GraphSpec, locator: Locator, tensor_spec: TensorSpec, kind: TensorKind) -> int | None:
-    """Return the single directly representable logical batch axis, if known."""
-    definition = graph_spec.get_shape_definition(locator) if kind == "input" else None
-    if definition is not None:
-        axes = [axis for axis, dimension in enumerate(definition) if isinstance(dimension, BatchDim)]
-    else:
-        axes = [axis for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items() if multiplier == 1]
-    return axes[0] if len(axes) == 1 else None
+def artifact_input_samples(
+    graph_spec: GraphSpec,
+    samples: Sequence[Sample],
+    *,
+    recorded_names: Sequence[str] | None = None,
+    metadata_indices: Sequence[int] | None = None,
+    artifact_names: Sequence[str] | None = None,
+) -> tuple[tuple[TensorSample, ...], ...]:
+    """Capture recorded calls as portable deployment input requests.
+
+    Each request contains all input tensors in executable order. Only the first
+    request for each combination of input shapes is retained, since later calls
+    with the same shapes do not add profiling coverage.
+
+    Args:
+        graph_spec: Recorded graph metadata containing tensor names and locators.
+        samples: Original module calls represented as ``(args, kwargs)`` pairs.
+        recorded_names: Recorded graph input names in executable order.
+        metadata_indices: Graph input positions in executable order.
+        artifact_names: Final executable names for the selected inputs.
+
+    Returns:
+        Portable requests, each containing input samples in executable order.
+    """
+    requests = []
+    seen_shapes = set()
+    for sample in samples:
+        request = _artifact_input_sample(
+            graph_spec,
+            sample,
+            recorded_names=recorded_names,
+            metadata_indices=metadata_indices,
+            artifact_names=artifact_names,
+        )
+        shapes = tuple(tensor.shape for tensor in request)
+        if shapes not in seen_shapes:
+            requests.append(request)
+            seen_shapes.add(shapes)
+    return tuple(requests)
 
 
 def bounded_tensor_specs(
@@ -106,7 +137,17 @@ def bounded_tensor_specs(
     return tuple(result)
 
 
-def artifact_input_sample(
+def _batch_axis(graph_spec: GraphSpec, locator: Locator, tensor_spec: TensorSpec, kind: TensorKind) -> int | None:
+    """Return the single directly representable logical batch axis, if known."""
+    definition = graph_spec.get_shape_definition(locator) if kind == "input" else None
+    if definition is not None:
+        axes = [axis for axis, dimension in enumerate(definition) if isinstance(dimension, BatchDim)]
+    else:
+        axes = [axis for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items() if multiplier == 1]
+    return axes[0] if len(axes) == 1 else None
+
+
+def _artifact_input_sample(
     graph_spec: GraphSpec,
     sample: Sample,
     *,

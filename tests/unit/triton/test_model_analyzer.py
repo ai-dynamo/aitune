@@ -198,7 +198,7 @@ def test_publish_uses_representative_backend_inputs(tmp_path):
         runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
         inputs=(BoundedTensorSpec(name="input_ids", dtype=DType.INT64, min_shape=(1, 4), max_shape=(8, 4)),),
         outputs=(_spec("output", DType.FLOAT32, 8),),
-        sample_inputs=(TensorSample(name="input_ids", shape=(2, 4), values=(17, 23, 42, 9, 3, 5, 7, 11)),),
+        sample_inputs=((TensorSample(name="input_ids", shape=(2, 4), values=(17, 23, 42, 9, 3, 5, 7, 11)),),),
     )
 
     model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
@@ -208,7 +208,37 @@ def test_publish_uses_representative_backend_inputs(tmp_path):
         "data": [{"input_ids": {"content": [17, 23, 42, 9], "shape": [4]}}]
     }
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
-    assert config["perf_analyzer_flags"]["input-data"] == [str(input_data_path.resolve())]
+    assert config["perf_analyzer_flags"] == {"input-data": [str(input_data_path.resolve())]}
+
+    search = aitriton.generate_model_analyzer_configs(artifact, model_path=model, path=tmp_path / "search")
+    search_data_path = search / "input-data.json"
+    assert json.loads(search_data_path.read_text()) == json.loads(input_data_path.read_text())
+    fast = yaml.safe_load((search / "fast.yaml").read_text())
+    assert fast["perf_analyzer_flags"] == {"input-data": [str(search_data_path.resolve())]}
+
+
+def test_recorded_shapes_feed_published_and_generated_analyzer_configs(tmp_path):
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"ONNX graph")
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+        inputs=(BoundedTensorSpec(name="input_ids", dtype=DType.INT64, min_shape=(1, 64), max_shape=(4, 256)),),
+        outputs=(_spec("output", DType.FLOAT32, 4),),
+        sample_inputs=tuple(
+            (TensorSample(name="input_ids", shape=(1, length), values=(101,) * length),) for length in (64, 128, 256)
+        ),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=4)
+    search = aitriton.generate_model_analyzer_configs(artifact, model_path=model, path=tmp_path / "search")
+
+    for directory, config_name in ((model / "model_analyzer", "config.yaml"), (search, "fast.yaml")):
+        input_data_path = directory / "input-data.json"
+        data = json.loads(input_data_path.read_text())
+        assert [request["input_ids"]["shape"] for request in data["data"]] == [[64], [128], [256]]
+        config = yaml.safe_load((directory / config_name).read_text())
+        assert config["perf_analyzer_flags"] == {"input-data": [str(input_data_path.resolve())]}
 
 
 def test_publish_encodes_fp16_representative_inputs_as_binary(tmp_path):
@@ -216,7 +246,7 @@ def test_publish_encodes_fp16_representative_inputs_as_binary(tmp_path):
     artifact = replace(
         _plan(tmp_path / "source.plan"),
         inputs=(_spec("input", DType.FLOAT16, 8),),
-        sample_inputs=(TensorSample(name="input", shape=(1, 8), values=values),),
+        sample_inputs=((TensorSample(name="input", shape=(1, 8), values=values),),),
     )
 
     model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)

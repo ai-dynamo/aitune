@@ -171,7 +171,7 @@ def test_artifact_after_deactivation_exposes_pt2_ordinal_tensor_interface(
     assert artifact.model.files == (artifact.model.path,)
     assert artifact.model.metadata == {"structured_call": False}
     assert artifact.runtime == RuntimeConfig(name="aotinductor")
-    assert tuple(sample.name for sample in artifact.sample_inputs) == ("INPUT__0",)
+    assert tuple(sample.name for sample in artifact.sample_inputs[0]) == ("INPUT__0",)
     destination = tmp_path / "exported" / "renamed.pt2"
     assert artifact.model.export_files(destination) == destination
     assert destination.read_bytes() == b"fake"
