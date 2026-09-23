@@ -1021,6 +1021,9 @@ def test_samples_used_profiles_include_wide_fallback(global_config_max_num_sampl
     graph_spec = make_graph_spec(_single_input, samples[0], (torch.randn(1, 64),), batch_size=1)
     for batch_size, sample in zip((2, 4), samples[1:], strict=True):
         update_input_spec(graph_spec, sample, batch_size=batch_size)
+    # Show that sequence length varies independently of batch size; otherwise
+    # the recorded shapes imply length = batch * 64.
+    update_input_spec(graph_spec, ((torch.randn(2, 64),), {}), batch_size=2)
     graph_spec.update_max_batch_size(8)
 
     profiles = backend.get_profiles(graph_spec=graph_spec, samples=samples)

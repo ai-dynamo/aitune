@@ -19,7 +19,7 @@ def add_output_path_arg(parser: argparse.ArgumentParser) -> argparse.ArgumentPar
     parser.add_argument(
         "--output-path",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "artifacts" / "bert.ait",
+        default=Path(__file__).resolve().parents[1] / "bert.ait",
         help="Path to this example's AITune checkpoint",
     )
     return parser

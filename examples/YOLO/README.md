@@ -19,5 +19,6 @@ The model uses fixed batch 1. Deterministic generated input verifies numerical a
 tuned checkpoint, and Triton deployment; it does not measure detection accuracy. The flow prints the selected
 configuration, throughput, and p99 latency.
 
-The flow saves `artifacts/yolov10n.ait` and publishes a Triton model named `yolov10n`. The publication repository
-is an output artifact, not a live deployment target. Review the model and package licenses before use.
+The flow saves `yolov10n.ait` and publishes a Triton model named `yolov10n` under `model_repository/`. The
+publication repository is an output artifact, not a live deployment target. Review the model and package licenses
+before use.

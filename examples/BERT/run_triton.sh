@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
 done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_NAME="bert"
-MODEL_REPOSITORY="${MODEL_REPOSITORY:-$SCRIPT_DIR/artifacts/model_repository}"
+MODEL_REPOSITORY="${MODEL_REPOSITORY:-$SCRIPT_DIR/model_repository}"
 TRITONSERVER="${TRITONSERVER:-/opt/tritonserver/bin/tritonserver}"
 PERF_ANALYZER="${PERF_ANALYZER:-$(command -v perf_analyzer || true)}"
 if [[ ! -f "$MODEL_REPOSITORY/$MODEL_NAME/config.pbtxt" ]]; then
