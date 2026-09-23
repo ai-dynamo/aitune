@@ -12,6 +12,7 @@ from aitune.exceptions import AITunePublicationError, AITuneUserInputError
 from aitune.records import DeploymentArtifact
 from aitune.triton.config import (
     BaseModelConfig,
+    DynamicBatcher,
     ONNXRuntimeModelConfig,
     TensorRTModelConfig,
     TorchAOTIModelConfig,
@@ -252,7 +253,7 @@ def _model_config(
             artifact,
             name=model_name,
             max_batch_size=batch_size,
-            dynamic_batching=dynamic_batching,
+            batcher=DynamicBatcher() if dynamic_batching else None,
         )
     except (KeyError, TypeError, ValueError) as error:
         raise AITunePublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error

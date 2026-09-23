@@ -7,7 +7,7 @@ from google.protobuf import text_format
 from tritonclient.grpc import model_config_pb2
 
 from aitune.exceptions import AITunePublicationError, AITuneUserInputError
-from aitune.triton import ONNXRuntimeModelConfig, TensorRTModelConfig, TorchAOTIModelConfig, publish
+from aitune.triton import DynamicBatcher, ONNXRuntimeModelConfig, TensorRTModelConfig, TorchAOTIModelConfig, publish
 
 
 def _config(backend: str):
@@ -16,7 +16,7 @@ def _config(backend: str):
         "max_batch_size": 8,
         "inputs": ({"name": "x", "data_type": "TYPE_FP32", "dims": (16,)},),
         "outputs": ({"name": "y", "data_type": "TYPE_FP32", "dims": (4,)},),
-        "dynamic_batching": True,
+        "batcher": DynamicBatcher(),
     }
     if backend == "tensorrt":
         return TensorRTModelConfig(**common, optimization_profile_indices=(0, 1))

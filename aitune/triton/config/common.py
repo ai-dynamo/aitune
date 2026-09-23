@@ -104,8 +104,7 @@ class BaseModelConfig(BaseModel, ABC):
     max_batch_size: int = Field(ge=0)
     inputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
     outputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
-    dynamic_batching: bool | DynamicBatcher = True
-    sequence_batching: SequenceBatcher | None = None
+    batcher: DynamicBatcher | SequenceBatcher | None = Field(default_factory=DynamicBatcher)
     instance_groups: tuple[InstanceGroup, ...] = ()
     parameters: dict[str, str] = Field(default_factory=dict)
     response_cache: bool | None = None
@@ -135,7 +134,7 @@ class BaseModelConfig(BaseModel, ABC):
         *,
         name: str,
         max_batch_size: int,
-        dynamic_batching: bool = True,
+        batcher: DynamicBatcher | SequenceBatcher | None,
     ) -> "BaseModelConfig":
         """Combine the tensor interface with runtime-specific artifact settings."""
         batched = max_batch_size > 0
@@ -144,19 +143,17 @@ class BaseModelConfig(BaseModel, ABC):
             max_batch_size=max_batch_size,
             inputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.inputs),
             outputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.outputs),
-            dynamic_batching=dynamic_batching,
+            batcher=batcher,
             **cls._artifact_options(artifact),
         )
 
     @model_validator(mode="after")
     def _validate_batching(self) -> "BaseModelConfig":
         """Require a batched model contract before enabling the scheduler."""
-        if self.dynamic_batching and self.max_batch_size == 0:
-            raise ValueError("dynamic_batching requires a positive max_batch_size")
-        if self.dynamic_batching and self.sequence_batching is not None:
-            raise ValueError("dynamic_batching and sequence_batching are mutually exclusive")
-        if isinstance(self.dynamic_batching, DynamicBatcher):
-            if any(size > self.max_batch_size for size in self.dynamic_batching.preferred_batch_size):
+        if self.batcher is not None and self.max_batch_size == 0:
+            raise ValueError("batcher requires a positive max_batch_size")
+        if isinstance(self.batcher, DynamicBatcher):
+            if any(size > self.max_batch_size for size in self.batcher.preferred_batch_size):
                 raise ValueError("preferred_batch_size cannot exceed max_batch_size")
         if self.platform != "tensorrt_plan" and any(group.profile for group in self.instance_groups):
             raise ValueError("Instance profiles are only supported by TensorRT")
@@ -196,14 +193,10 @@ class BaseModelConfig(BaseModel, ABC):
     def _optional_config_dict(self) -> dict[str, Any]:
         """Preserve explicit false values and scheduler message presence."""
         data: dict[str, Any] = {}
-        if self.dynamic_batching:
-            data["dynamic_batching"] = (
-                self.dynamic_batching.model_dump(mode="json", exclude_none=True)
-                if isinstance(self.dynamic_batching, DynamicBatcher)
-                else {}
-            )
-        if self.sequence_batching is not None:
-            data["sequence_batching"] = self.sequence_batching.model_dump(mode="json", exclude_none=True)
+        if isinstance(self.batcher, DynamicBatcher):
+            data["dynamic_batching"] = self.batcher.model_dump(mode="json", exclude_none=True)
+        elif isinstance(self.batcher, SequenceBatcher):
+            data["sequence_batching"] = self.batcher.model_dump(mode="json", exclude_none=True)
         if self.response_cache is not None:
             data["response_cache"] = {"enable": self.response_cache}
         if self.decoupled is not None:
