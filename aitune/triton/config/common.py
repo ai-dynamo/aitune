@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Shared fields for backend-specific Triton model configurations."""
 
+from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal
@@ -93,7 +94,7 @@ class TritonTensorConfig(BaseModel):
         return dims
 
 
-class BaseModelConfig(BaseModel):
+class BaseModelConfig(BaseModel, ABC):
     """Internal fields and validation shared by supported Triton backends."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -103,7 +104,7 @@ class BaseModelConfig(BaseModel):
     max_batch_size: int = Field(ge=0)
     inputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
     outputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
-    dynamic_batching: bool | DynamicBatcher = False
+    dynamic_batching: bool | DynamicBatcher = True
     sequence_batching: SequenceBatcher | None = None
     instance_groups: tuple[InstanceGroup, ...] = ()
     parameters: dict[str, str] = Field(default_factory=dict)
@@ -129,7 +130,12 @@ class BaseModelConfig(BaseModel):
 
     @classmethod
     def from_artifact(
-        cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int, dynamic_batching: bool = False
+        cls,
+        artifact: DeploymentArtifact,
+        *,
+        name: str,
+        max_batch_size: int,
+        dynamic_batching: bool = True,
     ) -> "BaseModelConfig":
         """Combine the tensor interface with runtime-specific artifact settings."""
         batched = max_batch_size > 0
@@ -217,6 +223,7 @@ class BaseModelConfig(BaseModel):
         return content
 
     @classmethod
+    @abstractmethod
     def _artifact_options(cls, artifact: DeploymentArtifact) -> dict[str, Any]:
         """Read settings owned by the specialized Triton config."""
         raise NotImplementedError
