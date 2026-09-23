@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Generate Triton model repositories from tuned AITune artifacts."""
+"""Generate Triton model repositories from artifacts and existing model files."""
 
 import logging
 import os
@@ -80,8 +80,10 @@ def publish(
         AITuneUserInputError: If publication arguments are invalid.
         AITunePublicationError: If the artifact cannot be represented or publication fails.
     """
-    if not isinstance(model, DeploymentArtifact):
-        return _publish_existing_request(
+    if isinstance(model, DeploymentArtifact):
+        if config is not None or additional_files or resources:
+            raise AITuneUserInputError("Artifact publication derives config and additional files from the artifact")
+        return _publish_deployment_artifact(
             model,
             path=path,
             model_name=model_name,
@@ -89,13 +91,39 @@ def publish(
             dynamic_batching=dynamic_batching,
             max_batch_size=max_batch_size,
             latency_budget_ms=latency_budget_ms,
-            config=config,
-            additional_files=additional_files,
-            resources=resources,
         )
-    if config is not None or additional_files or resources:
-        raise AITuneUserInputError("Artifact publication derives config and additional files from the artifact")
-    artifact = model
+    if not isinstance(model, str | os.PathLike):
+        raise AITuneUserInputError("model must be an artifact or a model file path")
+    if config is None:
+        raise AITuneUserInputError("config is required when publishing a model file")
+    if (
+        model_name is not None
+        or dynamic_batching is not None
+        or max_batch_size is not None
+        or latency_budget_ms is not None
+    ):
+        raise AITuneUserInputError("For a model file, specify deployment settings in config")
+    return _publish_existing_model(
+        model,
+        path=path,
+        model_version=model_version,
+        config=config,
+        additional_files=additional_files,
+        resources=resources,
+    )
+
+
+def _publish_deployment_artifact(
+    artifact: DeploymentArtifact,
+    *,
+    path: str | os.PathLike[str],
+    model_name: str | None,
+    model_version: int,
+    dynamic_batching: bool | None,
+    max_batch_size: int | None,
+    latency_budget_ms: int | None,
+) -> Path:
+    """Publish an artifact and generate its Model Analyzer configuration."""
     model_name = _validate_target(model_name, model_version)
     if latency_budget_ms is not None and (
         not isinstance(latency_budget_ms, int) or isinstance(latency_budget_ms, bool) or latency_budget_ms < 1
@@ -116,14 +144,7 @@ def publish(
 
     try:
         repository = Path(path)
-        model_directory = repository / model_name
-        if model_directory.exists():
-            raise AITunePublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
-
-        repository.mkdir(parents=True, exist_ok=True)
-        model_directory.mkdir()
-        version_directory = model_directory / str(model_version)
-        version_directory.mkdir(parents=True)
+        model_directory, version_directory = _create_model_directories(repository, model_name, model_version)
         (model_directory / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
         destination = version_directory / file_name
         if artifact.model.additional_files:
@@ -151,39 +172,16 @@ def publish(
     return model_directory
 
 
-def _publish_existing_request(
-    model: str | os.PathLike[str],
-    *,
-    path: str | os.PathLike[str],
-    model_name: str | None,
-    model_version: int,
-    dynamic_batching: bool | None,
-    max_batch_size: int | None,
-    latency_budget_ms: int | None,
-    config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig | None,
-    additional_files: Sequence[str | os.PathLike[str]],
-    resources: Mapping[str, str | os.PathLike[str]] | None,
-) -> Path:
-    """Require file publication settings to come from the supplied config."""
-    if not isinstance(model, str | os.PathLike):
-        raise AITuneUserInputError("model must be an artifact or a model file path")
-    if config is None:
-        raise AITuneUserInputError("config is required when publishing a model file")
-    if (
-        model_name is not None
-        or dynamic_batching is not None
-        or max_batch_size is not None
-        or latency_budget_ms is not None
-    ):
-        raise AITuneUserInputError("For a model file, specify deployment settings in config")
-    return _publish_existing_file(
-        model,
-        path=path,
-        config=config,
-        model_version=model_version,
-        additional_files=additional_files,
-        resources=resources,
-    )
+def _create_model_directories(repository: Path, model_name: str, model_version: int) -> tuple[Path, Path]:
+    """Create a new Triton model entry without replacing an existing one."""
+    model_directory = repository / model_name
+    if model_directory.exists():
+        raise AITunePublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
+    repository.mkdir(parents=True, exist_ok=True)
+    model_directory.mkdir()
+    version_directory = model_directory / str(model_version)
+    version_directory.mkdir()
+    return model_directory, version_directory
 
 
 def _artifact_layout(artifact: DeploymentArtifact) -> tuple[str, bool]:
@@ -260,16 +258,16 @@ def _model_config(
         raise AITunePublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
 
 
-def _publish_existing_file(
-    model_file: str | os.PathLike[str],
+def _publish_existing_model(
+    model: str | os.PathLike[str],
     *,
     path: str | os.PathLike[str],
-    config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig,
     model_version: int,
+    config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig,
     additional_files: Sequence[str | os.PathLike[str]],
     resources: Mapping[str, str | os.PathLike[str]] | None,
 ) -> Path:
-    """Copy a supplied model using its explicit, validated Triton configuration."""
+    """Publish an existing file using its explicit Triton configuration."""
     layouts = {
         TensorRTModelConfig: "model.plan",
         ONNXRuntimeModelConfig: "model.onnx",
@@ -280,7 +278,7 @@ def _publish_existing_file(
             "config must be a TensorRTModelConfig, ONNXRuntimeModelConfig, or TorchAOTIModelConfig"
         )
     _validate_target(config.name, model_version)
-    source = Path(model_file)
+    source = Path(model)
     relative_paths = _additional_file_paths(source, additional_files)
     if relative_paths and not isinstance(config, ONNXRuntimeModelConfig):
         raise AITunePublicationError("Only ONNX models support additional files")
@@ -290,14 +288,8 @@ def _publish_existing_file(
     resource_files = _resource_files(config, resources or {})
     repository = Path(path)
     model_directory = repository / config.name
-    if model_directory.exists():
-        raise AITunePublicationError(f"{model_directory} already exists; Triton publication never replaces a model")
-
     try:
-        repository.mkdir(parents=True, exist_ok=True)
-        model_directory.mkdir()
-        version_directory = model_directory / str(model_version)
-        version_directory.mkdir()
+        model_directory, version_directory = _create_model_directories(repository, config.name, model_version)
         (model_directory / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
         destination = version_directory / file_name
         if relative_paths:
@@ -313,6 +305,8 @@ def _publish_existing_file(
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(resource_source, target)
     except Exception as error:
+        if isinstance(error, AITunePublicationError):
+            raise
         raise AITunePublicationError(
             f"Failed to publish Triton model {config.name!r}: {error}. "
             f"An incomplete model directory may remain at {model_directory}"
