@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from base64 import b64encode
 from dataclasses import replace
 from pathlib import Path
+from struct import pack
 
 import pytest
 import yaml
@@ -204,6 +206,24 @@ def test_publish_uses_representative_backend_inputs(tmp_path):
     input_data_path = model / "model_analyzer/input-data.json"
     assert json.loads(input_data_path.read_text()) == {
         "data": [{"input_ids": {"content": [17, 23, 42, 9], "shape": [4]}}]
+    }
+    config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
+    assert config["perf_analyzer_flags"]["input-data"] == [str(input_data_path.resolve())]
+
+
+def test_publish_encodes_fp16_representative_inputs_as_binary(tmp_path):
+    values = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0)
+    artifact = replace(
+        _plan(tmp_path / "source.plan"),
+        inputs=(_spec("input", DType.FLOAT16, 8),),
+        sample_inputs=(TensorSample(name="input", shape=(1, 8), values=values),),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", max_batch_size=8)
+
+    input_data_path = model / "model_analyzer/input-data.json"
+    assert json.loads(input_data_path.read_text()) == {
+        "data": [{"input": {"content": {"b64": b64encode(pack("<8e", *values)).decode("ascii")}, "shape": [8]}}]
     }
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
     assert config["perf_analyzer_flags"]["input-data"] == [str(input_data_path.resolve())]

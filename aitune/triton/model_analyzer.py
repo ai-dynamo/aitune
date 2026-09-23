@@ -3,15 +3,17 @@
 """Generate bounded Triton Model Analyzer configurations."""
 
 import json
+from base64 import b64encode
 from math import prod
 from pathlib import Path
 from typing import Any, Literal
 
+import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 from tritonclient.grpc import model_config_pb2
 
-from aitune.records import DeploymentArtifact
+from aitune.records import DeploymentArtifact, DType
 
 _CONFIG_FILE_NAME = "config.yaml"
 _INPUT_DATA_FILE_NAME = "input-data.json"
@@ -85,6 +87,7 @@ def _input_data(
     if not artifact.sample_inputs:
         return None
 
+    dtypes = {tensor.name: tensor.dtype for tensor in artifact.inputs}
     tensors: dict[str, Any] = {}
     for sample in artifact.sample_inputs:
         target_shape = tuple(shapes[sample.name])
@@ -101,8 +104,13 @@ def _input_data(
         if not source_values:
             raise ValueError(f"Representative input {sample.name!r} has no values")
         repeats = (target_size + len(source_values) - 1) // len(source_values)
+        values = (source_values * repeats)[:target_size]
+        content: Any = list(values)
+        if dtypes[sample.name] is DType.FLOAT16:
+            # Perf Analyzer rejects numeric JSON for FP16; send little-endian half values as binary.
+            content = {"b64": b64encode(np.asarray(values, dtype="<f2").tobytes()).decode("ascii")}
         tensors[sample.name] = {
-            "content": list((source_values * repeats)[:target_size]),
+            "content": content,
             "shape": list(target_shape),
         }
     return {"data": [tensors]}
