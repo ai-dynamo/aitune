@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # /// script
-# dependencies = ["transformers"]
+# dependencies = ["transformers>=4.57.6,<5"]
 # scope = "always"
 # allow_failure = false
 # [[pip_install]]

@@ -10,7 +10,8 @@ requires-python = ">=3.11, <3.14"
 dependencies = [
     "aitune",
     "torch",
-    "transformers",
+    # The example's legacy torch.onnx.export path uses the tested Transformers 4 API.
+    "transformers>=4.57.6,<5",
 ]
 
 [project.optional-dependencies]
