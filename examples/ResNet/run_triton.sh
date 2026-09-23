@@ -15,6 +15,7 @@ if [[ ! -f "$MODEL_REPOSITORY/$MODEL_NAME/config.pbtxt" ]]; then
 fi
 MODEL_REPOSITORY_PATH="$(realpath "$MODEL_REPOSITORY")"
 MODEL_ANALYZER_CONFIG="$MODEL_REPOSITORY_PATH/$MODEL_NAME/model_analyzer/config.yaml"
+MODEL_ANALYZER_WORKSPACE="${MODEL_REPOSITORY_PATH}-model-analyzer/$MODEL_NAME"
 DEPLOYMENT_MODEL_REPOSITORY="${DEPLOYMENT_MODEL_REPOSITORY:-$MODEL_REPOSITORY_PATH-deployment}"
 TRITON_LOG_PATH="${TRITON_LOG_PATH:-$(dirname "$MODEL_REPOSITORY_PATH")/tritonserver.log}"
 if [[ ! -x "$TRITONSERVER" ]]; then
@@ -26,6 +27,8 @@ if [[ -z "$PERF_ANALYZER" || ! -x "$PERF_ANALYZER" ]]; then
   exit 1
 fi
 
+# Model Analyzer creates its output directories but requires their shared parent to exist.
+mkdir -p "$MODEL_ANALYZER_WORKSPACE"
 model-analyzer profile \
   --config-file "$MODEL_ANALYZER_CONFIG" \
   --triton-server-path "$TRITONSERVER" \
