@@ -50,7 +50,8 @@ def tune(
             Tensor will be treated as a single sample dataset.
         batch_sizes: The batch sizes to use for tuning. At least 2 different batch sizes are required for determining
             batch axis.
-        max_num_batches_per_batch_size: The maximum number of batches to use for tuning per batch size.
+        max_num_batches_per_batch_size: The maximum number of batches to use for tuning per batch size. ``None``
+            uses all batches; zero yields no batches.
         device: The device to use for tuning.
         dry_run: If True, only dry run the tuning.
         disable_external_logging: If True, libraries logging will be suppressed.

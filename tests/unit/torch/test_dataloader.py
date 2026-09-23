@@ -302,6 +302,14 @@ def test_torch_stack_dataset():
     assert args[0].shape == (4, 3, 4, 4)
 
 
+def test_samples_generator_zero_max_num_batches_yields_no_samples():
+    dataset = [torch.randn(3, 4, 4) for _ in range(2)]
+
+    samples = list(samples_generator(dataset, batch_sizes=[1], max_num_batches_per_batch_size=0))
+
+    assert samples == []
+
+
 def test_dataset_label_tensor():
     dataset = [{"label": i} for i in range(10)]
     samples = simulate_tuning_loop(dataset, batch_sizes=[4])
