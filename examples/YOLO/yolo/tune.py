@@ -3,6 +3,8 @@
 """Tune YOLOv10n from ONNX and save an AITune checkpoint."""
 
 import argparse
+import os
+from logging import basicConfig
 from pathlib import Path
 
 from aitune.torch import MaxThroughputStrategy, Module, PerformanceValidationMode, save, tune
@@ -45,6 +47,8 @@ def tune_model(checkpoint: Path) -> None:
 
 def main() -> None:
     """Parse arguments and start YOLO tuning."""
+    log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
+    basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", choices=("triton",), default="triton")
     add_output_path_arg(parser)

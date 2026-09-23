@@ -3,6 +3,8 @@
 """Tune BERT from Torch or ONNX and save an AITune checkpoint."""
 
 import argparse
+import os
+from logging import basicConfig
 from pathlib import Path
 
 import torch
@@ -68,6 +70,8 @@ def tune_model(source_kind: str, target: str, checkpoint: Path, model_name: str)
 
 def main() -> None:
     """Parse arguments and start BERT tuning."""
+    log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
+    basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", choices=("torch", "onnx"), required=True)
     parser.add_argument("--target", choices=("python", "triton"), default="triton")
