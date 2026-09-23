@@ -33,7 +33,7 @@ model-analyzer profile \
   --config-file "$MODEL_ANALYZER_CONFIG" \
   --triton-server-path "$TRITONSERVER" \
   --perf-analyzer-path "$PERF_ANALYZER"
-python -m resnet.triton.promote \
+python3 -m resnet.triton.promote \
   --analyzer-config "$MODEL_ANALYZER_CONFIG" \
   --deployment-model-repository "$DEPLOYMENT_MODEL_REPOSITORY"
 MODEL_REPOSITORY_PATH="$(realpath "$DEPLOYMENT_MODEL_REPOSITORY")"
@@ -48,7 +48,7 @@ for attempt in {1..100}; do
     curl --noproxy '*' --connect-timeout 1 --max-time 2 -fsS \
       "http://localhost:8000/v2/models/$MODEL_NAME/ready" >/dev/null 2>&1; then
     cat "$TRITON_LOG_PATH"
-    python -m resnet.triton.client --model-name "$MODEL_NAME" "$@"
+    python3 -m resnet.triton.client --model-name "$MODEL_NAME" "$@"
     exit 0
   fi
   if ! kill -0 "$TRITON_PID" >/dev/null 2>&1; then
