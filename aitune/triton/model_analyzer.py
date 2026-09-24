@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 import numpy as np
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tritonclient.grpc import model_config_pb2
 
 from aitune.records import DeploymentArtifact, DType
@@ -39,7 +39,15 @@ class ModelAnalyzerConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
     latency_budget_ms: int | None = Field(default=None, ge=1, strict=True)
-    latency_percentile: Literal[90, 95, 99] = 95
+    latency_percentile: int = Field(default=95, strict=True)
+
+    @field_validator("latency_percentile")
+    @classmethod
+    def _validate_latency_percentile(cls, percentile: int) -> int:
+        """Limit latency constraints to percentiles reported by Model Analyzer."""
+        if percentile not in (90, 95, 99):
+            raise ValueError("latency_percentile must be 90, 95, or 99")
+        return percentile
 
 
 class _ModelAnalyzerYamlConfig(BaseModel):
