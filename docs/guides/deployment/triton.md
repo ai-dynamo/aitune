@@ -178,6 +178,11 @@ for each request.
 Publication generates `model_analyzer/config.yaml` for a bounded search. Perf Analyzer concurrency is capped at twice
 the published maximum batch size.
 
+For an artifact, `publish(..., latency_budget_ms=50, latency_percentile=95)` limits the search to configurations
+whose p95 latency is at most 50 ms. The budget defaults to `None`, while the percentile defaults to 95. The
+percentile still controls Perf Analyzer's latency stability check when no budget is set. Supported percentiles are
+90, 95, and 99; throughput remains an independently measured inference rate.
+
 The configuration uses the artifact's recorded minimum input shapes. Batched deployments omit the leading batch
 dimension from Perf Analyzer shape flags. Model Analyzer skips combinations where the Perf Analyzer request batch size
 exceeds the candidate model maximum.

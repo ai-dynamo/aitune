@@ -33,6 +33,7 @@ def publish(
     model_name: str | None = None,
     model_version: int = 1,
     latency_budget_ms: int | None = None,
+    latency_percentile: int = 95,
     config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig | None = None,
     additional_files: Sequence[str | os.PathLike[str]] = (),
     resources: Mapping[str, str | os.PathLike[str]] | None = None,
@@ -60,7 +61,8 @@ def publish(
         path: Triton model repository root.
         model_name: New model directory name for an artifact; file publication uses ``config.name``.
         model_version: Positive Triton model version.
-        latency_budget_ms: Optional p99 latency limit for Model Analyzer, in milliseconds.
+        latency_budget_ms: Optional latency limit for Model Analyzer, in milliseconds.
+        latency_percentile: Latency percentile used for stabilization and the optional budget (90, 95, or 99).
         config: Backend-specific configuration required for an existing file.
         additional_files: ONNX external-data paths relative to the source file's directory.
         resources: Model-relative auxiliary destination paths mapped to local files.
@@ -81,12 +83,15 @@ def publish(
             model_name=model_name,
             model_version=model_version,
             latency_budget_ms=latency_budget_ms,
+            latency_percentile=latency_percentile,
         )
     if not isinstance(model, str | os.PathLike):
         raise AITuneUserInputError("model must be an artifact or a model file path")
     if config is None:
         raise AITuneUserInputError("config is required when publishing a model file")
-    if model_name is not None or latency_budget_ms is not None:
+    if latency_budget_ms is not None or latency_percentile != 95:
+        raise AITuneUserInputError("Model Analyzer options require a deployment artifact")
+    if model_name is not None:
         raise AITuneUserInputError("For a model file, specify deployment settings in config")
     return _publish_existing_model(
         model,
@@ -105,6 +110,7 @@ def _publish_deployment_artifact(
     model_name: str | None,
     model_version: int,
     latency_budget_ms: int | None,
+    latency_percentile: int,
 ) -> Path:
     """Publish an artifact and generate its Model Analyzer configuration."""
     model_name = _validate_target(model_name, model_version)
@@ -112,6 +118,12 @@ def _publish_deployment_artifact(
         not isinstance(latency_budget_ms, int) or isinstance(latency_budget_ms, bool) or latency_budget_ms < 1
     ):
         raise AITuneUserInputError(f"latency_budget_ms must be a positive integer, got {latency_budget_ms!r}")
+    if (
+        not isinstance(latency_percentile, int)
+        or isinstance(latency_percentile, bool)
+        or latency_percentile not in (90, 95, 99)
+    ):
+        raise AITuneUserInputError(f"latency_percentile must be one of 90, 95, 99, got {latency_percentile!r}")
 
     file_name, multi_file = _artifact_layout(artifact)
     _validate_artifact_files(artifact, multi_file=multi_file)
@@ -132,6 +144,7 @@ def _publish_deployment_artifact(
             model_directory=model_directory,
             destination=repository_path.parent / f"{repository_path.name}-model-analyzer" / model_name,
             latency_budget_ms=latency_budget_ms,
+            latency_percentile=latency_percentile,
             output_directory=model_directory / "model_analyzer",
             input_data_path=model_directory / "model_analyzer" / "input-data.json",
         )

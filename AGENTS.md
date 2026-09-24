@@ -31,6 +31,9 @@ Do not hand-maintain duplicate copies under `docs/examples/`.
 
 ## Example Workflows
 
+Do not create unit tests for code under `examples/`. Validate example behavior
+through the functional workflows instead.
+
 Functional-test variant arguments are passed to tuning and to `run_triton.sh`.
 Each example's Triton script consumes the arguments needed for validation and
 ignores unrelated arguments, such as a source selector used only during tuning.

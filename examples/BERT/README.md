@@ -25,7 +25,8 @@ BERT_MODEL_NAME=google-bert/bert-base-cased ./prepare_triton.sh torch
 
 The model must expose one `input_ids` input and two outputs. The example tunes batches 1, 2, and 4 at sequence
 lengths 64, 128, and 256. TensorRT uses one profile covering the recorded range. Model Analyzer uses the
-minimum input shape (64 tokens) for its throughput and p99 latency report; it does not aggregate the three lengths.
+minimum input shape (64 tokens) for its throughput, p95, and p99 latency report; it does not aggregate the three lengths.
+The report also identifies the request batch size, concurrency, and instance group used for that measurement.
 Random token IDs verify numerical agreement, not language-task accuracy.
 
 The flow saves `checkpoints/bert.ait` and publishes a Triton model named `bert` under
