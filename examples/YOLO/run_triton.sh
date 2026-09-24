@@ -4,6 +4,27 @@
 
 set -euo pipefail
 
+MODEL_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tuned-model-path)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for --tuned-model-path" >&2
+        exit 2
+      fi
+      MODEL_ARGS+=(--tuned-model-path "$2")
+      shift 2
+      ;;
+    --tuned-model-path=*)
+      MODEL_ARGS+=("$1")
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_NAME="yolov10n"
 MODEL_REPOSITORY="${MODEL_REPOSITORY:-$SCRIPT_DIR/model_repository}"
@@ -24,7 +45,7 @@ ANALYZER_WORKSPACE="$MODEL_REPOSITORY-model-analyzer/$MODEL_NAME"
 DEPLOYMENT_REPOSITORY="${DEPLOYMENT_REPOSITORY:-$MODEL_REPOSITORY-deployment}"
 TRITON_LOG="${TRITON_LOG:-$(dirname "$MODEL_REPOSITORY")/tritonserver.log}"
 mkdir -p "$ANALYZER_WORKSPACE"
-python3 -m yolo.python_inference
+python3 -m yolo.python_inference "${MODEL_ARGS[@]}"
 model-analyzer profile --config-file "$ANALYZER_CONFIG" \
   --triton-server-path "$TRITONSERVER" --perf-analyzer-path "$PERF_ANALYZER"
 python3 -m yolo.triton.promote \
@@ -39,7 +60,7 @@ for attempt in {1..100}; do
     http://localhost:8000/v2/health/ready >/dev/null 2>&1 && \
     curl --noproxy '*' --connect-timeout 1 --max-time 2 -fsS \
       "http://localhost:8000/v2/models/$MODEL_NAME/ready" >/dev/null 2>&1; then
-    python3 -m yolo.triton.client
+    python3 -m yolo.triton.client "${MODEL_ARGS[@]}"
     exit 0
   fi
   if ! kill -0 "$TRITON_PID" >/dev/null 2>&1; then

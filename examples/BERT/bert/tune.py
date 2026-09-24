@@ -19,7 +19,7 @@ from aitune.torch.backend import (
 )
 from aitune.torch.dataloader import DynamicShapeDataset
 from aitune.torch.module import OnnxModule
-from bert.cmd_args import add_model_name_arg, add_output_path_arg
+from bert.cmd_args import add_model_name_arg, add_tuned_model_path_arg
 from bert.model import onnx_model, torch_model
 
 BATCH_SIZES = [1, 2, 4]
@@ -76,9 +76,9 @@ def main() -> None:
     parser.add_argument("--source", choices=("torch", "onnx"), required=True)
     parser.add_argument("--target", choices=("python", "triton"), default="triton")
     add_model_name_arg(parser)
-    add_output_path_arg(parser)
+    add_tuned_model_path_arg(parser)
     args = parser.parse_args()
-    tune_model(args.source, args.target, args.output_path, args.model_name)
+    tune_model(args.source, args.target, args.tuned_model_path, args.model_name)
 
 
 if __name__ == "__main__":

@@ -28,5 +28,7 @@ lengths 64, 128, and 256. TensorRT uses one profile covering the recorded range.
 minimum input shape (64 tokens) for its throughput and p99 latency report; it does not aggregate the three lengths.
 Random token IDs verify numerical agreement, not language-task accuracy.
 
-The flow saves `bert.ait` and publishes a Triton model named `bert` under `model_repository/`. Move aside previous
-outputs when switching model or source. The publication repository is an output artifact, not a live deployment target.
+The flow saves `bert.ait` in the current directory and publishes a Triton model named `bert` under
+`model_repository/`. Each BERT command accepts `--tuned-model-path` to use another checkpoint path. Move aside
+previous outputs when switching model or source. The publication repository is an output artifact, not a live
+deployment target.

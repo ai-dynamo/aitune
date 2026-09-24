@@ -10,7 +10,7 @@ import torch
 
 from aitune.torch import Module, load
 from aitune.torch.module import OnnxModule
-from yolo.cmd_args import add_output_path_arg
+from yolo.cmd_args import add_tuned_model_path_arg
 from yolo.model import sample_input
 
 
@@ -39,9 +39,9 @@ def run_inference(checkpoint: Path) -> None:
 def main() -> None:
     """Parse arguments and run Python inference."""
     parser = argparse.ArgumentParser(description=__doc__)
-    add_output_path_arg(parser)
+    add_tuned_model_path_arg(parser)
     args = parser.parse_args()
-    run_inference(args.output_path)
+    run_inference(args.tuned_model_path)
 
 
 if __name__ == "__main__":

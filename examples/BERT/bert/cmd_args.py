@@ -14,12 +14,12 @@ def add_model_name_arg(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
     return parser
 
 
-def add_output_path_arg(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Use one default checkpoint path throughout the example."""
+def add_tuned_model_path_arg(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Use a working-directory checkpoint path throughout the example."""
     parser.add_argument(
-        "--output-path",
+        "--tuned-model-path",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "bert.ait",
-        help="Path to this example's AITune checkpoint",
+        default=Path("bert.ait"),
+        help="Path to the tuned AITune package (default: bert.ait)",
     )
     return parser

@@ -12,11 +12,23 @@ while [[ $# -gt 0 ]]; do
         echo "Missing value for --model-name" >&2
         exit 2
       fi
-      MODEL_ARGS=(--model-name "$2")
+      MODEL_ARGS+=(--model-name "$2")
       shift 2
       ;;
     --model-name=*)
-      MODEL_ARGS=("$1")
+      MODEL_ARGS+=("$1")
+      shift
+      ;;
+    --tuned-model-path)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for --tuned-model-path" >&2
+        exit 2
+      fi
+      MODEL_ARGS+=(--tuned-model-path "$2")
+      shift 2
+      ;;
+    --tuned-model-path=*)
+      MODEL_ARGS+=("$1")
       shift
       ;;
     *)

@@ -10,7 +10,7 @@ from pathlib import Path
 from aitune.torch import MaxThroughputStrategy, Module, PerformanceValidationMode, save, tune
 from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend
 from aitune.torch.dataloader import DynamicShapeDataset
-from yolo.cmd_args import add_output_path_arg
+from yolo.cmd_args import add_tuned_model_path_arg
 from yolo.model import onnx_model, sample_input
 
 
@@ -51,9 +51,9 @@ def main() -> None:
     basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", choices=("triton",), default="triton")
-    add_output_path_arg(parser)
+    add_tuned_model_path_arg(parser)
     args = parser.parse_args()
-    tune_model(args.output_path)
+    tune_model(args.tuned_model_path)
 
 
 if __name__ == "__main__":

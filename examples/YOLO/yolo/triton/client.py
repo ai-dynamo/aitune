@@ -12,7 +12,7 @@ import tritonclient.grpc as grpcclient
 
 from aitune.torch import Module, load
 from aitune.torch.module import OnnxModule
-from yolo.cmd_args import add_output_path_arg
+from yolo.cmd_args import add_tuned_model_path_arg
 from yolo.model import sample_input
 
 
@@ -53,10 +53,10 @@ def run_inference(checkpoint: Path, triton_url: str) -> None:
 def main() -> None:
     """Parse arguments and check Triton inference."""
     parser = argparse.ArgumentParser(description=__doc__)
-    add_output_path_arg(parser)
+    add_tuned_model_path_arg(parser)
     parser.add_argument("--triton-url", default="localhost:8001")
     args = parser.parse_args()
-    run_inference(args.output_path, args.triton_url)
+    run_inference(args.tuned_model_path, args.triton_url)
 
 
 if __name__ == "__main__":

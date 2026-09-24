@@ -13,7 +13,7 @@ from transformers import AutoConfig
 
 from aitune.torch import Module, load
 from aitune.torch.module import OnnxModule
-from bert.cmd_args import add_model_name_arg, add_output_path_arg
+from bert.cmd_args import add_model_name_arg, add_tuned_model_path_arg
 from bert.tune import BATCH_SIZES, SEQUENCE_LENGTHS
 
 
@@ -59,10 +59,10 @@ def main() -> None:
     """Parse arguments and check Triton inference."""
     parser = argparse.ArgumentParser(description=__doc__)
     add_model_name_arg(parser)
-    add_output_path_arg(parser)
+    add_tuned_model_path_arg(parser)
     parser.add_argument("--triton-url", default="localhost:8001")
     args = parser.parse_args()
-    run_inference(args.output_path, args.triton_url, args.model_name)
+    run_inference(args.tuned_model_path, args.triton_url, args.model_name)
 
 
 if __name__ == "__main__":

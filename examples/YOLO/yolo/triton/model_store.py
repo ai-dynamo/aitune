@@ -9,7 +9,7 @@ from typing import cast
 import aitune.triton
 from aitune.torch import Module, load
 from aitune.torch.module import OnnxModule
-from yolo.cmd_args import add_output_path_arg
+from yolo.cmd_args import add_tuned_model_path_arg
 
 
 def create_model_store(checkpoint: Path, model_repository: Path) -> None:
@@ -30,10 +30,13 @@ def create_model_store(checkpoint: Path, model_repository: Path) -> None:
 def main() -> None:
     """Parse arguments and generate the Triton model store."""
     parser = argparse.ArgumentParser(description=__doc__)
-    add_output_path_arg(parser)
+    add_tuned_model_path_arg(parser)
     parser.add_argument("--model-repository", type=Path, help="Triton model repository")
     args = parser.parse_args()
-    create_model_store(args.output_path, args.model_repository or args.output_path.parent / "model_repository")
+    create_model_store(
+        args.tuned_model_path,
+        args.model_repository or args.tuned_model_path.parent / "model_repository",
+    )
 
 
 if __name__ == "__main__":
