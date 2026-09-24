@@ -215,6 +215,7 @@ def _publish_existing_model(
             "config must be a TensorRTModelConfig, ONNXRuntimeModelConfig, or TorchAOTIModelConfig"
         )
     _validate_target(config.name, model_version)
+    _validate_version_policy(config, model_version)
     source = Path(model)
     relative_paths = _additional_file_paths(source, additional_files)
     if relative_paths and not isinstance(config, ONNXRuntimeModelConfig):
@@ -266,6 +267,16 @@ def _validate_target(model_name: str | None, model_version: int) -> str:
     if not isinstance(model_version, int) or isinstance(model_version, bool) or model_version < 1:
         raise AITuneUserInputError(f"model_version must be a positive integer, got {model_version!r}")
     return model_name
+
+
+def _validate_version_policy(config: BaseModelConfig, model_version: int) -> None:
+    """Require a specific version policy to serve the version being published."""
+    if config.version_policy is not None and "specific" in config.version_policy:
+        allowed_versions = config.version_policy["specific"].get("versions", ())
+        if model_version not in allowed_versions:
+            raise AITuneUserInputError(
+                f"model_version {model_version} is excluded by config.version_policy.specific: {allowed_versions}"
+            )
 
 
 def _additional_file_paths(source: Path, additional_files: Sequence[str | os.PathLike[str]]) -> tuple[Path, ...]:
