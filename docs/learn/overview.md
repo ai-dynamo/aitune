@@ -15,7 +15,7 @@ import { BadgeLinks } from "../_components/BadgeLinks";
     },
     {
       href: "https://www.python.org/downloads/",
-      src: "https://img.shields.io/badge/python-3.10%2B-blue",
+      src: "https://img.shields.io/badge/python-3.11%2B-blue",
       alt: "Python",
     },
     {

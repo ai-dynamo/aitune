@@ -17,6 +17,8 @@ from aitune.torch.task.profiling import (
     ModelExecutionTimeMeasuringStrategy,
     NumStepsMeasuringStopStrategy,
     ProfilingConfig,
+    ProfilingResultEvent,
+    ProfilingResults,
     StableWindowMeasuringStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
@@ -114,12 +116,19 @@ def test_max_throughput_uses_strategy_profiling_config():
     assert result.profiling_stop_strategy is profiling_stop_strategy
 
 
-def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_path):
+def test_max_throughput_strategy_tune_max_throughput_backend(monkeypatch, torch_device, tmp_path):
     slower = SleepBackend(sleep_time=1e-2)
     faster = SleepBackend(sleep_time=1e-5)
+    messages = []
+    reported_metrics = []
+    monkeypatch.setattr(
+        "aitune.torch.tune_strategy.profiling_tune_strategy.report_backend_metric",
+        lambda metric, backend, value: reported_metrics.append((metric, backend, value)),
+    )
     strategy = MaxThroughputStrategy(
         backends=[slower, faster],
         profiling_config=_profiling_config(),
+        sink=lambda message, *args: messages.append(message % args if args else message),
     )
     strategy.enable_performance_validation(False)
     strategy.enable_correctness_check(False)
@@ -129,7 +138,7 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
 
     def mock_measure(backend, name, graph_spec, samples, profiling_cfg):
         del samples
-        return MaxThroughputProfilingResult(throughput=1.0 / backend.sleep_time, selected_batch_size=1)
+        return MaxThroughputProfilingResult(throughput=1.0 / backend.sleep_time, latency=10.0, selected_batch_size=1)
 
     strategy._measure = mock_measure
 
@@ -144,6 +153,35 @@ def test_max_throughput_strategy_tune_max_throughput_backend(torch_device, tmp_p
     max_throughput_backend = cast(SleepBackend, max_throughput_backend)
 
     assert max_throughput_backend.sleep_time == faster.sleep_time
+    assert ("throughput", faster.describe(), 1.0 / faster.sleep_time) in reported_metrics
+    assert ("latency", faster.describe(), 10.0) in reported_metrics
+    assert any("mean latency: 10.000 ms" in message for message in messages)
+
+
+def test_max_throughput_measures_latency_at_selected_batch_size(monkeypatch, mock_backend):
+    """Use the same measured samples for selected-batch latency and throughput."""
+    results = ProfilingResults(
+        entries=[
+            ProfilingResultEvent(0.0, "model", "backend", 1, "inference", execution_time=5e6),
+            ProfilingResultEvent(0.0, "model", "backend", 4, "inference", execution_time=100e6),
+            ProfilingResultEvent(0.0, "model", "backend", 4, "inference", execution_time=20e6),
+        ]
+    )
+    monkeypatch.setattr(
+        "aitune.torch.tune_strategy.max_throughput_strategy.find_max_throughput_for_backend",
+        lambda *args: (4, 200.0, results),
+    )
+    profiling_config = _profiling_config(
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1, warmup_samples=1)
+    )
+    strategy = MaxThroughputStrategy(backends=[mock_backend], profiling_config=profiling_config)
+
+    result = strategy._measure(mock_backend, "model", MagicMock(), MagicMock(), profiling_config)
+
+    assert result.selected_batch_size == 4
+    assert result.throughput == 200.0
+    assert result.latency == pytest.approx(20.0)
+    assert result.to_json_dict("throughput")["latency"] == pytest.approx(20.0)
 
 
 def test_max_throughput_strategy_max_batch_size_in_graph_spec(torch_device, tmp_path):
@@ -385,8 +423,10 @@ def test_max_throughput_post_tune_emits_speedup_summary(torch_device, tmp_path):
         backends=[user_backend],
         profiling_config=_profiling_config(),
     )
-    strategy._baseline_result = MaxThroughputProfilingResult(throughput=1.0, selected_batch_size=1)
-    strategy._record_perf_result(user_backend, MaxThroughputProfilingResult(throughput=2.0, selected_batch_size=1))
+    strategy._baseline_result = MaxThroughputProfilingResult(throughput=1.0, latency=10.0, selected_batch_size=1)
+    strategy._record_perf_result(
+        user_backend, MaxThroughputProfilingResult(throughput=2.0, latency=5.0, selected_batch_size=1)
+    )
     strategy.enable_correctness_check(False)
 
     with (
@@ -411,7 +451,7 @@ def test_max_throughput_post_tune_emits_baseline_selected_when_baseline_wins(moc
     baseline = MagicMock(spec=Backend)
     baseline.describe.return_value = "TorchEagerBackend()"
     strategy._baseline_backend = baseline
-    strategy._baseline_result = MaxThroughputProfilingResult(throughput=42.0, selected_batch_size=1)
+    strategy._baseline_result = MaxThroughputProfilingResult(throughput=42.0, latency=10.0, selected_batch_size=1)
     strategy.perf_validation_results = []
 
     with patch.object(strategy._logger, "isEnabledFor", return_value=True):
@@ -433,7 +473,7 @@ def test_max_throughput_post_tune_silent_for_baseline_selected_when_info_disable
     baseline = MagicMock(spec=Backend)
     baseline.describe.return_value = "TorchEagerBackend()"
     strategy._baseline_backend = baseline
-    strategy._baseline_result = MaxThroughputProfilingResult(throughput=42.0, selected_batch_size=1)
+    strategy._baseline_result = MaxThroughputProfilingResult(throughput=42.0, latency=10.0, selected_batch_size=1)
     strategy.perf_validation_results = []
 
     with (

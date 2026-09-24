@@ -4,13 +4,15 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
+from pathlib import Path
 from typing import Any, Literal
 
-from google.protobuf import text_format
+from google.protobuf import json_format, text_format
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tritonclient.grpc import model_config_pb2
 
 from aitune.records import BoundedTensorSpec, DeploymentArtifact, DType
+from aitune.triton.config.options import DynamicBatcher, InstanceGroup, ModelWarmup, SequenceBatcher
 
 
 class TritonDataType(str, Enum):
@@ -18,6 +20,11 @@ class TritonDataType(str, Enum):
 
     BOOL = "TYPE_BOOL"
     UINT8 = "TYPE_UINT8"
+    UINT16 = "TYPE_UINT16"
+    UINT32 = "TYPE_UINT32"
+    UINT64 = "TYPE_UINT64"
+    BFLOAT16 = "TYPE_BF16"
+    STRING = "TYPE_STRING"
     INT8 = "TYPE_INT8"
     INT16 = "TYPE_INT16"
     INT32 = "TYPE_INT32"
@@ -49,6 +56,34 @@ class TritonTensorConfig(BaseModel):
     data_type: TritonDataType
     dims: tuple[int, ...]
     reshape: tuple[int, ...] | None = None
+    is_shape_tensor: bool = False
+    is_non_linear_format_io: bool = False
+    optional: bool = False
+    format: Literal["FORMAT_NONE", "FORMAT_NHWC", "FORMAT_NCHW"] = "FORMAT_NONE"
+    allow_ragged_batch: bool = False
+    label_filename: str | None = None
+
+    @field_validator("reshape")
+    @classmethod
+    def _validate_reshape(cls, dims: tuple[int, ...] | None) -> tuple[int, ...] | None:
+        """Allow scalar reshapes and one inferred dimension."""
+        if dims is not None and (any(d < -1 for d in dims) or dims.count(-1) > 1):
+            raise ValueError("reshape allows non-negative dimensions and at most one -1")
+        return dims
+
+    def to_config_dict(self, *, output: bool) -> dict[str, Any]:
+        """Serialize only settings appropriate to an input or output tensor."""
+        if output and (self.optional or self.allow_ragged_batch or self.format != "FORMAT_NONE"):
+            raise ValueError("optional, format, and allow_ragged_batch are input-only settings")
+        if not output and self.label_filename is not None:
+            raise ValueError("label_filename is an output-only setting")
+        data = self.model_dump(mode="json", exclude_none=True)
+        if self.reshape is not None:
+            data["reshape"] = {"shape": list(self.reshape)}
+        excluded = ("optional", "format", "allow_ragged_batch") if output else ("label_filename",)
+        for key in excluded:
+            data.pop(key, None)
+        return data
 
     @field_validator("dims")
     @classmethod
@@ -57,22 +92,6 @@ class TritonTensorConfig(BaseModel):
         if not dims or any(dimension != -1 and dimension < 1 for dimension in dims):
             raise ValueError("Triton tensor dimensions must be non-empty and contain positive values or -1")
         return dims
-
-
-def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConfig:
-    """Translate an artifact tensor spec into Triton's tensor representation."""
-    if batched and spec.batch_axis != 0:
-        raise ValueError(f"Triton batching requires batch_axis=0 for tensor {spec.name!r}")
-    bounds = zip(spec.min_shape, spec.max_shape, strict=True)
-    dimensions = tuple(minimum if minimum == maximum else -1 for minimum, maximum in bounds)
-    if batched:
-        dimensions = dimensions[1:]
-    reshape = None
-    if not dimensions:
-        # Triton's API requires non-empty dims; reshape preserves the scalar shape expected by the backend.
-        dimensions = (1,)
-        reshape = ()
-    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions, reshape=reshape)
 
 
 class BaseModelConfig(BaseModel, ABC):
@@ -85,42 +104,116 @@ class BaseModelConfig(BaseModel, ABC):
     max_batch_size: int = Field(ge=0)
     inputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
     outputs: tuple[TritonTensorConfig, ...] = Field(min_length=1)
-    dynamic_batching: bool = False
+    batcher: DynamicBatcher | SequenceBatcher | None = Field(default_factory=DynamicBatcher)
+    instance_groups: tuple[InstanceGroup, ...] = ()
+    parameters: dict[str, str] = Field(default_factory=dict)
+    response_cache: bool | None = None
+    decoupled: bool | None = None
+    warmup: tuple[ModelWarmup, ...] = ()
+    default_model_filename: str | None = None
+    version_policy: dict[str, Any] | None = None
+    optimization: dict[str, Any] | None = None
+    batch_input: tuple[dict[str, Any], ...] = ()
+    batch_output: tuple[dict[str, Any], ...] = ()
+    metric_tags: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("default_model_filename")
+    @classmethod
+    def _validate_filename(cls, filename: str | None) -> str | None:
+        """Keep the entry file inside its version directory."""
+        if filename is not None and (
+            not filename or filename in {".", ".."} or Path(filename).name != filename or "\\" in filename
+        ):
+            raise ValueError("default_model_filename must be a single filename")
+        return filename
 
     @classmethod
-    def from_artifact(cls, artifact: DeploymentArtifact, *, name: str, max_batch_size: int) -> "BaseModelConfig":
-        """Combine the tensor interface with runtime-specific artifact settings."""
+    def from_artifact(
+        cls,
+        artifact: DeploymentArtifact,
+        *,
+        name: str,
+    ) -> "BaseModelConfig":
+        """Derive Triton batching and runtime settings from the artifact."""
+        max_batch_size = artifact.max_batch_size or 0
+        if any(
+            tensor.batch_axis != 0 for tensor in artifact.inputs + artifact.outputs
+        ) or not cls._supports_artifact_batching(artifact):
+            max_batch_size = 0
         batched = max_batch_size > 0
         return cls(
             name=name,
             max_batch_size=max_batch_size,
             inputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.inputs),
             outputs=tuple(tensor_config(tensor, batched=batched) for tensor in artifact.outputs),
-            dynamic_batching=batched,
+            batcher=DynamicBatcher() if max_batch_size >= 2 else None,
             **cls._artifact_options(artifact),
         )
 
+    @classmethod
+    def _supports_artifact_batching(cls, artifact: DeploymentArtifact) -> bool:
+        """Allow runtime-specific configs to reject Triton's implicit batch dimension."""
+        return True
+
+    @model_validator(mode="after")
+    def _validate_batching(self) -> "BaseModelConfig":
+        """Require a batched model contract before enabling the scheduler."""
+        if self.batcher is not None and self.max_batch_size == 0:
+            raise ValueError("batcher requires a positive max_batch_size")
+        if isinstance(self.batcher, DynamicBatcher):
+            if any(size > self.max_batch_size for size in self.batcher.preferred_batch_size):
+                raise ValueError("preferred_batch_size cannot exceed max_batch_size")
+        if self.platform != "tensorrt_plan" and any(group.profile for group in self.instance_groups):
+            raise ValueError("Instance profiles are only supported by TensorRT")
+        if len({sample.name for sample in self.warmup}) != len(self.warmup):
+            raise ValueError("Warmup names must be unique")
+        if any(sample.batch_size > max(1, self.max_batch_size) for sample in self.warmup):
+            raise ValueError("Warmup batch_size exceeds the model batch limit")
+        self.to_protobuf()
+        return self
+
     def to_protobuf(self) -> model_config_pb2.ModelConfig:
         """Build Triton's protobuf representation."""
-        config = model_config_pb2.ModelConfig(
-            name=self.name,
-            platform=self.platform,
-            max_batch_size=self.max_batch_size,
-        )
-        for field_name, tensors in (("input", self.inputs), ("output", self.outputs)):
-            target = getattr(config, field_name)
-            for tensor in tensors:
-                target_tensor = target.add(
-                    name=tensor.name,
-                    data_type=model_config_pb2.DataType.Value(tensor.data_type.value),
-                    dims=tensor.dims,
-                )
-                if tensor.reshape is not None:
-                    target_tensor.reshape.shape.extend(tensor.reshape)
-                    target_tensor.reshape.SetInParent()
-        if self.dynamic_batching:
-            config.dynamic_batching.SetInParent()
-        return config
+        data = self._common_config_dict()
+        try:
+            return json_format.ParseDict(data, model_config_pb2.ModelConfig())
+        except (json_format.ParseError, TypeError, ValueError) as error:
+            raise ValueError(f"Invalid Triton model configuration: {error}") from error
+
+    def _common_config_dict(self) -> dict[str, Any]:
+        """Translate public options to protobuf field names without dropping settings."""
+        data = {
+            "name": self.name,
+            "platform": self.platform,
+            "max_batch_size": self.max_batch_size,
+            "input": [tensor.to_config_dict(output=False) for tensor in self.inputs],
+            "output": [tensor.to_config_dict(output=True) for tensor in self.outputs],
+            "instance_group": [group.model_dump(mode="json", exclude_none=True) for group in self.instance_groups],
+            "parameters": {key: {"string_value": value} for key, value in self.parameters.items()},
+            "model_warmup": [sample.model_dump(mode="json", exclude_none=True) for sample in self.warmup],
+            "batch_input": list(self.batch_input),
+            "batch_output": list(self.batch_output),
+            "metric_tags": self.metric_tags,
+        }
+        data.update(self._optional_config_dict())
+        return data
+
+    def _optional_config_dict(self) -> dict[str, Any]:
+        """Preserve explicit false values and scheduler message presence."""
+        data: dict[str, Any] = {}
+        if isinstance(self.batcher, DynamicBatcher):
+            data["dynamic_batching"] = self.batcher.model_dump(mode="json", exclude_none=True)
+        elif isinstance(self.batcher, SequenceBatcher):
+            data["sequence_batching"] = self.batcher.model_dump(mode="json", exclude_none=True)
+        if self.response_cache is not None:
+            data["response_cache"] = {"enable": self.response_cache}
+        if self.decoupled is not None:
+            data["model_transaction_policy"] = {"decoupled": self.decoupled}
+        for name in ("default_model_filename", "version_policy", "optimization"):
+            value = getattr(self, name)
+            if value is not None:
+                data[name] = value
+        return data
 
     def to_pbtxt(self) -> str:
         """Render and schema-validate a Triton ``config.pbtxt`` document."""
@@ -130,14 +223,24 @@ class BaseModelConfig(BaseModel, ABC):
         text_format.Parse(content, model_config_pb2.ModelConfig())
         return content
 
-    @model_validator(mode="after")
-    def _validate_batching(self) -> "BaseModelConfig":
-        """Keep the scheduler setting consistent with the declared batch size."""
-        if self.dynamic_batching != (self.max_batch_size > 0):
-            raise ValueError("dynamic_batching must be enabled exactly when max_batch_size is positive")
-        return self
-
     @classmethod
     @abstractmethod
     def _artifact_options(cls, artifact: DeploymentArtifact) -> dict[str, Any]:
         """Read settings owned by the specialized Triton config."""
+        raise NotImplementedError
+
+
+def tensor_config(spec: BoundedTensorSpec, *, batched: bool) -> TritonTensorConfig:
+    """Translate an artifact tensor spec into Triton's tensor representation."""
+    if batched and spec.batch_axis != 0:
+        raise ValueError(f"Triton batching requires batch_axis=0 for tensor {spec.name!r}")
+    bounds = zip(spec.min_shape, spec.max_shape, strict=True)
+    dimensions = tuple(minimum if minimum == maximum else -1 for minimum, maximum in bounds)
+    if batched:
+        dimensions = dimensions[1:]
+    reshape = None
+    if not dimensions:
+        # Triton's API requires non-empty dims; reshape preserves the backend's scalar shape.
+        dimensions = (1,)
+        reshape = ()
+    return TritonTensorConfig(name=spec.name, data_type=_DTYPES[spec.dtype], dims=dimensions, reshape=reshape)

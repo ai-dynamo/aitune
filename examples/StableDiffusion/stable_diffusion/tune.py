@@ -24,7 +24,7 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
         steps: Number of inference steps
         tuned_model_path: Path to save the tuned model
         batch_sizes: Batch sizes to record before tuning; defaults to [1].
-        strategy: Optional strategy; defaults to MaxThroughput without maximum-batch-size discovery.
+        strategy: Optional strategy; when not provided, automatic resolution is used.
     """
     batch_sizes = batch_sizes or [1]
     pipeline = get_pipeline(model_name=model_name)

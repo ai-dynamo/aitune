@@ -279,6 +279,8 @@ def test_artifact_after_deactivation_exposes_the_final_onnx_interface(
     expected_provider = (execution_provider or ONNXExecutionProvider.CUDA).value
     assert artifact.runtime.options == {"execution_provider": expected_provider}
     assert type(artifact.runtime.options["execution_provider"]) is str
+    assert tuple(sample.name for sample in artifact.sample_inputs) == ("input_x",)
+    assert artifact.sample_inputs[0].shape == (1, 32)
     assert artifact.model.additional_files == ()
     assert artifact.model.files == (artifact.model.path,)
 
@@ -319,6 +321,27 @@ def test_artifact_additional_files_include_discovered_and_exported_data_without_
         Path("weights/first.data"),
         Path("model.onnx.data"),
         Path("weights/second.data"),
+    )
+
+
+def test_artifact_samples_follow_finalized_onnx_input_order(mocker, backend):
+    sample = Mock()
+    second = Mock()
+    second.name = "second"
+    first = Mock()
+    first.name = "first"
+    backend._samples = (sample,)
+    backend._graph_spec = Mock(spec=GraphSpec)
+    backend._input_nodes = [second, first]
+    artifact_input_sample = mocker.patch(
+        "aitune.torch.backend.onnx_runtime_backend.artifact_input_sample", return_value=()
+    )
+
+    assert backend._artifact_sample_inputs() == ()
+    artifact_input_sample.assert_called_once_with(
+        backend._graph_spec,
+        sample,
+        recorded_names=("second", "first"),
     )
 
 
@@ -525,6 +548,7 @@ def test_to_dict_contains_required_keys(mock_onnx, backend, model, graph_spec, s
     assert ONNXRuntimeBackend.STATE_GRAPH_SPEC in state
     assert ONNXRuntimeBackend.STATE_OUTPUT_OBJECT in state
     assert state[ONNXRuntimeBackend.STATE_SAMPLES] == backend._samples.to_dict()
+    assert "sample_inputs" not in state
 
 
 @requires_cuda

@@ -509,7 +509,7 @@ class Module(wrapt.CallableObjectProxy):
         The function checks if there is sufficient strategies (list/dict).
         """
         if strategy is not None:
-            return [materialize_strategy(strategy, self.__wrapped__) for _ in graph_specs]
+            return [materialize_strategy(strategy, self.__wrapped__).clone() for _ in graph_specs]
 
         if self._self_strategy_list:
             if len(self._self_strategy_list) < len(graph_specs):
@@ -533,7 +533,7 @@ class Module(wrapt.CallableObjectProxy):
             return [materialize_strategy(item, self.__wrapped__) for item in self._self_strategy_map.values()]
 
         if self._self_strategy is not None:
-            return [materialize_strategy(self._self_strategy, self.__wrapped__) for _ in graph_specs]
+            return [materialize_strategy(self._self_strategy, self.__wrapped__).clone() for _ in graph_specs]
 
         if dry_run:
             return [DummyTuneStrategy()] * len(graph_specs)

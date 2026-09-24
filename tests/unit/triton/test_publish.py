@@ -39,7 +39,17 @@ def _plan(path: Path, *, profiles: int = 1, use_cuda_graphs: bool = False) -> De
     path.write_bytes(b"TensorRT plan")
     inputs, outputs = _interface()
     return DeploymentArtifact(
-        model=ModelFiles(format="tensorrt_plan", path=path, metadata={"optimization_profile_count": profiles}),
+        model=ModelFiles(
+            format="tensorrt_plan",
+            path=path,
+            metadata={
+                "optimization_profile_count": profiles,
+                "optimization_profiles": (
+                    {"input_ids": {"min_shape": (1, 8), "opt_shape": (4, 128), "max_shape": (8, 512)}},
+                )
+                * profiles,
+            },
+        ),
         inputs=inputs,
         outputs=outputs,
         runtime=RuntimeConfig(name="tensorrt", options={"use_cuda_graphs": use_cuda_graphs}),
@@ -49,27 +59,72 @@ def _plan(path: Path, *, profiles: int = 1, use_cuda_graphs: bool = False) -> De
 def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path):
     artifact = _plan(tmp_path / "source.plan", profiles=2, use_cuda_graphs=True)
 
-    model = aitriton.publish(
-        artifact,
-        path=tmp_path / "repository",
-        model_name="encoder",
-        dynamic_batching=True,
-        max_batch_size=4,
-    )
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
     assert (model / "1" / "model.plan").read_bytes() == b"TensorRT plan"
     config = (model / "config.pbtxt").read_text()
     parsed = text_format.Parse(config, model_config_pb2.ModelConfig())
     assert parsed.name == "encoder"
-    assert parsed.max_batch_size == 4
+    assert parsed.max_batch_size == 8
     assert 'platform: "tensorrt_plan"' in config
-    assert "max_batch_size: 4" in config
+    assert "max_batch_size: 8" in config
     assert parsed.input[0].name == "input_ids"
     assert parsed.input[0].data_type == model_config_pb2.TYPE_INT64
     assert tuple(parsed.input[0].dims) == (-1,)
     assert tuple(parsed.instance_group[0].profile) == ("0", "1")
     assert parsed.optimization.cuda.graphs
     assert parsed.HasField("dynamic_batching")
+
+
+def test_publish_keeps_implicit_batch_axis_for_batch_one_artifact(tmp_path):
+    """A batch-one artifact retains Triton's batch axis without a dynamic batcher."""
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"ONNX graph")
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        inputs=(_spec("input_ids", DType.INT64, (1, 8), (1, 8)),),
+        outputs=(_spec("logits", DType.FLOAT32, (1, 4), (1, 4)),),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 1
+    assert not parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (8,)
+    assert tuple(parsed.output[0].dims) == (4,)
+
+
+def test_publish_uses_smallest_batch_bound_across_inputs_and_outputs(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    artifact = replace(artifact, outputs=(_spec("logits", DType.FLOAT32, (1, 4), (4, 4)),))
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 4
+    assert parsed.HasField("dynamic_batching")
+
+
+def test_publish_keeps_nonleading_batch_axis_in_full_shape(tmp_path):
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"ONNX graph")
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        inputs=(
+            BoundedTensorSpec(name="images", dtype=DType.FLOAT32, min_shape=(3, 1), max_shape=(3, 8), batch_axis=1),
+        ),
+        outputs=(_spec("logits", DType.FLOAT32, (1, 4), (8, 4)),),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 0
+    assert not parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (3, -1)
 
 
 @pytest.mark.parametrize(
@@ -90,14 +145,10 @@ def test_publishes_scalar_tensors_with_triton_reshape(tmp_path, minimum, maximum
     )
     artifact = replace(artifact, inputs=(scalar,), outputs=(scalar,))
 
-    model = aitriton.publish(
-        artifact,
-        path=tmp_path / "repository",
-        model_name="scalar",
-        dynamic_batching=dynamic_batching,
-    )
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="scalar")
 
     parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.HasField("dynamic_batching") == dynamic_batching
     for tensor in (parsed.input[0], parsed.output[0]):
         assert tuple(tensor.dims) == (1,)
         assert tensor.HasField("reshape")
@@ -134,8 +185,9 @@ def test_publishes_onnx_external_data_and_runtime_provider(tmp_path, provider, e
     config = (published / "config.pbtxt").read_text()
     parsed = text_format.Parse(config, model_config_pb2.ModelConfig())
     assert 'platform: "onnxruntime_onnx"' in config
-    assert parsed.max_batch_size == 0
-    assert tuple(parsed.input[0].dims) == (-1, -1)
+    assert parsed.max_batch_size == 8
+    assert parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (-1,)
     accelerators = parsed.optimization.execution_accelerators.gpu_execution_accelerator
     assert tuple(accelerator.name for accelerator in accelerators) == expected_accelerators
 
@@ -157,9 +209,10 @@ def test_publishes_pt2_using_torch_aoti_names(tmp_path):
     assert 'platform: "torch_aoti"' in config
     assert 'name: "INPUT__0"' in config
     assert 'name: "OUTPUT__0"' in config
+    assert "dynamic_batching" in config
 
 
-def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_path):
+def test_structured_pt2_publishes_without_batching(tmp_path):
     package = tmp_path / "source.pt2"
     package.write_bytes(b"PT2 package")
     inputs, outputs = _interface()
@@ -170,18 +223,11 @@ def test_structured_pt2_publishes_unbatched_but_refuses_dynamic_batching(tmp_pat
         runtime=RuntimeConfig(name="aotinductor"),
     )
 
-    published = aitriton.publish(artifact, path=tmp_path / "unbatched", model_name="encoder")
+    published = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     assert (published / "1" / "model.pt2").is_file()
-
-    with pytest.raises(AITunePublicationError, match="structured calls"):
-        aitriton.publish(
-            artifact,
-            path=tmp_path / "repository",
-            model_name="encoder",
-            dynamic_batching=True,
-        )
-
-    assert not (tmp_path / "repository" / "encoder").exists()
+    parsed = text_format.Parse((published / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 0
+    assert not parsed.HasField("dynamic_batching")
 
 
 def test_refuses_to_replace_an_existing_model(tmp_path):
@@ -207,21 +253,6 @@ def test_repository_creation_failure_raises_publication_error(tmp_path):
     assert isinstance(error.value.__cause__, OSError)
 
 
-def test_staging_directory_creation_failure_raises_publication_error(tmp_path, mocker):
-    artifact = _plan(tmp_path / "source.plan")
-    repository = tmp_path / "repository"
-    make_staging = mocker.patch(
-        "aitune.triton.model_repository.tempfile.mkdtemp", side_effect=OSError("staging unavailable")
-    )
-
-    with pytest.raises(AITunePublicationError, match="staging unavailable") as error:
-        aitriton.publish(artifact, path=repository, model_name="encoder")
-
-    assert isinstance(error.value.__cause__, OSError)
-    make_staging.assert_called_once_with(dir=tmp_path)
-    assert not (repository / "encoder").exists()
-
-
 def test_publishes_to_current_directory(tmp_path, monkeypatch):
     artifact = _plan(tmp_path / "source.plan")
     repository = tmp_path / "repository"
@@ -233,55 +264,7 @@ def test_publishes_to_current_directory(tmp_path, monkeypatch):
     assert (repository / "encoder" / "1" / "model.plan").read_bytes() == b"TensorRT plan"
 
 
-def test_uses_explicit_staging_path_outside_repository(tmp_path):
-    artifact = _plan(tmp_path / "source.plan")
-    repository = tmp_path / "repository"
-    staging_root = tmp_path / "staging"
-
-    published = aitriton.publish(
-        artifact,
-        path=repository,
-        model_name="encoder",
-        staging_path=staging_root,
-    )
-
-    assert published == repository / "encoder"
-    assert not tuple(staging_root.iterdir())
-
-
-def test_rejects_staging_path_inside_repository_before_export(tmp_path, mocker):
-    artifact = _plan(tmp_path / "source.plan")
-    repository = tmp_path / "repository"
-    export_files = mocker.patch.object(ModelFiles, "export_files")
-
-    with pytest.raises(AITunePublicationError, match="outside the model repository"):
-        aitriton.publish(
-            artifact,
-            path=repository,
-            model_name="encoder",
-            staging_path=repository / "staging",
-        )
-
-    export_files.assert_not_called()
-
-
-def test_rejects_staging_path_on_different_filesystem_before_export(tmp_path, mocker):
-    artifact = _plan(tmp_path / "source.plan")
-    export_files = mocker.patch.object(ModelFiles, "export_files")
-    mocker.patch("aitune.triton.model_repository._same_filesystem", return_value=False)
-
-    with pytest.raises(AITunePublicationError, match="same filesystem"):
-        aitriton.publish(
-            artifact,
-            path=tmp_path / "repository",
-            model_name="encoder",
-            staging_path=tmp_path / "staging",
-        )
-
-    export_files.assert_not_called()
-
-
-def test_copy_failure_leaves_no_partial_model(tmp_path):
+def test_copy_failure_leaves_partial_model_for_caller_to_remove(tmp_path):
     artifact = _plan(tmp_path / "source.plan")
     artifact = replace(
         artifact,
@@ -289,26 +272,10 @@ def test_copy_failure_leaves_no_partial_model(tmp_path):
         runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
     )
 
-    with pytest.raises(AITunePublicationError, match="Failed to publish"):
+    with pytest.raises(AITunePublicationError, match="An incomplete model directory may remain"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
 
-    assert not tuple((tmp_path / "repository").iterdir())
-
-
-def test_cleanup_failure_is_reported(tmp_path, mocker):
-    artifact = _plan(tmp_path / "source.plan")
-    artifact = replace(
-        artifact,
-        model=ModelFiles(format="onnx", path=artifact.model.path, additional_files=(Path("missing.bin"),)),
-        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
-    )
-    mocker.patch("aitune.triton.model_repository.shutil.rmtree", side_effect=OSError("cleanup unavailable"))
-
-    with pytest.raises(AITunePublicationError, match="failed to clean staging directory") as error:
-        aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
-
-    assert isinstance(error.value.__cause__, OSError)
-    assert "cleanup unavailable" in str(error.value)
+    assert (tmp_path / "repository" / "encoder" / "config.pbtxt").is_file()
 
 
 @pytest.mark.parametrize(

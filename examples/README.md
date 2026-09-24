@@ -26,6 +26,7 @@ Shows how to tune ResNet models for image classification tasks. This example dem
   - Model tuning with AITune
   - Image classification inference
   - Performance comparison before/after tuning
+  - Triton model repository generation and Model Analyzer-guided configuration promotion
 - **More Info**:
   - https://huggingface.co/microsoft/resnet-50
 
