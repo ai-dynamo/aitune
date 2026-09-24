@@ -71,6 +71,22 @@ def test_existing_model_requires_config_and_never_replaces_model(tmp_path):
     assert (model / "1/model.onnx").read_bytes() == b"graph"
 
 
+def test_existing_model_rejects_version_policy_that_excludes_published_version(tmp_path):
+    source = tmp_path / "encoder.onnx"
+    source.write_bytes(b"graph")
+    config = _config("onnx").model_copy(update={"version_policy": {"specific": {"versions": [2]}}})
+    repository = tmp_path / "repository"
+
+    with pytest.raises(AITuneUserInputError, match="version_policy"):
+        publish(source, path=repository, config=config, model_version=1)
+
+    assert not repository.exists()
+
+    allowed_config = config.model_copy(update={"version_policy": {"specific": {"versions": [1, 2]}}})
+    model = publish(source, path=repository, config=allowed_config, model_version=1)
+    assert (model / "1" / "model.onnx").read_bytes() == b"graph"
+
+
 def test_existing_model_copy_failure_can_leave_incomplete_directory(tmp_path):
     source = tmp_path / "encoder.onnx"
     source.write_bytes(b"graph")
