@@ -10,7 +10,7 @@ from pathlib import Path
 import torch
 from transformers import AutoConfig
 
-from aitune.torch import MaxThroughputStrategy, Module, save, tune
+from aitune.torch import MaxThroughputStrategy, Module, PerformanceValidationMode, save, tune
 from aitune.torch.backend import (
     ONNXRuntimeBackend,
     TensorRTBackend,
@@ -53,6 +53,10 @@ def tune_model(source_kind: str, target: str, checkpoint: Path, model_name: str)
         backends.append(ONNXRuntimeBackend())
 
     strategy = MaxThroughputStrategy(backends)
+    strategy.enable_find_max_batch_size(False)
+    if target == "triton":
+        # Triton needs a deployable backend; eager baseline selection cannot be published.
+        strategy.enable_performance_validation(PerformanceValidationMode.DISABLED)
     module = Module(source, "bert", strategy=strategy)
     try:
         tune(

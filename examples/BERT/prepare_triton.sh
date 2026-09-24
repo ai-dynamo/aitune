@@ -23,6 +23,7 @@ docker run --rm --gpus all --ipc host \
   -w /workspace/examples/BERT \
   "nvcr.io/nvidia/tritonserver:$NVIDIA_RELEASE-py3" \
   bash -lc '
+    set -euo pipefail
     python3 -m venv --system-site-packages /tmp/aitune-bert
     source /tmp/aitune-bert/bin/activate
     pip install --extra-index-url https://pypi.nvidia.com \

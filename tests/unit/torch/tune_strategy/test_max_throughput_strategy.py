@@ -409,7 +409,7 @@ def test_max_throughput_torcheager_excluded_from_selection_when_performance_vali
         tmp_path,
     )
 
-    assert not isinstance(selected, TorchEagerBackend)
+    assert selected is user_backend
     assert strategy._baseline_backend is None
     assert strategy.perf_validation_results == []
 
