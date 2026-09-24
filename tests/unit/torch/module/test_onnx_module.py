@@ -44,10 +44,10 @@ def test_onnx_module_simple_inference(onnx_add_path, device):
 
 def test_onnx_module_requires_path():
     with pytest.raises(TypeError, match="path"):
-        OnnxModule()
+        OnnxModule()  # pytype: disable=missing-parameter
 
     with pytest.raises(TypeError, match="ONNX file path is required"):
-        OnnxModule(None)
+        OnnxModule(None)  # pytype: disable=wrong-arg-types
 
 
 @pytest.mark.parametrize("path", ["", "   ", Path("")])
