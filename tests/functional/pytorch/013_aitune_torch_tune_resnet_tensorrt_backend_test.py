@@ -12,10 +12,10 @@ import timm
 import torch
 
 from aitune.torch.backend.tensorrt.tensorrt_backend import (
-    ProfileMode,
     TensorRTBackend,
     TensorRTBackendConfig,
     TensorRTProfile,
+    TensorRTProfileMode,
 )
 from aitune.torch.config import config as global_config
 from aitune.torch.module.wrapper_module import Module
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     # multi profile, auto generated profiles with batch sizes and samples
     do_test(
         TensorRTBackend(
-            config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED),
+            config=TensorRTBackendConfig(profiles=TensorRTProfileMode.SAMPLES_USED),
         ),
         dtype=torch.bfloat16,
         device="cuda",

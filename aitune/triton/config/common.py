@@ -5,7 +5,7 @@
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from google.protobuf import json_format, text_format
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -97,7 +97,7 @@ class TritonTensorConfig(BaseModel):
 class BaseModelConfig(BaseModel, ABC):
     """Internal fields and validation shared by supported Triton backends."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
     name: str = Field(min_length=1)
     platform: Literal["tensorrt_plan", "onnxruntime_onnx", "torch_aoti"]
@@ -133,7 +133,7 @@ class BaseModelConfig(BaseModel, ABC):
         artifact: DeploymentArtifact,
         *,
         name: str,
-    ) -> "BaseModelConfig":
+    ) -> Self:
         """Derive Triton batching and runtime settings from the artifact."""
         max_batch_size = artifact.max_batch_size or 0
         if any(

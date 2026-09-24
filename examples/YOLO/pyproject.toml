@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+[project]
+name = "aitune-yolo-triton-example"
+version = "0.1.0"
+description = "YOLOv10n ONNX Triton tuning example"
+readme = "README.md"
+license = { text = "Apache 2.0" }
+requires-python = ">=3.11, <3.14"
+dependencies = [
+    "aitune",
+    "torch",
+    "huggingface-hub",
+    "numpy",
+]
+
+[project.optional-dependencies]
+triton = ["aitune[triton,torch212]"]
+
+[tool.uv.sources]
+aitune = { path = "../../" }
+
+[project.scripts]
+tune = "yolo.tune:main"
+python-inference = "yolo.python_inference:main"
+triton-model-store = "yolo.triton.model_store:main"
+yolo-tune = "yolo.tune:main"
+yolo-python-inference = "yolo.python_inference:main"
+yolo-triton-model-store = "yolo.triton.model_store:main"
+yolo-triton-promote = "yolo.triton.promote:main"
+yolo-triton-inference = "yolo.triton.client:main"
+
+[build-system]
+requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+namespaces = false
+include = ["yolo", "yolo.*"]
+
+[tool.aitune]
+docker_image = "nvcr.io/nvidia/pytorch:26.05-py3"
+timeout = "1h"
+workflows = [{ name = "triton", install_script = "install.sh" }]

@@ -69,8 +69,13 @@ class FindMaxBatchSizeMixin(TuneStrategy):
                     try:
                         backend._assert_supported_modules(module)
                     except Exception:
+                        supported_formats = ", ".join(
+                            sorted(module_format.value for module_format in backend._supported_modules)
+                        )
                         self._logger.warning(
-                            "⚠️ Backend %s does not support %s modules", backend.name, backend._supported_modules
+                            "⚠️ Backend %s does not support this module (supported formats: %s)",
+                            backend.name,
+                            supported_formats,
                         )
                         backend = get_default_backend_for_module(module)
                         self._logger.warning("⚠️ Using default backend %s", backend.name)

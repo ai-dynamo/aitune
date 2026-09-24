@@ -107,7 +107,7 @@ class TensorRTBackendConfig(BackendConfig):
     optimization_level: int | None = None
     compatibility_level: int | None = None
     timing_cache: Path | None = None
-    profiles: ProfileMode | list[TensorRTProfile] = ProfileMode.SINGLE
+    profiles: TensorRTProfileMode | list[TensorRTProfile] = TensorRTProfileMode.SINGLE
     device: str = "cuda"
     quantization_config: ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None = None
     enable_tf32: bool = True
@@ -225,16 +225,16 @@ config = TensorRTBackendConfig(
 Optimization profiles for dynamic shapes.
 
 ```python
-from aitune.torch.backend.tensorrt import ProfileMode, TensorRTProfile
+from aitune.torch.backend.tensorrt import TensorRTProfile, TensorRTProfileMode
 
 # Single profile (default)
 config = TensorRTBackendConfig(
-    profiles=ProfileMode.SINGLE,
+    profiles=TensorRTProfileMode.SINGLE,
 )
 
 # Multiple profiles from samples
 config = TensorRTBackendConfig(
-    profiles=ProfileMode.SAMPLES_USED,
+    profiles=TensorRTProfileMode.SAMPLES_USED,
 )
 
 # Custom profiles
@@ -396,7 +396,7 @@ Automatically generates a single profile from recorded samples:
 
 ```python
 config = TensorRTBackendConfig(
-    profiles=ProfileMode.SINGLE,
+    profiles=TensorRTProfileMode.SINGLE,
 )
 ```
 
@@ -406,11 +406,15 @@ config = TensorRTBackendConfig(
 
 #### SAMPLES_USED
 
-Generates one profile per unique input shape:
+Generates one exact profile per unique recorded input shape. For dynamic inputs, a wide fallback follows the exact
+profiles and covers the observed range. If find-max-batch-size is enabled, it also covers the discovered batch bound.
+
+When the module defines explicit dynamic shapes, those definitions take precedence and produce one graph-derived
+profile instead of sample profiles.
 
 ```python
 config = TensorRTBackendConfig(
-    profiles=ProfileMode.SAMPLES_USED,
+    profiles=TensorRTProfileMode.SAMPLES_USED,
 )
 ```
 

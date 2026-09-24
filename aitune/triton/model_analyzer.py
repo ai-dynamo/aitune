@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 import numpy as np
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tritonclient.grpc import model_config_pb2
 
 from aitune.records import DeploymentArtifact, DType
@@ -18,9 +18,39 @@ from aitune.records import DeploymentArtifact, DType
 _CONFIG_FILE_NAME = "config.yaml"
 _INPUT_DATA_FILE_NAME = "input-data.json"
 _DEFAULT_MAX_INSTANCE_COUNT = 3
+_INFERENCE_OUTPUT_FIELDS = (
+    "model_name",
+    "batch_size",
+    "concurrency",
+    "model_config_path",
+    "instance_group",
+    "max_batch_size",
+    "satisfies_constraints",
+    "perf_throughput",
+    "perf_latency_p90",
+    "perf_latency_p95",
+    "perf_latency_p99",
+)
 
 
-class _ModelAnalyzerConfig(BaseModel):
+class ModelAnalyzerConfig(BaseModel):
+    """User options for the Model Analyzer config generated during publication."""
+
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+
+    latency_budget_ms: int | None = Field(default=None, ge=1, strict=True)
+    latency_percentile: int = Field(default=95, strict=True)
+
+    @field_validator("latency_percentile")
+    @classmethod
+    def _validate_latency_percentile(cls, percentile: int) -> int:
+        """Limit latency constraints to percentiles reported by Model Analyzer."""
+        if percentile not in (90, 95, 99):
+            raise ValueError("latency_percentile must be 90, 95, or 99")
+        return percentile
+
+
+class _ModelAnalyzerYamlConfig(BaseModel):
     """Validated configuration for Model Analyzer's quick search mode."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -31,8 +61,9 @@ class _ModelAnalyzerConfig(BaseModel):
     output_model_repository_path: Path
     override_output_model_repository: Literal[False] = False
     export_path: Path
-    perf_analyzer_flags: dict[str, tuple[str, ...]] = Field(default_factory=dict)
-    latency_budget: int | None = Field(default=None, ge=1)
+    perf_analyzer_flags: dict[str, tuple[str, ...] | int] = Field(default_factory=dict)
+    constraints: dict[str, dict[str, int]] | None = None
+    inference_output_fields: tuple[str, ...] = _INFERENCE_OUTPUT_FIELDS
     run_config_search_mode: Literal["quick"] = "quick"
     run_config_search_min_instance_count: int = Field(default=1, ge=1)
     run_config_search_max_instance_count: int = Field(default=3, ge=1)
@@ -51,7 +82,7 @@ def write_model_analyzer_config(
     config: model_config_pb2.ModelConfig,
     model_directory: Path,
     destination: Path,
-    latency_budget_ms: int | None,
+    options: ModelAnalyzerConfig,
     output_directory: Path,
     input_data_path: Path,
 ) -> None:
@@ -60,7 +91,7 @@ def write_model_analyzer_config(
     if input_data is not None:
         perf_flags["input-data"] = (str(input_data_path.resolve()),)
 
-    analyzer_config = _quick_config(config, model_directory, destination, perf_flags, latency_budget_ms)
+    analyzer_config = _quick_config(config, model_directory, destination, perf_flags, options)
     output_directory.mkdir(parents=True, exist_ok=True)
     (output_directory / _CONFIG_FILE_NAME).write_text(analyzer_config.to_yaml())
     if input_data is not None:
@@ -121,14 +152,18 @@ def _quick_config(
     model_directory: Path,
     destination: Path,
     perf_flags: dict[str, tuple[str, ...]],
-    latency_budget_ms: int | None,
-) -> _ModelAnalyzerConfig:
+    options: ModelAnalyzerConfig,
+) -> _ModelAnalyzerYamlConfig:
     """Build a quick search within the published model's batch limit."""
     batched = config.max_batch_size > 0
-    return _ModelAnalyzerConfig(
+    latency_budget_ms = options.latency_budget_ms
+    latency_percentile = options.latency_percentile
+    return _ModelAnalyzerYamlConfig(
         model_repository=model_directory.parent.resolve(),
-        perf_analyzer_flags=perf_flags,
-        latency_budget=latency_budget_ms,
+        perf_analyzer_flags={**perf_flags, "percentile": latency_percentile},
+        constraints={f"perf_latency_p{latency_percentile}": {"max": latency_budget_ms}}
+        if latency_budget_ms is not None
+        else None,
         profile_models=(config.name,),
         checkpoint_directory=(destination / "checkpoints").resolve(),
         output_model_repository_path=(destination / "model-repository").resolve(),

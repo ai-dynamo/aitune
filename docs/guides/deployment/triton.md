@@ -69,8 +69,8 @@ model_path = publish("encoder.onnx", path="model_repository", config=config)
 ```
 
 The default `batcher=DynamicBatcher()` combines independent requests. For a stateful model, set
-`batcher=SequenceBatcher(...)` instead. Set `batcher=None` to omit both schedulers; a positive `max_batch_size` still
-allows batched requests, while `max_batch_size=0` disables batching and requires `batcher=None`.
+`batcher=SequenceBatcher(...)` instead. Set `batcher=None` to omit both schedulers from the generated config.
+`max_batch_size` can remain positive so clients can send batched requests without AITune configuring a dynamic batcher.
 
 Use `additional_files` for ONNX external data and `resources` for referenced labels or warmup files. Existing-file
 publication writes `config.pbtxt` but has no artifact from which to derive Model Analyzer input shapes or samples.
@@ -162,10 +162,29 @@ the Python backend and those dependencies.
 ## Artifact batching
 
 AITune derives Triton's batching configuration from the artifact. When every input and output has a batch axis on the
-first dimension, the generated `max_batch_size` is the smallest recorded maximum across those tensors. A batch-one
-artifact keeps `max_batch_size=1` and the implicit batch dimension, without a dynamic batcher. Dynamic batching is
-enabled when the supported maximum is at least 2. Artifacts without a compatible batch axis use `max_batch_size=0`
-and retain their full tensor shapes. Structured PT2 calls also use `max_batch_size=0`.
+first dimension and supports batch size one, the generated `max_batch_size` is the smallest recorded maximum across
+those tensors. A batch-one artifact keeps `max_batch_size=1` and the implicit batch dimension, without a dynamic
+batcher. Dynamic batching is enabled when the supported maximum is at least 2. If any tensor lacks a leading batch
+axis or has a minimum batch size greater than one, AITune uses `max_batch_size=0` and retains full tensor shapes.
+Structured PT2 calls also use `max_batch_size=0`.
+
+To override deployment settings, derive a specialized config from the artifact and assign the fields you want to
+change. Assignment validates the new values:
+
+```python
+from aitune.triton import TensorRTModelConfig
+
+config = TensorRTModelConfig.from_artifact(artifact, name="encoder")
+config.batcher = None
+config.max_batch_size = 32  # Use a limit supported by the executable.
+publish(artifact, path="model_repository", config=config)
+```
+
+AITune checks that a supplied config has the artifact's backend type and model name. You are responsible for keeping
+its tensor interface, model filename, and runtime settings compatible with the executable. If `model_name` is omitted,
+`config.name` names the model. Set `batcher=None` to omit dynamic batching while retaining a positive batch limit.
+If you change `max_batch_size` from a positive value to zero, also update the input and output dimensions to include
+the leading axis.
 
 For an existing model file, supply the batching settings through its backend-specific `config`. Its `max_batch_size`
 and `batcher` fields control Triton's implicit batch dimension and scheduler.
@@ -177,6 +196,22 @@ for each request.
 
 Publication generates `model_analyzer/config.yaml` for a bounded search. Perf Analyzer concurrency is capped at twice
 the published maximum batch size.
+
+For an artifact, configure Model Analyzer's latency objective during publication:
+
+```python
+from aitune.triton import ModelAnalyzerConfig, publish
+
+publish(
+    artifact,
+    path="model_repository",
+    model_analyzer=ModelAnalyzerConfig(latency_budget_ms=50, latency_percentile=95),
+)
+```
+
+This limits the search to configurations whose p95 latency is at most 50 ms. The budget defaults to `None`, while
+the percentile defaults to 95. The percentile still controls Perf Analyzer's latency stability check when no budget
+is set. Supported percentiles are 90, 95, and 99; throughput remains an independently measured inference rate.
 
 The configuration uses the artifact's recorded minimum input shapes. Batched deployments omit the leading batch
 dimension from Perf Analyzer shape flags. Model Analyzer skips combinations where the Perf Analyzer request batch size

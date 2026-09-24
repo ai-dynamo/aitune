@@ -17,6 +17,8 @@ from aitune.records import (
     ModelFiles,
     RuntimeConfig,
 )
+from aitune.triton import DynamicBatcher, ONNXRuntimeModelConfig, TensorRTModelConfig
+from aitune.triton.config.common import tensor_config
 
 
 def _spec(
@@ -74,6 +76,124 @@ def test_publishes_tensorrt_plan_with_bounds_batching_and_profiles(tmp_path):
     assert tuple(parsed.instance_group[0].profile) == ("0", "1")
     assert parsed.optimization.cuda.graphs
     assert parsed.HasField("dynamic_batching")
+
+
+def test_artifact_uses_supplied_matching_config(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    config = TensorRTModelConfig.from_artifact(artifact, name="encoder")
+    config.batcher = DynamicBatcher(max_queue_delay_microseconds=100)
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", config=config)
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert model.name == "encoder"
+    assert parsed.dynamic_batching.max_queue_delay_microseconds == 100
+    assert parsed.max_batch_size == 8
+
+
+def test_artifact_config_can_use_full_tensor_shapes_without_triton_batching(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    config = TensorRTModelConfig(
+        name="encoder",
+        max_batch_size=0,
+        inputs=tuple(tensor_config(spec, batched=False) for spec in artifact.inputs),
+        outputs=tuple(tensor_config(spec, batched=False) for spec in artifact.outputs),
+        batcher=None,
+        optimization_profile_indices=(0,),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", config=config)
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 0
+    assert not parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (-1, -1)
+
+
+def test_onnx_artifact_uses_supplied_config_without_triton_batching(tmp_path):
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"ONNX graph")
+    inputs, outputs = _interface()
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        inputs=inputs,
+        outputs=outputs,
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+    )
+    config = ONNXRuntimeModelConfig(
+        name="encoder",
+        max_batch_size=0,
+        inputs=tuple(tensor_config(spec, batched=False) for spec in inputs),
+        outputs=tuple(tensor_config(spec, batched=False) for spec in outputs),
+        batcher=None,
+        execution_provider="cuda",
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", config=config)
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 0
+    assert not parsed.HasField("dynamic_batching")
+    assert tuple(parsed.input[0].dims) == (-1, -1)
+
+
+@pytest.mark.parametrize("max_batch_size", [4, 16])
+def test_artifact_config_can_override_batch_limit(tmp_path, max_batch_size):
+    artifact = _plan(tmp_path / "source.plan")
+    config = TensorRTModelConfig.from_artifact(artifact, name="encoder")
+    config.max_batch_size = max_batch_size
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", config=config)
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == max_batch_size
+
+
+def test_artifact_config_can_omit_scheduler_with_positive_batch_limit(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    config = TensorRTModelConfig.from_artifact(artifact, name="encoder")
+    config.batcher = None
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", config=config)
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.max_batch_size == 8
+    assert not parsed.HasField("dynamic_batching")
+
+
+@pytest.mark.parametrize("mismatch", ["name", "platform"])
+def test_artifact_rejects_config_that_does_not_match(tmp_path, mismatch):
+    artifact = _plan(tmp_path / "source.plan")
+    default = TensorRTModelConfig.from_artifact(artifact, name="encoder")
+    if mismatch == "name":
+        config = default.model_copy(update={"name": "other"})
+        model_name = "encoder"
+    elif mismatch == "platform":
+        config = ONNXRuntimeModelConfig(
+            name="encoder",
+            max_batch_size=default.max_batch_size,
+            inputs=default.inputs,
+            outputs=default.outputs,
+            execution_provider="cuda",
+        )
+        model_name = None
+    with pytest.raises(AITunePublicationError, match="config.*artifact|artifact.*config"):
+        aitriton.publish(artifact, path=tmp_path / "repository", model_name=model_name, config=config)
+
+    assert not (tmp_path / "repository").exists()
+
+
+def test_artifact_accepts_supplied_tensor_and_profile_settings(tmp_path):
+    artifact = _plan(tmp_path / "source.plan", profiles=2)
+    default = TensorRTModelConfig.from_artifact(artifact, name="encoder")
+    changed_input = default.inputs[0].model_copy(update={"dims": (16,)})
+    config = default.model_copy(update={"inputs": (changed_input,), "optimization_profile_indices": (2,)})
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", config=config)
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert tuple(parsed.input[0].dims) == (16,)
+    assert tuple(parsed.instance_group[0].profile) == ("2",)
 
 
 def test_publish_keeps_implicit_batch_axis_for_batch_one_artifact(tmp_path):
