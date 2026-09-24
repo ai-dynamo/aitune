@@ -56,7 +56,7 @@ def tune_model(source_kind: str, target: str, checkpoint: Path, model_name: str)
     strategy.enable_find_max_batch_size(False)
     if target == "triton":
         # Triton needs a deployable backend; eager baseline selection cannot be published.
-        strategy.enable_performance_validation(PerformanceValidationMode.DISABLED)
+        strategy.enable_performance_validation(PerformanceValidationMode.DIAGNOSTIC)
     module = Module(source, "bert", strategy=strategy)
     try:
         tune(
