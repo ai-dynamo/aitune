@@ -92,7 +92,7 @@ class TensorRTRunner:
         self._engine_info = None
 
 
-class ProfileMode(Enum):
+class TensorRTProfileMode(Enum):
     """Mode how TRT optimization profiles will be generated for TensorRT engine.
 
     Attributes:
@@ -133,7 +133,7 @@ class TensorRTBackendConfig(BackendConfig):
     optimization_level: int | None = None
     compatibility_level: int | None = None
     timing_cache: Path | None = None
-    profiles: ProfileMode | list[TensorRTProfile] = ProfileMode.SINGLE
+    profiles: TensorRTProfileMode | list[TensorRTProfile] = TensorRTProfileMode.SINGLE
     device: str = "cuda"
     quantization_config: ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None = None
     enable_tf32: bool = True
@@ -156,7 +156,7 @@ class TensorRTBackendConfig(BackendConfig):
     def from_dict(cls, data: dict) -> "TensorRTBackendConfig":
         """Initialise config from a plain dict (e.g. parsed from YAML).
 
-        ``profiles`` may be passed as a string (``ProfileMode`` value) or a
+        ``profiles`` may be passed as a string (``TensorRTProfileMode`` value) or a
         list of profile dicts and will be reconstructed automatically.
         ``quantization_config`` may be passed as a dict with a ``_type`` key
         (produced by ``to_dict()``) and will be reconstructed automatically.
@@ -169,11 +169,11 @@ class TensorRTBackendConfig(BackendConfig):
         return cls(**data)
 
     @classmethod
-    def profiles_from_dict(cls, data: str | list[dict]) -> ProfileMode | list[TensorRTProfile]:
+    def profiles_from_dict(cls, data: str | list[dict]) -> TensorRTProfileMode | list[TensorRTProfile]:
         """Convert dict to list of TensorRTProfile."""
         if isinstance(data, list):
             return [TensorRTProfile.from_dict(profile) for profile in data]
-        return ProfileMode(data)
+        return TensorRTProfileMode(data)
 
     @classmethod
     def quantization_config_from_dict(
@@ -250,7 +250,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         self._config = config or TensorRTBackendConfig()
 
-        if self._config.profiles == ProfileMode.SAMPLES_USED and global_config.max_num_samples_stored <= 1:
+        if self._config.profiles == TensorRTProfileMode.SAMPLES_USED and global_config.max_num_samples_stored <= 1:
             raise ValueError(
                 """aitune.torch.config.max_num_samples_stored is set to 1, change it to number of samples to use for profile generation.
                 Example:
@@ -1130,8 +1130,8 @@ class TensorRTBackend(Backend, TensorRTRunner):
         """Create profiles from samples or from graph_spec.
 
         If self._config.profiles is a list, return the user provided profiles.
-        If self._config.profiles is ProfileMode.SINGLE, create a single profile from the graph spec.
-        If self._config.profiles is ProfileMode.SAMPLES_USED, create exact profiles from samples and a wide fallback
+        If self._config.profiles is TensorRTProfileMode.SINGLE, create a single profile from the graph spec.
+        If self._config.profiles is TensorRTProfileMode.SAMPLES_USED, create exact profiles from samples and a wide fallback
         for the graph's shape range, including the discovered maximum batch size.
         Explicit module shape definitions always produce a single authoritative profile and cannot be combined with
         user-provided TensorRT profiles.
@@ -1154,7 +1154,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         if isinstance(self._config.profiles, list):
             return self._get_user_profiles(graph_spec)
 
-        if self._config.profiles == ProfileMode.SINGLE:
+        if self._config.profiles == TensorRTProfileMode.SINGLE:
             # this will create a single profile from the graph spec
             return self._get_profiles_from_shapes(graph_spec)
 

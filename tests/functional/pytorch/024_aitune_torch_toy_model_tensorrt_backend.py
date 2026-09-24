@@ -11,9 +11,9 @@ from polygraphy.backend.trt import TrtRunner
 
 from aitune.records import DeploymentArtifact, DType
 from aitune.torch.backend.tensorrt.tensorrt_backend import (
-    ProfileMode,
     TensorRTBackend,
     TensorRTBackendConfig,
+    TensorRTProfileMode,
 )
 from aitune.torch.config import config as global_config
 from aitune.torch.dataloader import DynamicShapeDataset
@@ -92,7 +92,7 @@ def testing_multi_profile_with_samples():
     global_config.max_num_samples_stored = 4
 
     # configure the backend to use multi-profile mode, and auto generate profiles from samples used for tuning
-    backend = TensorRTBackend(TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+    backend = TensorRTBackend(TensorRTBackendConfig(profiles=TensorRTProfileMode.SAMPLES_USED))
     strategy = OneBackendStrategy(backend)
     strategy.enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)

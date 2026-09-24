@@ -149,7 +149,7 @@ def test_tensor_names_do_not_affect_graph_identity():
 def test_tensorrt_profiles_and_bindings_use_original_names(named_source, layout, profile_mode, tmp_path):
     from types import SimpleNamespace
 
-    from aitune.torch.backend.tensorrt.tensorrt_backend import ProfileMode, TensorRTBackend
+    from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTProfileMode
     from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
     from aitune.torch.dynamic_shapes import BatchDim
 
@@ -158,7 +158,7 @@ def test_tensorrt_profiles_and_bindings_use_original_names(named_source, layout,
     backend._graph_spec = graph
     expected = ([1, 3], [4, 3], [4, 3])
     if profile_mode == "samples":
-        backend._config.profiles = ProfileMode.SAMPLES_USED
+        backend._config.profiles = TensorRTProfileMode.SAMPLES_USED
         expected = ([2, 3], [2, 3], [2, 3])
     elif profile_mode == "explicit":
         graph.dynamic_shapes = {

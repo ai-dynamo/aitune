@@ -13,9 +13,9 @@ from transformers import AutoConfig
 from aitune.torch import MaxThroughputStrategy, Module, save, tune
 from aitune.torch.backend import (
     ONNXRuntimeBackend,
-    ProfileMode,
     TensorRTBackend,
     TensorRTBackendConfig,
+    TensorRTProfileMode,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
 )
@@ -46,7 +46,7 @@ def tune_model(source_kind: str, target: str, checkpoint: Path, model_name: str)
     )
     requests = {length: values.cuda() for length, values in tokens.items()}
 
-    backends = [TensorRTBackend(config=TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))]
+    backends = [TensorRTBackend(config=TensorRTBackendConfig(profiles=TensorRTProfileMode.SAMPLES_USED))]
     if source_kind == "torch":
         backends.append(TorchInductorAotBackend() if target == "triton" else TorchInductorJitBackend())
     else:

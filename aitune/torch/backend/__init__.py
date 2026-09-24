@@ -12,10 +12,10 @@ from aitune.torch.backend.onnx_runtime_backend import (
 from aitune.torch.backend.tensorrt import (
     ONNXAutoCastConfig,
     ONNXQuantizationConfig,
-    ProfileMode,
     TensorRTBackend,
     TensorRTBackendConfig,
     TensorRTProfile,
+    TensorRTProfileMode,
     TorchQuantizationConfig,
 )
 from aitune.torch.backend.torch_eager import TorchEagerBackend, TorchEagerBackendConfig
@@ -39,7 +39,7 @@ __all__ = [
     "BuildMode",
     "ExecutionMode",
     "ModuleFormat",
-    "ProfileMode",
+    "TensorRTProfileMode",
     "KernelSelectorBackend",
     "KernelSelectorBackendConfig",
     "ONNXAutoCastConfig",
