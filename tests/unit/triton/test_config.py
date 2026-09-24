@@ -61,6 +61,23 @@ def test_batched_model_without_scheduler():
     assert not result.HasField("sequence_batching")
 
 
+def test_model_config_fields_can_be_updated_with_validation():
+    model = config("trt")
+
+    model.max_batch_size = 32
+    model.batcher = None
+
+    result = roundtrip(model)
+    assert result.max_batch_size == 32
+    assert not result.HasField("dynamic_batching")
+
+    with pytest.raises(ValidationError, match="greater than or equal"):
+        model.max_batch_size = -1
+
+    with pytest.raises(ValidationError, match="preferred_batch_size cannot exceed max_batch_size"):
+        model.batcher = DynamicBatcher(preferred_batch_size=(64,))
+
+
 @pytest.mark.parametrize("dtype", list(TritonDataType))
 def test_tensor_datatypes(dtype):
     result = roundtrip(config(inputs=(tensor(data_type=dtype),)))
