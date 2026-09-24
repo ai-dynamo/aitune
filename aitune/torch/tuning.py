@@ -9,6 +9,7 @@ from pathlib import Path
 
 import torch
 
+from aitune.exceptions import AITuneUserInputError
 from aitune.global_context import BATCH_SIZE_KEY, MODULE_CONTEXT_KEY, global_context
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.storage import Storage
@@ -60,10 +61,15 @@ def tune(
 
     Note:
         Max batch size is limited by specified batch_size.
+        Registered modules must be untuned. A loaded checkpoint is deployed and cannot be temporarily deactivated
+        to free VRAM during tuning.
     """
     with report_tune_run(AITuneMode.DECLARATIVE):
         # Setup logging
         setup_logging(format_string=LOG_FORMAT)
+
+        with coordinator.raise_if_any_rank_fails("Checking registered modules before tuning", AITuneUserInputError):
+            _reject_already_tuned_modules()
 
         if clear_cache:
             _clear_cache()
@@ -189,6 +195,18 @@ def load(
         logger.info("✅ Checkpoint loaded from: %s in %.2f seconds", path, timer.elapsed)
 
         return module
+
+
+def _reject_already_tuned_modules() -> None:
+    """Reject loaded or previously tuned modules before recording samples."""
+    already_tuned_names = [
+        name for name, module in MODULE_REGISTRY.modules.items() if module.state == ModuleState.TUNED
+    ]
+    if already_tuned_names:
+        raise AITuneUserInputError(
+            f"Cannot tune while registered modules are already tuned: {', '.join(already_tuned_names)}. "
+            "Start tuning with vanilla models instead of loaded or deployed artifacts."
+        )
 
 
 def _validate_and_normalize_batch_sizes(batch_sizes: list[int] | None) -> list[int]:
