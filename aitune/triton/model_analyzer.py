@@ -33,7 +33,16 @@ _INFERENCE_OUTPUT_FIELDS = (
 )
 
 
-class _ModelAnalyzerConfig(BaseModel):
+class ModelAnalyzerConfig(BaseModel):
+    """User options for the Model Analyzer config generated during publication."""
+
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+
+    latency_budget_ms: int | None = Field(default=None, ge=1, strict=True)
+    latency_percentile: Literal[90, 95, 99] = 95
+
+
+class _ModelAnalyzerYamlConfig(BaseModel):
     """Validated configuration for Model Analyzer's quick search mode."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -65,8 +74,7 @@ def write_model_analyzer_config(
     config: model_config_pb2.ModelConfig,
     model_directory: Path,
     destination: Path,
-    latency_budget_ms: int | None,
-    latency_percentile: int,
+    options: ModelAnalyzerConfig,
     output_directory: Path,
     input_data_path: Path,
 ) -> None:
@@ -75,9 +83,7 @@ def write_model_analyzer_config(
     if input_data is not None:
         perf_flags["input-data"] = (str(input_data_path.resolve()),)
 
-    analyzer_config = _quick_config(
-        config, model_directory, destination, perf_flags, latency_budget_ms, latency_percentile
-    )
+    analyzer_config = _quick_config(config, model_directory, destination, perf_flags, options)
     output_directory.mkdir(parents=True, exist_ok=True)
     (output_directory / _CONFIG_FILE_NAME).write_text(analyzer_config.to_yaml())
     if input_data is not None:
@@ -138,12 +144,13 @@ def _quick_config(
     model_directory: Path,
     destination: Path,
     perf_flags: dict[str, tuple[str, ...]],
-    latency_budget_ms: int | None,
-    latency_percentile: int,
-) -> _ModelAnalyzerConfig:
+    options: ModelAnalyzerConfig,
+) -> _ModelAnalyzerYamlConfig:
     """Build a quick search within the published model's batch limit."""
     batched = config.max_batch_size > 0
-    return _ModelAnalyzerConfig(
+    latency_budget_ms = options.latency_budget_ms
+    latency_percentile = options.latency_percentile
+    return _ModelAnalyzerYamlConfig(
         model_repository=model_directory.parent.resolve(),
         perf_analyzer_flags={**perf_flags, "percentile": latency_percentile},
         constraints={f"perf_latency_p{latency_percentile}": {"max": latency_budget_ms}}

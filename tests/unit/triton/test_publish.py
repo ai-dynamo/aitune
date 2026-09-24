@@ -161,7 +161,7 @@ def test_artifact_config_can_omit_scheduler_with_positive_batch_limit(tmp_path):
     assert not parsed.HasField("dynamic_batching")
 
 
-@pytest.mark.parametrize("mismatch", ["name", "platform", "input_dims", "input_dtype"])
+@pytest.mark.parametrize("mismatch", ["name", "platform"])
 def test_artifact_rejects_config_that_does_not_match(tmp_path, mismatch):
     artifact = _plan(tmp_path / "source.plan")
     default = TensorRTModelConfig.from_artifact(artifact, name="encoder")
@@ -177,27 +177,23 @@ def test_artifact_rejects_config_that_does_not_match(tmp_path, mismatch):
             execution_provider="cuda",
         )
         model_name = None
-    else:
-        changes = {"dims": (16,)} if mismatch == "input_dims" else {"data_type": "TYPE_FP32"}
-        changed_input = default.inputs[0].model_copy(update=changes)
-        config = default.model_copy(update={"inputs": (changed_input,)})
-        model_name = None
-
     with pytest.raises(AITunePublicationError, match="config.*artifact|artifact.*config"):
         aitriton.publish(artifact, path=tmp_path / "repository", model_name=model_name, config=config)
 
     assert not (tmp_path / "repository").exists()
 
 
-def test_artifact_rejects_config_with_missing_tensorrt_profile(tmp_path):
+def test_artifact_accepts_supplied_tensor_and_profile_settings(tmp_path):
     artifact = _plan(tmp_path / "source.plan", profiles=2)
     default = TensorRTModelConfig.from_artifact(artifact, name="encoder")
-    config = default.model_copy(update={"optimization_profile_indices": (2,)})
+    changed_input = default.inputs[0].model_copy(update={"dims": (16,)})
+    config = default.model_copy(update={"inputs": (changed_input,), "optimization_profile_indices": (2,)})
 
-    with pytest.raises(AITunePublicationError, match="optimization profiles"):
-        aitriton.publish(artifact, path=tmp_path / "repository", config=config)
+    model = aitriton.publish(artifact, path=tmp_path / "repository", config=config)
 
-    assert not (tmp_path / "repository").exists()
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert tuple(parsed.input[0].dims) == (16,)
+    assert tuple(parsed.instance_group[0].profile) == ("2",)
 
 
 def test_publish_keeps_implicit_batch_axis_for_batch_one_artifact(tmp_path):

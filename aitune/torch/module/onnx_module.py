@@ -21,21 +21,12 @@ class OnnxModule(nn.Module):
 
     def __init__(self, path: str | Path) -> None:
         """Keep the ONNX path and create a session lazily on the input device."""
-        if path is None:
-            raise TypeError("ONNX file path is required")
-        if not str(path).strip() or path == Path("."):
-            raise ValueError("ONNX file path must not be empty")
         super().__init__()
-        self._path = Path(path).resolve()
+        self.path = Path(path).resolve()
         self._input_names: tuple[str, ...] = ()
         self._output_names: tuple[str, ...] = ()
         self._session = None
         self._device = None
-
-    @property
-    def path(self) -> Path:
-        """Return the ONNX source path."""
-        return self._path
 
     def preserve_tensor_names(self, graph_spec: GraphSpec) -> None:
         """Attach original ONNX names to recorded tensors without altering their observed shapes."""

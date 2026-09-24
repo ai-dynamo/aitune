@@ -8,6 +8,7 @@ from typing import cast
 
 import aitune.triton
 from aitune.torch import Module, load
+from aitune.triton import ModelAnalyzerConfig
 from resnet.model import get_model
 from resnet.triton import TRITON_LATENCY_BUDGET_MS
 
@@ -36,7 +37,7 @@ def main():
             artifact,
             path=args.model_repository,
             model_name=args.model_name,
-            latency_budget_ms=TRITON_LATENCY_BUDGET_MS,
+            model_analyzer=ModelAnalyzerConfig(latency_budget_ms=TRITON_LATENCY_BUDGET_MS),
         )
         print(f"Triton model: {model_path}", flush=True)
         print(f"Model Analyzer configuration: {model_path / 'model_analyzer' / 'config.yaml'}", flush=True)

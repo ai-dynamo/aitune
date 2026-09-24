@@ -9,9 +9,10 @@ from struct import pack
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from aitune import triton as aitriton
-from aitune.exceptions import AITunePublicationError, AITuneUserInputError
+from aitune.exceptions import AITunePublicationError
 from aitune.records import (
     BoundedTensorSpec,
     DeploymentArtifact,
@@ -85,7 +86,7 @@ def test_publish_preserves_optional_model_analyzer_latency_budget(tmp_path):
         artifact,
         path=tmp_path / "repository",
         model_name="encoder",
-        latency_budget_ms=50,
+        model_analyzer=aitriton.ModelAnalyzerConfig(latency_budget_ms=50),
     )
 
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
@@ -99,8 +100,7 @@ def test_publish_uses_configured_model_analyzer_percentile(tmp_path):
         artifact,
         path=tmp_path / "repository",
         model_name="encoder",
-        latency_budget_ms=50,
-        latency_percentile=90,
+        model_analyzer=aitriton.ModelAnalyzerConfig(latency_budget_ms=50, latency_percentile=90),
     )
 
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
@@ -115,7 +115,7 @@ def test_publish_stabilizes_on_configured_percentile_without_budget(tmp_path):
         artifact,
         path=tmp_path / "repository",
         model_name="encoder",
-        latency_percentile=99,
+        model_analyzer=aitriton.ModelAnalyzerConfig(latency_percentile=99),
     )
 
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
@@ -124,15 +124,13 @@ def test_publish_stabilizes_on_configured_percentile_without_budget(tmp_path):
 
 
 def test_publish_rejects_unavailable_model_analyzer_percentile(tmp_path):
-    artifact = _plan(tmp_path / "source.plan")
-    with pytest.raises(AITuneUserInputError, match="latency_percentile must be one of 90, 95, 99"):
-        aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", latency_percentile=97)
+    with pytest.raises(ValidationError, match="latency_percentile"):
+        aitriton.ModelAnalyzerConfig(latency_percentile=97)
 
 
 def test_publish_rejects_invalid_model_analyzer_latency_budget(tmp_path):
-    artifact = _plan(tmp_path / "source.plan")
-    with pytest.raises(AITuneUserInputError, match="latency_budget_ms must be a positive integer"):
-        aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder", latency_budget_ms=0)
+    with pytest.raises(ValidationError, match="latency_budget_ms"):
+        aitriton.ModelAnalyzerConfig(latency_budget_ms=0)
 
 
 def test_keeps_an_unbatched_model_unbatched(tmp_path):
@@ -175,7 +173,7 @@ def test_analyzer_uses_quick_search_for_multiple_tensorrt_profiles(tmp_path):
 
     config = yaml.safe_load((output / "config.yaml").read_text())
     assert config["run_config_search_mode"] == "quick"
-    assert config["perf_analyzer_flags"] == {"shape": ["input:8"]}
+    assert config["perf_analyzer_flags"] == {"shape": ["input:8"], "percentile": 95}
     assert config["profile_models"] == ["encoder"]
     assert config["run_config_search_max_model_batch_size"] == 8
     assert config["run_config_search_max_concurrency"] == 16
@@ -187,7 +185,7 @@ def test_publish_generates_analyzer_config_automatically(tmp_path):
     text = (model / "model_analyzer/config.yaml").read_text()
     config = yaml.safe_load(text)
     assert config["model_repository"] == str(model.parent.resolve())
-    assert config["perf_analyzer_flags"] == {"shape": ["input:8"]}
+    assert config["perf_analyzer_flags"] == {"shape": ["input:8"], "percentile": 95}
     assert config["run_config_search_max_model_batch_size"] == 8
     assert config["run_config_search_max_concurrency"] == 16
     assert ".aitune-" not in text
@@ -225,7 +223,10 @@ def test_publish_uses_concrete_shapes_for_dynamic_onnx_inputs(tmp_path, batched)
     model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     dimensions = "16" if batched else "1,16"
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
-    assert config["perf_analyzer_flags"] == {"shape": [f"tokens:{dimensions}", f"mask:{dimensions}"]}
+    assert config["perf_analyzer_flags"] == {
+        "shape": [f"tokens:{dimensions}", f"mask:{dimensions}"],
+        "percentile": 95,
+    }
 
 
 def test_publish_uses_representative_backend_inputs(tmp_path):
@@ -278,7 +279,7 @@ def test_analyzer_uses_artifact_shapes_and_batch_bounds_for_tensorrt(tmp_path):
     )
     model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="encoder")
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
-    assert config["perf_analyzer_flags"] == {"shape": ["input:8"]}
+    assert config["perf_analyzer_flags"] == {"shape": ["input:8"], "percentile": 95}
     assert config["run_config_search_max_model_batch_size"] == 8
     assert config["run_config_search_max_concurrency"] == 16
 
@@ -327,7 +328,7 @@ def test_publish_pt2_generates_analyzer_config(tmp_path):
         model_name="encoder",
     )
     config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
-    assert config["perf_analyzer_flags"] == {"shape": ["input:1,8"]}
+    assert config["perf_analyzer_flags"] == {"shape": ["input:1,8"], "percentile": 95}
     assert "run_config_search_max_model_batch_size" not in config
 
 
