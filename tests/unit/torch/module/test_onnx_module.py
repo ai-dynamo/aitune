@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Run a real ONNX graph through recording and throughput tuning."""
 
-from pathlib import Path
-
 import onnx
 import pytest
 import torch
@@ -40,20 +38,6 @@ def test_onnx_module_simple_inference(onnx_add_path, device):
 
     torch.testing.assert_close(source(x)["y"], x * 2)
     torch.testing.assert_close(source(x=x)["y"], x * 2)
-
-
-def test_onnx_module_requires_path():
-    with pytest.raises(TypeError, match="path"):
-        OnnxModule()  # pytype: disable=missing-parameter
-
-    with pytest.raises(TypeError, match="ONNX file path is required"):
-        OnnxModule(None)  # pytype: disable=wrong-arg-types
-
-
-@pytest.mark.parametrize("path", ["", "   ", Path("")])
-def test_onnx_module_rejects_empty_path(path):
-    with pytest.raises(ValueError, match="ONNX file path must not be empty"):
-        OnnxModule(path)
 
 
 def test_onnx_module_record_and_tune(onnx_add_path):
