@@ -47,8 +47,33 @@ model_repository/
 
 AITune copies the executable and any required additional files, preserving their relative paths. ONNX models with
 external data use a directory beneath the version entry. The generated `config.pbtxt` describes the artifact's
-inputs, outputs, and runtime settings. AITune also generates Model Analyzer configurations and includes representative
+inputs, outputs, and runtime settings. AITune also generates a Model Analyzer configuration and includes representative
 input data when the backend retained a sample.
+
+### Publish an existing model file
+
+For a model that was not tuned by AITune, provide a backend-specific configuration with the tensor interface and
+batching settings. The config type selects the Triton backend; AITune does not inspect or compile the file:
+
+```python
+from aitune.triton import ONNXRuntimeModelConfig, TritonDataType, TritonTensorConfig, publish
+
+config = ONNXRuntimeModelConfig(
+    name="encoder",
+    max_batch_size=8,
+    execution_provider="cuda",
+    inputs=(TritonTensorConfig(name="input", data_type=TritonDataType.FLOAT16, dims=(3, 224, 224)),),
+    outputs=(TritonTensorConfig(name="output", data_type=TritonDataType.FLOAT16, dims=(1000,)),),
+)
+model_path = publish("encoder.onnx", path="model_repository", config=config)
+```
+
+The default `batcher=DynamicBatcher()` combines independent requests. For a stateful model, set
+`batcher=SequenceBatcher(...)` instead. Set `batcher=None` to omit both schedulers; a positive `max_batch_size` still
+allows batched requests, while `max_batch_size=0` disables batching and requires `batcher=None`.
+
+Use `additional_files` for ONNX external data and `resources` for referenced labels or warmup files. Existing-file
+publication writes `config.pbtxt` but has no artifact from which to derive Model Analyzer input shapes or samples.
 
 `publish()` generates files directly in the new model directory; it does not make a live deployment update. It never
 replaces an existing model directory. If generation fails or is interrupted, an incomplete directory can remain and
@@ -125,8 +150,8 @@ Choose Triton's Python backend when your deployment needs Python model construct
 3. In `TritonPythonModel.initialize()`, construct the original model and call `aitune.torch.load()`.
 4. In `execute()`, convert each Triton request into model inputs, run inference, and return Triton responses.
 
-You provide the repository and Python code for this path; `publish()` generates repositories only for the supported
-ONNX, TensorRT, and PT2 artifacts. Install AITune, the tuned backend's dependencies, and the model's Python dependencies
+You provide the repository and Python code for this path; `publish()` generates repositories for supported
+ONNX, TensorRT, and PT2 artifacts or existing model files. Install AITune, the tuned backend's dependencies, and the model's Python dependencies
 in the Python backend environment. Make the checkpoint available at the configured storage path.
 
 Follow the [Triton Python backend guide](https://github.com/triton-inference-server/python_backend#usage) for its
@@ -134,24 +159,16 @@ repository layout, configuration, and request-handling API. Once prepared, the r
 [standalone Triton](#run-triton-standalone) or a [Dynamo Triton environment](#run-triton-through-dynamo) that includes
 the Python backend and those dependencies.
 
-## Batching overrides
+## Artifact batching
 
-Dynamic batching is enabled by default. AITune reads the supported batch range from the tuned artifact and uses its
-recorded maximum, so the deployment limit normally does not need to be provided. Disable it explicitly for artifacts
-that must retain their full tensor shapes:
+AITune derives Triton's batching configuration from the artifact. When every input and output has a batch axis on the
+first dimension, the generated `max_batch_size` is the smallest recorded maximum across those tensors. A batch-one
+artifact keeps `max_batch_size=1` and the implicit batch dimension, without a dynamic batcher. Dynamic batching is
+enabled when the supported maximum is at least 2. Artifacts without a compatible batch axis use `max_batch_size=0`
+and retain their full tensor shapes. Structured PT2 calls also use `max_batch_size=0`.
 
-```python
-model_path = publish(
-    artifact,
-    path="model_repository",
-    model_name="encoder",
-    dynamic_batching=False,
-)
-```
-
-Set `max_batch_size` only to lower the deployment limit from the recorded maximum. With `dynamic_batching=False`, it
-can also enable Triton's implicit batch dimension without enabling the dynamic batcher. The override must stay within
-the artifact's recorded bounds, and every input and output must use the first axis as its batch dimension.
+For an existing model file, supply the batching settings through its backend-specific `config`. Its `max_batch_size`
+and `batcher` fields control Triton's implicit batch dimension and scheduler.
 
 TensorRT model configurations retain the complete optimization-profile set so Triton can select a compatible profile
 for each request.
@@ -177,6 +194,10 @@ AITune generates the configuration but does not run Model Analyzer. Checkpoints,
 are written under `model_repository-model-analyzer/encoder/`, outside the serving repository. See the
 [Model Analyzer configuration reference](https://github.com/triton-inference-server/model_analyzer/blob/main/docs/config.md)
 for commands and additional options.
+
+For an explicit bounded sweep, `generate_model_analyzer_configs(artifact, model_path=model_path, path=...)` writes
+`fast.yaml` and `manual.yaml` to a separate directory. Use this only when you need to customize the search space;
+the default Triton workflow uses `model_analyzer/config.yaml`.
 
 ## Known limitations
 

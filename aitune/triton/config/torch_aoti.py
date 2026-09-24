@@ -17,6 +17,11 @@ class TorchAOTIModelConfig(BaseModelConfig):
     structured_call: bool
 
     @classmethod
+    def _supports_artifact_batching(cls, artifact: DeploymentArtifact) -> bool:
+        """Structured PT2 calls cannot use Triton's implicit batch dimension."""
+        return not artifact.model.metadata.get("structured_call", False)
+
+    @classmethod
     def _artifact_options(cls, artifact: DeploymentArtifact) -> dict[str, Any]:
         """Read the PT2 package's call structure."""
         return {"structured_call": artifact.model.metadata["structured_call"]}
