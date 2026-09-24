@@ -16,19 +16,17 @@ docker run --rm --gpus all --ipc host \
   -e AITUNE_CACHE_DIR=/tmp/aitune-cache \
   -e HF_HOME=/tmp/huggingface-cache \
   -e TORCH_HOME=/tmp/torch-cache \
-  -e ONNX_PATH="${ONNX_PATH:-}" \
   -v "$REPOSITORY_ROOT:/workspace" \
   -w /workspace/examples/YOLO \
   "nvcr.io/nvidia/tritonserver:$NVIDIA_RELEASE-py3" \
   bash -lc '
+    set -euo pipefail
     python3 -m venv --system-site-packages /tmp/aitune-yolo
     source /tmp/aitune-yolo/bin/activate
     pip install --extra-index-url https://pypi.nvidia.com \
       -e "/workspace[triton,torch212]" -e ".[triton]"
     ./install.sh
-    onnx_args=()
-    if [[ -n "$ONNX_PATH" ]]; then onnx_args=(--onnx-path "$ONNX_PATH"); fi
-    yolo-tune "${onnx_args[@]}"
+    yolo-tune
     yolo-triton-model-store
     ./run_triton.sh
   '

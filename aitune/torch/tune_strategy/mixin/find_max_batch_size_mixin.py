@@ -68,9 +68,17 @@ class FindMaxBatchSizeMixin(TuneStrategy):
                     backend = self._find_max_batch_size_backend_class()
                     try:
                         backend._assert_supported_modules(module)
-                    except RuntimeError as error:
+                    except Exception:
+                        supported_formats = ", ".join(
+                            sorted(module_format.value for module_format in backend._supported_modules)
+                        )
+                        self._logger.warning(
+                            "⚠️ Backend %s does not support this module (supported formats: %s)",
+                            backend.name,
+                            supported_formats,
+                        )
                         backend = get_default_backend_for_module(module)
-                        self._logger.warning("⚠️ %s; using %s to find max batch size", error, backend.name)
+                        self._logger.warning("⚠️ Using default backend %s", backend.name)
 
                     with control_output(log_file=build_log_file):
                         backend.build(module, graph_spec, samples, device, find_max_batch_size_cache_dir)

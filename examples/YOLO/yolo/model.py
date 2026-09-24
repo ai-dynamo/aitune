@@ -13,7 +13,7 @@ ONNX_REVISION = "57657320425ee34056408a57ad9d29c4d4815bd8"
 
 
 def onnx_model() -> OnnxModule:
-    """Load an existing ONNX graph or the pinned graph from the functional test."""
+    """Load the pinned YOLOv10n ONNX graph."""
     model_path = Path(hf_hub_download("onnx-community/yolov10n", "onnx/model.onnx", revision=ONNX_REVISION))
     return OnnxModule(model_path)
 

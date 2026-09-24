@@ -407,7 +407,10 @@ config = TensorRTBackendConfig(
 #### SAMPLES_USED
 
 Generates one exact profile per unique recorded input shape. For dynamic inputs, a wide fallback follows the exact
-profiles and covers the observed range. If find-max-batch-size is enabled, it also covers the discovered batch bound:
+profiles and covers the observed range. If find-max-batch-size is enabled, it also covers the discovered batch bound.
+
+When the module defines explicit dynamic shapes, those definitions take precedence and produce one graph-derived
+profile instead of sample profiles.
 
 ```python
 config = TensorRTBackendConfig(

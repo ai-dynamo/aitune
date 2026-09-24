@@ -28,6 +28,9 @@ global_config.max_num_samples_stored = 100
 `ProfileMode.SAMPLES_USED` creates an exact profile for each recorded shape. When input shapes vary, it also adds a
 wide fallback spanning their range, including the discovered maximum batch size when find-max-batch-size is enabled.
 
+When the module defines explicit dynamic shapes, those definitions take precedence and produce one graph-derived
+profile instead of sample profiles.
+
 ```python
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.backend.tensorrt import TensorRTProfile, ProfileMode

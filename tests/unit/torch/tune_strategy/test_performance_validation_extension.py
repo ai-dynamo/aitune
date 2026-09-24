@@ -405,10 +405,8 @@ def test_find_max_batch_size_explains_unsupported_format_and_fallback(mock_graph
     ):
         ext.find_max_batch_size(module, "mod", mock_graph_spec, mock_data, torch.device("cpu"), tmp_path)
 
-    assert (
-        "Backend TorchEagerBackend does not support onnx modules; "
-        "using ONNXRuntimeBackend to find max batch size" in caplog.text
-    )
+    assert "Backend TorchEagerBackend does not support this module (supported formats: torch)" in caplog.text
+    assert "Using default backend ONNXRuntimeBackend" in caplog.text
     assert "frozenset" not in caplog.text
     fallback.build.assert_called_once()
 
