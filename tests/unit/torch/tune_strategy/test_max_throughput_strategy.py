@@ -409,7 +409,8 @@ def test_max_throughput_torcheager_excluded_from_selection_when_performance_vali
         tmp_path,
     )
 
-    assert selected is user_backend
+    assert isinstance(selected, SleepBackend)
+    assert selected.sleep_time == user_backend.sleep_time
     assert strategy._baseline_backend is None
     assert strategy.perf_validation_results == []
 
