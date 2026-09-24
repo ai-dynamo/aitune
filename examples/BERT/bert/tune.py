@@ -19,6 +19,7 @@ from aitune.torch.backend import (
     TorchInductorAotBackend,
     TorchInductorJitBackend,
 )
+from aitune.torch.config import config as global_config
 from aitune.torch.dataloader import DynamicShapeDataset
 from aitune.torch.module import OnnxModule
 from bert.cmd_args import add_model_name_arg, add_tuned_model_path_arg
@@ -30,6 +31,8 @@ SEQUENCE_LENGTHS = [64, 128, 256]
 
 def tune_model(source_kind: str, target: str, checkpoint: Path, model_name: str) -> None:
     """Tune the selected source for Python or Triton inference."""
+    # Retain every batch-size and sequence-length sample for TensorRT profiles.
+    global_config.max_num_samples_stored = len(BATCH_SIZES) * len(SEQUENCE_LENGTHS)
     vocab_size = AutoConfig.from_pretrained(model_name).vocab_size
     generator = torch.Generator().manual_seed(0)
     tokens = {
