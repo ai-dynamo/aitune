@@ -8,7 +8,7 @@ from typing import cast
 
 import aitune.triton
 from aitune.torch import Module, load
-from aitune.torch.module import OnnxModule
+from aitune.torch.module import onnx_checkpoint_placeholder
 from bert.cmd_args import add_tuned_model_path_arg
 
 
@@ -18,7 +18,7 @@ def create_model_store(checkpoint: Path, model_repository: Path) -> None:
         raise FileNotFoundError(f"Missing {checkpoint}; run bert-tune first")
 
     # These AOT backends restore their compiled artifacts without the original source model.
-    tuned_model = cast(Module, load(OnnxModule.for_checkpoint(), checkpoint))
+    tuned_model = cast(Module, load(onnx_checkpoint_placeholder(), checkpoint))
     try:
         artifact = tuned_model.artifact()
         model_path = aitune.triton.publish(

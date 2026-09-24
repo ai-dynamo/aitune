@@ -10,7 +10,7 @@ import torch
 from transformers import AutoConfig
 
 from aitune.torch import Module, load
-from aitune.torch.module import OnnxModule
+from aitune.torch.module import onnx_checkpoint_placeholder
 from bert.cmd_args import add_model_name_arg, add_tuned_model_path_arg
 from bert.model import torch_model
 from bert.tune import BATCH_SIZES, SEQUENCE_LENGTHS
@@ -29,7 +29,7 @@ def run_inference(checkpoint: Path, model_name: str, target: str) -> None:
         for batch_size in [*BATCH_SIZES, 3]
     ]
     # A Torch JIT checkpoint needs its original module; Triton-capable artifacts are self-contained.
-    source = torch_model(model_name).cuda() if target == "python" else OnnxModule.for_checkpoint()
+    source = torch_model(model_name).cuda() if target == "python" else onnx_checkpoint_placeholder()
     tuned_model = cast(Module, load(source, checkpoint))
     try:
         for sample in samples:

@@ -9,7 +9,7 @@ from typing import cast
 import torch
 
 from aitune.torch import Module, load
-from aitune.torch.module import OnnxModule
+from aitune.torch.module import onnx_checkpoint_placeholder
 from yolo.cmd_args import add_tuned_model_path_arg
 from yolo.model import sample_input
 
@@ -20,7 +20,7 @@ def run_inference(checkpoint: Path) -> None:
         raise FileNotFoundError(f"Missing {checkpoint}; run yolo-tune first")
 
     images = sample_input()
-    tuned_model = cast(Module, load(OnnxModule.for_checkpoint(), checkpoint))
+    tuned_model = cast(Module, load(onnx_checkpoint_placeholder(), checkpoint))
     try:
         artifact_input_name = tuned_model.artifact().input_names[0]
         if artifact_input_name not in {"images", "input_x"}:

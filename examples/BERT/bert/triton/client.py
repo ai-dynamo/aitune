@@ -12,7 +12,7 @@ import tritonclient.grpc as grpcclient
 from transformers import AutoConfig
 
 from aitune.torch import Module, load
-from aitune.torch.module import OnnxModule
+from aitune.torch.module import onnx_checkpoint_placeholder
 from bert.cmd_args import add_model_name_arg, add_tuned_model_path_arg
 from bert.tune import BATCH_SIZES, SEQUENCE_LENGTHS
 
@@ -28,7 +28,7 @@ def run_inference(checkpoint: Path, triton_url: str, model_name: str) -> None:
         for length in SEQUENCE_LENGTHS
         for batch_size in [*BATCH_SIZES, 3]
     ]
-    tuned_model = cast(Module, load(OnnxModule.for_checkpoint(), checkpoint))
+    tuned_model = cast(Module, load(onnx_checkpoint_placeholder(), checkpoint))
     try:
         client = grpcclient.InferenceServerClient(url=triton_url)
         model_name = "bert"

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Run a real ONNX graph through recording and throughput tuning."""
 
+from pathlib import Path
+
 import onnx
 import pytest
 import torch
@@ -10,7 +12,7 @@ from onnx import TensorProto, helper
 from aitune.torch import MaxThroughputStrategy, Module, tune
 from aitune.torch.backend import ONNXRuntimeBackend
 from aitune.torch.dataloader import DynamicShapeDataset
-from aitune.torch.module import OnnxModule
+from aitune.torch.module import OnnxModule, onnx_checkpoint_placeholder
 from aitune.torch.task.profiling import ProfilingConfig
 
 
@@ -40,14 +42,18 @@ def test_onnx_module_simple_inference(onnx_add_path, device):
     torch.testing.assert_close(source(x=x)["y"], x * 2)
 
 
-def test_onnx_module_without_file_rejects_direct_inference():
-    with pytest.raises(TypeError, match="for_checkpoint"):
+def test_onnx_module_requires_path():
+    with pytest.raises(TypeError, match="path"):
         OnnxModule()
 
-    source = OnnxModule.for_checkpoint()
+    with pytest.raises(TypeError, match="ONNX file path is required"):
+        OnnxModule(None)
 
-    with pytest.raises(RuntimeError, match="no ONNX file"):
-        source(torch.ones(1, 3))
+
+@pytest.mark.parametrize("path", ["", "   ", Path("")])
+def test_onnx_module_rejects_empty_path(path):
+    with pytest.raises(ValueError, match="ONNX file path must not be empty"):
+        OnnxModule(path)
 
 
 def test_onnx_module_record_and_tune(onnx_add_path):
@@ -154,7 +160,7 @@ def test_onnx_module_external_weights_checkpoint(tmp_path):
         module.deactivate()
         path.unlink()
         (tmp_path / "weights.bin").unlink()
-        module = load(OnnxModule.for_checkpoint(), checkpoint)
+        module = load(onnx_checkpoint_placeholder(), checkpoint)
         (backend,) = module.module.backends.values()
         assert isinstance(backend, ONNXRuntimeBackend)
         torch.testing.assert_close(module(x=x[:2])["y"], x[:2] * 2)
