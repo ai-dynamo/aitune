@@ -14,9 +14,6 @@ from bert.cmd_args import add_tuned_model_path_arg
 
 def create_model_store(checkpoint: Path, model_repository: Path) -> None:
     """Load the checkpoint and generate the Triton model and Analyzer config."""
-    if not checkpoint.is_file():
-        raise FileNotFoundError(f"Missing {checkpoint}; run bert-tune first")
-
     # These AOT backends restore their compiled artifacts without the original source model.
     tuned_model = cast(Module, load(onnx_checkpoint_placeholder(), checkpoint))
     try:

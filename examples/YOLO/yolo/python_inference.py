@@ -16,9 +16,6 @@ from yolo.model import sample_input
 
 def run_inference(checkpoint: Path) -> None:
     """Check that the compiled checkpoint produces finite outputs."""
-    if not checkpoint.is_file():
-        raise FileNotFoundError(f"Missing {checkpoint}; run yolo-tune first")
-
     images = sample_input()
     tuned_model = cast(Module, load(onnx_checkpoint_placeholder(), checkpoint))
     try:

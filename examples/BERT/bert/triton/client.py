@@ -19,8 +19,6 @@ from bert.tune import BATCH_SIZES, SEQUENCE_LENGTHS
 
 def run_inference(checkpoint: Path, triton_url: str, model_name: str) -> None:
     """Compare Triton outputs with the restored compiled checkpoint."""
-    if not checkpoint.is_file():
-        raise FileNotFoundError(f"Missing {checkpoint}; run bert-tune first")
     generator = torch.Generator().manual_seed(1)
     vocab_size = AutoConfig.from_pretrained(model_name).vocab_size
     samples = [

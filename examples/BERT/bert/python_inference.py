@@ -18,9 +18,6 @@ from bert.tune import BATCH_SIZES, SEQUENCE_LENGTHS
 
 def run_inference(checkpoint: Path, model_name: str, target: str) -> None:
     """Check that the compiled checkpoint handles every supported input shape."""
-    if not checkpoint.is_file():
-        raise FileNotFoundError(f"Missing {checkpoint}; run bert-tune first")
-
     generator = torch.Generator().manual_seed(1)
     vocab_size = AutoConfig.from_pretrained(model_name).vocab_size
     samples = [

@@ -7,11 +7,11 @@ from pathlib import Path
 
 
 def add_tuned_model_path_arg(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Use a working-directory checkpoint path throughout the example."""
+    """Pass a checkpoint path through AITune's default local storage."""
     parser.add_argument(
         "--tuned-model-path",
         type=Path,
         default=Path("yolov10n.ait"),
-        help="Path to the tuned AITune package (default: yolov10n.ait)",
+        help="Tuned AITune package path (relative paths use checkpoints/; default: yolov10n.ait)",
     )
     return parser

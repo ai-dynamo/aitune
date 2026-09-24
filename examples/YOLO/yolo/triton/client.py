@@ -18,8 +18,6 @@ from yolo.model import sample_input
 
 def run_inference(checkpoint: Path, triton_url: str) -> None:
     """Compare Triton outputs with the restored compiled checkpoint."""
-    if not checkpoint.is_file():
-        raise FileNotFoundError(f"Missing {checkpoint}; run yolo-tune first")
     tuned_model = cast(Module, load(onnx_checkpoint_placeholder(), checkpoint))
     images = sample_input()
     try:

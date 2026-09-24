@@ -19,6 +19,6 @@ The model uses fixed batch 1. Deterministic generated input verifies numerical a
 tuned checkpoint, and Triton deployment; it does not measure detection accuracy. The flow prints the selected
 configuration, throughput, and p99 latency.
 
-The flow saves `yolov10n.ait` in the current directory and publishes a Triton model named `yolov10n` under
+The flow saves `checkpoints/yolov10n.ait` and publishes a Triton model named `yolov10n` under
 `model_repository/`. Each YOLO command accepts `--tuned-model-path` to use another checkpoint path. The publication
 repository is an output artifact, not a live deployment target. Review the model and package licenses before use.
