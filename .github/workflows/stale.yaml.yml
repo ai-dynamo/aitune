@@ -9,6 +9,7 @@ jobs:
     if: github.repository_owner == 'ai-dynamo'
     runs-on: linux-amd64-cpu4
     permissions:
+      actions: write
       issues: write
       pull-requests: write
     steps:
