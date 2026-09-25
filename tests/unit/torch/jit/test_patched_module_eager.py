@@ -306,7 +306,9 @@ def test_jit_strategy_resolution_failure_falls_back_and_tunes_child(mocker, tmp_
     child = parent._children[0]
     assert parent._state == ModuleState.EAGER
     assert child._state == ModuleState.TUNED
-    assert [call.args[0].__class__ for call in resolve_strategy.call_args_list] == [ParentWithChild, torch.nn.Linear]
+    assert resolve_strategy.call_count == 2
+    assert isinstance(resolve_strategy.call_args_list[0].args[0], ParentWithChild)
+    assert isinstance(resolve_strategy.call_args_list[1].args[0], torch.nn.Linear)
     assert "No default backends support parent" in next(config.cache_dir.glob("*/error.log")).read_text()
 
 
