@@ -60,6 +60,7 @@ def test_dynamic_strategy_uses_compilation_mode(compilation, expected):
 def test_dynamic_strategy_uses_distributed_candidates():
     strategy = materialize_strategy(resolve_strategy(), DistributedModule())
 
+    assert isinstance(strategy, MaxThroughputStrategy)
     assert [type(backend) for backend in strategy._backends] == [TorchInductorAotBackend, TorchInductorJitBackend]
 
 
@@ -68,6 +69,7 @@ def test_dynamic_strategy_uses_only_onnx_compatible_candidates(tmp_path):
 
     strategy = materialize_strategy(resolve_strategy(), module)
 
+    assert isinstance(strategy, MaxThroughputStrategy)
     assert [type(backend) for backend in strategy._backends] == [
         TensorRTBackend,
         ONNXRuntimeBackend,
@@ -87,6 +89,8 @@ def test_dynamic_strategy_returns_fresh_backends():
     first = materialize_strategy(request, torch.nn.Identity())
     second = materialize_strategy(request, torch.nn.Identity())
 
+    assert isinstance(first, MaxThroughputStrategy)
+    assert isinstance(second, MaxThroughputStrategy)
     assert first is not second
     assert all(left is not right for left, right in zip(first._backends, second._backends, strict=True))
 
@@ -100,6 +104,8 @@ def test_aot_wrapper_materializes_strategy_for_each_module():
     ordinary_strategy = ordinary._get_strategies_for_graph_specs(None, [graph_spec], dry_run=False)[0]
     distributed_strategy = distributed._get_strategies_for_graph_specs(None, [graph_spec], dry_run=False)[0]
 
+    assert isinstance(ordinary_strategy, MaxThroughputStrategy)
+    assert isinstance(distributed_strategy, MaxThroughputStrategy)
     assert [type(backend) for backend in ordinary_strategy._backends] == [
         TensorRTBackend,
         TensorRTBackend,
@@ -117,6 +123,7 @@ def test_dynamic_strategy_applies_find_max_batch_size_configuration():
 
     strategy = materialize_strategy(request, torch.nn.Identity())
 
+    assert isinstance(strategy, MaxThroughputStrategy)
     assert strategy._enable_find_max_batch_size is False
 
 
