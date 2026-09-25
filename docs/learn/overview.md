@@ -26,32 +26,54 @@ import { BadgeLinks } from "../_components/BadgeLinks";
   ]}
 />
 
+**NVIDIA AITune automates the acceleration of PyTorch models and pipelines on NVIDIA GPUs.**
+It brings inference engines and acceleration techniques together under a single API to find a suitable
+configuration for each workload.
 
+Start with a model from Hugging Face or timm, or bring your own model and checkpoint. For supported inference
+workloads, enable just-in-time tuning with **zero changes to your application code**, or use the explicit tuning
+API to prepare artifacts for deployment.
 
-**NVIDIA AITune** is an inference toolkit designed for tuning and deploying Deep Learning models with a focus on NVIDIA GPUs. It provides model tuning capabilities through compilation and conversion paths that can significantly improve inference speed and efficiency across various AI workloads including Computer Vision, Natural Language Processing, Speech Recognition, and Generative AI.
+Find your model in the [recipe catalog](../../examples/README.md), or follow the [quick start](quick_start.md).
 
-The toolkit enables seamless tuning of PyTorch models and pipelines using various backends such as TensorRT, Torch-TensorRT, TorchAO, Torch Inductor, and ONNX Runtime through a single Python API. The resulting tuned models are ready for deployment in production environments.
+## Why AITune?
 
-NVIDIA AITune works with your environment — relying first on your software versions — and selects the best-performing backend for your software and hardware setup, guiding you to supported technologies.
+- **Reduce manual integration work.** Automate module inspection, backend evaluation, numerical checks, and
+  performance-based selection through one API.
+- **Explore multiple acceleration paths.** Different backends perform best on different models and workloads.
+  AITune evaluates configured, compatible candidates and can select different implementations for different modules.
+- **Tune to your requirements.** Set performance goals and compilation requirements. AITune automatically resolves
+  and evaluates suitable backends for each module.
+- **Automate deployment preparation.** Generate Triton model stores or serve tuned artifacts through Dynamo workers.
 
-## When to Use AITune
+## How it works
 
-AITune provides compute graph optimizations for PyTorch models at the `nn.Module` level. Use AITune when you want automated inference optimization with minimal code changes.
+1. **Inspect.** Provide a PyTorch model and representative inputs. AITune finds tunable `nn.Module` components
+   and observes their inputs and execution.
+2. **Wrap.** Customize the selected modules' tuning strategies and backend configurations.
+3. **Tune.** Evaluate configured, compatible backends and acceleration combinations, including post-training
+   quantization (PTQ), kernel selection, and CUDA graphs.
+4. **Validate.** Check numerical outputs against the original implementation and measure performance.
+5. **Select by strategy.** Choose among validated candidates for throughput, latency, or a latency budget.
+6. **Run & deploy.** Run tuned modules in Python. Use the explicit workflow to save an `.ait` artifact for reuse
+   or deployment with Triton or Dynamo, as supported by the recipe.
 
-If your model is supported by a dedicated serving framework and benefits from runtime optimizations (e.g. continuous batching, speculative decoding), use frameworks like TensorRT-LLM, vLLM, or SGLang for best performance. Use AITune for general PyTorch models and pipelines that lack such specialized tooling.
+<a href="../assets/aitune_workflow.svg">
+  <img src="../assets/aitune_workflow.svg" alt="AITune workflow: inspect, wrap, tune, validate, select by strategy, and run or deploy." width="800" />
+</a>
 
-## Features at Glance
+## Getting started
 
-The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
+- **Just-in-time (JIT): try acceleration in your existing application.** Enable tuning when launching your script;
+  AITune captures inputs and tunes eligible modules during inference. See the [JIT guide](../guides/jit_tuning.md).
+- **Ahead-of-time (AOT): prepare a reusable tuning artifact.** Use the explicit flow to inspect, wrap, and tune your model,
+  then save it for reuse or deployment. See the [AOT guide](../guides/aot_tuning.md).
 
-| Feature                     | Description                                                                                                                                              |
-|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Ease-of-use                 | Single line of code to run all possible tuning paths directly from your source code                                                                      |
-| Wide Backend Support        | Compatible with various tuning backends including TensorRT, Torch-TensorRT, TorchAO, Torch Inductor, and ONNX Runtime                                    |
-| Model Tuning                | Enhance the performance of models such as ResNET and BERT for efficient inference deployment                                                             |
-| Pipeline Tuning             | Streamline Python code pipelines for models such as Stable Diffusion and Flux using seamless model wrapping and tuning                                   |
-| Model Export and Conversion | Automate the process of exporting and converting models between various formats with focus on TensorRT, Torch-TensorRT, Torch Inductor, and ONNX Runtime |
-| Correctness Testing         | Ensures tuned models produce correct outputs by validating on provided data samples                                                                      |
-| Performance Profiling       | Profiles models to select the optimal backend based on performance metrics such as latency and throughput                                                |
-| Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                                                       |
-| JIT tuning                  | Just-in-time tuning of a model or a pipeline without any code changes required                                                                           |
+Follow the [quick start](quick_start.md) for a Stable Diffusion example and the [installation guide](install.md)
+for environment setup.
+
+## Model recipes
+
+Explore [ready-to-use model recipes](../../examples/README.md) for tuning, validation, benchmarking, and deployment.
+Choose a model and a configuration for your GPU setup, precision, and deployment target, then adapt the recipe
+with your own compatible checkpoint and data.

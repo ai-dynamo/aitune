@@ -80,29 +80,40 @@ navigation:
         contents:
           - page: Tuning Assistant
             path: ../docs/guides/tuning-assistant.md
-  - section: Examples
+  - section: Model Recipes
     contents:
-      - page: Overview
+      - page: Recipe catalog
+        slug: overview
         path: ../examples/README.md
-      - page: E5Large
-        path: ../examples/E5Large/README.md
-      - page: ESM2
-        path: ../examples/ESM2/README.md
-      - page: FLUX
-        path: ../examples/FLUX/README.md
-      - page: JitTuning
-        path: ../examples/JitTuning/README.md
-      - page: LLM
-        path: ../examples/LLM/README.md
-      - page: ParakeetCTC
-        path: ../examples/ParakeetCTC/README.md
-      - page: ParakeetRNNT
-        path: ../examples/ParakeetRNNT/README.md
-      - page: ResNet
+      - page: ResNet-50
+        slug: res-net
         path: ../examples/ResNet/README.md
-      - page: StableDiffusion
+      - page: FLUX.1-dev
+        slug: flux
+        path: ../examples/FLUX/README.md
+      - page: Stable Diffusion 3 Medium
+        slug: stable-diffusion
         path: ../examples/StableDiffusion/README.md
-      - page: WAN
+      - page: Stable Diffusion XL (JIT example)
+        slug: jit-tuning
+        path: ../examples/JitTuning/README.md
+      - page: ESM-2 650M
+        slug: esm2
+        path: ../examples/ESM2/README.md
+      - page: Parakeet CTC 0.6B
+        slug: parakeet-ctc
+        path: ../examples/ParakeetCTC/README.md
+      - page: Parakeet RNNT 1.1B
+        slug: parakeet-rnnt
+        path: ../examples/ParakeetRNNT/README.md
+      - page: E5 Large V2
+        slug: e5-large
+        path: ../examples/E5Large/README.md
+      - page: Qwen3 0.6B
+        slug: llm
+        path: ../examples/LLM/README.md
+      - page: Wan 2.1 T2V 1.3B
+        slug: wan
         path: ../examples/WAN/README.md
   - section: API Reference
     contents:
