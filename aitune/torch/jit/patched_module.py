@@ -173,9 +173,9 @@ class PatchedModule:
             coordinator.verify_equal(current.fq_name, "JIT module order")
             recording = cast(RecordingModule, current._wrapper)
             backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
-            strategy = _build_strategy(current.__wrapped__)
             try:
                 with coordinator.raise_if_any_rank_fails(f"JIT tuning for {current.fq_name}"):
+                    strategy = _build_strategy(current.__wrapped__)
                     with report_module_tune(
                         module_name=current.__wrapped__.__class__.__name__,
                         num_parameters=count_parameters(current.__wrapped__),
