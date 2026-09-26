@@ -20,16 +20,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend import (
-    Backend,
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchInductorAotBackend,
-    TorchInductorJitBackend,
-    TorchTensorRTAotBackend,
-    TorchTensorRTAotBackendConfig,
-)
-from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTConfig
+from aitune.torch.backend import Backend
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
@@ -102,7 +93,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
 
     def __init__(
         self,
-        backends: list[Backend] | None = None,
+        backends: list[Backend],
         profiling_config: ProfilingConfig | None = None,
         **kwargs: Any,
     ):
@@ -147,38 +138,6 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             "performance_validation_mode": self._performance_validation_mode.value,
             "profiling_config": self._profiling_config_to_json_dict(),
         }
-
-    def _default_aot_backends(self, distributed: bool = False) -> list[Backend]:
-        """Compare supported export and compiler alternatives for AOT; performance varies by model."""
-        backends: list[Backend] = []
-        if not distributed:
-            backends = [TensorRTBackend(), TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False))]
-        return [
-            *backends,
-            TorchInductorAotBackend(),
-            TorchTensorRTAotBackend(
-                config=TorchTensorRTAotBackendConfig(
-                    compile_config=TorchTensorRTConfig(use_distributed_mode_trace=distributed),
-                ),
-            ),
-            TorchInductorJitBackend(),
-        ]
-
-    def _default_jit_backends(self, distributed: bool = False) -> list[Backend]:
-        """Compare supported export and compiler alternatives for JIT; performance varies by model."""
-        backends: list[Backend] = []
-        if not distributed:
-            backends = [TensorRTBackend(), TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False))]
-        return [
-            *backends,
-            TorchInductorAotBackend(),
-            TorchTensorRTAotBackend(
-                config=TorchTensorRTAotBackendConfig(
-                    compile_config=TorchTensorRTConfig(use_distributed_mode_trace=distributed),
-                ),
-            ),
-            TorchInductorJitBackend(),
-        ]
 
     @abstractmethod
     def _measure(

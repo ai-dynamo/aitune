@@ -8,14 +8,17 @@ from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStra
 from aitune.torch.tune_strategy.min_latency_strategy import MinLatencyStrategy
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
+from aitune.torch.tune_strategy.resolver import Constraint, resolve_strategy
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
 __all__ = [
     "FirstWinsStrategy",
+    "Constraint",
     "LatencyBudgetStrategy",
     "MaxThroughputStrategy",
     "MinLatencyStrategy",
     "OneBackendStrategy",
     "PerformanceValidationMode",
     "TuneStrategy",
+    "resolve_strategy",
 ]

@@ -30,7 +30,9 @@ The runtime session is created on the first call. To switch an existing session'
 
 ## Tune with the two supported backends
 
-Use an explicit backend list: the default strategy candidates are not filtered for `OnnxModule` and include incompatible backends.
+`resolve_strategy()` automatically filters candidates using their supported module formats. For `OnnxModule`, the
+dynamic candidates are `ONNXRuntimeBackend` and `TensorRTBackend`; torch-only backends are excluded before tuning.
+Use an explicit backend list when you want to restrict tuning to one of these implementations.
 Tuning with these backends requires an NVIDIA GPU and the corresponding runtime dependencies; see [installation](../learn/install.md).
 
 The following example assumes `model.onnx` accepts dynamic batches of float32 images under the name `input.1`.

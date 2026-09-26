@@ -8,44 +8,46 @@ Tune strategies determine how AITune selects and configures backends during the 
 
 ## Overview
 
-Both ahead-of-time and JIT tuning default to `MaxThroughputStrategy`, with different backend candidates. JIT disables maximum-batch-size discovery and uses the recorded input bounds.
-Explicit backend lists and strategy choices are preserved.
+Both ahead-of-time and JIT tuning use `resolve_strategy()` by default. It stores the requested tuning intent and
+creates a fresh concrete strategy immediately before each module is tuned. This allows different modules to receive
+different compatible backend candidates.
 
-Default JIT tuning profiles TensorRT (Dynamo), TensorRT (`use_dynamo=False`), and TorchInductor JIT for ordinary
-modules. For distributed modules, it profiles TorchInductor AOT and TorchInductor JIT.
-
-Default AOT tuning profiles the following candidates in order:
+The initial dynamic resolver profiles the following candidates in order when `compilation="any"`:
 
 | Candidate | Ordinary module | Distributed module |
 |---|---|---|
 | TensorRT (Dynamo) | Yes | — |
 | TensorRT (`use_dynamo=False`) | Yes | — |
 | TorchInductor AOT | Yes | Yes |
-| Torch-TensorRT AOT | Yes | `use_distributed_mode_trace=True` |
 | TorchInductor JIT | Yes | Yes |
 
-Use `MaxThroughputStrategy.for_aot()` for the full candidate set above, or
-`MaxThroughputStrategy.for_jit()` for the smaller JIT set. The regular constructor is equivalent to
-`for_aot()`. AOT preserves each strategy's batch-size policy; JIT disables maximum-batch-size discovery
-to limit tuning work during inference. Both factories accept constructor arguments, including explicit backend lists.
+Use the dynamic resolver when AITune should select candidates for each module:
+
+```python
+strategy = ait.resolve_strategy(
+    objective="throughput",
+    compilation="any",
+)
+```
+
+`compilation` accepts `"aot"`, `"jit"`, or `"any"`. The `"any"` value allows candidates using either supported
+build mode. The initial implementation uses module format, topology, and compilation mode to select candidates.
+
+Concrete strategy classes are the manual API. Their backend lists are always explicit:
+
+```python
+strategy = ait.MaxThroughputStrategy(
+    backends=[ait.backend.TensorRTBackend(), ait.backend.TorchInductorJitBackend()],
+)
+```
 
 Profiling determines the winning backend; candidate order is not a performance ranking.
 `FirstWinsStrategy` owns a separate fallback order because it stops at the first backend that passes its checks.
 
-Strategy implementations follow the same configuration hooks:
-
-| Hook | Default candidates for |
-|---|---|
-| `_default_aot_backends(distributed=False)` | AOT modules |
-| `_default_jit_backends(distributed=False)` | JIT modules |
-
-Each hook defines its own candidates and uses `distributed` to select compatible backends. Neither hook delegates
-to the other. `MultiBackendStrategy` selects the workflow during construction and the module type before tuning.
-Explicit backend lists, including empty lists, take precedence.
-
-`ProfilingTuneStrategy` defines the candidates used by the latency strategies in both workflows.
-`MaxThroughputStrategy` inherits its AOT candidates and defines a smaller JIT set. `FirstWinsStrategy`
-explicitly uses the same fallback order in both workflows.
+`objective="throughput"` creates a `MaxThroughputStrategy`; adding
+`constraints=[ait.Constraint.max_latency_ms(20)]` creates a
+`LatencyBudgetStrategy` with a 20 ms limit. `objective="latency"` creates a `MinLatencyStrategy`. Each constraint is a
+small typed value, so more constraint kinds can be composed later without adding parameters to `resolve_strategy()`.
 
 AITune provides five built-in strategies:
 
@@ -57,7 +59,9 @@ AITune provides five built-in strategies:
 
 ## Existing ONNX models
 
-For `OnnxModule`, explicitly pass only `ONNXRuntimeBackend` and/or `TensorRTBackend` as tuning candidates. Default backend lists are not filtered for ONNX input and include incompatible backends. See [ONNX Model Tuning](../onnx_tuning.md) for a complete `MaxThroughputStrategy` example.
+For `OnnxModule`, dynamic resolution selects only candidates tagged for ONNX input: `ONNXRuntimeBackend` and
+`TensorRTBackend`. Explicit strategies must likewise contain only ONNX-compatible backends. See
+[ONNX Model Tuning](../onnx_tuning.md) for a complete example.
 
 ## Why Backends Can Fail
 
