@@ -32,11 +32,11 @@ class DistributedModule(torch.nn.Identity):
 
 
 def test_resolve_strategy_captures_dynamic_request():
-    strategy = resolve_strategy(objective="throughput", compilation="mixed")
+    strategy = resolve_strategy(objective="throughput", compilation="any")
 
     assert strategy.to_json_dict() == {
         "objective": "throughput",
-        "compilation": "mixed",
+        "compilation": "any",
         "constraints": [],
         "backends": "resolved for each module",
     }
@@ -47,7 +47,7 @@ def test_resolve_strategy_captures_dynamic_request():
     [
         ("aot", [TensorRTBackend, TensorRTBackend, TorchInductorAotBackend]),
         ("jit", [TorchInductorJitBackend]),
-        ("mixed", [TensorRTBackend, TensorRTBackend, TorchInductorAotBackend, TorchInductorJitBackend]),
+        ("any", [TensorRTBackend, TensorRTBackend, TorchInductorAotBackend, TorchInductorJitBackend]),
     ],
 )
 def test_dynamic_strategy_uses_compilation_mode(compilation, expected):
@@ -145,6 +145,7 @@ def test_dynamic_strategy_maps_latency_limit():
     [
         ({"objective": "unknown"}, "Unknown objective"),
         ({"compilation": "unknown"}, "Unknown compilation"),
+        ({"compilation": "mixed"}, "Unknown compilation"),
         (
             {"objective": "latency", "constraints": [Constraint.max_latency_ms(20)]},
             "only valid with objective='throughput'",

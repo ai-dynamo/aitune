@@ -12,7 +12,7 @@ Both ahead-of-time and JIT tuning use `resolve_strategy()` by default. It stores
 creates a fresh concrete strategy immediately before each module is tuned. This allows different modules to receive
 different compatible backend candidates.
 
-The initial dynamic resolver profiles the following candidates in order when `compilation="mixed"`:
+The initial dynamic resolver profiles the following candidates in order when `compilation="any"`:
 
 | Candidate | Ordinary module | Distributed module |
 |---|---|---|
@@ -26,12 +26,12 @@ Use the dynamic resolver when AITune should select candidates for each module:
 ```python
 strategy = ait.resolve_strategy(
     objective="throughput",
-    compilation="mixed",
+    compilation="any",
 )
 ```
 
-`compilation` accepts `"aot"`, `"jit"`, or `"mixed"`. The initial implementation uses module format, topology, and
-compilation mode to select candidates.
+`compilation` accepts `"aot"`, `"jit"`, or `"any"`. The `"any"` value allows candidates using either supported
+build mode. The initial implementation uses module format, topology, and compilation mode to select candidates.
 
 Concrete strategy classes are the manual API. Their backend lists are always explicit:
 
