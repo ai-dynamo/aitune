@@ -8,13 +8,15 @@ SPDX-License-Identifier: Apache-2.0
   <title id="title">NVIDIA AITune workflow</title>
   <desc id="description">A PyTorch model and inputs are inspected to find and monitor tunable nn.Module.
     Configure their tuning strategies and backends through wrapping.
-    Compatible engines include TensorRT, Torch-TensorRT, Torch Inductor, and ONNX Runtime,
-    with PTQ, kernel selection, and CUDA graphs. Numerics checks and throughput measurements precede selecting
-    a candidate by strategy and saving a tuned .ait artifact. Run in Python or deploy with Triton
+    Tuning tries compatible backend candidates for each module, including TensorRT, Torch-TensorRT,
+    Torch Inductor, and ONNX Runtime, with PTQ, kernel selection, and CUDA graphs.
+    It checks numerical outputs, measures performance, and selects the best backend for the configured strategy
+    and objective before saving a tuned .ait artifact. Run in Python or deploy with Triton
     or Dynamo as supported by the recipe.</desc>
   <style>
     :root { color-scheme: light dark; }
     .background { fill: #ffffff; }
+    .tune-group { fill: #f7faf4; stroke: #538000; stroke-width: 3; }
     .panel { fill: #ffffff; stroke: #538000; stroke-width: 3; }
     .card { fill: #f0f2ed; stroke: #899080; stroke-width: 2; }
     .flow { fill: none; stroke: #538000; stroke-width: 3; stroke-linejoin: round; }
@@ -22,6 +24,7 @@ SPDX-License-Identifier: Apache-2.0
     text { fill: #17200e; font-family: Arial, Helvetica, sans-serif; text-anchor: middle; }
     .heading { font-size: 32px; font-weight: 700; }
     .detail { font-size: 24px; font-weight: 400; }
+    .support-detail { font-size: 20px; }
     .engine { font-size: 26px; font-weight: 600; }
     .selection { font-size: 22px; font-weight: 700; }
     .artifact { fill: #76b900; }
@@ -29,6 +32,7 @@ SPDX-License-Identifier: Apache-2.0
     .artifact-detail { fill: #101800; }
     @media (prefers-color-scheme: dark) {
       .background { fill: #101210; }
+      .tune-group { fill: #171d14; stroke: #76b900; }
       .panel { fill: #101210; stroke: #76b900; }
       .card { fill: #252925; stroke: #737b70; }
       .flow { stroke: #76b900; }
@@ -44,6 +48,7 @@ SPDX-License-Identifier: Apache-2.0
     </marker>
   </defs>
   <rect class="background" width="1950" height="620"/>
+  <rect class="tune-group" x="710" y="42" width="780" height="562" rx="12"/>
   <path class="flow" d="M 190 320 H 216" marker-end="url(#arrow)"/>
   <path class="flow" d="M 430 320 H 456" marker-end="url(#arrow)"/>
   <path class="flow" d="M 1110 320 H 1146" marker-end="url(#arrow)"/>
@@ -73,54 +78,61 @@ SPDX-License-Identifier: Apache-2.0
     <tspan x="575">Configure strategy</tspan>
     <tspan x="575" dy="30">&amp; backends</tspan>
   </text>
-  <text class="heading" x="935" y="111">
-    <tspan x="935">Tune</tspan>
+  <text class="heading" x="1100" y="109">
+    <tspan x="1100">Tune</tspan>
   </text>
-  <path class="flow" d="M 690 320 H 750 M 750 176 V 380 M 1110 176 V 380"/>
-  <path class="flow" d="M 750 176 H 781" marker-end="url(#arrow)"/>
-  <path class="flow" d="M 1085 176 H 1110"/>
-  <rect class="card" x="785" y="148" width="300" height="56" rx="8"/>
-  <text class="engine" x="935" y="185">
+  <text class="detail" x="935" y="150">
+    <tspan x="935">Try eligible backends</tspan>
+  </text>
+  <path class="flow" d="M 690 320 H 750 M 750 218 V 422 M 1110 218 V 422"/>
+  <path class="flow" d="M 750 218 H 781" marker-end="url(#arrow)"/>
+  <path class="flow" d="M 1085 218 H 1110"/>
+  <rect class="card" x="785" y="190" width="300" height="56" rx="8"/>
+  <text class="engine" x="935" y="227">
     <tspan x="935">TensorRT</tspan>
   </text>
-  <path class="flow" d="M 750 244 H 781" marker-end="url(#arrow)"/>
-  <path class="flow" d="M 1085 244 H 1110"/>
-  <rect class="card" x="785" y="216" width="300" height="56" rx="8"/>
-  <text class="engine" x="935" y="253">
+  <path class="flow" d="M 750 286 H 781" marker-end="url(#arrow)"/>
+  <path class="flow" d="M 1085 286 H 1110"/>
+  <rect class="card" x="785" y="258" width="300" height="56" rx="8"/>
+  <text class="engine" x="935" y="295">
     <tspan x="935">Torch-TensorRT</tspan>
   </text>
-  <path class="flow" d="M 750 312 H 781" marker-end="url(#arrow)"/>
-  <path class="flow" d="M 1085 312 H 1110"/>
-  <rect class="card" x="785" y="284" width="300" height="56" rx="8"/>
-  <text class="engine" x="935" y="321">
+  <path class="flow" d="M 750 354 H 781" marker-end="url(#arrow)"/>
+  <path class="flow" d="M 1085 354 H 1110"/>
+  <rect class="card" x="785" y="326" width="300" height="56" rx="8"/>
+  <text class="engine" x="935" y="363">
     <tspan x="935">Torch Inductor</tspan>
   </text>
-  <path class="flow" d="M 750 380 H 781" marker-end="url(#arrow)"/>
-  <path class="flow" d="M 1085 380 H 1110"/>
-  <rect class="card" x="785" y="352" width="300" height="56" rx="8"/>
-  <text class="engine" x="935" y="389">
+  <path class="flow" d="M 750 422 H 781" marker-end="url(#arrow)"/>
+  <path class="flow" d="M 1085 422 H 1110"/>
+  <rect class="card" x="785" y="394" width="300" height="56" rx="8"/>
+  <text class="engine" x="935" y="431">
     <tspan x="935">ONNX Runtime</tspan>
   </text>
-  <rect class="panel" x="728" y="438" width="414" height="156" rx="8"/>
-  <text class="detail" x="935" y="471">
-    <tspan x="935">Accelerations: PTQ,</tspan>
-    <tspan x="935" dy="30">kernel selection, CUDA graphs</tspan>
+  <rect class="panel" x="728" y="480" width="365" height="110" rx="8"/>
+  <text class="detail support-detail" x="910" y="510">
+    <tspan x="910">Accelerations:</tspan>
+    <tspan x="910" dy="26">PTQ, kernel selection,</tspan>
+    <tspan x="910" dy="26">CUDA graphs</tspan>
   </text>
-  <text class="detail" x="935" y="550">
-    <tspan x="935">Compatible with model</tspan>
-    <tspan x="935" dy="30">&amp; hardware</tspan>
+  <rect class="panel" x="1107" y="480" width="365" height="110" rx="8"/>
+  <text class="detail support-detail" x="1290" y="522">
+    <tspan x="1290">Compatible with</tspan>
+    <tspan x="1290" dy="26">model &amp; hardware</tspan>
   </text>
   <rect class="panel" x="1150" y="218" width="200" height="204" rx="8"/>
   <text class="heading" x="1250" y="269">
-    <tspan x="1250">Validate</tspan>
+    <tspan x="1250">Assess</tspan>
   </text>
-  <text class="detail" x="1250" y="325">
-    <tspan x="1250">Numerics checks</tspan>
-    <tspan x="1250" dy="30">+ throughput</tspan>
+  <text class="detail" x="1250" y="316">
+    <tspan x="1250">Validate outputs</tspan>
+    <tspan x="1250" dy="30">and measure</tspan>
+    <tspan x="1250" dy="30">performance.</tspan>
   </text>
-  <text class="selection" x="1425" y="268">
-    <tspan x="1425">Select by</tspan>
-    <tspan x="1425" dy="26">strategy</tspan>
+  <text class="selection" x="1425" y="232">
+    <tspan x="1425">Select</tspan>
+    <tspan x="1425" dy="26">best</tspan>
+    <tspan x="1425" dy="26">backend</tspan>
   </text>
   <rect class="artifact" x="1500" y="218" width="150" height="204" rx="8"/>
   <text class="artifact-label" x="1575" y="314">

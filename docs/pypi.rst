@@ -24,6 +24,8 @@ Why AITune?
   performance-based selection through one API.
 - **Explore multiple acceleration paths.** Different backends perform best on different models and workloads.
   AITune evaluates configured, compatible candidates and can select different implementations for different modules.
+- **Match backends to each module.** AITune resolves compatible backend candidates for each module and its execution
+  context, allowing different parts of a pipeline to use different acceleration paths.
 - **Tune to your requirements.** Set performance goals and compilation requirements. AITune automatically resolves
   and evaluates suitable backends for each module.
 - **Automate deployment preparation.** Generate Triton model stores or serve tuned artifacts through Dynamo workers.
@@ -31,19 +33,20 @@ Why AITune?
 How it works
 ------------
 
+AITune combines these stages into a workflow for each model or pipeline:
+
 1. **Inspect.** Provide a PyTorch model and representative inputs. AITune finds tunable ``nn.Module`` components
    and observes their inputs and execution.
 2. **Wrap.** Customize the selected modules' tuning strategies and backend configurations.
-3. **Tune.** Evaluate configured, compatible backends and acceleration combinations, including post-training
-   quantization (PTQ), kernel selection, and CUDA graphs.
-4. **Validate.** Check numerical outputs against the original implementation and measure performance.
-5. **Select by strategy.** Choose among validated candidates for throughput, latency, or a latency budget.
-6. **Run & deploy.** Run tuned modules in Python. Use the explicit workflow to save an ``.ait`` artifact for reuse
+3. **Tune.** Try compatible backend candidates and acceleration combinations, including post-training quantization
+   (PTQ), kernel selection, and CUDA graphs. Check numerical outputs against the original implementation, measure
+   performance, and select a backend using the configured strategy.
+4. **Run & deploy.** Run tuned modules in Python. Use the explicit workflow to save an ``.ait`` artifact for reuse
    or deployment with Triton or Dynamo, as supported by the recipe.
 
 .. image:: https://raw.githubusercontent.com/ai-dynamo/aitune/main/docs/assets/aitune_workflow.svg
    :width: 800px
-   :alt: AITune workflow: inspect, wrap, tune, validate, select by strategy, and run or deploy.
+   :alt: AITune workflow: inspect, wrap, try and assess backends, select the best backend, and run or deploy.
    :target: https://github.com/ai-dynamo/aitune/blob/main/docs/assets/aitune_workflow.svg
 
 Install
