@@ -27,10 +27,10 @@ from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.module import is_distributed_module
 
 Objective = Literal["throughput", "latency"]
-Compilation = Literal["aot", "jit", "mixed"]
+Compilation = Literal["aot", "jit", "any"]
 
 _OBJECTIVES = frozenset({"throughput", "latency"})
-_COMPILATION_MODES = frozenset({"aot", "jit", "mixed"})
+_COMPILATION_MODES = frozenset({"aot", "jit", "any"})
 
 
 @dataclass(frozen=True)
@@ -129,14 +129,14 @@ StrategyInput = TuneStrategy | DynamicTuneStrategy
 def resolve_strategy(
     *,
     objective: Objective = "throughput",
-    compilation: Compilation = "mixed",
+    compilation: Compilation = "any",
     constraints: Sequence[Constraint] = (),
 ) -> DynamicTuneStrategy:
     """Declare a strategy whose backends will be resolved for each tuned module.
 
     Args:
         objective: Performance metric to optimize: throughput or latency.
-        compilation: Allow ahead-of-time, just-in-time, or both backend build modes.
+        compilation: Allow ahead-of-time, just-in-time, or any supported backend build mode.
         constraints: Limits that candidates must satisfy while optimizing the objective.
 
     Returns:

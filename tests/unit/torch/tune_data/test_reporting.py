@@ -122,7 +122,7 @@ def test_snapshot_config_jit_mode_strategy_resolves_default_when_unset(mocker):
         "name": "DynamicTuneStrategy",
         "config": {
             "objective": "throughput",
-            "compilation": "mixed",
+            "compilation": "any",
             "constraints": [],
             "backends": "resolved for each module",
         },
