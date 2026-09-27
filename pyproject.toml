@@ -102,7 +102,7 @@ onnxruntime-gpu-cuda12 = ["onnxruntime-gpu"]
 onnxruntime-gpu-cuda13 = ["onnxruntime-gpu"]
 
 [project.urls]
-"Documentation" = "https://ai-dynamo.github.io/aitune"
+"Documentation" = "https://docs.nvidia.com/aitune/"
 "Repository" = "https://github.com/ai-dynamo/aitune.git"
 "Tracker" = "https://github.com/ai-dynamo/aitune/issues"
 

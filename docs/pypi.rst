@@ -15,7 +15,8 @@ for individual modules according to the configured tuning strategy.
 Start with a model from Hugging Face or timm, or bring your own model and checkpoint. For supported applications,
 enable just-in-time tuning during inference, or use the explicit tuning API to prepare artifacts for deployment.
 
-Find your model in the `recipe catalog <https://github.com/ai-dynamo/aitune/blob/main/examples/README.md>`_, or follow the `quick start <https://github.com/ai-dynamo/aitune/blob/main/docs/learn/quick_start.md>`_.
+Find your model in the `recipe catalog <https://github.com/ai-dynamo/aitune/blob/main/examples/README.md>`_, or follow
+the `quick start <https://docs.nvidia.com/aitune/learn/quick-start/>`_.
 
 Why AITune?
 -----------
@@ -60,7 +61,8 @@ Use a Linux environment with an NVIDIA GPU and a compatible PyTorch and CUDA ins
 
     pip install --extra-index-url https://pypi.nvidia.com aitune
 
-See the `installation guide <https://github.com/ai-dynamo/aitune/blob/main/docs/learn/install.md>`_ for requirements, containers, and PyTorch/CUDA version selection.
+See the `installation guide <https://docs.nvidia.com/aitune/learn/install/>`_ for requirements, containers, and
+PyTorch/CUDA version selection.
 
 Quick start
 -----------
@@ -99,7 +101,8 @@ Enable AITune when launching the script:
 The example saves an image to ``landscape.png``. Use representative prompts for your workload.
 Eligible modules use the selected implementations in the running application.
 A new process starts tuning again; use the explicit workflow below for saved artifacts.
-See the `JIT guide <https://github.com/ai-dynamo/aitune/blob/main/docs/guides/jit_tuning.md>`_ for configuration and deferred tuning for pipelines.
+See the `JIT guide <https://docs.nvidia.com/aitune/guides/just-in-time-tuning/>`_ for configuration and deferred tuning
+for pipelines.
 
 Ahead-of-time (AOT): prepare a reusable tuning artifact
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -132,8 +135,10 @@ Provide your model and representative inputs:
     ait.save(pipe, "tuned_pipe.ait")
 
 This produces an image and a ``tuned_pipe.ait`` artifact that can be loaded into a compatible pipeline.
-Use representative prompts or data for your workload. See the `AOT guide <https://github.com/ai-dynamo/aitune/blob/main/docs/guides/aot_tuning.md>`_ for tuning
-configuration and the `checkpoint guide <https://github.com/ai-dynamo/aitune/blob/main/docs/guides/deployment/checkpoints.md>`_ for saving and loading.
+Use representative prompts or data for your workload. See the
+`AOT guide <https://docs.nvidia.com/aitune/guides/ahead-of-time-tuning/>`_ for tuning
+configuration and the `checkpoint guide <https://docs.nvidia.com/aitune/guides/deployment/save-and-load-checkpoints/>`_
+for saving and loading.
 
 Model recipes
 -------------
@@ -145,13 +150,13 @@ with your own compatible checkpoint and data.
 Learn more
 ----------
 
-- `Product overview <https://github.com/ai-dynamo/aitune/blob/main/docs/learn/overview.md>`_
-- `Supported backends <https://github.com/ai-dynamo/aitune/blob/main/docs/learn/backends.md>`_
-- `Multi-GPU tuning <https://github.com/ai-dynamo/aitune/blob/main/docs/guides/multi_gpu.md>`_
-- `Profiling and hardware metrics <https://github.com/ai-dynamo/aitune/blob/main/docs/guides/advanced/profiling_and_hardware_metrics.md>`_
-- `Deployment overview <https://github.com/ai-dynamo/aitune/blob/main/docs/guides/deployment/deployment.md>`_
-- `Triton deployment <https://github.com/ai-dynamo/aitune/blob/main/docs/guides/deployment/triton.md>`_
-- `Dynamo deployment <https://github.com/ai-dynamo/aitune/blob/main/docs/guides/deployment/dynamo.md>`_
+- `Documentation <https://docs.nvidia.com/aitune/>`_
+- `Supported backends <https://docs.nvidia.com/aitune/learn/backends/>`_
+- `Multi-GPU tuning <https://docs.nvidia.com/aitune/guides/multi-gpu-integration/>`_
+- `Profiling and hardware metrics <https://docs.nvidia.com/aitune/guides/advanced/profiling-and-hardware-metrics/>`_
+- `Deployment overview <https://docs.nvidia.com/aitune/guides/deployment/overview/>`_
+- `Triton deployment <https://docs.nvidia.com/aitune/guides/deployment/triton/>`_
+- `Dynamo deployment <https://docs.nvidia.com/aitune/guides/deployment/dynamo/>`_
 
 Notice
 ------

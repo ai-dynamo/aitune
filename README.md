@@ -17,7 +17,8 @@ for individual modules according to the configured tuning strategy.
 Start with a model from Hugging Face or timm, or bring your own model and checkpoint. For supported applications,
 enable just-in-time tuning during inference, or use the explicit tuning API to prepare artifacts for deployment.
 
-Find your model in the [recipe catalog](examples/README.md), or follow the [quick start](docs/learn/quick_start.md).
+Find your model in the [recipe catalog](examples/README.md), or follow the
+[quick start](https://docs.nvidia.com/aitune/learn/quick-start/).
 
 ## Why AITune?
 
@@ -58,7 +59,8 @@ Use a Linux environment with an NVIDIA GPU and a compatible PyTorch and CUDA ins
 pip install --extra-index-url https://pypi.nvidia.com aitune
 ```
 
-See the [installation guide](docs/learn/install.md) for requirements, containers, and PyTorch/CUDA version selection.
+See the [installation guide](https://docs.nvidia.com/aitune/learn/install/) for requirements, containers, and
+PyTorch/CUDA version selection.
 
 ## Quick start
 
@@ -95,7 +97,8 @@ AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning python your_script.py
 The example saves an image to `landscape.png`. Use representative prompts for your workload.
 Eligible modules use the selected implementations in the running application.
 A new process starts tuning again; use the explicit workflow below for saved artifacts.
-See the [JIT guide](docs/guides/jit_tuning.md) for configuration and deferred tuning for pipelines.
+See the [JIT guide](https://docs.nvidia.com/aitune/guides/just-in-time-tuning/) for configuration and deferred tuning
+for pipelines.
 
 ### Ahead-of-time (AOT): prepare a reusable tuning artifact
 
@@ -129,8 +132,10 @@ ait.save(pipe, "tuned_pipe.ait")
 ```
 
 This produces an image and a `tuned_pipe.ait` artifact that can be loaded into a compatible pipeline.
-Use representative prompts or data for your workload. See the [AOT guide](docs/guides/aot_tuning.md) for tuning
-configuration and the [checkpoint guide](docs/guides/deployment/checkpoints.md) for saving and loading.
+Use representative prompts or data for your workload. See the
+[AOT guide](https://docs.nvidia.com/aitune/guides/ahead-of-time-tuning/) for tuning
+configuration and the [checkpoint guide](https://docs.nvidia.com/aitune/guides/deployment/save-and-load-checkpoints/)
+for saving and loading.
 
 ## Model recipes
 
@@ -144,13 +149,13 @@ with your own compatible checkpoint and data.
 
 ## Learn more
 
-- [Product overview](docs/learn/overview.md)
-- [Supported backends](docs/learn/backends.md)
-- [Multi-GPU tuning](docs/guides/multi_gpu.md)
-- [Profiling and hardware metrics](docs/guides/advanced/profiling_and_hardware_metrics.md)
-- [Deployment overview](docs/guides/deployment/deployment.md)
-- [Triton deployment](docs/guides/deployment/triton.md)
-- [Dynamo deployment](docs/guides/deployment/dynamo.md)
+- [Documentation](https://docs.nvidia.com/aitune/)
+- [Supported backends](https://docs.nvidia.com/aitune/learn/backends/)
+- [Multi-GPU tuning](https://docs.nvidia.com/aitune/guides/multi-gpu-integration/)
+- [Profiling and hardware metrics](https://docs.nvidia.com/aitune/guides/advanced/profiling-and-hardware-metrics/)
+- [Deployment overview](https://docs.nvidia.com/aitune/guides/deployment/overview/)
+- [Triton deployment](https://docs.nvidia.com/aitune/guides/deployment/triton/)
+- [Dynamo deployment](https://docs.nvidia.com/aitune/guides/deployment/dynamo/)
 
 ## Notice
 
