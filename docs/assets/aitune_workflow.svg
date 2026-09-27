@@ -8,8 +8,9 @@ SPDX-License-Identifier: Apache-2.0
   <title id="title">NVIDIA AITune workflow</title>
   <desc id="description">A PyTorch model and inputs are inspected to find and monitor tunable nn.Module.
     Configure their tuning strategies and backends through wrapping.
-    Tuning tries compatible backend candidates for each module, including TensorRT, Torch-TensorRT,
-    Torch Inductor, and ONNX Runtime, with PTQ, kernel selection, and CUDA graphs.
+    Tuning evaluates backend candidates for each module and its execution context, including TensorRT,
+    Torch-TensorRT, Torch Inductor, and ONNX Runtime. Configured candidates can incorporate PTQ,
+    kernel selection, or CUDA graphs where supported by the backend.
     It checks numerical outputs, measures performance, and selects the best backend for the configured strategy
     and objective before saving a tuned .ait artifact. Run in Python or deploy with Triton
     or Dynamo as supported by the recipe.</desc>
@@ -82,7 +83,7 @@ SPDX-License-Identifier: Apache-2.0
     <tspan x="1100">Tune</tspan>
   </text>
   <text class="detail" x="935" y="150">
-    <tspan x="935">Try eligible backends</tspan>
+    <tspan x="935">Evaluate backend candidates</tspan>
   </text>
   <path class="flow" d="M 690 320 H 750 M 750 218 V 422 M 1110 218 V 422"/>
   <path class="flow" d="M 750 218 H 781" marker-end="url(#arrow)"/>
@@ -111,14 +112,14 @@ SPDX-License-Identifier: Apache-2.0
   </text>
   <rect class="panel" x="728" y="480" width="365" height="110" rx="8"/>
   <text class="detail support-detail" x="910" y="510">
-    <tspan x="910">Accelerations:</tspan>
+    <tspan x="910">Supported techniques:</tspan>
     <tspan x="910" dy="26">PTQ, kernel selection,</tspan>
     <tspan x="910" dy="26">CUDA graphs</tspan>
   </text>
   <rect class="panel" x="1107" y="480" width="365" height="110" rx="8"/>
   <text class="detail support-detail" x="1290" y="522">
-    <tspan x="1290">Compatible with</tspan>
-    <tspan x="1290" dy="26">model &amp; hardware</tspan>
+    <tspan x="1290">Candidates depend on</tspan>
+    <tspan x="1290" dy="26">module &amp; execution context</tspan>
   </text>
   <rect class="panel" x="1150" y="218" width="200" height="204" rx="8"/>
   <text class="heading" x="1250" y="269">

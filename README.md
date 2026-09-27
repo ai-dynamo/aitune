@@ -9,27 +9,26 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.8+-red.svg)](https://pytorch.org/)
 
-**NVIDIA AITune automates the acceleration of PyTorch models and pipelines on NVIDIA GPUs.**
-It brings inference engines and acceleration techniques together under a single API to find a suitable
-configuration for each workload.
+**NVIDIA AITune automates inference tuning for PyTorch models and pipelines on NVIDIA GPUs.**
+It brings inference engines and acceleration techniques together under a single, extensible API. AITune combines
+backend evaluation, numerical validation, and performance measurement into one workflow, selecting implementations
+for individual modules according to the configured tuning strategy.
 
-Start with a model from Hugging Face or timm, or bring your own model and checkpoint. For supported inference
-workloads, enable just-in-time tuning with **zero changes to your application code**, or use the explicit tuning
-API to prepare artifacts for deployment.
+Start with a model from Hugging Face or timm, or bring your own model and checkpoint. For supported applications,
+enable just-in-time tuning during inference, or use the explicit tuning API to prepare artifacts for deployment.
 
 Find your model in the [recipe catalog](examples/README.md), or follow the [quick start](docs/learn/quick_start.md).
 
 ## Why AITune?
 
-- **Reduce manual integration work.** Automate module inspection, backend evaluation, numerical checks, and
-  performance-based selection through one API.
-- **Explore multiple acceleration paths.** Different backends perform best on different models and workloads.
-  AITune evaluates configured, compatible candidates and can select different implementations for different modules.
-- **Match backends to each module.** AITune resolves compatible backend candidates for each module and its execution
-  context, allowing different parts of a pipeline to use different acceleration paths.
-- **Tune to your requirements.** Set performance goals and compilation requirements. AITune automatically resolves
-  and evaluates suitable backends for each module.
-- **Automate deployment preparation.** Generate Triton model stores or serve tuned artifacts through Dynamo workers.
+- **Integrate through one API.** Use a shared workflow across supported backends. Extend the workflow with custom
+  backends and tuning strategies.
+- **Evaluate options per module.** Use default candidates that account for execution needs, or configure candidates
+  explicitly. Different modules in a pipeline can use different backends.
+- **Select using measurements.** Check numerical outputs and measure performance on representative inputs. Choose
+  strategies for throughput, latency, or a latency budget to guide selection.
+- **Prepare for deployment.** Reuse tuned modules in Python, generate Triton model repositories, or serve through
+  Dynamo workers, as supported by the recipe.
 
 ## How it works
 
@@ -38,15 +37,18 @@ AITune combines these stages into a workflow for each model or pipeline:
 1. **Inspect.** Provide a PyTorch model and representative inputs. AITune finds tunable `nn.Module` components
    and observes their inputs and execution.
 2. **Wrap.** Customize the selected modules' tuning strategies and backend configurations.
-3. **Tune.** Try compatible backend candidates and acceleration combinations, including post-training quantization
-   (PTQ), kernel selection, and CUDA graphs. Check numerical outputs against the original implementation, measure
-   performance, and select a backend using the configured strategy.
+3. **Tune.** Evaluate configured backend candidates, check numerical outputs against the original implementation,
+   and measure performance on representative inputs. Select a backend using the configured strategy. Candidates can
+   incorporate post-training quantization (PTQ), kernel selection, or CUDA graphs where supported by the backend.
 4. **Run & deploy.** Run tuned modules in Python. Use the explicit workflow to save an `.ait` artifact for reuse
    or deployment with Triton or Dynamo, as supported by the recipe.
 
 <a href="docs/assets/aitune_workflow.svg">
-  <img src="docs/assets/aitune_workflow.svg" alt="AITune workflow: inspect, wrap, try and assess backends, select the best backend, and run or deploy." width="800" />
+  <img src="docs/assets/aitune_workflow.svg" alt="AITune workflow: inspect, wrap, evaluate backend candidates, validate outputs, measure performance, select the best backend for the configured strategy, and run or deploy." width="800" />
 </a>
+
+A shared tuning workflow brings supported backends and acceleration techniques together, with selection guided by
+the configured strategy.
 
 ## Install
 
