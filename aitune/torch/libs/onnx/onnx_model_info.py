@@ -89,7 +89,7 @@ class ONNXModelInfo:
             self._input_dtypes = self._get_tensor_dtypes(model.graph.input)
             self._output_dtypes = self._get_tensor_dtypes(model.graph.output)
             self._operators = self._get_operators(model.graph)
-            self._precision = self._precision(model)
+            self._precision = self._get_precision(model)
 
             # Extract opset versions
             self._opsets = {}
@@ -289,7 +289,7 @@ class ONNXModelInfo:
         """
         return self._doc_string
 
-    def _precision(self, model: onnx.ModelProto) -> "ONNXPrecision | None":
+    def _get_precision(self, model: onnx.ModelProto) -> "ONNXPrecision | None":
         found = {
             ONNX_DTYPE_TO_PRECISION[init.data_type]
             for init in model.graph.initializer
