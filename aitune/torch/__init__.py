@@ -25,7 +25,8 @@ from aitune.torch.tune_data.reporting import snapshot_tuning_data
 from aitune.torch.tuning import load, save, tune
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import PatchedModule
-from aitune.torch.jit.patcher import patch_for_jit_tuning
+from aitune.torch.jit.patcher import jit_reset, patch_for_jit_tuning
+from aitune.torch.jit.registration import JITRegistration, register_for_jit_tuning
 
 __all__ = [
     "aitune_cache_dir",
@@ -54,6 +55,9 @@ __all__ = [
     "LocalTorchStorage",
     "DataLoaderFactory",
     "patch_for_jit_tuning",
+    "jit_reset",
+    "register_for_jit_tuning",
+    "JITRegistration",
 ]
 
 if config.enable_diffusers_integration:

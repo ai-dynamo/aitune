@@ -84,8 +84,9 @@ To add another backend or selection policy, see
 
 ## Getting started
 
-- **Just-in-time (JIT): try acceleration in your existing application.** Enable tuning when launching your script;
-  AITune captures inputs and tunes eligible modules during inference. See the [JIT guide](../guides/jit_tuning.md).
+- **Just-in-time (JIT): try acceleration in your existing application.** Enable automatic tuning when launching your
+  script, or explicitly register final module instances that another framework has already constructed. AITune captures
+  inputs and tunes eligible modules during inference. See the [JIT guide](../guides/jit_tuning.md).
 - **Ahead-of-time (AOT): prepare a reusable tuning artifact.** Use the explicit flow to inspect, wrap, and tune your model,
   then save it for reuse or deployment. See the [AOT guide](../guides/aot_tuning.md).
 

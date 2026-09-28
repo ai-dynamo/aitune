@@ -103,9 +103,13 @@ class PatchedModule:
     deferred_tuning_enabled: ClassVar[bool] = False
     module_counter: ClassVar[int] = 0
 
-    def __init__(self, module: torch.nn.Module):
+    def __init__(self, module: torch.nn.Module, *, explicit_head: bool = False):
         """Initialize the patched module."""
         self.__wrapped__ = module
+        self._explicit_head = explicit_head
+        self._session_mode = config.mode
+        self._class_before_device_patch: type[torch.nn.Module] | None = None
+        self._patched_device_class: type[torch.nn.Module] | None = None
         # proxy forward, hooks
         self._original_forward = module.forward
         self._current_forward_pre_hooks = module._forward_pre_hooks
@@ -129,6 +133,11 @@ class PatchedModule:
         }
         self._extra_state_info: str = ""  # for tracking purposes
         self._update_state(ModuleState.INIT)
+
+    @property
+    def explicit_head(self) -> bool:
+        """Whether this module was registered as an exact JIT target."""
+        return self._explicit_head
 
     @property
     def fq_name(self) -> str:
@@ -347,6 +356,9 @@ class PatchedModule:
         to module.forward wrappers. Since the wrapper object itself never changes, cached
         references remain valid across state transitions.
         """
+        if config.mode != self._session_mode:
+            raise RuntimeError("Call jit_reset() before switching JIT modes")
+
         forward_func = self._forward_routing.get(self._state)
         if forward_func is None:
             raise ValueError(f"Module should not be called in the state: {self._state}")
@@ -360,13 +372,25 @@ class PatchedModule:
         """
         params = count_parameters(self.__wrapped__)
         if int(params) <= config.min_parameters:
+            if self._explicit_head:
+                self._parent = None
+                self._level = 0
+                self._call_count = 1
+                self._fq_name = self._get_fully_qualified_name()
+            self._update_state(ModuleState.SKIPPED)
             self._unpatch()
             return self._original_forward(*args, **kwargs)
 
         formatted_params = format_num_parameters(params)
         self._name += f" 📊{formatted_params}"
         self._call_count = 1
-        if PatchedModule.stack:
+        if self._explicit_head:
+            self._parent = None
+            self._level = 0
+            self._allowed_to_tune = True
+            PatchedModule.heads.append(self)
+            _to_hist(f"New explicit top module: {str(self)}")
+        elif PatchedModule.stack:
             parent = PatchedModule.stack[-1]
             if parent._level + 1 < config.max_depth_level:
                 parent._children.append(self)
@@ -527,6 +551,8 @@ class PatchedModule:
             current = todo.pop()
             name = current._name
             counter = PatchedModule.patched_classes[name]
+            if current._class_before_device_patch is None:
+                current._class_before_device_patch = current.__wrapped__.__class__
             # create dynamically a subclass with device attribute overridden
             patched_class = type(
                 f"Patched_{name}_{counter}",
@@ -536,8 +562,23 @@ class PatchedModule:
             PatchedModule.patched_classes[name] += 1
             # replace class so that python dynamically invokes patched device attribute
             current.__wrapped__.__class__ = patched_class
+            current._patched_device_class = patched_class
             if current._parent:
                 todo.append(current._parent)
+
+    def _restore_device_attribute(self) -> None:
+        """Restore the class only when AITune still owns the active device patch."""
+        if self.__wrapped__.__class__ is self._patched_device_class and self._class_before_device_patch is not None:
+            self.__wrapped__.__class__ = self._class_before_device_patch
+        self._class_before_device_patch = None
+        self._patched_device_class = None
+
+    def _restore_device_attribute_hierarchy(self) -> None:
+        """Restore AITune-generated device classes on this module and its ancestors."""
+        current: PatchedModule | None = self
+        while current is not None:
+            current._restore_device_attribute()
+            current = current._parent
 
     def __repr__(self):
         """Representation of the module."""
@@ -674,6 +715,7 @@ class PatchedModule:
         """
         self._allowed_to_tune = False
         self._restore_original_forward()
+        self._restore_device_attribute()
         self.__wrapped__._forward_hooks = self._current_forward_hooks
         self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
 
@@ -747,7 +789,11 @@ class PatchedModule:
         PatchedModule.history.clear()
         PatchedModule.heads.clear()
         PatchedModule.stack.clear()
+        PatchedModule.patched_classes.clear()
+        PatchedModule.fq_name_counter.clear()
+        PatchedModule.attempted_tuning = False
         PatchedModule.deferred_tuning_enabled = False
+        PatchedModule.module_counter = 0
 
     @staticmethod
     def on_python_exit():
