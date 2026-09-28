@@ -11,6 +11,7 @@ reviews:
   high_level_summary: true
   collapse_walkthrough: true
   poem: false
+  review_details: false
   auto_review:
     enabled: true
     auto_incremental_review: true
