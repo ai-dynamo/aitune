@@ -1,220 +1,109 @@
 ---
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-title: "NVIDIA AITune Examples"
+title: "Model Recipes"
 ---
 
-This directory contains practical examples demonstrating how to use NVIDIA AITune to tune different types of AI models for inference performance.
+# Model Recipes
 
-ESM2 and Parakeet CTC use AITune's default strategy without overrides.
-For AOT tuning, this selects `MaxThroughputStrategy` with automatic backend candidates and maximum-batch-size discovery.
-JIT also defaults to `MaxThroughputStrategy`, with fewer candidates and maximum-batch-size discovery disabled.
-Stable Diffusion and FLUX disable maximum-batch-size discovery to tune their recorded image batches. Stable Diffusion
-uses the default AOT backend candidates, as do FLUX's non-transformer modules.
-Explicit backend lists remain where models need quantization, precision settings, or specific compiler options.
+Browse ready-to-use recipes for tuning, validating, benchmarking, and deploying models. Choose a model below
+to find configurations and commands you can adapt with your own compatible checkpoint and data.
 
-## ResNet
+## Find a model
 
-### Computer Vision - Image Classification
+<table>
+  <thead>
+    <tr>
+      <th>Task</th>
+      <th>Model</th>
+      <th>Hub</th>
+      <th>Precision</th>
+      <th>Offloading</th>
+      <th>Single GPU</th>
+      <th>Multi-GPU</th>
+      <th>Deployment</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">Image classification</th>
+      <td><a href="./ResNet/README.md">ResNet-50</a></td>
+      <td><a href="https://huggingface.co/timm">timm</a></td>
+      <td>FP16</td><td>-</td>
+      <td>Ahead of time, Runtime</td><td>-</td><td>Dynamo + Triton</td>
+    </tr>
+    <tr>
+      <th scope="rowgroup" rowSpan="3">Image generation</th>
+      <td><a href="./FLUX/README.md">FLUX.1-dev</a></td>
+      <td><a href="https://huggingface.co/black-forest-labs/FLUX.1-dev">Hugging Face</a></td>
+      <td>BF16, FP8 and NVFP4</td><td>-</td>
+      <td>Runtime</td><td>Runtime</td><td>Dynamo</td>
+    </tr>
+    <tr>
+      <td><a href="./StableDiffusion/README.md">Stable Diffusion 3 Medium</a></td>
+      <td><a href="https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers">Hugging Face</a></td>
+      <td>FP16</td><td>-</td>
+      <td>Ahead of time, Runtime</td><td>-</td><td>Dynamo</td>
+    </tr>
+    <tr>
+      <td><a href="./JitTuning/README.md">Stable Diffusion XL</a></td>
+      <td><a href="https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0">Hugging Face</a></td>
+      <td>-</td><td>-</td>
+      <td>Ahead of time, Runtime</td><td>-</td><td>-</td>
+    </tr>
+    <tr>
+      <th scope="row">Protein language modeling</th>
+      <td><a href="./ESM2/README.md">ESM-2 650M</a></td>
+      <td><a href="https://huggingface.co/facebook/esm2_t33_650M_UR50D">Hugging Face</a></td>
+      <td>-</td><td>-</td>
+      <td>Ahead of time, Runtime</td><td>-</td><td>Dynamo</td>
+    </tr>
+    <tr>
+      <th scope="rowgroup" rowSpan="2">Speech recognition</th>
+      <td><a href="./ParakeetCTC/README.md">Parakeet CTC 0.6B</a></td>
+      <td><a href="https://huggingface.co/nvidia/parakeet-ctc-0.6b">Hugging Face</a></td>
+      <td>-</td><td>-</td>
+      <td>Ahead of time, Runtime</td><td>-</td><td>Dynamo</td>
+    </tr>
+    <tr>
+      <td><a href="./ParakeetRNNT/README.md">Parakeet RNNT 1.1B</a></td>
+      <td><a href="https://huggingface.co/nvidia/parakeet-rnnt-1.1b">Hugging Face</a></td>
+      <td>-</td><td>-</td>
+      <td>Ahead of time, Runtime</td><td>-</td><td>Dynamo</td>
+    </tr>
+    <tr>
+      <th scope="row">Text embeddings</th>
+      <td><a href="./E5Large/README.md">E5 Large V2</a></td>
+      <td><a href="https://huggingface.co/intfloat/e5-large-v2">Hugging Face</a></td>
+      <td>-</td><td>-</td>
+      <td>Ahead of time</td><td>-</td><td>Dynamo</td>
+    </tr>
+    <tr>
+      <th scope="row">Text generation</th>
+      <td><a href="./LLM/README.md">Qwen3 0.6B</a></td>
+      <td><a href="https://huggingface.co/Qwen/Qwen3-0.6B">Hugging Face</a></td>
+      <td>-</td><td>-</td>
+      <td>Runtime</td><td>Eager only</td><td>-</td>
+    </tr>
+    <tr>
+      <th scope="row">Video generation</th>
+      <td><a href="./WAN/README.md">Wan 2.1 T2V 1.3B</a></td>
+      <td><a href="https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers">Hugging Face</a></td>
+      <td>BF16; FP32 VAE</td><td>-</td>
+      <td>Ahead of time, Runtime</td>
+      <td>Ahead of time, Runtime</td><td>Dynamo</td>
+    </tr>
+  </tbody>
+</table>
 
-Shows how to tune ResNet models for image classification tasks. This example demonstrates model tuning and inference tuning for convolutional neural networks.
+- **Model:** links to the recipe and usage instructions.
+- **Hub:** links to the source model card or collection.
+- **Precision:** numerical formats available in the recipe, such as FP16, BF16, FP8, and NVFP4.
+- **Offloading:** whether the recipe supports moving model weights between GPU and CPU memory.
+- **Single GPU / Multi-GPU:** compilation options for each setup. **Ahead of time** uses prebuilt backend artifacts;
+  **Runtime** compiles during loading or inference; **Eager only** runs without a compiled backend.
+- **Deployment:** documented serving targets, such as Triton and Dynamo.
+- **-:** no option is documented in the current recipe.
 
-- **Location**: [`ResNet`](./ResNet/README.md)
-- **Model**: ResNet50 image classification
-- **Use Case**: Optimizing CNN models for computer vision tasks
-- **Key Features**:
-  - Model tuning with AITune
-  - Image classification inference
-  - Performance comparison before/after tuning
-  - Triton model repository generation and Model Analyzer-guided configuration promotion
-- **More Info**:
-  - https://huggingface.co/microsoft/resnet-50
-
-## BERT
-
-Triton-only example for tuning BERT-base-uncased from Torch or ONNX. Both origins run in functional CI.
-
-- **Location**: [`BERT`](./BERT/README.md)
-- **Model**: BERT-base-uncased
-- **Key Features**:
-  - Select a deployment-capable backend from Torch or ONNX inputs
-  - Validate the saved checkpoint with standalone Python inference
-  - Generate a Triton model repository, profile a three-length mixed workload with Model Analyzer, and promote the fastest configuration
-  - Validate deployed inference through Triton gRPC
-
-## YOLO
-
-Triton-only example for tuning YOLOv10n from Torch or ONNX. Both origins run in functional CI.
-
-- **Location**: [`YOLO`](./YOLO/README.md)
-- **Model**: YOLOv10n object detection
-- **Key Features**:
-  - Select a deployment-capable backend from Torch or ONNX inputs
-  - Validate the saved checkpoint with standalone Python inference
-  - Generate a fixed-batch Triton model repository, profile with Model Analyzer, and promote the fastest configuration
-  - Validate deployed detections through Triton gRPC
-
-## StableDiffusion
-
-### Generative AI - Text-to-Image
-
-Demonstrates tuning of Stable Diffusion models for text-to-image generation. This example shows how to tune diffusion models for faster and more efficient image generation.
-
-- **Location**: [`StableDiffusion`](./StableDiffusion/README.md)
-- **Model**: Stable Diffusion 3 from HuggingFace
-- **Use Case**: Optimizing text-to-image diffusion models
-- **Key Features**:
-  - Diffusion pipeline tuning
-  - Customizable image generation parameters
-  - Text prompt-based image synthesis
-- **More Info**:
-  - https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers
-
-## FLUX
-
-### Generative AI - Advanced Text-to-Image
-
-Shows tuning of the FLUX text-to-image model, demonstrating advanced diffusion model tuning techniques for high-quality image generation.
-
-- **Location**: [`FLUX`](./FLUX/README.md)
-- **Model**: FLUX.1-dev from Black Forest Labs
-- **Use Case**: Optimizing state-of-the-art text-to-image models
-- **Key Features**:
-  - Advanced diffusion model tuning
-  - Single-GPU and Diffusers context-parallel execution
-  - High-quality image generation
-  - Efficient inference pipeline tuning
-- **More Info**:
-  - https://huggingface.co/black-forest-labs/FLUX.1-dev
-
-## WAN
-
-### Generative AI - Text-to-Video
-
-Demonstrates distributed tuning and serving of the WAN 2.1 text-to-video model with Diffusers context parallelism.
-
-- **Location**: [`WAN`](./WAN/README.md)
-- **Model**: WAN 2.1 T2V 1.3B from Hugging Face
-- **Use Case**: Optimizing large text-to-video diffusion models across multiple GPUs
-- **Key Features**:
-  - Multi-GPU Ulysses and ring context parallelism
-  - Independent backend selection for the WAN transformer
-  - Rank-local distributed checkpoints
-  - Original and tuned MP4 generation
-  - Collective NVIDIA Dynamo serving
-- **More Info**:
-  - https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers
-
-## ParakeetCTC
-
-### Speech AI - Automatic Speech Recognition
-
-Demonstrates tuning of ASR (Automatic Speech Recognition) models using NVIDIA's Parakeet CTC model for speech-to-text conversion.
-
-- **Location**: [`ParakeetCTC`](./ParakeetCTC/README.md)
-- **Model**: NVIDIA Parakeet CTC 0.6B
-- **Use Case**: Optimizing speech recognition models
-- **Key Features**:
-  - ASR model tuning
-  - Audio-to-text transcription
-  - NVIDIA NeMo framework integration
-- **More Info**:
-  - https://huggingface.co/nvidia/parakeet-ctc-0.6b
-  - https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/asr/models.html
-
-## ParakeetRNNT
-
-### Speech AI - Automatic Speech Recognition
-
-Demonstrates tuning of ASR (Automatic Speech Recognition) models using NVIDIA's Parakeet RNNT model for speech-to-text conversion.
-
-- **Location**: [`ParakeetRNNT`](./ParakeetRNNT/README.md)
-- **Model**: NVIDIA Parakeet RNNT 1.1B
-- **Use Case**: Optimizing speech recognition models
-- **Key Features**:
-  - ASR model tuning
-  - Audio-to-text transcription
-  - NVIDIA NeMo framework integration
-- **More Info**:
-  - https://huggingface.co/nvidia/parakeet-rnnt-1.1b
-  - https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/asr/models.html
-
-## ESM2
-
-### Text AI - Advanced Text Embedding
-
-Demonstrates tuning of ESM2 model for text embedding tasks.
-
-- **Location**: [`ESM2`](./ESM2/README.md)
-- **Model**: ESM2 from HuggingFace
-- **Use Case**: Optimizing text embedding models
-- **Key Features**:
-  - Text embedding tuning
-  - Text embedding inference
-  - HuggingFace integration
-- **More Info**:
-  - https://huggingface.co/esm/esm2-t12-100M-UR50S
-
-## E5Large
-
-### Text AI - Advanced Text Embedding
-
-Demonstrates tuning of E5Large model for text embedding tasks.
-
-- **Location**: [`E5Large`](./E5Large/README.md)
-- **Model**: E5Large from HuggingFace
-- **Use Case**: Optimizing text embedding models
-- **Key Features**:
-  - Text embedding tuning
-  - Text embedding inference
-  - HuggingFace integration
-- **More Info**:
-  - https://huggingface.co/intfloat/e5-large-v2
-
-## LLM
-
-### Large Language Models - Text Generation
-
-Demonstrates tuning of Large Language Models for text generation tasks. This example shows how to optimize LLMs for efficient inference with KV cache support.
-
-- **Location**: [`LLM`](./LLM/README.md)
-- **Model**: Qwen3.5-0.8B from HuggingFace
-- **Use Case**: Optimizing LLMs for text generation and inference
-- **Key Features**:
-  - LLM model tuning with AITune
-  - Single-GPU and Transformers native tensor-parallel execution
-  - Static and dynamic KV cache optimization
-  - Prefill and decode phase optimization
-  - HuggingFace integration
-- **More Info**:
-  - https://huggingface.co/Qwen/Qwen3.5-0.8B
-
-## JIT Tuning
-
-### Just-In-Time Model Tuning
-
-Demonstrates how to use NVIDIA AITune with JIT (Just-In-Time) tuning that requires no code changes. This example shows how to enable automatic tuning through environment variables without modifying existing code.
-
-- **Location**: [`JitTuning`](./JitTuning/README.md)
-- **Models**: Various models including ResNet, Stable Diffusion 3, Stable Diffusion XL, and FLUX
-- **Use Case**: Zero-code-change automatic model optimization
-- **Key Features**:
-  - No-code JIT tuning via environment variables
-  - Automatic tuning without imports or code modifications
-  - Support for multiple model types (ResNet, diffusion models)
-  - Simple enable/disable through `AUTOWRAPT_BOOTSTRAP` variable
-- **More Info**:
-  - https://huggingface.co/stabilityai/stable-diffusion-3-medium-diffusers
-  - https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
-  - https://huggingface.co/black-forest-labs/FLUX.1-dev
-
----
-
-Each example includes:
-
-- Complete setup instructions
-- Usage examples with CLI commands
-- Model-specific tuning parameters
-- AI Dynamo deployment instructions where supported
-
-To get started, navigate to any example directory and follow the README instructions for that specific model type.
+Compilation options describe the main tuned component. Open the model page for supported combinations,
+hardware requirements, and results.

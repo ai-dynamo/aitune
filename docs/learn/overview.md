@@ -26,32 +26,74 @@ import { BadgeLinks } from "../_components/BadgeLinks";
   ]}
 />
 
+**NVIDIA AITune automates inference tuning for PyTorch models and pipelines on NVIDIA GPUs.**
+It brings inference engines and acceleration techniques together under a single, extensible API. AITune combines
+backend evaluation, numerical validation, and performance measurement into one workflow, selecting implementations
+for individual modules according to the configured tuning strategy.
 
+Start with a model from Hugging Face or timm, or bring your own model and checkpoint. For supported applications,
+enable just-in-time tuning during inference, or use the explicit tuning API to prepare artifacts for deployment.
 
-**NVIDIA AITune** is an inference toolkit designed for tuning and deploying Deep Learning models with a focus on NVIDIA GPUs. It provides model tuning capabilities through compilation and conversion paths that can significantly improve inference speed and efficiency across various AI workloads including Computer Vision, Natural Language Processing, Speech Recognition, and Generative AI.
+Find your model in the [recipe catalog](../../examples/README.md), or follow the [quick start](quick_start.md).
 
-The toolkit enables seamless tuning of PyTorch models and pipelines using various backends such as TensorRT, Torch-TensorRT, TorchAO, Torch Inductor, and ONNX Runtime through a single Python API. The resulting tuned models are ready for deployment in production environments.
+## Why AITune?
 
-NVIDIA AITune works with your environment — relying first on your software versions — and selects the best-performing backend for your software and hardware setup, guiding you to supported technologies.
+- **Integrate through one API.** Use a shared workflow across supported backends. Extend the workflow with custom
+  backends and tuning strategies.
+- **Evaluate options per module.** Use default candidates that account for execution needs, or configure candidates
+  explicitly. Different modules in a pipeline can use different backends.
+- **Select using measurements.** Check numerical outputs and measure performance on representative inputs. Choose
+  strategies for throughput, latency, or a latency budget to guide selection.
+- **Prepare for deployment.** Reuse tuned modules in Python, generate Triton model repositories, or serve through
+  Dynamo workers, as supported by the recipe.
 
-## When to Use AITune
+## How it works
 
-AITune provides compute graph optimizations for PyTorch models at the `nn.Module` level. Use AITune when you want automated inference optimization with minimal code changes.
+AITune combines these stages into a workflow for each model or pipeline:
 
-If your model is supported by a dedicated serving framework and benefits from runtime optimizations (e.g. continuous batching, speculative decoding), use frameworks like TensorRT-LLM, vLLM, or SGLang for best performance. Use AITune for general PyTorch models and pipelines that lack such specialized tooling.
+1. **Inspect.** Provide a PyTorch model and representative inputs. AITune finds tunable `nn.Module` components
+   and observes their inputs and execution.
+2. **Wrap.** Customize the selected modules' tuning strategies and backend configurations.
+3. **Tune.** Evaluate configured backend candidates, check numerical outputs against the original implementation,
+   and measure performance on representative inputs. Select a backend using the configured strategy. Candidates can
+   incorporate post-training quantization (PTQ), kernel selection, or CUDA graphs where supported by the backend.
+4. **Run & deploy.** Run tuned modules in Python. Use the explicit workflow to save an `.ait` artifact for reuse
+   or deployment with Triton or Dynamo, as supported by the recipe.
 
-## Features at Glance
+<a href="../assets/aitune_workflow.svg">
+  <img src="../assets/aitune_workflow.svg" alt="AITune workflow: inspect, wrap, evaluate backend candidates, validate outputs, measure performance, select the best backend for the configured strategy, and run or deploy." width="800" />
+</a>
 
-The distinct capabilities of NVIDIA AITune are summarized in the feature matrix:
+A shared tuning workflow brings supported backends and acceleration techniques together, with selection guided by
+the configured strategy.
 
-| Feature                     | Description                                                                                                                                              |
-|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Ease-of-use                 | Single line of code to run all possible tuning paths directly from your source code                                                                      |
-| Wide Backend Support        | Compatible with various tuning backends including TensorRT, Torch-TensorRT, TorchAO, Torch Inductor, and ONNX Runtime                                    |
-| Model Tuning                | Enhance the performance of models such as ResNET and BERT for efficient inference deployment                                                             |
-| Pipeline Tuning             | Streamline Python code pipelines for models such as Stable Diffusion and Flux using seamless model wrapping and tuning                                   |
-| Model Export and Conversion | Automate the process of exporting and converting models between various formats with focus on TensorRT, Torch-TensorRT, Torch Inductor, and ONNX Runtime |
-| Correctness Testing         | Ensures tuned models produce correct outputs by validating on provided data samples                                                                      |
-| Performance Profiling       | Profiles models to select the optimal backend based on performance metrics such as latency and throughput                                                |
-| Model Persistence           | Save and load tuned models for production deployment with flexible storage options                                                                       |
-| JIT tuning                  | Just-in-time tuning of a model or a pipeline without any code changes required                                                                           |
+## Backend selection within a pipeline
+
+Default candidates account for the tuning workflow and whether a module requires distributed execution. You can
+also configure the candidates explicitly. For example, a video pipeline may contain a transformer that spans
+multiple GPUs and a decoder that runs locally on each GPU. The transformer needs backends that support distributed
+execution, while the decoder can use single-GPU candidates.
+
+Each module can receive a different backend. Selection depends on the evaluated candidates, representative inputs,
+hardware, and tuning strategy. Measure the complete pipeline with your workload to assess the overall result.
+See [tuning strategies](../guides/tune_strategies/tune_strategies.md) for selection policies and
+[multi-GPU tuning](../guides/multi_gpu.md) for distributed execution.
+
+To add another backend or selection policy, see
+[workflow customization](../guides/advanced/tuning_workflow.md#workflow-customization).
+
+## Getting started
+
+- **Just-in-time (JIT): try acceleration in your existing application.** Enable tuning when launching your script;
+  AITune captures inputs and tunes eligible modules during inference. See the [JIT guide](../guides/jit_tuning.md).
+- **Ahead-of-time (AOT): prepare a reusable tuning artifact.** Use the explicit flow to inspect, wrap, and tune your model,
+  then save it for reuse or deployment. See the [AOT guide](../guides/aot_tuning.md).
+
+Follow the [quick start](quick_start.md) for a Stable Diffusion example and the [installation guide](install.md)
+for environment setup.
+
+## Model recipes
+
+Explore [ready-to-use model recipes](../../examples/README.md) for tuning, validation, benchmarking, and deployment.
+Choose a model and a configuration for your GPU setup, precision, and deployment target, then adapt the recipe
+with your own compatible checkpoint and data.
