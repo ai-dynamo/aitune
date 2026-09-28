@@ -345,6 +345,12 @@ ckpt/
 checkpoints/
 notebooks/checkpoints/
 
+# generated example deployment outputs
+/artifacts/
+/examples/*/*.ait
+/examples/*/model_repository*/
+/examples/BERT/model.onnx
+
 # skip nsights system reports
 *.nsys-rep
 

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # /// script
-# dependencies = ["huggingface-hub", "pillow"]
+# dependencies = ["huggingface-hub"]
 # scope = "always"
 # allow_failure = false
 # [[pip_install]]
@@ -14,7 +14,7 @@
 
 Source: https://huggingface.co/onnx-community/yolov10n
 The published graph requires batch 1 and 640x640 RGB inputs.
-Uses the model card street image and compares detections with confidence >= 0.4.
+Deterministic generated input checks execution and numerical agreement, not detection accuracy.
 Run: HF_ENDPOINT=https://huggingface.co python -m pytest tests/functional/onnx/007_onnx_yolo.py -q -s
 Use --basetemp=/path/to/artifacts to retain the performance report and checkpoint.
 """
@@ -22,11 +22,9 @@ Use --basetemp=/path/to/artifacts to retain the performance report and checkpoin
 import json
 from pathlib import Path
 
-import numpy as np
 import pytest
 import torch
-from huggingface_hub import hf_hub_download, snapshot_download
-from PIL import Image, ImageDraw
+from huggingface_hub import snapshot_download
 
 from aitune.torch import MaxThroughputStrategy, Module, PerformanceValidationMode, load, save, tune
 from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend, TensorRTBackendConfig
@@ -39,27 +37,16 @@ def load_model():
     snapshot = snapshot_download(
         "onnx-community/yolov10n",
         revision="57657320425ee34056408a57ad9d29c4d4815bd8",
-        allow_patterns=["onnx/model.onnx", "config.json", "preprocessor_config.json"],
+        allow_patterns=["onnx/model.onnx"],
     )
     path = Path(snapshot) / "onnx/model.onnx"
-    config = json.loads((Path(snapshot) / "config.json").read_text())
-    processor = json.loads((Path(snapshot) / "preprocessor_config.json").read_text())
-    return OnnxModule(path), config, processor
+    return OnnxModule(path)
 
 
-def load_image(processor):
-    image_path = hf_hub_download("Xenova/transformers.js-docs", "city-streets.jpg", repo_type="dataset")
-    with Image.open(image_path) as original:
-        image = original.convert("RGB")
-    scale = processor["size"]["longest_edge"] / max(image.size)
-    new_width, new_height = (int(round(size * scale, 2)) for size in image.size)
-    resized = image.resize((new_width, new_height), resample=processor["resample"])
-    pixels = torch.from_numpy(np.array(resized)).permute(2, 0, 1).float() * processor["rescale_factor"]
-    # Transformers.js pads the bottom and right with zeros after rescaling.
-    images = torch.zeros((1, 3, processor["pad_size"], processor["pad_size"]))
-    images[0, :, :new_height, :new_width] = pixels
-
-    return image, images.cuda(), (new_width, new_height)
+def sample_input() -> torch.Tensor:
+    """Create a reproducible input without an external image asset."""
+    generator = torch.Generator().manual_seed(0)
+    return torch.rand((1, 3, 640, 640), generator=generator).cuda()
 
 
 def tune_and_save(source: OnnxModule, requests: torch.Tensor, tmp_path: Path):
@@ -115,43 +102,13 @@ def tune_and_save(source: OnnxModule, requests: torch.Tensor, tmp_path: Path):
         raise
 
 
-def inference(module, checkpoint, requests, tuned_output, expected, image, resized_size, config):
-    new_width, new_height = resized_size
-
+def inference(module, checkpoint, requests, tuned_output, expected):
     module = load(module, checkpoint)
     restored_output = module(images=requests)
     torch.testing.assert_close(restored_output, tuned_output)
     print(f"Load passed. Checkpoint: {checkpoint}")  # noqa: T201
-
-    threshold = 0.4
-    predictions = restored_output["output0"][0]
-    predictions = predictions[predictions[:, 4] >= threshold]
-    reference = expected["output0"][0]
-    reference = reference[reference[:, 4] >= threshold]
-    assert len(predictions) > 0
-    torch.testing.assert_close(predictions, reference, rtol=1e-2, atol=1e-2)
-
-    # draw detections on the image
-    annotated = image.copy()
-    draw = ImageDraw.Draw(annotated)
-    xs, ys = image.width / new_width, image.height / new_height
-    for xmin, ymin, xmax, ymax, score, class_id in predictions.tolist():
-        box = (xmin * xs, ymin * ys, xmax * xs, ymax * ys)
-        bbox = ", ".join(f"{value:.2f}" for value in box)
-        label = config["id2label"][str(int(class_id))]
-        print(f'Found "{label}" at [{bbox}] with score {score:.4f}.')  # noqa: T201
-        draw.rectangle(box, outline="lime", width=3)
-
-        caption = f"{label} {score:.2f}"
-        text_width = draw.textlength(caption)
-        position = (max(0, min(box[0], image.width - text_width - 4)), max(0, box[1] - 16))
-
-        draw.rectangle(draw.textbbox(position, caption), fill="black")
-        draw.text(position, caption, fill="lime")
-
-    annotated_path = Path(__file__).parent / "city-streets-detections.png"
-    annotated.save(annotated_path)
-    print(f"Annotated image: {annotated_path}")
+    torch.testing.assert_close(restored_output, expected, rtol=1e-2, atol=1e-2)
+    assert all(torch.isfinite(output).all() for output in restored_output.values())
 
 
 @torch.inference_mode()
@@ -159,13 +116,13 @@ def test_onnx_yolo(tmp_path: Path) -> None:
     if not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
 
-    source, config, processor = load_model()
+    source = load_model()
     module = None
     try:
-        image, requests, resized_size = load_image(processor)
+        requests = sample_input()
         expected = source(images=requests)
         module, checkpoint, tuned_output = tune_and_save(source, requests, tmp_path)
-        inference(module, checkpoint, requests, tuned_output, expected, image, resized_size, config)
+        inference(module, checkpoint, requests, tuned_output, expected)
     finally:
         if module is not None and module.state.name == "TUNED":
             for backend in module.module.backends.values():

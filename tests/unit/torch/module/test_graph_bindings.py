@@ -149,7 +149,7 @@ def test_tensor_names_do_not_affect_graph_identity():
 def test_tensorrt_profiles_and_bindings_use_original_names(named_source, layout, profile_mode, tmp_path):
     from types import SimpleNamespace
 
-    from aitune.torch.backend.tensorrt.tensorrt_backend import ProfileMode, TensorRTBackend
+    from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTProfileMode
     from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
     from aitune.torch.dynamic_shapes import BatchDim
 
@@ -158,7 +158,7 @@ def test_tensorrt_profiles_and_bindings_use_original_names(named_source, layout,
     backend._graph_spec = graph
     expected = ([1, 3], [4, 3], [4, 3])
     if profile_mode == "samples":
-        backend._config.profiles = ProfileMode.SAMPLES_USED
+        backend._config.profiles = TensorRTProfileMode.SAMPLES_USED
         expected = ([2, 3], [2, 3], [2, 3])
     elif profile_mode == "explicit":
         graph.dynamic_shapes = {
@@ -172,10 +172,15 @@ def test_tensorrt_profiles_and_bindings_use_original_names(named_source, layout,
         backend._config.profiles = [profile]
         expected = ([1, 3], [2, 3], [8, 3])
     profiles = backend.get_profiles(graph, [_sample(layout, 2)])
-    assert len(profiles) == 1
+    assert len(profiles) == (2 if profile_mode == "samples" else 1)
     assert set(profiles[0]) == {"input.1", "kwargs"}
     for shapes in profiles[0].values():
         assert tuple(list(shape) for shape in shapes) == expected
+    if profile_mode == "samples":
+        # The exact sample profile keeps the original names, as does the range fallback.
+        assert set(profiles[1]) == {"input.1", "kwargs"}
+        for shapes in profiles[1].values():
+            assert tuple(list(shape) for shape in shapes) == ([1, 3], [4, 3], [4, 3])
     backend._engine_info = SimpleNamespace(input_names=["input.1", "kwargs"])
     inputs = backend._prepare_inputs(*_sample(layout, 2))
     torch.testing.assert_close(inputs["input.1"], torch.full((2, 3), 5.0))

@@ -195,7 +195,7 @@ triton-model-store = "demo.triton.model_store:main"
 
 [tool.aitune]
 workflows = [{ name = "triton" }]
-variants = [{ arguments = { image-path = "dog.webp" }, launcher = "torchrun", processes = 2 }]
+variants = [{ arguments = { image-path = "dog.webp", source = "onnx" }, launcher = "torchrun", processes = 2 }]
 """.strip(),
         encoding="utf-8",
     )
@@ -216,6 +216,7 @@ variants = [{ arguments = { image-path = "dog.webp" }, launcher = "torchrun", pr
         "--module",
         "demo.tune",
         "--image-path=dog.webp",
+        "--source=onnx",
         "--target=triton",
     ]
     assert run.call_args_list[4].args[0] == [
@@ -224,7 +225,7 @@ variants = [{ arguments = { image-path = "dog.webp" }, launcher = "torchrun", pr
         "demo.triton.model_store",
         f"--model-repository={model_repository}",
     ]
-    assert run.call_args_list[5].args[0] == ["./run_triton.sh", "--image-path=dog.webp"]
+    assert run.call_args_list[5].args[0] == ["./run_triton.sh", "--image-path=dog.webp", "--source=onnx"]
     assert run.call_args_list[5].kwargs["env"]["MODEL_REPOSITORY"] == str(model_repository)
     assert "TRITON_NETWORK" not in run.call_args_list[5].kwargs["env"]
     assert len(run.call_args_list) == 6

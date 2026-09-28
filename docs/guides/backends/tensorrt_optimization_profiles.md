@@ -23,20 +23,25 @@ global_config.max_num_samples_stored = float("inf")
 global_config.max_num_samples_stored = 100
 ```
 
-### Use the `ProfileMode.SAMPLES_USED` mode
+### Use the `TensorRTProfileMode.SAMPLES_USED` mode
 
-You can use the `ProfileMode.SAMPLES_USED` mode to auto-generate multiple profiles from shapes of samples used for tuning.
+`TensorRTProfileMode.SAMPLES_USED` creates an exact profile for each recorded shape. When input shapes vary, it also adds a
+wide fallback spanning their range, including the discovered maximum batch size when find-max-batch-size is enabled.
+
+When the module defines explicit dynamic shapes, those definitions take precedence and produce one graph-derived
+profile instead of sample profiles.
 
 ```python
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
-from aitune.torch.backend.tensorrt import TensorRTProfile, ProfileMode
+from aitune.torch.backend.tensorrt import TensorRTProfile, TensorRTProfileMode
 
-backend = TensorRTBackend(TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+backend = TensorRTBackend(TensorRTBackendConfig(profiles=TensorRTProfileMode.SAMPLES_USED))
 ```
 
 ### Use the correct samples and the right batch sizes during tuning
 
-If you use a different batch size than the one used for profile generation, the model will not be able to run.
+The fallback accepts unrecorded shapes within its bounds, while the exact profiles are preferred for recorded shapes.
+Inputs outside the fallback bounds cannot run.
 
 NOTE: As samples for a single parameter have different shapes, we are wrapping them in a `DynamicShapeDataset` to handle different shapes.
 
@@ -49,10 +54,10 @@ data2 = torch.randn((3, 448, 448), device=device).to(dtype)
 
 global_config.max_num_samples_stored = 4 # 2 samples x 2 batch sizes
 
-backend = TensorRTBackend(TensorRTBackendConfig(profiles=ProfileMode.SAMPLES_USED))
+backend = TensorRTBackend(TensorRTBackendConfig(profiles=TensorRTProfileMode.SAMPLES_USED))
 module = ait.Module(model, "toy-model", strategy=ait.OneBackendStrategy(backend).enable_find_max_batch_size(False))
 
-ait.tune(module, DynamicShapeDataset([data1, data2]), batch_sizes=[2, 8], device=device)  # will generate 4 profiles
+ait.tune(module, DynamicShapeDataset([data1, data2]), batch_sizes=[2, 8], device=device)  # 4 exact profiles + fallback
 
 module(data1.repeat(8, 1, 1, 1))
 module(data2.repeat(8, 1, 1, 1))

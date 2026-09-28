@@ -13,6 +13,7 @@ from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.wrapper_module import Module
@@ -383,6 +384,31 @@ def test_find_max_batch_size_uses_strategy_profiling_config(
         ext.find_max_batch_size(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
 
     assert mock_profile.call_args.args[4] is profiling_config
+
+
+def test_find_max_batch_size_explains_unsupported_format_and_fallback(mock_graph_spec, mock_data, tmp_path, caplog):
+    module = OnnxModule(tmp_path / "model.onnx")
+    fallback = MagicMock(spec=Backend)
+    fallback.name = "ONNXRuntimeBackend"
+    ext = _ConcreteExtension(profiling_config=_profiling_config())
+
+    with (
+        patch(
+            "aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.get_default_backend_for_module",
+            return_value=fallback,
+        ),
+        patch(
+            "aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.find_max_throughput_for_backend",
+            return_value=(4, 80.0, MagicMock()),
+        ),
+        caplog.at_level("WARNING"),
+    ):
+        ext.find_max_batch_size(module, "mod", mock_graph_spec, mock_data, torch.device("cpu"), tmp_path)
+
+    assert "Backend TorchEagerBackend does not support this module (supported formats: torch)" in caplog.text
+    assert "Using default backend ONNXRuntimeBackend" in caplog.text
+    assert "frozenset" not in caplog.text
+    fallback.build.assert_called_once()
 
 
 def test_find_max_batch_size_records_output_bounds(tmp_path):

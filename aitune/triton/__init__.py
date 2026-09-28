@@ -17,12 +17,14 @@ from aitune.triton.config.options import (
     QueuePolicy,
     SequenceBatcher,
 )
+from aitune.triton.model_analyzer import ModelAnalyzerConfig
 from aitune.triton.model_repository import PublicationError, publish
 
 __all__ = [
     "DynamicBatcher",
     "ExecutionAccelerator",
     "InstanceGroup",
+    "ModelAnalyzerConfig",
     "ModelWarmup",
     "QueuePolicy",
     "SequenceBatcher",

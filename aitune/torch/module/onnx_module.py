@@ -97,3 +97,9 @@ class OnnxModule(nn.Module):
         """Release the runtime session."""
         self._session = None
         self._device = None
+
+
+def onnx_checkpoint_placeholder() -> nn.Identity:
+    """Supply a source module when loading a self-contained ONNX AOT checkpoint."""
+    # FIXME: Load self-contained checkpoints without requiring a placeholder source module.
+    return nn.Identity()

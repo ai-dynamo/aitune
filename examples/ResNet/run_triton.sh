@@ -4,6 +4,29 @@
 
 set -euo pipefail
 
+# Variant arguments also include tuning-only options. Only the image path is
+# needed for this correctness check; the client supplies its default otherwise.
+CLIENT_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --image-path)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for $1" >&2
+        exit 2
+      fi
+      CLIENT_ARGS+=("$1" "$2")
+      shift 2
+      ;;
+    --image-path=*)
+      CLIENT_ARGS+=("$1")
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_REPOSITORY="${MODEL_REPOSITORY:-$SCRIPT_DIR/model_repository}"
 MODEL_NAME="${MODEL_NAME:-resnet50}"
@@ -48,7 +71,7 @@ for attempt in {1..100}; do
     curl --noproxy '*' --connect-timeout 1 --max-time 2 -fsS \
       "http://localhost:8000/v2/models/$MODEL_NAME/ready" >/dev/null 2>&1; then
     cat "$TRITON_LOG_PATH"
-    python3 -m resnet.triton.client --model-name "$MODEL_NAME" "$@"
+    python3 -m resnet.triton.client --model-name "$MODEL_NAME" "${CLIENT_ARGS[@]}"
     exit 0
   fi
   if ! kill -0 "$TRITON_PID" >/dev/null 2>&1; then

@@ -10,7 +10,7 @@ from onnx import TensorProto, helper
 from aitune.torch import MaxThroughputStrategy, Module, tune
 from aitune.torch.backend import ONNXRuntimeBackend
 from aitune.torch.dataloader import DynamicShapeDataset
-from aitune.torch.module import OnnxModule
+from aitune.torch.module import OnnxModule, onnx_checkpoint_placeholder
 from aitune.torch.task.profiling import ProfilingConfig
 
 
@@ -144,7 +144,7 @@ def test_onnx_module_external_weights_checkpoint(tmp_path):
         module.deactivate()
         path.unlink()
         (tmp_path / "weights.bin").unlink()
-        module = load(module, checkpoint)
+        module = load(onnx_checkpoint_placeholder(), checkpoint)
         (backend,) = module.module.backends.values()
         assert isinstance(backend, ONNXRuntimeBackend)
         torch.testing.assert_close(module(x=x[:2])["y"], x[:2] * 2)

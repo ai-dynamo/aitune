@@ -11,7 +11,7 @@ from pathlib import Path
 from aitune.exceptions import AITunePublicationError, AITuneUserInputError
 from aitune.records import DeploymentArtifact
 from aitune.triton.config import BaseModelConfig, ONNXRuntimeModelConfig, TensorRTModelConfig, TorchAOTIModelConfig
-from aitune.triton.model_analyzer import write_model_analyzer_config
+from aitune.triton.model_analyzer import ModelAnalyzerConfig, write_model_analyzer_config
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def publish(
     path: str | os.PathLike[str],
     model_name: str | None = None,
     model_version: int = 1,
-    latency_budget_ms: int | None = None,
+    model_analyzer: ModelAnalyzerConfig | None = None,
     config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig | None = None,
     additional_files: Sequence[str | os.PathLike[str]] = (),
     resources: Mapping[str, str | os.PathLike[str]] | None = None,
@@ -43,8 +43,8 @@ def publish(
     into the new model directory, so a failure can leave an incomplete directory.
     For artifacts, a Model Analyzer config is generated under
     ``model_analyzer/config.yaml`` with input shapes derived from the artifact.
-    The Triton batch limit and scheduler are derived from the artifact's tensor
-    bounds and runtime call structure.
+    Without an explicit config, the Triton batch limit and scheduler are derived
+    from the artifact's tensor bounds and runtime call structure.
     Existing model files require an explicit backend-specific ``config`` and
     are copied without compilation or tuning. Callers must keep generation
     separate from updates to a live Triton repository.
@@ -58,10 +58,12 @@ def publish(
     Args:
         model: Deployment artifact or path to an existing model file.
         path: Triton model repository root.
-        model_name: New model directory name for an artifact; file publication uses ``config.name``.
+        model_name: New model directory name for an artifact; defaults to ``config.name`` when config is supplied.
         model_version: Positive Triton model version.
-        latency_budget_ms: Optional p99 latency limit for Model Analyzer, in milliseconds.
-        config: Backend-specific configuration required for an existing file.
+        model_analyzer: Optional Model Analyzer options. Omission uses the default options for artifacts.
+        config: Complete backend-specific configuration. For an artifact, it is derived when omitted. A supplied
+            config must match the artifact runtime and model name; the caller owns its other values. An existing
+            model file requires it.
         additional_files: ONNX external-data paths relative to the source file's directory.
         resources: Model-relative auxiliary destination paths mapped to local files.
 
@@ -73,20 +75,27 @@ def publish(
         AITunePublicationError: If the artifact cannot be represented or publication fails.
     """
     if isinstance(model, DeploymentArtifact):
-        if config is not None or additional_files or resources:
-            raise AITuneUserInputError("Artifact publication derives config and additional files from the artifact")
+        if config is not None and type(config) not in _MODEL_CONFIGS.values():
+            raise AITunePublicationError(
+                "config must be a TensorRTModelConfig, ONNXRuntimeModelConfig, or TorchAOTIModelConfig"
+            )
+        if additional_files or resources:
+            raise AITuneUserInputError("Artifact publication derives additional files from the artifact")
         return _publish_deployment_artifact(
             model,
             path=path,
             model_name=model_name,
             model_version=model_version,
-            latency_budget_ms=latency_budget_ms,
+            model_analyzer=model_analyzer,
+            config=config,
         )
     if not isinstance(model, str | os.PathLike):
         raise AITuneUserInputError("model must be an artifact or a model file path")
     if config is None:
         raise AITuneUserInputError("config is required when publishing a model file")
-    if model_name is not None or latency_budget_ms is not None:
+    if model_analyzer is not None:
+        raise AITuneUserInputError("Model Analyzer options require a deployment artifact")
+    if model_name is not None:
         raise AITuneUserInputError("For a model file, specify deployment settings in config")
     return _publish_existing_model(
         model,
@@ -104,23 +113,30 @@ def _publish_deployment_artifact(
     path: str | os.PathLike[str],
     model_name: str | None,
     model_version: int,
-    latency_budget_ms: int | None,
+    model_analyzer: ModelAnalyzerConfig | None,
+    config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig | None,
 ) -> Path:
     """Publish an artifact and generate its Model Analyzer configuration."""
-    model_name = _validate_target(model_name, model_version)
-    if latency_budget_ms is not None and (
-        not isinstance(latency_budget_ms, int) or isinstance(latency_budget_ms, bool) or latency_budget_ms < 1
-    ):
-        raise AITuneUserInputError(f"latency_budget_ms must be a positive integer, got {latency_budget_ms!r}")
+    model_name = _validate_target(
+        model_name if model_name is not None else config.name if config else None, model_version
+    )
+    if model_analyzer is not None and not isinstance(model_analyzer, ModelAnalyzerConfig):
+        raise AITuneUserInputError("model_analyzer must be a ModelAnalyzerConfig")
 
     file_name, multi_file = _artifact_layout(artifact)
     _validate_artifact_files(artifact, multi_file=multi_file)
-    config = _model_config(artifact, model_name=model_name)
+    config = _model_config(artifact, model_name=model_name, config=config)
+    _validate_version_policy(config, model_version)
+    _resource_files(config, {})
+    try:
+        config_text = config.to_pbtxt()
+    except (TypeError, ValueError) as error:
+        raise AITunePublicationError(f"Invalid Triton configuration for {model_name!r}: {error}") from error
 
     try:
         repository = Path(path)
         model_directory, version_directory = _create_model_directories(repository, model_name, model_version)
-        (model_directory / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
+        (model_directory / _CONFIG_FILE_NAME).write_text(config_text)
         destination = version_directory / file_name
         if artifact.model.additional_files:
             destination = destination / file_name
@@ -131,7 +147,7 @@ def _publish_deployment_artifact(
             config=config.to_protobuf(),
             model_directory=model_directory,
             destination=repository_path.parent / f"{repository_path.name}-model-analyzer" / model_name,
-            latency_budget_ms=latency_budget_ms,
+            options=model_analyzer or ModelAnalyzerConfig(),
             output_directory=model_directory / "model_analyzer",
             input_data_path=model_directory / "model_analyzer" / "input-data.json",
         )
@@ -182,17 +198,27 @@ def _validate_artifact_files(artifact: DeploymentArtifact, *, multi_file: bool) 
         )
 
 
-def _model_config(artifact: DeploymentArtifact, *, model_name: str) -> BaseModelConfig:
-    """Build a validated Triton configuration from an artifact."""
+def _model_config(
+    artifact: DeploymentArtifact,
+    *,
+    model_name: str,
+    config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig | None,
+) -> BaseModelConfig:
+    """Derive or validate the Triton configuration for an artifact."""
     if not artifact.inputs or not artifact.outputs:
         raise AITunePublicationError("Triton publication requires at least one input and one output")
     config_type = _MODEL_CONFIGS.get(artifact.runtime.name)
     if config_type is None:
         raise AITunePublicationError(f"Unsupported Triton runtime: {artifact.runtime.name!r}")
     try:
-        return config_type.from_artifact(artifact, name=model_name)
+        generated = config_type.from_artifact(artifact, name=model_name)
     except (KeyError, TypeError, ValueError) as error:
         raise AITunePublicationError(f"Invalid Triton configuration for {artifact.runtime.name!r}: {error}") from error
+    if config is None:
+        return generated
+    if type(config) is not type(generated) or config.name != generated.name:
+        raise AITunePublicationError("Supplied Triton config does not match the artifact runtime or model name")
+    return config
 
 
 def _publish_existing_model(
@@ -293,7 +319,7 @@ def _additional_file_paths(source: Path, additional_files: Sequence[str | os.Pat
 
 
 def _resource_files(
-    config: TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig,
+    config: BaseModelConfig,
     resources: Mapping[str, str | os.PathLike[str]],
 ) -> dict[Path, Path]:
     """Validate auxiliary file destinations and require files referenced by config."""
