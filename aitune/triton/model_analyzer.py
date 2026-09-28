@@ -39,8 +39,7 @@ class ModelAnalyzerConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
     latency_budget_ms: int | None = Field(default=None, ge=1, strict=True)
-    latency_percentile: Literal[90, 95, 99] = Field(default=95, strict=True)
-
+    latency_percentile: Literal[90, 95, 99] = Field(default=95)
 
 
 class _ModelAnalyzerYamlConfig(BaseModel):
