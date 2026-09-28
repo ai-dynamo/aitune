@@ -16,6 +16,7 @@ from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.patcher import Patcher, jit_reset
+from aitune.torch.utils.module import is_externally_managed_module
 
 _LIMIT_NAMES = (
     "cache_size_limit",
@@ -330,7 +331,14 @@ def test_reset_restores_capacity_when_report_finalization_fails(monkeypatch):
 def test_reset_preserves_failed_wrapper_for_retry_after_partial_unpatch(monkeypatch):
     config = _DynamoConfig(**dict.fromkeys(_LIMIT_NAMES, 1))
     monkeypatch.setattr(dynamo, "dynamo_config", config)
-    wrappers = [PatchedModule(torch.nn.Linear(2, 2), explicit_head=True) for _ in range(2)]
+    wrappers = [
+        PatchedModule(
+            torch.nn.Linear(2, 2),
+            explicit_head=True,
+            device_management="external",
+        )
+        for _ in range(2)
+    ]
     modules = [wrapper.__wrapped__ for wrapper in wrappers]
     original_forwards = [wrapper._original_forward for wrapper in wrappers]
     Patcher._patched_modules.extend(wrappers)
@@ -338,6 +346,7 @@ def test_reset_preserves_failed_wrapper_for_retry_after_partial_unpatch(monkeypa
     Patcher._explicit_route_counts.update({wrapper._id: 1 for wrapper in wrappers})
     module_counter = PatchedModule.module_counter
     dynamo.reserve_dynamo_recompile_capacity(owner=1, route_count=2, strategy=_strategy(num_backends=1))
+    assert all(is_externally_managed_module(module) for module in modules)
 
     with monkeypatch.context() as failure:
         failure.setattr(patcher_module, "has_active_report", lambda: False)
@@ -353,9 +362,10 @@ def test_reset_preserves_failed_wrapper_for_retry_after_partial_unpatch(monkeypa
     assert Patcher._explicit_route_counts == {wrapper._id: 1 for wrapper in wrappers}
     assert PatchedModule.module_counter == module_counter
     assert modules[0].forward is original_forwards[0]
-    assert modules[1].forward is not original_forwards[1]
+    assert not is_externally_managed_module(modules[0])
+    assert is_externally_managed_module(modules[1])
     with pytest.raises(RuntimeError, match="cleanup is incomplete"):
-        register_for_jit_tuning([modules[1]])
+        register_for_jit_tuning([modules[1]], device_management="external")
 
     jit_reset()
 
@@ -365,6 +375,7 @@ def test_reset_preserves_failed_wrapper_for_retry_after_partial_unpatch(monkeypa
     assert Patcher._explicit_route_counts == {}
     assert PatchedModule.module_counter == 0
     assert all(module.forward is original for module, original in zip(modules, original_forwards, strict=True))
+    assert not any(is_externally_managed_module(module) for module in modules)
 
 
 def test_old_cached_forward_does_not_release_new_session_capacity(monkeypatch):

@@ -3,6 +3,7 @@
 """PyTorch module utilities for parameter counting, device management, and memory offloading."""
 
 import inspect
+import weakref
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -19,6 +20,18 @@ from aitune.utils.monitoring import annotate
 
 if TYPE_CHECKING:
     from aitune.torch.backend.backend import Backend
+
+
+_EXTERNALLY_MANAGED_MODULE_ROOTS: dict[int, weakref.ReferenceType[nn.Module]] = {}
+
+
+def _remove_externally_managed_module(
+    module_id: int,
+    module_ref: weakref.ReferenceType[nn.Module],
+) -> None:
+    """Remove a dead external-placement root without being affected by object-id reuse."""
+    if _EXTERNALLY_MANAGED_MODULE_ROOTS.get(module_id) is module_ref:
+        _EXTERNALLY_MANAGED_MODULE_ROOTS.pop(module_id, None)
 
 
 def format_num_parameters(num: int) -> str:
@@ -125,9 +138,45 @@ def is_distributed_module(module: nn.Module) -> bool:
     return is_integration_distributed_module(module)
 
 
+def register_externally_managed_module(module: nn.Module) -> None:
+    """Preserve placement for a module tree owned by an external runtime.
+
+    Registration is identity-scoped: copies of the module are not registered and remain movable by AITune.
+    """
+    module_id = id(module)
+    module_ref = weakref.ref(
+        module,
+        lambda ref: _remove_externally_managed_module(module_id, ref),
+    )
+    _EXTERNALLY_MANAGED_MODULE_ROOTS[module_id] = module_ref
+
+
+def unregister_externally_managed_module(module: nn.Module) -> None:
+    """Stop preserving externally managed placement for a module tree."""
+    module_ref = _EXTERNALLY_MANAGED_MODULE_ROOTS.get(id(module))
+    if module_ref is not None and module_ref() is module:
+        _EXTERNALLY_MANAGED_MODULE_ROOTS.pop(id(module), None)
+
+
+def is_externally_managed_module(module: nn.Module) -> bool:
+    """Return whether an external runtime owns placement through a registered root."""
+    direct_ref = _EXTERNALLY_MANAGED_MODULE_ROOTS.get(id(module))
+    if direct_ref is not None and direct_ref() is module:
+        return True
+
+    for module_id, module_ref in tuple(_EXTERNALLY_MANAGED_MODULE_ROOTS.items()):
+        root = module_ref()
+        if root is None:
+            _remove_externally_managed_module(module_id, module_ref)
+            continue
+        if any(owned_module is module for owned_module in root.modules()):
+            return True
+    return False
+
+
 def move_module_to_device(module: nn.Module, device: str | torch.device) -> None:
-    """Move an ordinary module while preserving distributed module placement."""
-    if not is_distributed_module(module):
+    """Move an ordinary module while preserving application-managed placement."""
+    if not is_distributed_module(module) and not is_externally_managed_module(module):
         module.to(device)
 
 
@@ -142,13 +191,13 @@ def move_tensors_to_device(value: Any, device: str | torch.device) -> Any:
 
 
 def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
-    """Offload an ordinary module while preserving distributed placement.
+    """Offload an ordinary module while preserving application-managed placement.
 
     Args:
         model: Model to offload, including any nested ONNX Runtime sessions.
         device: Device to offload to. ONNX modules use CPU for meta.
     """
-    if is_distributed_module(model):
+    if is_distributed_module(model) or is_externally_managed_module(model):
         return
 
     with annotate("Offloading module"):

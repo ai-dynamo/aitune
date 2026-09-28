@@ -15,6 +15,7 @@ import torch.nn as nn
 from packaging.version import Version
 
 from aitune.torch.module.sample_store import Sample
+from aitune.torch.utils.module import move_module_to_device
 from aitune.utils.monitoring import annotate
 
 # Setup logger
@@ -105,7 +106,7 @@ class TorchQuantizer:
             model_copy = deepcopy(module)
 
             # Offload model to CPU
-            module.to("cpu")
+            move_module_to_device(module, "cpu")
             self._clean_memory()
 
             # Move model to target device

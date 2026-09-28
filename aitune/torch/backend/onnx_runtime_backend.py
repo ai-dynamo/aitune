@@ -26,7 +26,7 @@ from aitune.torch.libs.onnx.runtime import run_onnx
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
-from aitune.torch.utils.module import offload
+from aitune.torch.utils.module import move_module_to_device, offload
 
 logger = getLogger(__name__)
 
@@ -140,6 +140,7 @@ class ONNXRuntimeBackend(Backend):
 
     _build_mode = BuildMode.AHEAD_OF_TIME
     _supported_modules = frozenset({ModuleFormat.TORCH, ModuleFormat.ONNX})
+    _supports_external_device_management = True
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
 
     # State dictionary keys
@@ -228,7 +229,8 @@ class ONNXRuntimeBackend(Backend):
     def _export_onnx(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> None:
         """Export a Torch module and preserve its output structure."""
         self._output_object = self._get_output_object(module=module, sample=samples[0])
-        module = module.eval().to(self._device)
+        module = module.eval()
+        move_module_to_device(module, self._device)
         self._onnx_model_artifact = ArtifactPath(cache_dir, "model_raw.onnx")
         onnx_exporter = ONNXExporter(
             output_path=self._onnx_model_artifact.path,
@@ -392,7 +394,7 @@ class ONNXRuntimeBackend(Backend):
         Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
         the output object.
         """
-        module.to(self._device)
+        move_module_to_device(module, self._device)
         args, kwargs = sample
         with torch.no_grad():
             output_object = module(*args, **kwargs)
