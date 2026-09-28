@@ -52,6 +52,13 @@ to find configurations and commands you can adapt with your own compatible check
       <td>Ahead of time, Runtime</td><td>-</td><td>-</td>
     </tr>
     <tr>
+      <th scope="row">Object detection</th>
+      <td><a href="./YOLO/README.md">YOLOv10n</a></td>
+      <td><a href="https://huggingface.co/onnx-community/yolov10n">Hugging Face</a></td>
+      <td>-</td><td>-</td>
+      <td>Ahead of time</td><td>-</td><td>Triton</td>
+    </tr>
+    <tr>
       <th scope="row">Protein language modeling</th>
       <td><a href="./ESM2/README.md">ESM-2 650M</a></td>
       <td><a href="https://huggingface.co/facebook/esm2_t33_650M_UR50D">Hugging Face</a></td>
@@ -70,6 +77,13 @@ to find configurations and commands you can adapt with your own compatible check
       <td><a href="https://huggingface.co/nvidia/parakeet-rnnt-1.1b">Hugging Face</a></td>
       <td>-</td><td>-</td>
       <td>Ahead of time, Runtime</td><td>-</td><td>Dynamo</td>
+    </tr>
+    <tr>
+      <th scope="row">Text encoding</th>
+      <td><a href="./BERT/README.md">BERT-base-uncased</a></td>
+      <td><a href="https://huggingface.co/google-bert/bert-base-uncased">Hugging Face</a></td>
+      <td>-</td><td>-</td>
+      <td>Ahead of time</td><td>-</td><td>Triton</td>
     </tr>
     <tr>
       <th scope="row">Text embeddings</th>
