@@ -7,6 +7,8 @@ from typing import Any, Optional
 
 import torch
 
+from aitune.torch.libs.onnx.onnx_model_info import ONNXModelInfo
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.utils import validation
 
 
@@ -68,6 +70,18 @@ class ModuleInfo:
     def set_wrapped(self, name: str, wrapped: Any):
         """Set the wrapped module."""
         setattr(self.module, name, wrapped)
+
+
+@dataclass
+class OnnxModuleInfo(ModuleInfo):
+    """Execution information for an ONNX module, with its declared graph metadata."""
+
+    module: OnnxModule
+
+    @property
+    def onnx_graph(self) -> ONNXModelInfo:
+        """Read the source graph's opsets, operators, and declared I/O."""
+        return self.module.graph_info
 
 
 class ListOfModulesInfo(ModuleInfo):

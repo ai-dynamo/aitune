@@ -1,14 +1,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import onnx
 import pytest
 import torch
 import torch.nn as nn
+from onnx import TensorProto, helper
 
 from aitune.torch.distributed import DistributedOutcome
 from aitune.torch.inspecting import inspect
 from aitune.torch.inspecting.inspecting import _run_inference, _synchronize_inspection_result
-from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo
+from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo, OnnxModuleInfo
+from aitune.torch.module import OnnxModule
 
 TEST_NUMBER_OF_ITERATIONS = 10
 
@@ -81,6 +84,37 @@ def test_inspect_simple_model(simple_model, sample_dataset):
     assert any(info.forward_called for info in modules)
     assert any(info.execution_count > 0 for info in modules)
     assert any(info.total_execution_time > 0 for info in modules)
+
+
+def test_inspect_onnx_module_reports_declared_graph(tmp_path):
+    path = tmp_path / "double.onnx"
+    graph = helper.make_graph(
+        [helper.make_node("Add", ["x", "x"], ["y"])],
+        "double",
+        [helper.make_tensor_value_info("x", TensorProto.FLOAT, ["batch", 3])],
+        [helper.make_tensor_value_info("y", TensorProto.FLOAT, ["batch", 3])],
+    )
+    onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], ir_version=8), path)
+
+    source = OnnxModule(path)
+    graph_info = source.graph_info
+    assert graph_info.opsets == {"": 17}
+    assert graph_info.opset_version == 17
+    assert graph_info.operators == {"Add"}
+    assert graph_info.input_names == ["x"]
+    assert graph_info.output_names == ["y"]
+    assert graph_info.input_dtypes == {"x": "FLOAT"}
+    assert graph_info.output_dtypes == {"y": "FLOAT"}
+    assert graph_info.input_shapes == {"x": ["batch", 3]}
+    assert graph_info.output_shapes == {"y": ["batch", 3]}
+
+    dataset = [{"x": torch.randn(3)} for _ in range(2)]
+    report = inspect(source, dataset, number_of_iterations=1, warmup_iterations=1)
+    (module_info,) = report.get_modules()
+    assert isinstance(module_info, OnnxModuleInfo)
+    assert module_info.module is source
+    assert module_info.onnx_graph is graph_info
+    assert module_info.execution_count == 1
 
 
 def test_inspect_synchronizes_complete_inference_calls(mocker, simple_model, sample_dataset):

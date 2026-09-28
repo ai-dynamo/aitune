@@ -70,20 +70,26 @@ class ONNXModelInfo:
 
         try:
             logger.info("Loading ONNX model: %s", model_path)
-            # Load the ONNX model
-            model = onnx.load(model_path)
+            # Graph metadata and initializer dtypes do not require external weight data.
+            model = onnx.load(model_path, load_external_data=False)
+            if not model.HasField("graph"):
+                raise ValueError(f"ONNX model {model_path} does not contain a graph")
 
             # Extract all information
             self._input_names = [input_data.name for input_data in model.graph.input]
             self._output_names = [output_data.name for output_data in model.graph.output]
             self._input_shapes = self._get_tensor_shapes(model.graph.input)
+            self._output_shapes = self._get_tensor_shapes(model.graph.output)
+            self._input_dtypes = self._get_tensor_dtypes(model.graph.input)
+            self._output_dtypes = self._get_tensor_dtypes(model.graph.output)
+            self._operators = self._get_operators(model.graph)
             self._precision = self._precision(model)
 
             # Extract opset versions
-            self._opset_version = None
-            if model.opset_import:
-                # Get the main opset version (typically the first one)
-                self._opset_version = model.opset_import[0].version
+            self._opsets = {entry.domain: entry.version for entry in model.opset_import}
+            # ONNX uses the empty domain for its standard operator set:
+            # https://onnx.ai/onnx/repo-docs/Versioning.html#operator-sets
+            self._opset_version = self._opsets.get("")
 
             # Extract producer info if available
             self._producer_name = model.producer_name if hasattr(model, "producer_name") else None
@@ -141,6 +147,31 @@ class ONNXModelInfo:
         """
         return self._input_shapes
 
+    @property
+    def output_shapes(self) -> dict[str, list[int | str | None]]:
+        """Declared output shapes, keyed by tensor name."""
+        return self._output_shapes
+
+    @property
+    def input_dtypes(self) -> dict[str, str]:
+        """Declared ONNX input tensor data types, keyed by tensor name."""
+        return self._input_dtypes
+
+    @property
+    def output_dtypes(self) -> dict[str, str]:
+        """Declared ONNX output tensor data types, keyed by tensor name."""
+        return self._output_dtypes
+
+    @property
+    def operators(self) -> frozenset[str]:
+        """Operator types used by graph nodes, qualified with their domain when nonstandard."""
+        return self._operators
+
+    @property
+    def opsets(self) -> dict[str, int]:
+        """Imported opset versions keyed by ONNX domain; the standard domain is ``""``."""
+        return self._opsets
+
     @staticmethod
     def _get_tensor_shapes(value_info_list) -> dict[str, list[int | str | None]]:
         """Extract shapes from ONNX graph ValueInfoProto list (e.g. model.graph.input)."""
@@ -159,6 +190,29 @@ class ONNXModelInfo:
             shapes[val.name] = dims
         return shapes
 
+    @staticmethod
+    def _get_tensor_dtypes(value_info_list) -> dict[str, str]:
+        """Extract declared tensor element types where available."""
+        return {
+            value.name: onnx.TensorProto.DataType.Name(value.type.tensor_type.elem_type)
+            for value in value_info_list
+            if value.type.HasField("tensor_type")
+        }
+
+    @staticmethod
+    def _get_operators(graph: onnx.GraphProto) -> frozenset[str]:
+        """Collect operator types from a graph and any nested control-flow graphs."""
+        operators = set()
+        for node in graph.node:
+            operators.add(f"{node.domain}::{node.op_type}" if node.domain else node.op_type)
+            for attribute in node.attribute:
+                if attribute.type == onnx.AttributeProto.GRAPH:
+                    operators.update(ONNXModelInfo._get_operators(attribute.g))
+                elif attribute.type == onnx.AttributeProto.GRAPHS:
+                    for subgraph in attribute.graphs:
+                        operators.update(ONNXModelInfo._get_operators(subgraph))
+        return frozenset(operators)
+
     @property
     def output_names(self) -> list[str]:
         """List of output tensor names.
@@ -169,7 +223,7 @@ class ONNXModelInfo:
         return self._output_names
 
     @property
-    def opset_version(self) -> int:
+    def opset_version(self) -> int | None:
         """OpSet version of the model.
 
         Returns:
@@ -178,7 +232,7 @@ class ONNXModelInfo:
         return self._opset_version
 
     @property
-    def precision(self) -> "ONNXPrecision":
+    def precision(self) -> "ONNXPrecision | None":
         """Precision of the model.
 
         Returns:
