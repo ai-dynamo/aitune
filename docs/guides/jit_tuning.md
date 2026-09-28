@@ -4,15 +4,18 @@
 title: "Just-in-Time Tuning Guide"
 ---
 
-Just-in-time tuning enables automatic model tuning without modifying your existing code. You can enable it with an environment variable and run your script - AITune will automatically discover and tune modules during execution.
+Just-in-time tuning records real application calls and tunes modules during execution. Use automatic discovery without
+modifying an existing script, or explicitly register final module instances when you need exact post-construction
+targets.
 
 ## Overview
 
-Just-in-time tuning provides a zero-code-change approach to model tuning:
+Just-in-time tuning provides automatic and targeted approaches to model tuning:
 
 - **Automatic Discovery**: Automatically detects PyTorch modules during execution
 - **Zero Code Changes**: No need to modify your existing scripts
-- **Hierarchical Tuning**: Recursively tunes modules from top to bottom
+- **Explicit Registration**: Select already constructed module instances without enabling global interception
+- **Hierarchical Tuning**: Recursively tunes automatically discovered modules from top to bottom
 - **Configurable**: Fine-tune behavior through environment variables or configuration
 
 ## Quick Start
@@ -81,6 +84,54 @@ This approach allows you to:
 
 - Enable just-in-time tuning for specific functions only
 - Keep the rest of your code unchanged
+
+### Registering Existing Modules
+
+The environment, import, and decorator activation methods discover modules while those modules are being constructed.
+If the modules already exist—for example, because another runtime first prepares or installs hooks on the model—register
+the final module instances explicitly:
+
+```python
+from aitune.torch import register_for_jit_tuning
+
+# `blocks` may be any iterable of existing torch.nn.Module instances, including ModuleList.
+registration = register_for_jit_tuning(model.blocks)
+```
+
+For a single module, pass a one-element iterable:
+
+```python
+registration = register_for_jit_tuning([model])
+```
+
+Explicit registration does not patch `torch.nn.Module.__init__`, does not affect modules created later, and does not
+require `import aitune.torch.jit.enable`. Every registered module is an independent top-level tuning target. Owned
+children are compiled as part of that target, so selected roots must have disjoint ownership trees. Re-registering the
+same instance is idempotent, and repeated instances in one call are deduplicated by identity.
+
+Do not import `aitune.torch.jit.enable` or set `AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning` in a process using explicit
+registration. Automatic constructor interception and explicit registration cannot overlap in one live JIT session.
+
+The returned registration exposes non-blocking, live snapshots for the selected targets:
+
+```python
+for report in registration.reports:
+    print(report.module_name, report.state)
+
+print(registration.state_counts)
+if registration.all_tuned:
+    print("All registered modules reached the tuned state")
+```
+
+`all_tuned` describes JIT wrapper state; it does not by itself prove acceleration or a performance improvement. An eager
+backend or successful dry-run simulation can also produce the tuned state. Reset JIT state before changing modes or
+beginning a new same-process registration generation:
+
+```python
+from aitune.torch import jit_reset
+
+jit_reset()
+```
 
 ## How Just-in-Time Tuning Works
 

@@ -15,6 +15,14 @@ from aitune.torch.tune_data.reporting import _active_graph, _active_module, _act
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
 from aitune.utils.logging import setup_logging
 
+# These modules change process-wide JIT state as soon as they are imported, so
+# they cannot safely share pytest's doctest collection process.
+collect_ignore = [
+    "aitune/torch/jit/disable.py",
+    "aitune/torch/jit/enable.py",
+    "aitune/torch/jit/enable_inspection.py",
+]
+
 
 @pytest.fixture(autouse=True)
 def module_registry_cleanup():
