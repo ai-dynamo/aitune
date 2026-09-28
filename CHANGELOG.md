@@ -7,7 +7,7 @@ title: "Changelog"
 
 ## 0.7.0 (unreleased)
 
-- feat: explicitly register existing module instances as targeted JIT tuning heads
+- feat: explicitly register existing module instances as targeted JIT tuning heads with optional externally managed placement
 - feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
 - feat: expose portable deployment artifacts for ONNX Runtime, TensorRT, and TorchInductor AOT models, including required additional files and representative inputs
 - feat: publish tuned artifacts or existing ONNX, TensorRT, and PT2 files as Triton model repositories with backend-specific configurations

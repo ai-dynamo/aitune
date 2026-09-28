@@ -17,6 +17,7 @@ from aitune.torch.jit.patcher import Patcher, prepare_for_jit_tuning
 from aitune.torch.jit.tune import deferred as jit_deferred
 from aitune.torch.tune_data.reporting import has_active_report
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
+from aitune.torch.utils.module import is_externally_managed_module
 
 
 class _ParentModule(torch.nn.Module):
@@ -224,6 +225,21 @@ def test_registration_rejects_invalid_module_collections_without_mutation(module
     assert Patcher._patched_modules == []
 
 
+def test_registration_rejects_invalid_device_management_without_mutation(tmp_path):
+    _configure_deferred(tmp_path)
+    module = torch.nn.Linear(2, 2)
+
+    with pytest.raises(ValueError, match="device_management"):
+        register_for_jit_tuning(
+            [module],
+            device_management="application",  # pytype: disable=wrong-arg-types
+        )
+
+    assert "forward" not in module.__dict__
+    assert not is_externally_managed_module(module)
+    assert Patcher._patched_modules == []
+
+
 def test_registration_rejects_inspection_mode_without_mutation(tmp_path):
     _configure_deferred(tmp_path)
     jit_config.mode = JITMode.INSPECT
@@ -375,18 +391,54 @@ def test_registration_validates_every_target_before_patching_any_target(tmp_path
     assert Patcher._patched_modules == []
 
 
+def test_registration_rejects_conflicting_policy_without_stacking_proxies(tmp_path):
+    _configure_deferred(tmp_path)
+    module = torch.nn.Linear(2, 2)
+    registration = register_for_jit_tuning([module])
+    proxied_forward = module.forward
+
+    with pytest.raises(ValueError, match="device_management"):
+        register_for_jit_tuning([module], device_management="external")
+
+    assert module.forward is proxied_forward
+    assert registration.modules == (module,)
+    assert len(Patcher._patched_modules) == 1
+    assert not is_externally_managed_module(module)
+
+
+def test_mixed_registrations_keep_independent_device_policies(tmp_path):
+    _configure_deferred(tmp_path)
+    aitune_managed = torch.nn.Linear(2, 2)
+    externally_managed = torch.nn.Linear(2, 2)
+
+    register_for_jit_tuning([aitune_managed])
+    register_for_jit_tuning([externally_managed], device_management="external")
+
+    wrappers = {
+        patched.__wrapped__: patched for patched in Patcher._patched_modules if isinstance(patched, PatchedModule)
+    }
+    assert wrappers[aitune_managed].device_management == "aitune"
+    assert wrappers[externally_managed].device_management == "external"
+    assert not is_externally_managed_module(aitune_managed)
+    assert is_externally_managed_module(externally_managed)
+
+
 def test_registration_rolls_back_partial_wrapper_and_new_session_on_failure(tmp_path, mocker):
     _configure_deferred(tmp_path)
     modules = [torch.nn.Linear(2, 2), torch.nn.Linear(2, 2)]
     original_register_module = Patcher._register_module
     call_count = 0
 
-    def register_module(module, *, explicit_head=False):
+    def register_module(module, *, explicit_head=False, device_management="aitune"):
         nonlocal call_count
         call_count += 1
         if call_count == 2:
             raise RuntimeError("registration failed")
-        return original_register_module(module, explicit_head=explicit_head)
+        return original_register_module(
+            module,
+            explicit_head=explicit_head,
+            device_management=device_management,
+        )
 
     mocker.patch.object(Patcher, "_register_module", side_effect=register_module)
 

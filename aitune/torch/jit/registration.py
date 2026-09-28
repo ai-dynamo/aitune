@@ -4,12 +4,16 @@
 
 from collections import Counter
 from collections.abc import Iterable
+from typing import Literal
 
 import torch
 
 from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.patcher import Patcher
 from aitune.torch.tune_data.report_models import ModuleInspectionReport
+
+DeviceManagement = Literal["aitune", "external"]
+_DEVICE_MANAGEMENT_POLICIES = ("aitune", "external")
 
 
 def _materialize_modules(modules: Iterable[torch.nn.Module]) -> list[torch.nn.Module]:
@@ -74,7 +78,11 @@ class JITRegistration:
         return bool(self._patched_modules) and all(module._state.value == "tuned" for module in self._patched_modules)
 
 
-def register_for_jit_tuning(modules: Iterable[torch.nn.Module]) -> JITRegistration:
+def register_for_jit_tuning(
+    modules: Iterable[torch.nn.Module],
+    *,
+    device_management: DeviceManagement = "aitune",
+) -> JITRegistration:
     """Register pre-existing modules as independent JIT tuning targets.
 
     Unlike automatic JIT interception, registration does not patch construction of future
@@ -84,16 +92,27 @@ def register_for_jit_tuning(modules: Iterable[torch.nn.Module]) -> JITRegistrati
     Args:
         modules: Iterable of existing modules. Pass ``[module]`` for one module. Passing an
             ``nn.ModuleList`` directly registers its elements.
+        device_management: ``"aitune"`` allows AITune to place the original module as usual.
+            ``"external"`` preserves placement of the original module tree while allowing
+            inputs, backend artifacts, and internal copies to move.
 
     Returns:
         A read-only registration view with live module states and inspection reports.
 
     Raises:
         TypeError: If ``modules`` is not iterable or contains a non-module value.
-        ValueError: If ``modules`` is empty, a target is excluded, or target ownership trees overlap.
+        ValueError: If ``modules`` is empty, the device policy is invalid, a target is excluded,
+            or target ownership trees overlap.
         RuntimeError: If inspection mode or global constructor interception is active.
     """
+    if device_management not in _DEVICE_MANAGEMENT_POLICIES:
+        policies = ", ".join(repr(policy) for policy in _DEVICE_MANAGEMENT_POLICIES)
+        raise ValueError(f"device_management must be one of: {policies}")
+
     Patcher.validate_explicit_registration_session()
     materialized_modules = _materialize_modules(modules)
-    patched_modules = Patcher.register_modules(_unique_modules(materialized_modules))
+    patched_modules = Patcher.register_modules(
+        _unique_modules(materialized_modules),
+        device_management=device_management,
+    )
     return JITRegistration(patched_modules)
