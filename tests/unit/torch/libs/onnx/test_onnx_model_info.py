@@ -163,6 +163,44 @@ def test_graph_metadata_preserves_operator_domains_and_declared_io(tmp_path):
     assert info.output_shapes == {"y": [None, "length"]}
 
 
+def test_standard_domain_alias_is_normalized(tmp_path):
+    path = tmp_path / "standard-alias.onnx"
+    graph = helper.make_graph(
+        [helper.make_node("Add", ["x", "x"], ["y"], domain="ai.onnx")],
+        "double",
+        [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1])],
+        [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1])],
+    )
+    onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("ai.onnx", 17)], ir_version=8), path)
+
+    info = ONNXModelInfo(path)
+    assert info.opsets == {"": 17}
+    assert info.opset_version == 17
+    assert info.operators == {"Add"}
+
+
+@pytest.mark.parametrize("alias_version", [17, 18])
+def test_both_standard_domain_spellings(tmp_path, alias_version):
+    path = tmp_path / "both-standard-domains.onnx"
+    graph = helper.make_graph([], "empty", [], [])
+    onnx.save(
+        helper.make_model(
+            graph,
+            opset_imports=[helper.make_opsetid("", 17), helper.make_opsetid("ai.onnx", alias_version)],
+            ir_version=8,
+        ),
+        path,
+    )
+
+    if alias_version == 17:
+        info = ONNXModelInfo(path)
+        assert info.opsets == {"": 17}
+        assert info.opset_version == 17
+    else:
+        with pytest.raises(ValueError, match="Conflicting opset versions for ONNX domain ''"):
+            ONNXModelInfo(path)
+
+
 def test_operators_include_nested_graphs(tmp_path):
     path = tmp_path / "nested.onnx"
     branch = helper.make_graph([helper.make_node("Relu", ["x"], ["y"])], "branch", [], [])

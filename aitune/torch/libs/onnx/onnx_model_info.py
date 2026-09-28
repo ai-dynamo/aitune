@@ -12,6 +12,12 @@ import onnx
 logger = logging.getLogger(__name__)
 
 
+def _normalize_domain(domain: str) -> str:
+    """Use the empty string for both spellings of the standard ONNX domain."""
+    # https://onnx.ai/onnx/_modules/onnx/version_converter.html
+    return "" if domain == "ai.onnx" else domain
+
+
 class ONNXPrecision(str, Enum):
     """Post-export quantization precision for the ONNX model.
 
@@ -86,9 +92,15 @@ class ONNXModelInfo:
             self._precision = self._precision(model)
 
             # Extract opset versions
-            self._opsets = {entry.domain: entry.version for entry in model.opset_import}
-            # ONNX uses the empty domain for its standard operator set:
-            # https://onnx.ai/onnx/repo-docs/Versioning.html#operator-sets
+            self._opsets = {}
+            for entry in model.opset_import:
+                domain = _normalize_domain(entry.domain)
+                if domain in self._opsets and self._opsets[domain] != entry.version:
+                    raise ValueError(
+                        f"Conflicting opset versions for ONNX domain {domain!r}: "
+                        f"{self._opsets[domain]} and {entry.version}"
+                    )
+                self._opsets[domain] = entry.version
             self._opset_version = self._opsets.get("")
 
             # Extract producer info if available
@@ -204,7 +216,8 @@ class ONNXModelInfo:
         """Collect operator types from a graph and any nested control-flow graphs."""
         operators = set()
         for node in graph.node:
-            operators.add(f"{node.domain}::{node.op_type}" if node.domain else node.op_type)
+            domain = _normalize_domain(node.domain)
+            operators.add(f"{domain}::{node.op_type}" if domain else node.op_type)
             for attribute in node.attribute:
                 if attribute.type == onnx.AttributeProto.GRAPH:
                     operators.update(ONNXModelInfo._get_operators(attribute.g))

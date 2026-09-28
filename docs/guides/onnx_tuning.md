@@ -32,7 +32,7 @@ The runtime session is created on the first call. To switch an existing session'
 
 `source.graph_info` reads declared ONNX metadata without running inference. It includes `opsets` (keyed by domain,
 with `""` for the [standard ONNX domain](https://onnx.ai/onnx/repo-docs/Versioning.html#operator-sets)),
-`operators`, and input and output names, dtypes, and shapes. Operator names
+including models that spell it `"ai.onnx"`), `operators`, and input and output names, dtypes, and shapes. Operator names
 from nonstandard domains use `domain::operator`.
 
 ```python
