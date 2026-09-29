@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """A runnable ONNX graph for AITune recording and tuning."""
 
+from functools import cached_property
 from pathlib import Path
 
 import onnxruntime
 import torch
 from torch import nn
 
+from aitune.torch.libs.onnx.onnx_model_info import ONNXModelInfo
 from aitune.torch.libs.onnx.runtime import prepare_onnx_inputs, run_onnx
 from aitune.torch.module.graph_spec import GraphSpec
 
@@ -27,6 +29,11 @@ class OnnxModule(nn.Module):
         self._output_names: tuple[str, ...] = ()
         self._session = None
         self._device = None
+
+    @cached_property
+    def graph_info(self) -> ONNXModelInfo:
+        """Read metadata declared by the source ONNX graph without running inference."""
+        return ONNXModelInfo(self.path)
 
     def preserve_tensor_names(self, graph_spec: GraphSpec) -> None:
         """Attach original ONNX names to recorded tensors without altering their observed shapes."""

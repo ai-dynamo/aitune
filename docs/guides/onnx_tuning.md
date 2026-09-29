@@ -28,6 +28,32 @@ Outputs are a dictionary keyed by the original graph output names.
 The untuned module runs through ONNX Runtime on CPU or CUDA, based on its input tensors. All inputs must share a device.
 The runtime session is created on the first call. To switch an existing session's device, call `source.offload("cpu")` or `source.offload("cuda:0")` before passing inputs on that device.
 
+## Inspect the source graph
+
+`source.graph_info` reads declared ONNX metadata without running inference. It includes `opsets` (keyed by domain,
+with `""` for the [standard ONNX domain](https://onnx.ai/onnx/repo-docs/Versioning.html#operator-sets)),
+including models that spell it `"ai.onnx"`), `operators`, and input and output names, dtypes, and shapes. Operator names
+from nonstandard domains use `domain::operator`.
+
+```python
+graph = source.graph_info
+print(graph.opsets, graph.operators, graph.input_dtypes, graph.input_shapes)
+```
+
+To observe execution and find modules to wrap, pass representative samples to `ait.inspect` as with other PyTorch
+modules. Its `OnnxModuleInfo` entry adds `onnx_graph` alongside the usual call counts and timings:
+
+```python
+import aitune.torch as ait
+
+dataset = [{"input.1": torch.randn(3, 224, 224)} for _ in range(10)]
+report = ait.inspect(source, dataset)
+(module_info,) = report.get_modules()
+print(module_info.onnx_graph.operators, module_info.average_execution_time)
+```
+
+Graph inspection reports source facts and observed execution. It does not wrap modules or select tuning backends.
+
 ## Tune with the two supported backends
 
 Use an explicit backend list: the default strategy candidates are not filtered for `OnnxModule` and include incompatible backends.

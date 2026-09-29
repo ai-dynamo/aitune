@@ -4,7 +4,10 @@
 
 from unittest.mock import MagicMock, patch
 
+import numpy as np
+import onnx
 import pytest
+from onnx import TensorProto, helper, numpy_helper
 
 from aitune.torch.libs.onnx.onnx_model_info import ONNX_DTYPE_TO_PRECISION, ONNXModelInfo, ONNXPrecision
 from tests.toy_models.onnx_models import ToyOnnxModel
@@ -58,6 +61,7 @@ def _make_value_info(name: str, dims):
     val = MagicMock()
     val.name = name
     val.type.HasField.return_value = True  # tensor_type and shape are present
+    val.type.tensor_type.elem_type = TensorProto.FLOAT
 
     mock_dims = []
     for d in dims:
@@ -84,6 +88,7 @@ def _make_initializer(data_type: int):
 
 def _make_opset_entry(version: int):
     entry = MagicMock()
+    entry.domain = ""
     entry.version = version
     return entry
 
@@ -134,6 +139,75 @@ def test_output_names():
 def test_opset_version():
     info = ONNXModelInfo(ToyOnnxModel().path)
     assert info.opset_version == 12
+
+
+def test_graph_metadata_preserves_operator_domains_and_declared_io(tmp_path):
+    path = tmp_path / "custom.onnx"
+    graph = helper.make_graph(
+        [helper.make_node("CustomOp", ["x"], ["y"], domain="example")],
+        "custom",
+        [helper.make_tensor_value_info("x", TensorProto.INT64, [None, "length"])],
+        [helper.make_tensor_value_info("y", TensorProto.INT64, [None, "length"])],
+    )
+    onnx.save(
+        helper.make_model(graph, opset_imports=[helper.make_opsetid("example", 1), helper.make_opsetid("", 17)]),
+        path,
+    )
+
+    info = ONNXModelInfo(path)
+    assert info.opsets == {"example": 1, "": 17}
+    assert info.opset_version == 17
+    assert info.operators == {"example::CustomOp"}
+    assert info.input_dtypes == {"x": "INT64"}
+    assert info.output_dtypes == {"y": "INT64"}
+    assert info.output_shapes == {"y": [None, "length"]}
+
+
+def test_standard_domain_alias_is_normalized(tmp_path):
+    path = tmp_path / "standard-alias.onnx"
+    graph = helper.make_graph(
+        [helper.make_node("Add", ["x", "x"], ["y"], domain="ai.onnx")],
+        "double",
+        [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1])],
+        [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1])],
+    )
+    onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("ai.onnx", 17)], ir_version=8), path)
+
+    info = ONNXModelInfo(path)
+    assert info.opsets == {"": 17}
+    assert info.opset_version == 17
+    assert info.operators == {"Add"}
+
+
+@pytest.mark.parametrize("alias_version", [17, 18])
+def test_both_standard_domain_spellings(tmp_path, alias_version):
+    path = tmp_path / "both-standard-domains.onnx"
+    graph = helper.make_graph([], "empty", [], [])
+    onnx.save(
+        helper.make_model(
+            graph,
+            opset_imports=[helper.make_opsetid("", 17), helper.make_opsetid("ai.onnx", alias_version)],
+            ir_version=8,
+        ),
+        path,
+    )
+
+    if alias_version == 17:
+        info = ONNXModelInfo(path)
+        assert info.opsets == {"": 17}
+        assert info.opset_version == 17
+    else:
+        with pytest.raises(ValueError, match="Conflicting opset versions for ONNX domain ''"):
+            ONNXModelInfo(path)
+
+
+def test_operators_include_nested_graphs(tmp_path):
+    path = tmp_path / "nested.onnx"
+    branch = helper.make_graph([helper.make_node("Relu", ["x"], ["y"])], "branch", [], [])
+    graph = helper.make_graph([helper.make_node("If", ["condition"], ["y"], then_branch=branch)], "nested", [], [])
+    onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)]), path)
+
+    assert ONNXModelInfo(path).operators == {"If", "Relu"}
 
 
 def test_producer_info():
@@ -246,6 +320,39 @@ def test_precision_no_initializers_returns_none(mock_load, tmp_path):
 # ---------------------------------------------------------------------------
 # ONNXModelInfo — error handling
 # ---------------------------------------------------------------------------
+
+
+def test_empty_source_is_rejected(tmp_path):
+    path = tmp_path / "empty.onnx"
+    path.write_bytes(b"")
+
+    with pytest.raises(ValueError, match="does not contain a graph"):
+        ONNXModelInfo(path)
+
+
+def test_graph_metadata_does_not_load_external_weights(tmp_path):
+    path = tmp_path / "external.onnx"
+    weights = numpy_helper.from_array(np.array([1.0], dtype=np.float32), name="weights")
+    graph = helper.make_graph(
+        [helper.make_node("Add", ["x", "weights"], ["y"])],
+        "external",
+        [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1])],
+        [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1])],
+        [weights],
+    )
+    onnx.save_model(
+        helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], ir_version=8),
+        path,
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="weights.data",
+        size_threshold=0,
+    )
+    (tmp_path / "weights.data").unlink()
+
+    info = ONNXModelInfo(path)
+    assert info.operators == {"Add"}
+    assert info.input_dtypes == {"x": "FLOAT"}
 
 
 def test_import_error_propagates(monkeypatch, tmp_path):
