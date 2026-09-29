@@ -57,7 +57,7 @@ for batch_size, args, kwargs in samples_generator(dataset, batch_sizes, max_num_
 
 - **`batch_size`**: Current batch size being processed
 - **`args`, `kwargs`**: Actual data samples for this batch
-- **`max_num_batches_per_batch_size`**: Limits how many model executions are done per batch size (useful to limit large datasets)
+- **`max_num_batches_per_batch_size`**: Limits how many model executions are done per batch size (useful to limit large datasets). `None` uses every batch; zero uses none.
 
 The global context tracks the current batch size, allowing wrapped modules to correlate shape changes with batch size changes.
 
@@ -291,7 +291,8 @@ Each backend is a small state machine that enforces safe usage:
 - `INACTIVE` → `ACTIVE`: `activate()` restores the backend for inference.
 - `CHECKPOINT_LOADED` → `ACTIVE` or `DEPLOYED`: A backend created from a checkpoint can be activated for tinkering or
   deployed for final use.
-- `ACTIVE` → `DEPLOYED`: `deploy()` finalizes the backend. After this, state changes are not allowed.
+- `DEPLOYED` → `RELEASED`: `deactivate()` releases a deployed backend permanently. It cannot be activated again;
+  load a new checkpoint instance to resume inference. Repeated deactivation is harmless.
 
 The backend's state is governed by the strategy and the user must not change it. After a module is successfully tuned, it can be used to do inference - the backend will be in `ACTIVE` or `DEPLOYED` states.
 

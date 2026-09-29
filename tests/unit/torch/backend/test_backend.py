@@ -11,7 +11,16 @@ import pytest
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend.backend import BackendConfig, BuildMode, DummyBackend, ExecutionMode
+from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend, TorchEagerBackend
+from aitune.torch.backend.backend import (
+    BackendConfig,
+    BackendState,
+    BuildMode,
+    DummyBackend,
+    ExecutionMode,
+    ModuleFormat,
+)
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.utils.hashing import hash_string
 from tests.toy_backends import SleepBackend
 
@@ -74,6 +83,30 @@ def test_backend_exposes_build_mode():
     assert SleepBackend().build_mode == BuildMode.JUST_IN_TIME
 
 
+def test_backend_without_a_deployable_format_rejects_artifact_request():
+    with pytest.raises(RuntimeError, match="does not produce a deployable artifact"):
+        SleepBackend().artifact()
+
+
+def test_deployed_backend_can_be_released_but_not_reused(mocker):
+    backend = SleepBackend()
+    backend.state = BackendState.CHECKPOINT_LOADED
+    backend.deploy(device=torch.device("cpu"))
+    deactivate = mocker.spy(backend, "_deactivate")
+
+    backend.deactivate()
+    backend.deactivate()
+
+    deactivate.assert_called_once()
+    assert backend.state == BackendState.RELEASED
+    with pytest.raises(RuntimeError, match="released"):
+        backend.activate()
+    with pytest.raises(RuntimeError, match="should be activated first"):
+        backend.infer(torch.ones(1))
+    with pytest.raises(RuntimeError, match="should be loaded from a checkpoint"):
+        backend.deploy(device=torch.device("cpu"))
+
+
 def test_backend_requires_explicit_build_mode():
     with pytest.raises(TypeError, match="MissingBuildModeBackend must explicitly define _build_mode"):
 
@@ -110,6 +143,30 @@ def test_backend_accepts_declared_execution_modes(mocker, distributed):
     mocker.patch("aitune.torch.backend.backend.is_distributed_module", return_value=distributed)
 
     AllExecutionModesSleepBackend()._assert_execution_mode(module)
+
+
+@pytest.mark.parametrize("backend_cls", [DummyBackend, ONNXRuntimeBackend, TensorRTBackend, TorchEagerBackend])
+def test_backend_accepts_torch_modules(backend_cls):
+    backend_cls()._assert_supported_modules(nn.Linear(2, 2))
+
+
+@pytest.mark.parametrize("backend_cls", [ONNXRuntimeBackend, TensorRTBackend])
+def test_backend_accepts_onnx_modules(backend_cls, tmp_path):
+    backend_cls()._assert_supported_modules(OnnxModule(tmp_path / "model.onnx"))
+
+
+@pytest.mark.parametrize("backend_cls", [DummyBackend, TorchEagerBackend])
+def test_backend_build_rejects_unsupported_onnx_module(backend_cls, tmp_path):
+    backend = backend_cls()
+    backend._config = BackendTestConfig()
+    assert backend._supported_modules == frozenset({ModuleFormat.TORCH})
+
+    with pytest.raises(RuntimeError, match=f"{backend_cls.__name__} does not support onnx modules"):
+        backend.build(OnnxModule(tmp_path / "model.onnx"), None, [], torch.device("cpu"), tmp_path)
+
+    assert backend.state == BackendState.INIT
+    assert backend.device is None
+    assert not (tmp_path / "config.json").exists()
 
 
 def test_backend_build_releases_unused_memory(mocker, tmp_path):

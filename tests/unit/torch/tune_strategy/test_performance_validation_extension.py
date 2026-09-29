@@ -11,7 +11,10 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.onnx_module import OnnxModule
+from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
@@ -170,7 +173,7 @@ def test_pre_tune_sets_baseline_throughput(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 100.0, MagicMock())),
@@ -190,7 +193,7 @@ def test_pre_tune_stores_baseline_backend(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 50.0, MagicMock())),
@@ -211,7 +214,7 @@ def test_pre_tune_resets_results_on_each_call(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 100.0, MagicMock())),
@@ -233,7 +236,7 @@ def test_pre_tune_baseline_build_failure_leaves_baseline_none(
     failing_eager.build.side_effect = RuntimeError("build failed")
 
     with patch(
-        "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+        "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
         return_value=failing_eager,
     ):
         ext._pre_tune(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
@@ -254,7 +257,7 @@ def test_pre_tune_skips_baseline_when_performance_validation_disabled(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ) as mock_eager_cls,
         patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile,
@@ -306,7 +309,7 @@ def test_pre_tune_does_not_profile_baseline_when_performance_validation_disabled
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ) as mock_eager_cls,
         patch(_PATCH_FIND_MAX_THROUGHPUT) as mock_profile,
@@ -329,7 +332,7 @@ def test_resolved_batch_size_uses_graph_spec_get_max_batch_size(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(16, 100.0, MagicMock())),
@@ -352,7 +355,7 @@ def test_pre_tune_uses_strategy_profiling_config_for_baseline(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 80.0, MagicMock())) as mock_profile,
@@ -381,6 +384,61 @@ def test_find_max_batch_size_uses_strategy_profiling_config(
         ext.find_max_batch_size(mock_module, "mod", mock_graph_spec, mock_data, torch_device, tmp_path)
 
     assert mock_profile.call_args.args[4] is profiling_config
+
+
+def test_find_max_batch_size_explains_unsupported_format_and_fallback(mock_graph_spec, mock_data, tmp_path, caplog):
+    module = OnnxModule(tmp_path / "model.onnx")
+    fallback = MagicMock(spec=Backend)
+    fallback.name = "ONNXRuntimeBackend"
+    ext = _ConcreteExtension(profiling_config=_profiling_config())
+
+    with (
+        patch(
+            "aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.get_default_backend_for_module",
+            return_value=fallback,
+        ),
+        patch(
+            "aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.find_max_throughput_for_backend",
+            return_value=(4, 80.0, MagicMock()),
+        ),
+        caplog.at_level("WARNING"),
+    ):
+        ext.find_max_batch_size(module, "mod", mock_graph_spec, mock_data, torch.device("cpu"), tmp_path)
+
+    assert "Backend TorchEagerBackend does not support this module (supported formats: torch)" in caplog.text
+    assert "Using default backend ONNXRuntimeBackend" in caplog.text
+    assert "frozenset" not in caplog.text
+    fallback.build.assert_called_once()
+
+
+def test_find_max_batch_size_records_output_bounds(tmp_path):
+    module = TinyModel()
+    signature = ForwardSignature.from_callable(module.forward)
+    graph_spec = GraphSpec(
+        name="graph",
+        input_spec=SampleMetadata.from_inputs({"x": torch.zeros(1, 4)}, batch_size=1),
+        output_spec=SampleMetadata.from_outputs(torch.zeros(1, 4), batch_size=1),
+        forward_signature=signature,
+    )
+    graph_spec.update_shapes_seen(
+        SampleMetadata.from_inputs({"x": torch.zeros(4, 4)}, batch_size=4),
+        SampleMetadata.from_outputs(torch.zeros(4, 4), batch_size=4),
+    )
+    samples = MagicMock(spec=SampleStore)
+    ext = _ConcreteExtension(profiling_config=_profiling_config())
+
+    with (
+        patch.object(TorchEagerBackend, "build"),
+        patch(
+            "aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.find_max_throughput_for_backend",
+            return_value=(8, 80.0, MagicMock()),
+        ),
+    ):
+        ext.find_max_batch_size(module, "mod", graph_spec, samples, torch.device("cpu"), tmp_path)
+
+    assert graph_spec.input_spec.tensor_specs[0].max_shape == [8, 4]
+    assert graph_spec.output_spec.tensor_specs[0].min_shape == [1, 4]
+    assert graph_spec.output_spec.tensor_specs[0].max_shape == [8, 4]
 
 
 def test_performance_validation_profiles_baseline_by_default(torch_device):
@@ -418,7 +476,7 @@ def test_pre_tune_logs_baseline_profiling_start_when_validation_enabled(
 
     with (
         patch(
-            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.TorchEagerBackend",
+            "aitune.torch.tune_strategy.mixin.performance_validation_mixin.get_default_backend_for_module",
             return_value=mock_eager_backend,
         ),
         patch(_PATCH_FIND_MAX_THROUGHPUT, return_value=(4, 80.0, MagicMock())),

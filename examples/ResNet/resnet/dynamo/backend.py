@@ -132,7 +132,7 @@ class ResNetBatchedBackend:
 
         try:
             batch_tensor = [r.tensor_image for r in requests]
-            batch_tensor = torch.cat(batch_tensor, dim=0).cuda()
+            batch_tensor = torch.cat(batch_tensor, dim=0).to(device="cuda", dtype=torch.float16)
             logger.info("Batch tensor shape: %s", tuple(batch_tensor.shape))
 
             # Run inference on the batch
@@ -183,7 +183,7 @@ class ResNetBatchedBackend:
     def _decode_image(self, requests: ImageClassificationRequest) -> torch.Tensor:
         """Decode images from request paths."""
         image = Image.open(requests.image_path).convert("RGB")
-        return self.transform(image).unsqueeze(0).cuda()
+        return self.transform(image).unsqueeze(0).to(device="cuda", dtype=torch.float16)
 
     @dynamo_endpoint(ImageClassificationRequest, ImageClassificationResponse)
     async def classify_image(self, request: ImageClassificationRequest):
