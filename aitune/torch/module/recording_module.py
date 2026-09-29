@@ -19,6 +19,7 @@ from aitune.torch.dynamic_shapes import DynamicShapes
 from aitune.torch.module.forward_contract import ForwardContract, ForwardContractCapture
 from aitune.torch.module.forward_signature import ForwardInputPath, ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import SampleStore
 
@@ -150,6 +151,8 @@ class RecordingModule:
                 post_input_spec=post_inputs_metadata,
                 forward_contract=forward_contract,
             )
+            if isinstance(self._module, OnnxModule):
+                self._module.preserve_tensor_names(self._graph_specs[inputs_metadata])
             graph_cache_dir = self._cache_dir_resolver() / graph_name
             # Samples must remain isolated because tuning writes backend artifacts
             # alongside the samples directory in the graph cache directory.

@@ -9,8 +9,6 @@ from aitune.exceptions import AITuneUserInputError
 from aitune.torch.module.forward_signature import ForwardInputPath, validate_forward_input_path
 from aitune.utils import validation
 
-__all__ = ["BatchDim", "DynamicDim"]
-
 
 @dataclass(frozen=True, slots=True)
 class DynamicDim:

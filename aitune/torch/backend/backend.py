@@ -15,8 +15,10 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import torch
 import torch.nn as nn
 
+from aitune.records import DeploymentArtifact
 from aitune.torch.module.forward_contract import TensorMutationPolicy
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_backend_build
 from aitune.torch.utils.memory import release_transient_memory
@@ -47,7 +49,8 @@ class BackendState(Enum):
         ACTIVE: The model was tuned and the backend is activated, you can do inference
         CHECKPOINT_LOADED: The backend was loaded from a checkpoint, it is ready to be deployed
         DEPLOYED: The model was tuned and is ready to use, you can do inference. All data required to jit building has
-        been freed, you can't change backend state anymore.
+        been freed; deactivation releases the backend permanently.
+        RELEASED: A deployed backend was deactivated and cannot be activated again.
 
     State transitions:
     ```mermaid
@@ -59,7 +62,8 @@ class BackendState(Enum):
         checkpoint_loaded --> deployed: When backend is deployed from checkpoint
         checkpoint_loaded --> active: When backend is activated from checkpoint
         active --> deployed: When backend is deployed after being active
-        deployed --> [*]
+        deployed --> released: When backend is deactivated
+        released --> [*]
     ```
 
     Note:
@@ -71,7 +75,7 @@ class BackendState(Enum):
     This abstract class has public interface methods which manage state of the backend:
         build(): Builds backend, changes state to ACTIVE
         activate(): Activates backend, changes state to ACTIVE
-        deactivate(): Deactivates backend, changes state to INACTIVE
+        deactivate(): Deactivates backend, changes state to INACTIVE or RELEASED
         deploy(): Deploys backend, changes state to DEPLOYED
 
     Each method calls corresponding private method which should not change state differently - with one exception:
@@ -97,6 +101,7 @@ class BackendState(Enum):
     ACTIVE = "active"
     CHECKPOINT_LOADED = "checkpoint_loaded"
     DEPLOYED = "deployed"
+    RELEASED = "released"
 
 
 class ExecutionMode(str, Enum):
@@ -104,6 +109,13 @@ class ExecutionMode(str, Enum):
 
     SINGLE_GPU = "single_gpu"
     MULTI_GPU = "multi_gpu"
+
+
+class ModuleFormat(str, Enum):
+    """Source module formats supported by a backend."""
+
+    TORCH = "torch"
+    ONNX = "onnx"
 
 
 class BuildMode(str, Enum):
@@ -186,6 +198,7 @@ class Backend(ABC):
     _build_mode: ClassVar[BuildMode]
     # Shared by output restoration and stateful validation.
     tensor_mutation_policy: ClassVar[TensorMutationPolicy] = TensorMutationPolicy.PRESERVE_INPUT
+    _supported_modules: ClassVar[frozenset[ModuleFormat]] = frozenset({ModuleFormat.TORCH})
 
     def __init_subclass__(cls, **kwargs) -> None:
         """Require each backend subclass to declare its execution and build modes."""
@@ -249,6 +262,7 @@ class Backend(ABC):
         with release_transient_memory():
             with report_backend_build(self, log_file=log_file):
                 try:
+                    self._assert_supported_modules(module)
                     self._assert_device(device)
                     self._assert_execution_mode(module)
                     self._set_device(device)
@@ -264,6 +278,12 @@ class Backend(ABC):
                         exc_info=True,
                     )
                     raise
+
+    def _assert_supported_modules(self, module: nn.Module) -> None:
+        """Reject source module formats that the backend does not support."""
+        module_format = ModuleFormat.ONNX if isinstance(module, OnnxModule) else ModuleFormat.TORCH
+        if module_format not in self._supported_modules:
+            raise RuntimeError(f"Backend {self.name} does not support {module_format.value} modules")
 
     def _assert_execution_mode(self, module: nn.Module) -> None:
         """Reject the module execution mode when the backend does not support it."""
@@ -281,6 +301,8 @@ class Backend(ABC):
             raise RuntimeError(f"Cannot activate backend {self.name}, backend should be built first")
         if self.state == BackendState.DEPLOYED:
             raise RuntimeError(f"Cannot activate backend {self.name}, backend is already deployed")
+        if self.state == BackendState.RELEASED:
+            raise RuntimeError(f"Cannot activate backend {self.name}, deployed backend has been released")
 
         if self.state == BackendState.INACTIVE or self.state == BackendState.CHECKPOINT_LOADED:
             with release_transient_memory():
@@ -292,24 +314,24 @@ class Backend(ABC):
         """Deactivates backend.
 
         After deactivating, the backend cannot be used to do inference.
+        Deployed backends are permanently released; load a new instance to use them again.
         """
         if self.state == BackendState.INIT:
             raise RuntimeError(f"Cannot deactivate backend {self.name}, backend should be built first")
-        if self.state == BackendState.DEPLOYED:
-            raise RuntimeError(f"Cannot deactivate backend {self.name}, backend is already deployed")
         if self.state == BackendState.CHECKPOINT_LOADED:
-            raise RuntimeError(f"Cannot deactivate backend {self.name}, backend has already been deployed")
+            raise RuntimeError(f"Cannot deactivate backend {self.name}, backend has not been deployed")
 
-        if self.state == BackendState.ACTIVE:
+        if self.state in (BackendState.ACTIVE, BackendState.DEPLOYED):
+            next_state = BackendState.RELEASED if self.state == BackendState.DEPLOYED else BackendState.INACTIVE
             self._deactivate()
+            self.state = next_state
             self._clean_memory()
-            self.state = BackendState.INACTIVE
 
     @annotate(color="cyan")
     def deploy(self, device: torch.device | None):
         """Deploys the backend.
 
-        After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
+        After deploying, the backend is ready to do inference. Deactivation permanently releases it.
 
         Args:
             device: The device to deploy the backend on.
@@ -337,6 +359,17 @@ class Backend(ABC):
             raise RuntimeError(f"Cannot run inference, backend {self.name} should be activated first")
 
         return self._infer(*args, **kwargs)
+
+    def artifact(self) -> DeploymentArtifact:
+        """Return the deployable artifact produced by this backend.
+
+        Returns:
+            The backend's finalized artifact.
+
+        Raises:
+            RuntimeError: If this backend does not produce an independently deployable artifact.
+        """
+        raise RuntimeError(f"Backend {self.name} does not produce a deployable artifact")
 
     @abstractmethod
     def key(self) -> str:
@@ -430,7 +463,7 @@ class Backend(ABC):
     def _deploy(self):
         """Deploys the backend.
 
-        After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
+        After deploying, the backend is ready to do inference. Deactivation permanently releases it.
         """
         ...
 

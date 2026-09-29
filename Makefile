@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-.PHONY: clean clean-build clean-pyc clean-docs clean-test clean-notebooks docs docs-serve lint test coverage release dist install install-dev install-dev-deps help
+.PHONY: clean clean-build clean-pyc clean-docs clean-test clean-notebooks docs docs-serve lint test coverage release dist install install-dev install-dev-deps help validate-functional
 .DEFAULT_GOAL := help
 
 define BROWSER_PYSCRIPT
@@ -45,7 +45,6 @@ clean-pyc: ## remove Python file artifacts
 	find . -name '__pycache__' -not -path "./.cache/*" -exec rm -fr {} +
 
 clean-test: ## remove test and coverage artifacts
-	rm -fr .tox/
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
@@ -78,14 +77,42 @@ docs-serve: docs ## serve Fern docs locally
 lint: ## check style with pre-commit and pytype
 	pre-commit run --all-files
 	pytype aitune tests -j auto
+	$(MAKE) validate-functional
+
+validate-functional: ## validate PEP-723 / [tool.aitune] metadata for functional tests and examples
+	uv run --script tests/functional/scripts/validate.py
+
+list-functional-tests: ## list all functional tests
+	uv run --script tests/functional/scripts/generate.py \
+            --default-docker-image "aitune-functional:latest" \
+            --scripts-path tests/functional/pytorch \
+            --scripts-path tests/functional/pytorch/kernels \
+            --scripts-path tests/functional/pytorch/jit \
+            --scripts-path tests/functional/dataloader \
+            --scripts-path tests/functional/dynamo \
+            --projects-path examples \
+			--stdout | jq -r '.[] | .id'
+
+build-functional-image: ## build the image for functional tests
+	docker build \
+		--build-arg USER_ID=$(shell id -u) --build-arg GROUP_ID=$(shell id -g) \
+		-f .github/docker/Dockerfile -t aitune-functional .
+
+TEST ?= tests/functional/pytorch/002_aitune_torch_wrap_module_resnet_test.py
+TYPE ?= script
+TID ?= 0
+run-functional-test: ## run a functional test in the container, arguments: TEST=tests_path, TYPE=script|project, TID=test_number
+	docker run --rm --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+		-u $(shell id -u):$(shell id -g) \
+		-e HF_TOKEN \
+		-v $(PWD):/opt/ai-tune/ \
+		-w /opt/ai-tune/ \
+		aitune-functional:latest \
+			python tests/functional/scripts/execute.py $(TEST) --kind $(TYPE) --test-number $(TID) --verbose
 
 
 test: ## run tests on
 	pytest
-
-
-all-tests: ## run all tests for all python versions
-	tox --develop --skip-missing-interpreters
 
 
 coverage: ## check code coverage quickly with the default Python
@@ -95,7 +122,7 @@ coverage: ## check code coverage quickly with the default Python
 	$(BROWSER) htmlcov/index.html
 
 dist: clean ## builds source and wheel package
-	python3 -m build .
+	uv build
 	ls -lh dist
 
 install: clean ## install the package to the active Python's site-packages
@@ -108,4 +135,4 @@ install-dev: clean-build clean-pyc clean-test
 
 uv-locks-update:
 	uv lock
-	for ex in `find examples/ -name pyproject.toml`; do (cd `dirname $$ex` && uv lock); done
+	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock); done

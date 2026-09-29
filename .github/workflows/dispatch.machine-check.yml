@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: Test 4-rank sanity
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_name:
+        description: Runner name
+        required: true
+        default: prod-aitune-tester-rtx-pro-4500-4-v1
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
+  UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
+  UV_VERSION: 0.12.8
+
+  # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
+  # plugin. RTX runners have no EFA provider, so OFI initialization fails and
+  # NCCL segfaults during process-group creation. Use NCCL's built-in Socket
+  # transport for this single-node, 4xGPU sanity check.
+  # fix for error: Segmentation fault: address not mapped to object at address (nil)
+  NCCL_NET_PLUGIN: none
+  NCCL_NET: Socket
+
+  # Actions version pins
+  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test-4-rank-sanity:
+    name: Test 4-rank sanity
+    runs-on: ${{ inputs.runner_name }}
+    timeout-minutes: 15
+    container:
+      image: nvcr.io/nvidia/pytorch:26.01-py3
+    env:
+      NCCL_DEBUG: INFO
+      NCCL_DEBUG_SUBSYS: INIT,NET,GRAPH
+      UCX_LOG_LEVEL: info
+    steps:
+      - uses: *actions_checkout
+        with:
+          persist-credentials: false
+      - run: nvidia-smi
+      - run: nvidia-smi -L
+      - run: nvidia-smi topo -m
+      - run: |
+          python -c "import sys; print(sys.version)"
+          python -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA version:', torch.version.cuda)"
+          python -c "import torch; print('CUDA is available:', torch.cuda.is_available()); torch.cuda.init()"
+          python -c "import torch; print('CUDA devices:', torch.cuda.device_count())"
+          python -c "import tensorrt; print('TensorRT version:', tensorrt.__version__)"
+          python -c "import torch_tensorrt; print('Torch-TensorRT version:', torch_tensorrt.__version__)"
+      - run: python .github/scripts/sanity/check_nccl_4_rank.py
