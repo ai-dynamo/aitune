@@ -16,7 +16,7 @@ import numpy as np
 import timm
 import torch
 
-from aitune.torch.backend.tensorrt import ProfileMode, TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend.tensorrt import TensorRTBackend, TensorRTBackendConfig, TensorRTProfileMode
 from aitune.torch.config import config as global_config
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
@@ -44,7 +44,7 @@ def test_resnet50_with_cuda_graph_profiles():
         vanilla_benchmark = simple_benchmark(model, sample, batch_sizes=BATCH_SIZES)
 
     # Create TensorRT backend with CUDA graphs enabled
-    config = TensorRTBackendConfig(use_cuda_graphs=True, profiles=ProfileMode.SAMPLES_USED)
+    config = TensorRTBackendConfig(use_cuda_graphs=True, profiles=TensorRTProfileMode.SAMPLES_USED)
     backend = TensorRTBackend(config=config)
 
     # when - create module and tune with CUDA graphs enabled

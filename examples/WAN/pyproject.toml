@@ -7,18 +7,18 @@ version = "0.1.0"
 description = "NVIDIA AITune WAN 2.1 text-to-video example"
 readme = "README.md"
 license = { text = "Apache 2.0" }
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.11, <3.14"
 
 dependencies = [
     "accelerate",
     "aitune",
     "aitune-examples-common",
-    "diffusers>=0.36,<0.38",
+    "diffusers>=0.37.1,<0.38",
     "ftfy",
     "imageio[ffmpeg]",
     "sentencepiece",
     "torch>=2.0.0",
-    "transformers<5",
+    "transformers>=4.57.6,<5",
 ]
 
 [project.optional-dependencies]

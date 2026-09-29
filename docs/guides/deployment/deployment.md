@@ -1,238 +1,52 @@
 ---
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-title: "Deployment Guide"
+title: "Deployment Overview"
 ---
 
-This guide covers the full deployment story for AITune-tuned models: saving a tuned model to a checkpoint, loading it in production, and optionally serving it as an OpenAI-compatible HTTP endpoint via [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo).
+Deploy your AITune-tuned model with NVIDIA Dynamo. Choose a Python worker to serve your model or pipeline, or use
+Triton within Dynamo to serve an optimized artifact. Standalone Triton is also supported.
 
-## Save a Tuned Model
+## Deploy with Dynamo
 
-### Basic Save
+Dynamo provides the serving frontend, service discovery, and request routing. There are two ways to connect your
+tuned model:
 
-```python
-import aitune.torch as ait
+### Serve a Python model or pipeline
 
-# After tuning
-ait.save(model, "checkpoints/model.ait")
-```
+Start here when you want to keep your existing Python inference code. Your application constructs the model and
+loads an AITune checkpoint. AITune's Dynamo worker exposes your inference function through the OpenAI-compatible
+HTTP frontend. Start with FLUX image generation or WAN video generation; audio and embeddings are also supported.
 
-This creates:
+Follow [Deploy with Dynamo](dynamo.md) to serve FLUX on one GPU and generate your first image. Continue with its
+[multi-GPU section](dynamo.md#multi-gpu-workers) for WAN video generation across multiple GPUs.
 
-- `checkpoints/model.ait`: Compressed checkpoint with tuned modules
-- `checkpoints/model_sha256_sums.txt`: SHA256 checksums
-- `checkpoints/model/`: Decompressed artifacts (after first load)
+### Serve a model through Triton within Dynamo
 
-### With Custom Storage
+Use this path when you want Triton to execute the model behind Dynamo's frontend and routing. AITune can generate a
+Triton repository from an ONNX Runtime, TensorRT, or TorchInductor AOT artifact, or publish an existing ONNX, TensorRT,
+or PT2 file with an explicit model configuration. Requests use the KServe gRPC tensor API.
 
-```python
-from aitune.torch import LocalTorchStorage
+Follow the [Triton guide](triton.md) to prepare the repository, then choose
+[Run Triton through Dynamo](triton.md#run-triton-through-dynamo). That guide also explains how to use a checkpoint
+with Triton's Python backend when your model needs Python code.
 
-storage = LocalTorchStorage(
-    base_folder="production/models",
-    remove_checkpoint_after_tune=False,
-)
+## Alternative: standalone Triton
 
-ait.save(model, "model_v2.ait", storage=storage)
-```
+If you already deploy with Triton or want to serve directly from it, use the same model repository with
+[standalone Triton](triton.md#run-triton-standalone). You can generate a repository for an optimized artifact or an
+existing model file, or provide a Python backend that loads an AITune checkpoint. All paths are covered in the
+[Triton guide](triton.md).
 
-## Load in Production
+## What to prepare
 
-### Basic Load
+The serving platform and the saved model format are separate choices:
 
-```python
-import aitune.torch as ait
+| What runs inference | What you prepare | Where it can run |
+|---|---|---|
+| Python code that constructs your model or pipeline | An AITune checkpoint, model code, and dependencies | AITune's Dynamo worker or Triton's Python backend |
+| Triton loading an optimized artifact or existing model file directly | A generated Triton model repository | Dynamo's Triton worker or standalone Triton |
 
-model = YourModel()
-model.eval()
-model.to("cuda")
-
-ait.load(model, "checkpoints/model.ait")
-
-output = model(input_data)
-```
-
-### With Custom Storage
-
-```python
-from aitune.torch import LocalTorchStorage
-
-storage = LocalTorchStorage(base_folder="production/models")
-ait.load(model, "model.ait", storage=storage)
-```
-
-### Loading Process
-
-1. **First load** — decompresses `.ait` file, extracts artifacts, verifies checksums, loads backend and weights. Slower due to decompression.
-2. **Subsequent loads** — uses decompressed files from `checkpoints/`, skips decompression. Faster startup.
-
-## Serve with Dynamo Worker
-
-After loading a tuned model, you can expose it as an OpenAI-compatible HTTP endpoint using AITune's Dynamo integration. The worker registers the model with the Dynamo HTTP frontend, deserializes incoming requests, packs inference results into the Dynamo wire format, and blocks until SIGTERM/SIGINT.
-
-### Prerequisites
-
-Install the Dynamo extra:
-
-```bash
-uv pip install "aitune[dynamo]"
-```
-
-The `"audio"` modality requires NVIDIA Dynamo 1.1 or later and serves text-to-speech requests through
-`/v1/audio/speech`. Automatic speech recognition is not currently exposed by this worker API.
-
-For local development without etcd/NATS, set `DYN_DISCOVERY_BACKEND=file` before starting any Dynamo process.
-
-### Quick Start — Embedding Model
-
-```python
-import numpy as np
-import aitune.dynamo as dyn
-import aitune.torch as ait  # for ait.config, ait.load, ait.save
-from sentence_transformers import SentenceTransformer
-
-model = SentenceTransformer("intfloat/e5-large-v2")
-ait.config.device_after_tuning = "cpu"
-ait.load(model, "checkpoints/e5large.ait")
-
-
-def mapping(req) -> dict:
-    sentences = req.input if isinstance(req.input, list) else [req.input]
-    return {"sentences": sentences}
-
-
-def embed(sentences: list[str]) -> np.ndarray:
-    return model.encode(sentences, normalize_embeddings=True, device="cuda")
-
-
-config = dyn.DynamoWorkerConfig(
-    type="embedding",
-    model_path="intfloat/e5-large-v2",
-    mapping=mapping,
-)
-dyn.dynamo_worker(embed, config)  # blocks until shutdown
-```
-
-### API Reference
-
-Import from `aitune.dynamo`:
-
-```python
-import aitune.dynamo as dyn
-```
-
-#### `DynamoWorkerConfig`
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `type` | `str` | required | Modality: `"embedding"`, `"image"`, `"video"`, or `"audio"` (TTS) |
-| `model_path` | `str` | required | HuggingFace model ID or local path |
-| `mapping` | `Callable \| None` | `None` | Adapter `fn(request) -> dict` unpacked as `**kwargs` into the user function. Required when passing an `nn.Module`. |
-| `namespace` | `str` | `"aitune"` | Dynamo service namespace |
-| `component` | `str` | `"backend"` | Component name within the namespace |
-| `endpoint` | `str` | `"generate"` | Endpoint name — full address: `{namespace}.{component}.{endpoint}` |
-| `enable_nats` | `bool` | `False` | Enable NATS JetStream for KV-cache events |
-| `model_name` | `str \| None` | `None` | Name advertised to the frontend. Defaults to `model_path`. |
-
-#### `dynamo_worker(model_or_fn, config, *, setup=None, warmup=None)`
-
-Functional API. Validates config, starts the Dynamo runtime, and blocks until shutdown.
-
-- **`model_or_fn`**: any callable, or a `torch.nn.Module` (requires `config.mapping`)
-- **`config`**: `DynamoWorkerConfig`
-- **`setup`**: optional rank-local initialization callback
-- **`warmup`**: optional warmup callback run only after setup succeeds on every rank
-
-#### `DynamoWorker` (class-based API)
-
-For more control, subclass `DynamoWorker` and override `setup()` and `serve()`:
-
-```python
-import aitune.dynamo as dyn
-
-
-class MyEmbeddingWorker(dyn.DynamoWorker):
-    def setup(self) -> None:
-        # called once at startup — load or tune your model here
-        self.model = load_my_model()
-
-    async def serve(self, request):
-        sentences = request.input if isinstance(request.input, list) else [request.input]
-        embeddings = self.model.encode(sentences)
-        yield embeddings
-
-
-MyEmbeddingWorker().run()
-```
-
-Override `on_ready(runtime, endpoint)` for post-startup work such as custom `register_model` calls.
-Override `warmup()` to run model warmup after `setup()` succeeds on every rank and before endpoint registration.
-
-### Multi-GPU Workers
-
-Use the same `DynamoWorker` API for local and multi-GPU models. Initialize the application-owned process group and
-construct the rank-local model before calling `run()` or `dynamo_worker()` on every rank. AITune starts the Dynamo
-endpoint only on rank 0, serializes and broadcasts incoming requests, executes the request on every rank, and returns
-only rank 0's response.
-
-For rank-local initialization that may fail, pass it through `setup=` and put any collective model warmup in
-`warmup=`. AITune exchanges setup failures across the process group before allowing any rank to start warmup or
-register the endpoint.
-
-The worker does not initialize or destroy the process group and does not add inference barriers or CUDA
-synchronization. The application remains responsible for device placement, model sharding or context parallelism,
-and process-group teardown after the worker returns. An initialized multi-rank process group represents one collective
-model worker. Deploy independent model replicas as separate worker groups or pods.
-
-### Modality Types
-
-| `type` | Request field | Expected return type | Example |
-|---|---|---|---|
-| `"embedding"` | `request.input` (str or list[str]) | `np.ndarray` or `torch.Tensor` of shape `(n, dim)` | E5Large, BGE |
-| `"image"` | `request.prompt` (str) | PNG or JPEG `bytes` | FLUX, Stable Diffusion |
-| `"video"` | `request.prompt` (str) | MP4 bytes | — |
-| `"audio"` | `request.input` (str) | WAV bytes | Qwen3-TTS |
-
-Audio bytes are automatically packed as WAV output. To serve another audio codec, return a fully formed Dynamo response
-`dict`. Plain dictionaries are forwarded to the runtime as-is for every modality.
-
-### Serving with `run_dynamo.sh`
-
-The recommended way to start all processes locally is a `run_dynamo.sh` script that:
-
-1. Starts the Dynamo HTTP frontend in the background
-2. Starts the backend worker in the background
-3. Polls `/health` until the endpoint is registered
-4. Runs a smoke-test client request
-
-```bash
-#!/bin/bash
-export DYN_DISCOVERY_BACKEND=file
-
-python -m dynamo.frontend --http-port 8000 &
-FRONTEND_PID=$!
-
-python -m myapp.dynamo.backend &
-BACKEND_PID=$!
-
-trap "kill -9 $FRONTEND_PID; kill -9 $BACKEND_PID" EXIT
-
-for i in {1..10}; do
-  curl -s http://localhost:8000/health | grep -q '"dyn://aitune.backend.generate"' && break
-  echo "Waiting for endpoint... (attempt $i)"
-  sleep 5
-done
-
-python -m myapp.dynamo.client
-```
-
-See the [E5Large example](../../../examples/E5Large/README.md) for a complete working version.
-
-## Next Steps
-
-- [AOT Tuning Guide](../aot_tuning.md) — tuning a model before saving
-- [Tune Strategies](../tune_strategies/tune_strategies.md) — selecting the right optimization strategy
-- [Backend Guides](../backends/tensorrt_backend.md) — backend-specific deployment notes
-- [E5Large example](../../../examples/E5Large/README.md) — end-to-end embedding worker
-- [FLUX example](../../../examples/FLUX/README.md) — end-to-end image generation worker
-- [WAN example](../../../examples/WAN/README.md) — context-parallel text-to-video worker
+The [save and load guide](checkpoints.md) applies to both Python deployment paths. Repository generation is covered
+in the [Triton guide](triton.md#generate-a-model-repository). Each deployment guide links to the preparation steps it
+needs.

@@ -5,7 +5,14 @@ title: "Changelog"
 ---
 # Changelog
 
-## 0.6.0 (unreleased)
+## 0.7.0 (unreleased)
+
+- feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
+- feat: expose portable deployment artifacts for ONNX Runtime, TensorRT, and TorchInductor AOT models, including required additional files and representative inputs
+- feat: publish tuned artifacts or existing ONNX, TensorRT, and PT2 files as Triton model repositories with backend-specific configurations
+- feat: generate Triton Model Analyzer configurations and representative Perf Analyzer input data during artifact publication
+
+## 0.6.0
 
 - feat: multi-GPU AOT/JIT tuning for application-managed tensor and context parallelism, including collective backend selection, correctness, and profiling
 - feat: serve application-managed multi-GPU models through one collective Dynamo worker

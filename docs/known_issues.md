@@ -25,11 +25,11 @@ title: "Known Issues and Limitations"
 - **Distributed checkpoints.** Multi-GPU tuning produces rank-local artifacts. Loading with a different world size or
   rank topology is not supported, and AITune does not currently package distributed artifacts into one portable
   checkpoint.
-- **Kernel providers with strict Torch Export on PyTorch 2.9.** PyTorch 2.9 strict export cannot capture the forward
-  hooks that temporarily replace `torch.nn.functional` kernels and can fail with a guard-export assertion. This is a
-  generic limitation affecting every kernel provider, including SageAttention, when `KernelSelectorBackend` uses a
-  `TorchInductorAotBackend` delegate. Use PyTorch 2.10 or later, or on PyTorch 2.9 choose a delegate that does not rely
-  on strict Torch Export, such as a JIT delegate.
+- **Kernel providers with strict Torch Export on PyTorch 2.8 and 2.9.** PyTorch 2.8 and 2.9 strict export cannot capture
+  the forward hooks that temporarily replace `torch.nn.functional` kernels and can fail with a guard-export assertion.
+  This is a generic limitation affecting every kernel provider, including SageAttention, when `KernelSelectorBackend`
+  uses a `TorchInductorAotBackend` delegate. Use PyTorch 2.10 or later, or on PyTorch 2.8 or 2.9 choose a delegate that
+  does not rely on strict Torch Export, such as a JIT delegate.
 - **Diffusers attention dispatcher backend compatibility.** `DiffusersAttentionBackend.SAGE` requires SageAttention
   2 or later and does not work with SageAttention V1. `DiffusersAttentionBackend.SAGE_HUB` and
   `DiffusersAttentionBackend.FLASH_4_HUB` currently do not work because of internal Diffusers issues.
