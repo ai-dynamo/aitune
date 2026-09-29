@@ -10,6 +10,7 @@ import pytest
 import torch
 from torch.utils.data import Dataset
 
+from aitune.exceptions import AITuneUserInputError
 from aitune.torch import tuning
 from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.module.wrapper_module import ModuleState
@@ -26,6 +27,24 @@ class DummyDataset(Dataset):
 
     def __getitem__(self, idx):
         return torch.randn(3, 32, 32)
+
+
+def test_tune_rejects_already_tuned_module_before_recording_or_deactivation(mocker):
+    loaded_module = Mock()
+    loaded_module.state = ModuleState.TUNED
+    vanilla_module = Mock()
+    vanilla_module.state = ModuleState.RECORDING
+    pipeline = Mock()
+    clear_cache = mocker.patch("aitune.torch.tuning._clear_cache")
+    mocker.patch.dict(MODULE_REGISTRY.modules, {"loaded": loaded_module, "vanilla": vanilla_module}, clear=True)
+
+    with pytest.raises(AITuneUserInputError, match="loaded"):
+        tune(pipeline, DummyDataset(size=1), batch_sizes=[1], clear_cache=True)
+
+    clear_cache.assert_not_called()
+    pipeline.assert_not_called()
+    loaded_module.deactivate.assert_not_called()
+    vanilla_module.deactivate.assert_not_called()
 
 
 @pytest.mark.parametrize("dry_run", [True, False])

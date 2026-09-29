@@ -120,8 +120,8 @@ $ git checkout -b name-of-your-bugfix-or-feature
 
 Now you can make your changes locally.
 
-5. When you're done making changes, check that your changes pass linters and the
-   tests, including testing other Python versions with tox:
+5. When you're done making changes, check that your changes pass the linters and
+   tests:
 
 ```shell
 $ make lint  # will run i.a. flake8 and pytype linters
@@ -168,5 +168,4 @@ By contributing, you agree that your contribution is licensed under the
 [Apache 2.0 License](https://github.com/ai-dynamo/aitune/blob/main/LICENSE). All participation is
 also governed by the
 [Code of Conduct](https://github.com/ai-dynamo/aitune/blob/main/CODE_OF_CONDUCT.md).
-
 

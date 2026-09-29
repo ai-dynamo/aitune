@@ -12,7 +12,6 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
-from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
@@ -24,6 +23,7 @@ from aitune.torch.tune_data.reporting import report_backend_metric, report_graph
 from aitune.torch.tune_strategy.formatting import fmt_speedup_comparison, fmt_speedup_msg, fmt_speedup_msg_short
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
+from aitune.torch.utils.module import get_default_backend_for_module
 from aitune.utils.logging import log
 
 
@@ -129,7 +129,7 @@ class PerformanceValidationMixin(TuneStrategy):
         baseline_cache_dir = cache_dir / "perf_validation_baseline"
         shutil.rmtree(baseline_cache_dir, ignore_errors=True)
         baseline_cache_dir.mkdir(parents=True)
-        backend = TorchEagerBackend()
+        backend = get_default_backend_for_module(module)
         local_error: Exception | None = None
         batch_size = None
         throughput = None

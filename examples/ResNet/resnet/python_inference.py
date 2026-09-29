@@ -43,7 +43,7 @@ def do_inference(model_name, tuned_model_path, image_path, expected_class_id=Non
     tuned_model = load(model, tuned_model_path)
 
     img = Image.open(image_path)
-    x = transform(img).to("cuda")
+    x = transform(img).to(device="cuda", dtype=torch.float16)
     batch = x.unsqueeze(0)  # during tuning model sees batches, we have to unsqueeze to see single sample
     if dynamic_shapes:
         batch = torch.nn.functional.interpolate(batch, size=(256, 256), mode="bilinear", align_corners=False).repeat(
@@ -64,7 +64,7 @@ def do_inference(model_name, tuned_model_path, image_path, expected_class_id=Non
 def main():
     """Entry point for the script."""
     basicConfig(level="INFO", format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
-    args = add_args(get_parser()).parse_args()
+    args = add_args(get_parser("Run ResNet inference through AITune's Python runtime")).parse_args()
 
     do_inference(
         model_name=args.model_name,

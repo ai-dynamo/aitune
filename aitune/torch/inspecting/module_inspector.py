@@ -38,7 +38,14 @@ from typing import Any
 
 import torch
 
-from aitune.torch.inspecting.module_info import DictOfModulesInfo, ListOfModulesInfo, ModuleInfo, ObjectOfModulesInfo
+from aitune.torch.inspecting.module_info import (
+    DictOfModulesInfo,
+    ListOfModulesInfo,
+    ModuleInfo,
+    ObjectOfModulesInfo,
+    OnnxModuleInfo,
+)
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.utils.cuda_utils import synchronize
 from aitune.utils.env_vars import get_bool_env_variable
 
@@ -67,7 +74,9 @@ class InspectContext:
     def create_module_info(self, module: torch.nn.Module | list | dict | Any) -> ModuleInfo:
         """Get the ModuleInfo based on current context and provided object type."""
         cls = ObjectOfModulesInfo
-        if isinstance(module, torch.nn.Module):
+        if isinstance(module, OnnxModule):
+            cls = OnnxModuleInfo
+        elif isinstance(module, torch.nn.Module):
             cls = ModuleInfo
         elif isinstance(module, list):
             cls = ListOfModulesInfo

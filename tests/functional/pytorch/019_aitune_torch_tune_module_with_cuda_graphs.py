@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import torch
 
-from aitune.torch.backend.tensorrt import ProfileMode, TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend.tensorrt import TensorRTBackend, TensorRTBackendConfig, TensorRTProfileMode
 from aitune.torch.config import config as global_config
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
@@ -41,7 +41,7 @@ def test_custom_module_with_cuda_graphs():
 
     # Create TensorRT backend with CUDA graphs enabled
     config = TensorRTBackendConfig(
-        use_dynamo=False, use_cuda_graphs=True, opset_version=20, profiles=ProfileMode.SAMPLES_USED
+        use_dynamo=False, use_cuda_graphs=True, opset_version=20, profiles=TensorRTProfileMode.SAMPLES_USED
     )
     backend = TensorRTBackend(config=config)
 
