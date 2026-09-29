@@ -22,6 +22,8 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import ProfilingConfig
+from aitune.torch.task.profiling.events import get_inference_events
+from aitune.torch.task.profiling.metrics import get_latency
 from aitune.torch.tune_strategy.profiling_tune_strategy import BackendProfilingResult, ProfilingTuneStrategy
 
 
@@ -31,11 +33,18 @@ class MaxThroughputProfilingResult(BackendProfilingResult):
 
     selected_batch_size: int
     throughput: float
+    latency: float
 
     @property
     def metric(self) -> float:
         """Returns throughput as the comparison metric."""
         return self.throughput
+
+    def to_json_dict(self, metric_label: str) -> dict[str, int | float]:
+        """Return throughput and mean latency for the selected batch size."""
+        result = super().to_json_dict(metric_label)
+        result["latency"] = self.latency
+        return result
 
 
 class MaxThroughputStrategy(ProfilingTuneStrategy):
@@ -48,6 +57,7 @@ class MaxThroughputStrategy(ProfilingTuneStrategy):
 
     AOT candidates are inherited from ProfilingTuneStrategy. The JIT hook below uses
     fewer candidates to limit tuning work during inference.
+    Mean latency at the selected batch size is reported but does not affect selection.
     """
 
     _title = "Max Throughput Strategy"
@@ -75,8 +85,18 @@ class MaxThroughputStrategy(ProfilingTuneStrategy):
         profiling_cfg: ProfilingConfig,
     ) -> MaxThroughputProfilingResult:
         """Profiles the backend and returns throughput with the selected batch size."""
-        batch_size, throughput, _ = find_max_throughput_for_backend(backend, name, graph_spec, samples, profiling_cfg)
-        return MaxThroughputProfilingResult(throughput=throughput, selected_batch_size=batch_size)
+        batch_size, throughput, profiling_results = find_max_throughput_for_backend(
+            backend, name, graph_spec, samples, profiling_cfg
+        )
+        selected_events = [
+            event for event in get_inference_events(profiling_results.entries) if event.batch_size == batch_size
+        ]
+        measured_events = profiling_cfg.measurement_stop_strategy.get_events(selected_events)
+        if not measured_events:
+            raise ValueError(f"No latency measurements found for {backend.describe()} at batch size {batch_size}")
+        return MaxThroughputProfilingResult(
+            throughput=throughput, latency=get_latency(measured_events), selected_batch_size=batch_size
+        )
 
     def _is_better(self, result: BackendProfilingResult, other: BackendProfilingResult) -> bool:
         return result.metric > other.metric

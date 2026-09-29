@@ -159,14 +159,21 @@ def test_get_profiling_config_wraps_existing_stop_strategy(mock_backend):
     assert result.profiling_stop_strategy.base_strategy is profiling_config.profiling_stop_strategy
 
 
-def test_latency_budget_strategy_selects_max_throughput_backend(torch_device, tmp_path):
+def test_latency_budget_strategy_selects_max_throughput_backend(monkeypatch, torch_device, tmp_path):
     """LatencyBudgetStrategy selects the compliant backend with highest throughput."""
     lower_throughput = SleepBackend(sleep_time=1e-2)
     higher_throughput = SleepBackend(sleep_time=1e-5)
+    messages = []
+    reported_metrics = []
+    monkeypatch.setattr(
+        "aitune.torch.tune_strategy.profiling_tune_strategy.report_backend_metric",
+        lambda metric, backend, value: reported_metrics.append((metric, backend, value)),
+    )
     strategy = LatencyBudgetStrategy(
         latency_budget_ms=50.0,
         backends=[lower_throughput, higher_throughput],
         profiling_config=_profiling_config(),
+        sink=lambda message, *args: messages.append(message % args if args else message),
     )
     strategy.enable_performance_validation(False)
     strategy.enable_correctness_check(False)
@@ -195,10 +202,18 @@ def test_latency_budget_strategy_selects_max_throughput_backend(torch_device, tm
 
     assert isinstance(selected, SleepBackend)
     assert selected.sleep_time == higher_throughput.sleep_time
+    assert ("throughput", higher_throughput.describe(), 200.0) in reported_metrics
+    assert ("latency", higher_throughput.describe(), 10.0) in reported_metrics
+    assert any("200.00 samples/s, mean latency: 10.000 ms" in message for message in messages)
 
 
-def test_latency_budget_strategy_raises_when_no_user_backend_satisfies_budget(torch_device, tmp_path):
+def test_latency_budget_strategy_raises_when_no_user_backend_satisfies_budget(monkeypatch, torch_device, tmp_path):
     """A successful baseline does not hide that no user-provided backend satisfied the budget."""
+    reported_metrics = []
+    monkeypatch.setattr(
+        "aitune.torch.tune_strategy.profiling_tune_strategy.report_graph_baseline_metric",
+        lambda metric, value: reported_metrics.append((metric, value)),
+    )
     strategy = LatencyBudgetStrategy(
         latency_budget_ms=50.0,
         backends=[SleepBackend()],
@@ -226,3 +241,6 @@ def test_latency_budget_strategy_raises_when_no_user_backend_satisfies_budget(to
             torch_device,
             tmp_path,
         )
+
+    assert ("throughput", 100.0) in reported_metrics
+    assert ("latency", 10.0) in reported_metrics

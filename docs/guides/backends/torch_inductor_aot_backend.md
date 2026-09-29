@@ -132,6 +132,30 @@ result = model(input_tensor)
 After `ait.tune` completes, the original module is offloaded to CPU to free GPU memory.
 The compiled `.pt2` runner is fully self-contained for inference.
 
+## Deployment Artifact
+
+Request a deployment record from a tuned module and copy its package:
+
+```python
+artifact = model.artifact()
+package_path = artifact.model.export_files("deployment/model.pt2")
+```
+
+The returned `DeploymentArtifact` contains:
+
+- `model.format="pt2"`, the package path, and `model.metadata["structured_call"]`,
+  which indicates whether the call uses nested inputs or container outputs.
+- `runtime.name="aotinductor"` with empty runtime options. Inductor configuration
+  controls compilation and is already reflected in the package.
+- Bounded input and output tensor specs named `INPUT__0`, `OUTPUT__0`, and so on,
+  in PyTorch's flattened call order.
+
+The backend creates this record only when `artifact()` is called. It retains the
+tensor ordering captured during build, so the record can also be requested after
+deactivation or directly from a backend restored from a checkpoint, without loading
+the compiled runner. Calls with non-tensor leaves currently raise an error when
+requesting the record; this does not prevent tuning or inference.
+
 ## Comparison with Torch Inductor JIT Backend
 
 | Feature                  | AOT Backend                     | JIT Backend                  |

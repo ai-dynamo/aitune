@@ -4,7 +4,7 @@
 
 import torch
 import torch.nn.functional as F  # noqa: N812
-from torch.nn.attention import SDPBackend
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from aitune.torch.kernel_forge.kernel_provider import KernelProviderState, TorchSDPAKernelProvider
 from tests.utilities.helpers import requires_cuda
@@ -38,9 +38,11 @@ def test_torch_sdpa_flash_provider_is_callable(torch_device):
 
     assert provider.prepare([sample]) is True
 
-    expected = F.scaled_dot_product_attention(query, key, value)
-    actual = provider(query, key, value)
+    with sdpa_kernel(SDPBackend.FLASH_ATTENTION):
+        # force backend for capture expected values
+        expected = F.scaled_dot_product_attention(query, key, value)
 
+    actual = provider(query, key, value)
     torch.testing.assert_close(actual, expected)
 
 
