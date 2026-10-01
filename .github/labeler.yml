@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Labels are applied to pull requests based on changed files.
+
+backend::tensorrt:
+  - changed-files:
+      - any-glob-to-any-file:
+          - aitune/torch/backend/tensorrt/**
+          - aitune/torch/libs/torch/**
+
+backend::triton:
+  - changed-files:
+      - any-glob-to-any-file:
+          - aitune/triton/**
+          - aitune/torch/kernel_forge/**
+          - examples/**/triton/**
+
+component::dynamo:
+  - changed-files:
+      - any-glob-to-any-file:
+          - aitune/dynamo/**
+
+component::jit:
+  - changed-files:
+      - any-glob-to-any-file:
+          - aitune/torch/jit/**
+
+component::inspection:
+  - changed-files:
+      - any-glob-to-any-file:
+          - aitune/torch/inspecting/**
+
+component::tuning:
+  - changed-files:
+      - any-glob-to-any-file:
+          - aitune/torch/tune_strategy/**
+          - aitune/torch/task/**
+          - aitune/torch/tuning.py
+
+component::checkpoint:
+  - changed-files:
+      - any-glob-to-any-file:
+          - aitune/torch/checkpoint/**
+
+component::profiling:
+  - changed-files:
+      - any-glob-to-any-file:
+          - aitune/torch/performance/**
+          - aitune/torch/task/profiling/**
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/**
+          - examples/**/README.md
+          - '**/*.md'
+          - '**/*.rst'
+
+examples:
+  - changed-files:
+      - any-glob-to-any-file:
+          - examples/**
+          - notebooks/**
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - tests/**
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+          - .github/actions/**
+          - .pre-commit-config.yaml
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - pyproject.toml
+          - uv.lock
+          - requirements*.txt
