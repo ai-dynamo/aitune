@@ -35,9 +35,7 @@ jobs:
           INCLUDE_DELETIONS: ${{ env.INCLUDE_DELETIONS }}
         with:
           script: |
-            // Changed lines = additions ( + deletions)?
-            // size/S 1-50, size/XS 51-100, size/M 101-150,
-            // size/L 151-200, size/XL 201-300, size/XXL 301+
+
             const sizeLabels = ['size/S', 'size/XS', 'size/M', 'size/L', 'size/XL', 'size/XXL']
             const { owner, repo } = context.repo
             const issue_number = context.issue.number
@@ -50,11 +48,11 @@ jobs:
             })
             const lines = pr.additions + (includeDeletions ? pr.deletions : 0)
             const label =
-              lines <= 50 ? 'size/S'
-              : lines <= 100 ? 'size/XS'
-              : lines <= 150 ? 'size/M'
-              : lines <= 200 ? 'size/L'
-              : lines <= 300 ? 'size/XL'
+              lines <= 50 ? 'size/XS'
+              : lines <= 80 ? 'size/S'
+              : lines <= 120 ? 'size/M'
+              : lines <= 150 ? 'size/L'
+              : lines <= 200 ? 'size/XL'
               : 'size/XXL'
             // Get existing size labels
             const { data: existing } = await github.rest.issues.listLabelsOnIssue({
