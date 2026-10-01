@@ -3,47 +3,48 @@
 
 # Labels are applied to pull requests based on changed files.
 
-backend::tensorrt:
+backends:
   - changed-files:
       - any-glob-to-any-file:
-          - aitune/torch/backend/tensorrt/**
-          - aitune/torch/libs/torch/**
+          - aitune/torch/backend/**
+          - aitune/torch/libs/**
 
-backend::triton:
+triton:
   - changed-files:
       - any-glob-to-any-file:
           - aitune/triton/**
           - examples/**/triton/**
 
-component::dynamo:
+dynamo:
   - changed-files:
       - any-glob-to-any-file:
           - aitune/dynamo/**
           - examples/**/dynamo/**
+          - examples/**/run_dynamo.sh
 
-component::jit:
+jit:
   - changed-files:
       - any-glob-to-any-file:
           - aitune/torch/jit/**
 
-component::inspection:
+inspection:
   - changed-files:
       - any-glob-to-any-file:
           - aitune/torch/inspecting/**
 
-component::tuning:
+tuning:
   - changed-files:
       - any-glob-to-any-file:
           - aitune/torch/tune_strategy/**
           - aitune/torch/task/**
           - aitune/torch/tuning.py
 
-component::checkpoint:
+checkpoint:
   - changed-files:
       - any-glob-to-any-file:
           - aitune/torch/checkpoint/**
 
-component::profiling:
+profiling:
   - changed-files:
       - any-glob-to-any-file:
           - aitune/torch/performance/**
@@ -80,4 +81,6 @@ dependencies:
       - any-glob-to-any-file:
           - pyproject.toml
           - uv.lock
-          - requirements*.txt
+          - examples/**/pyproject.toml
+          - examples/**/uv.lock
+
