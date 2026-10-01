@@ -30,7 +30,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
-
             const sizeLabels = ['size/S', 'size/XS', 'size/M', 'size/L', 'size/XL', 'size/XXL']
             const { owner, repo } = context.repo
             const issue_number = context.issue.number
