@@ -13,13 +13,13 @@ backend::triton:
   - changed-files:
       - any-glob-to-any-file:
           - aitune/triton/**
-          - aitune/torch/kernel_forge/**
           - examples/**/triton/**
 
 component::dynamo:
   - changed-files:
       - any-glob-to-any-file:
           - aitune/dynamo/**
+          - examples/**/dynamo/**
 
 component::jit:
   - changed-files:
@@ -54,6 +54,7 @@ documentation:
       - any-glob-to-any-file:
           - docs/**
           - examples/**/README.md
+          - fern/**
           - '**/*.md'
           - '**/*.rst'
 
@@ -71,8 +72,7 @@ tests:
 ci:
   - changed-files:
       - any-glob-to-any-file:
-          - .github/workflows/**
-          - .github/actions/**
+          - .github/**
           - .pre-commit-config.yaml
 
 dependencies:
