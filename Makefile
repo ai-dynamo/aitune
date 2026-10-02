@@ -131,7 +131,7 @@ install: clean ## install the package to the active Python's site-packages
 
 install-dev: clean-build clean-pyc clean-test
 	$(PIP_INSTALL) --upgrade pip
-	$(PIP_INSTALL) -e --group dev .
+	$(PIP_INSTALL) --group dev -e .
 
 uv-locks-update:
 	uv lock
