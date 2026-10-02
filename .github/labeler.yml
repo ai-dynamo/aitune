@@ -56,8 +56,8 @@ documentation:
           - docs/**
           - examples/**/README.md
           - fern/**
-          - '**/*.md'
           - '**/*.rst'
+          - 'README.md'
 
 examples:
   - changed-files:

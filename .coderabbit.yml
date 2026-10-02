@@ -20,5 +20,22 @@ reviews:
       - Draft
       - WIP
 
+  auto_apply_labels: true
+  labeling_instructions:
+    - label: "review-effort/low"
+      instructions: >
+        Apply when the pull request is narrow, low-risk, and can likely be
+        reviewed in under 15 minutes.
+
+    - label: "review-effort/medium"
+      instructions: >
+        Apply when the pull request has multiple meaningful changes or likely
+        needs 15–45 minutes of review.
+
+    - label: "review-effort/high"
+      instructions: >
+        Apply when the pull request changes architecture, spans several
+        components, modifies public APIs, or likely needs over 45 minutes.
+
 chat:
   auto_reply: true
