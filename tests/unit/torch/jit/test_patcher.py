@@ -4,6 +4,7 @@
 
 from unittest.mock import Mock
 
+import pytest
 import torch
 
 from aitune.torch.jit.config import JITMode
@@ -41,6 +42,18 @@ def test_eager_jit_tunes_when_ready(mocker):
         module(torch.ones(1, 2))
 
     tune.assert_called_once_with()
+
+
+def test_constructor_interception_rejects_mode_change_before_registering_module():
+    jit_config.mode = JITMode.TUNE_EAGER
+    Patcher.patch_torch()
+
+    jit_config.mode = JITMode.TUNE_DEFERRED
+    with pytest.raises(RuntimeError, match=r"Call jit_reset\(\) before switching JIT modes"):
+        torch.nn.Linear(2, 2)
+
+    assert Patcher._session_mode is JITMode.TUNE_EAGER
+    assert Patcher._patched_modules == []
 
 
 def test_prepare_for_tuning():
