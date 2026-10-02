@@ -56,7 +56,7 @@ The command:
 4. Saves the tuned pipeline as an AITune checkpoint.
 
 The transformer compares Torch-TensorRT and TorchInductor with model-specific settings. Other tunable modules use
-the default AOT backend candidates. Maximum-batch-size discovery is disabled for all modules to match this example's
+the default dynamic backend candidates. Maximum-batch-size discovery is disabled for all modules to match this example's
 single-image inference and serving workload.
 
 ### Optional transformer quantization

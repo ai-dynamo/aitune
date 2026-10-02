@@ -8,13 +8,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend import (
-    Backend,
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchInductorAotBackend,
-    TorchInductorJitBackend,
-)
+from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_strategy.mixin import PerformanceValidationMixin
@@ -25,11 +19,11 @@ from aitune.utils.logging import log
 class FirstWinsStrategy(PerformanceValidationMixin, MultiBackendStrategy):
     """Try backends in order and stop at the first that passes the configured checks.
 
-    The default order tries TensorRT export paths before Inductor. It is a fallback
-    policy, not a measured performance ranking. AOT and JIT use the same order.
+    Backend order is a fallback policy, not a measured performance ranking. The
+    caller supplies candidates directly or obtains them from the dynamic resolver.
     """
 
-    def __init__(self, backends: list[Backend] | None = None, **kwargs):
+    def __init__(self, backends: list[Backend], **kwargs):
         """Initializes strategy."""
         super().__init__(backends=backends, **kwargs)
 
@@ -40,26 +34,6 @@ class FirstWinsStrategy(PerformanceValidationMixin, MultiBackendStrategy):
             "performance_validation_mode": self._performance_validation_mode.value,
             "profiling_config": self._profiling_config_to_json_dict(),
         }
-
-    def _default_aot_backends(self, distributed: bool = False) -> list[Backend]:
-        """Try TensorRT before Inductor for AOT; distributed modules need Inductor backends."""
-        if distributed:
-            return [TorchInductorAotBackend(), TorchInductorJitBackend()]
-        return [
-            TensorRTBackend(),
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorJitBackend(),
-        ]
-
-    def _default_jit_backends(self, distributed: bool = False) -> list[Backend]:
-        """Try TensorRT before Inductor for JIT; distributed modules need Inductor backends."""
-        if distributed:
-            return [TorchInductorAotBackend(), TorchInductorJitBackend()]
-        return [
-            TensorRTBackend(),
-            TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False)),
-            TorchInductorJitBackend(),
-        ]
 
     def _tune(
         self,

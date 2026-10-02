@@ -18,6 +18,7 @@ from aitune.torch.jit.patched_module import (
     PRINT_HIERARCHY_HEADER,
     PRINT_HIERARCHY_NO_MODULES_HEADER,
     GraphBreakException,
+    ModuleState,
     PatchedModule,
 )
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
@@ -270,6 +271,45 @@ def test_jit_eager_records_inspection_once_from_top_module_before_child_fallback
     assert tune_calls[0][1] != tune_calls[1][1]
     assert isinstance(offload_after_tuning.call_args.args[0], torch.nn.Linear)
     assert evict_page_cache.call_count >= 1
+
+
+def test_jit_strategy_resolution_failure_falls_back_and_tunes_child(mocker, tmp_path):
+    """A parent without a matching strategy should leave its child eligible for tuning."""
+
+    class ParentWithChild(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.child = torch.nn.Linear(4, 4)
+
+        def forward(self, x):
+            return self.child(x)
+
+    def resolve_for_module(module):
+        if isinstance(module, ParentWithChild):
+            raise RuntimeError("No default backends support parent")
+        return DummyTuneStrategy()
+
+    config.mode = JITMode.TUNE_EAGER
+    config.device = torch.device("cpu")
+    config.detect_graph_breaks = False
+    config.max_depth_level = 2
+    config.cache_dir = tmp_path / "jit-cache"
+    resolve_strategy = mocker.patch.object(config, "resolve_strategy", side_effect=resolve_for_module)
+    mocker.patch("aitune.torch.jit.patched_module.offload_after_tuning")
+
+    with prepare_for_jit_tuning():
+        model = ParentWithChild()
+
+    model(torch.randn(2, 4))
+
+    parent = PatchedModule.heads[0]
+    child = parent._children[0]
+    assert parent._state == ModuleState.EAGER
+    assert child._state == ModuleState.TUNED
+    assert resolve_strategy.call_count == 2
+    assert isinstance(resolve_strategy.call_args_list[0].args[0], ParentWithChild)
+    assert isinstance(resolve_strategy.call_args_list[1].args[0], torch.nn.Linear)
+    assert "No default backends support parent" in next(config.cache_dir.glob("*/error.log")).read_text()
 
 
 @requires_cuda
