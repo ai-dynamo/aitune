@@ -3,11 +3,10 @@
 """Create tune strategies whose backends are resolved for each module."""
 
 from collections.abc import Sequence
-from copy import deepcopy
-from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Self
 
 import torch.nn as nn
+from pydantic import BaseModel, ConfigDict, PositiveFloat, field_validator, model_validator, validate_call
 
 from aitune.torch.backend import (
     Backend,
@@ -26,52 +25,77 @@ from aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin import FindMaxBa
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.utils.module import is_distributed_module
 
+Relation = Literal["at_most"]
 Objective = Literal["throughput", "latency"]
 Compilation = Literal["aot", "jit", "any"]
+Unit = Literal["ms"]
 
 _OBJECTIVES = frozenset({"throughput", "latency"})
 _COMPILATION_MODES = frozenset({"aot", "jit", "any"})
 
 
-@dataclass(frozen=True)
-class Constraint:
+class Constraint(BaseModel):
     """Describe one requirement that a tuning candidate must satisfy."""
 
-    metric: str
-    relation: str
-    value: float
-    unit: str
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    metric: Objective
+    relation: Relation
+    value: PositiveFloat
+    unit: Unit = "ms"
+
+    @model_validator(mode="after")
+    def _metric_and_unit_validation(self) -> Self:
+        """Only 'latency' metric with 'ms' unit is supported for now."""
+        if not (self.metric == "latency" and self.unit == "ms"):
+            raise ValueError("Only 'latency' metric with 'ms' unit is supported for now.")
+        return self
 
     @classmethod
-    def max_latency_ms(cls, milliseconds: float) -> "Constraint":
+    def max_latency_ms(cls, milliseconds: float) -> Self:
         """Require latency to be no greater than ``milliseconds``."""
-        if milliseconds <= 0:
-            raise ValueError(f"Maximum latency must be greater than zero, got {milliseconds}.")
         return cls(metric="latency", relation="at_most", value=milliseconds, unit="ms")
 
 
-class DynamicTuneStrategy:
-    """Describe a strategy whose concrete backends depend on the tuned module.
+class DynamicTuneStrategy(BaseModel):
+    """Describes rules that are used to select and configure an optimal tuning strategy for a given module at tune time.
 
-    Instances contain no backend state and may be shared between wrapped modules after
-    configuration. A fresh concrete ``TuneStrategy`` is created immediately before each
-    module is tuned.
+    This class holds no backend instances or backend-specific state. Instead, it contains a declarative description of
+    the desired optimization *objective* (such as "throughput" or "latency") and a set of *constraints*, all of which apply together.
+
+    In this framework:
+      - The *objective* defines what we try to maximize or minimize (e.g., maximize throughput).
+      - The *constraint(s)* express requirements that must be met by any configuration the strategy chooses (such as "latency at_most N ms").
+        For now, only a single latency constraint is supported (e.g., "latency at_most N ms").
+      - Typically, this means we optimize for maximum throughput, but only among strategies/configurations that meet the given latency constraint.
+
+    This class is *dynamic*: it does not directly reference any backends.
+    When `materialize()` is called with a particular module, it creates a concrete `TuneStrategy` with appropriate backend objects
+    and automatically selects the right strategy class (e.g., `LatencyBudgetStrategy` for a throughput-optimization subject to a latency constraint).
+
+    The same DynamicTuneStrategy instance can be used for multiple modules, and a fresh concrete strategy is produced for each module.
+
+    Example:
+        # Optimize for max throughput, but only if latency ≤ 40 ms for the current module
+        dts = DynamicTuneStrategy(
+            objective="throughput",
+            compilation="any",
+            constraints=[Constraint.max_latency_ms(40)]
+        )
+        strategy = dts.materialize(some_module)
     """
 
-    def __init__(
-        self,
-        *,
-        objective: Objective,
-        compilation: Compilation,
-        constraints: Sequence[Constraint],
-    ) -> None:
-        """Store user intent without creating module-specific backends."""
-        self.objective = objective
-        self.compilation = compilation
-        self.constraints = tuple(constraints)
-        self._find_max_batch_size: bool | None = None
+    objective: Objective
+    compilation: Compilation
+    constraints: Sequence[Constraint]
+    _find_max_batch_size: bool | None = None
 
-    def enable_find_max_batch_size(self, enable: bool = True) -> "DynamicTuneStrategy":
+    @field_validator("constraints", mode="before")
+    @classmethod
+    def _validate_constraints(cls, v):
+        return tuple(v)
+
+    def enable_find_max_batch_size(self, enable: bool = True) -> Self:
         """Configure maximum-batch-size discovery on the resolved strategy."""
         self._find_max_batch_size = enable
         return self
@@ -79,14 +103,10 @@ class DynamicTuneStrategy:
     def materialize(self, module: nn.Module) -> TuneStrategy:
         """Create a concrete strategy with fresh backends for ``module``."""
         backends = _resolve_backends(module, compilation=self.compilation)
-        latency_limit = next(
-            (
-                constraint
-                for constraint in self.constraints
-                if constraint.metric == "latency" and constraint.relation == "at_most"
-            ),
-            None,
-        )
+
+        # Only one constraint with metric='latency' and relation='at_most' is supported.
+        latency_limit = next(iter(self.constraints), None)
+
         if self.objective == "latency":
             strategy: TuneStrategy = MinLatencyStrategy(backends=backends)
         elif latency_limit is not None:
@@ -99,33 +119,24 @@ class DynamicTuneStrategy:
 
         if self._find_max_batch_size is not None and isinstance(strategy, FindMaxBatchSizeMixin):
             strategy.enable_find_max_batch_size(self._find_max_batch_size)
+
         return strategy
 
-    def clone(self) -> "DynamicTuneStrategy":
+    def clone(self) -> Self:
         """Return an independent copy of this dynamic configuration."""
-        return deepcopy(self)
+        return self.model_copy(deep=True)
 
     def to_json_dict(self) -> dict:
         """Return the unresolved configuration for reporting."""
-        return {
-            "objective": self.objective,
-            "compilation": self.compilation,
-            "constraints": [
-                {
-                    "metric": constraint.metric,
-                    "relation": constraint.relation,
-                    "value": constraint.value,
-                    "unit": constraint.unit,
-                }
-                for constraint in self.constraints
-            ],
-            "backends": "resolved for each module",
-        }
+        dump = self.model_dump(mode="json", exclude={"_find_max_batch_size"})
+        dump["backends"] = "resolved for each module"
+        return dump
 
 
-StrategyInput = TuneStrategy | DynamicTuneStrategy
+StrategyOption = TuneStrategy | DynamicTuneStrategy
 
 
+@validate_call
 def resolve_strategy(
     *,
     objective: Objective = "throughput",
@@ -142,20 +153,17 @@ def resolve_strategy(
     Returns:
         A dynamic strategy configuration suitable for AOT and JIT tuning.
     """
-    _validate_choice("objective", objective, _OBJECTIVES)
-    _validate_choice("compilation", compilation, _COMPILATION_MODES)
-    constraints = tuple(constraints)
     seen_constraints: set[tuple[str, str]] = set()
+
+    # Validate all constraints: only one per (metric, relation) pair, must be supported,
+    # Latency constraint with throughput objective.
     for constraint in constraints:
-        if not isinstance(constraint, Constraint):
-            raise TypeError(f"Unsupported constraint type: {type(constraint).__qualname__}.")
         constraint_key = (constraint.metric, constraint.relation)
         if constraint_key in seen_constraints:
             raise ValueError(
                 f"Only one constraint with metric={constraint.metric!r} and relation={constraint.relation!r} "
                 "may be specified."
             )
-        seen_constraints.add(constraint_key)
         if constraint_key != ("latency", "at_most") or constraint.unit != "ms":
             raise ValueError(
                 f"Unsupported constraint: metric={constraint.metric!r}, relation={constraint.relation!r}, "
@@ -164,14 +172,12 @@ def resolve_strategy(
         if objective != "throughput":
             raise ValueError("The maximum latency constraint is only valid with objective='throughput'.")
 
-    return DynamicTuneStrategy(
-        objective=objective,
-        compilation=compilation,
-        constraints=constraints,
-    )
+        seen_constraints.add(constraint_key)
+
+    return DynamicTuneStrategy(objective=objective, compilation=compilation, constraints=constraints)
 
 
-def materialize_strategy(strategy: StrategyInput, module: nn.Module) -> TuneStrategy:
+def materialize_strategy(strategy: StrategyOption, module: nn.Module) -> TuneStrategy:
     """Resolve a dynamic strategy for ``module`` or preserve an explicit strategy."""
     if isinstance(strategy, DynamicTuneStrategy):
         return strategy.materialize(module)
@@ -194,10 +200,6 @@ def _resolve_backends(module: nn.Module, *, compilation: Compilation) -> list[Ba
             TorchInductorJitBackend(),
         ]
 
-    # Source-format compatibility is the first capability filter. In particular,
-    # an OnnxModule must never reach a backend that expects a torch.nn.Module graph.
-    backends = [backend for backend in backends if module_format in backend._supported_modules]
-
     execution_mode = ExecutionMode.MULTI_GPU if is_distributed_module(module) else ExecutionMode.SINGLE_GPU
     backends = [backend for backend in backends if execution_mode in backend._execution_modes]
 
@@ -213,10 +215,3 @@ def _resolve_backends(module: nn.Module, *, compilation: Compilation) -> list[Ba
             f"No default backends support module {module.__class__.__qualname__!r} with compilation={compilation!r}."
         )
     return backends
-
-
-def _validate_choice(name: str, value: str, choices: frozenset[str]) -> None:
-    """Validate one public string option with a useful error."""
-    if value not in choices:
-        expected = ", ".join(sorted(choices))
-        raise ValueError(f"Unknown {name} {value!r}; expected one of: {expected}.")

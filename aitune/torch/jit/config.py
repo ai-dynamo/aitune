@@ -14,7 +14,7 @@ from aitune.torch.utils.device import get_device
 from aitune.utils.env_vars import AITUNE_JIT_CACHE_DIR as _AITUNE_JIT_CACHE_DIR
 
 if TYPE_CHECKING:
-    from aitune.torch.tune_strategy.resolver import StrategyInput
+    from aitune.torch.tune_strategy.resolver import StrategyOption
     from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
 
@@ -47,7 +47,7 @@ class Config:
     patch_exclude: tuple[str, ...] = ()
 
     cache_dir: Path = field(default_factory=lambda: _AITUNE_JIT_CACHE_DIR)
-    strategy: "StrategyInput | None" = None  # explicit or dynamically resolved strategy
+    strategy: "StrategyOption | None" = None  # explicit or dynamically resolved strategy
 
     def __post_init__(self):
         """Post init."""

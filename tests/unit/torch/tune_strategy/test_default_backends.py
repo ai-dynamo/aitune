@@ -143,9 +143,9 @@ def test_dynamic_strategy_maps_latency_limit():
 @pytest.mark.parametrize(
     "kwargs,error",
     [
-        ({"objective": "unknown"}, "Unknown objective"),
-        ({"compilation": "unknown"}, "Unknown compilation"),
-        ({"compilation": "mixed"}, "Unknown compilation"),
+        ({"objective": "unknown"}, " Input should be 'throughput' or 'latency'"),
+        ({"compilation": "unknown"}, "Input should be 'aot', 'jit' or 'any'"),
+        ({"compilation": "mixed"}, "Input should be 'aot', 'jit' or 'any'"),
         (
             {"objective": "latency", "constraints": [Constraint.max_latency_ms(20)]},
             "only valid with objective='throughput'",
@@ -158,7 +158,7 @@ def test_resolve_strategy_rejects_invalid_options(kwargs, error):
 
 
 def test_max_latency_constraint_rejects_non_positive_value():
-    with pytest.raises(ValueError, match="Maximum latency must be greater than zero"):
+    with pytest.raises(ValueError, match="Constraint\nvalue\n  Input should be greater than 0"):
         Constraint.max_latency_ms(0)
 
 

@@ -25,7 +25,7 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import report_graph_tune, report_module_tune
-from aitune.torch.tune_strategy.resolver import StrategyInput, materialize_strategy, resolve_strategy
+from aitune.torch.tune_strategy.resolver import StrategyOption, materialize_strategy, resolve_strategy
 from aitune.torch.tune_strategy.tune_strategy import (
     DummyTuneStrategy,
     TuneStrategy,
@@ -48,8 +48,8 @@ class ModuleState(Enum):
     TUNED = "tuned"
 
 
-StrategyList = list[StrategyInput]
-StrategyMap = dict[SampleMetadata, StrategyInput]
+StrategyList = list[StrategyOption]
+StrategyMap = dict[SampleMetadata, StrategyOption]
 
 
 class Module(wrapt.CallableObjectProxy):
@@ -81,7 +81,7 @@ class Module(wrapt.CallableObjectProxy):
         self,
         module: torch.nn.Module,
         name: str | None = None,
-        strategy: StrategyInput | None = None,
+        strategy: StrategyOption | None = None,
         strategies: StrategyList | StrategyMap | None = None,
         dynamic_shapes: DynamicShapes | None = None,
     ):
@@ -305,7 +305,7 @@ class Module(wrapt.CallableObjectProxy):
     def tune(
         self,
         device: str | torch.device | None = None,
-        strategy: StrategyInput | None = None,
+        strategy: StrategyOption | None = None,
         dry_run: bool = False,
     ):
         """Tunes the module.
@@ -475,7 +475,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def _setup_strategies(
         self,
-        strategy: StrategyInput | None,
+        strategy: StrategyOption | None,
         strategies: StrategyList | StrategyMap | None,
     ):
         """Sets up strategy or strategy_map or strategy_list depending on input args."""
@@ -499,7 +499,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def _get_strategies_for_graph_specs(
         self,
-        strategy: StrategyInput | None,
+        strategy: StrategyOption | None,
         graph_specs: list[GraphSpec],
         dry_run: bool,
     ) -> list[TuneStrategy]:
