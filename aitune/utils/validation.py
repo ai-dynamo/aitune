@@ -31,9 +31,9 @@ def positive(value: Number, *, name: str | None = None) -> None:
         name: Name of the value being validated.
 
     Raises:
-        ValueError: If value is less than or equal to 0.
+        ValueError: If value is not greater than 0, including NaN.
     """
-    if value <= 0:
+    if not value > 0:
         raise ValueError(f"{name or 'value'} must be positive, got {value!r}.")
 
 
@@ -45,7 +45,7 @@ def non_negative(value: Number, *, name: str | None = None) -> None:
         name: Name of the value being validated.
 
     Raises:
-        ValueError: If value is less than 0.
+        ValueError: If value is not greater than or equal to 0, including NaN.
     """
-    if value < 0:
+    if not value >= 0:
         raise ValueError(f"{name or 'value'} must not be negative, got {value!r}.")
