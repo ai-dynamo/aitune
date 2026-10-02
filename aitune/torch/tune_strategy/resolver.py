@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import Literal, Self
 
 import torch.nn as nn
-from pydantic import BaseModel, ConfigDict, PositiveFloat, field_validator, model_validator, validate_call
+from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, field_validator, model_validator, validate_call
 
 from aitune.torch.backend import (
     Backend,
@@ -86,8 +86,8 @@ class DynamicTuneStrategy(BaseModel):
     """
 
     objective: Objective
-    compilation: Compilation
-    constraints: Sequence[Constraint]
+    compilation: Compilation = "any"
+    constraints: Sequence[Constraint] = Field(default_factory=list)
     _find_max_batch_size: bool | None = None
 
     @field_validator("constraints", mode="before")

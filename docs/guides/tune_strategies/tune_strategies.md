@@ -8,11 +8,12 @@ Tune strategies determine how AITune selects and configures backends during the 
 
 ## Overview
 
-Both ahead-of-time and JIT tuning use `resolve_strategy()` by default. It stores the requested tuning intent and
-creates a fresh concrete strategy immediately before each module is tuned. This allows different modules to receive
-different compatible backend candidates.
+AITune supports two ways to specify a tuning strategy:
 
-The initial dynamic resolver profiles the following candidates in order when `compilation="any"`:
+- **Dynamic strategy (default):** Use `resolve_strategy()`. Backends are chosen automatically for each module, based on its properties and user criteria. This allows different modules to get different, compatible backend candidates.
+- **Manual strategy:** Specify an explicit strategy class with a fixed backend list. The same backends are used for all modules.
+
+When using the dynamic strategy with `compilation="any"`, the candidate backends below are tried in order:
 
 | Candidate | Ordinary module | Distributed module |
 |---|---|---|
@@ -26,7 +27,7 @@ Use the dynamic resolver when AITune should select candidates for each module:
 ```python
 strategy = ait.resolve_strategy(
     objective="throughput",
-    compilation="any",
+    compilation="any",  # default
 )
 ```
 
@@ -152,7 +153,7 @@ import aitune.torch as ait
 # List backends in priority order (fastest → most compatible)
 backends = [
     TensorRTBackend(config=TensorRTBackendConfig()),  # Best performance, but may not support all models
-    TorchInductorJitBackend(),                            # Good performance, broader compatibility
+    TorchInductorJitBackend(),  # Good performance, broader compatibility
 ]
 
 # Create strategy
@@ -205,7 +206,7 @@ from aitune.torch.backend import (
     TensorRTBackendConfig,
     TorchInductorJitBackend,
     TorchAOBackend,
-    TorchAOBackendConfig
+    TorchAOBackendConfig,
 )
 import aitune.torch as ait
 
