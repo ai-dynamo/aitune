@@ -72,6 +72,7 @@ def tune_model(
             ait.module.Module(
                 getattr(pipeline, name),
                 name=name,
+                strategy=ait.resolve_strategy().enable_find_max_batch_size(False),
             ),
         )
 

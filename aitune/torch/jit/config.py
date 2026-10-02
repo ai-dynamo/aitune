@@ -26,6 +26,13 @@ class JITMode(enum.Enum):
     TUNE_DEFERRED = "tune_deferred"  # tune mode, deferred tuning enabled by an explicit marker call
 
 
+def _default_strategy_resolver() -> "StrategyOption":
+    """Return the default strategy."""
+    from aitune.torch.tune_strategy.resolver import resolve_strategy
+
+    return resolve_strategy()
+
+
 @dataclass
 class Config:
     """Configuration for JIT module."""
@@ -47,7 +54,7 @@ class Config:
     patch_exclude: tuple[str, ...] = ()
 
     cache_dir: Path = field(default_factory=lambda: _AITUNE_JIT_CACHE_DIR)
-    strategy: "StrategyOption | None" = None  # explicit or dynamically resolved strategy
+    strategy: "StrategyOption" = field(default_factory=_default_strategy_resolver)
 
     def __post_init__(self):
         """Post init."""
@@ -64,10 +71,9 @@ class Config:
         Args:
             module: Module that will be tuned.
         """
-        from aitune.torch.tune_strategy.resolver import materialize_strategy, resolve_strategy
+        from aitune.torch.tune_strategy.resolver import materialize_strategy
 
-        configured_strategy = self.strategy or resolve_strategy()
-        return materialize_strategy(configured_strategy, module)
+        return materialize_strategy(self.strategy, module)
 
     def reset_to_defaults(self) -> None:
         """Reset all options to their default values (e.g. for test isolation)."""
