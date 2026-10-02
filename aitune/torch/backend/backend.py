@@ -21,7 +21,7 @@ from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_backend_build
 from aitune.torch.utils.memory import release_transient_memory
-from aitune.torch.utils.module import is_distributed_module
+from aitune.torch.utils.module import is_distributed_module, is_externally_managed_module
 from aitune.utils.hashing import hash_string
 from aitune.utils.monitoring import annotate, with_backend_context
 from aitune.utils.serialization import json_serialize
@@ -193,6 +193,7 @@ class Backend(ABC):
     _execution_modes: ClassVar[frozenset[ExecutionMode]]
     _build_mode: ClassVar[BuildMode]
     _supported_modules: ClassVar[frozenset[ModuleFormat]] = frozenset({ModuleFormat.TORCH})
+    _supports_external_device_management: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs) -> None:
         """Require each backend subclass to declare its execution and build modes."""
@@ -257,6 +258,7 @@ class Backend(ABC):
                     self._assert_supported_modules(module)
                     self._assert_device(device)
                     self._assert_execution_mode(module)
+                    self._assert_external_device_management(module)
                     self._set_device(device)
                     self._save_config(cache_dir)
                     ready_backend = self._build(module, graph_spec, samples, cache_dir)
@@ -282,6 +284,11 @@ class Backend(ABC):
         execution_mode = ExecutionMode.MULTI_GPU if is_distributed_module(module) else ExecutionMode.SINGLE_GPU
         if execution_mode not in self._execution_modes:
             raise RuntimeError(f"Backend {self.name} does not support {execution_mode.value} execution")
+
+    def _assert_external_device_management(self, module: nn.Module) -> None:
+        """Reject externally managed placement unless the backend explicitly supports it."""
+        if is_externally_managed_module(module) and not self._supports_external_device_management:
+            raise RuntimeError(f"Backend {self.name} does not support external module device management")
 
     @annotate(color="cyan")
     def activate(self):
@@ -520,6 +527,7 @@ class DummyBackend(Backend):
     _devices = ["cpu", "cuda"]
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
     _build_mode = BuildMode.AHEAD_OF_TIME
+    _supports_external_device_management = True
 
     def key(self) -> str:
         """Returns the key of the backend."""

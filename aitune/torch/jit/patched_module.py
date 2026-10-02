@@ -45,6 +45,8 @@ from aitune.torch.utils.module import (
     format_num_parameters,
     move_module_to_device,
     offload_after_tuning,
+    register_externally_managed_module,
+    unregister_externally_managed_module,
 )
 from aitune.utils.disk_space import raise_if_out_of_space
 from aitune.utils.logging import write_exception_log
@@ -104,10 +106,17 @@ class PatchedModule:
     deferred_tuning_enabled: ClassVar[bool] = False
     module_counter: ClassVar[int] = 0
 
-    def __init__(self, module: torch.nn.Module, *, explicit_head: bool = False):
+    def __init__(
+        self,
+        module: torch.nn.Module,
+        *,
+        explicit_head: bool = False,
+        device_management: str = "aitune",
+    ):
         """Initialize the patched module."""
         self.__wrapped__ = module
         self._explicit_head = explicit_head
+        self._device_management = device_management
         self._session_mode = config.mode
         self._observed_route_count = 1
         self._pending_dynamo_runtime_routes: set[SampleMetadata] = set()
@@ -136,11 +145,18 @@ class PatchedModule:
         }
         self._extra_state_info: str = ""  # for tracking purposes
         self._update_state(ModuleState.INIT)
+        if self._device_management == "external":
+            register_externally_managed_module(module)
 
     @property
     def explicit_head(self) -> bool:
         """Whether this module was registered as an exact JIT target."""
         return self._explicit_head
+
+    @property
+    def device_management(self) -> str:
+        """The module placement policy for this JIT target."""
+        return self._device_management
 
     def _observed_route_count_value(self) -> int:
         """Return a monotonic count of graph routes observed for this module."""
@@ -190,6 +206,11 @@ class PatchedModule:
         """Release capacity when no selected JIT route still needs a first call."""
         if not self._pending_dynamo_runtime_routes:
             self._release_dynamo_tuning_capacity()
+
+    def _patch_tuned_device_attribute(self, device: torch.device) -> None:
+        """Expose AITune-managed placement without changing externally managed targets."""
+        if self._device_management == "aitune":
+            self._patch_device_attribute(device)
 
     @annotate(name="tune", color="yellow")
     def tune(
@@ -250,13 +271,14 @@ class PatchedModule:
                             }
                             current._extra_state_info = ", ".join([backend.name for backend in backends.values()])
                         else:
-                            current._wrapper = PassthroughModule(current.__wrapped__, device=device)
+                            passthrough_device = device if current.device_management == "aitune" else None
+                            current._wrapper = PassthroughModule(current.__wrapped__, device=passthrough_device)
                             current._extra_state_info = "dry-run tuning success"
 
                         # Tuning succeeded, so restore the current forward and unpatch its descendants.
                         current._handle_backend_added_hooks()
                         current._update_state(ModuleState.TUNED)
-                        current._patch_device_attribute(device)
+                        current._patch_tuned_device_attribute(device)
                         current._unpatch_hierarchy(include_self=False)
                         _to_hist(f"Model tuned: {str(current)}")
                         offload_after_tuning(
@@ -766,6 +788,8 @@ class PatchedModule:
         self._allowed_to_tune = False
         self._restore_original_forward()
         self._restore_device_attribute()
+        if self._device_management == "external":
+            unregister_externally_managed_module(self.__wrapped__)
         self.__wrapped__._forward_hooks = self._current_forward_hooks
         self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
 

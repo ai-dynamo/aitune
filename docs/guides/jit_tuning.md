@@ -133,6 +133,29 @@ from aitune.torch import jit_reset
 jit_reset()
 ```
 
+#### Preserving Externally Managed Placement
+
+If another runtime owns module placement or offloading, opt the explicitly registered targets into external device
+management:
+
+```python
+registration = register_for_jit_tuning(
+    [model],
+    device_management="external",
+)
+```
+
+With this policy, AITune does not move or offload the registered module tree, including its descendants. The external
+runtime remains responsible for making that tree resident when it is called. AITune may still move input tensors,
+backend artifacts, and internal module copies needed for tuning; copies do not inherit the external-placement marker.
+The default `device_management="aitune"` behavior is unchanged, and `jit_reset()` removes the marker from registered
+targets.
+
+Backends must explicitly opt into this contract by setting `_supports_external_device_management = True`; unsupported
+backends are rejected before their build implementation runs. The built-in ONNX Runtime, TensorRT, Torch eager,
+TorchInductor AOT and JIT, Torch-TensorRT AOT and JIT, and TorchAO backends support generic externally managed
+placement.
+
 Explicit registrations of instances that share the same Python `forward` frame may temporarily raise TorchDynamo's
 process-wide recompile limits. Capacity accounts for the configured backend candidates, optional graph-break detection,
 and the selected inference route. AOT-only targets release it after tuning; JIT targets release it after every recorded
