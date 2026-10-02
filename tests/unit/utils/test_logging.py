@@ -2,7 +2,44 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for logging utilities."""
 
-from aitune.utils.logging import log_to_file, write_exception_log
+import warnings
+from contextlib import nullcontext
+
+import pytest
+
+from aitune.utils.logging import libraries_logging, log_to_file, write_exception_log
+
+
+@pytest.mark.parametrize("raise_error", [False, True])
+def test_libraries_logging_restores_warning_filters(raise_error):
+    """Temporary suppression preserves the caller's warning policy on exit."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        expected_error = pytest.raises(RuntimeError, match="context failed") if raise_error else nullcontext()
+        with expected_error:
+            with libraries_logging(True):
+                warnings.warn("'colored' module is not installed", UserWarning, stacklevel=1)
+                if raise_error:
+                    raise RuntimeError("context failed")
+
+        with pytest.raises(UserWarning, match="caller warning"):
+            warnings.warn("caller warning", UserWarning, stacklevel=1)
+        with pytest.raises(UserWarning, match="'colored' module is not installed"):
+            warnings.warn("'colored' module is not installed", UserWarning, stacklevel=1)
+
+
+def test_libraries_logging_preserves_outer_warning_suppression():
+    """Leaving a nested context keeps the outer context's suppression active."""
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("error", UserWarning)
+        with libraries_logging(True):
+            with libraries_logging(True):
+                warnings.warn("'colored' module is not installed", UserWarning, stacklevel=1)
+            warnings.warn("'colored' module is not installed", UserWarning, stacklevel=1)
+
+        assert not captured
+        with pytest.raises(UserWarning, match="caller warning"):
+            warnings.warn("caller warning", UserWarning, stacklevel=1)
 
 
 def test_log_to_file_appends_message_and_exception(tmp_path):
