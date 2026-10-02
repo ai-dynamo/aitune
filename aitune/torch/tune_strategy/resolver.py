@@ -45,7 +45,7 @@ class Constraint(BaseModel):
     unit: Unit = "ms"
 
     @model_validator(mode="after")
-    def _metric_and_unit_validation(self) -> Self:
+    def _metric_and_unit_validation(self) -> Self:  # pytype: disable=invalid-annotation
         """Only 'latency' metric with 'ms' unit is supported for now."""
         if not (self.metric == "latency" and self.unit == "ms"):
             raise ValueError("Only 'latency' metric with 'ms' unit is supported for now.")
