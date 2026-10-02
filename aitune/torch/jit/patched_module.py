@@ -15,7 +15,7 @@ import torch
 import wrapt
 
 from aitune.global_context import MODULE_CONTEXT_KEY, global_context
-from aitune.torch.backend.backend import Backend
+from aitune.torch.backend.backend import Backend, BuildMode
 from aitune.torch.config import config as global_config
 from aitune.torch.distributed import (
     coordinator,
@@ -23,6 +23,7 @@ from aitune.torch.distributed import (
     resolve_tuning_device,
 )
 from aitune.torch.jit.config import JITMode, config
+from aitune.torch.jit.dynamo import release_dynamo_recompile_capacity, reserve_dynamo_recompile_capacity
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule
@@ -108,6 +109,8 @@ class PatchedModule:
         self.__wrapped__ = module
         self._explicit_head = explicit_head
         self._session_mode = config.mode
+        self._observed_route_count = 1
+        self._pending_dynamo_runtime_routes: set[SampleMetadata] = set()
         self._class_before_device_patch: type[torch.nn.Module] | None = None
         self._patched_device_class: type[torch.nn.Module] | None = None
         # proxy forward, hooks
@@ -139,6 +142,12 @@ class PatchedModule:
         """Whether this module was registered as an exact JIT target."""
         return self._explicit_head
 
+    def _observed_route_count_value(self) -> int:
+        """Return a monotonic count of graph routes observed for this module."""
+        graph_specs = getattr(getattr(self, "_wrapper", None), "graph_specs", ())
+        self._observed_route_count = max(self._observed_route_count, len(graph_specs))
+        return self._observed_route_count
+
     @property
     def fq_name(self) -> str:
         """Get the fully qualified name of the module.
@@ -157,6 +166,30 @@ class PatchedModule:
         """
         if self._should_be_tuned():
             self.tune()
+
+    def _reserve_dynamo_tuning_capacity(self, strategy: TuneStrategy) -> None:
+        """Reserve Dynamo capacity for explicit same-frame compilation routes."""
+        if not self._explicit_head or config.dry_run:
+            return
+
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        reserve_dynamo_recompile_capacity(
+            self._id,
+            Patcher.explicit_route_count(),
+            strategy,
+            detect_graph_breaks=config.detect_graph_breaks,
+        )
+
+    def _release_dynamo_tuning_capacity(self) -> None:
+        """Release this explicit target's Dynamo reservation, if any."""
+        if self._explicit_head:
+            release_dynamo_recompile_capacity(self._id)
+
+    def _release_dynamo_tuning_capacity_if_complete(self) -> None:
+        """Release capacity when no selected JIT route still needs a first call."""
+        if not self._pending_dynamo_runtime_routes:
+            self._release_dynamo_tuning_capacity()
 
     @annotate(name="tune", color="yellow")
     def tune(
@@ -183,6 +216,7 @@ class PatchedModule:
             recording = cast(RecordingModule, current._wrapper)
             backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
             try:
+                current._reserve_dynamo_tuning_capacity(strategy)
                 with coordinator.raise_if_any_rank_fails(f"JIT tuning for {current.fq_name}"):
                     strategy = _build_strategy(current.__wrapped__)
                     with report_module_tune(
@@ -209,6 +243,11 @@ class PatchedModule:
                                 module_name=current.fq_name,
                                 forward_signature=recording.forward_signature,
                             )
+                            current._pending_dynamo_runtime_routes = {
+                                route
+                                for route, backend in backends.items()
+                                if backend.build_mode is BuildMode.JUST_IN_TIME
+                            }
                             current._extra_state_info = ", ".join([backend.name for backend in backends.values()])
                         else:
                             current._wrapper = PassthroughModule(current.__wrapped__, device=device)
@@ -223,7 +262,9 @@ class PatchedModule:
                         offload_after_tuning(
                             current.__wrapped__, backends.values(), device=global_config.device_after_tuning
                         )
+                        current._release_dynamo_tuning_capacity_if_complete()
             except Exception as error:
+                current._release_dynamo_tuning_capacity()
                 current._log_tuning_exception(error)
                 # Out-of-space errors must halt the process — the cache disk is full
                 # and silently falling back to eager would mask the real cause.
@@ -473,9 +514,18 @@ class PatchedModule:
         """Forward call for the tuned state."""
         try:
             self._restore_original_forward()
-            return self._wrapper(*args, **kwargs)
+            route = self._wrapper.route_for_inputs(args, kwargs) if isinstance(self._wrapper, TunedModule) else None
+            result = self._wrapper(*args, **kwargs)
+            self._mark_dynamo_runtime_route_complete(route)
+            return result
         finally:
             self._proxy_forward()
+
+    def _mark_dynamo_runtime_route_complete(self, route: SampleMetadata | None) -> None:
+        """Release capacity after every selected JIT route runs successfully."""
+        if route is not None:
+            self._pending_dynamo_runtime_routes.discard(route)
+        self._release_dynamo_tuning_capacity_if_complete()
 
     def _create_graph_cache_dir(self, graph_spec_name: str) -> Path:
         """Create a cache directory for the graph."""

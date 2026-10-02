@@ -12,6 +12,7 @@ import torch
 
 from aitune.torch.config import AITuneMode
 from aitune.torch.jit.config import JITMode, config
+from aitune.torch.jit.dynamo import restore_dynamo_recompile_capacity
 from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import ModuleState as PatchedModuleState
 from aitune.torch.jit.patched_module import PatchedModule
@@ -56,6 +57,7 @@ class Patcher:
     _torch_patched: bool = False
     _exit_handler: Callable | None = None
     _session_mode: JITMode | None = None
+    _explicit_route_counts: dict[int, int] = {}
 
     @classmethod
     def _ensure_session(cls) -> None:
@@ -85,6 +87,8 @@ class Patcher:
         else:
             patched_module = PatchedModule(module, explicit_head=explicit_head)
         cls._patched_modules.append(patched_module)
+        if isinstance(patched_module, PatchedModule) and patched_module.explicit_head:
+            cls._explicit_route_counts[patched_module._id] = patched_module._observed_route_count_value()
         return patched_module
 
     @classmethod
@@ -175,6 +179,7 @@ class Patcher:
         """Undo wrappers created by an explicit-registration transaction."""
         for wrapper in reversed(wrappers):
             wrapper._unpatch()
+            cls._explicit_route_counts.pop(wrapper._id, None)
 
     @classmethod
     def _rollback_explicit_registration_session(
@@ -242,6 +247,15 @@ class Patcher:
                 f"{cls._module_label(module)} and {cls._module_label(existing_module)}"
             )
         return reusable
+
+    @classmethod
+    def explicit_route_count(cls) -> int:
+        """Return a monotonic session count of explicit module/graph compilation routes."""
+        for module in cls._patched_modules:
+            if not isinstance(module, PatchedModule) or not module.explicit_head:
+                continue
+            cls._explicit_route_counts[module._id] = module._observed_route_count_value()
+        return sum(cls._explicit_route_counts.values())
 
     @staticmethod
     def _module_tree_ids(module: torch.nn.Module) -> set[int]:
@@ -407,11 +421,13 @@ def jit_reset() -> None:
     finally:
         try:
             Patcher.unpatch_torch(unpatch_modules=True)
-        finally:
             if Patcher._exit_handler is not None:
                 atexit.unregister(Patcher._exit_handler)
             Patcher._exit_handler = None
             Patcher._session_mode = None
             Patcher._original_module_init = None
+            Patcher._explicit_route_counts.clear()
             PatchedModule.reset()
             InspectModule.reset()
+        finally:
+            restore_dynamo_recompile_capacity()

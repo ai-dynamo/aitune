@@ -77,6 +77,13 @@ class TunedModule:
             output = self._backend_func(sample)
         return output
 
+    def route_for_inputs(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> SampleMetadata:
+        """Resolve the recorded backend route selected by inference inputs."""
+        if not self._check_graph and len(self._backends) == 1:
+            return next(iter(self._backends))
+        forward_inputs = self._forward_signature.normalize(args, kwargs)
+        return SampleMetadata.from_inputs(forward_inputs.arguments, strict=self._config.strict_mode)
+
     @property
     def device(self) -> torch.device:
         """Get the device of the module.
