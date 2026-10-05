@@ -360,6 +360,8 @@ class Patcher:
             module: The module to unpatch.
         """
         if module in cls._patched_modules:
+            if isinstance(module, PatchedModule) and module.explicit_head:
+                cls._explicit_route_counts[module._id] = module._observed_route_count_value()
             cls._patched_modules.remove(module)
 
     @classmethod

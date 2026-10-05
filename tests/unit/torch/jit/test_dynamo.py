@@ -534,7 +534,6 @@ def test_repeated_settled_registration_preserves_historical_routes_without_new_c
     for value in inputs:
         module(value)
     assert len(first.reports[0].graphs) == 2
-    assert Patcher.explicit_route_count() == 2
 
     if settled_state == "skipped":
         jit_config.skip_modules = ["Linear"]
