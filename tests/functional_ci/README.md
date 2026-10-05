@@ -1,8 +1,7 @@
-<!--
+---
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
--->
-
+---
 # Functional CI
 
 This suite runs deterministic local model cases on the required GPU runner.
