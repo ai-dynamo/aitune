@@ -59,6 +59,23 @@ class Patcher:
     _session_mode: JITMode | None = None
     _session_report: TuneRunReport | None = None
     _cleanup_pending: bool = False
+    _explicit_registrations: dict[int, PatchedModule] = {}
+
+    @staticmethod
+    def _on_python_exit() -> None:
+        """Dispatch exit diagnostics using the active or configured JIT mode."""
+        mode = Patcher._session_mode if Patcher._session_mode is not None else config.mode
+        if mode == JITMode.INSPECT:
+            InspectModule.on_python_exit()
+        else:
+            PatchedModule.on_python_exit()
+
+    @classmethod
+    def _ensure_exit_handler(cls) -> None:
+        """Register exit diagnostics without binding a tuning session."""
+        if cls._exit_handler is None:
+            cls._exit_handler = cls._on_python_exit
+            atexit.register(cls._exit_handler)
 
     @classmethod
     def _ensure_session(cls) -> None:
@@ -67,11 +84,7 @@ class Patcher:
         cls._raise_if_session_mode_changed()
 
         cls._session_mode = config.mode
-        if cls._exit_handler is None:
-            cls._exit_handler = (
-                InspectModule.on_python_exit if config.mode == JITMode.INSPECT else PatchedModule.on_python_exit
-            )
-            atexit.register(cls._exit_handler)
+        cls._ensure_exit_handler()
 
         if config.mode != JITMode.INSPECT and not has_active_report():
             cls._session_report = report_tune_run_start(AITuneMode.JIT)
@@ -111,11 +124,14 @@ class Patcher:
     def patch_torch(cls):
         """Patch torch.nn.Module to track execution."""
         cls._raise_if_cleanup_pending()
-        if any(isinstance(module, PatchedModule) and module.explicit_head for module in cls._patched_modules):
+        if cls._explicit_registrations or any(
+            isinstance(module, PatchedModule) and module.explicit_head for module in cls._patched_modules
+        ):
             raise RuntimeError(
                 "Global JIT constructor interception cannot run while explicit JIT registrations are active"
             )
-        cls._ensure_session()
+        cls._raise_if_session_mode_changed()
+        cls._ensure_exit_handler()
         if cls._torch_patched:
             return
 
@@ -123,9 +139,9 @@ class Patcher:
             cls._original_module_init = torch.nn.Module.__init__
 
         def _patched_init(module, *args, **kwargs):
-            cls._raise_if_session_mode_changed()
             cls._original_module_init(module, *args, **kwargs)
             if cls._is_allowed_to_tune(module):
+                cls._ensure_session()
                 cls._intercepted_classes.add(module.__class__)
                 cls._register_module(module)
 
@@ -156,7 +172,9 @@ class Patcher:
                 resolved[index] = wrapper
 
             assert all(wrapper is not None for wrapper in resolved)
-            return tuple(wrapper for wrapper in resolved if wrapper is not None)
+            registrations = tuple(wrapper for wrapper in resolved if wrapper is not None)
+            cls._explicit_registrations.update({id(wrapper.__wrapped__): wrapper for wrapper in registrations})
+            return registrations
         except Exception as error:
             try:
                 cls._rollback_explicit_registrations(newly_registered)
@@ -266,9 +284,11 @@ class Patcher:
         module: torch.nn.Module,
         tree: set[int],
     ) -> PatchedModule | None:
-        """Return an identical registration or reject overlap with existing wrappers."""
+        """Reuse registrations retained until reset, rejecting overlapping ownership."""
         reusable: PatchedModule | None = None
-        for existing in cls._patched_modules:
+        existing_registrations = {id(existing): existing for existing in cls._patched_modules}
+        existing_registrations.update({id(existing): existing for existing in cls._explicit_registrations.values()})
+        for existing in existing_registrations.values():
             existing_module = existing.__wrapped__
             if not tree & cls._module_tree_ids(existing_module):
                 continue
@@ -445,6 +465,9 @@ def jit_reset() -> None:
         Patcher._end_session_report()
     finally:
         Patcher.unpatch_torch(unpatch_modules=True)
+        for registration in Patcher._explicit_registrations.values():
+            registration._update_state(PatchedModuleState.DETACHED)
+        Patcher._explicit_registrations.clear()
         if Patcher._exit_handler is not None:
             atexit.unregister(Patcher._exit_handler)
         Patcher._exit_handler = None
