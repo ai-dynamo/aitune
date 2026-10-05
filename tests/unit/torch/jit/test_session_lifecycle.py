@@ -55,6 +55,47 @@ def test_reset_preserves_borrowed_report_and_subsequent_spans():
     assert not has_active_report()
 
 
+def test_automatic_activation_preserves_borrowed_report_when_first_module_binds_mode():
+    report = report_tune_run_start(AITuneMode.DECLARATIVE)
+    Patcher.patch_torch()
+    assert Patcher._session_mode is None
+    assert Patcher._session_report is None
+
+    jit_config.mode = JITMode.TUNE_EAGER
+    torch.nn.Linear(2, 2)
+    assert Patcher._session_mode is JITMode.TUNE_EAGER
+    assert Patcher._session_report is None
+
+    jit_reset()
+
+    assert has_active_report()
+    assert report.duration_s is None
+    with report_module_tune("after automatic reset", 1):
+        pass
+    assert report.modules[-1].module_name == "after automatic reset"
+    report_tune_run_end(expected_report=report)
+
+
+def test_automatic_session_owns_one_report_started_at_first_eligible_module(mocker):
+    start_report = mocker.spy(import_module("aitune.torch.jit.patcher"), "report_tune_run_start")
+    Patcher.patch_torch()
+    torch.nn.ModuleList()
+    start_report.assert_not_called()
+
+    torch.nn.Linear(2, 2)
+    report = Patcher._session_report
+    assert report is not None
+    torch.nn.Linear(2, 2)
+    start_report.assert_called_once_with(AITuneMode.JIT)
+    assert Patcher._session_report is report
+
+    jit_reset()
+
+    assert report.duration_s is not None
+    assert Patcher._session_report is None
+    assert not has_active_report()
+
+
 @pytest.mark.parametrize("finalizer", ["reset", "exit"])
 def test_session_finalizers_preserve_replacement_report(finalizer):
     register_for_jit_tuning([torch.nn.Linear(2, 2)])
@@ -154,6 +195,7 @@ def test_partial_reset_blocks_registration_until_cleanup_retry_succeeds():
     failing = _RejectForwardRestore(2, 2)
     registration = register_for_jit_tuning([good, failing])
     wrappers = list(Patcher._patched_modules)
+    history = dict(Patcher._explicit_registrations)
     counter = PatchedModule.module_counter
     failing.reject_restore = True
     try:
@@ -161,6 +203,7 @@ def test_partial_reset_blocks_registration_until_cleanup_retry_succeeds():
             jit_reset()
 
         assert Patcher._patched_modules == [wrappers[1]]
+        assert Patcher._explicit_registrations == history
         assert Patcher._cleanup_pending
         assert Patcher._session_mode == JITMode.TUNE_DEFERRED
         assert PatchedModule.module_counter == counter
@@ -175,11 +218,49 @@ def test_partial_reset_blocks_registration_until_cleanup_retry_succeeds():
         jit_reset()
 
     assert Patcher._patched_modules == []
+    assert Patcher._explicit_registrations == {}
     assert not Patcher._cleanup_pending
     assert Patcher._session_mode is None
     assert PatchedModule.module_counter == 0
     fresh = register_for_jit_tuning([failing])
     assert fresh.state_counts == {"init": 1}
+
+
+def test_skipped_module_restoration_failure_blocks_registration_until_reset_succeeds():
+    failing = _RejectForwardRestore(2, 2)
+    jit_config.min_parameters = 100
+    registration = register_for_jit_tuning([failing])
+    wrapper = Patcher._patched_modules[0]
+    module_id = registration.reports[0].module_id
+    history = dict(Patcher._explicit_registrations)
+    counter = PatchedModule.module_counter
+    failing.reject_restore = True
+    try:
+        with pytest.raises(RuntimeError, match="forward restoration rejected"):
+            failing(torch.ones(1, 2))
+
+        assert registration.state_counts == {"skipped": 1}
+        assert registration.reports[0].module_id == module_id
+        assert Patcher._patched_modules == [wrapper]
+        assert Patcher._explicit_registrations == history
+        assert Patcher._cleanup_pending
+        assert PatchedModule.module_counter == counter
+        with pytest.raises(RuntimeError, match="cleanup is incomplete"):
+            register_for_jit_tuning([failing])
+        with pytest.raises(RuntimeError, match="cleanup is incomplete"):
+            Patcher.patch_torch()
+    finally:
+        failing.reject_restore = False
+        jit_reset()
+
+    assert registration.state_counts == {"detached": 1}
+    assert Patcher._patched_modules == []
+    assert Patcher._explicit_registrations == {}
+    assert not Patcher._cleanup_pending
+    assert PatchedModule.module_counter == 0
+    fresh = register_for_jit_tuning([failing])
+    assert fresh.state_counts == {"init": 1}
+    assert fresh._patched_modules[0] is not wrapper
 
 
 def test_failed_rollback_preserves_cleanup_retry_and_registration_error(mocker):
@@ -203,6 +284,7 @@ def test_failed_rollback_preserves_cleanup_retry_and_registration_error(mocker):
         assert len(Patcher._patched_modules) == 1
         assert Patcher._patched_modules[0].__wrapped__ is failing
         assert Patcher._patched_modules[0]._state == ModuleState.DETACHED
+        assert Patcher._explicit_registrations == {}
         assert good.forward.__func__ is torch.nn.Linear.forward
         assert Patcher._cleanup_pending
         assert Patcher._session_mode == JITMode.TUNE_DEFERRED

@@ -537,6 +537,8 @@ class PatchedModule:
         """Forward call for the tuned state."""
         try:
             self._restore_original_forward()
+            if not self._pending_dynamo_runtime_routes:
+                return self._wrapper(*args, **kwargs)
             route = self._wrapper.route_for_inputs(args, kwargs) if isinstance(self._wrapper, TunedModule) else None
             result = self._wrapper(*args, **kwargs)
             self._mark_dynamo_runtime_route_complete(route)
@@ -785,20 +787,24 @@ class PatchedModule:
         """Unpatch the module.
 
         Cached forward references become pass-through calls immediately. Failed restoration
-        leaves the wrapper in the registry so cleanup can be retried.
+        leaves the wrapper in the registry and blocks new registrations until cleanup succeeds.
         """
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
         self._unpatched = True
         self._allowed_to_tune = False
         try:
-            self._restore_original_forward()
-            self._restore_device_attribute()
-        finally:
-            self.__wrapped__._forward_hooks = self._current_forward_hooks
-            self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
-        if self._device_management == "external":
-            unregister_externally_managed_module(self.__wrapped__)
-
-        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+            try:
+                self._restore_original_forward()
+                self._restore_device_attribute()
+            finally:
+                self.__wrapped__._forward_hooks = self._current_forward_hooks
+                self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
+            if self._device_management == "external":
+                unregister_externally_managed_module(self.__wrapped__)
+        except Exception:
+            Patcher._cleanup_pending = True
+            raise
 
         Patcher.unpatch_module(self)
 
@@ -924,4 +930,5 @@ def _build_strategy(module: torch.nn.Module) -> TuneStrategy:
     if isinstance(strategy, FindMaxBatchSizeMixin):
         strategy.enable_find_max_batch_size(False)
 
+    strategy._configure_for_module(module)
     return strategy
