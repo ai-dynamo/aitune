@@ -18,7 +18,7 @@ _LIMIT_NAMES = (
 
 
 def _backend_candidate_count(strategy: TuneStrategy) -> int:
-    """Return the number of backend builds a strategy may attempt for one graph."""
+    """Count backend candidates from a strategy already configured for its module."""
     strategy_config: dict[str, Any] = strategy.to_json_dict()
     backends = strategy_config.get("backends")
     if isinstance(backends, list):
@@ -81,6 +81,7 @@ class _SessionDynamoRecompileCapacity:
             self._restore_locked()
 
     def _restore_locked(self) -> None:
+        """Restore limits still owned by this session, then clear its reservations."""
         if self._config is not None:
             for name, assigned_limit in self._assigned_limits.items():
                 if getattr(self._config, name, None) == assigned_limit:

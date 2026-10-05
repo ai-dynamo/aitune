@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for session Dynamo capacity used by explicitly registered JIT targets."""
 
+from collections import OrderedDict
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -9,6 +10,7 @@ import pytest
 import torch
 
 from aitune.torch import register_for_jit_tuning
+from aitune.torch.backend.backend import BuildMode
 from aitune.torch.jit import dynamo
 from aitune.torch.jit import patched_module as patched_module_module
 from aitune.torch.jit import patcher as patcher_module
@@ -16,6 +18,11 @@ from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.patcher import Patcher, jit_reset
+from aitune.torch.module.forward_signature import ForwardSignature
+from aitune.torch.module.passthrough_module import PassthroughModule
+from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.tuned_module import TunedModule
+from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
 
 _LIMIT_NAMES = (
     "cache_size_limit",
@@ -54,6 +61,17 @@ def _strategy(num_backends: int) -> Mock:
     strategy = Mock()
     strategy.to_json_dict.return_value = {"backends": [{} for _ in range(num_backends)]}
     return strategy
+
+
+def _tuned_wrapper(patched, inputs, *, build_mode=BuildMode.JUST_IN_TIME):
+    signature = ForwardSignature.from_callable(patched._original_forward)
+    backends = OrderedDict()
+    for value in inputs:
+        route = SampleMetadata.from_inputs(signature.normalize((value,), {}).arguments)
+        backend = Mock(build_mode=build_mode)
+        backend.infer.side_effect = lambda tensor: tensor + 1
+        backends[route] = backend
+    return TunedModule(backends, module_name="test", forward_signature=signature)
 
 
 def test_capacity_reserves_build_and_runtime_routes_until_reset(monkeypatch):
@@ -110,44 +128,142 @@ def test_capacity_restores_after_every_active_target_releases(monkeypatch):
 def test_first_successful_tuned_inference_releases_target_capacity(monkeypatch):
     module = torch.nn.Linear(2, 2)
     patched = PatchedModule(module, explicit_head=True)
-    expected = torch.ones(1, 2)
-    patched._wrapper = Mock(return_value=expected)
+    value = torch.zeros(1, 2)
+    patched._wrapper = _tuned_wrapper(patched, [value])
+    patched._pending_dynamo_runtime_routes = set(patched._wrapper.backends)
     patched._update_state(patched_module_module.ModuleState.TUNED)
     release = Mock()
     monkeypatch.setattr(patched_module_module, "release_dynamo_recompile_capacity", release)
+    route_for_inputs = Mock(wraps=patched._wrapper.route_for_inputs)
+    monkeypatch.setattr(patched._wrapper, "route_for_inputs", route_for_inputs)
 
-    assert module(torch.zeros(1, 2)) is expected
+    torch.testing.assert_close(module(value), value + 1)
+    torch.testing.assert_close(module(value), value + 1)
+    torch.testing.assert_close(module(value), value + 1)
 
     release.assert_called_once_with(patched._id)
+    route_for_inputs.assert_called_once()
+    assert not patched._pending_dynamo_runtime_routes
 
 
-def test_capacity_is_held_until_every_recorded_jit_route_runs(monkeypatch):
-    patched = PatchedModule(torch.nn.Linear(2, 2), explicit_head=True)
-    first_route = Mock()
-    second_route = Mock()
-    patched._pending_dynamo_runtime_routes = {first_route, second_route}
-    release = Mock()
-    monkeypatch.setattr(patched_module_module, "release_dynamo_recompile_capacity", release)
-
-    patched._mark_dynamo_runtime_route_complete(first_route)
-    release.assert_not_called()
-
-    patched._mark_dynamo_runtime_route_complete(second_route)
-    release.assert_called_once_with(patched._id)
-
-
-def test_failed_selected_inference_keeps_target_capacity_for_retry(monkeypatch):
+def test_capacity_is_held_until_every_recorded_jit_route_succeeds_after_retry(monkeypatch):
+    config = _DynamoConfig(**dict.fromkeys(_LIMIT_NAMES, 1))
+    monkeypatch.setattr(dynamo, "dynamo_config", config)
     module = torch.nn.Linear(2, 2)
     patched = PatchedModule(module, explicit_head=True)
-    patched._wrapper = Mock(side_effect=RuntimeError("lazy compile failed"))
+    first_value, second_value = torch.zeros(1, 2), torch.zeros(2)
+    patched._wrapper = _tuned_wrapper(patched, [first_value, second_value])
+    first_route, second_route = patched._wrapper.backends
+    patched._pending_dynamo_runtime_routes = {first_route, second_route}
+    patched._update_state(patched_module_module.ModuleState.TUNED)
+    dynamo.reserve_dynamo_recompile_capacity(patched._id, route_count=2, strategy=_strategy(num_backends=1))
+    release = Mock(wraps=dynamo.release_dynamo_recompile_capacity)
+    monkeypatch.setattr(patched_module_module, "release_dynamo_recompile_capacity", release)
+
+    torch.testing.assert_close(module(first_value), first_value + 1)
+    assert patched._pending_dynamo_runtime_routes == {second_route}
+    release.assert_not_called()
+    assert all(getattr(config, name) == 4 for name in _LIMIT_NAMES)
+
+    backend = patched._wrapper.backends[second_route]
+    backend.infer.side_effect = RuntimeError("lazy compile failed")
+    with pytest.raises(RuntimeError, match="lazy compile failed"):
+        module(second_value)
+    assert module.forward is not patched._original_forward
+    assert patched._pending_dynamo_runtime_routes == {second_route}
+    release.assert_not_called()
+    assert all(getattr(config, name) == 4 for name in _LIMIT_NAMES)
+
+    backend.infer.side_effect = lambda tensor: tensor + 1
+    torch.testing.assert_close(module(second_value), second_value + 1)
+    assert not patched._pending_dynamo_runtime_routes
+    release.assert_called_once_with(patched._id)
+    assert all(getattr(config, name) == 1 for name in _LIMIT_NAMES)
+
+    torch.testing.assert_close(module(first_value), first_value + 1)
+    torch.testing.assert_close(module(second_value), second_value + 1)
+    release.assert_called_once_with(patched._id)
+
+
+@pytest.mark.parametrize("explicit_head", [True, False])
+@pytest.mark.parametrize("build_mode", [BuildMode.JUST_IN_TIME, BuildMode.AHEAD_OF_TIME])
+def test_steady_state_tuned_inference_skips_capacity_bookkeeping(monkeypatch, explicit_head, build_mode):
+    module = torch.nn.Linear(2, 2)
+    patched = PatchedModule(module, explicit_head=explicit_head)
+    value = torch.zeros(1, 2)
+    patched._wrapper = _tuned_wrapper(patched, [value], build_mode=build_mode)
     patched._update_state(patched_module_module.ModuleState.TUNED)
     release = Mock()
     monkeypatch.setattr(patched_module_module, "release_dynamo_recompile_capacity", release)
+    route_for_inputs = Mock(side_effect=AssertionError("steady-state route lookup"))
+    monkeypatch.setattr(patched._wrapper, "route_for_inputs", route_for_inputs)
 
-    with pytest.raises(RuntimeError, match="lazy compile failed"):
-        module(torch.zeros(1, 2))
+    torch.testing.assert_close(module(value), value + 1)
+    torch.testing.assert_close(module(value), value + 1)
 
+    backend = next(iter(patched._wrapper.backends.values()))
+    backend.infer.side_effect = RuntimeError("inference failed")
+    with pytest.raises(RuntimeError, match="inference failed"):
+        module(value)
+    assert module.forward is not patched._original_forward
+    backend.infer.side_effect = lambda tensor: tensor + 1
+    torch.testing.assert_close(module(value), value + 1)
+
+    route_for_inputs.assert_not_called()
     release.assert_not_called()
+
+
+@pytest.mark.parametrize("explicit_head", [True, False])
+def test_passthrough_inference_skips_capacity_bookkeeping(monkeypatch, explicit_head):
+    module = torch.nn.Linear(2, 2)
+    value = torch.ones(1, 2)
+    expected = module(value)
+    patched = PatchedModule(module, explicit_head=explicit_head)
+    patched._wrapper = PassthroughModule(module, device=torch.device("cpu"))
+    patched._update_state(patched_module_module.ModuleState.TUNED)
+    release = Mock()
+    monkeypatch.setattr(patched_module_module, "release_dynamo_recompile_capacity", release)
+    mark_complete = Mock()
+    monkeypatch.setattr(patched, "_mark_dynamo_runtime_route_complete", mark_complete)
+
+    torch.testing.assert_close(module(value), expected)
+    torch.testing.assert_close(module(value), expected)
+
+    mark_complete.assert_not_called()
+    release.assert_not_called()
+
+
+def test_capacity_uses_custom_strategy_prepared_for_current_module(monkeypatch):
+    class ModuleDependentStrategy(DummyTuneStrategy):
+        def __init__(self):
+            super().__init__()
+            self._backends = []
+
+        def _configure_for_module(self, module):
+            self._backends = [f"candidate-{index}" for index in range(module.candidate_count)]
+
+        def to_json_dict(self):
+            return {"backends": list(self._backends)}
+
+    prior_module = _SharedFrameModule(1)
+    prior_module.candidate_count = 2
+    original_strategy = ModuleDependentStrategy()
+    original_strategy._configure_for_module(prior_module)
+    jit_config.strategy = original_strategy
+    current_module = _SharedFrameModule(2)
+    current_module.candidate_count = 4
+    patched = PatchedModule(current_module, explicit_head=True)
+    Patcher._patched_modules.append(patched)
+    config = _DynamoConfig(**dict.fromkeys(_LIMIT_NAMES, 1))
+    monkeypatch.setattr(dynamo, "dynamo_config", config)
+
+    prepared_strategy = patched_module_module._build_strategy(current_module)
+    patched._reserve_dynamo_tuning_capacity(prepared_strategy)
+
+    assert prepared_strategy is not original_strategy
+    assert len(prepared_strategy.to_json_dict()["backends"]) == 4
+    assert len(original_strategy.to_json_dict()["backends"]) == 2
+    assert all(getattr(config, name) == 5 for name in _LIMIT_NAMES)
 
 
 def test_capacity_preserves_external_limit_updates_across_later_reservations(monkeypatch):
@@ -391,3 +507,54 @@ def test_old_cached_forward_does_not_release_new_session_capacity(monkeypatch):
     assert registration.state_counts == {"init": 1}
     assert registration.reports[0].call_count == 0
     assert Patcher._patched_modules == [new_wrapper]
+
+
+@pytest.mark.parametrize("settled_state", ["skipped", "eager"])
+def test_repeated_settled_registration_preserves_historical_routes_without_new_capacity(
+    tmp_path, monkeypatch, settled_state
+):
+    class FailingStrategy(DummyTuneStrategy):
+        def _tune(self, *args):
+            raise RuntimeError("no backend can tune this target")
+
+    jit_config.mode = JITMode.TUNE_DEFERRED
+    jit_config.device = torch.device("cpu")
+    jit_config.batch_axis_required = False
+    jit_config.min_parameters = -1
+    jit_config.cache_dir = tmp_path / "jit-cache"
+    jit_config.strategy = FailingStrategy()
+    module = torch.nn.Linear(2, 2)
+    inputs = (torch.ones(1, 2), torch.ones(2))
+    first = register_for_jit_tuning([module])
+    module_id = first.reports[0].module_id
+    module_counter = PatchedModule.module_counter
+    reserve = Mock(wraps=dynamo.reserve_dynamo_recompile_capacity)
+    monkeypatch.setattr(patched_module_module, "reserve_dynamo_recompile_capacity", reserve)
+
+    for value in inputs:
+        module(value)
+    assert len(first.reports[0].graphs) == 2
+    assert Patcher.explicit_route_count() == 2
+
+    if settled_state == "skipped":
+        jit_config.skip_modules = ["Linear"]
+    else:
+        Patcher.enable_tune_deferred()
+    module(inputs[0])
+    assert first.state_counts == {settled_state: 1}
+    assert Patcher._patched_modules == []
+    assert Patcher.explicit_route_count() == 2
+    reservations_before_reuse = reserve.call_count
+
+    for _ in range(3):
+        repeated = register_for_jit_tuning([module])
+        assert repeated.state_counts == {settled_state: 1}
+        assert repeated.reports[0].module_id == module_id
+        assert PatchedModule.module_counter == module_counter
+        assert Patcher.explicit_route_count() == 2
+        assert Patcher._patched_modules == []
+        for value in inputs:
+            module(value)
+        assert reserve.call_count == reservations_before_reuse
+
+    assert first.state_counts == {settled_state: 1}

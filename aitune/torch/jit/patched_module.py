@@ -515,6 +515,8 @@ class PatchedModule:
         """Forward call for the tuned state."""
         try:
             self._restore_original_forward()
+            if not self._pending_dynamo_runtime_routes:
+                return self._wrapper(*args, **kwargs)
             route = self._wrapper.route_for_inputs(args, kwargs) if isinstance(self._wrapper, TunedModule) else None
             result = self._wrapper(*args, **kwargs)
             self._mark_dynamo_runtime_route_complete(route)
@@ -900,4 +902,5 @@ def _build_strategy(module: torch.nn.Module) -> TuneStrategy:
     if isinstance(strategy, FindMaxBatchSizeMixin):
         strategy.enable_find_max_batch_size(False)
 
+    strategy._configure_for_module(module)
     return strategy
