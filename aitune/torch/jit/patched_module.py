@@ -713,18 +713,22 @@ class PatchedModule:
         """Unpatch the module.
 
         Cached forward references become pass-through calls immediately. Failed restoration
-        leaves the wrapper in the registry so cleanup can be retried.
+        leaves the wrapper in the registry and blocks new registrations until cleanup succeeds.
         """
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
         self._unpatched = True
         self._allowed_to_tune = False
         try:
-            self._restore_original_forward()
-            self._restore_device_attribute()
-        finally:
-            self.__wrapped__._forward_hooks = self._current_forward_hooks
-            self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
-
-        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+            try:
+                self._restore_original_forward()
+                self._restore_device_attribute()
+            finally:
+                self.__wrapped__._forward_hooks = self._current_forward_hooks
+                self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
+        except Exception:
+            Patcher._cleanup_pending = True
+            raise
 
         Patcher.unpatch_module(self)
 
