@@ -5,6 +5,7 @@
 from copy import deepcopy
 from unittest.mock import Mock
 
+import pytest
 import torch
 
 from aitune.torch import register_for_jit_tuning
@@ -166,6 +167,66 @@ def test_external_policy_preserves_placement_during_tuning_failure(tmp_path):
     assert module.__class__ is original_class
     assert not is_externally_managed_module(module)
     module.to.assert_not_called()
+
+
+@pytest.mark.parametrize("terminal_state", ["skipped", "eager"])
+def test_settled_external_registration_reuses_policy_without_restoring_placement_markers(tmp_path, terminal_state):
+    strategy = _strategy()
+    _configure_dry_run(tmp_path, strategy)
+    if terminal_state == "skipped":
+        jit_config.min_parameters = 100
+    else:
+        strategy.tune_dry_run.side_effect = RuntimeError("build failed")
+    target = _ModuleTree()
+    target.to = Mock(return_value=target)
+    target.child.to = Mock(return_value=target.child)
+    first = register_for_jit_tuning([target], device_management="external")
+    wrapper = Patcher._patched_modules[0]
+    inputs = torch.ones(1, 2)
+    assert is_externally_managed_module(target)
+    assert is_externally_managed_module(target.child)
+
+    target(inputs)
+    if terminal_state == "eager":
+        Patcher.enable_tune_deferred()
+        target(inputs)
+    assert first.state_counts == {terminal_state: 1}
+    assert not is_externally_managed_module(target)
+    assert not is_externally_managed_module(target.child)
+    original_forward = target.forward
+
+    repeated = register_for_jit_tuning([target], device_management="external")
+    target(inputs)
+
+    assert repeated._patched_modules == (wrapper,)
+    assert repeated.state_counts == {terminal_state: 1}
+    assert not is_externally_managed_module(target)
+    assert not is_externally_managed_module(target.child)
+    assert target.forward is original_forward
+    if terminal_state == "eager":
+        strategy.tune_dry_run.assert_called_once()
+    else:
+        strategy.tune_dry_run.assert_not_called()
+
+    with pytest.raises(ValueError, match="device_management='external'"):
+        register_for_jit_tuning([target], device_management="aitune")
+
+    assert first.state_counts == {terminal_state: 1}
+    assert target.forward is original_forward
+    assert not is_externally_managed_module(target)
+    assert not is_externally_managed_module(target.child)
+
+    jit_reset()
+    fresh = register_for_jit_tuning([target], device_management="aitune")
+
+    assert first.state_counts == {"detached": 1}
+    assert fresh.state_counts == {"init": 1}
+    assert fresh._patched_modules[0] is not wrapper
+    assert fresh._patched_modules[0].device_management == "aitune"
+    assert not is_externally_managed_module(target)
+    assert not is_externally_managed_module(target.child)
+    target.to.assert_not_called()
+    target.child.to.assert_not_called()
 
 
 def test_jit_reset_removes_external_placement_registration(tmp_path):
