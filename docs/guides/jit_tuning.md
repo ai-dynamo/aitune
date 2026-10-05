@@ -51,6 +51,10 @@ pipe.to("cuda")
 images = pipe("A beautiful landscape")
 ```
 
+Activation installs constructor interception; the session binds to `jit_config.mode` when the first eligible module is
+constructed. You can configure deferred or inspection mode after activation and before constructing the model.
+Once a module is registered, call `jit_reset()` before changing modes.
+
 ### Using Annotation (Decorator)
 
 For fine-grained control, you can use the `@patch_for_jit_tuning` decorator on specific functions:
@@ -107,7 +111,10 @@ registration = register_for_jit_tuning([model])
 Explicit registration does not patch `torch.nn.Module.__init__`, does not affect modules created later, and does not
 require `import aitune.torch.jit.enable`. Every registered module is an independent top-level tuning target. Owned
 children are compiled as part of that target, so selected roots must have disjoint ownership trees. Re-registering the
-same instance is idempotent, and repeated instances in one call are deduplicated by identity.
+same instance is idempotent, and repeated instances in one call are deduplicated by identity. AITune retains each
+registration until `jit_reset()`, including targets that were skipped or fell back to eager execution. Re-registering
+those targets preserves their state and does not retry tuning; their ownership trees remain reserved for that
+registration generation. Reset before retrying a target with changed settings.
 
 Do not import `aitune.torch.jit.enable` or set `AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning` in a process using explicit
 registration. Automatic constructor interception and explicit registration cannot overlap in one live JIT session.

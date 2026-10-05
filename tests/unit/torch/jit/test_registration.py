@@ -61,6 +61,29 @@ def _strategy() -> Mock:
     return strategy
 
 
+def _settled_registration(tmp_path, state, module=None):
+    strategy = None
+    if state is ModuleState.EAGER:
+        strategy = _strategy()
+        strategy.tune_dry_run.side_effect = RuntimeError("forced tuning failure")
+        _configure_dry_run(tmp_path, strategy)
+    else:
+        _configure_deferred(tmp_path)
+        jit_config.min_parameters = 100
+    if module is None:
+        module = torch.nn.Linear(2, 2)
+    registration = register_for_jit_tuning([module])
+    wrapper = Patcher._patched_modules[0]
+    module(torch.ones(1, 2))
+    if state is ModuleState.EAGER:
+        Patcher.enable_tune_deferred()
+        module(torch.ones(1, 2))
+        strategy.tune_dry_run.assert_called_once()
+    assert registration.state_counts == {state.value: 1}
+    assert Patcher._patched_modules == []
+    return module, registration, wrapper, strategy
+
+
 def test_registers_only_existing_modules_selected_by_the_caller(tmp_path):
     _configure_deferred(tmp_path)
     selected = torch.nn.Linear(2, 2)
@@ -117,6 +140,111 @@ def test_registration_deduplicates_modules_by_identity_and_is_idempotent(tmp_pat
     assert first.modules == second.modules == (module,)
     assert len(Patcher._patched_modules) == 1
     assert first.reports[0].module_id == second.reports[0].module_id
+
+
+@pytest.mark.parametrize("state", [ModuleState.SKIPPED, ModuleState.EAGER])
+def test_repeated_registration_reuses_settled_target_without_retry(tmp_path, state):
+    module, first, wrapper, strategy = _settled_registration(tmp_path, state)
+    original_forward = module.forward
+    module_counter = PatchedModule.module_counter
+    heads = list(PatchedModule.heads)
+    expected = module(torch.ones(1, 2))
+
+    second = register_for_jit_tuning([module, module])
+    torch.testing.assert_close(module(torch.ones(1, 2)), expected)
+
+    assert second.modules == first.modules == (module,)
+    assert first._patched_modules == second._patched_modules == (wrapper,)
+    assert first.reports[0].module_id == second.reports[0].module_id
+    assert second.state_counts == {state.value: 1}
+    assert module.forward is original_forward
+    assert Patcher._patched_modules == []
+    assert PatchedModule.module_counter == module_counter
+    assert PatchedModule.heads == heads
+    if strategy is not None:
+        strategy.tune_dry_run.assert_called_once()
+
+
+@pytest.mark.parametrize("state", [ModuleState.SKIPPED, ModuleState.EAGER])
+def test_settled_target_retains_ownership_and_blocks_constructor_interception(tmp_path, state):
+    parent = _ParentModule()
+    module, registration, wrapper, _ = _settled_registration(tmp_path, state, parent.child)
+    original_module_init = torch.nn.Module.__init__
+
+    with pytest.raises(ValueError, match="overlaps an existing JIT registration"):
+        register_for_jit_tuning([parent])
+    with pytest.raises(RuntimeError, match="explicit JIT registrations are active"):
+        Patcher.patch_torch()
+
+    assert registration.state_counts == {state.value: 1}
+    assert Patcher._explicit_registrations == {id(module): wrapper}
+    assert Patcher._patched_modules == []
+    assert not Patcher._torch_patched
+    assert torch.nn.Module.__init__ is original_module_init
+    assert "forward" not in parent.__dict__
+
+
+@pytest.mark.parametrize("state", [ModuleState.SKIPPED, ModuleState.EAGER])
+def test_failed_mixed_registration_preserves_settled_target_and_rolls_back_new_targets(tmp_path, mocker, state):
+    module, first, wrapper, strategy = _settled_registration(tmp_path, state)
+    added = torch.nn.Linear(2, 2)
+    rejected = torch.nn.Linear(2, 2)
+    original_register = Patcher._register_module
+    history = dict(Patcher._explicit_registrations)
+    module_counter = PatchedModule.module_counter
+    report = Patcher._session_report
+    created = []
+
+    def register(target, **kwargs):
+        if target is rejected:
+            raise RuntimeError("registration failed")
+        new_wrapper = original_register(target, **kwargs)
+        created.append(new_wrapper)
+        return new_wrapper
+
+    register_mock = mocker.patch.object(Patcher, "_register_module", side_effect=register)
+    with pytest.raises(RuntimeError, match="registration failed"):
+        register_for_jit_tuning([module, added, rejected])
+
+    assert register_mock.call_count == 2
+    assert len(created) == 1
+    assert created[0].__wrapped__ is added
+    assert added.forward is created[0]._original_forward
+    assert "forward" not in rejected.__dict__
+    assert Patcher._explicit_registrations == history
+    assert Patcher._patched_modules == []
+    assert not Patcher._cleanup_pending
+    assert PatchedModule.module_counter == module_counter
+    assert Patcher._session_report is report
+    assert first.state_counts == {state.value: 1}
+    assert register_for_jit_tuning([module])._patched_modules == (wrapper,)
+    if strategy is not None:
+        strategy.tune_dry_run.assert_called_once()
+
+    replacement = register_for_jit_tuning([added])
+    assert replacement.state_counts == {"init": 1}
+    assert replacement.reports[0].module_id == module_counter
+    assert set(Patcher._explicit_registrations) == {id(module), id(added)}
+
+
+@pytest.mark.parametrize("state", [ModuleState.SKIPPED, ModuleState.EAGER])
+def test_reset_detaches_settled_handle_and_allows_a_fresh_registration_generation(tmp_path, state):
+    module, first, wrapper, _ = _settled_registration(tmp_path, state)
+
+    jit_reset()
+
+    assert first.state_counts == {"detached": 1}
+    assert Patcher._explicit_registrations == {}
+    assert Patcher._patched_modules == []
+    assert Patcher._session_mode is None
+    assert not has_active_report()
+
+    second = register_for_jit_tuning([module])
+    assert second.state_counts == {"init": 1}
+    assert second.reports[0].module_id == 0
+    assert second._patched_modules[0] is not wrapper
+    assert first.state_counts == {"detached": 1}
+    assert set(Patcher._explicit_registrations) == {id(module)}
 
 
 def test_registration_handle_reports_live_explicit_head_state(tmp_path):
