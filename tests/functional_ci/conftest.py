@@ -9,6 +9,15 @@ import torch
 
 from aitune.torch.config import config
 from aitune.torch.module_registry import MODULE_REGISTRY
+from tests.functional_ci.capabilities import FunctionalProfile, get_functional_profile
+
+pytest_plugins = ["tests.functional_ci.reporting"]
+
+
+@pytest.fixture(scope="session")
+def functional_profile() -> FunctionalProfile:
+    """Return the explicitly selected functional test profile."""
+    return get_functional_profile()
 
 
 @pytest.fixture(scope="session")
@@ -20,7 +29,7 @@ def functional_device() -> torch.device:
 
 
 @pytest.fixture(autouse=True)
-def functional_state(tmp_path) -> Iterator[None]:
+def functional_state(tmp_path, request: pytest.FixtureRequest) -> Iterator[None]:
     """Isolate AOT settings and clean up backend resources for each case."""
     original = (
         config.min_num_samples,
@@ -31,6 +40,7 @@ def functional_state(tmp_path) -> Iterator[None]:
     config.min_num_samples = 1
     config.max_num_samples_stored = 16
     config.cache_dir = tmp_path / "aot-config-cache"
+    request.node._functional_cache_dir = config.cache_dir
     config.tuning_data_output_path = tmp_path / "tuning-report.json"
     try:
         yield
