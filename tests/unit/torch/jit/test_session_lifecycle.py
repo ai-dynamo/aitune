@@ -226,6 +226,43 @@ def test_partial_reset_blocks_registration_until_cleanup_retry_succeeds():
     assert fresh.state_counts == {"init": 1}
 
 
+def test_skipped_module_restoration_failure_blocks_registration_until_reset_succeeds():
+    failing = _RejectForwardRestore(2, 2)
+    jit_config.min_parameters = 100
+    registration = register_for_jit_tuning([failing])
+    wrapper = Patcher._patched_modules[0]
+    module_id = registration.reports[0].module_id
+    history = dict(Patcher._explicit_registrations)
+    counter = PatchedModule.module_counter
+    failing.reject_restore = True
+    try:
+        with pytest.raises(RuntimeError, match="forward restoration rejected"):
+            failing(torch.ones(1, 2))
+
+        assert registration.state_counts == {"skipped": 1}
+        assert registration.reports[0].module_id == module_id
+        assert Patcher._patched_modules == [wrapper]
+        assert Patcher._explicit_registrations == history
+        assert Patcher._cleanup_pending
+        assert PatchedModule.module_counter == counter
+        with pytest.raises(RuntimeError, match="cleanup is incomplete"):
+            register_for_jit_tuning([failing])
+        with pytest.raises(RuntimeError, match="cleanup is incomplete"):
+            Patcher.patch_torch()
+    finally:
+        failing.reject_restore = False
+        jit_reset()
+
+    assert registration.state_counts == {"detached": 1}
+    assert Patcher._patched_modules == []
+    assert Patcher._explicit_registrations == {}
+    assert not Patcher._cleanup_pending
+    assert PatchedModule.module_counter == 0
+    fresh = register_for_jit_tuning([failing])
+    assert fresh.state_counts == {"init": 1}
+    assert fresh._patched_modules[0] is not wrapper
+
+
 def test_failed_rollback_preserves_cleanup_retry_and_registration_error(mocker):
     failing = _RejectForwardRestore(2, 2)
     good = torch.nn.Linear(2, 2)
