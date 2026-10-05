@@ -26,7 +26,7 @@ from aitune.torch.libs.onnx.runtime import run_onnx
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
-from aitune.torch.utils.module import move_module_to_device, offload
+from aitune.torch.utils.module import is_externally_managed_module, move_module_to_device, offload
 
 logger = getLogger(__name__)
 
@@ -211,8 +211,9 @@ class ONNXRuntimeBackend(Backend):
         """Prepare artifacts and output structure from an existing ONNX model."""
         self._output_object = {spec.name: None for _, spec in graph_spec.output_spec.tensor_data}
         self._onnx_model_artifact = ArtifactPath.from_existing(module.path, root=module.path.parent)
-        # Release the baseline session before allocating the backend's configured session.
-        module.deactivate()
+        # Release an AITune-managed baseline session before allocating the backend's configured session.
+        if not is_externally_managed_module(module):
+            module.deactivate()
         # Read only graph metadata; leave large external weights on disk.
         model = onnx.load(module.path, load_external_data=False)
         locations = {

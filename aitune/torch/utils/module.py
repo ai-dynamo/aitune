@@ -174,9 +174,52 @@ def is_externally_managed_module(module: nn.Module) -> bool:
     return False
 
 
+def _has_externally_managed_descendant(module: nn.Module) -> bool:
+    """Return whether the module tree overlaps any externally managed tree."""
+    if not _EXTERNALLY_MANAGED_MODULE_ROOTS:
+        return False
+
+    module_ids = {id(owned_module) for owned_module in module.modules()}
+    for module_id, module_ref in tuple(_EXTERNALLY_MANAGED_MODULE_ROOTS.items()):
+        root = module_ref()
+        if root is None:
+            _remove_externally_managed_module(module_id, module_ref)
+            continue
+        if any(id(owned_module) in module_ids for owned_module in root.modules()):
+            return True
+    return False
+
+
+def _can_move_module(module: nn.Module, *, operation: str) -> bool:
+    """Validate bulk placement changes without moving any part of the module.
+
+    Returns:
+        Whether AITune can relocate the whole tree. Distributed modules and trees
+        directly owned by an external runtime retain their existing placement.
+
+    Raises:
+        RuntimeError: An ordinary module contains an externally managed subtree.
+    """
+    if is_distributed_module(module) or is_externally_managed_module(module):
+        return False
+    if _has_externally_managed_descendant(module):
+        raise RuntimeError(
+            f"Cannot {operation} {module.__class__.__name__}: it contains an externally managed subtree. "
+            "Move independent ordinary submodules individually or manage placement through the external runtime."
+        )
+    return True
+
+
 def move_module_to_device(module: nn.Module, device: str | torch.device) -> None:
-    """Move an ordinary module while preserving application-managed placement."""
-    if not is_distributed_module(module) and not is_externally_managed_module(module):
+    """Move an ordinary module while preserving application-managed placement.
+
+    Distributed and externally managed modules retain their existing placement.
+
+    Raises:
+        RuntimeError: The ordinary module contains an externally managed subtree;
+            no part of its tree is moved.
+    """
+    if _can_move_module(module, operation="move"):
         module.to(device)
 
 
@@ -196,8 +239,12 @@ def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
     Args:
         model: Model to offload, including any nested ONNX Runtime sessions.
         device: Device to offload to. ONNX modules use CPU for meta.
+
+    Raises:
+        RuntimeError: The ordinary module contains an externally managed subtree;
+            no tensors or ONNX sessions are moved and memory cleanup is skipped.
     """
-    if is_distributed_module(model) or is_externally_managed_module(model):
+    if not _can_move_module(model, operation="offload"):
         return
 
     with annotate("Offloading module"):

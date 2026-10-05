@@ -480,6 +480,7 @@ def test_reset_preserves_failed_wrapper_for_retry_after_partial_unpatch(monkeypa
     assert modules[0].forward is original_forwards[0]
     assert not is_externally_managed_module(modules[0])
     assert is_externally_managed_module(modules[1])
+    assert modules[1].forward is not original_forwards[1]
     with pytest.raises(RuntimeError, match="cleanup is incomplete"):
         register_for_jit_tuning([modules[1]], device_management="external")
 

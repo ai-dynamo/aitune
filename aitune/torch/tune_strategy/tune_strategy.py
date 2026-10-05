@@ -255,7 +255,10 @@ class TuneStrategy(ABC):
             if built_backend.is_active:
                 built_backend.deactivate()
             # A failed backend may leave an ordinarily placed module on CPU.
-            move_module_to_device(module, device)
+            try:
+                move_module_to_device(module, device)
+            except Exception as placement_error:
+                raise placement_error from local_error
             if raise_on_failure:
                 raise local_error
             return None

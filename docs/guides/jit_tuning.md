@@ -163,6 +163,13 @@ backend artifacts, and internal module copies needed for tuning; copies do not i
 The default `device_management="aitune"` behavior is unchanged, and `jit_reset()` removes the marker from registered
 targets.
 
+AITune rejects moving or offloading an ancestor that contains an externally managed target, with a descriptive error
+before changing placement. Applications can move independent, unprotected subtrees separately.
+
+ONNX Runtime and TensorRT builds preserve the original session and device of an externally managed `OnnxModule` while
+creating their own session or artifact. The external owner can explicitly call `deactivate()` when the original session
+is no longer needed.
+
 Backends must explicitly opt into this contract by setting `_supports_external_device_management = True`; unsupported
 backends are rejected before their build implementation runs. The built-in ONNX Runtime, TensorRT, Torch eager,
 TorchInductor AOT and JIT, Torch-TensorRT AOT and JIT, and TorchAO backends support generic externally managed
