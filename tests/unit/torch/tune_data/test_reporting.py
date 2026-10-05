@@ -3,6 +3,8 @@
 """Tests for the report-building reporting."""
 
 import json
+from contextlib import nullcontext
+from dataclasses import replace
 from importlib import import_module
 from unittest.mock import MagicMock
 
@@ -16,6 +18,7 @@ from aitune.torch.tune_data.reporting import (
     _active_graph,
     _active_module,
     _active_report,
+    _run_start_ts,
     report_backend_build,
     report_graph_tune,
     report_inspection_details,
@@ -209,6 +212,32 @@ def test_tune_run_captures_exception(enable_reporting):
     assert report["exception"] == {"type": "RuntimeError", "message": "boom"}
 
 
+@pytest.mark.parametrize("raise_exception", [False, True])
+def test_tune_run_preserves_replacement_report(enable_reporting, raise_exception):
+    with pytest.raises(RuntimeError) if raise_exception else nullcontext():
+        with report_tune_run(AITuneMode.JIT):
+            original_report = _active_report.get()
+            replacement_report = report_tune_run_start(AITuneMode.DECLARATIVE)
+            replacement_start_ts = _run_start_ts.get()
+            if raise_exception:
+                raise RuntimeError("original run failed")
+
+    assert _active_report.get() is replacement_report
+    assert _run_start_ts.get() == replacement_start_ts
+    assert replacement_report.duration_s is None
+    assert replacement_report.exception is None
+    assert original_report.duration_s is None
+    assert not enable_reporting.exists()
+
+    with report_module_tune(module_name="replacement", num_parameters=100):
+        pass
+    report_tune_run_end(expected_report=replacement_report)
+    report = json.loads(enable_reporting.read_text())
+    assert report["modules"][0]["module_name"] == "replacement"
+    assert report["exception"] is None
+    assert _active_report.get() is None
+
+
 # ---------------------------------------------------------------------------
 # report_tune_run_start / report_tune_run_end (JIT path)
 # ---------------------------------------------------------------------------
@@ -224,6 +253,69 @@ def test_start_end_tune_run(enable_reporting):
     report = json.loads(enable_reporting.read_text())
     assert report["mode"] == "JIT"
     assert _active_report.get() is None
+
+
+def test_start_tune_run_returns_active_report(enable_reporting):
+    report = report_tune_run_start(AITuneMode.JIT)
+
+    assert report is _active_report.get()
+    assert report.mode is AITuneMode.JIT
+    assert report.duration_s is None
+    assert not enable_reporting.exists()
+
+
+def test_end_tune_run_requires_report_identity(enable_reporting):
+    report = report_tune_run_start(AITuneMode.JIT)
+    different_report = replace(report)
+    start_ts = _run_start_ts.get()
+    assert different_report == report
+
+    report_tune_run_end(exception=ValueError("unrelated"), expected_report=different_report)
+
+    assert _active_report.get() is report
+    assert _run_start_ts.get() == start_ts
+    assert report.duration_s is None
+    assert report.exception is None
+    assert not enable_reporting.exists()
+
+    report_tune_run_end(expected_report=report)
+    assert _active_report.get() is None
+    assert json.loads(enable_reporting.read_text())["exception"] is None
+
+
+def test_end_tune_run_preserves_replacement_report(enable_reporting):
+    original_report = report_tune_run_start(AITuneMode.JIT)
+    replacement_report = report_tune_run_start(AITuneMode.DECLARATIVE)
+    replacement_start_ts = _run_start_ts.get()
+
+    report_tune_run_end(exception=ValueError("old run failed"), expected_report=original_report)
+
+    assert _active_report.get() is replacement_report
+    assert _run_start_ts.get() == replacement_start_ts
+    assert replacement_report.duration_s is None
+    assert replacement_report.exception is None
+    assert not enable_reporting.exists()
+
+    report_tune_run_end(expected_report=replacement_report)
+    report = json.loads(enable_reporting.read_text())
+    assert report["mode"] == "DECLARATIVE"
+    assert report["duration_s"] is not None
+    assert _active_report.get() is None
+
+
+def test_end_owned_tune_run_with_exception(enable_reporting):
+    report = report_tune_run_start(AITuneMode.JIT)
+
+    report_tune_run_end(exception=ValueError("owned run failed"), expected_report=report)
+
+    assert report.exception == ExceptionInfo(type="ValueError", message="owned run failed")
+    assert report.duration_s is not None
+    assert _active_report.get() is None
+    assert _run_start_ts.get() is None
+    assert json.loads(enable_reporting.read_text())["exception"] == {
+        "type": "ValueError",
+        "message": "owned run failed",
+    }
 
 
 def test_end_tune_run_with_exception(enable_reporting):

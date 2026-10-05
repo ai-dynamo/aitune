@@ -34,7 +34,6 @@ from aitune.torch.tune_data.reporting import (
     report_graph_tune,
     report_inspection_details,
     report_module_tune,
-    report_tune_run_end,
 )
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
@@ -108,6 +107,7 @@ class PatchedModule:
         self.__wrapped__ = module
         self._explicit_head = explicit_head
         self._session_mode = config.mode
+        self._unpatched = False
         self._class_before_device_patch: type[torch.nn.Module] | None = None
         self._patched_device_class: type[torch.nn.Module] | None = None
         # proxy forward, hooks
@@ -351,11 +351,12 @@ class PatchedModule:
     def _forward_router(self, wrapped, instance, args, kwargs):
         """Route forward calls to the appropriate state-specific handler.
 
-        This method serves as a stable wrapper throughout the module's lifecycle.
-        This design is necessary for compatibility with models that internally cache references
-        to module.forward wrappers. Since the wrapper object itself never changes, cached
-        references remain valid across state transitions.
+        Cached references to module.forward keep using this router across state transitions.
+        After permanent unpatching they call the original forward without re-entering the JIT session.
         """
+        if self._state == ModuleState.DETACHED or self._unpatched:
+            return self._original_forward(*args, **kwargs)
+
         if config.mode != self._session_mode:
             raise RuntimeError("Call jit_reset() before switching JIT modes")
 
@@ -711,13 +712,17 @@ class PatchedModule:
     def _unpatch(self):
         """Unpatch the module.
 
-        Removes it also from Patcher object registry.
+        Cached forward references become pass-through calls immediately. Failed restoration
+        leaves the wrapper in the registry so cleanup can be retried.
         """
+        self._unpatched = True
         self._allowed_to_tune = False
-        self._restore_original_forward()
-        self._restore_device_attribute()
-        self.__wrapped__._forward_hooks = self._current_forward_hooks
-        self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
+        try:
+            self._restore_original_forward()
+            self._restore_device_attribute()
+        finally:
+            self.__wrapped__._forward_hooks = self._current_forward_hooks
+            self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
 
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 
@@ -798,7 +803,9 @@ class PatchedModule:
     @staticmethod
     def on_python_exit():
         """Give suggestions if tuning was not attempted."""
-        report_tune_run_end()
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        Patcher._end_session_report()
 
         if len(PatchedModule.heads) == 0:
             logging.error("JIT tuning has been enabled but no modules were found.")

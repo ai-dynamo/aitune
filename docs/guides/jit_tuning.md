@@ -133,6 +133,11 @@ from aitune.torch import jit_reset
 jit_reset()
 ```
 
+Cached references to a registered module's `forward` remain callable after reset and run the original forward without
+starting another tuning session. Reset finalizes only the tuning report created by JIT; reports owned by other tuning
+runs remain active. If module restoration fails, reset retains the failed wrappers for cleanup retry and rejects new
+registrations until a subsequent `jit_reset()` succeeds.
+
 ## How Just-in-Time Tuning Works
 
 Just-in-time tuning follows this process:

@@ -15,6 +15,7 @@ from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import ModuleState as PatchedModuleState
 from aitune.torch.jit.patched_module import PatchedModule
+from aitune.torch.tune_data.report_models import TuneRunReport
 from aitune.torch.tune_data.reporting import (
     has_active_report,
     report_inspection_details,
@@ -56,10 +57,13 @@ class Patcher:
     _torch_patched: bool = False
     _exit_handler: Callable | None = None
     _session_mode: JITMode | None = None
+    _session_report: TuneRunReport | None = None
+    _cleanup_pending: bool = False
 
     @classmethod
     def _ensure_session(cls) -> None:
         """Initialize reporting and process-exit handling for one JIT session."""
+        cls._raise_if_cleanup_pending()
         cls._raise_if_session_mode_changed()
 
         cls._session_mode = config.mode
@@ -70,7 +74,23 @@ class Patcher:
             atexit.register(cls._exit_handler)
 
         if config.mode != JITMode.INSPECT and not has_active_report():
-            report_tune_run_start(AITuneMode.JIT)
+            cls._session_report = report_tune_run_start(AITuneMode.JIT)
+
+    @classmethod
+    def _end_session_report(cls, exception: BaseException | None = None) -> None:
+        """Finalize only the report created by this JIT session, if still active."""
+        if cls._session_report is None:
+            return
+        try:
+            report_tune_run_end(exception=exception, expected_report=cls._session_report)
+        finally:
+            cls._session_report = None
+
+    @classmethod
+    def _raise_if_cleanup_pending(cls) -> None:
+        """Prevent a new tuning session from reusing partially cleaned wrappers."""
+        if cls._cleanup_pending:
+            raise RuntimeError("JIT cleanup is incomplete; retry jit_reset() before registering or patching modules")
 
     @classmethod
     def _register_module(
@@ -90,6 +110,7 @@ class Patcher:
     @classmethod
     def patch_torch(cls):
         """Patch torch.nn.Module to track execution."""
+        cls._raise_if_cleanup_pending()
         if any(isinstance(module, PatchedModule) and module.explicit_head for module in cls._patched_modules):
             raise RuntimeError(
                 "Global JIT constructor interception cannot run while explicit JIT registrations are active"
@@ -122,7 +143,7 @@ class Patcher:
         previous_module_counter = PatchedModule.module_counter
         previous_session_mode = cls._session_mode
         previous_exit_handler = cls._exit_handler
-        report_was_active = has_active_report()
+        previous_session_report = cls._session_report
         newly_registered: list[PatchedModule] = []
         try:
             cls._ensure_session()
@@ -139,19 +160,26 @@ class Patcher:
         except Exception as error:
             try:
                 cls._rollback_explicit_registrations(newly_registered)
+            except Exception as cleanup_error:
+                error.add_note(f"JIT registration cleanup failed; retry jit_reset(): {cleanup_error}")
             finally:
-                PatchedModule.module_counter = previous_module_counter
-                cls._rollback_explicit_registration_session(
-                    previous_session_mode,
-                    previous_exit_handler,
-                    report_was_active,
-                    error,
-                )
+                if not cls._cleanup_pending:
+                    PatchedModule.module_counter = previous_module_counter
+                try:
+                    cls._rollback_explicit_registration_session(
+                        previous_session_mode,
+                        previous_exit_handler,
+                        previous_session_report,
+                        error,
+                    )
+                except Exception as report_error:
+                    error.add_note(f"JIT registration report finalization failed: {report_error}")
             raise
 
     @classmethod
     def validate_explicit_registration_session(cls) -> None:
         """Reject explicit registration while an incompatible JIT path is active."""
+        cls._raise_if_cleanup_pending()
         cls._raise_if_session_mode_changed()
         if config.mode == JITMode.INSPECT:
             raise RuntimeError("register_for_jit_tuning() does not support JITMode.INSPECT")
@@ -173,28 +201,38 @@ class Patcher:
     @classmethod
     def _rollback_explicit_registrations(cls, wrappers: Sequence[PatchedModule]) -> None:
         """Undo wrappers created by an explicit-registration transaction."""
+        first_error: Exception | None = None
         for wrapper in reversed(wrappers):
-            wrapper._unpatch()
+            try:
+                wrapper._update_state(PatchedModuleState.DETACHED)
+                wrapper._unpatch()
+            except Exception as error:
+                first_error = first_error or error
+        if first_error is not None:
+            cls._cleanup_pending = True
+            raise first_error
 
     @classmethod
     def _rollback_explicit_registration_session(
         cls,
         previous_session_mode: JITMode | None,
         previous_exit_handler: Callable | None,
-        report_was_active: bool,
+        previous_session_report: TuneRunReport | None,
         error: Exception,
     ) -> None:
         """Restore session globals when an explicit-registration transaction fails."""
         try:
-            if not report_was_active and has_active_report():
-                report_tune_run_end(exception=error)
+            if cls._session_report is not previous_session_report:
+                cls._end_session_report(exception=error)
         finally:
-            try:
-                if cls._exit_handler is not previous_exit_handler and cls._exit_handler is not None:
-                    atexit.unregister(cls._exit_handler)
-            finally:
-                cls._exit_handler = previous_exit_handler
-                cls._session_mode = previous_session_mode
+            if not cls._cleanup_pending:
+                try:
+                    if cls._exit_handler is not previous_exit_handler and cls._exit_handler is not None:
+                        atexit.unregister(cls._exit_handler)
+                finally:
+                    cls._exit_handler = previous_exit_handler
+                    cls._session_mode = previous_session_mode
+                    cls._session_report = previous_session_report
 
     @classmethod
     def _validate_registration_targets(cls, modules: Sequence[torch.nn.Module]) -> list[set[int]]:
@@ -314,8 +352,10 @@ class Patcher:
                     except Exception as error:
                         first_error = first_error or error
                 if first_error is not None:
+                    cls._cleanup_pending = True
                     raise first_error
                 cls._intercepted_classes.clear()
+                cls._cleanup_pending = False
         finally:
             if cls._original_module_init is not None:
                 torch.nn.Module.__init__ = cls._original_module_init
@@ -402,16 +442,13 @@ def jit_reset() -> None:
     but their modules report the detached state after reset.
     """
     try:
-        if Patcher._session_mode is not None and Patcher._session_mode != JITMode.INSPECT and has_active_report():
-            report_tune_run_end()
+        Patcher._end_session_report()
     finally:
-        try:
-            Patcher.unpatch_torch(unpatch_modules=True)
-        finally:
-            if Patcher._exit_handler is not None:
-                atexit.unregister(Patcher._exit_handler)
-            Patcher._exit_handler = None
-            Patcher._session_mode = None
-            Patcher._original_module_init = None
-            PatchedModule.reset()
-            InspectModule.reset()
+        Patcher.unpatch_torch(unpatch_modules=True)
+        if Patcher._exit_handler is not None:
+            atexit.unregister(Patcher._exit_handler)
+        Patcher._exit_handler = None
+        Patcher._session_mode = None
+        Patcher._original_module_init = None
+        PatchedModule.reset()
+        InspectModule.reset()
