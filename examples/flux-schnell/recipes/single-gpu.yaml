@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# Implemented draft; no measured hardware support or performance claims yet.
+name: single-gpu
+model:
+  base_model: black-forest-labs/FLUX.1-schnell
+  revision: 741f7c3ce8b383c54771c7003378a50191e9efe9
+  checkpoint_format: diffusers-directory
+environment:
+  dockerfile: ../Dockerfile
+  base_image: nvcr.io/nvidia/pytorch:26.06-py3
+  evaluated_image_digest: null
+hardware:
+  tested: []
+execution:
+  gpu_count: 1
+  parallelism: none
+  compilation: runtime
+  weight_offloading: false
+precision:
+  allowed: [bf16]
+artifact_path: ../results/single-gpu/artifact/tuned.ait
+output_dir: ../results/single-gpu
+inputs:
+  tune: ../samples/tune.jsonl
+  validation: ../samples/validation.jsonl
+  inference: ../samples/inference.jsonl
+  benchmark: ../samples/validation.jsonl
+workload:
+  width: 1024
+  height: 1024
+  num_inference_steps: 4
+  guidance_scale: 0.0
+  max_sequence_length: 256
+tuning:
+  batch_sizes: [1]
+benchmark:
+  warmup_iterations: 3
+  repetitions: 20
+  sampling_interval_s: 0.05
+validation:
+  metric: rgb_ssim
+  threshold: 0.70
+deployment:
+  targets: [dynamo]
+  port: 8000
+  seed: 42
+  concurrency: 1
+  request_count: 20
+  readiness_timeout_s: 1800

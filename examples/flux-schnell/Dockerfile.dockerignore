@@ -1,0 +1,5 @@
+# Build-context exclusions when building this Dockerfile from the repository root.
+**/.venv
+**/__pycache__
+**/*.egg-info
+examples/flux-schnell/results/**

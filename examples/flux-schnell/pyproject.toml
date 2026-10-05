@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+[project]
+name = "aitune-flux-schnell-recipe"
+version = "0.1.0"
+description = "FLUX.1-schnell tuning, correctness, measurement, and Dynamo serving"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "aitune[torch212,dynamo]==0.6.0",
+  "diffusers==0.37.0",
+  "transformers==4.57.6",
+  "accelerate==1.12.0",
+  "sentencepiece==0.2.1",
+  "protobuf>=6.33.5,<7",
+  "pillow>=12,<13",
+  "scikit-image>=0.25,<0.27",
+  "pyyaml==6.0.3",
+  "nvidia-ml-py>=13,<14",
+  "ai-dynamo==1.5.0",
+  "aiperf==0.13.0",
+]
+
+[project.scripts]
+recipe = "flux_schnell_recipe.cli:main"
+
+[build-system]
+requires = ["setuptools>=80,<83"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["flux_schnell_recipe*"]
+
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[[tool.uv.index]]
+name = "nvidia"
+url = "https://pypi.nvidia.com"
+explicit = true
+
+[tool.aitune]
+skip = true
