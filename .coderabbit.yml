@@ -17,7 +17,6 @@ reviews:
     auto_incremental_review: true
     drafts: true
     ignore_title_keywords:
-      - Draft
       - WIP
 
   auto_apply_labels: true
