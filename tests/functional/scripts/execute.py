@@ -8,24 +8,31 @@ import argparse
 import json
 import os
 import shlex
+import site
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import tomllib
 from metadata import FunctionalTestConfig, FunctionalVariantConfig  # noqa: E402
 
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib  # pytype: disable=import-error
+USER_CUSTOMIZE_PATH = Path(__file__).parent.parent.parent.parent / ".github" / "scripts" / "usercustomize.py"
 
 
 def main() -> None:
     """Run the selected functional matrix entry."""
     args = parse_args()
-    run(args.path, args.kind, args.test_number, args.verbose, args.dry_run, args.workflow)
+    run(
+        args.path,
+        args.kind,
+        args.test_number,
+        args.verbose,
+        args.dry_run,
+        args.workflow,
+    )
 
 
 def run(
@@ -37,6 +44,7 @@ def run(
     workflow: str | None = None,
 ) -> None:
     """Run one zero-based entry from a functional script or example project."""
+    _prepare_environment()
     config = _load_config(path, kind)
     try:
         entry = config.entries[test_number]
@@ -53,11 +61,29 @@ def run(
             _run_command([f"./{install_script}"], verbose, dry_run, cwd=path, env=env)
     _save_requirements(verbose, dry_run)
 
-    run_kwargs: dict[str, Any] = {"cwd": path if kind == "project" else None, "env": env}
+    run_kwargs: dict[str, Any] = {
+        "cwd": path if kind == "project" else None,
+        "env": env,
+    }
     if kind == "project":
         _run_project(path, entry, workflow, verbose, dry_run, run_kwargs)
     else:
         _run_command(_command(path, kind, entry), verbose, dry_run, **run_kwargs)
+
+
+def _prepare_environment() -> None:
+    """Prepare the environment for the functional test.
+    Replicate .github/scripts/usercustomize.py injection for user site-packages in Python
+    """
+
+    user_site = Path(site.getusersitepackages()).absolute()
+    if not USER_CUSTOMIZE_PATH.exists():
+        raise FileNotFoundError(f"User customize path {USER_CUSTOMIZE_PATH} not found")
+
+    user_site.mkdir(parents=True, exist_ok=True)
+    dest = user_site / "usercustomize.py"
+    if not dest.exists() or USER_CUSTOMIZE_PATH.read_bytes() != dest.read_bytes():
+        dest.write_bytes(USER_CUSTOMIZE_PATH.read_bytes())
 
 
 def _validate_requested_workflow(
@@ -91,7 +117,12 @@ def _run_project(
         return
 
     target = "python" if workflow == "dynamo" else "triton"
-    _run_command(_command(path, "project", entry, "tune", {"target": target}), verbose, dry_run, **run_kwargs)
+    _run_command(
+        _command(path, "project", entry, "tune", {"target": target}),
+        verbose,
+        dry_run,
+        **run_kwargs,
+    )
     if workflow == "dynamo":
         _run_command(["./run_dynamo.sh"], verbose, dry_run, **run_kwargs)
         return
@@ -127,7 +158,12 @@ def _run_triton_validation(
     model_repository = _model_repository_path(path)
     triton_run_kwargs = dict(run_kwargs)
     triton_run_kwargs["env"] = run_kwargs["env"] | {"MODEL_REPOSITORY": str(model_repository)}
-    _run_command(["./run_triton.sh", *_arguments(entry.arguments)], verbose, dry_run, **triton_run_kwargs)
+    _run_command(
+        ["./run_triton.sh", *_arguments(entry.arguments)],
+        verbose,
+        dry_run,
+        **triton_run_kwargs,
+    )
 
 
 def _model_repository_path(path: Path) -> Path:
@@ -144,15 +180,31 @@ def _install_dependencies(
     workflow: str | None = None,
 ) -> None:
     if kind != "project" or workflow != "triton":
-        _run_command([sys.executable, "-m", "pip", "install", "--group", "functional-test"], verbose, dry_run)
+        _run_command(
+            [sys.executable, "-m", "pip", "install", "--group", "functional-test"],
+            verbose,
+            dry_run,
+        )
 
     if kind == "project":
-        _run_command([sys.executable, "-m", "pip", "install", "examples/common"], verbose, dry_run)
+        _run_command(
+            [sys.executable, "-m", "pip", "install", "examples/common"],
+            verbose,
+            dry_run,
+        )
         extra = workflow or "dynamo"
-        _run_command([sys.executable, "-m", "pip", "install", f"{path}[{extra}]"], verbose, dry_run)
+        _run_command(
+            [sys.executable, "-m", "pip", "install", f"{path}[{extra}]"],
+            verbose,
+            dry_run,
+        )
 
     if config.dependencies:
-        _run_command([sys.executable, "-m", "pip", "install", *config.dependencies], verbose, dry_run)
+        _run_command(
+            [sys.executable, "-m", "pip", "install", *config.dependencies],
+            verbose,
+            dry_run,
+        )
 
     for install in config.pip_install:
         _run_command(
@@ -171,7 +223,16 @@ def _install_dependencies(
 
 def _save_requirements(verbose: bool = False, dry_run: bool = False) -> None:
     _run_command(
-        [sys.executable, "-m", "pip", "freeze", "--all", "--no-input", "--local", "--quiet"],
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "freeze",
+            "--all",
+            "--no-input",
+            "--local",
+            "--quiet",
+        ],
         verbose,
         dry_run,
         stdout_path=Path("functional_test_requirements.txt"),
@@ -221,7 +282,11 @@ def _project_module(path: Path, script: str) -> str:
 
 
 def _run_command(
-    command: list[str], verbose: bool, dry_run: bool, stdout_path: Path | None = None, **kwargs: Any
+    command: list[str],
+    verbose: bool,
+    dry_run: bool,
+    stdout_path: Path | None = None,
+    **kwargs: Any,
 ) -> None:
     if verbose:
         redirect = f" > {stdout_path}" if stdout_path else ""
