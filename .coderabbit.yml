@@ -21,6 +21,11 @@ reviews:
       - WIP
 
   auto_apply_labels: true
+  mutually_exclusive_groups:
+      review-effort:
+          - review-effort/low
+          - review-effort/medium
+          - review-effort/high
   labeling_instructions:
     - label: "review-effort/low"
       instructions: >
