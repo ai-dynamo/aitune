@@ -145,6 +145,7 @@ def test_failed_registration_only_finalizes_report_it_created(mocker, existing_r
     assert has_active_report() is existing_report
     if existing_report:
         assert created_reports == []
+        assert borrowed is not None
         assert borrowed.duration_s is None
         with report_module_tune("still active", 1):
             pass

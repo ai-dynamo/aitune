@@ -653,11 +653,11 @@ class PatchedModule:
         The substitution is done with a wrapt.decorator so that the replaced function has the same docstring,
         signature and other attributes. This is crucial as some HF models perform self inspection for method arguments.
 
-        We re-enable hooks so that they are called before and after the proxied forward.
+        Re-enable hooks before installing the proxy so rejected hook assignments leave forward unchanged.
         """
         self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
-        self.__wrapped__.forward = wrapt.decorator(self._forward_router)(self._original_forward)
         self.__wrapped__._forward_hooks = self._current_forward_hooks
+        self.__wrapped__.forward = wrapt.decorator(self._forward_router)(self._original_forward)
 
     def _restore_original_forward(self):
         """Restore the original forward and hooks.

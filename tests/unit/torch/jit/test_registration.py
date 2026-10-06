@@ -76,6 +76,7 @@ def _settled_registration(tmp_path, state, module=None):
     wrapper = Patcher._patched_modules[0]
     module(torch.ones(1, 2))
     if state is ModuleState.EAGER:
+        assert strategy is not None
         Patcher.enable_tune_deferred()
         module(torch.ones(1, 2))
         strategy.tune_dry_run.assert_called_once()
@@ -501,6 +502,52 @@ def test_registration_validates_every_target_before_patching_any_target(tmp_path
 
     assert "forward" not in valid.__dict__
     assert Patcher._patched_modules == []
+
+
+def test_registration_preserves_original_forward_when_hook_assignment_fails(tmp_path):
+    class RejectForwardHooks(torch.nn.Linear):
+        def __setattr__(self, name, value):
+            if name == "_forward_hooks" and self.__dict__.get("reject_forward_hooks", False):
+                object.__setattr__(self, "reject_forward_hooks", False)
+                raise RuntimeError("forward hook assignment rejected")
+            super().__setattr__(name, value)
+
+    _configure_deferred(tmp_path)
+    module = RejectForwardHooks(2, 2)
+    original_forward = module.forward
+    module.forward = original_forward
+    original_pre_hooks = module._forward_pre_hooks
+    original_hooks = module._forward_hooks
+    value = torch.ones(1, 2)
+    expected = module(value)
+    module.reject_forward_hooks = True
+
+    with pytest.raises(RuntimeError, match="forward hook assignment rejected"):
+        register_for_jit_tuning([module])
+
+    assert module.forward is original_forward
+    assert module._forward_pre_hooks is original_pre_hooks
+    assert module._forward_hooks is original_hooks
+    assert Patcher._patched_modules == []
+    assert Patcher._explicit_registrations == {}
+    assert not Patcher._cleanup_pending
+    assert Patcher._session_mode is None
+    assert Patcher._session_report is None
+    assert Patcher._exit_handler is None
+    assert PatchedModule.heads == []
+    assert PatchedModule.module_counter == 0
+    assert not has_active_report()
+    torch.testing.assert_close(module(value), expected)
+
+    jit_reset()
+
+    assert module.forward is original_forward
+    assert module._forward_pre_hooks is original_pre_hooks
+    assert module._forward_hooks is original_hooks
+    torch.testing.assert_close(module(value), expected)
+    replacement = register_for_jit_tuning([module])
+    assert replacement.reports[0].module_id == 0
+    assert replacement.state_counts == {"init": 1}
 
 
 def test_registration_rolls_back_partial_wrapper_and_new_session_on_failure(tmp_path, mocker):
