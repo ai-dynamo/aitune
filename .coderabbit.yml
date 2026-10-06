@@ -15,12 +15,16 @@ reviews:
   auto_review:
     enabled: true
     auto_incremental_review: true
-    drafts: false
+    drafts: true
     ignore_title_keywords:
-      - Draft
       - WIP
 
   auto_apply_labels: true
+  mutually_exclusive_groups:
+      review-effort:
+          - review-effort/low
+          - review-effort/medium
+          - review-effort/high
   labeling_instructions:
     - label: "review-effort/low"
       instructions: >

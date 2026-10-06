@@ -63,6 +63,43 @@ def test_simple_sequence_tensors():
     assert args[0].shape == (4, 3, 24, 24)
 
 
+@pytest.mark.parametrize("sample_type", [tuple, list])
+@pytest.mark.parametrize("num_args", [0, 1, 2])
+def test_mixed_call_samples_preserve_every_batch_row(sample_type, num_args):
+    dataset = [
+        sample_type((
+            [torch.tensor([index + offset * 10]) for offset in range(num_args)],
+            {"input": torch.tensor([index + 100]), "prompt": f"sample-{index}"},
+        ))
+        for index in range(4)
+    ]
+
+    samples = simulate_tuning_loop(dataset, batch_sizes=[2])
+
+    assert len(samples) == 2
+    for batch_index, (batch_size, args, kwargs) in enumerate(samples):
+        indices = torch.tensor([[batch_index * 2], [batch_index * 2 + 1]])
+        assert batch_size == 2
+        assert len(args) == num_args
+        for offset, arg in enumerate(args):
+            torch.testing.assert_close(arg, indices + offset * 10)
+        torch.testing.assert_close(kwargs["input"], indices + 100)
+        assert kwargs["prompt"] == [f"sample-{index}" for index in indices.flatten().tolist()]
+
+
+def test_mixed_call_samples_with_no_keyword_arguments():
+    dataset = [([torch.tensor([index])], {}) for index in range(4)]
+
+    samples = simulate_tuning_loop(dataset, batch_sizes=[4])
+
+    assert len(samples) == 1
+    batch_size, args, kwargs = samples[0]
+    assert batch_size == 4
+    assert len(args) == 1
+    torch.testing.assert_close(args[0], torch.arange(4).reshape(4, 1))
+    assert kwargs == {}
+
+
 def test_simple_sequence_strings():
     dataset = ["random string" for _ in range(10)]
     samples = simulate_tuning_loop(dataset, batch_sizes=[4])
