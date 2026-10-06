@@ -8,7 +8,6 @@ from types import SimpleNamespace
 import onnx
 import pytest
 import torch
-from onnx import TensorProto, helper
 
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend, TensorRTBackendConfig
@@ -25,13 +24,13 @@ from aitune.torch.utils.module import (
 @pytest.fixture
 def onnx_path(tmp_path):
     path = tmp_path / "add.onnx"
-    graph = helper.make_graph(
-        [helper.make_node("Add", ["x", "x"], ["y"])],
+    graph = onnx.helper.make_graph(
+        [onnx.helper.make_node("Add", ["x", "x"], ["y"])],
         "double",
-        [helper.make_tensor_value_info("x", TensorProto.FLOAT, ["batch", 3])],
-        [helper.make_tensor_value_info("y", TensorProto.FLOAT, ["batch", 3])],
+        [onnx.helper.make_tensor_value_info("x", onnx.TensorProto.FLOAT, ["batch", 3])],
+        [onnx.helper.make_tensor_value_info("y", onnx.TensorProto.FLOAT, ["batch", 3])],
     )
-    onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], ir_version=8), path)
+    onnx.save(onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 17)], ir_version=8), path)
     return path
 
 

@@ -21,7 +21,6 @@ from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.tune_data.reporting import report_backend_build
 from aitune.torch.utils.memory import release_transient_memory
-from aitune.torch.utils.module import is_distributed_module, is_externally_managed_module
 from aitune.utils.hashing import hash_string
 from aitune.utils.monitoring import annotate, with_backend_context
 from aitune.utils.serialization import json_serialize
@@ -281,12 +280,16 @@ class Backend(ABC):
 
     def _assert_execution_mode(self, module: nn.Module) -> None:
         """Reject the module execution mode when the backend does not support it."""
+        from aitune.torch.utils.module import is_distributed_module
+
         execution_mode = ExecutionMode.MULTI_GPU if is_distributed_module(module) else ExecutionMode.SINGLE_GPU
         if execution_mode not in self._execution_modes:
             raise RuntimeError(f"Backend {self.name} does not support {execution_mode.value} execution")
 
     def _assert_external_device_management(self, module: nn.Module) -> None:
         """Reject externally managed placement unless the backend explicitly supports it."""
+        from aitune.torch.utils.module import is_externally_managed_module
+
         if is_externally_managed_module(module) and not self._supports_external_device_management:
             raise RuntimeError(f"Backend {self.name} does not support external module device management")
 

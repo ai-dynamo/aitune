@@ -19,7 +19,7 @@ from aitune.torch.utils.memory import cleanup_memory
 from aitune.utils.monitoring import annotate
 
 if TYPE_CHECKING:
-    from aitune.torch.backend.backend import Backend
+    import aitune.torch.backend.backend as backend_module
 
 
 _EXTERNALLY_MANAGED_MODULE_ROOTS: dict[int, weakref.ReferenceType[nn.Module]] = {}
@@ -263,7 +263,7 @@ def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
 
 def offload_after_tuning(
     model: nn.Module,
-    backends: Iterable["Backend"],
+    backends: Iterable["backend_module.Backend"],
     device: str | torch.device,
 ) -> None:
     """Offload a tuned ordinary module when no selected backend builds just in time."""
@@ -276,7 +276,7 @@ def offload_after_tuning(
     offload(model, device=device)
 
 
-def get_default_backend_for_module(module: nn.Module) -> "Backend":
+def get_default_backend_for_module(module: nn.Module) -> "backend_module.Backend":
     """Gets the default backend for a module."""
     from aitune.torch.backend import ONNXRuntimeBackend, TorchEagerBackend
 
