@@ -493,11 +493,13 @@ def test_old_cached_forward_does_not_release_new_session_capacity(monkeypatch):
     expected = module(value)
     register_for_jit_tuning([module])
     old_wrapper = Patcher._patched_modules[0]
+    assert isinstance(old_wrapper, PatchedModule)
     cached_forward = module.forward
     jit_reset()
 
     registration = register_for_jit_tuning([module])
     new_wrapper = Patcher._patched_modules[0]
+    assert isinstance(new_wrapper, PatchedModule)
     assert new_wrapper._id == old_wrapper._id
     dynamo.reserve_dynamo_recompile_capacity(owner=new_wrapper._id, route_count=3, strategy=_strategy(num_backends=1))
 
