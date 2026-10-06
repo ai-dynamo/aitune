@@ -110,7 +110,7 @@ def testing_multi_profile_with_samples():
     module(data2.repeat(8, 1, 1, 1))
 
     try:
-        module(data1.repeat(4, 1, 1, 1))
+        module(data1.repeat(9, 1, 1, 1))
     except RuntimeError:
         pass  # expected exception when passing sample with shape that is not in any profile
     else:

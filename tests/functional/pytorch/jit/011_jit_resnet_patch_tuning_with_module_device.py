@@ -25,7 +25,7 @@ def create_resnet():
 
     The decorator will make this model tunable.
     """
-    return timm.create_model("resnet18", pretrained=False).to("cuda")
+    return timm.create_model("resnet18", pretrained=False).to("cuda").eval()
 
 
 @collect_tuning_data(__file__)

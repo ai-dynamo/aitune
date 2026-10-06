@@ -24,7 +24,7 @@ def test_jit_resnet():
 
     config.min_samples = 2
 
-    resnet = timm.create_model("resnet18", pretrained=False).to("cuda")
+    resnet = timm.create_model("resnet18", pretrained=False).to("cuda").eval()
 
     def batch():
         # we are calling two times with different batch sizes to recognize dynamic axes
