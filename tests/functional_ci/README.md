@@ -13,11 +13,15 @@ Run the suite with:
 python -m pytest tests/functional_ci/ -ra --junitxml=functional-ci.test-report.xml
 ```
 
-The first case covers the explicit Torch Eager lifecycle: inspect and wrap,
-tune, infer, save, load into a fresh model, and infer again. The PR profile
-checks the required CUDA runner and backend packages. Missing requirements or
-advertised capabilities fail the run. Optional exclusions retain their case ID
-and reason in the JUnit report.
+The backend lifecycle cases cover inspect and wrap, tune, infer, save, load
+into a fresh model, and infer again. The explicit Torch Eager case runs first.
+The Inductor cases add a full-graph, fixed-shape JIT variant (device inferred
+from inputs) and an AOT variant (explicit device). The JIT case checks a
+compiled region; the AOT case checks an executed runner, then exports the
+`pt2` artifact to a new path and runs it through `aoti_load_package`. The PR
+profile checks the required CUDA runner and backend packages. Missing
+requirements or advertised capabilities fail the run. Optional exclusions
+retain their case ID and reason in the JUnit report.
 
 Run metadata is written before pytest starts. It includes the selected profile,
 GPU and CUDA details, installed library versions, commit, and container image.
