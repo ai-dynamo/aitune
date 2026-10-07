@@ -158,11 +158,7 @@ def _match_detections(
     iou_threshold: float = 0.5,
     score_tolerance: float = 0.05,
 ) -> tuple[int, int, int]:
-    """
-    Match detections by IoU and class, returning (matched, expected_count, restored_count).
-
-    Checking the expected center pixel to be inside the actual bounding box, as order may differ checking against all.
-    """
+    """Match confident detections by class, center containment, score, and IoU."""
     actual = actual[actual[:, 4] >= confidence_threshold].detach().cpu()
     expected = expected[expected[:, 4] >= confidence_threshold].detach().cpu()
     pairs = []
