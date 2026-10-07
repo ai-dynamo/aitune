@@ -8,6 +8,7 @@ from unittest.mock import Mock
 import pytest
 import torch
 
+from aitune.torch import backend as backends
 from aitune.torch import register_for_jit_tuning
 from aitune.torch.backend.backend import BuildMode, DummyBackend, ExecutionMode
 from aitune.torch.jit.config import JITMode
@@ -278,3 +279,115 @@ def test_backend_build_rejects_unsupported_external_policy_before_build(tmp_path
         raise AssertionError("unsupported backend reached its build implementation")
 
     backend._build.assert_not_called()
+
+
+class _InheritedExternalBackend(DummyBackend):
+    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
+    _build_mode = BuildMode.AHEAD_OF_TIME
+
+    def _build(self, module, graph_spec, samples, cache_dir):
+        module.to("meta")
+        return self
+
+
+@pytest.mark.parametrize("instance_opt_in", [False, True])
+def test_backend_build_rejects_inherited_external_permission_before_mutation(tmp_path, mocker, instance_opt_in):
+    _configure_dry_run(tmp_path, _strategy())
+    module = torch.nn.Linear(2, 2)
+    original_weight = module.weight
+    original_values = module.weight.detach().clone()
+    register_for_jit_tuning([module], device_management="external")
+    backend = _InheritedExternalBackend()
+    if instance_opt_in:
+        backend._supports_external_device_management = True
+    build = mocker.spy(backend, "_build")
+    move = mocker.spy(module, "to")
+
+    assert backend._supports_external_device_management is True
+    assert "_supports_external_device_management" not in type(backend).__dict__
+    with pytest.raises(RuntimeError, match="external module device management"):
+        backend.build(module, Mock(), Mock(), torch.device("cpu"), tmp_path)
+
+    build.assert_not_called()
+    move.assert_not_called()
+    assert module.weight is original_weight
+    assert module.weight.device.type == "cpu"
+    torch.testing.assert_close(module.weight, original_values)
+    assert is_externally_managed_module(module)
+
+
+def test_backend_build_accepts_concrete_external_opt_in(tmp_path, mocker):
+    class ExplicitExternalBackend(_InheritedExternalBackend):
+        _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
+        _build_mode = BuildMode.AHEAD_OF_TIME
+        _supports_external_device_management = True
+
+        def _build(self, module, graph_spec, samples, cache_dir):
+            return self
+
+    _configure_dry_run(tmp_path, _strategy())
+    module = torch.nn.Linear(2, 2)
+    original_weight = module.weight
+    register_for_jit_tuning([module], device_management="external")
+    backend = ExplicitExternalBackend()
+    build = mocker.spy(backend, "_build")
+
+    assert backend.build(module, Mock(), Mock(), torch.device("cpu"), tmp_path) is backend
+
+    build.assert_called_once()
+    assert module.weight is original_weight
+    assert module.weight.device.type == "cpu"
+
+
+def test_backend_without_concrete_opt_in_still_builds_ordinary_module(tmp_path, mocker):
+    module = torch.nn.Linear(2, 2)
+    backend = _InheritedExternalBackend()
+    build = mocker.spy(backend, "_build")
+
+    assert backend.build(module, Mock(), Mock(), torch.device("cpu"), tmp_path) is backend
+
+    build.assert_called_once()
+    assert module.weight.device.type == "meta"
+
+
+@pytest.mark.parametrize("permission", [1, "true"])
+def test_backend_external_opt_in_requires_boolean_true(tmp_path, permission):
+    class DeclaredExternalBackend(_InheritedExternalBackend):
+        _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
+        _build_mode = BuildMode.AHEAD_OF_TIME
+
+    DeclaredExternalBackend._supports_external_device_management = permission
+    _configure_dry_run(tmp_path, _strategy())
+    module = torch.nn.Linear(2, 2)
+    register_for_jit_tuning([module], device_management="external")
+    backend = DeclaredExternalBackend()
+    backend._build = Mock(return_value=backend)
+
+    with pytest.raises(RuntimeError, match="external module device management"):
+        backend.build(module, Mock(), Mock(), torch.device("cpu"), tmp_path)
+
+    backend._build.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "backend_cls",
+    [
+        DummyBackend,
+        backends.ONNXRuntimeBackend,
+        backends.TensorRTBackend,
+        backends.TorchEagerBackend,
+        backends.TorchInductorAotBackend,
+        backends.TorchInductorJitBackend,
+        backends.TorchTensorRTAotBackend,
+        backends.TorchTensorRTJitBackend,
+        backends.TorchAOBackend,
+    ],
+)
+def test_builtin_backends_still_accept_external_placement(tmp_path, backend_cls):
+    _configure_dry_run(tmp_path, _strategy())
+    module = torch.nn.Linear(2, 2)
+    register_for_jit_tuning([module], device_management="external")
+    # Capability validation needs only the concrete class, without initializing GPU runtimes.
+    backend = backend_cls.__new__(backend_cls)
+
+    backend._assert_external_device_management(module)

@@ -170,10 +170,10 @@ ONNX Runtime and TensorRT builds preserve the original session and device of an 
 creating their own session or artifact. The external owner can explicitly call `deactivate()` when the original session
 is no longer needed.
 
-Backends must explicitly opt into this contract by setting `_supports_external_device_management = True`; unsupported
-backends are rejected before their build implementation runs. The built-in ONNX Runtime, TensorRT, Torch eager,
-TorchInductor AOT and JIT, Torch-TensorRT AOT and JIT, and TorchAO backends support generic externally managed
-placement.
+Each concrete backend subclass must declare `_supports_external_device_management = True` itself; this opt-in is not
+inherited. Unsupported backends are rejected before their build implementation runs. The built-in ONNX Runtime,
+TensorRT, Torch eager, TorchInductor AOT and JIT, Torch-TensorRT AOT and JIT, and TorchAO backends support generic
+externally managed placement.
 
 Explicit registrations of instances that share the same Python `forward` frame may temporarily raise TorchDynamo's
 process-wide recompile limits. Capacity accounts for the configured backend candidates, optional graph-break detection,

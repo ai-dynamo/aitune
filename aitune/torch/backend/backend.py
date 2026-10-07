@@ -290,7 +290,10 @@ class Backend(ABC):
         """Reject externally managed placement unless the backend explicitly supports it."""
         from aitune.torch.utils.module import is_externally_managed_module
 
-        if is_externally_managed_module(module) and not self._supports_external_device_management:
+        if (
+            is_externally_managed_module(module)
+            and type(self).__dict__.get("_supports_external_device_management", False) is not True
+        ):
             raise RuntimeError(f"Backend {self.name} does not support external module device management")
 
     @annotate(color="cyan")
