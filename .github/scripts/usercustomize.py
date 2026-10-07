@@ -1,7 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Prefer local flash_attn package over the system-wide one."""
+"""Prefer local FlashAttention-4 over the image's system-wide FlashAttention-2.
+
+FlashAttention-4 is a pre-release that shares the ``flash_attn`` import namespace
+with FlashAttention-2, which is preinstalled in the tests Docker image.
+This startup hook ensures FA4-dependent tests import the locally installed FA4
+package instead of FA2.
+"""
 
 import sys
 from importlib.machinery import PathFinder
