@@ -354,6 +354,9 @@ jobs:
       ${{ !cancelled() && needs.wheel.result == 'success' &&
           (needs.pytorch-image.result == 'success' || needs.pytorch-image.result == 'skipped') }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    env:
+      AITUNE_FUNCTIONAL_PROFILE: pr
+      AITUNE_FUNCTIONAL_CONTAINER_REF: ${{ needs.wheel.outputs.image }}
     permissions:
       contents: read
       packages: read
@@ -371,10 +374,14 @@ jobs:
           name: dist
           path: dist
       - run: python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
+      - run: python -m tests.functional_ci.reporting --output functional-ci.run.json
       - run: python -m pytest tests/functional_ci/ -ra --junitxml=functional-ci.test-report.xml
       - if: always()
         uses: *actions_upload_artifact
         with:
           name: functional-ci-test-report
-          path: functional-ci.test-report.xml
+          path: |
+            functional-ci.test-report.xml
+            functional-ci.run.json
+            functional-ci-logs/
           if-no-files-found: ignore
