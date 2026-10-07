@@ -27,6 +27,8 @@ def run_artifact(
     """
     if artifact.model.format == "pt2":
         return _run_pt2(artifact, exported_path, inputs)
+    if artifact.model.format == "tensorrt_plan":
+        return _run_tensorrt(artifact, exported_path, inputs)
     raise NotImplementedError(f"No native runner for artifact format {artifact.model.format!r}")
 
 
@@ -44,3 +46,24 @@ def _run_pt2(
         result = runner(*ordered_inputs)
     outputs = result if isinstance(result, (list, tuple)) else (result,)
     return dict(zip(artifact.output_names, outputs, strict=True))
+
+
+def _run_tensorrt(
+    artifact: DeploymentArtifact,
+    exported_path: Path,
+    inputs: Mapping[str, torch.Tensor],
+) -> dict[str, torch.Tensor]:
+    """Run an exported TensorRT plan through Polygraphy's ``TrtRunner``."""
+    import tensorrt as trt
+    from polygraphy.backend.trt import TrtRunner
+
+    ordered_inputs = [(name, inputs[name]) for name in artifact.input_names]
+    device = ordered_inputs[0][1].device
+    runtime = trt.Runtime(trt.Logger(trt.Logger.WARNING))
+    engine = runtime.deserialize_cuda_engine(exported_path.read_bytes())
+    if engine is None:
+        raise RuntimeError(f"Could not deserialize TensorRT engine from {exported_path}")
+    feed = {name: tensor.detach().cpu().numpy() for name, tensor in ordered_inputs}
+    with TrtRunner(engine) as runner:
+        outputs = runner.infer(feed)
+    return {name: torch.from_numpy(outputs[name]).to(device) for name in artifact.output_names}
