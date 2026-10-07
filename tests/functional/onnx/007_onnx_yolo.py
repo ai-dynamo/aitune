@@ -151,6 +151,10 @@ def test_onnx_yolo(tmp_path: Path) -> None:
         source.deactivate()
 
 
+def _box_area(boxes: torch.Tensor) -> torch.Tensor:
+    return (boxes[:, 2:4] - boxes[:, :2]).clamp(min=0).prod(-1)
+
+
 def _match_detections(
     actual: torch.Tensor,
     expected: torch.Tensor,
@@ -158,56 +162,22 @@ def _match_detections(
     iou_threshold: float = 0.5,
     score_tolerance: float = 0.05,
 ) -> tuple[int, int, int]:
-    """Match confident detections by class, center containment, score, and IoU."""
-    actual = actual[actual[:, 4] >= confidence_threshold].detach().cpu()
-    expected = expected[expected[:, 4] >= confidence_threshold].detach().cpu()
-    pairs = []
-    for expected_index, expected_detection in enumerate(expected):
-        expected_center_x = (expected_detection[0] + expected_detection[2]) / 2
-        expected_center_y = (expected_detection[1] + expected_detection[3]) / 2
-        for actual_index, actual_detection in enumerate(actual):
-            if expected_detection[5] != actual_detection[5]:
-                continue
-            if abs(expected_detection[4].item() - actual_detection[4].item()) > score_tolerance:
-                continue
-            if not (
-                actual_detection[0] <= expected_center_x <= actual_detection[2]
-                and actual_detection[1] <= expected_center_y <= actual_detection[3]
-            ):
-                continue
-            actual_center_x = (actual_detection[0] + actual_detection[2]) / 2
-            actual_center_y = (actual_detection[1] + actual_detection[3]) / 2
-            if not (
-                expected_detection[0] <= actual_center_x <= expected_detection[2]
-                and expected_detection[1] <= actual_center_y <= expected_detection[3]
-            ):
-                continue
-            intersection_width = max(
-                0.0,
-                min(expected_detection[2].item(), actual_detection[2].item())
-                - max(expected_detection[0].item(), actual_detection[0].item()),
-            )
-            intersection_height = max(
-                0.0,
-                min(expected_detection[3].item(), actual_detection[3].item())
-                - max(expected_detection[1].item(), actual_detection[1].item()),
-            )
-            intersection = intersection_width * intersection_height
-            expected_area = (expected_detection[2] - expected_detection[0]) * (
-                expected_detection[3] - expected_detection[1]
-            )
-            actual_area = (actual_detection[2] - actual_detection[0]) * (actual_detection[3] - actual_detection[1])
-            union = expected_area.item() + actual_area.item() - intersection
-            if union and intersection / union >= iou_threshold:
-                pairs.append((intersection / union, expected_index, actual_index))
-
-    matched_expected = set()
-    matched_actual = set()
-    for _, expected_index, actual_index in sorted(pairs, reverse=True):
-        if expected_index not in matched_expected and actual_index not in matched_actual:
-            matched_expected.add(expected_index)
-            matched_actual.add(actual_index)
-    return len(matched_expected), len(expected), len(actual)
+    """Greedily match confident detections of the same class by IoU, highest IoU first."""
+    actual = actual[actual[:, 4] >= confidence_threshold].cpu()
+    expected = expected[expected[:, 4] >= confidence_threshold].cpu()
+    top_left = torch.maximum(expected[:, None, :2], actual[None, :, :2])
+    bottom_right = torch.minimum(expected[:, None, 2:4], actual[None, :, 2:4])
+    intersection = (bottom_right - top_left).clamp(min=0).prod(-1)
+    iou = intersection / (_box_area(expected)[:, None] + _box_area(actual)[None, :] - intersection)
+    same_class = expected[:, None, 5] == actual[None, :, 5]
+    close_score = (expected[:, None, 4] - actual[None, :, 4]).abs() <= score_tolerance
+    iou = iou.where(same_class & close_score & (iou >= iou_threshold), 0)
+    matched = 0
+    while iou.numel() and iou.max() > 0:
+        expected_index, actual_index = divmod(int(iou.argmax()), iou.shape[1])
+        iou[expected_index], iou[:, actual_index] = 0, 0
+        matched += 1
+    return matched, len(expected), len(actual)
 
 
 if __name__ == "__main__":
