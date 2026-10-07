@@ -18,7 +18,15 @@ into a fresh model, and infer again. The explicit Torch Eager case runs first.
 The Inductor cases add a full-graph, fixed-shape JIT variant (device inferred
 from inputs) and an AOT variant (explicit device). The JIT case checks a
 compiled region; the AOT case checks an executed runner, then exports the
-`pt2` artifact to a new path and runs it through `aoti_load_package`. The PR
+`pt2` artifact to a new path and runs it through `aoti_load_package`.
+The TensorRT cases add fp32 Torch-TensorRT JIT and AOT variants plus a
+standalone TensorRT variant. Both Torch-TensorRT variants convert the full
+graph and disable TF32, then count real runs of the `tensorrt::execute_engine`
+operator that its C++ and Python runtimes share. Their lifecycle stops at
+checkpoint restoration because that backend exposes no deployment artifact.
+The standalone TensorRT variant disables TF32 and CUDA graphs to isolate its
+own engine execution, then exports the `tensorrt_plan` artifact to a new path
+and runs it through Polygraphy's `TrtRunner`. The PR
 profile checks the required CUDA runner and backend packages. Missing
 requirements or advertised capabilities fail the run. Optional exclusions
 retain their case ID and reason in the JUnit report.

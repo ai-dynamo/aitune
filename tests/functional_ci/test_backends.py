@@ -3,6 +3,8 @@
 """Functional backend lifecycle cases."""
 
 from collections.abc import Callable
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -11,10 +13,17 @@ import aitune.torch as ait
 from aitune.torch.backend import (
     Backend,
     BuildMode,
+    TensorRTBackend,
+    TensorRTBackendConfig,
     TorchEagerBackend,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
     TorchInductorJitBackendConfig,
+    TorchTensorRTAotBackend,
+    TorchTensorRTAotBackendConfig,
+    TorchTensorRTConfig,
+    TorchTensorRTJitBackend,
+    TorchTensorRTJitBackendConfig,
 )
 from aitune.torch.module import Module
 
@@ -26,6 +35,29 @@ from .fixtures.models import make_mlp
 def _inductor_jit_backend() -> Backend:
     """Build a fixed-shape, full-graph Inductor JIT backend."""
     return TorchInductorJitBackend(TorchInductorJitBackendConfig(fullgraph=True, dynamic=False))
+
+
+def _torch_tensorrt_jit_backend() -> Backend:
+    """Build a Torch-TensorRT JIT backend that fully converts the graph to fp32."""
+    return TorchTensorRTJitBackend(
+        TorchTensorRTJitBackendConfig(
+            compile_config=TorchTensorRTConfig(enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True)
+        )
+    )
+
+
+def _torch_tensorrt_aot_backend() -> Backend:
+    """Build a Torch-TensorRT AOT backend that fully converts the graph to fp32."""
+    return TorchTensorRTAotBackend(
+        TorchTensorRTAotBackendConfig(
+            compile_config=TorchTensorRTConfig(enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True)
+        )
+    )
+
+
+def _tensorrt_backend() -> Backend:
+    """Build a standalone TensorRT backend with its lifecycle isolated from TF32 and CUDA graphs."""
+    return TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, use_cuda_graphs=False))
 
 
 @pytest.mark.backend_lifecycle
@@ -55,6 +87,30 @@ def _inductor_jit_backend() -> Backend:
             True,
             id="inductor-aot-fp32",
             marks=pytest.mark.functional_case(backend="TorchInductorAotBackend", variant="fp32-aot-explicit"),
+        ),
+        pytest.param(
+            _torch_tensorrt_jit_backend,
+            "inferred",
+            BuildMode.JUST_IN_TIME,
+            False,
+            id="torch-tensorrt-jit-fp32",
+            marks=pytest.mark.functional_case(backend="TorchTensorRTJitBackend", variant="fp32-jit-inferred"),
+        ),
+        pytest.param(
+            _torch_tensorrt_aot_backend,
+            "explicit",
+            BuildMode.AHEAD_OF_TIME,
+            False,
+            id="torch-tensorrt-aot-fp32",
+            marks=pytest.mark.functional_case(backend="TorchTensorRTAotBackend", variant="fp32-aot-explicit"),
+        ),
+        pytest.param(
+            _tensorrt_backend,
+            "explicit",
+            BuildMode.AHEAD_OF_TIME,
+            True,
+            id="tensorrt-fp32",
+            marks=pytest.mark.functional_case(backend="TensorRTBackend", variant="fp32-explicit"),
         ),
     ],
 )
@@ -107,7 +163,7 @@ def test_backend_lifecycle(
 
 
 def _assert_real_execution(backend: Backend, module: Module, value: torch.Tensor, expected: torch.Tensor) -> None:
-    """Confirm the real runtime ran: a compiled region for JIT, an executed runner for AOT."""
+    """Confirm the real runtime ran: a compiled region for JIT, an executed engine or runner for AOT."""
     if isinstance(backend, TorchInductorJitBackend):
         assert backend._compiled_module is not None
         torch.testing.assert_close(module(value), expected, rtol=1e-4, atol=1e-5)
@@ -129,16 +185,72 @@ def _assert_real_execution(backend: Backend, module: Module, value: torch.Tensor
             backend._runner = runner
         assert calls == 1
         return
+    if isinstance(backend, (TorchTensorRTJitBackend, TorchTensorRTAotBackend)):
+        with _observed_torch_tensorrt_execution() as counter:
+            torch.testing.assert_close(module(value), expected, rtol=1e-4, atol=1e-5)
+        assert counter.calls == 1
+        return
+    if isinstance(backend, TensorRTBackend):
+        assert backend._config.enable_tf32 is False
+        assert backend._config.use_cuda_graphs is False
+        original = backend._execute_engine
+        calls = 0
+
+        def observed_execute():
+            nonlocal calls
+            calls += 1
+            return original()
+
+        backend._execute_engine = observed_execute
+        try:
+            torch.testing.assert_close(module(value), expected, rtol=1e-4, atol=1e-5)
+        finally:
+            backend._execute_engine = original
+        assert calls == 1
+        return
     torch.testing.assert_close(module(value), expected, rtol=1e-4, atol=1e-5)
 
 
-def _assert_native_artifact(module: Module, tmp_path, value: torch.Tensor, expected: torch.Tensor) -> None:
-    """Export the PT2 artifact to a new path and execute it through its native runtime."""
-    artifact = module.artifact()
-    assert artifact.model.format == "pt2"
-    assert artifact.runtime.name == "aotinductor"
+@contextmanager
+def _observed_torch_tensorrt_execution():
+    """Count real Torch-TensorRT engine runs via the ``tensorrt::execute_engine`` operator."""
+    counter = SimpleNamespace(calls=0)
+    packet = torch.ops.tensorrt.execute_engine
 
-    exported_path = tmp_path / "exported" / "model.pt2"
+    class _ObservedPacket:
+        def __call__(self, *args, **kwargs):
+            counter.calls += 1
+            return packet(*args, **kwargs)
+
+        def __getattr__(self, item):
+            target = getattr(packet, item)
+            if item != "default":
+                return target
+
+            def wrapper(*args, **kwargs):
+                counter.calls += 1
+                return target(*args, **kwargs)
+
+            return wrapper
+
+    torch.ops.tensorrt.execute_engine = _ObservedPacket()
+    try:
+        yield counter
+    finally:
+        torch.ops.tensorrt.execute_engine = packet
+
+
+_NATIVE_RUNTIME_NAMES = {"pt2": "aotinductor", "tensorrt_plan": "tensorrt"}
+_NATIVE_FILE_NAMES = {"pt2": "model.pt2", "tensorrt_plan": "model.plan"}
+
+
+def _assert_native_artifact(module: Module, tmp_path, value: torch.Tensor, expected: torch.Tensor) -> None:
+    """Export the deployment artifact to a new path and execute it through its native runtime."""
+    artifact = module.artifact()
+    model_format = artifact.model.format
+    assert artifact.runtime.name == _NATIVE_RUNTIME_NAMES[model_format]
+
+    exported_path = tmp_path / "exported" / _NATIVE_FILE_NAMES[model_format]
     assert artifact.model.export_files(exported_path) == exported_path
 
     outputs = run_artifact(artifact, exported_path, {artifact.input_names[0]: value})
