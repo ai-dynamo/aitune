@@ -8,18 +8,18 @@ import argparse
 import json
 import os
 import shlex
+import site
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+import tomllib
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from metadata import FunctionalTestConfig, FunctionalVariantConfig  # noqa: E402
 
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib  # pytype: disable=import-error
+USER_CUSTOMIZE_PATH = Path(__file__).parent.parent.parent.parent / ".github" / "scripts" / "usercustomize.py"
 
 
 def main() -> None:
@@ -37,6 +37,7 @@ def run(
     workflow: str | None = None,
 ) -> None:
     """Run one zero-based entry from a functional script or example project."""
+    _prepare_environment(dry_run)
     config = _load_config(path, kind)
     try:
         entry = config.entries[test_number]
@@ -58,6 +59,23 @@ def run(
         _run_project(path, entry, workflow, verbose, dry_run, run_kwargs)
     else:
         _run_command(_command(path, kind, entry), verbose, dry_run, **run_kwargs)
+
+
+def _prepare_environment(dry_run: bool) -> None:
+    """Prepare the environment for the functional test.
+    Replicate .github/scripts/usercustomize.py injection for user site-packages in Python
+    """
+    user_site = Path(site.getusersitepackages()).absolute()
+    if not USER_CUSTOMIZE_PATH.exists():
+        raise FileNotFoundError(f"User customize path {USER_CUSTOMIZE_PATH} not found")
+
+    if dry_run:
+        return
+
+    user_site.mkdir(parents=True, exist_ok=True)
+    dest = user_site / "usercustomize.py"
+    if not dest.exists() or USER_CUSTOMIZE_PATH.read_bytes() != dest.read_bytes():
+        dest.write_bytes(USER_CUSTOMIZE_PATH.read_bytes())
 
 
 def _validate_requested_workflow(

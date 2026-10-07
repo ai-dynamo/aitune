@@ -14,7 +14,7 @@
 
 Source: https://huggingface.co/onnx-community/yolov10n
 The published graph requires batch 1 and 640x640 RGB inputs.
-Deterministic generated input checks execution and numerical agreement, not detection accuracy.
+A pinned dog image checks detection agreement and checkpoint round-trip across runtimes.
 Run: HF_ENDPOINT=https://huggingface.co python -m pytest tests/functional/onnx/007_onnx_yolo.py -q -s
 Use --basetemp=/path/to/artifacts to retain the performance report and checkpoint.
 """
@@ -25,6 +25,7 @@ from pathlib import Path
 import pytest
 import torch
 from huggingface_hub import snapshot_download
+from PIL import Image
 
 from aitune.torch import MaxThroughputStrategy, Module, PerformanceValidationMode, load, save, tune
 from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend, TensorRTBackendConfig
@@ -44,9 +45,11 @@ def load_model():
 
 
 def sample_input() -> torch.Tensor:
-    """Create a reproducible input without an external image asset."""
-    generator = torch.Generator().manual_seed(0)
-    return torch.rand((1, 3, 640, 640), generator=generator).cuda()
+    image_path = Path(__file__).resolve().parents[3] / "examples/ResNet/dog.webp"
+    with Image.open(image_path) as image:
+        image = image.convert("RGB").resize((640, 640))
+        image_tensor = torch.frombuffer(bytearray(image.tobytes()), dtype=torch.uint8).reshape(640, 640, 3)
+    return image_tensor.permute(2, 0, 1).unsqueeze(0).to(torch.float32).div_(255).cuda()
 
 
 def tune_and_save(source: OnnxModule, requests: torch.Tensor, tmp_path: Path):
@@ -102,13 +105,31 @@ def tune_and_save(source: OnnxModule, requests: torch.Tensor, tmp_path: Path):
         raise
 
 
+def test_detection_matching_ignores_row_order() -> None:
+    expected = torch.tensor([[10, 10, 30, 30, 0.9, 1], [60, 60, 100, 100, 0.8, 2]])
+    actual = torch.tensor([[60, 60, 100, 100, 0.79, 2], [10, 10, 31, 30, 0.91, 1]])
+
+    assert _match_detections(actual, expected) == (2, 2, 2)
+
+
 def inference(module, checkpoint, requests, tuned_output, expected):
     module = load(module, checkpoint)
     restored_output = module(images=requests)
     torch.testing.assert_close(restored_output, tuned_output)
     print(f"Load passed. Checkpoint: {checkpoint}")  # noqa: T201
-    torch.testing.assert_close(restored_output, expected, rtol=1e-2, atol=1e-2)
-    assert all(torch.isfinite(output).all() for output in restored_output.values())
+    # output0 rows are [x1, y1, x2, y2, score, class_id]; box coordinates are in input pixels.
+    assert restored_output.keys() == expected.keys()
+    for name, restored in restored_output.items():
+        reference = expected[name]
+        assert restored.shape == reference.shape
+        assert torch.isfinite(restored).all()
+        assert torch.isfinite(reference).all()
+    assert restored_output["output0"].shape == (1, 300, 6)
+    matched, expected_count, restored_count = _match_detections(restored_output["output0"][0], expected["output0"][0])
+    assert expected_count > 0, "Reference produced no confident detections"
+    assert restored_count > 0, "TensorRT produced no confident detections"
+    assert matched / expected_count >= 0.9
+    assert matched / restored_count >= 0.9
 
 
 @torch.inference_mode()
@@ -128,6 +149,35 @@ def test_onnx_yolo(tmp_path: Path) -> None:
             for backend in module.module.backends.values():
                 backend._deactivate()
         source.deactivate()
+
+
+def _box_area(boxes: torch.Tensor) -> torch.Tensor:
+    return (boxes[:, 2:4] - boxes[:, :2]).clamp(min=0).prod(-1)
+
+
+def _match_detections(
+    actual: torch.Tensor,
+    expected: torch.Tensor,
+    confidence_threshold: float = 0.25,
+    iou_threshold: float = 0.5,
+    score_tolerance: float = 0.05,
+) -> tuple[int, int, int]:
+    """Greedily match confident detections of the same class by IoU, highest IoU first."""
+    actual = actual[actual[:, 4] >= confidence_threshold].cpu()
+    expected = expected[expected[:, 4] >= confidence_threshold].cpu()
+    top_left = torch.maximum(expected[:, None, :2], actual[None, :, :2])
+    bottom_right = torch.minimum(expected[:, None, 2:4], actual[None, :, 2:4])
+    intersection = (bottom_right - top_left).clamp(min=0).prod(-1)
+    iou = intersection / (_box_area(expected)[:, None] + _box_area(actual)[None, :] - intersection)
+    same_class = expected[:, None, 5] == actual[None, :, 5]
+    close_score = (expected[:, None, 4] - actual[None, :, 4]).abs() <= score_tolerance
+    iou = iou.where(same_class & close_score & (iou >= iou_threshold), 0)
+    matched = 0
+    while iou.numel() and iou.max() > 0:
+        expected_index, actual_index = divmod(int(iou.argmax()), iou.shape[1])
+        iou[expected_index], iou[:, actual_index] = 0, 0
+        matched += 1
+    return matched, len(expected), len(actual)
 
 
 if __name__ == "__main__":

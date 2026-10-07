@@ -150,7 +150,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python tests/functional/scripts/metadata.py ${{ matrix.path }} | tee script_metadata.json
-
+          # DO NOT ADD ANY CODE HERE, execute.py MUST prepare the environment for the functional test
           python tests/functional/scripts/execute.py \
             "${{ matrix.path }}" \
             --kind "${{ matrix.kind }}" \
