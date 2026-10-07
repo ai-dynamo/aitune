@@ -102,12 +102,16 @@ def tune_and_save(source: OnnxModule, requests: torch.Tensor, tmp_path: Path):
         raise
 
 
-def inference(module, checkpoint, requests, tuned_output):
+def inference(module, checkpoint, requests, tuned_output, expected):
     module = load(module, checkpoint)
     restored_output = module(images=requests)
     torch.testing.assert_close(restored_output, tuned_output)
     print(f"Load passed. Checkpoint: {checkpoint}")  # noqa: T201
-    assert restored_output["output0"].shape == (1, 300, 6)
+    # output0 rows are [x1, y1, x2, y2, score, class_id]; box coordinates are in input pixels.
+    assert restored_output.keys() == expected.keys()
+    restored, reference = restored_output["output0"], expected["output0"]
+    torch.testing.assert_close(restored[..., :4], reference[..., :4], rtol=0, atol=1.0)
+    torch.testing.assert_close(restored[..., 4:], reference[..., 4:], rtol=1e-2, atol=1e-2)
     assert all(torch.isfinite(output).all() for output in restored_output.values())
 
 
@@ -120,8 +124,9 @@ def test_onnx_yolo(tmp_path: Path) -> None:
     module = None
     try:
         requests = sample_input()
+        expected = source(images=requests)
         module, checkpoint, tuned_output = tune_and_save(source, requests, tmp_path)
-        inference(module, checkpoint, requests, tuned_output)
+        inference(module, checkpoint, requests, tuned_output, expected)
     finally:
         if module is not None and module.state.name == "TUNED":
             for backend in module.module.backends.values():
