@@ -44,6 +44,11 @@ checkpoint:
       - any-glob-to-any-file:
           - aitune/torch/checkpoint/**
 
+dataloader:
+  - changed-files:
+      - any-glob-to-any-file:
+          - aitune/torch/dataloader.py
+
 profiling:
   - changed-files:
       - any-glob-to-any-file:
@@ -68,7 +73,15 @@ examples:
 tests:
   - changed-files:
       - any-glob-to-any-file:
-          - tests/**
+          - tests/unit/**
+          - tests/utilities/**
+          - tests/toy_models/**
+          - tests/toy_backends.py
+
+functional-tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - tests/functional_ci/**
 
 ci:
   - changed-files:
