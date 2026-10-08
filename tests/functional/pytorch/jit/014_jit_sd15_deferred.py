@@ -37,14 +37,12 @@ def create_model():
 
 @collect_tuning_data(__file__)
 def test_jit_sd15():
-    pipe = create_model()
-
-    prompt = "A futuristic cityscape with neon lights and flying cars"
-
     config.dry_run = False
     config.min_samples = 4
-
     config.mode = JITMode.TUNE_DEFERRED
+
+    pipe = create_model()
+    prompt = "A futuristic cityscape with neon lights and flying cars"
 
     for size in [256, 512]:
         pipe([prompt] * 1, num_inference_steps=50, height=size, width=size)
