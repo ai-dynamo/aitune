@@ -81,7 +81,7 @@ jobs:
         with:
           context: .
           file: .github/docker/Dockerfile
-          push: true
+          outputs: type=image,push=true,compression=zstd,force-compression=true,oci-mediatypes=true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/pytorch:${{ matrix.torch_ci_image_base }}
             AITUNE_CI_IMAGE_CREATION_DATE=${{ github.event.head_commit.timestamp }}
@@ -121,7 +121,7 @@ jobs:
         with:
           context: .
           file: .github/docker/triton.Dockerfile
-          push: true
+          outputs: type=image,push=true,compression=zstd,force-compression=true,oci-mediatypes=true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/tritonserver:${{ matrix.triton_ci_image_base }}
             AITUNE_EXTRAS=${{ matrix.aitune_extras }}
@@ -158,10 +158,29 @@ jobs:
         with:
           context: .
           file: .github/docker/cuda.Dockerfile
-          push: true
+          outputs: type=image,push=true,compression=zstd,force-compression=true,oci-mediatypes=true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/cuda:${{ matrix.cuda_ci_image_base }}
             AITUNE_CI_IMAGE_CREATION_DATE=${{ github.event.head_commit.timestamp }}
           tags: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda_ci_image_base }}:latest
       - id: image
         run: echo "image=ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda_ci_image_base }}:latest" >> "$GITHUB_OUTPUT"
+
+  warm-gpu-runner-cache:
+    name: warm ${{ matrix.runner }} image cache
+    needs: create-base-images
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [prod-aitune-tester-rtx-pro-4500-v1]
+    # Pull the freshly pushed PR CI image onto the GPU node so the first PR job of the day starts warm.
+    container:
+      image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - run: python -c "import aitune"

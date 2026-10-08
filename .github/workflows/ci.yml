@@ -262,7 +262,7 @@ jobs:
         with:
           context: .
           file: .github/docker/Dockerfile
-          push: true
+          outputs: type=image,push=true,compression=zstd,oci-mediatypes=true
           build-args: |
             FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
             ADDITIONAL_PACKAGES=pytest
@@ -320,24 +320,24 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    # The k8s container hook adds about 20s to every step, so keep the step count low:
+    # take the sources from the sdist instead of a checkout and run everything in one step.
     steps:
-      - uses: *actions_checkout
-        with:
-          persist-credentials: false
       - uses: *actions_download_artifact
         with:
           name: dist
           path: dist
-      - run: |
+      - name: Run unit tests
+        run: |
           echo "Container image: ${{ needs.wheel.outputs.image }}"
           echo "Checking onnxruntime_providers_cuda.so dependencies:"
           ldd /usr/local/lib/python3.12/dist-packages/onnxruntime/capi/libonnxruntime_providers_cuda.so
-      - run: python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
-      - run: >-
-          python -m pytest -q -rf tests/unit
-          --cov=aitune
-          --cov-report=xml:coverage.xml
-          --junitxml=pytorch-gpu.test-report.xml
+          tar xzf dist/*.tar.gz --strip-components 1
+          python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
+          python -m pytest -q -rf tests/unit \
+            --cov=aitune \
+            --cov-report=xml:coverage.xml \
+            --junitxml=pytorch-gpu.test-report.xml
       - if: always()
         uses: *actions_upload_artifact
         with:
