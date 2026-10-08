@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Explicit, bounded single-GPU Schnell configuration."""
+"""Explicit, bounded single-GPU and context-parallel Schnell configurations."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,9 +37,13 @@ def load_config(path):
             raise ValueError(f"{key} must be a mapping")
     if not isinstance(raw.get("name"), str) or not re.fullmatch(r"[a-z0-9-]+", raw["name"]):
         raise ValueError("name must contain lowercase letters, numbers, or hyphens")
-    if raw["execution"] != {"gpu_count": 1, "parallelism": "none", "compilation": "runtime",
-                             "weight_offloading": False}:
-        raise ValueError("Implemented layout: one GPU, no parallelism/offloading, runtime compilation")
+    execution = raw["execution"]
+    count = execution.get("gpu_count")
+    if type(count) is not int or count not in (1, 2):
+        raise ValueError("Implemented layouts: one GPU or two GPUs on one node")
+    if execution != {"gpu_count": count, "parallelism": "none" if count == 1 else "context-ulysses",
+                     "compilation": "runtime", "weight_offloading": False}:
+        raise ValueError("Use runtime compilation without offloading; two GPUs require context-ulysses")
     if raw["precision"] != {"allowed": ["bf16"]}:
         raise ValueError("This recipe supports BF16 without quantization")
     if raw["tuning"] != {"batch_sizes": [1]}:
@@ -62,6 +66,8 @@ def load_config(path):
         raise ValueError("Schnell requires guidance_scale: 0")
     if type(w["max_sequence_length"]) is not int or not 1 <= w["max_sequence_length"] <= 256:
         raise ValueError("Schnell max_sequence_length must be between 1 and 256")
+    if count > 1 and (w["max_sequence_length"] % count or (w["width"] // 16 * (w["height"] // 16)) % count):
+        raise ValueError("Context parallelism requires text and packed image sequence lengths divisible by GPU count")
     b = raw["benchmark"]
     for key in ("warmup_iterations", "repetitions"):
         if type(b.get(key)) is not int or b[key] < 1:
@@ -69,15 +75,21 @@ def load_config(path):
     if not isinstance(b.get("sampling_interval_s"), (int, float)) or not 0.01 <= b["sampling_interval_s"] <= 1:
         raise ValueError("sampling_interval_s must be between 0.01 and 1")
     v = raw["validation"]
-    if v.get("metric") != "rgb_ssim" or not isinstance(v.get("threshold"), (int, float)) or not 0 < v["threshold"] <= 1:
+    if v.get("metric") != "rgb_ssim" or type(v.get("threshold")) not in (int, float) or not 0 < v["threshold"] <= 1:
         raise ValueError("validation must specify rgb_ssim and threshold in (0,1]")
+    soft_threshold = v.get("soft_threshold")
+    if soft_threshold is not None and (type(soft_threshold) not in (int, float)
+            or not v["threshold"] <= soft_threshold <= 1):
+        raise ValueError("validation.soft_threshold must be between validation.threshold and 1, or null")
     d = raw["deployment"]
-    if d.get("targets") != ["dynamo"] or d.get("concurrency") != 1:
+    if count > 1 and d != {"targets": []}:
+        raise ValueError("The multi-GPU recipe implements Python phases only; set deployment.targets: []")
+    if count == 1 and (d.get("targets") != ["dynamo"] or d.get("concurrency") != 1):
         raise ValueError("Deployment implements Dynamo at concurrency 1")
-    for key in ("port", "request_count", "readiness_timeout_s"):
+    for key in (("port", "request_count", "readiness_timeout_s") if count == 1 else ()):
         if type(d.get(key)) is not int or d[key] < 1:
             raise ValueError(f"deployment.{key} must be positive")
-    if d["port"] > 65535 or type(d.get("seed")) is not int or not 0 <= d["seed"] < 2**32:
+    if count == 1 and (d["port"] > 65535 or type(d.get("seed")) is not int or not 0 <= d["seed"] < 2**32):
         raise ValueError("Invalid deployment port or seed")
 
     def resolved(value):

@@ -18,7 +18,7 @@ def compilation_counters():
             "inductor_generated_kernels": metrics.generated_kernel_count}
 
 
-def prepare(pipe, cfg, records):
+def prepare(pipe, cfg, records, compilation):
     from .model import generate, synchronize
     synchronize()
     start = time.perf_counter()
@@ -26,6 +26,9 @@ def prepare(pipe, cfg, records):
         generate(pipe, cfg, item)
     synchronize()
     first_use_s = time.perf_counter() - start
+    first_use_start, first_use_end = start, time.perf_counter()
+    compile_timing = compilation.finish()
+    compile_records = compilation.snapshot()
     start = time.perf_counter()
     before = compilation_counters()
     for _ in range(cfg["benchmark"]["warmup_iterations"]):
@@ -33,10 +36,12 @@ def prepare(pipe, cfg, records):
             generate(pipe, cfg, item)
     synchronize()
     warmup_s = time.perf_counter() - start
-    if compilation_counters() != before:
+    warmup_end = time.perf_counter()
+    if compilation_counters() != before or compilation.snapshot() != compile_records:
         raise RuntimeError("Compilation continued during warmup; inspect logs before accepting measurements")
-    return {"first_use_s": first_use_s, "warmup_s": warmup_s, "compilation_s": None,
-            "compilation_missing_reason": "First-use includes generation and lazy compilation; pure compiler wall time is unavailable",
+    return {"first_use_s": first_use_s, "warmup_s": warmup_s, **compile_timing,
+            "first_use_start_monotonic_s": first_use_start, "first_use_end_monotonic_s": first_use_end,
+            "warmup_start_monotonic_s": start, "warmup_end_monotonic_s": warmup_end,
             "first_use_policy": "One unmeasured pass over every input before post-compilation warmup",
             "cache_state": "new per-process compiler caches; artifact retains tuning-time state"}
 
@@ -56,6 +61,8 @@ def main():
     directory.mkdir()
     configure_cache(directory)
     from .model import generate, load_model, synchronize
+    from .compilation import CompilationRecorder
+    compilation = CompilationRecorder(directory)
     source = source_identity(args, cfg)
     pipe = load_model(args, cfg, args.variant, source)
     report = {"variant": args.variant, "run_id": Path(args.run_dir).name, "contract": contract(cfg, source),
@@ -71,7 +78,7 @@ def main():
         evidence = require_correctness(cfg)
         validation = read_inputs(cfg["inputs"]["validation"])
         records = read_inputs(cfg["inputs"]["benchmark"])
-        report.update(prepare(pipe, cfg, records + validation))
+        report.update(prepare(pipe, cfg, records + validation, compilation))
         save_images(pipe, cfg, validation, directory / "images")
         quality = compare(cfg, Path(evidence["original"]) / "images", directory / "images", validation)
         write_json(directory / "correctness.json", quality)
@@ -81,6 +88,7 @@ def main():
         sampler = Sampler(directory / "gpu-samples.jsonl", cfg["benchmark"]["sampling_interval_s"]).start()
         timings = []
         before = compilation_counters()
+        compile_records = compilation.snapshot()
         synchronize()
         start = time.perf_counter()
         unix_start = time.time()
@@ -95,7 +103,7 @@ def main():
             end = time.perf_counter()
             sampler.stop()
         write_json(directory / "timings.json", timings)
-        if compilation_counters() != before:
+        if compilation_counters() != before or compilation.snapshot() != compile_records:
             raise RuntimeError("Compilation occurred in the measured window; report rejected")
         report.update({"throughput_images_s": len(timings) / (end - start),
                        "latency_mean_ms": sum(t["elapsed_s"] for t in timings) / len(timings) * 1000,

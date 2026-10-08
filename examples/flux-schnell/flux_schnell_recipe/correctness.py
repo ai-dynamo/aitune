@@ -4,11 +4,14 @@
 
 from pathlib import Path
 from collections import deque
+import logging
 import subprocess
 import sys
 
 from .data import read_inputs
 from .records import artifact_metadata, contract, file_sha, new_run, read_json, source_identity, write_json
+
+logger = logging.getLogger(__name__)
 
 
 def score_images(reference, actual):
@@ -25,6 +28,8 @@ def score_images(reference, actual):
 
 def compare(cfg, reference, actual, records):
     from PIL import Image
+    threshold = cfg["validation"]["threshold"]
+    soft_threshold = cfg["validation"].get("soft_threshold")
     scores = []
     for item in records:
         with Image.open(Path(reference) / f"{item['id']}.png") as a, Image.open(Path(actual) / f"{item['id']}.png") as b:
@@ -32,9 +37,16 @@ def compare(cfg, reference, actual, records):
             if a.size != expected_size or b.size != expected_size:
                 raise ValueError("Image dimensions differ from the recipe")
             score = score_images(a, b)
-        scores.append({"id": item["id"], "ssim": score, "passed": score >= cfg["validation"]["threshold"]})
-    return {"metric": "rgb_ssim", "threshold": cfg["validation"]["threshold"],
-            "passed": all(s["passed"] for s in scores), "scores": scores}
+        passed = score >= threshold
+        soft_passed = score >= soft_threshold if soft_threshold is not None else None
+        if passed and soft_passed is False:
+            logger.warning("Image %s: SSIM %.6f is below soft threshold %.6f (hard threshold %.6f passed)",
+                           item["id"], score, soft_threshold, threshold)
+        scores.append({"id": item["id"], "ssim": score, "passed": passed, "soft_passed": soft_passed})
+    return {"metric": "rgb_ssim", "threshold": threshold, "soft_threshold": soft_threshold,
+            "passed": all(s["passed"] for s in scores),
+            "soft_passed": all(s["soft_passed"] for s in scores) if soft_threshold is not None else None,
+            "scores": scores}
 
 
 def worker_command(args, cfg, action, variant, run_dir):

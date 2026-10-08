@@ -30,6 +30,7 @@ def main():
     from ...model import load_model, generate, synchronize
     from ...telemetry import Sampler
     from ...worker import prepare, compilation_counters
+    from ...compilation import CompilationRecorder
     identity = source_identity(args, cfg)
     artifact = artifact_metadata(cfg)
     if contract(cfg, identity) != artifact["contract"]:
@@ -37,6 +38,7 @@ def main():
     records = read_inputs(cfg["inputs"]["validation"]) + read_inputs(cfg["inputs"]["benchmark"])
     if any(r["seed"] != cfg["deployment"]["seed"] for r in records):
         raise ValueError("Dynamo's image protocol uses one configured seed; validation/benchmark seeds must match it")
+    compilation = CompilationRecorder(directory)
     pipe = load_model(args, cfg, args.variant, identity)
     name = f"flux-schnell-{args.variant}-{directory.name}"
     lock = threading.Lock()
@@ -44,7 +46,7 @@ def main():
 
     def warmup():
         nonlocal sampler
-        timing = prepare(pipe, cfg, records)
+        timing = prepare(pipe, cfg, records, compilation)
         sampler = Sampler(directory / "gpu-samples.jsonl", cfg["benchmark"]["sampling_interval_s"], stream=True).start()
         write_json(directory / "service.json", {"run_id": directory.name, "model_name": name,
             "variant": args.variant, "contract": contract(cfg, identity), "artifact_sha256": artifact["sha256"],
@@ -60,12 +62,13 @@ def main():
     def serve(prompt):
         with lock:
             before = compilation_counters()
+            compile_records = compilation.snapshot()
             start = time.time()
             image = generate(pipe, cfg, {"prompt": prompt, "seed": cfg["deployment"]["seed"]})
             synchronize()
             buffer = io.BytesIO()
             image.save(buffer, format="PNG")
-            compiled = compilation_counters() != before
+            compiled = compilation_counters() != before or compilation.snapshot() != compile_records
             with (directory / "requests.jsonl").open("a") as log:
                 log.write(json.dumps({"start_unix_s": start, "end_unix_s": time.time(), "compiled": compiled}) + "\n")
             if compiled:

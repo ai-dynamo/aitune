@@ -45,7 +45,8 @@ def run(args, cfg):
                "--custom-dataset-type", "single_turn", "--dataset-sampling-strategy", "sequential",
                "--extra-inputs", f"size:{cfg['workload']['width']}x{cfg['workload']['height']}",
                "--concurrency", "1", "--request-count", str(cfg["deployment"]["request_count"]),
-               "--warmup-request-count", "0", "--artifact-dir", str(artifacts)]
+               # AIPerf 0.13 disables warmup when omitted; an explicit zero is invalid.
+               "--artifact-dir", str(artifacts)]
     write_json(directory / "command.json", command)
     with (directory / "aiperf.log").open("w") as log:
         subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True, env=dict(os.environ, TZ="UTC"))
@@ -80,6 +81,8 @@ def run(args, cfg):
               "throughput_images_s": count / (end - start), "latency_mean_ms": metric(raw, "request_latency", "ms"),
               "compilation_s": service["timing"]["compilation_s"],
               "compilation_missing_reason": service["timing"]["compilation_missing_reason"],
+              "compilation_method": service["timing"].get("compilation_method"),
+              "raw_compilation": service["timing"].get("raw_compilation"),
               "warmup_s": service["timing"]["warmup_s"], "first_use_s": service["timing"]["first_use_s"],
               "measurement_start_unix_s": start, "measurement_end_unix_s": end,
               "batch_size": 1, "concurrency": 1, "inputs": records,

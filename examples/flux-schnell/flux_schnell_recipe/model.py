@@ -5,15 +5,19 @@
 import os
 
 
-def check_gpu():
+def check_gpu(cfg):
     import torch
-    if int(os.environ.get("WORLD_SIZE", "1")) != 1 or int(os.environ.get("LOCAL_WORLD_SIZE", "1")) != 1:
-        raise ValueError("This recipe requires one process; do not use torchrun")
-    if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
-        raise ValueError("Expose exactly one CUDA GPU, for example CUDA_VISIBLE_DEVICES=0")
+    import torch.distributed as dist
+    count = cfg["execution"]["gpu_count"]
+    if int(os.environ.get("WORLD_SIZE", "1")) != count or int(os.environ.get("LOCAL_WORLD_SIZE", "1")) != count:
+        raise ValueError("Launcher world size differs from execution.gpu_count; use the recipe CLI")
+    if not torch.cuda.is_available() or torch.cuda.device_count() != count:
+        raise ValueError(f"Expose exactly {count} CUDA GPU(s)")
+    if count > 1 and (not dist.is_initialized() or dist.get_world_size() != count):
+        raise ValueError("Context parallelism requires an initialized NCCL process group")
+    torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", "0")))
     if not torch.cuda.is_bf16_supported():
         raise ValueError("This recipe requires native BF16 support")
-    torch.cuda.set_device(0)
     torch.backends.cuda.matmul.allow_tf32 = False
 
 
@@ -21,7 +25,7 @@ def load_model(args, cfg, variant="original", source=None):
     import torch
     from diffusers import FluxPipeline
     from .records import source_identity, contract, artifact_metadata
-    check_gpu()
+    check_gpu(cfg)
     source = source or source_identity(args, cfg)
     metadata = None
     if variant == "aitune":
@@ -35,6 +39,13 @@ def load_model(args, cfg, variant="original", source=None):
     if pipe.transformer.config.guidance_embeds:
         raise ValueError("This recipe requires a Schnell transformer without guidance embeddings")
     pipe = pipe.to("cuda")
+    if cfg["execution"]["gpu_count"] > 1:
+        from diffusers import ContextParallelConfig
+        if pipe.transformer.config.num_attention_heads % cfg["execution"]["gpu_count"]:
+            raise ValueError("Transformer attention heads must be divisible by the Ulysses degree")
+        pipe.transformer.set_attention_backend("_native_cudnn")
+        pipe.transformer.enable_parallelism(config=ContextParallelConfig(
+            ulysses_degree=cfg["execution"]["gpu_count"]))
     pipe.set_progress_bar_config(disable=True)
     if metadata:
         import aitune.torch as ait
@@ -63,3 +74,5 @@ def generate(pipe, cfg, item):
 def synchronize():
     import torch
     torch.cuda.synchronize()
+    if torch.distributed.is_initialized():
+        torch.distributed.barrier()

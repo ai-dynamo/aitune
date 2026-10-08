@@ -77,7 +77,7 @@ def environment():
             packages[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
             packages[name] = None
-    gpu = torch.cuda.get_device_properties(0)
+    gpu = torch.cuda.get_device_properties(torch.cuda.current_device())
     nv.nvmlInit()
     try:
         driver = nv.nvmlSystemGetDriverVersion()

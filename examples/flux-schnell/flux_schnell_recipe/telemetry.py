@@ -22,7 +22,7 @@ class Sampler:
         self.nv = nv
         nv.nvmlInit()
         try:
-            self.uuid = str(torch.cuda.get_device_properties(0).uuid)
+            self.uuid = str(torch.cuda.get_device_properties(torch.cuda.current_device()).uuid)
             self.handle = nv.nvmlDeviceGetHandleByUUID(self.uuid)
         except Exception:
             nv.nvmlShutdown()

@@ -4,8 +4,16 @@ SPDX-License-Identifier: Apache-2.0
 -->
 # Evaluation handoff
 
-Runtime validation has not been executed. Follow the exact [setup, quickstart and deployment commands](README.md)
-on an available GPU. The authoring skill delegates validation to the engineer's infrastructure.
+Local runtime validation has been completed for the bundled smoke workload on one RTX 6000 Ada. Saved runs cover tuning,
+Python correctness and benchmarking, inference, and both Original Model and AITune Dynamo correctness and benchmarking; see the
+[evaluation records](results/README.md). Python and deployment correctness passed the provisional 0.70 hard
+SSIM gate. AITune scores are below the current 0.95 soft threshold; the October 8 deployment reports record those warnings.
+
+The remaining work includes representative quality/performance evaluation, a second GPU architecture, and
+complete container build provenance. The local image ID and evaluation source snapshot are retained in the
+[provenance record](../../results/flux-schnell/evaluation/20261008-tables/provenance.json); the locally built image
+has no registry RepoDigest. Use the [setup, quickstart and deployment commands](README.md) for new runs.
+The workflow below also applies when reproducing or extending the existing local evaluation.
 
 1. Build the container; retain its Docker image metadata/digest, build log and the frozen lockfile. Check the actual
    loaded PyTorch, CUDA, TensorRT and Dynamo versions in the generated environment reports.
@@ -18,9 +26,11 @@ on an available GPU. The authoring skill delegates validation to the engineer's 
    keep the same container, GPU, size, steps, seed, concurrency and measurement settings.
 5. Repeat on a second GPU architecture, with a separate artifact and output directory. Never carry the artifact
    between architectures. Record the actual GPU models, VRAM, driver and any environment differences.
-6. Inspect first-use/compiler logs and raw AITune build events. Pure compiler wall time is currently unavailable.
-   Add an evaluated compiler-specific timing method before claiming all six metrics are measured; do not relabel
-   search, conversion, first-use, or warmup as compilation. No zero compilation time is asserted.
+6. Inspect `compilation.json`, first-use/compiler logs, and raw AITune build events. Runtime compilation uses
+   the union of PyTorch compiler-frame wall-time intervals, including tracing, lowering, and backend builds;
+   zero means no new compiler-frame work was observed. This excludes prebuilt artifact loading and the original
+   tuning/build phase. Keep first-use diagnostics separate because they can overlap compilation. Record TensorRT
+   timing-cache state explicitly; the evaluated comparisons start with an empty cache in a fresh container.
 
 Return these files from each evaluation:
 
@@ -33,8 +43,9 @@ Return these files from each evaluation:
 - Both deployment correctness reports and PNGs; both deployment benchmark reports and complete `aiperf/` directories.
 - Quality threshold justification and application-level image review findings.
 
-Please return the correctness and performance reports so hardware support and result tables can be established.
-No model support or speedup is inferred from this code or the sample YAML.
+Retain correctness and performance reports for additional evaluations so the local result tables can be extended.
+The current measurements cover the bundled prompts on one GPU architecture; they do not establish broader
+model support or representative quality/performance.
 
 ## Proposed discovery entries (pending evidence)
 
