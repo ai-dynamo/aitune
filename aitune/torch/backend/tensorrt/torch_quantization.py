@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """NVIDIA ModelOpt PyTorch quantization module for TensorRT backend."""
 
-import gc
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
@@ -15,6 +14,7 @@ import torch.nn as nn
 from packaging.version import Version
 
 from aitune.torch.module.sample_store import Sample
+from aitune.torch.utils.memory import gc_collect
 from aitune.utils.monitoring import annotate
 
 # Setup logger
@@ -249,4 +249,4 @@ class TorchQuantizer:
     def _clean_memory(self):
         """Clean up memory."""
         torch.cuda.empty_cache()
-        gc.collect()
+        gc_collect()

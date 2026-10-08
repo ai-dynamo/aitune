@@ -24,6 +24,19 @@ from aitune.torch.utils.module import (
 from tests.utilities.helpers import requires_cuda
 
 
+def test_gc_collect_skips_collection_during_pytest(mocker, monkeypatch):
+    from aitune.torch.utils.memory import gc_collect
+
+    collect = mocker.patch("aitune.torch.utils.memory.gc.collect")
+
+    gc_collect()
+
+    collect.assert_not_called()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    gc_collect()
+    collect.assert_called_once()
+
+
 @pytest.mark.parametrize(
     "num_params,expected",
     [(100, 100), (1_000, 1000), (100_000, 100000), (1_000_000, 1000000), (1_000_000_000, 1000000000)],
