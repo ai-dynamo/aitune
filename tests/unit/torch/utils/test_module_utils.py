@@ -31,7 +31,7 @@ from tests.utilities.helpers import requires_cuda
 def test_count_parameters(num_params, expected):
     """Test count_parameters with deeply nested modules."""
     module = nn.Sequential(
-        nn.Linear(num_params, 1, bias=False),
+        nn.Linear(num_params, 1, bias=False, device="meta"),
     )
     result = count_parameters(module)
 

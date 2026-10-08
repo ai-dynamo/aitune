@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Pytest fixtures both for unit and integration tests and docttest for production code."""
 
+import gc
 import logging
 import os
 
@@ -14,6 +15,16 @@ from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import _active_graph, _active_module, _active_report, _run_start_ts
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
 from aitune.utils.logging import setup_logging
+
+
+def pytest_collection_finish(session):
+    """Move objects created by imports/collection to the permanent GC generation.
+
+    Tests (and ``MODULE_REGISTRY.clear``) call ``gc.collect()`` often; without freezing, every call rescans
+    the huge heap of torch/modelopt/transformers objects (~0.3s each).
+    """
+    gc.collect()
+    gc.freeze()
 
 
 @pytest.fixture(autouse=True)
