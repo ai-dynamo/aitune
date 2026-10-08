@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Composite backend selecting kernel providers before delegating execution."""
 
-import gc
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -33,6 +32,7 @@ from aitune.torch.kernel_forge.kernel_provider import (
 from aitune.torch.kernel_forge.kernel_provider_runtime import KernelProviderRuntime
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
 from aitune.utils.env_vars import AITUNE_KERNEL_GENERATION_TIMEOUT
 from aitune.utils.validation import in_range
@@ -310,7 +310,7 @@ class KernelSelectorBackend(Backend):
             if self._runtime is not None:
                 self._runtime.deactivate()
             raise
-        gc.collect()
+        gc_collect()
 
     def to_dict(self) -> dict[str, Any]:
         """Return state required to restore the selected plan and delegate."""

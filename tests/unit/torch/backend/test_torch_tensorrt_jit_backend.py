@@ -400,7 +400,7 @@ def test_torch_compile_backend_deactivate(
     torch_mod_backend.compiler.reset = mocker.MagicMock()
     empty_cache = mocker.patch("aitune.torch.utils.memory.torch.cuda.empty_cache")
 
-    mock_gc = mocker.patch("gc.collect")
+    mock_gc = mocker.patch("aitune.torch.utils.memory.gc_collect")
 
     # Build, activate, and deactivate
     backend = torch_tensorrt_jit_backend.build(
