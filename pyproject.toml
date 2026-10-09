@@ -140,7 +140,7 @@ functional-test = [
     "urllib3>=2.6.3", # sec
     "kernels>=0.12",
     "sageattention",
-    "flash-attn-4==4.0.0b27",
+    "flash-attn-4>=4.0.0b33",
 ]
 doc = [
     "PyYAML >= 6.0",
@@ -166,7 +166,10 @@ aitune = ["**/*"]
 
 [tool.uv]
 managed = true
-environments = ["'tegra' not in platform_release"]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64' and 'tegra' not in platform_release",
+    "sys_platform == 'linux' and platform_machine == 'aarch64' and 'tegra' not in platform_release",
+]
 conflicts = [
     [
         { extra = "torch28" },

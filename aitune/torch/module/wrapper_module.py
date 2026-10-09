@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """AITune wrapper module."""
 
-import gc
 from collections import OrderedDict
 from enum import Enum
 from logging import getLogger
@@ -30,6 +29,7 @@ from aitune.torch.tune_strategy.tune_strategy import (
     DummyTuneStrategy,
     TuneStrategy,
 )
+from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import (
     count_parameters,
     get_module_device,
@@ -394,7 +394,7 @@ class Module(wrapt.CallableObjectProxy):
                 wrapper = cast(TunedModule, self._self_wrapper)
                 wrapper.deactivate()
             self._self_wrapper = None
-            gc.collect()
+            gc_collect()
 
     def _deploy_wrapper(self, device: torch.device | None):
         try:

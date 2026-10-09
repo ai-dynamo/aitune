@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch compile backend."""
 
-import gc
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
@@ -20,6 +19,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
+from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
 
 try:
@@ -271,7 +271,7 @@ class TorchTensorRTJitBackend(Backend):
         self._activate()
         self._samples = None
         self._data = None
-        gc.collect()
+        gc_collect()
 
     def _iter_samples(self):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""

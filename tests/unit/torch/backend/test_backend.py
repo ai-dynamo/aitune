@@ -170,7 +170,7 @@ def test_backend_build_rejects_unsupported_onnx_module(backend_cls, tmp_path):
 
 
 def test_backend_build_releases_unused_memory(mocker, tmp_path):
-    collect = mocker.patch("aitune.torch.utils.memory.gc.collect")
+    collect = mocker.patch("aitune.torch.utils.memory.gc_collect")
     mocker.patch("aitune.torch.utils.memory.torch.cuda.is_available", return_value=True)
     empty_cache = mocker.patch("aitune.torch.utils.memory.torch.cuda.empty_cache")
 

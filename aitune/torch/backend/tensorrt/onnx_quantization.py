@@ -9,20 +9,8 @@ from pathlib import Path
 from typing import Literal, get_args
 
 import modelopt
-import modelopt.onnx.quantization as moq
 import onnx
 from packaging.version import Version
-
-if Version(modelopt.__version__) < Version("0.40.0"):
-    from modelopt.onnx.quantization.qdq_utils import fp4qdq_to_2dq
-
-    # Note: https://nvidia.github.io/TensorRT-Model-Optimizer/reference/generated/modelopt.onnx.quantization.qdq_utils.html#modelopt.onnx.quantization.qdq_utils.fp4qdq_to_2dq
-    modelopt_fp4_exporter = fp4qdq_to_2dq
-else:
-    # Note: https://nvidia.github.io/Model-Optimizer/reference/generated/modelopt.onnx.export.html#modelopt.onnx.export.NVFP4QuantExporter
-    from modelopt.onnx.export import NVFP4QuantExporter
-
-    modelopt_fp4_exporter = NVFP4QuantExporter.process_model
 
 from aitune.torch.backend.tensorrt.modelopt_calibration import prepare_calibration_data
 from aitune.torch.module.graph_spec import GraphSpec
@@ -31,6 +19,20 @@ from aitune.utils.monitoring import annotate
 
 # Setup logger
 logger = logging.getLogger(__name__)
+
+
+def _get_modelopt_fp4_exporter():
+    if Version(modelopt.__version__) < Version("0.40.0"):
+        # Note: https://nvidia.github.io/TensorRT-Model-Optimizer/reference/generated/modelopt.onnx.quantization.qdq_utils.html#modelopt.onnx.quantization.qdq_utils.fp4qdq_to_2dq
+        from modelopt.onnx.quantization.qdq_utils import fp4qdq_to_2dq
+
+        return fp4qdq_to_2dq
+
+    # Note: https://nvidia.github.io/Model-Optimizer/reference/generated/modelopt.onnx.export.html#modelopt.onnx.export.NVFP4QuantExporter
+    from modelopt.onnx.export import NVFP4QuantExporter
+
+    return NVFP4QuantExporter.process_model
+
 
 QuantizationPrecision = Literal["int8", "int4", "fp8"]
 CalibrationMethod = Literal["max", "entropy", "awq_clip", "awq_lite", "awq_full", "rtn_dq"]
@@ -130,7 +132,7 @@ class ONNXQuantizer:
 
         # Used for FP4 nodes
         logger.info("Applying nvfp4 quant exporter transformation")
-        post_processed_model = modelopt_fp4_exporter(onnx_model)
+        post_processed_model = _get_modelopt_fp4_exporter()(onnx_model)
 
         #  Workaround for missing ir_version and opset, this is not needed for TensorRT
         if not hasattr(post_processed_model, "ir_version"):
@@ -195,6 +197,8 @@ class ONNXQuantizer:
 
             if calibration_data is not None:
                 quantize_kwargs["calibration_data"] = calibration_data
+
+            import modelopt.onnx.quantization as moq
 
             moq.quantize(**quantize_kwargs)
 

@@ -3,7 +3,6 @@
 """Torchao backend."""
 
 import copy
-import gc
 import json
 from collections.abc import Callable
 from dataclasses import MISSING, dataclass, fields
@@ -40,6 +39,7 @@ from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, B
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
@@ -280,7 +280,7 @@ class TorchAOBackend(Backend):
         self._activate()
         self._samples = None
         self._data = None
-        gc.collect()
+        gc_collect()
 
     def to_dict(self):
         """Returns the state_dict of the backend."""

@@ -61,7 +61,7 @@ def test_resnet50_with_cuda_graph_profiles():
 
     trtre_backend = next(iter(module._self_wrapper.backends.values()))
     graphs = trtre_backend._cuda_graphs
-    assert len(trtre_backend._trt_optimization_profiles) == len(BATCH_SIZES)
+    assert len(trtre_backend._trt_optimization_profiles) == len(BATCH_SIZES) + 1
     assert graphs.static_profile_indices == set(range(len(BATCH_SIZES)))
 
     module(data_bs2)

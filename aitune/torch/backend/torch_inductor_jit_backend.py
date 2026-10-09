@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch Inductor JIT backend."""
 
-import gc
 from collections.abc import Sequence
 from dataclasses import dataclass
 from logging import getLogger
@@ -16,6 +15,7 @@ from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, B
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
+from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
 
 logger = getLogger(__name__)
@@ -265,7 +265,7 @@ class TorchInductorJitBackend(Backend):
         self._activate()
         self._samples = None
         self._data = None
-        gc.collect()
+        gc_collect()
 
     def _iter_samples(self):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""
