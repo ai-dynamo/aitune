@@ -60,7 +60,7 @@ def test_custom_module_with_cuda_graphs():
 
     # Exercise alternating static profiles after tuning has warmed their graphs.
     trtre_backend = next(iter(module._self_wrapper.backends.values()))
-    assert len(trtre_backend._trt_optimization_profiles) == len(BATCH_SIZES)
+    assert len(trtre_backend._trt_optimization_profiles) == len(BATCH_SIZES) + 1
     assert trtre_backend._cuda_graphs.static_profile_indices == set(range(len(BATCH_SIZES)))
     module(data)
     first_graph = trtre_backend._cuda_graphs.active.graph

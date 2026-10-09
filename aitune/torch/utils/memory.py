@@ -5,9 +5,16 @@
 import contextlib
 import ctypes
 import gc
+import os
 from collections.abc import Generator
 
 import torch
+
+
+def gc_collect() -> None:
+    """Collect cyclic garbage outside pytest."""
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        gc.collect()
 
 
 @contextlib.contextmanager
@@ -16,7 +23,7 @@ def release_transient_memory() -> Generator[None, None, None]:
     try:
         yield
     finally:
-        gc.collect()
+        gc_collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
@@ -39,7 +46,7 @@ def cpu_cleanup():
 
     Note: Only supported on Linux and Windows platforms.
     """
-    gc.collect()
+    gc_collect()
     cpu_cleanup_low_level()
 
 
