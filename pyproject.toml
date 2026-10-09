@@ -209,6 +209,20 @@ testpaths = ["aitune", "tests/unit"]
 markers = [
     "slow: mark test as slow",
     "dynamo: mark test as requiring ai-dynamo-runtime (skip without aitune[dynamo])",
+    "backend_lifecycle: backend construction, tuning, inference, and checkpoint lifecycle",
+    "shapes: input shape behavior",
+    "module_topology: module wrapping and graph topology",
+    "jit: just-in-time tuning behavior",
+    "strategy_fallback: backend strategy selection and fallback behavior",
+    "checkpoints: checkpoint save and load behavior",
+    "artifacts: exported backend artifacts",
+    "precision: dtype and quantization behavior",
+    "cuda_graphs: CUDA graph execution behavior",
+    "attention: attention and KV cache behavior",
+    "distributed: distributed execution behavior",
+    "cross_feature: interactions between functional areas",
+    "functional_case(backend, variant): stable functional case metadata",
+    "requires_capability(name): required runner or backend capability",
 ]
 
 [tool.ruff]
