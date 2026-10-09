@@ -145,6 +145,36 @@ starting another tuning session. Reset finalizes only the tuning report created 
 runs remain active. If module restoration fails, reset retains the failed wrappers for cleanup retry and rejects new
 registrations until a subsequent `jit_reset()` succeeds.
 
+#### Preserving Externally Managed Placement
+
+If another runtime owns module placement or offloading, opt the explicitly registered targets into external device
+management:
+
+```python
+registration = register_for_jit_tuning(
+    [model],
+    device_management="external",
+)
+```
+
+With this policy, AITune does not move or offload the registered module tree, including its descendants. The external
+runtime remains responsible for making that tree resident when it is called. AITune may still move input tensors,
+backend artifacts, and internal module copies needed for tuning; copies do not inherit the external-placement marker.
+The default `device_management="aitune"` behavior is unchanged, and `jit_reset()` removes the marker from registered
+targets.
+
+AITune rejects moving or offloading an ancestor that contains an externally managed target, with a descriptive error
+before changing placement. Applications can move independent, unprotected subtrees separately.
+
+ONNX Runtime and TensorRT builds preserve the original session and device of an externally managed `OnnxModule` while
+creating their own session or artifact. The external owner can explicitly call `deactivate()` when the original session
+is no longer needed.
+
+Each concrete backend subclass must declare `_supports_external_device_management = True` itself; this opt-in is not
+inherited. Unsupported backends are rejected before their build implementation runs. The built-in ONNX Runtime,
+TensorRT, Torch eager, TorchInductor AOT and JIT, Torch-TensorRT AOT and JIT, and TorchAO backends support generic
+externally managed placement.
+
 Explicit registrations of instances that share the same Python `forward` frame may temporarily raise TorchDynamo's
 process-wide recompile limits. Capacity accounts for the configured backend candidates, optional graph-break detection,
 and the selected inference route. AOT-only targets release it after tuning; JIT targets release it after every recorded

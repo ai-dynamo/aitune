@@ -113,12 +113,17 @@ class Patcher:
         module: torch.nn.Module,
         *,
         explicit_head: bool = False,
+        device_management: str = "aitune",
     ) -> PatchedModule | InspectModule:
         """Create and retain one module wrapper."""
         if config.mode == JITMode.INSPECT:
             patched_module: PatchedModule | InspectModule = InspectModule(module)
         else:
-            patched_module = PatchedModule(module, explicit_head=explicit_head)
+            patched_module = PatchedModule(
+                module,
+                explicit_head=explicit_head,
+                device_management=device_management,
+            )
         cls._patched_modules.append(patched_module)
         if isinstance(patched_module, PatchedModule) and patched_module.explicit_head:
             cls._explicit_route_counts[patched_module._id] = patched_module._observed_route_count_value()
@@ -153,12 +158,20 @@ class Patcher:
         cls._torch_patched = True
 
     @classmethod
-    def register_modules(cls, modules: Sequence[torch.nn.Module]) -> tuple[PatchedModule, ...]:
+    def register_modules(
+        cls,
+        modules: Sequence[torch.nn.Module],
+        *,
+        device_management: str,
+    ) -> tuple[PatchedModule, ...]:
         """Register validated, pre-existing modules as independent JIT tuning heads."""
         cls.validate_explicit_registration_session()
 
         trees = cls._validate_registration_targets(modules)
-        resolved = [cls._find_reusable_registration(module, tree) for module, tree in zip(modules, trees, strict=True)]
+        resolved = [
+            cls._find_reusable_registration(module, tree, device_management)
+            for module, tree in zip(modules, trees, strict=True)
+        ]
 
         previous_module_counter = PatchedModule.module_counter
         previous_session_mode = cls._session_mode
@@ -170,7 +183,11 @@ class Patcher:
             for index, module in enumerate(modules):
                 if resolved[index] is not None:
                     continue
-                wrapper = cls._register_module(module, explicit_head=True)
+                wrapper = cls._register_module(
+                    module,
+                    explicit_head=True,
+                    device_management=device_management,
+                )
                 assert isinstance(wrapper, PatchedModule)
                 newly_registered.append(wrapper)
                 resolved[index] = wrapper
@@ -288,6 +305,7 @@ class Patcher:
         cls,
         module: torch.nn.Module,
         tree: set[int],
+        device_management: str,
     ) -> PatchedModule | None:
         """Reuse registrations retained until reset, rejecting overlapping ownership."""
         reusable: PatchedModule | None = None
@@ -298,6 +316,11 @@ class Patcher:
             if not tree & cls._module_tree_ids(existing_module):
                 continue
             if existing_module is module and isinstance(existing, PatchedModule) and existing.explicit_head:
+                if existing.device_management != device_management:
+                    raise ValueError(
+                        f"Module {cls._module_label(module)} is already registered with "
+                        f"device_management={existing.device_management!r}"
+                    )
                 reusable = existing
                 continue
             raise ValueError(

@@ -16,6 +16,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
+from aitune.torch.utils.module import register_externally_managed_module, unregister_externally_managed_module
 from tests.toy_backends import BuildFailsBackend, SleepBackend
 from tests.toy_models.torch_models import ToyTorchModel
 
@@ -184,6 +185,45 @@ def test_failed_backend_preserves_distributed_module_placement(mocker, mock_grap
 
     assert result is None
     to_spy.assert_not_called()
+
+
+def test_failed_backend_preserves_original_error_when_parent_restoration_is_refused(
+    mock_graph_spec, mock_samples, tmp_path
+):
+    module = nn.Sequential(nn.Linear(2, 2), nn.Linear(2, 2))
+    protected_child = module[1]
+    original_devices = {name: parameter.device for name, parameter in module.named_parameters()}
+    original_error = ValueError("Backend build failed")
+    backend = MagicMock(spec=Backend)
+    backend.name = "backend"
+    backend.describe.return_value = "backend"
+    backend.key.return_value = "backend"
+    backend.__deepcopy__ = lambda _, memo=None: backend
+    backend.build.side_effect = original_error
+    backend.is_active = True
+    strategy = FirstWinsStrategy([backend])
+    strategy.backend_results = []
+    strategy.enable_correctness_check(False)
+
+    register_externally_managed_module(protected_child)
+    try:
+        with pytest.raises(RuntimeError, match="externally managed") as error:
+            strategy._build_and_validate_backend(
+                backend,
+                module,
+                "test_module",
+                mock_graph_spec,
+                mock_samples,
+                torch.device("meta"),
+                tmp_path,
+            )
+
+        assert error.value.__cause__ is original_error
+        assert {name: parameter.device for name, parameter in module.named_parameters()} == original_devices
+        assert strategy.backend_results == [{"backend": "backend", "success": False}]
+        backend.deactivate.assert_called_once()
+    finally:
+        unregister_externally_managed_module(protected_child)
 
 
 def test_locally_successful_backend_is_rejected_when_another_rank_fails(

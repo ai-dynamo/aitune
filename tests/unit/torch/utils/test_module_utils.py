@@ -5,21 +5,28 @@
 
 import gc
 from collections import UserDict
+from copy import deepcopy
 
 import pytest
 import torch
 import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
 
+from aitune.torch import register_for_jit_tuning
 from aitune.torch.backend.backend import BuildMode
+from aitune.torch.jit.patcher import jit_reset
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.utils.module import (
     count_parameters,
     format_num_parameters,
     is_distributed_module,
+    is_externally_managed_module,
     move_module_to_device,
     move_tensors_to_device,
     offload,
     offload_after_tuning,
+    register_externally_managed_module,
+    unregister_externally_managed_module,
 )
 from tests.utilities.helpers import requires_cuda
 
@@ -109,6 +116,154 @@ def test_move_module_preserves_distributed_module_placement(mocker):
     move_module_to_device(module, torch.device("meta"))
 
     assert next(module.parameters()).device.type == "cpu"
+
+
+@pytest.fixture
+def parent_with_external_child():
+    parent = nn.Module()
+    parent.register_parameter("weight", nn.Parameter(torch.ones(2, 2)))
+    parent.child = nn.Module()
+    parent.child.layer = nn.Linear(2, 2)
+    parent.sibling = nn.Linear(2, 2)
+    external_root = parent.child
+    register_externally_managed_module(external_root)
+    try:
+        yield parent
+    finally:
+        unregister_externally_managed_module(external_root)
+
+
+@pytest.mark.parametrize("operation", [move_module_to_device, offload])
+def test_parent_bulk_placement_rejects_external_subtree_before_any_mutation(parent_with_external_child, operation):
+    parent = parent_with_external_child
+    original_parameters = tuple(parent.parameters())
+    original_values = [parameter.detach().clone() for parameter in original_parameters]
+    assert not is_externally_managed_module(parent)
+
+    with pytest.raises(RuntimeError, match="contains an externally managed subtree.*independent ordinary submodules"):
+        operation(parent, "meta")
+
+    for current, original, values in zip(parent.parameters(), original_parameters, original_values, strict=True):
+        assert current is original
+        assert current.device.type == "cpu"
+        torch.testing.assert_close(current, values)
+
+
+@pytest.mark.parametrize("operation", [move_module_to_device, offload])
+@pytest.mark.parametrize("descendant", [False, True])
+def test_external_root_and_descendant_keep_existing_noop(parent_with_external_child, operation, descendant):
+    target = parent_with_external_child.child
+    if descendant:
+        target = target.layer
+    assert is_externally_managed_module(target)
+
+    operation(target, "meta")
+
+    assert all(parameter.device.type == "cpu" for parameter in parent_with_external_child.parameters())
+
+
+@pytest.mark.parametrize("operation", [move_module_to_device, offload])
+def test_independent_sibling_and_parent_copy_remain_movable(parent_with_external_child, operation):
+    parent = parent_with_external_child
+    copied_parent = deepcopy(parent)
+
+    operation(parent.sibling, "meta")
+    operation(copied_parent, "meta")
+
+    assert all(parameter.device.type == "meta" for parameter in parent.sibling.parameters())
+    assert all(parameter.device.type == "meta" for parameter in copied_parent.parameters())
+    assert all(parameter.device.type == "cpu" for parameter in parent.child.parameters())
+    assert parent.weight.device.type == "cpu"
+    assert not is_externally_managed_module(copied_parent.child)
+
+
+@pytest.mark.parametrize("operation", [move_module_to_device, offload])
+@pytest.mark.parametrize("cleanup", ["unregister", "reset"])
+def test_external_placement_cleanup_restores_parent_movement(parent_with_external_child, operation, cleanup):
+    parent = parent_with_external_child
+    if cleanup == "reset":
+        register_for_jit_tuning([parent.child], device_management="external")
+        jit_reset()
+    else:
+        unregister_externally_managed_module(parent.child)
+
+    operation(parent, "meta")
+
+    assert all(parameter.device.type == "meta" for parameter in parent.parameters())
+
+
+def test_parent_offload_rejection_preserves_onnx_sessions_and_skips_cleanup(
+    parent_with_external_child, tmp_path, mocker
+):
+    parent = parent_with_external_child
+    parent.onnx = OnnxModule(tmp_path / "unused.onnx")
+    offload_onnx = mocker.patch.object(parent.onnx, "offload")
+    cleanup = mocker.patch("aitune.torch.utils.module.cleanup_memory")
+
+    with pytest.raises(RuntimeError, match="Cannot offload"):
+        offload(parent, "meta")
+
+    offload_onnx.assert_not_called()
+    cleanup.assert_not_called()
+    assert all(parameter.device.type == "cpu" for parameter in parent.parameters())
+
+
+@pytest.mark.parametrize("operation", [move_module_to_device, offload])
+def test_distributed_parent_preserves_existing_noop_with_external_child(parent_with_external_child, operation):
+    parent = parent_with_external_child
+    distributed_identity = type("DistributedIdentity", (nn.Identity,), {"__module__": "torch.distributed.test"})
+    parent.distributed = distributed_identity()
+
+    operation(parent, "meta")
+
+    assert all(parameter.device.type == "cpu" for parameter in parent.parameters())
+
+
+@pytest.mark.parametrize("operation", [move_module_to_device, offload])
+def test_parent_rejection_preserves_shared_parameter_identity(parent_with_external_child, operation):
+    parent = parent_with_external_child
+    parent.sibling.weight = parent.child.layer.weight
+    shared_weight = parent.sibling.weight
+
+    with pytest.raises(RuntimeError, match="externally managed subtree"):
+        operation(parent, "meta")
+
+    assert parent.sibling.weight is shared_weight
+    assert parent.child.layer.weight is shared_weight
+    assert shared_weight.device.type == "cpu"
+
+
+@pytest.mark.parametrize("operation", [move_module_to_device, offload])
+def test_dynamically_shared_external_descendant_prevents_parent_movement(operation):
+    external_root = nn.Module()
+    external_root.layer = nn.Linear(2, 2)
+    parent = nn.Module()
+    parent.ordinary = nn.Linear(2, 2)
+    register_externally_managed_module(external_root)
+    try:
+        parent.shared = external_root.layer
+        assert not is_externally_managed_module(parent)
+
+        with pytest.raises(RuntimeError, match="externally managed subtree"):
+            operation(parent, "meta")
+
+        assert external_root.layer.weight.device.type == "cpu"
+        assert parent.ordinary.weight.device.type == "cpu"
+    finally:
+        unregister_externally_managed_module(external_root)
+
+
+def test_dead_external_root_does_not_prevent_former_descendant_movement():
+    external_root = nn.Module()
+    external_root.layer = nn.Linear(2, 2)
+    former_descendant = external_root.layer
+    register_externally_managed_module(external_root)
+    del external_root
+    gc.collect()
+
+    move_module_to_device(former_descendant, "meta")
+
+    assert former_descendant.weight.device.type == "meta"
 
 
 def test_move_tensors_preserves_dtensor_placement(mocker):
