@@ -214,8 +214,13 @@ jobs:
       matrix:
         include:
           - python-version: "3.11"
+            aitune-extra: torch29
           - python-version: "3.12"
+            aitune-extra: torch29
           - python-version: "3.13"
+            aitune-extra: torch29
+          - python-version: "3.14"
+            aitune-extra: torch214
     steps:
       - uses: *actions_checkout
         with:
@@ -227,7 +232,7 @@ jobs:
         with:
           name: dist
           path: dist
-      - run: uv sync --frozen --group test --extra torch29 --extra triton
+      - run: uv sync --frozen --group test --extra ${{ matrix.aitune-extra }} --extra triton
       - run: uv pip install --reinstall --no-deps dist/*.whl
       - run: .venv/bin/python -m pytest -q -rf -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
       - if: always()
