@@ -232,7 +232,7 @@ jobs:
         with:
           name: dist
           path: dist
-      - run: uv sync --frozen --group test --extra ${{ matrix.aitune-extra }} --extra triton
+      - run: uv sync --frozen --group test --no-group dev --extra ${{ matrix.aitune-extra }} --extra triton
       - run: uv pip install --reinstall --no-deps dist/*.whl
       - run: .venv/bin/python -m pytest -q -rf -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
       - if: always()
