@@ -13,7 +13,16 @@ The remaining work includes representative quality/performance evaluation, a sec
 complete container build provenance. The local image ID and evaluation source snapshot are retained in the
 [provenance record](../../results/flux-schnell/evaluation/20261008-tables/provenance.json); the locally built image
 has no registry RepoDigest. Use the [setup, quickstart and deployment commands](README.md) for new runs.
-The workflow below also applies when reproducing or extending the existing local evaluation.
+The single-GPU workflow below also applies when reproducing or extending the existing local evaluation.
+
+For the prepared **two-H100 context-parallel candidate**, use the exact
+[multi-GPU evaluation and result-import commands](README.md#two-h100-evaluation).
+That configuration launches two ranks on one node and covers Python tune, correctness, benchmark and inference;
+it has no multi-GPU deployment targets and has not been run on H100. Return the documented
+`flux-mgpu-measurements.tar.gz` archive, containing both ranks' reports, PNGs, raw measurements, artifact metadata,
+topology and build provenance. Keep the large rank artifacts and caches on the evaluation machine.
+The report command validates the evidence and fills only the marked multi-GPU README results block.
+Its TensorRT timing-cache state differs from the historical cold-cache single-GPU runs and is recorded separately.
 
 1. Build the container; retain its Docker image metadata/digest, build log and the frozen lockfile. Check the actual
    loaded PyTorch, CUDA, TensorRT and Dynamo versions in the generated environment reports.

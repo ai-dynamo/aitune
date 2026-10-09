@@ -3,6 +3,7 @@
 """Regression checks for checkpoint placement and worker diagnostics."""
 
 from pathlib import Path
+import io
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,35 @@ from flux_schnell_recipe.correctness import run_worker
 
 
 class WorkerFailureTests(unittest.TestCase):
+    def test_worker_output_is_streamed_before_exit_and_retained(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            acknowledged = run_dir / "acknowledged"
+            # The child can only succeed if its output reaches the terminal while it is alive.
+            command = [sys.executable, "-u", "-c", "\n".join([
+                "from pathlib import Path",
+                "import sys, time",
+                "print('worker is loading', flush=True)",
+                "deadline = time.monotonic() + 10",
+                "while not Path(sys.argv[1]).exists():",
+                "    if time.monotonic() > deadline: sys.exit(8)",
+                "    time.sleep(0.01)",
+                "print('worker finished', file=sys.stderr)",
+            ]), str(acknowledged)]
+
+            class Terminal(io.StringIO):
+                def write(self, text):
+                    if "worker is loading" in text:
+                        acknowledged.touch()
+                    return super().write(text)
+
+            terminal = Terminal()
+            with patch("flux_schnell_recipe.correctness.worker_command", return_value=command), \
+                    patch("sys.stderr", terminal):
+                run_worker(None, None, "correctness", "original", run_dir)
+            self.assertEqual(terminal.getvalue(), (run_dir / "original.log").read_text())
+            self.assertIn("worker finished", terminal.getvalue())
+
     def test_child_error_and_log_path_are_reported(self):
         command = [sys.executable, "-c", "import sys; print('underlying error', file=sys.stderr); sys.exit(7)"]
         with tempfile.TemporaryDirectory() as directory:

@@ -3,8 +3,11 @@
 """Prompt manifests and lossless image storage."""
 
 import json
+import logging
 from pathlib import Path
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def read_inputs(path):
@@ -34,5 +37,7 @@ def save_images(pipe, cfg, records, directory):
     from .model import generate
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
-    for item in records:
+    for index, item in enumerate(records, 1):
+        logger.info("Generating image %d/%d: %s", index, len(records), item["id"])
         generate(pipe, cfg, item).save(directory / f"{item['id']}.png")
+    logger.info("Saved %d images to %s", len(records), directory)

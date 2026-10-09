@@ -31,6 +31,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["flux_schnell_recipe*"]
 
+[tool.setuptools.package-data]
+"flux_schnell_recipe.deployment.dynamo" = ["web.html"]
+
 [tool.uv]
 environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
 

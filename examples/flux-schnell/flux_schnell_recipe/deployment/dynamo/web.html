@@ -1,0 +1,138 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+     SPDX-License-Identifier: Apache-2.0 -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FLUX · Prompt studio</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #101714; color: #edf5ef; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1160px; margin: auto; padding: 48px 24px; }
+    header { border-bottom: 1px solid #34443a; padding-bottom: 28px; margin-bottom: 32px; }
+    .eyebrow { color: #9fe2b5; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { font-size: clamp(32px, 5vw, 48px); font-weight: 550; letter-spacing: -.04em; margin: 12px 0; }
+    p { color: #aebdb3; line-height: 1.6; }
+    .workspace { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 1.5fr); gap: 32px; }
+    label { display: block; font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+    textarea { width: 100%; min-height: 190px; resize: vertical; font: inherit; line-height: 1.6;
+      padding: 16px; background: #18231d; color: inherit; border: 1px solid #46594b; border-radius: 12px; }
+    textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #a4efbe; outline-offset: 4px; }
+    .hint { font-size: 13px; margin: 10px 0 24px; }
+    button, .download { border: 0; border-radius: 8px; padding: 13px 20px; font: inherit; font-weight: 600; }
+    button { width: 100%; background: #b2efc5; color: #122619; cursor: pointer; }
+    button:hover { background: #caf8d8; }
+    button:disabled { opacity: .55; cursor: wait; }
+    #status { min-height: 48px; font-size: 14px; }
+    #status.error { color: #ffb6a9; }
+    .preview { aspect-ratio: 1; background: #18231d; border: 1px solid #34443a; border-radius: 16px;
+      display: grid; place-items: center; overflow: hidden; }
+    #empty { text-align: center; padding: 24px; }
+    #empty span { display: block; font-size: 40px; color: #9fe2b5; margin-bottom: 16px; }
+    img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    [hidden] { display: none !important; }
+    .image-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 16px; }
+    #settings { font-size: 13px; color: #aebdb3; }
+    .download { color: #b2efc5; border: 1px solid #46594b; text-decoration: none; font-size: 13px; white-space: nowrap; }
+    @media (max-width: 720px) { main { padding: 28px 18px; } .workspace { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">FLUX.1-schnell</div>
+    <h1>Make room for imagination.</h1>
+    <p>Describe an idea. Turn it into an image.</p>
+  </header>
+  <div class="workspace">
+    <form id="form">
+      <label for="prompt">Your prompt</label>
+      <textarea id="prompt" required maxlength="8000" placeholder="A mountain lake at sunrise, watercolor illustration"></textarea>
+      <p class="hint">Try describing the subject, setting, lighting, and style.</p>
+      <button id="generate" type="submit" disabled>Generate image</button>
+      <p id="status" role="status" aria-live="polite">Loading settings…</p>
+    </form>
+    <section aria-label="Generated image">
+      <div class="preview" id="preview" aria-busy="false">
+        <div id="empty"><span aria-hidden="true">✧</span><p>Your next image starts with a few words.</p></div>
+        <img id="image" alt="" hidden>
+      </div>
+      <div class="image-footer">
+        <span id="settings"></span>
+        <a id="download" class="download" download="flux.png" hidden>Download PNG</a>
+      </div>
+    </section>
+  </div>
+</main>
+<script>
+  const form = document.querySelector('#form');
+  const prompt = document.querySelector('#prompt');
+  const button = document.querySelector('#generate');
+  const status = document.querySelector('#status');
+  const preview = document.querySelector('#preview');
+  const image = document.querySelector('#image');
+  const download = document.querySelector('#download');
+  let imageUrl;
+
+  async function initialize() {
+    try {
+      const response = await fetch('/api/config');
+      if (!response.ok) throw new Error('Could not load settings. Reload the page to try again.');
+      const cfg = await response.json();
+      document.querySelector('#settings').textContent =
+        `${cfg.width} × ${cfg.height} · ${cfg.steps} steps · Seed ${cfg.seed} · ${cfg.variant === 'aitune' ? 'AITune' : 'Original Model'}`;
+      preview.style.aspectRatio = `${cfg.width} / ${cfg.height}`;
+      status.textContent = 'Ready for your prompt.';
+      button.disabled = false;
+    } catch (error) {
+      status.textContent = error.message;
+      status.className = 'error';
+    }
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const text = prompt.value.trim();
+    if (!text || button.disabled) return;
+    button.disabled = true;
+    button.textContent = 'Generating…';
+    status.className = '';
+    preview.setAttribute('aria-busy', 'true');
+    const started = performance.now();
+    const progress = () => { status.textContent = `Generating your image… ${Math.floor((performance.now() - started) / 1000)}s`; };
+    progress();
+    const timer = setInterval(progress, 1000);
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: text })
+      });
+      if (!response.ok) {
+        const problem = await response.json();
+        throw new Error(problem.error || 'Generation failed. Please try again.');
+      }
+      const blob = await response.blob();
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      imageUrl = URL.createObjectURL(blob);
+      image.src = imageUrl;
+      image.alt = text;
+      image.hidden = false;
+      document.querySelector('#empty').hidden = true;
+      download.href = imageUrl;
+      download.hidden = false;
+      status.textContent = `Image ready in ${((performance.now() - started) / 1000).toFixed(1)}s.`;
+    } catch (error) {
+      status.textContent = error.message;
+      status.className = 'error';
+    } finally {
+      clearInterval(timer);
+      button.disabled = false;
+      button.textContent = 'Generate image';
+      preview.setAttribute('aria-busy', 'false');
+    }
+  });
+  initialize();
+</script>
+</body>
+</html>

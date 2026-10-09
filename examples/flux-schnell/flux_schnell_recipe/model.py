@@ -3,6 +3,9 @@
 """Schnell loading and seeded end-to-end Diffusers inference."""
 
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def check_gpu(cfg):
@@ -35,9 +38,11 @@ def load_model(args, cfg, variant="original", source=None):
     kwargs = {"torch_dtype": torch.bfloat16, "use_safetensors": True}
     if args.model_id:
         kwargs["revision"] = cfg["model"]["revision"]
+    logger.info("Loading base checkpoint")
     pipe = FluxPipeline.from_pretrained(args.model_id or args.checkpoint, **kwargs)
     if pipe.transformer.config.guidance_embeds:
         raise ValueError("This recipe requires a Schnell transformer without guidance embeddings")
+    logger.info("Moving pipeline to CUDA")
     pipe = pipe.to("cuda")
     if cfg["execution"]["gpu_count"] > 1:
         from diffusers import ContextParallelConfig
@@ -58,6 +63,7 @@ def load_model(args, cfg, variant="original", source=None):
         for name in ("aitune", "torch", "tensorrt", "torch-tensorrt", "diffusers", "transformers", "torchao"):
             if current["packages"][name] != built["packages"][name]:
                 raise ValueError(f"{name} differs from the artifact build environment")
+        logger.info("Restoring AITune artifact: %s", cfg.artifact)
         pipe = ait.load(pipe, cfg.artifact, storage=cpu_staging_storage())
     return pipe
 

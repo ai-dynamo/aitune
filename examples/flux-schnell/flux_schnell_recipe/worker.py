@@ -3,12 +3,15 @@
 """A fresh interpreter owns exactly one variant and its CUDA allocations."""
 
 import argparse
+import logging
 from pathlib import Path
 import time
 
 from .config import load_config
 from .data import read_inputs, save_images
 from .records import configure_cache, contract, environment, source_identity, write_json
+
+logger = logging.getLogger(__name__)
 
 
 def compilation_counters():
@@ -20,6 +23,7 @@ def compilation_counters():
 
 def prepare(pipe, cfg, records, compilation):
     from .model import generate, synchronize
+    logger.info("First-use pass over %d inputs; lazy compilation may take several minutes", len(records))
     synchronize()
     start = time.perf_counter()
     for item in records:
@@ -29,6 +33,8 @@ def prepare(pipe, cfg, records, compilation):
     first_use_start, first_use_end = start, time.perf_counter()
     compile_timing = compilation.finish()
     compile_records = compilation.snapshot()
+    logger.info("First-use pass complete in %.1fs; warming up with %d passes over %d inputs",
+                first_use_s, cfg["benchmark"]["warmup_iterations"], len(records))
     start = time.perf_counter()
     before = compilation_counters()
     for _ in range(cfg["benchmark"]["warmup_iterations"]):
@@ -39,6 +45,7 @@ def prepare(pipe, cfg, records, compilation):
     warmup_end = time.perf_counter()
     if compilation_counters() != before or compilation.snapshot() != compile_records:
         raise RuntimeError("Compilation continued during warmup; inspect logs before accepting measurements")
+    logger.info("Warmup complete in %.1fs", warmup_s)
     return {"first_use_s": first_use_s, "warmup_s": warmup_s, **compile_timing,
             "first_use_start_monotonic_s": first_use_start, "first_use_end_monotonic_s": first_use_end,
             "warmup_start_monotonic_s": start, "warmup_end_monotonic_s": warmup_end,
@@ -56,6 +63,10 @@ def main():
     parser.add_argument("--variant", required=True, choices=("original", "aitune"))
     parser.add_argument("--run-dir", required=True)
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO,
+                        format=f"%(asctime)s %(levelname)s [{args.action}/{args.variant}] %(message)s",
+                        datefmt="%H:%M:%S")
+    logger.info("Initializing worker")
     cfg = load_config(args.config)
     directory = Path(args.run_dir) / args.variant
     directory.mkdir()
@@ -64,7 +75,9 @@ def main():
     from .compilation import CompilationRecorder
     compilation = CompilationRecorder(directory)
     source = source_identity(args, cfg)
+    logger.info("Loading %s model from %s", args.variant, args.model_id or args.checkpoint)
     pipe = load_model(args, cfg, args.variant, source)
+    logger.info("Model loaded; collecting environment information")
     report = {"variant": args.variant, "run_id": Path(args.run_dir).name, "contract": contract(cfg, source),
               "environment": environment()}
     if args.action != "benchmark":
@@ -79,12 +92,15 @@ def main():
         validation = read_inputs(cfg["inputs"]["validation"])
         records = read_inputs(cfg["inputs"]["benchmark"])
         report.update(prepare(pipe, cfg, records + validation, compilation))
+        logger.info("Checking benchmark model correctness on %d validation images", len(validation))
         save_images(pipe, cfg, validation, directory / "images")
         quality = compare(cfg, Path(evidence["original"]) / "images", directory / "images", validation)
         write_json(directory / "correctness.json", quality)
         if not quality["passed"]:
             raise RuntimeError("Fresh benchmark model failed correctness")
         report["correctness"] = quality
+        logger.info("Correctness passed; measuring %d images (progress resumes after the timed window)",
+                    cfg["benchmark"]["repetitions"])
         sampler = Sampler(directory / "gpu-samples.jsonl", cfg["benchmark"]["sampling_interval_s"]).start()
         timings = []
         before = compilation_counters()
@@ -102,6 +118,7 @@ def main():
         finally:
             end = time.perf_counter()
             sampler.stop()
+        logger.info("Measurement complete: %d images in %.1fs", len(timings), end - start)
         write_json(directory / "timings.json", timings)
         if compilation_counters() != before or compilation.snapshot() != compile_records:
             raise RuntimeError("Compilation occurred in the measured window; report rejected")
@@ -111,6 +128,7 @@ def main():
                        "measurement_duration_s": end - start, "batch_size": 1, "concurrency": 1,
                        "workload_inputs": records, "raw_timings": str(directory / "timings.json")})
     write_json(directory / "report.json", report)
+    logger.info("Saved worker report: %s", directory / "report.json")
 
 
 if __name__ == "__main__":

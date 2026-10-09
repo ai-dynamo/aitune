@@ -5,7 +5,6 @@
 from dataclasses import replace
 from datetime import timedelta
 import os
-from pathlib import Path
 
 
 def rank_config(cfg, rank):

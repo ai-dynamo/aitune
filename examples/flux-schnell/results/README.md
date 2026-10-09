@@ -4,6 +4,12 @@ Local model workloads have been run on one NVIDIA RTX 6000 Ada Generation GPU (4
 As of 2026-10-08, tuning, Python correctness, Python benchmarking, inference, and both variants' Dynamo correctness and benchmarking
 have saved results. The example remains a draft because the broader evaluation is incomplete.
 
+The [two-H100 recipe](../recipes/multi-gpu.yaml) is prepared but unmeasured. Follow the
+[multi-GPU procedure](../README.md#two-h100-evaluation) to generate `multi-gpu/` evidence beside the existing
+`single-gpu/` runs. It includes separate rank artifacts, fresh-model correctness for both ranks/variants,
+per-device telemetry, aggregate Python measurements and a command to import the results into the README.
+No H100 measurements or multi-GPU deployment results are claimed here.
+
 The records are in the repository-root `results/flux-schnell/single-gpu/` directory, mounted as
 `/workspace/flux-schnell/results/single-gpu/` in the container. The links below point to those local records;
 they require the retained results tree and are not bundled publication artifacts.
