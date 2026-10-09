@@ -145,6 +145,12 @@ starting another tuning session. Reset finalizes only the tuning report created 
 runs remain active. If module restoration fails, reset retains the failed wrappers for cleanup retry and rejects new
 registrations until a subsequent `jit_reset()` succeeds.
 
+Explicit registrations of instances that share the same Python `forward` frame may temporarily raise TorchDynamo's
+process-wide recompile limits. Capacity accounts for the configured backend candidates, optional graph-break detection,
+and the selected inference route. AOT-only targets release it after tuning; JIT targets release it after every recorded
+route completes its first successful selected inference. `jit_reset()` also restores it if inference never completes.
+AITune preserves a limit value changed by other code while its reservation is active.
+
 ## How Just-in-Time Tuning Works
 
 Just-in-time tuning follows this process:

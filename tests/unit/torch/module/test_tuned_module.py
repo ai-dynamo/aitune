@@ -74,6 +74,14 @@ def test_multiple_dict_backends(check_graph):
         module("unseen")
 
 
+def test_route_for_inputs_reports_the_selected_recorded_route():
+    _, _, module = get_tuned_module(check_graph=True, strict_mode=True)
+    routes = tuple(module.backends)
+
+    assert module.route_for_inputs((1,), {}) == routes[0]
+    assert module.route_for_inputs((torch.randn(8),), {}) == routes[1]
+
+
 @pytest.mark.parametrize("check_graph", [True, False])
 def test_equivalent_call_layouts_use_same_backend(check_graph):
     def forward(x, y):
