@@ -44,6 +44,32 @@ skip the token prompt. The container installs locked dependencies and opens a sh
 Model downloads are cached on the host; artifacts, images, logs, and reports persist under
 the host's `results/flux-schnell/` directory.
 
+For experimental two-GPU tuning, recreate the container with `--gpus '"device=0,1"'` and use
+[`recipes/multi-gpu.yaml`](recipes/multi-gpu.yaml) for the Python commands. Both matching BF16-capable GPUs must
+be visible inside the container with working NCCL communication. This recipe launches its own two workers;
+do not wrap `recipe` in `torchrun`. Two-GPU Dynamo deployment and the web app are not supported.
+
+Before two-GPU tuning, check communication inside the container without loading the model:
+
+```bash
+NCCL_DEBUG=INFO uv run --frozen torchrun --standalone --nnodes=1 --nproc-per-node=2 --max-restarts=0 \
+  --module flux_schnell_recipe.distributed --config recipes/multi-gpu.yaml --timeout 120
+```
+
+Expect a passing report under `results/multi-gpu/preflight/<run>/`. Resolve communication failures before tuning.
+Two-GPU recipe commands stream worker logs with rank and startup-stage labels, plus elapsed time every 30 seconds.
+
+If the check hangs using direct GPU peer-to-peer communication, set this in the container shell and repeat it:
+
+```bash
+export NCCL_P2P_DISABLE=1
+```
+
+This allowed the communication check to pass and tuning to start on the reported two-H100 PCIe machine.
+Keep it set for tuning, correctness, benchmarking, and inference on that machine. Repeat the export in each new
+shell, or add `-e NCCL_P2P_DISABLE=1` to `docker run`. The fallback uses host shared memory and can affect performance;
+use it for affected machines rather than enabling it for every multi-GPU run.
+
 Run the following model commands **inside the container**.
 
 ## 2. Tune the model

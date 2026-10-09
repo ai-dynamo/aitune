@@ -6,10 +6,13 @@ import argparse
 import logging
 from pathlib import Path
 import time
+import traceback
 
 from .config import load_config
 from .distributed import collect, initialize, rank_config, shutdown
 from .records import configure_cache, contract, environment, source_identity, write_json
+
+logger = logging.getLogger(__name__)
 
 
 def execute(args, cfg, rank, directory):
@@ -93,12 +96,20 @@ def main():
     directory = Path(args.run_dir) / f"rank-{rank}"
     directory.mkdir(parents=True, exist_ok=False)
     configure_cache(directory)
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO,
+                        format=f"%(asctime)s %(levelname)s [{args.action}/{args.variant}/rank-{rank}] %(message)s",
+                        datefmt="%H:%M:%S")
+    logger.info("Initializing distributed worker; results: %s", directory)
     try:
         initialize(cfg)
         local_cfg = rank_config(cfg, rank)
         write_json(directory / "resolved-config.json", local_cfg.data)
+        logger.info("Starting %s", args.action)
         execute(args, local_cfg, rank, directory)
+        logger.info("Finished %s; report: %s", args.action, directory / "report.json")
+    except Exception:
+        write_json(directory / "error.json", {"rank": rank, "traceback": traceback.format_exc()})
+        raise
     finally:
         shutdown()
 

@@ -3,15 +3,19 @@
 """A single controller launches fresh context-parallel process groups and joins evidence."""
 
 from collections import deque
+import logging
 import os
 from pathlib import Path
 import signal
 import subprocess
 import sys
+import time
 
 from .compilation import interval_seconds
 from .distributed import rank_config
 from .records import artifact_metadata, contract, file_sha, new_run, read_json, source_identity, write_json
+
+logger = logging.getLogger(__name__)
 
 
 def launch(args, cfg, action, variant, directory, reference=None):
@@ -28,10 +32,27 @@ def launch(args, cfg, action, variant, directory, reference=None):
     print(f"{action} / {variant}: {log_path}", flush=True)
     env = dict(os.environ)
     env.setdefault("OMP_NUM_THREADS", "1")
-    with log_path.open("w") as log:
+    env["PYTHONUNBUFFERED"] = "1"
+    started = heartbeat = time.monotonic()
+    with log_path.open("w") as log, log_path.open(errors="replace") as output:
         process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
         try:
-            code = process.wait()
+            while True:
+                try:
+                    code = process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    code = None
+                text = output.read()
+                if text:
+                    sys.stderr.write(text)
+                    sys.stderr.flush()
+                if code is not None:
+                    break
+                now = time.monotonic()
+                if now - heartbeat >= 30:
+                    logger.info("Two-GPU %s/%s still running; elapsed %.0fs; log: %s",
+                                action, variant, now - started, log_path)
+                    heartbeat = now
         except BaseException:
             if process.poll() is None:
                 os.killpg(process.pid, signal.SIGTERM)
@@ -42,9 +63,18 @@ def launch(args, cfg, action, variant, directory, reference=None):
                     process.wait()
             raise
     if code:
+        errors = []
+        for rank in range(2):
+            error_path = directory / f"rank-{rank}" / "error.json"
+            if error_path.exists():
+                error = read_json(error_path)
+                errors.append(f"Rank {rank} worker traceback ({error_path}):\n{error['traceback']}")
         with log_path.open(errors="replace") as log:
             tail = "".join(deque(log, maxlen=30))
-        raise RuntimeError(f"Two-GPU {action}/{variant} exited {code}. Full log: {log_path}\n{tail}")
+        details = "\n".join(errors)
+        raise RuntimeError(f"Two-GPU {action}/{variant} exited {code}. Full log: {log_path}\n"
+                           f"{details}\nLast log lines:\n{tail}")
+    logger.info("Two-GPU %s/%s finished in %.1fs", action, variant, time.monotonic() - started)
     return [read_json(directory / f"rank-{rank}" / "report.json") for rank in range(2)]
 
 

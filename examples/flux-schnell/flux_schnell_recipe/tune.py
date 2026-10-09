@@ -2,11 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Inspect, tune, and persist the pipeline and its provenance."""
 
+import logging
 import time
 
 from .data import read_inputs
 from .model import load_model, synchronize
 from .records import configure_cache, contract, environment, file_sha, new_run, read_json, source_identity, write_json
+
+logger = logging.getLogger(__name__)
 
 
 def run(args, cfg, run_dir=None):
@@ -15,11 +18,13 @@ def run(args, cfg, run_dir=None):
         cfg.artifact.parent.mkdir(parents=True, exist_ok=False)
         run_dir = new_run(cfg, "tune")
     configure_cache(run_dir)
+    logger.info("Loading PyTorch and AITune for tuning")
     import torch
     import aitune.torch as ait
     from aitune.torch.backend import (TorchInductorJitBackend, TorchInductorJitBackendConfig,
                                      TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig, TorchTensorRTConfig)
     source = source_identity(args, cfg)
+    logger.info("Loading base model for tuning")
     pipe = load_model(args, cfg, source=source)
     samples = read_inputs(cfg["inputs"]["tune"])
     # AITune batches strings into lists and scalar seeds into one-element tensors.
@@ -28,15 +33,19 @@ def run(args, cfg, run_dir=None):
                     generator=torch.Generator("cpu").manual_seed(int(seed.item())))
 
     dataset = [{"prompt": item["prompt"], "seed": torch.tensor(item["seed"])} for item in samples]
+    logger.info("Inspecting pipeline with %d tuning inputs; synchronizing GPUs", len(samples))
     synchronize()
     start = time.perf_counter()
     info = ait.inspect(pipe, dataset, inference_function=invoke, number_of_iterations=1, warmup_iterations=2)
     info.describe()
     inspection_s = time.perf_counter() - start
+    logger.info("Pipeline inspection complete in %.1fs; configuring tuning candidates", inspection_s)
     compile_options = {"min_block_size": 50, "truncate_double": True}
     if cfg["execution"]["gpu_count"] > 1:
         compile_options["use_distributed_mode_trace"] = True
-        compile_options["timing_cache_path"] = str(run_dir / "tensorrt-timing-cache.bin")
+        # Both ranks must describe the same strategy. AITune adds rank suffixes
+        # to this common base path when it opens the actual timing cache files.
+        compile_options["timing_cache_path"] = str(run_dir.parent / "tensorrt-timing-cache.bin")
     strategy = ait.MaxThroughputStrategy(backends=[
         TorchTensorRTJitBackend(config=TorchTensorRTJitBackendConfig(
             dynamic=False, compile_config=TorchTensorRTConfig(**compile_options))),
@@ -45,6 +54,7 @@ def run(args, cfg, run_dir=None):
     others = [m for m in info.get_modules() if m.name != "transformer"]
     pipe = ait.wrap(pipe, others, strategy=ait.MaxThroughputStrategy.for_aot().enable_find_max_batch_size(False))
     pipe.transformer = ait.module.Module(pipe.transformer, name="transformer", strategy=strategy)
+    logger.info("Starting AITune candidate compilation and search; this can take several minutes")
     synchronize()
     start = time.perf_counter()
     with torch.inference_mode():
@@ -52,6 +62,7 @@ def run(args, cfg, run_dir=None):
     synchronize()
     tuning_s = time.perf_counter() - start
     tuning_end = time.perf_counter()
+    logger.info("Tuning completed in %.1fs; saving artifact to %s", tuning_s, cfg.artifact)
     ait.save(pipe, cfg.artifact)
     report = read_json(run_dir / "aitune-tuning.json")
     selection = [{"component": m["module_name"], "graphs": [
@@ -70,4 +81,5 @@ def run(args, cfg, run_dir=None):
                 "tuning_inputs_sha256": file_sha(cfg["inputs"]["tune"])}
     write_json(str(cfg.artifact) + ".json", metadata)
     write_json(run_dir / "report.json", metadata)
+    logger.info("Saved tuning report: %s", run_dir / "report.json")
     print(run_dir / "report.json")
