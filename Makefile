@@ -103,7 +103,6 @@ TYPE ?= script
 TID ?= 0
 run-functional-test: ## run a functional test in the container, arguments: TEST=tests_path, TYPE=script|project, TID=test_number
 	docker run --rm --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
-		-u $(shell id -u):$(shell id -g) \
 		-e HF_TOKEN \
 		-v $(PWD):/opt/ai-tune/ \
 		-w /opt/ai-tune/ \

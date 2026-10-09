@@ -27,6 +27,10 @@ logger = getLogger(__name__)
 
 def do_test(backend: TorchInductorAotBackend):
     # given
+    torch.manual_seed(0)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+
     device = torch.device("cuda")
 
     model = timm.create_model("resnet18", pretrained=False)
@@ -36,7 +40,6 @@ def do_test(backend: TorchInductorAotBackend):
 
     with torch.no_grad():
         expected_output = model(data.unsqueeze(0))
-    expected_probs = torch.nn.functional.softmax(expected_output[0], dim=0)
 
     strategy = OneBackendStrategy(backend)
     strategy.enable_performance_validation(False)
@@ -46,8 +49,7 @@ def do_test(backend: TorchInductorAotBackend):
     tune(module, data, batch_sizes=[2, 1], dry_run=False, disable_external_logging=False)
     # then - verify tuning
     out = module(data.unsqueeze(0))
-    actual_probs = torch.nn.functional.softmax(out[0], dim=0)
-    torch.testing.assert_close(actual_probs, expected_probs, rtol=1e-3, atol=1e-4)
+    torch.testing.assert_close(out, expected_output, rtol=1e-3, atol=1e-4)
 
     artifact = module.artifact()
     assert isinstance(artifact, DeploymentArtifact)

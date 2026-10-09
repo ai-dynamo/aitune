@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """TensorRT Builder module for building TensorRT engines from ONNX models."""
 
-import gc
 import logging
 from pathlib import Path
 from typing import Any
@@ -10,6 +9,7 @@ from typing import Any
 from polygraphy.backend.trt import CreateConfig, Profile, engine_from_network, network_from_onnx_path, save_engine
 from wrapt import lazy_import
 
+from aitune.torch.utils.memory import gc_collect
 from aitune.utils.monitoring import annotate
 
 trt = lazy_import("tensorrt")
@@ -79,7 +79,7 @@ class TensorRTBuilder:
             self._handle_failed_build(e, self.output_path)
             raise e
         finally:
-            gc.collect()
+            gc_collect()
 
     def _validate_onnx_file(self) -> None:
         """Validate that the ONNX file exists.

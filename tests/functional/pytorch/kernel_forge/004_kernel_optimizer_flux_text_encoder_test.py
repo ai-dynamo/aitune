@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # /// script
-# dependencies = ["flash-attn-4==4.0.0b29"]
 # scope = "always"
 # ///
 

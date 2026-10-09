@@ -2,19 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """NVIDIA ModelOpt PyTorch quantization module for TensorRT backend."""
 
-import gc
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
 import modelopt
-import modelopt.torch.quantization as mtq
 import torch
 import torch.nn as nn
 from packaging.version import Version
 
 from aitune.torch.module.sample_store import Sample
+from aitune.torch.utils.memory import gc_collect
 from aitune.utils.monitoring import annotate
 
 # Setup logger
@@ -122,6 +121,8 @@ class TorchQuantizer:
 
         # Quantize the model
         logger.info("Starting model quantization with config: %s", config.quantization_config)
+        import modelopt.torch.quantization as mtq
+
         with annotate("build: Model quantization"):
             quantized_model = mtq.quantize(model_copy, quant_config, forward_loop)
 
@@ -205,6 +206,8 @@ class TorchQuantizer:
             ImportError: If ModelOpt is not available
             ValueError: If configuration name is not supported
         """
+        import modelopt.torch.quantization as mtq
+
         config_mapping = {
             "NVFP4_DEFAULT_CFG": mtq.NVFP4_DEFAULT_CFG,
             "FP8_DEFAULT_CFG": mtq.FP8_DEFAULT_CFG,
@@ -249,4 +252,4 @@ class TorchQuantizer:
     def _clean_memory(self):
         """Clean up memory."""
         torch.cuda.empty_cache()
-        gc.collect()
+        gc_collect()
