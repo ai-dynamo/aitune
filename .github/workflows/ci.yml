@@ -232,7 +232,17 @@ jobs:
         with:
           name: dist
           path: dist
-      - run: uv sync --frozen --group test --no-group dev --extra ${{ matrix.aitune-extra }} --extra triton
+      - run: |
+          # The locked Triton deps cap grpcio below 1.68, which has no CPython 3.14 wheel.
+          # Use a wheel-compatible grpcio only for Python 3.14 to avoid compiling from source.
+          if [[ "$PYTHON_VERSION" == "3.14" ]]; then
+            uv sync --frozen --group test --no-group dev --extra ${{ matrix.aitune-extra }} --extra triton --no-install-package grpcio
+            uv pip install --no-deps grpcio==1.81.1
+          else
+            uv sync --frozen --group test --no-group dev --extra ${{ matrix.aitune-extra }} --extra triton
+          fi
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
       - run: uv pip install --reinstall --no-deps dist/*.whl
       - run: .venv/bin/python -m pytest -q -rf -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
       - if: always()
