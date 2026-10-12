@@ -3,8 +3,8 @@
 """Kernel selection for scaled dot-product attention delegated to Torch Inductor JIT."""
 
 import torch
-import torch.nn.functional as F
 from torch import nn
+from torch.nn import functional
 
 import aitune.torch as ait
 from aitune.torch.backend import KernelSelectorBackend
@@ -19,7 +19,7 @@ class Attention(nn.Module):
 
     def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
         """Return causal attention output."""
-        return F.scaled_dot_product_attention(query, key, value, is_causal=True)
+        return functional.scaled_dot_product_attention(query, key, value, is_causal=True)
 
 
 def _qkv(device: torch.device, seed: int) -> tuple[torch.Tensor, ...]:
