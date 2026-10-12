@@ -81,7 +81,7 @@ def test_jit_tuning(backend_id: str, mode: JITMode, device: torch.device):
             deferred()
             model(make_input(device, batch_size=1))
 
-        (head,) = (head for head in PatchedModule.heads if head._name == "JitMLP")
+        (head,) = (head for head in PatchedModule.heads if head._name.split(" ")[0] == "JitMLP")
         assert head._state == ModuleState.TUNED
         (selected,) = cast(TunedModule, head._wrapper).backends.values()
         assert type(selected) is type(backend)
