@@ -65,7 +65,8 @@ def test_jit_tuning(backend_id: str, mode: JITMode, device: torch.device):
             deferred()
             model(make_input(device, batch_size=1))
 
-        (head,) = PatchedModule.heads
+        # Tuned backends call child modules outside the parent call, so they appear as extra heads.
+        (head,) = (head for head in PatchedModule.heads if head._name == "Sequential")
         assert head._state == ModuleState.TUNED
         (selected,) = head._wrapper._backends.values()
         assert type(selected) is type(backend)
@@ -83,7 +84,8 @@ def test_jit_inspection_report(device: torch.device, tmp_path):
         model(make_input(device, batch_size=1))
         model(make_input(device, batch_size=2))
 
+    assert [head._name.split(" ")[0] for head in InspectModule.heads] == ["Sequential"]
     report = tmp_path / "inspection.html"
     InspectModule.save_report(report, "toy-mlp")
-    assert "Sequential" in report.read_text()
+    assert "toy-mlp" in report.read_text()
     assert not PatchedModule.heads
