@@ -109,14 +109,10 @@ class TorchEagerBackend(Backend):
 
         return self
 
-    def activate(self):
-        """Activates the backend."""
-        super().activate()
-        # move to device regardless of the state of the backend
-        move_module_to_device(self._orig_module, self._device)
-
     def _activate(self):
         """Activates runner."""
+        move_module_to_device(self._orig_module, self._device)
+
         if self._config.autocast_enabled:
             self._infer = self._infer_with_autocast
 
