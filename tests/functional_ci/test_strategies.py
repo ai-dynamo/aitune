@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+"""Strategy selection, fallback, performance validation, max-batch discovery, and dry-run."""
+
+from collections.abc import Callable
+
+import pytest
+import torch
+
+import aitune.torch as ait
+from aitune.torch.backend import (
+    Backend,
+    TensorRTBackend,
+    TensorRTBackendConfig,
+    TorchEagerBackend,
+    TorchInductorAotBackend,
+)
+from aitune.torch.module.wrapper_module import ModuleState
+from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
+from tests.toy_backends import BuildFailsBackend
+
+from .lifecycle import TENSORRT_FP32, selected_backend
+from .models import make_input, make_mlp
+
+PROFILING_STRATEGIES: dict[str, Callable[[list[Backend]], ait.MaxThroughputStrategy]] = {
+    "max-throughput": ait.MaxThroughputStrategy,
+    "min-latency": ait.MinLatencyStrategy,
+    "latency-budget": lambda backends: ait.LatencyBudgetStrategy(latency_budget_ms=10_000, backends=backends),
+}
+
+
+def _tune(strategy, device: torch.device, dry_run: bool = False) -> ait.Module:
+    """Tune the toy MLP on batch size 2 with `strategy`."""
+    tuned = ait.Module(make_mlp(device), "mlp", strategy=strategy)
+    ait.tune(tuned, list(make_input(device).unbind(0)), batch_sizes=[2], device=device, dry_run=dry_run)
+    return tuned
+
+
+def _assert_matches_eager(tuned: ait.Module, device: torch.device, batch_size: int = 2):
+    """Compare the tuned module with a fresh eager MLP."""
+    value = make_input(device, batch_size=batch_size, seed=5)
+    with torch.no_grad():
+        torch.testing.assert_close(
+            tuned(value), make_mlp(device)(value), rtol=TENSORRT_FP32.rtol, atol=TENSORRT_FP32.atol
+        )
+
+
+def test_first_wins_falls_back_after_build_failure(device: torch.device):
+    """A backend that fails to build is skipped and the next candidate is selected."""
+    strategy = ait.FirstWinsStrategy([BuildFailsBackend(RuntimeError), TorchInductorAotBackend()])
+    strategy.enable_performance_validation(False).enable_find_max_batch_size(False)
+    tuned = _tune(strategy, device)
+    assert type(selected_backend(tuned)) is TorchInductorAotBackend
+    _assert_matches_eager(tuned, device)
+
+
+@pytest.mark.parametrize("strategy_id", PROFILING_STRATEGIES)
+def test_profiling_strategy_diagnostic(strategy_id: str, device: torch.device):
+    """Profiling strategies pick one of the candidates and record the eager comparison in diagnostic mode."""
+    strategy = PROFILING_STRATEGIES[strategy_id]([TorchEagerBackend(), TorchInductorAotBackend()])
+    strategy.enable_performance_validation(PerformanceValidationMode.DIAGNOSTIC).enable_find_max_batch_size(False)
+    tuned = _tune(strategy, device)
+    assert type(selected_backend(tuned)) in {TorchEagerBackend, TorchInductorAotBackend}
+    assert strategy.perf_validation_results
+    _assert_matches_eager(tuned, device)
+
+
+def test_find_max_batch_size(device: torch.device):
+    """Max-batch discovery extends the TensorRT range beyond the recorded batch size."""
+    backend = TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, use_cuda_graphs=False))
+    tuned = _tune(ait.OneBackendStrategy(backend).enable_performance_validation(False), device)
+    (graph_spec,) = tuned.graph_specs
+    max_batch_size = graph_spec.get_max_batch_size()
+    assert max_batch_size > 2
+    _assert_matches_eager(tuned, device, batch_size=max_batch_size)
+
+
+def test_dry_run_keeps_eager(device: torch.device):
+    """A dry run checks the strategy without building or activating a backend."""
+    strategy = ait.OneBackendStrategy(TorchInductorAotBackend()).enable_performance_validation(False)
+    tuned = _tune(strategy.enable_find_max_batch_size(False), device, dry_run=True)
+    assert tuned.state != ModuleState.TUNED
+    _assert_matches_eager(tuned, device)
