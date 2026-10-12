@@ -50,7 +50,8 @@ def _torch_tensorrt_jit() -> Backend:
         disable_tf32=True,
         require_full_compilation=True,
     )
-    return TorchTensorRTJitBackend(TorchTensorRTJitBackendConfig(compile_config=compile_config))
+    # Dynamic batch compilation fails the max-shape correctness check (sympy `Infinity` bound), so compile per shape.
+    return TorchTensorRTJitBackend(TorchTensorRTJitBackendConfig(compile_config=compile_config, dynamic=False))
 
 
 JIT_BACKENDS: dict[str, tuple[Callable[[], Backend], Tolerance]] = {
