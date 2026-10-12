@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 from aitune.torch.backend import Backend, TorchEagerBackend, TorchInductorAotBackend
+from aitune.torch.backend.backend import BackendState
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
@@ -31,6 +32,9 @@ _DEVICE = torch.device("cuda")
 
 class SlowInductorAotBackend(TorchInductorAotBackend):
     """Real Inductor AOT build, which offloads the module, with slow inference so that TorchEager wins."""
+
+    _build_mode = TorchInductorAotBackend._build_mode
+    _execution_modes = TorchInductorAotBackend._execution_modes
 
     def _infer(self, *args, **kwargs):
         time.sleep(0.01)
@@ -48,11 +52,19 @@ def _tune_and_check(backends: list[Backend], mode: PerformanceValidationMode, na
     strategy.enable_find_max_batch_size(False)
     module = Module(model, name, strategy=strategy)
     try:
-        tune(module, list(data.unbind(0)), batch_sizes=[2], device=_DEVICE, ignore_failing_modules=False)
+        tune(
+            module,
+            list(data.unbind(0)),
+            batch_sizes=[2],
+            device=_DEVICE,
+            ignore_failing_modules=False,
+        )
 
         (selected,) = module.module.backends.values()
         assert type(selected) is TorchEagerBackend
-        assert next(model.parameters()).device == _DEVICE
+        assert selected.state == BackendState.ACTIVE
+
+        assert next(model.parameters()).device.type == _DEVICE.type
         with torch.no_grad():
             torch.testing.assert_close(module(data), expected)
     finally:
@@ -67,7 +79,11 @@ def _tune_and_check(backends: list[Backend], mode: PerformanceValidationMode, na
             PerformanceValidationMode.DISABLED,
             id="eager-candidate-wins",
         ),
-        pytest.param(lambda: [SlowInductorAotBackend()], PerformanceValidationMode.ENABLED, id="eager-baseline-wins"),
+        pytest.param(
+            lambda: [SlowInductorAotBackend()],
+            PerformanceValidationMode.ENABLED,
+            id="eager-baseline-wins",
+        ),
     ],
 )
 def test_eager_selected_after_inductor_aot_offload(backends, mode, request):
@@ -76,5 +92,9 @@ def test_eager_selected_after_inductor_aot_offload(backends, mode, request):
 
 if __name__ == "__main__":
     basicConfig(level=DEBUG, force=True)
-    _tune_and_check([TorchEagerBackend(), SlowInductorAotBackend()], PerformanceValidationMode.DISABLED, "candidate")
+    _tune_and_check(
+        [TorchEagerBackend(), SlowInductorAotBackend()],
+        PerformanceValidationMode.DISABLED,
+        "candidate",
+    )
     _tune_and_check([SlowInductorAotBackend()], PerformanceValidationMode.ENABLED, "baseline")
