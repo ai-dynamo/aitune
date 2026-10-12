@@ -22,6 +22,10 @@ class Tolerance:
     atol: float = 1e-5
 
 
+# TensorRT and ONNX Runtime fp32 on the SM120 PR runner differ from eager by about 3e-4 even with TF32 disabled.
+TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
+
+
 @dataclass
 class LifecycleResult:
     """Modules produced by `run_lifecycle`."""

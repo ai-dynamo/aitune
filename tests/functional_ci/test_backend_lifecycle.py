@@ -24,11 +24,8 @@ from aitune.torch.backend import (
     TorchTensorRTConfig,
 )
 
-from .lifecycle import Tolerance, run_lifecycle
+from .lifecycle import TENSORRT_FP32, Tolerance, run_lifecycle
 from .models import make_input, make_mlp
-
-# TensorRT and ONNX Runtime fp32 on the SM120 PR runner differ from eager by about 3e-4 even with TF32 disabled.
-TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
 
 
 def _torch_tensorrt_aot() -> Backend:
