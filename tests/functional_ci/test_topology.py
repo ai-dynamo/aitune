@@ -49,7 +49,7 @@ def test_partial_wrap_multigraph(backend_id: str, device: torch.device, tmp_path
     with torch.no_grad():
         expected = model(value)
 
-    inspected = ait.inspect(model, [value], number_of_iterations=1, warmup_iterations=1)
+    inspected = ait.inspect(model, [value], number_of_iterations=1, warmup_iterations=1, min_depth=1)
     found = inspected.get_modules()
     assert not any(info.module is model.unused for info in found)
     (encoder_info,) = (info for info in found if info.module is model.encoder)
