@@ -163,7 +163,8 @@ uv run --frozen recipe web --config recipes/single-gpu.yaml --host 0.0.0.0
 
 Open **http://localhost:8080** on the Docker host. Enter a prompt, select **Generate image**, and use
 **Download PNG** to save the result. The page shows elapsed time and displays the generated image.
-It reuses the running model, accepts one generation at a time, and uses the recipe's dimensions, steps, and seed.
+It reuses the running model, accepts one generation at a time, and uses the recipe's dimensions and steps.
+Each generation uses a new random seed, so repeating a prompt produces a different image.
 Images are not saved to the results directory automatically.
 
 The web app connects to port `8000` from the recipe by default. Use `--variant original` for an Original Model
@@ -172,7 +173,9 @@ service or `--endpoint http://HOST:PORT` for another service address. For a remo
 without authentication; the Docker command above publishes its port on host loopback only.
 
 For direct API clients, Dynamo accepts `POST /v1/images/generations` with the model ID from `/v1/models`,
-a `prompt`, `n: 1`, `size: "1024x1024"`, and `response_format: "b64_json"`. The PNG is returned in `data[0].b64_json`.
+a `prompt`, `n: 1`, `size: "1024x1024"`, and `response_format: "b64_json"`. Supply `nvext: {"seed": 123}`
+to choose a seed; omitting it uses the recipe's deployment seed for reproducible validation and benchmarking.
+The PNG is returned in `data[0].b64_json`.
 
 Press **Ctrl-C** in the web shell to stop the app, and in the serving shell to stop Dynamo and release the model.
 Rebuild the image after source changes; recreate the container if it lacks the port mappings shown above.

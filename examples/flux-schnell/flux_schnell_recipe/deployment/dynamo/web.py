@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 import json
 import logging
+import secrets
 import threading
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -22,7 +23,8 @@ def generate_image(endpoint, variant, cfg, prompt):
     if len(names) != 1:
         raise ValueError(f"Expected one running FLUX {variant} service; found {len(names)}. Check recipe serve.")
     payload = {"model": names[0], "prompt": prompt, "n": 1,
-               "size": f"{cfg['workload']['width']}x{cfg['workload']['height']}", "response_format": "b64_json"}
+               "size": f"{cfg['workload']['width']}x{cfg['workload']['height']}", "response_format": "b64_json",
+               "nvext": {"seed": secrets.randbits(32)}}
     request = Request(endpoint + "/v1/images/generations", data=json.dumps(payload).encode(),
                       headers={"Content-Type": "application/json"})
     with urlopen(request, timeout=600) as response:
@@ -58,7 +60,7 @@ def create_server(cfg, endpoint, variant="aitune", host="127.0.0.1", port=8080):
             elif self.path == "/api/config":
                 self.respond(200, json.dumps({"width": cfg["workload"]["width"],
                     "height": cfg["workload"]["height"], "steps": cfg["workload"]["num_inference_steps"],
-                    "seed": cfg["deployment"]["seed"], "variant": variant}).encode())
+                    "seed": "random", "variant": variant}).encode())
             else:
                 self.error(404, "Not found")
 

@@ -70,13 +70,18 @@ class WebTests(unittest.TestCase):
             self.assertIn(b'Your prompt', response.read())
         with urlopen(self.url + "/api/config") as response:
             settings = json.load(response)
-            self.assertEqual(settings["seed"], 42)
+            self.assertEqual(settings["seed"], "random")
             self.assertEqual(settings["variant"], "aitune")
         with self.generate("  Custom prompt: café by the sea  ") as response:
             self.assertEqual(response.headers["Content-Type"], "image/png")
             self.assertEqual(response.read(), PNG)
+        seed = self.payloads[0]["nvext"]["seed"]
+        self.assertIsInstance(seed, int)
+        self.assertGreaterEqual(seed, 0)
+        self.assertLess(seed, 2**32)
         self.assertEqual(self.payloads, [{"model": "flux-schnell-aitune-test", "prompt": "Custom prompt: café by the sea",
-                                         "n": 1, "size": "1024x1024", "response_format": "b64_json"}])
+                                         "n": 1, "size": "1024x1024", "response_format": "b64_json",
+                                         "nvext": {"seed": seed}}])
 
     def test_empty_prompt_does_not_reach_service(self):
         with self.assertRaises(HTTPError) as caught:

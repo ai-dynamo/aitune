@@ -37,7 +37,7 @@ def main():
         raise ValueError("Service source/configuration differs from the artifact")
     records = read_inputs(cfg["inputs"]["validation"]) + read_inputs(cfg["inputs"]["benchmark"])
     if any(r["seed"] != cfg["deployment"]["seed"] for r in records):
-        raise ValueError("Dynamo's image protocol uses one configured seed; validation/benchmark seeds must match it")
+        raise ValueError("Validation/benchmark seeds must match the configured default service seed")
     compilation = CompilationRecorder(directory)
     pipe = load_model(args, cfg, args.variant, identity)
     name = f"flux-schnell-{args.variant}-{directory.name}"
@@ -57,20 +57,22 @@ def main():
         size = f"{cfg['workload']['width']}x{cfg['workload']['height']}"
         if request.size not in (None, size) or getattr(request, "n", 1) not in (None, 1):
             raise ValueError(f"This artifact accepts n=1 and size={size}")
-        return {"prompt": request.prompt}
+        seed = request.nvext.seed if request.nvext is not None else None
+        return {"prompt": request.prompt, "seed": cfg["deployment"]["seed"] if seed is None else seed}
 
-    def serve(prompt):
+    def serve(prompt, seed):
         with lock:
             before = compilation_counters()
             compile_records = compilation.snapshot()
             start = time.time()
-            image = generate(pipe, cfg, {"prompt": prompt, "seed": cfg["deployment"]["seed"]})
+            image = generate(pipe, cfg, {"prompt": prompt, "seed": seed})
             synchronize()
             buffer = io.BytesIO()
             image.save(buffer, format="PNG")
             compiled = compilation_counters() != before or compilation.snapshot() != compile_records
             with (directory / "requests.jsonl").open("a") as log:
-                log.write(json.dumps({"start_unix_s": start, "end_unix_s": time.time(), "compiled": compiled}) + "\n")
+                log.write(json.dumps({"start_unix_s": start, "end_unix_s": time.time(),
+                                      "compiled": compiled, "seed": seed}) + "\n")
             if compiled:
                 raise RuntimeError("Unexpected runtime compilation after service warmup; restart and inspect workload")
             return buffer.getvalue()

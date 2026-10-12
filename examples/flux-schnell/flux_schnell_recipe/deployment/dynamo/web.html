@@ -82,7 +82,7 @@
       if (!response.ok) throw new Error('Could not load settings. Reload the page to try again.');
       const cfg = await response.json();
       document.querySelector('#settings').textContent =
-        `${cfg.width} × ${cfg.height} · ${cfg.steps} steps · Seed ${cfg.seed} · ${cfg.variant === 'aitune' ? 'AITune' : 'Original Model'}`;
+        `${cfg.width} × ${cfg.height} · ${cfg.steps} steps · Random seed per image · ${cfg.variant === 'aitune' ? 'AITune' : 'Original Model'}`;
       preview.style.aspectRatio = `${cfg.width} / ${cfg.height}`;
       status.textContent = 'Ready for your prompt.';
       button.disabled = false;
