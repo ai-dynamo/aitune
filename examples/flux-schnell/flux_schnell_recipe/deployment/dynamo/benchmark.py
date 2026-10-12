@@ -2,17 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 """AIPerf image workload and server-side NVML collection."""
 
-from datetime import datetime, timezone
 import json
 import math
 import os
-from pathlib import Path
 import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
 
-from . import client
 from ...data import read_inputs
 from ...records import new_run, read_json, write_json
 from ...telemetry import Sampler
+from . import client
 
 
 def metric(raw, name, unit):
@@ -28,6 +28,40 @@ def metric(raw, name, unit):
 def timestamp(value):
     parsed = datetime.fromisoformat(value)
     return (parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)).timestamp()
+
+
+def server_measurement(service, directory, start, end, count):
+    directory.mkdir(parents=True, exist_ok=True)
+    gpu_path = Path(service["directory"]) / "gpu-samples.jsonl"
+    # Drop a possible partial trailing line from the live append-only sampler.
+    lines = gpu_path.read_text().splitlines(keepends=True)
+    samples = [json.loads(line) for line in lines if line.endswith("\n")]
+    if any("error" in row for row in samples):
+        raise RuntimeError("Server-side GPU sampling failed")
+    selected = [row for row in samples if start <= row["unix_s"] <= end]
+    (directory / "gpu-samples.jsonl").write_text("".join(json.dumps(row) + "\n" for row in selected))
+    sampler = Sampler(directory / "gpu-samples.jsonl", service["sampling_interval_s"])
+    sampler.uuid = service["environment"]["gpu"]["uuid"]
+    sampler.samples = [dict(row, monotonic_s=row["unix_s"]) for row in selected]
+    gpu = sampler.summarize(start, end)
+    requests = [json.loads(line) for line in (Path(service["directory"]) / "requests.jsonl").read_text().splitlines()]
+    measured = [row for row in requests if start <= row["start_unix_s"] and row["end_unix_s"] <= end]
+    if len(measured) != count or any(row["compiled"] for row in measured):
+        raise ValueError("Server request records do not match AIPerf's window, or compilation occurred")
+    write_json(directory / "server-requests.json", measured)
+    return gpu
+
+
+def server_telemetry(service, directory, start, end, count):
+    if "ranks" not in service:
+        return {"gpu": server_measurement(service, directory, start, end, count)}
+    gpus = [server_measurement(rank, directory / f"rank-{rank['rank']}", start, end, count)
+            for rank in service["ranks"]]
+    if len({gpu["gpu_uuid"] for gpu in gpus}) != len(gpus) or any(gpu["missing_reason"] for gpu in gpus):
+        raise ValueError("Require complete server telemetry for distinct GPUs")
+    return {"gpu_count": len(gpus), "gpus": gpus,
+            "peak_gpu_memory_gib": max(gpu["peak_gpu_memory_gib"] for gpu in gpus),
+            "gpu_utilization_pct": sum(gpu["gpu_utilization_pct"] for gpu in gpus) / len(gpus)}
 
 
 def run(args, cfg):
@@ -59,25 +93,9 @@ def run(args, cfg):
     start, end = timestamp(raw["start_time"]), timestamp(raw["end_time"])
     if end <= start:
         raise ValueError("Invalid AIPerf measurement window")
-    gpu_path = Path(service["directory"]) / "gpu-samples.jsonl"
-    # Drop a possible partial trailing line from the live append-only sampler.
-    lines = gpu_path.read_text().splitlines(keepends=True)
-    samples = [json.loads(line) for line in lines if line.endswith("\n")]
-    if any("error" in row for row in samples):
-        raise RuntimeError("Server-side GPU sampling failed")
-    selected = [row for row in samples if start <= row["unix_s"] <= end]
-    (directory / "gpu-samples.jsonl").write_text("".join(json.dumps(row) + "\n" for row in selected))
-    sampler = Sampler(directory / "gpu-samples.jsonl", service["sampling_interval_s"])
-    sampler.uuid = service["environment"]["gpu"]["uuid"]
-    sampler.samples = [dict(row, monotonic_s=row["unix_s"]) for row in selected]
-    gpu = sampler.summarize(start, end)
-    requests = [json.loads(line) for line in (Path(service["directory"]) / "requests.jsonl").read_text().splitlines()]
-    measured = [row for row in requests if start <= row["start_unix_s"] and row["end_unix_s"] <= end]
-    if len(measured) != count or any(row["compiled"] for row in measured):
-        raise ValueError("Server request records do not match AIPerf's window, or compilation occurred")
-    write_json(directory / "server-requests.json", measured)
+    telemetry = server_telemetry(service, directory, start, end, count)
     report = {"run_id": directory.name, "target": "dynamo", "variant": args.variant, "service": service,
-              "correctness": quality, "raw_aiperf": str(artifacts), "gpu": gpu,
+              "correctness": quality, "raw_aiperf": str(artifacts), **telemetry,
               "throughput_images_s": count / (end - start), "latency_mean_ms": metric(raw, "request_latency", "ms"),
               "compilation_s": service["timing"]["compilation_s"],
               "compilation_missing_reason": service["timing"]["compilation_missing_reason"],

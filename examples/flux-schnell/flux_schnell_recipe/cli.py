@@ -32,12 +32,12 @@ def main():
     args = parser.parse_args()
     cfg = load_config(args.config)
     logging.basicConfig(level=logging.INFO)
-    if cfg["execution"]["gpu_count"] > 1:
-        if args.command not in ("tune", "correctness", "benchmark", "infer"):
-            parser.error("Multi-GPU deployment is not implemented; this recipe supplies Python phases only")
+    if cfg["execution"]["gpu_count"] > 1 and args.command in ("tune", "correctness", "benchmark", "infer"):
         from .multi_gpu import run
         run(args, cfg)
         return
+    if args.command not in ("tune", "correctness", "benchmark", "infer") and "dynamo" not in cfg["deployment"]["targets"]:
+        parser.error("Enable Dynamo deployment in the config; see recipes/multi-gpu.yaml for deployment settings")
     module = {"infer": "inference", "serve": "deployment.dynamo.server", "web": "deployment.dynamo.web",
               "deployment-correctness": "deployment.dynamo.client",
               "deployment-benchmark": "deployment.dynamo.benchmark"}.get(args.command, args.command)

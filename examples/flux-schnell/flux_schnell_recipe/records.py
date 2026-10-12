@@ -96,3 +96,11 @@ def artifact_metadata(cfg):
     if file_sha(cfg.artifact) != metadata["sha256"]:
         raise ValueError("Artifact hash differs from its tuning record")
     return metadata
+
+
+def deployment_artifact(cfg):
+    if cfg["execution"]["gpu_count"] == 1:
+        return artifact_metadata(cfg)
+    from .multi_gpu import read_manifest
+    manifest = read_manifest(cfg)
+    return {"contract": manifest["contract"], "sha256": [item["sha256"] for item in manifest["artifacts"]]}

@@ -44,4 +44,9 @@ validation:
   threshold: 0.70
   soft_threshold: 0.95
 deployment:
-  targets: []
+  targets: [dynamo]
+  port: 8000
+  seed: 42
+  concurrency: 1
+  request_count: 20
+  readiness_timeout_s: 1800

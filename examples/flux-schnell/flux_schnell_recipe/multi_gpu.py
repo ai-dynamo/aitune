@@ -79,9 +79,17 @@ def launch(args, cfg, action, variant, directory, reference=None):
 
 
 def require_manifest(args, cfg):
+    manifest = read_manifest(cfg)
+    if manifest["contract"] != contract(cfg, source_identity(args, cfg)):
+        raise ValueError("Multi-GPU artifact manifest differs from requested source/configuration")
+    return manifest
+
+
+def read_manifest(cfg):
     manifest = read_json(cfg.artifact.parent / "manifest.json")
-    expected = contract(cfg, source_identity(args, cfg))
-    if manifest["contract"] != expected or manifest["gpu_count"] != 2:
+    expected = contract(cfg, manifest["contract"]["source"])
+    if (manifest["contract"] != expected or manifest["gpu_count"] != 2
+            or [item["rank"] for item in manifest["artifacts"]] != [0, 1]):
         raise ValueError("Multi-GPU artifact manifest differs from requested source/configuration")
     for rank in range(2):
         metadata = artifact_metadata(rank_config(cfg, rank))

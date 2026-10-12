@@ -10,7 +10,7 @@ import sys
 import time
 
 from .data import read_inputs
-from .records import artifact_metadata, contract, file_sha, new_run, read_json, source_identity, write_json
+from .records import artifact_metadata, contract, deployment_artifact, file_sha, new_run, read_json, source_identity, write_json
 
 logger = logging.getLogger(__name__)
 
@@ -127,11 +127,14 @@ def run(args, cfg):
 
 
 def require_correctness(cfg, metadata=None):
-    result = read_json(read_json(cfg.output / "correctness-latest.json")["report"])
-    metadata = metadata or artifact_metadata(cfg)
+    path = Path(read_json(cfg.output / "correctness-latest.json")["report"])
+    result = read_json(path if path.is_absolute() else cfg.output / path)
+    metadata = metadata or deployment_artifact(cfg)
+    thresholds = ([rank["threshold"] for rank in result["ranks"]]
+                  if cfg["execution"]["gpu_count"] > 1 else [result["threshold"]])
     if (not result["passed"] or result["contract"] != metadata["contract"]
             or result["artifact_sha256"] != metadata["sha256"]
             or result["validation_inputs_sha256"] != file_sha(cfg["inputs"]["validation"])
-            or result["threshold"] != cfg["validation"]["threshold"]):
+            or thresholds != [cfg["validation"]["threshold"]] * cfg["execution"]["gpu_count"]):
         raise ValueError("Correctness evidence is stale; run recipe correctness with this configuration")
     return result

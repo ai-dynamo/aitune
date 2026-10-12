@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 from ...correctness import compare, require_correctness
 from ...data import read_inputs
-from ...records import artifact_metadata, contract, new_run, read_json, write_json
+from ...records import contract, deployment_artifact, new_run, read_json, write_json
 
 
 def service_info(args, cfg):
@@ -22,7 +22,7 @@ def service_info(args, cfg):
     if url.port != cfg["deployment"]["port"]:
         raise ValueError("Endpoint port differs from the selected recipe")
     service = read_json(read_json(cfg.output / f"serve-{args.variant}-latest.json")["service"])
-    artifact = artifact_metadata(cfg)
+    artifact = deployment_artifact(cfg)
     if (service["variant"] != args.variant or service["contract"] != artifact["contract"]
             or service["contract"] != contract(cfg, artifact["contract"]["source"])
             or service["artifact_sha256"] != artifact["sha256"] or service["seed"] != cfg["deployment"]["seed"]):
@@ -59,7 +59,10 @@ def run(args, cfg):
     images.mkdir()
     for item in records:
         image_request(args, cfg, service, item).save(images / f"{item['id']}.png")
-    result = compare(cfg, Path(reference["original"]) / "images", images, records)
+    reference_dir = Path(reference["original"])
+    if cfg["execution"]["gpu_count"] > 1:
+        reference_dir /= "rank-0"
+    result = compare(cfg, reference_dir / "images", images, records)
     result.update({"service": service, "reference": reference, "run_id": directory.name})
     write_json(directory / "report.json", result)
     print(directory / "report.json")

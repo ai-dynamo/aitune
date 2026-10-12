@@ -44,10 +44,11 @@ skip the token prompt. The container installs locked dependencies and opens a sh
 Model downloads are cached on the host; artifacts, images, logs, and reports persist under
 the host's `results/flux-schnell/` directory.
 
-For experimental two-GPU tuning, recreate the container with `--gpus '"device=0,1"'` and use
-[`recipes/multi-gpu.yaml`](recipes/multi-gpu.yaml) for the Python commands. Both matching BF16-capable GPUs must
+For experimental two-GPU execution, recreate the container with `--gpus '"device=0,1"'` and use
+[`recipes/multi-gpu.yaml`](recipes/multi-gpu.yaml) throughout tuning, validation, serving, and the web app. Both matching BF16-capable GPUs must
 be visible inside the container with working NCCL communication. This recipe launches its own two workers;
-do not wrap `recipe` in `torchrun`. Two-GPU Dynamo deployment and the web app are not supported.
+do not wrap `recipe` in `torchrun`. Both GPUs cooperate on each image using Ulysses context parallelism;
+the Dynamo service exposes one endpoint and processes one image request at a time.
 
 Before two-GPU tuning, check communication inside the container without loading the model:
 
@@ -66,7 +67,7 @@ export NCCL_P2P_DISABLE=1
 ```
 
 This allowed the communication check to pass and tuning to start on the reported two-H100 PCIe machine.
-Keep it set for tuning, correctness, benchmarking, and inference on that machine. Repeat the export in each new
+Keep it set for tuning, correctness, benchmarking, inference, and serving on that machine. Repeat the export in each new
 shell, or add `-e NCCL_P2P_DISABLE=1` to `docker run`. The fallback uses host shared memory and can affect performance;
 use it for affected machines rather than enabling it for every multi-GPU run.
 
@@ -129,6 +130,28 @@ uv run --frozen recipe serve \
 The service loads the artifact, completes first-use compilation and warmup, then prints
 `Ready at http://localhost:8000`. It keeps the model loaded for incoming prompts. Leave this shell running.
 Startup logs are in `results/single-gpu/serve-aitune/<run>/frontend.log` and `worker.log`.
+
+For two GPUs, first tune and check correctness with `recipes/multi-gpu.yaml`, then start:
+
+```bash
+uv run --frozen recipe serve \
+  --model-id black-forest-labs/FLUX.1-schnell --config recipes/multi-gpu.yaml \
+  --target dynamo --variant aitune
+```
+
+On machines needing the NCCL fallback above, keep `NCCL_P2P_DISABLE=1` exported in this shell.
+The service verifies `results/multi-gpu/artifact/manifest.json` and loads each rank's saved artifact.
+Existing two-GPU artifacts remain usable; adding deployment settings does not change their model contract.
+If using an older custom config with `deployment.targets: []`, copy the deployment settings from the updated
+two-GPU recipe. Rebuild the container to include the updated example code.
+
+Readiness requires both ranks to finish compilation and warmup and the model to register with Dynamo.
+Logs are under `results/multi-gpu/serve-aitune/<run>/`; `worker.log` includes both ranks, while
+`rank-0/` and `rank-1/` hold separate compiler records, request logs, and GPU samples.
+Stopping the service stops the frontend and both workers. Use `recipes/multi-gpu.yaml` for the deployment
+checks and web command below too. Deployment correctness compares against the two-GPU Original Model;
+benchmark reports include both GPUs and count each jointly generated image once.
+The two-H100 serving workflow still needs hardware validation; no multi-GPU performance results are claimed.
 
 From a **second host terminal**, open another shell in the same container:
 

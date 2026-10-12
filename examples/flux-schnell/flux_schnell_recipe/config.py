@@ -82,14 +82,13 @@ def load_config(path):
             or not v["threshold"] <= soft_threshold <= 1):
         raise ValueError("validation.soft_threshold must be between validation.threshold and 1, or null")
     d = raw["deployment"]
-    if count > 1 and d != {"targets": []}:
-        raise ValueError("The multi-GPU recipe implements Python phases only; set deployment.targets: []")
-    if count == 1 and (d.get("targets") != ["dynamo"] or d.get("concurrency") != 1):
+    deployment_enabled = count == 1 or d != {"targets": []}
+    if deployment_enabled and (d.get("targets") != ["dynamo"] or d.get("concurrency") != 1):
         raise ValueError("Deployment implements Dynamo at concurrency 1")
-    for key in (("port", "request_count", "readiness_timeout_s") if count == 1 else ()):
+    for key in (("port", "request_count", "readiness_timeout_s") if deployment_enabled else ()):
         if type(d.get(key)) is not int or d[key] < 1:
             raise ValueError(f"deployment.{key} must be positive")
-    if count == 1 and (d["port"] > 65535 or type(d.get("seed")) is not int or not 0 <= d["seed"] < 2**32):
+    if deployment_enabled and (d["port"] > 65535 or type(d.get("seed")) is not int or not 0 <= d["seed"] < 2**32):
         raise ValueError("Invalid deployment port or seed")
 
     def resolved(value):
