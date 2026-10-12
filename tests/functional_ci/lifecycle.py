@@ -45,7 +45,8 @@ def run_lifecycle(
     tolerance: Tolerance,
 ) -> LifecycleResult:
     """Tune `backend` on a fresh model, check outputs, then reload the checkpoint into another fresh model."""
-    strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
+    strategy = ait.OneBackendStrategy(backend)
+    strategy.enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
     model = model_factory()
     with torch.no_grad():
