@@ -28,7 +28,12 @@ TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
 
 def _torch_tensorrt_aot() -> Backend:
     """Build a Torch-TensorRT AOT backend that converts the whole graph in fp32."""
-    compile_config = TorchTensorRTConfig(enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True)
+    compile_config = TorchTensorRTConfig(
+        enabled_precisions={torch.float32},
+        min_block_size=1,
+        disable_tf32=True,
+        require_full_compilation=True,
+    )
     return TorchTensorRTAotBackend(TorchTensorRTAotBackendConfig(compile_config=compile_config))
 
 
