@@ -153,18 +153,24 @@ python my_script.py
 
 ### Registering existing modules
 
-If another library or runtime has already constructed the modules you want to tune, register those final instances
-directly:
+Explicit registration wraps existing module instances that you pass to AITune instead of discovering modules as their
+constructors run. The modules may have been loaded or prepared by another runtime, such as Flex Tensor, before AITune
+is imported. Load and prepare the model first, then register the final instances you want to tune:
 
 ```python
+from diffusers import DiffusionPipeline
+
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5").to("cuda")
+
 from aitune.torch import register_for_jit_tuning
 
-# Pass an iterable of modules. A ModuleList can be passed directly.
-registration = register_for_jit_tuning(model.blocks)
+# Pass an iterable containing the existing modules to wrap.
+registration = register_for_jit_tuning([pipe.unet])
 ```
 
-For one module, pass `[model]`. Explicit registration selects only the supplied modules and treats each one as an
-independent top-level JIT target. It otherwise follows the same eager or deferred runtime recording and tuning
+For one module, pass `[model]`. For a collection such as the existing `ModuleList` in `model.blocks`, pass
+`register_for_jit_tuning(model.blocks)`. Explicit registration selects only the supplied modules and treats each one as
+an independent top-level JIT target. It otherwise follows the same eager or deferred runtime recording and tuning
 lifecycle. Do not enable automatic constructor interception in the same live JIT session. The returned registration
 provides live inspection reports, state counts, and an `all_tuned` snapshot. See
 [Registering Existing Modules](../guides/jit_tuning.md#registering-existing-modules) for the complete contract.
