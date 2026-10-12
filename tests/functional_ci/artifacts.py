@@ -23,7 +23,10 @@ def _run_tensorrt_plan(path: Path, inputs: list[torch.Tensor]) -> list[torch.Ten
     """Deserialize a TensorRT plan and execute it on torch-allocated buffers."""
     import tensorrt as trt
 
-    engine = trt.Runtime(trt.Logger(trt.Logger.WARNING)).deserialize_cuda_engine(path.read_bytes())
+    # TensorRT needs the logger and the runtime to outlive the engine and its execution context.
+    logger = trt.Logger(trt.Logger.WARNING)
+    runtime = trt.Runtime(logger)
+    engine = runtime.deserialize_cuda_engine(path.read_bytes())
     assert engine is not None, f"cannot deserialize {path}"
     context = engine.create_execution_context()
     names = [engine.get_tensor_name(index) for index in range(engine.num_io_tensors)]
