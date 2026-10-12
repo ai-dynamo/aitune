@@ -7,6 +7,7 @@ from typing import cast
 
 import pytest
 import torch
+from torch import nn
 
 import aitune.torch as ait
 from aitune.torch.backend import (
@@ -26,6 +27,19 @@ from aitune.torch.module.tuned_module import TunedModule
 
 from .lifecycle import TENSORRT_FP32, Tolerance
 from .models import make_input, make_mlp
+
+
+class JitMLP(nn.Module):
+    """Single JIT head around the toy MLP; `nn.Sequential` containers are not patched, so their children would be heads."""
+
+    def __init__(self, mlp: nn.Module):
+        """Wrap the toy MLP."""
+        super().__init__()
+        self.mlp = mlp
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the toy MLP."""
+        return self.mlp(x)
 
 
 def _torch_tensorrt_jit() -> Backend:
@@ -57,7 +71,7 @@ def test_jit_tuning(backend_id: str, mode: JITMode, device: torch.device):
     jit_config.strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
     reference = make_mlp(device)
     with prepare_for_jit_tuning():
-        model = make_mlp(device)
+        model = JitMLP(make_mlp(device))
 
     with torch.no_grad():
         model(make_input(device, batch_size=1))
@@ -67,8 +81,7 @@ def test_jit_tuning(backend_id: str, mode: JITMode, device: torch.device):
             deferred()
             model(make_input(device, batch_size=1))
 
-        # Tuned backends call child modules outside the parent call, so they appear as extra heads.
-        (head,) = (head for head in PatchedModule.heads if head._name == "Sequential")
+        (head,) = (head for head in PatchedModule.heads if head._name == "JitMLP")
         assert head._state == ModuleState.TUNED
         (selected,) = cast(TunedModule, head._wrapper).backends.values()
         assert type(selected) is type(backend)
@@ -80,13 +93,13 @@ def test_jit_inspection_report(device: torch.device, tmp_path):
     """Inspect mode records the model hierarchy without tuning and writes an HTML report."""
     jit_config.mode = JITMode.INSPECT
     with prepare_for_jit_tuning():
-        model = make_mlp(device)
+        model = JitMLP(make_mlp(device))
 
     with torch.no_grad():
         model(make_input(device, batch_size=1))
         model(make_input(device, batch_size=2))
 
-    assert [head._name.split(" ")[0] for head in InspectModule.heads] == ["Sequential"]
+    assert [head._name.split(" ")[0] for head in InspectModule.heads] == ["JitMLP"]
     report = tmp_path / "inspection.html"
     InspectModule.save_report(report, "toy-mlp")
     assert "toy-mlp" in report.read_text()
