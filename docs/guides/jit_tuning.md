@@ -4,19 +4,29 @@
 title: "Just-in-Time Tuning Guide"
 ---
 
-Just-in-time tuning records real application calls and tunes modules during execution. Use automatic discovery without
-modifying an existing script, or explicitly register final module instances when you need exact post-construction
-targets.
+Just-in-time tuning enables automatic model tuning without modifying your existing code. You can enable it with an environment variable and run your script - AITune will automatically discover and tune modules during execution.
 
 ## Overview
 
-Just-in-time tuning provides automatic and targeted approaches to model tuning:
+Just-in-time tuning provides a zero-code-change approach to model tuning:
 
 - **Automatic Discovery**: Automatically detects PyTorch modules during execution
 - **Zero Code Changes**: No need to modify your existing scripts
-- **Explicit Registration**: Select already constructed module instances without enabling global interception
-- **Hierarchical Tuning**: Recursively tunes automatically discovered modules from top to bottom
+- **Hierarchical Tuning**: Recursively tunes modules from top to bottom
 - **Configurable**: Fine-tune behavior through environment variables or configuration
+
+### Explicit Registration
+
+For models that already exist—for example, loaded or prepared by Flex Tensor before AITune is imported—use explicit
+registration. This wraps the module instances you pass instead of wrapping modules during their construction.
+
+- **Existing Modules**: Register instances created by your application's model constructor, factory, or `from_pretrained()`
+- **Explicit Targets**: Select the exact modules to wrap without enabling constructor interception or discovering later modules
+- **Independent Targets**: Treat each supplied module as a top-level tuning target, with its owned children compiled as part of that target
+- **Runtime Tuning**: Record real application calls and follow the configured eager or deferred tuning lifecycle
+- **Live Status**: Inspect reports, state counts, and the `all_tuned` snapshot for the selected targets
+
+See [Registering Existing Modules](#registering-existing-modules) for examples and the registration contract.
 
 ## Quick Start
 
@@ -92,20 +102,26 @@ This approach allows you to:
 ### Registering Existing Modules
 
 The environment, import, and decorator activation methods discover modules while those modules are being constructed.
-If the modules already exist—for example, because another runtime first prepares or installs hooks on the model—register
-the final module instances explicitly:
+Explicit registration attaches JIT wrappers to module instances that already exist. For example, another runtime such
+as Flex Tensor may have loaded or prepared the model before AITune is imported. Register the final instances after
+those preparation steps. The following example loads a pipeline before importing AITune, then selects its UNet:
 
 ```python
+from diffusers import DiffusionPipeline
+
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5").to("cuda")
+
 from aitune.torch import register_for_jit_tuning
 
-# `blocks` may be any iterable of existing torch.nn.Module instances, including ModuleList.
-registration = register_for_jit_tuning(model.blocks)
+# Wrap only this existing module; constructor interception is not enabled.
+registration = register_for_jit_tuning([pipe.unet])
 ```
 
-For a single module, pass a one-element iterable:
+For a single module, pass a one-element iterable such as `[model]`. For a collection of existing modules, pass the
+iterable directly. A `ModuleList`, such as `model.blocks`, can be passed without converting it to a list:
 
 ```python
-registration = register_for_jit_tuning([model])
+registration = register_for_jit_tuning(model.blocks)
 ```
 
 Explicit registration does not patch `torch.nn.Module.__init__`, does not affect modules created later, and does not
