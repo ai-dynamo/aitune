@@ -3,6 +3,7 @@
 """JIT mode cases: modules created under the patcher are tuned on live traffic."""
 
 from collections.abc import Callable
+from typing import cast
 
 import pytest
 import torch
@@ -21,6 +22,7 @@ from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
 from aitune.torch.jit.tune import deferred
+from aitune.torch.module.tuned_module import TunedModule
 
 from .lifecycle import TENSORRT_FP32, Tolerance
 from .models import make_input, make_mlp
@@ -68,7 +70,7 @@ def test_jit_tuning(backend_id: str, mode: JITMode, device: torch.device):
         # Tuned backends call child modules outside the parent call, so they appear as extra heads.
         (head,) = (head for head in PatchedModule.heads if head._name == "Sequential")
         assert head._state == ModuleState.TUNED
-        (selected,) = head._wrapper._backends.values()
+        (selected,) = cast(TunedModule, head._wrapper).backends.values()
         assert type(selected) is type(backend)
         value = make_input(device, batch_size=3, seed=7)
         torch.testing.assert_close(model(value), reference(value), rtol=tolerance.rtol, atol=tolerance.atol)
