@@ -28,7 +28,12 @@ from .models import make_input, make_mlp
 
 def _torch_tensorrt_jit() -> Backend:
     """Build a Torch-TensorRT JIT backend that converts the whole graph in fp32."""
-    compile_config = TorchTensorRTConfig(enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True)
+    compile_config = TorchTensorRTConfig(
+        enabled_precisions={torch.float32},
+        min_block_size=1,
+        disable_tf32=True,
+        require_full_compilation=True,
+    )
     return TorchTensorRTJitBackend(TorchTensorRTJitBackendConfig(compile_config=compile_config))
 
 
