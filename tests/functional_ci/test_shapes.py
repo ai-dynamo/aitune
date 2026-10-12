@@ -32,6 +32,9 @@ SHAPE_BACKENDS: dict[str, tuple[Callable[[], Backend], Tolerance]] = {
     "onnxruntime-cuda": (ONNXRuntimeBackend, TENSORRT_FP32),
 }
 
+# Row sums accumulate the per-element TensorRT error over `OUT_FEATURES` values.
+TENSORRT_ROW_SUM = Tolerance(rtol=1e-3, atol=5e-3)
+
 
 class StructuredModel(nn.Module):
     """Model with a nested dict input, non-tensor and optional arguments, and a nested dict/tuple output."""
@@ -96,12 +99,14 @@ def test_explicit_batch_dim(backend_id: str, device: torch.device):
 def test_structured_io(backend_id: str, device: torch.device):
     """Nested dict input, a float and a `None` argument, and a nested dict/tuple output survive tuning."""
     backend_factory, tolerance = SHAPE_BACKENDS[backend_id]
+    tolerance = TENSORRT_ROW_SUM if backend_id == "tensorrt" else tolerance
     bias = torch.linspace(-1, 1, IN_FEATURES, device=device)
     reference = StructuredModel(make_mlp(device))
     tuned = ait.Module(StructuredModel(make_mlp(device)), "structured", strategy=_strategy(backend_factory()))
 
     def pipeline(model: Callable) -> Callable:
-        return lambda x: model(x, {"bias": bias}, scale=2.0, mask=None)
+        # Every tensor in the sample is batched, so the bias is repeated per row.
+        return lambda x: model(x, {"bias": bias.repeat(x.shape[0], 1)}, scale=2.0, mask=None)
 
     ait.tune(pipeline(tuned), list(make_input(device, batch_size=8).unbind(0)), batch_sizes=[1, 4], device=device)
 
