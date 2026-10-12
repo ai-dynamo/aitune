@@ -38,7 +38,9 @@ def test_kernel_selector_attention(device: torch.device):
         tuned(*_qkv(device, seed=0))
         tuned.tune(device=device)
 
-        assert type(selected_backend(tuned)) is KernelSelectorBackend
+        selector = selected_backend(tuned)
+        assert type(selector) is KernelSelectorBackend
+        assert selector._runtime is not None and selector._runtime.plan.providers, "no attention provider selected"
         sample = _qkv(device, seed=1)
         torch.testing.assert_close(
             tuned(*sample), Attention()(*sample), rtol=FP16_ATTENTION.rtol, atol=FP16_ATTENTION.atol
