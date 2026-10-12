@@ -37,23 +37,14 @@ def selected_backend(module: Module) -> Backend:
     return next(iter(backends.values()))
 
 
-def _model_with_zeroed_parameters(model_factory: Callable[[], nn.Module]) -> nn.Module:
-    """Return a fresh model whose outputs match the eager model only if `ait.load` restores the checkpoint weights."""
-    model = model_factory()
-    with torch.no_grad():
-        for parameter in model.parameters():
-            parameter.zero_()
-    return model
-
-
 def run_lifecycle(
     backend: Backend,
-    model_factory: Callable[[], nn.Module],
+    model_factory: Callable[..., nn.Module],
     value: torch.Tensor,
     checkpoint: Path,
     tolerance: Tolerance,
 ) -> LifecycleResult:
-    """Tune `backend` on a fresh model, check outputs, then reload the checkpoint into a zero-initialized model."""
+    """Tune `backend` on a fresh model, check outputs, then reload the checkpoint into a differently seeded model."""
     strategy = ait.OneBackendStrategy(backend)
     strategy.enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
@@ -75,7 +66,8 @@ def run_lifecycle(
 
     ait.save(tuned, checkpoint)
     tuned.deactivate()
-    restored = ait.load(_model_with_zeroed_parameters(model_factory), checkpoint)
+    # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
+    restored = ait.load(model_factory(seed=1), checkpoint)
     assert restored is not tuned
     assert type(selected_backend(restored)) is type(backend)
     with torch.no_grad():
