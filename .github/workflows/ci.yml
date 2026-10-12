@@ -281,7 +281,7 @@ jobs:
   pytorch-cpu:
     name: PyTorch CPU
     needs: [wheel, pytorch-image]
-    if: >-
+    if: &wheel_and_image_ready >-
       ${{ !cancelled() && needs.wheel.result == 'success' &&
           (needs.pytorch-image.result == 'success' || needs.pytorch-image.result == 'skipped') }}
     runs-on: linux-amd64-cpu32
@@ -313,9 +313,7 @@ jobs:
   pytorch-gpu:
     name: PyTorch GPU
     needs: [wheel, pytorch-image]
-    if: >-
-      ${{ !cancelled() && needs.wheel.result == 'success' &&
-          (needs.pytorch-image.result == 'success' || needs.pytorch-image.result == 'skipped') }}
+    if: *wheel_and_image_ready
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 40
     permissions:
@@ -356,9 +354,7 @@ jobs:
   functional-ci:
     name: Functional CI GPU
     needs: [wheel, pytorch-image]
-    if: >-
-      ${{ !cancelled() && needs.wheel.result == 'success' &&
-          (needs.pytorch-image.result == 'success' || needs.pytorch-image.result == 'skipped') }}
+    if: *wheel_and_image_ready
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 30
     permissions:
