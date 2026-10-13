@@ -2,21 +2,26 @@
 # SPDX-License-Identifier: Apache-2.0
 """Local prompt UI and same-origin proxy for an already running Dynamo service."""
 
+from __future__ import annotations
+
 import base64
 import json
 import logging
 import secrets
 import threading
+from argparse import Namespace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .config import Config
+
 logger = logging.getLogger(__name__)
 MAX_BODY = 64 * 1024
 
 
-def generate_image(endpoint, variant, cfg, prompt):
+def generate_image(endpoint: str, variant: str, cfg: Config, prompt: str) -> bytes:
     with urlopen(endpoint + "/v1/models", timeout=10) as response:
         models = json.load(response)["data"]
     names = [model["id"] for model in models if model["id"].startswith(f"flux-schnell-{variant}-")]
@@ -45,8 +50,18 @@ def generate_image(endpoint, variant, cfg, prompt):
     return image
 
 
+class WebServer(ThreadingHTTPServer):
+    cfg: Config
+    endpoint: str
+    variant: str
+    page: bytes
+    generation_lock: threading.Lock
+
+
 class Handler(BaseHTTPRequestHandler):
-    def respond(self, status, body, content_type="application/json"):
+    server: WebServer
+
+    def respond(self, status: int, body: bytes, content_type: str = "application/json") -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
@@ -55,10 +70,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def error(self, status, message):
+    def error(self, status: int, message: str) -> None:
         self.respond(status, json.dumps({"error": message}).encode())
 
-    def do_GET(self):
+    def do_GET(self) -> None:
         if self.path == "/":
             self.respond(200, self.server.page, "text/html; charset=utf-8")
         elif self.path == "/api/config":
@@ -75,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.error(404, "Not found")
 
-    def do_POST(self):
+    def do_POST(self) -> None:
         if self.path != "/api/generate":
             self.error(404, "Not found")
             return
@@ -106,7 +121,7 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             self.server.generation_lock.release()
 
-    def read_prompt(self):
+    def read_prompt(self) -> str:
         length = int(self.headers.get("Content-Length", "0"))
         if not 0 < length <= MAX_BODY:
             raise ValueError("Prompt request must be between 1 byte and 64 KiB")
@@ -117,21 +132,21 @@ class Handler(BaseHTTPRequestHandler):
         return prompt.strip()
 
 
-def create_server(cfg, endpoint, variant="aitune", host="127.0.0.1", port=8080):
-    server = ThreadingHTTPServer((host, port), Handler)
+def create_server(cfg: Config, endpoint: str, variant: str = "aitune", port: int = 8080) -> WebServer:
+    server = WebServer(("127.0.0.1", port), Handler)
     server.cfg, server.endpoint, server.variant = cfg, endpoint.rstrip("/"), variant
     server.page = files(__package__).joinpath("web.html").read_bytes()
     server.generation_lock = threading.Lock()
     return server
 
 
-def run(args, cfg):
+def run(args: Namespace, cfg: Config) -> None:
     endpoint = args.endpoint or f"http://127.0.0.1:{cfg['deployment']['port']}"
-    with create_server(cfg, endpoint, args.variant, args.host, args.port) as server:
+    with create_server(cfg, endpoint, args.variant, args.port) as server:
         print(
-            f"Web app: http://{args.host}:{server.server_port}; image service: {endpoint}; stop with Ctrl-C", flush=True
+            f"Web app: http://127.0.0.1:{server.server_port}; image service: {endpoint}; stop with Ctrl-C", flush=True
         )
         try:
             server.serve_forever()
         except KeyboardInterrupt:
-            pass
+            logger.info("Shutdown requested; stopping the web app")

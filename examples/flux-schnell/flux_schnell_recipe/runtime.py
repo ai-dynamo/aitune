@@ -2,22 +2,28 @@
 # SPDX-License-Identifier: Apache-2.0
 """Launch isolated Python or torchrun workers, with live logs and process cleanup."""
 
+from __future__ import annotations
+
 import logging
 import os
 import signal
 import subprocess
 import sys
 import time
+from argparse import Namespace
 from collections import deque
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any, cast
 
+from .config import Config
 from .distributed import rank_directory
 from .records import read_json, write_json
 
 logger = logging.getLogger(__name__)
 
 
-def worker_command(args, cfg, action, variant, directory):
+def worker_command(args: Namespace, cfg: Config, action: str, variant: str, directory: Path) -> list[str]:
     source = ["--model-id", args.model_id] if args.model_id else ["--checkpoint", str(Path(args.checkpoint).resolve())]
     launcher = [sys.executable, "-u", "-m"]
     if cfg["execution"]["gpu_count"] > 1:
@@ -46,13 +52,13 @@ def worker_command(args, cfg, action, variant, directory):
     ]
 
 
-def stop_processes(processes):
+def stop_processes(processes: Sequence[subprocess.Popen[bytes]]) -> None:
     for process in reversed(processes):
         if process.poll() is None:
             try:
                 os.killpg(process.pid, signal.SIGTERM)
             except ProcessLookupError:
-                pass
+                logger.info("Process group %d no longer exists; skipping SIGTERM", process.pid)
     for process in reversed(processes):
         try:
             process.wait(timeout=20)
@@ -61,7 +67,7 @@ def stop_processes(processes):
             process.wait()
 
 
-def stream(command, log_path):
+def stream(command: list[str], log_path: Path) -> int:
     """Retain subprocess output while showing progress, including during compilation."""
     env = dict(os.environ, PYTHONUNBUFFERED="1")
     env.setdefault("OMP_NUM_THREADS", "1")
@@ -77,7 +83,7 @@ def stream(command, log_path):
                 sys.stderr.write(output.read())
                 sys.stderr.flush()
                 if code is not None:
-                    return code
+                    return cast(int, code)
                 if time.monotonic() - heartbeat >= 30:
                     logger.info("Worker running for %.0fs; log: %s", time.monotonic() - started, log_path)
                     heartbeat = time.monotonic()
@@ -85,7 +91,9 @@ def stream(command, log_path):
             stop_processes([process])
 
 
-def launch(args, cfg, action, variant, directory, reference=None):
+def launch(
+    args: Namespace, cfg: Config, action: str, variant: str, directory: Path, reference: Path | None = None
+) -> list[dict[str, Any]]:
     directory.mkdir(parents=True, exist_ok=False)
     command = worker_command(args, cfg, action, variant, directory)
     if reference is not None:

@@ -2,23 +2,32 @@
 # SPDX-License-Identifier: Apache-2.0
 """The same tuning, inference, benchmark, or serving worker on one or two GPUs."""
 
+from __future__ import annotations
+
 import argparse
 import logging
 import os
 import time
 import traceback
+from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from .config import load_config, rank_config, read_inputs
+from .config import Config, InputRecord, load_config, rank_config, read_inputs
 from .distributed import collect, initialize, rank_directory, shutdown
 from .metrics import CompilationRecorder, Sampler, compilation_counters, prepare
 from .model import generate, load_model, save_images, synchronize
 from .records import configure_cache, contract, environment, source_identity, write_json
 
+if TYPE_CHECKING:
+    from diffusers import FluxPipeline
+
 logger = logging.getLogger(__name__)
 
 
-def measure(pipe, cfg, records, directory, recorder):
+def measure(
+    pipe: FluxPipeline, cfg: Config, records: Sequence[InputRecord], directory: Path, recorder: CompilationRecorder
+) -> dict[str, Any]:
     sampler = Sampler(directory / "gpu-samples.jsonl", cfg["benchmark"]["sampling_interval_s"]).start()
     before, compilation_records = compilation_counters(), recorder.snapshot()
     timings = []
@@ -58,15 +67,17 @@ def measure(pipe, cfg, records, directory, recorder):
     }
 
 
-def execute(args, cfg, rank, directory):
+def execute(args: argparse.Namespace, cfg: Config, rank: int, directory: Path) -> None:
     if args.action == "tune":
         from .tune import run
 
-        return run(args, cfg, run_dir=directory)
+        run(args, cfg, run_dir=directory)
+        return
     if args.action == "serve":
         from .dynamo.backend import execute as serve
 
-        return serve(args, cfg, directory, rank)
+        serve(args, cfg, directory, rank)
+        return
     recorder = CompilationRecorder(directory)
     source = source_identity(args, cfg)
     pipe = load_model(args, cfg, args.variant, source)
@@ -102,7 +113,7 @@ def execute(args, cfg, rank, directory):
     write_json(directory / "report.json", report)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True)
     source = parser.add_mutually_exclusive_group(required=True)

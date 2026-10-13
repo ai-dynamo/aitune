@@ -35,15 +35,15 @@ Minimum memory requirements have not been established. Review the
 ```bash
 docker build -f examples/flux-schnell/Dockerfile -t aitune-flux-schnell .
 mkdir -p results/flux-schnell hf-cache
-docker run --gpus '"device=0"' --ipc=host --rm -it \
+docker run --gpus '"device=0"' --ipc=host --network=host --rm -it \
   --name aitune-flux-schnell -e HF_TOKEN \
-  -p 127.0.0.1:8000:8000 -p 127.0.0.1:8080:8080 \
   -v "$PWD/results/flux-schnell:/workspace/flux-schnell/results" \
   -v "$PWD/hf-cache:/cache/huggingface" aitune-flux-schnell
 ```
 
 The following commands run **inside the container**, in `/workspace/flux-schnell`. Dependencies are
 locked; the model cache and results persist on the host. Rebuild the image after changing the example.
+Host networking lets the Docker host reach services bound to `127.0.0.1` inside the container; no port publishing is needed.
 
 ## Tune, validate, benchmark, generate
 
@@ -107,16 +107,16 @@ After tuning and checking correctness:
 uv run --frozen recipe serve
 ```
 
-The service loads the artifact and finishes compilation and warmup before printing `Ready at http://localhost:8000`.
+The service loads the artifact and finishes compilation and warmup before printing `Ready at http://127.0.0.1:8000`.
 Leave it running. Open a second shell with `docker exec -it aitune-flux-schnell bash`, then run:
 
 ```bash
 uv run --frozen recipe deployment-correctness
 uv run --frozen recipe deployment-benchmark
-uv run --frozen recipe web --host 0.0.0.0
+uv run --frozen recipe web
 ```
 
-Open **http://localhost:8080** on the Docker host, enter a prompt, and select **Generate image**.
+Open **http://127.0.0.1:8080** on the Docker host, enter a prompt, and select **Generate image**.
 Each generation uses a fresh random seed. The page displays elapsed time and a **Download PNG** button;
 it accepts one generation at a time and does not automatically save images to the results directory.
 
@@ -127,7 +127,7 @@ Dynamo exposes one endpoint; both ranks participate in each request and must fin
 
 The endpoint defaults to the recipe's port; override it with `--endpoint http://HOST:PORT`. Deployment measurements
 require a local service and shared results directory; the web app can connect remotely. For a remote Docker host,
-forward port 8080 with SSH. This is a local demo without authentication; the Docker command binds ports to host loopback.
+forward port 8080 with SSH. This is a local demo without authentication; the web app and Dynamo bind to `127.0.0.1`.
 
 API clients can use `POST /v1/images/generations` with the model ID from `/v1/models`, a `prompt`, `n: 1`,
 `size: "1024x1024"`, and `response_format: "b64_json"`. Optional `nvext: {"seed": 123}` chooses a seed;

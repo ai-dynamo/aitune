@@ -2,20 +2,30 @@
 # SPDX-License-Identifier: Apache-2.0
 """Own the Dynamo frontend and worker; readiness and process-group cleanup."""
 
+from __future__ import annotations
+
 import json
+import logging
 import os
 import signal
 import socket
 import subprocess
 import sys
 import time
+from argparse import Namespace
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 from urllib.request import urlopen
 
+from ..config import Config
 from ..records import contract, deployment_artifact, new_run, read_json, source_identity, write_json
 from ..runtime import stop_processes, worker_command
 
+logger = logging.getLogger(__name__)
 
-def publish_distributed_service(cfg, directory, artifact):
+
+def publish_distributed_service(cfg: Config, directory: Path, artifact: dict[str, Any]) -> None:
     paths = [directory / f"rank-{rank}" / "service.json" for rank in range(cfg["execution"]["gpu_count"])]
     if not all(path.is_file() for path in paths):
         return
@@ -51,7 +61,7 @@ def publish_distributed_service(cfg, directory, artifact):
     write_json(directory / "service.json", service)
 
 
-def registered(directory, port):
+def registered(directory: Path, port: int) -> bool:
     if not (directory / "service.json").exists():
         return False
     service = read_json(directory / "service.json")
@@ -63,7 +73,9 @@ def registered(directory, port):
         return False
 
 
-def wait_for_ready(processes, cfg, directory, artifact):
+def wait_for_ready(
+    processes: Sequence[subprocess.Popen[bytes]], cfg: Config, directory: Path, artifact: dict[str, Any]
+) -> None:
     deadline = time.monotonic() + cfg["deployment"]["readiness_timeout_s"]
     while True:
         if any(p.poll() is not None for p in processes):
@@ -77,7 +89,7 @@ def wait_for_ready(processes, cfg, directory, artifact):
         time.sleep(1)
 
 
-def run(args, cfg):
+def run(args: Namespace, cfg: Config) -> None:
     if int(os.environ.get("WORLD_SIZE", "1")) != 1 or "RANK" in os.environ:
         raise ValueError("Run recipe serve once; it launches its own workers. Do not wrap it in torchrun")
     artifact = deployment_artifact(cfg)
@@ -86,7 +98,7 @@ def run(args, cfg):
     port = cfg["deployment"]["port"]
     with socket.socket() as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        probe.bind(("0.0.0.0", port))
+        probe.bind(("127.0.0.1", port))
     directory = new_run(cfg, f"serve-{args.variant}")
     env = dict(
         os.environ,
@@ -94,12 +106,18 @@ def run(args, cfg):
         DYN_EVENT_PLANE="zmq",
         DYN_REQUEST_PLANE="tcp",
         DYN_ROUTER_USE_KV_EVENTS="false",
+        DYN_TCP_RPC_HOST="127.0.0.1",
+        DYN_TCP_RESPONSE_STREAM_HOST="lo",  # Dynamo 1.5 expects an interface name for this listener.
+        DYN_SYSTEM_PORT="-1",
         TZ="UTC",
     )
     worker = worker_command(args, cfg, "serve", args.variant, directory)
     env.setdefault("OMP_NUM_THREADS", "1")
     env["PYTHONUNBUFFERED"] = "1"
-    commands = [[sys.executable, "-m", "dynamo.frontend", "--http-port", str(port)], worker]
+    commands = [
+        [sys.executable, "-m", "dynamo.frontend", "--http-host", "127.0.0.1", "--http-port", str(port)],
+        worker,
+    ]
     write_json(directory / "commands.json", commands)
     print(f"Starting Dynamo; logs: {directory / 'frontend.log'} and {directory / 'worker.log'}", flush=True)
     processes, logs = [], []
@@ -113,12 +131,12 @@ def run(args, cfg):
             )
         wait_for_ready(processes, cfg, directory, artifact)
         write_json(cfg.output / f"serve-{args.variant}-latest.json", {"service": str(directory / "service.json")})
-        print(f"Ready at http://localhost:{port}; records: {directory}; stop with Ctrl-C", flush=True)
+        print(f"Ready at http://127.0.0.1:{port}; records: {directory}; stop with Ctrl-C", flush=True)
         while all(p.poll() is None for p in processes):
             time.sleep(1)
         raise RuntimeError(f"Dynamo exited unexpectedly; inspect {directory}")
     except KeyboardInterrupt:
-        pass
+        logger.info("Shutdown requested; stopping the Dynamo frontend and worker")
     finally:
         stop_processes(processes)
         for log in logs:

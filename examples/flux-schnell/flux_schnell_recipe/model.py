@@ -2,14 +2,27 @@
 # SPDX-License-Identifier: Apache-2.0
 """Schnell loading and seeded end-to-end Diffusers inference."""
 
+from __future__ import annotations
+
 import logging
 import os
+from argparse import Namespace
+from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from .config import Config, InputRecord, Prompt
+
+if TYPE_CHECKING:
+    from diffusers import FluxPipeline
+    from PIL.Image import Image
+
+    from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 
 logger = logging.getLogger(__name__)
 
 
-def check_gpu(cfg):
+def check_gpu(cfg: Config) -> None:
     import torch
     import torch.distributed as dist
 
@@ -26,7 +39,9 @@ def check_gpu(cfg):
     torch.backends.cuda.matmul.allow_tf32 = False
 
 
-def load_model(args, cfg, variant="original", source=None):
+def load_model(
+    args: Namespace, cfg: Config, variant: str = "original", source: dict[str, Any] | None = None
+) -> FluxPipeline:
     import torch
     from diffusers import FluxPipeline
 
@@ -65,7 +80,7 @@ def load_model(args, cfg, variant="original", source=None):
     return pipe
 
 
-def generate(pipe, cfg, item):
+def generate(pipe: FluxPipeline, cfg: Config, item: Prompt | InputRecord) -> Image:
     import torch
 
     with torch.inference_mode():
@@ -79,7 +94,7 @@ def generate(pipe, cfg, item):
     return image.convert("RGB")
 
 
-def synchronize():
+def synchronize() -> None:
     import torch
 
     torch.cuda.synchronize()
@@ -87,7 +102,7 @@ def synchronize():
         torch.distributed.barrier()
 
 
-def save_images(pipe, cfg, records, directory):
+def save_images(pipe: FluxPipeline, cfg: Config, records: Sequence[InputRecord], directory: str | Path) -> None:
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
     for index, item in enumerate(records, 1):
@@ -96,7 +111,7 @@ def save_images(pipe, cfg, records, directory):
     logger.info("Saved %d images to %s", len(records), directory)
 
 
-def cpu_staging_storage():
+def cpu_staging_storage() -> LocalTorchStorage:
     """Avoid duplicating CUDA weights when restoring a saved pipeline."""
     import torch
 
@@ -104,7 +119,7 @@ def cpu_staging_storage():
     from aitune.torch.checkpoint.storage_tasks import STATE_DICT_FILE, TorchLoadTask
 
     class CpuTorchLoadTask(TorchLoadTask):
-        def load(self, path, state_dict=None):
+        def load(self, path: Path, state_dict: dict[str, Any] | None = None) -> dict[str, Any]:
             return torch.load(path / STATE_DICT_FILE, map_location="cpu", weights_only=False)
 
     storage = LocalTorchStorage()
@@ -114,7 +129,7 @@ def cpu_staging_storage():
     return storage
 
 
-def check_environment(built):
+def check_environment(built: dict[str, Any]) -> None:
     from .records import environment
 
     current = environment()

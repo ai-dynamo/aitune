@@ -2,18 +2,27 @@
 # SPDX-License-Identifier: Apache-2.0
 """Warmup, compiler timing, and device-wide NVML sampling for Python and Dynamo."""
 
+from __future__ import annotations
+
 import json
 import logging
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
+from types import ModuleType
+from typing import TYPE_CHECKING, Any
 
+from .config import Config, InputRecord
 from .records import write_json
+
+if TYPE_CHECKING:
+    from diffusers import FluxPipeline
 
 logger = logging.getLogger(__name__)
 
 
-def interval_seconds(records):
+def interval_seconds(records: Sequence[dict[str, Any]]) -> float:
     """Count overlapping/nested compiler intervals once, excluding runtime events."""
     intervals = []
     for record in records:
@@ -35,14 +44,14 @@ class CompilationRecorder:
     # torch._dynamo.reset(), unlike callbacks and compilation_time_metrics.
     limit = 100000
 
-    def __init__(self, directory):
+    def __init__(self, directory: Path) -> None:
         from torch._dynamo.utils import clear_compilation_metrics, set_compilation_metrics_limit
 
         self.path = directory / "compilation.json"
         set_compilation_metrics_limit(self.limit)
         clear_compilation_metrics()
 
-    def snapshot(self):
+    def snapshot(self) -> list[dict[str, Any]]:
         from torch._dynamo.utils import get_compilation_metrics
 
         rows = get_compilation_metrics()
@@ -63,7 +72,7 @@ class CompilationRecorder:
         )
         return [{key: getattr(row, key) for key in fields} for row in rows]
 
-    def finish(self):
+    def finish(self) -> dict[str, Any]:
         records = self.snapshot()
         result = {
             "compilation_s": interval_seconds(records),
@@ -75,7 +84,7 @@ class CompilationRecorder:
         return result
 
 
-def compilation_counters():
+def compilation_counters() -> dict[str, int]:
     from torch._dynamo.utils import counters
     from torch._inductor import metrics
 
@@ -85,7 +94,9 @@ def compilation_counters():
     }
 
 
-def prepare(pipe, cfg, records, compilation):
+def prepare(
+    pipe: FluxPipeline, cfg: Config, records: Sequence[InputRecord], compilation: CompilationRecorder
+) -> dict[str, Any]:
     from .model import generate, synchronize
 
     logger.info("First-use pass over %d inputs; lazy compilation may take several minutes", len(records))
@@ -129,14 +140,19 @@ def prepare(pipe, cfg, records, compilation):
 
 
 class Sampler:
-    def __init__(self, path, interval, stream=False):
+    nv: ModuleType
+    handle: Any
+    uuid: str
+    thread: threading.Thread
+
+    def __init__(self, path: str | Path, interval: float, stream: bool = False) -> None:
         self.path, self.interval = Path(path), interval
         self.stream = stream
-        self.samples = []
-        self.error = None
+        self.samples: list[dict[str, float]] = []
+        self.error: str | None = None
         self.stop_event = threading.Event()
 
-    def start(self):
+    def start(self) -> Sampler:
         import pynvml as nv
         import torch
 
@@ -152,7 +168,7 @@ class Sampler:
         self.thread.start()
         return self
 
-    def _loop(self):
+    def _loop(self) -> None:
         output = self.path.open("w") if self.stream else None
         try:
             while not self.stop_event.is_set():
@@ -175,14 +191,14 @@ class Sampler:
             if output:
                 output.close()
 
-    def stop(self):
+    def stop(self) -> None:
         self.stop_event.set()
         self.thread.join()
         self.nv.nvmlShutdown()
         if not self.stream:
             self.path.write_text("".join(json.dumps(row) + "\n" for row in self.samples))
 
-    def summarize(self, start, end):
+    def summarize(self, start: float, end: float) -> dict[str, Any]:
         rows = [r for r in self.samples if start <= r["monotonic_s"] <= end]
         reason = self.error or ("No NVML sample inside the measurement window" if not rows else None)
         utilization = None
@@ -204,5 +220,5 @@ class Sampler:
         }
 
 
-def phase_duration(ranks, phase):
+def phase_duration(ranks: Sequence[dict[str, Any]], phase: str) -> float:
     return max(r[f"{phase}_end_monotonic_s"] for r in ranks) - min(r[f"{phase}_start_monotonic_s"] for r in ranks)

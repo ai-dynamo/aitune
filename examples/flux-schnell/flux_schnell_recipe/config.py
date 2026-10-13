@@ -6,28 +6,38 @@ import json
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any, TypedDict
 
 import yaml
+
+
+class Prompt(TypedDict):
+    prompt: str
+    seed: int
+
+
+class InputRecord(Prompt):
+    id: str
 
 
 @dataclass(frozen=True)
 class Config:
     path: Path
-    data: dict
+    data: dict[str, Any]
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Any:
         return self.data[key]
 
     @property
-    def output(self):
+    def output(self) -> Path:
         return Path(self["output_dir"])
 
     @property
-    def artifact(self):
+    def artifact(self) -> Path:
         return Path(self["artifact_path"])
 
 
-def rank_config(cfg, rank):
+def rank_config(cfg: Config, rank: int) -> Config:
     count = cfg["execution"]["gpu_count"]
     if count == 1:
         return cfg
@@ -36,7 +46,7 @@ def rank_config(cfg, rank):
     return replace(cfg, data=data)
 
 
-def load_config(path):
+def load_config(path: str | Path) -> Config:
     path = Path(path).resolve()
     raw = yaml.safe_load(path.read_text())
     if not isinstance(raw, dict):
@@ -62,7 +72,7 @@ def load_config(path):
     validate_measurement(raw)
     validate_deployment(raw)
 
-    def resolved(value):
+    def resolved(value: object) -> str:
         if not isinstance(value, str) or not value:
             raise ValueError("Paths must be nonempty strings")
         return str((path.parent / value).resolve())
@@ -74,7 +84,7 @@ def load_config(path):
     return Config(path, raw)
 
 
-def validate_model(raw):
+def validate_model(raw: dict[str, Any]) -> None:
     execution = raw["execution"]
     count = execution.get("gpu_count")
     if type(count) is not int or count not in (1, 2):
@@ -98,7 +108,7 @@ def validate_model(raw):
         raise ValueError("Only complete Diffusers checkpoint directories are accepted")
 
 
-def validate_workload(raw):
+def validate_workload(raw: dict[str, Any]) -> None:
     count = raw["execution"]["gpu_count"]
     w = raw["workload"]
     if set(w) != {"width", "height", "num_inference_steps", "guidance_scale", "max_sequence_length"}:
@@ -116,7 +126,7 @@ def validate_workload(raw):
         raise ValueError("Context parallelism requires text and packed image sequence lengths divisible by GPU count")
 
 
-def validate_measurement(raw):
+def validate_measurement(raw: dict[str, Any]) -> None:
     b = raw["benchmark"]
     for key in ("warmup_iterations", "repetitions"):
         if type(b.get(key)) is not int or b[key] < 1:
@@ -133,7 +143,7 @@ def validate_measurement(raw):
         raise ValueError("validation.soft_threshold must be between validation.threshold and 1, or null")
 
 
-def validate_deployment(raw):
+def validate_deployment(raw: dict[str, Any]) -> None:
     count = raw["execution"]["gpu_count"]
     d = raw["deployment"]
     deployment_enabled = count == 1 or d != {"targets": []}
@@ -146,8 +156,9 @@ def validate_deployment(raw):
         raise ValueError("Invalid deployment port or seed")
 
 
-def read_inputs(path):
-    records, ids = [], set()
+def read_inputs(path: str | Path) -> list[InputRecord]:
+    records: list[InputRecord] = []
+    ids: set[str] = set()
     for line_no, line in enumerate(Path(path).read_text().splitlines(), 1):
         if not line.strip():
             continue

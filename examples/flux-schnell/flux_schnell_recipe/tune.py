@@ -2,17 +2,26 @@
 # SPDX-License-Identifier: Apache-2.0
 """Inspect, tune, and persist the pipeline and its provenance."""
 
+from __future__ import annotations
+
 import logging
 import time
+from argparse import Namespace
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .config import rank_config, read_inputs
+from .config import Config, rank_config, read_inputs
 from .model import load_model, synchronize
 from .records import configure_cache, contract, environment, file_sha, new_run, source_identity, write_json
+
+if TYPE_CHECKING:
+    from diffusers.pipelines.flux.pipeline_output import FluxPipelineOutput
+    from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
 
-def run(args, cfg, run_dir=None):
+def run(args: Namespace, cfg: Config, run_dir: Path | None = None) -> None:
     if run_dir is None and cfg["execution"]["gpu_count"] > 1:
         return distributed_tune(args, cfg)
     # Exclusive directory creation also prevents two tuning processes overwriting one artifact.
@@ -38,7 +47,7 @@ def run(args, cfg, run_dir=None):
     samples = read_inputs(cfg["inputs"]["tune"])
     # AITune batches strings into lists and scalar seeds into one-element tensors.
 
-    def invoke(prompt, seed):
+    def invoke(prompt: list[str], seed: Tensor) -> FluxPipelineOutput:
         return pipe(
             prompt=prompt,
             **cfg["workload"],
@@ -105,7 +114,7 @@ def run(args, cfg, run_dir=None):
     print(run_dir / "report.json")
 
 
-def distributed_tune(args, cfg):
+def distributed_tune(args: Namespace, cfg: Config) -> None:
     from .metrics import phase_duration
     from .runtime import launch
 

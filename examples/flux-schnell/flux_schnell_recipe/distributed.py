@@ -5,15 +5,20 @@
 import logging
 import os
 from datetime import timedelta
+from pathlib import Path
+from typing import TypeVar, cast
+
+from .config import Config
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 
-def rank_directory(cfg, directory, rank=0):
+def rank_directory(cfg: Config, directory: Path, rank: int = 0) -> Path:
     return directory / f"rank-{rank}" if cfg["execution"]["gpu_count"] > 1 else directory
 
 
-def initialize(cfg, timeout_s=1800):
+def initialize(cfg: Config, timeout_s: int = 1800) -> int:
     import torch
     import torch.distributed as dist
 
@@ -55,24 +60,24 @@ def initialize(cfg, timeout_s=1800):
     return rank
 
 
-def collect(value):
+def collect(value: T) -> list[T]:
     import torch.distributed as dist
 
     if not dist.is_initialized():
         return [value]
-    result = [None] * dist.get_world_size()
+    result: list[T | None] = [None] * dist.get_world_size()
     dist.all_gather_object(result, value)
-    return result
+    return cast(list[T], result)
 
 
-def shutdown():
+def shutdown() -> None:
     import torch.distributed as dist
 
     if dist.is_initialized():
         dist.destroy_process_group()
 
 
-def main():
+def main() -> None:
     """User-run topology smoke check, before loading the model or tuning."""
     import argparse
 

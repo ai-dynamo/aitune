@@ -2,19 +2,27 @@
 # SPDX-License-Identifier: Apache-2.0
 """Validate images, benchmark fresh models, and run inference on either GPU layout."""
 
-import logging
-from pathlib import Path
+from __future__ import annotations
 
-from .config import read_inputs
+import logging
+from argparse import Namespace
+from collections.abc import Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from .config import Config, InputRecord, read_inputs
 from .distributed import rank_directory
 from .metrics import interval_seconds, phase_duration
 from .records import contract, deployment_artifact, file_sha, new_run, read_json, source_identity, write_json
 from .runtime import launch
 
+if TYPE_CHECKING:
+    from PIL.Image import Image
+
 logger = logging.getLogger(__name__)
 
 
-def score_images(reference, actual):
+def score_images(reference: Image, actual: Image) -> float:
     import numpy as np
     from skimage.metrics import structural_similarity
 
@@ -27,7 +35,7 @@ def score_images(reference, actual):
     return score
 
 
-def compare(cfg, reference, actual, records):
+def compare(cfg: Config, reference: str | Path, actual: str | Path, records: Sequence[InputRecord]) -> dict[str, Any]:
     from PIL import Image
 
     threshold = cfg["validation"]["threshold"]
@@ -63,7 +71,7 @@ def compare(cfg, reference, actual, records):
     }
 
 
-def require_correctness(cfg, metadata=None):
+def require_correctness(cfg: Config, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     path = Path(read_json(cfg.output / "correctness-latest.json")["report"])
     result = read_json(path if path.is_absolute() else cfg.output / path)
     metadata = metadata or deployment_artifact(cfg)
@@ -81,7 +89,7 @@ def require_correctness(cfg, metadata=None):
     return result
 
 
-def correctness(args, cfg):
+def correctness(args: Namespace, cfg: Config) -> dict[str, Any]:
     artifact = deployment_artifact(cfg)
     if artifact["contract"] != contract(cfg, source_identity(args, cfg)):
         raise ValueError("Artifact contract differs from requested source/configuration")
@@ -118,7 +126,7 @@ def correctness(args, cfg):
     return result
 
 
-def aggregate(ranks, directory, cfg):
+def aggregate(ranks: list[dict[str, Any]], directory: Path, cfg: Config) -> dict[str, Any]:
     if len(ranks) == 1:
         return ranks[0]
     if [r["rank"] for r in ranks] != list(range(cfg["execution"]["gpu_count"])):
@@ -167,7 +175,7 @@ def aggregate(ranks, directory, cfg):
     return result
 
 
-def benchmark(args, cfg):
+def benchmark(args: Namespace, cfg: Config) -> None:
     quality = correctness(args, cfg)
     directory = new_run(cfg, "benchmark")
     variants = {}
@@ -192,7 +200,7 @@ def benchmark(args, cfg):
     print(directory / "report.json", flush=True)
 
 
-def infer(args, cfg):
+def infer(args: Namespace, cfg: Config) -> None:
     artifact = deployment_artifact(cfg)
     if artifact["contract"] != contract(cfg, source_identity(args, cfg)):
         raise ValueError("Artifact contract differs from requested source/configuration")

@@ -2,4 +2,3 @@
 __pycache__/
 *.egg-info/
 results/*/
-!results/README.md

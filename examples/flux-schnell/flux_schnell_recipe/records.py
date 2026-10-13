@@ -9,13 +9,15 @@ import os
 import platform
 import sys
 import uuid
+from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
-from .config import rank_config
+from .config import Config, rank_config
 
 
-def write_json(path, value):
+def write_json(path: str | Path, value: object) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
@@ -23,15 +25,15 @@ def write_json(path, value):
     temporary.replace(path)
 
 
-def read_json(path):
+def read_json(path: str | Path) -> Any:
     return json.loads(Path(path).read_text())
 
 
-def digest(value):
+def digest(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
-def file_sha(path):
+def file_sha(path: str | Path) -> str:
     h = hashlib.sha256()
     with Path(path).open("rb") as stream:
         for chunk in iter(lambda: stream.read(8 * 1024 * 1024), b""):
@@ -39,7 +41,7 @@ def file_sha(path):
     return h.hexdigest()
 
 
-def source_identity(args, cfg):
+def source_identity(args: Namespace, cfg: Config) -> dict[str, Any]:
     if args.model_id:
         return {"kind": "hub", "id": args.model_id, "revision": cfg["model"]["revision"]}
     root = Path(args.checkpoint).resolve()
@@ -53,18 +55,18 @@ def source_identity(args, cfg):
     return {"kind": "directory", "path": str(root), "files_sha256": digest(files)}
 
 
-def contract(cfg, source):
+def contract(cfg: Config, source: dict[str, Any]) -> dict[str, Any]:
     return {"source": source, **{k: cfg[k] for k in ("model", "workload", "precision", "execution")}}
 
 
-def new_run(cfg, phase):
+def new_run(cfg: Config, phase: str) -> Path:
     run = cfg.output / phase / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8])
     run.mkdir(parents=True)
     write_json(run / "resolved-config.json", cfg.data)
     return run
 
 
-def configure_cache(run):
+def configure_cache(run: Path) -> None:
     # Set before importing AITune/Torch. All compiler caches persist with the run.
     for key, subdir in (
         ("AITUNE_CACHE_DIR", "aitune-cache"),
@@ -76,7 +78,7 @@ def configure_cache(run):
     os.environ["AITUNE_TUNING_DATA_PATH"] = str(run / "aitune-tuning.json")
 
 
-def environment():
+def environment() -> dict[str, Any]:
     import pynvml as nv
     import torch
 
@@ -125,21 +127,21 @@ def environment():
     }
 
 
-def artifact_metadata(cfg):
+def artifact_metadata(cfg: Config) -> dict[str, Any]:
     metadata = read_json(str(cfg.artifact) + ".json")
     if file_sha(cfg.artifact) != metadata["sha256"]:
         raise ValueError("Artifact hash differs from its tuning record")
     return metadata
 
 
-def deployment_artifact(cfg):
+def deployment_artifact(cfg: Config) -> dict[str, Any]:
     if cfg["execution"]["gpu_count"] == 1:
         return artifact_metadata(cfg)
     manifest = read_manifest(cfg)
     return {"contract": manifest["contract"], "sha256": [item["sha256"] for item in manifest["artifacts"]]}
 
 
-def read_manifest(cfg):
+def read_manifest(cfg: Config) -> dict[str, Any]:
     manifest = read_json(cfg.artifact.parent / "manifest.json")
     expected = contract(cfg, manifest["contract"]["source"])
     if (

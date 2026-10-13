@@ -10,7 +10,7 @@ import os
 from .config import load_config
 
 
-def parse_args():
+def parse_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     parser = argparse.ArgumentParser(description="FLUX.1-schnell AITune recipe")
     commands = parser.add_subparsers(dest="command", required=True)
     for name in (
@@ -39,12 +39,11 @@ def parse_args():
         if name == "web":
             command.add_argument("--endpoint", help="Dynamo base URL; defaults to localhost at deployment.port")
             command.add_argument("--variant", choices=("original", "aitune"), default="aitune")
-            command.add_argument("--host", default="127.0.0.1", help="Bind address; use 0.0.0.0 inside Docker")
             command.add_argument("--port", type=int, default=8080, help="Web app port (default: 8080)")
     return parser, parser.parse_args()
 
 
-def main():
+def main() -> None:
     parser, args = parse_args()
     cfg = load_config(args.config)
     logging.basicConfig(level=logging.INFO)
@@ -59,7 +58,7 @@ def main():
     ):
         parser.error("Enable Dynamo deployment in the config; see recipes/multi-gpu.yaml for deployment settings")
     if hasattr(args, "endpoint") and not args.endpoint:
-        args.endpoint = f"http://localhost:{cfg['deployment']['port']}"
+        args.endpoint = f"http://127.0.0.1:{cfg['deployment']['port']}"
     module, function = {
         "tune": ("tune", "run"),
         "correctness": ("evaluate", "correctness"),

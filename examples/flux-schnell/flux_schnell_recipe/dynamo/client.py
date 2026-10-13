@@ -2,24 +2,31 @@
 # SPDX-License-Identifier: Apache-2.0
 """Image requests checked against local Original Model reference PNGs."""
 
+from __future__ import annotations
+
 import base64
 import io
 import json
 import math
 import os
 import subprocess
+from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from ..config import read_inputs
+from ..config import Config, InputRecord, read_inputs
 from ..evaluate import compare, require_correctness
 from ..metrics import Sampler
 from ..records import contract, deployment_artifact, new_run, read_json, write_json
 
+if TYPE_CHECKING:
+    from PIL.Image import Image
 
-def service_info(args, cfg):
+
+def service_info(args: Namespace, cfg: Config) -> dict[str, Any]:
     # Provenance and telemetry use the same results mount and host clock.
     url = urlparse(args.endpoint)
     if url.scheme != "http" or url.hostname not in ("localhost", "127.0.0.1") or url.path not in ("", "/"):
@@ -43,7 +50,7 @@ def service_info(args, cfg):
     return service
 
 
-def image_request(args, cfg, service, record):
+def image_request(args: Namespace, cfg: Config, service: dict[str, Any], record: InputRecord) -> Image:
     from PIL import Image
 
     payload = {
@@ -66,7 +73,7 @@ def image_request(args, cfg, service, record):
         return image.convert("RGB")
 
 
-def correctness(args, cfg):
+def correctness(args: Namespace, cfg: Config) -> dict[str, Any]:
     service = service_info(args, cfg)
     reference = require_correctness(cfg)
     records = read_inputs(cfg["inputs"]["validation"])
@@ -89,7 +96,7 @@ def correctness(args, cfg):
     return result
 
 
-def metric(raw, name, unit):
+def metric(raw: dict[str, Any], name: str, unit: str) -> float:
     entry = raw.get(name)
     if not isinstance(entry, dict) or entry.get("unit") != unit:
         raise ValueError(f"Missing or incompatible AIPerf metric {name}; expected {unit}")
@@ -99,12 +106,14 @@ def metric(raw, name, unit):
     return value
 
 
-def timestamp(value):
+def timestamp(value: str) -> float:
     parsed = datetime.fromisoformat(value)
     return (parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)).timestamp()
 
 
-def server_measurement(service, directory, start, end, count):
+def server_measurement(
+    service: dict[str, Any], directory: Path, start: float, end: float, count: int | float
+) -> dict[str, Any]:
     directory.mkdir(parents=True, exist_ok=True)
     gpu_path = Path(service["directory"]) / "gpu-samples.jsonl"
     # Drop a possible partial trailing line from the live append-only sampler.
@@ -126,7 +135,9 @@ def server_measurement(service, directory, start, end, count):
     return gpu
 
 
-def server_telemetry(service, directory, start, end, count):
+def server_telemetry(
+    service: dict[str, Any], directory: Path, start: float, end: float, count: int | float
+) -> dict[str, Any]:
     if "ranks" not in service:
         return {"gpu": server_measurement(service, directory, start, end, count)}
     gpus = [
@@ -142,7 +153,7 @@ def server_telemetry(service, directory, start, end, count):
     }
 
 
-def benchmark(args, cfg):
+def benchmark(args: Namespace, cfg: Config) -> None:
     quality = correctness(args, cfg)
     service = quality["service"]
     records = read_inputs(cfg["inputs"]["benchmark"])
