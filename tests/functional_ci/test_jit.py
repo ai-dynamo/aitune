@@ -24,9 +24,8 @@ from aitune.torch.jit.patched_module import ModuleState, PatchedModule
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
 from aitune.torch.jit.tune import deferred
 from aitune.torch.module.tuned_module import TunedModule
-
-from .lifecycle import TENSORRT_FP32, Tolerance
-from .models import make_input, make_mlp
+from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
+from tests.functional_ci.models import make_input, make_mlp
 
 
 class JitMLP(nn.Module):
