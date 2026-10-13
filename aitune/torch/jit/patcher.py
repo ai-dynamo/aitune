@@ -6,20 +6,17 @@ import atexit
 from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from functools import wraps
-from typing import TypeVar
+from typing import TypeVar, cast
 
 import torch
 
 from aitune.torch.config import AITuneMode
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.inspect_module import InspectModule
-from aitune.torch.jit.patched_module import ModuleState as PatchedModuleState
 from aitune.torch.jit.patched_module import PatchedModule
-from aitune.torch.tune_data.report_models import TuneRunReport
 from aitune.torch.tune_data.reporting import (
     has_active_report,
     report_inspection_details,
-    report_tune_run_end,
     report_tune_run_start,
 )
 
@@ -55,55 +52,22 @@ class Patcher:
     _intercepted_classes: set[type[torch.nn.Module]] = set()  # for tracking purposes
     _original_module_init: Callable | None = None
     _torch_patched: bool = False
-    _exit_handler: Callable | None = None
-    _session_mode: JITMode | None = None
-    _session_report: TuneRunReport | None = None
-    _cleanup_pending: bool = False
-    _explicit_registrations: dict[int, PatchedModule] = {}
+    _entry_path: str | None = None
+    _mode: JITMode | None = None
 
     @staticmethod
     def _on_python_exit() -> None:
-        """Dispatch exit diagnostics using the active or configured JIT mode."""
-        mode = Patcher._session_mode if Patcher._session_mode is not None else config.mode
-        if mode == JITMode.INSPECT:
+        """Dispatch exit diagnostics for the worker's chosen mode."""
+        if Patcher._mode == JITMode.INSPECT:
             InspectModule.on_python_exit()
         else:
             PatchedModule.on_python_exit()
 
     @classmethod
-    def _ensure_exit_handler(cls) -> None:
-        """Register exit diagnostics without binding a tuning session."""
-        if cls._exit_handler is None:
-            cls._exit_handler = cls._on_python_exit
-            atexit.register(cls._exit_handler)
-
-    @classmethod
-    def _ensure_session(cls) -> None:
-        """Initialize reporting and process-exit handling for one JIT session."""
-        cls._raise_if_cleanup_pending()
-        cls._raise_if_session_mode_changed()
-
-        cls._session_mode = config.mode
-        cls._ensure_exit_handler()
-
-        if config.mode != JITMode.INSPECT and not has_active_report():
-            cls._session_report = report_tune_run_start(AITuneMode.JIT)
-
-    @classmethod
-    def _end_session_report(cls, exception: BaseException | None = None) -> None:
-        """Finalize only the report created by this JIT session, if still active."""
-        if cls._session_report is None:
-            return
-        try:
-            report_tune_run_end(exception=exception, expected_report=cls._session_report)
-        finally:
-            cls._session_report = None
-
-    @classmethod
-    def _raise_if_cleanup_pending(cls) -> None:
-        """Prevent a new tuning session from reusing partially cleaned wrappers."""
-        if cls._cleanup_pending:
-            raise RuntimeError("JIT cleanup is incomplete; retry jit_reset() before registering or patching modules")
+    def _check_mode(cls) -> None:
+        """Keep the mode fixed once the worker has installed its first wrapper."""
+        if cls._mode is not None and cls._mode != config.mode:
+            raise RuntimeError("JIT mode is fixed after module registration; start a fresh worker to change it")
 
     @classmethod
     def _register_module(
@@ -112,7 +76,12 @@ class Patcher:
         *,
         explicit_head: bool = False,
     ) -> PatchedModule | InspectModule:
-        """Create and retain one module wrapper."""
+        """Start ordinary reporting once and install one module wrapper."""
+        if cls._mode is None:
+            cls._mode = config.mode
+            atexit.register(cls._on_python_exit)
+            if config.mode != JITMode.INSPECT and not has_active_report():
+                report_tune_run_start(AITuneMode.JIT)
         if config.mode == JITMode.INSPECT:
             patched_module: PatchedModule | InspectModule = InspectModule(module)
         else:
@@ -122,16 +91,11 @@ class Patcher:
 
     @classmethod
     def patch_torch(cls):
-        """Patch torch.nn.Module to track execution."""
-        cls._raise_if_cleanup_pending()
-        if cls._explicit_registrations or any(
-            isinstance(module, PatchedModule) and module.explicit_head for module in cls._patched_modules
-        ):
-            raise RuntimeError(
-                "Global JIT constructor interception cannot run while explicit JIT registrations are active"
-            )
-        cls._raise_if_session_mode_changed()
-        cls._ensure_exit_handler()
+        """Intercept constructors for the worker's automatic JIT entry path."""
+        if cls._entry_path == "explicit":
+            raise RuntimeError("Automatic JIT discovery cannot follow explicit registration; start a fresh worker")
+        cls._check_mode()
+        cls._entry_path = "automatic"
         if cls._torch_patched:
             return
 
@@ -141,7 +105,7 @@ class Patcher:
         def _patched_init(module, *args, **kwargs):
             cls._original_module_init(module, *args, **kwargs)
             if cls._is_allowed_to_tune(module):
-                cls._ensure_session()
+                cls._check_mode()
                 cls._intercepted_classes.add(module.__class__)
                 cls._register_module(module)
 
@@ -150,161 +114,33 @@ class Patcher:
 
     @classmethod
     def register_modules(cls, modules: Sequence[torch.nn.Module]) -> tuple[PatchedModule, ...]:
-        """Register validated, pre-existing modules as independent JIT tuning heads."""
-        cls.validate_explicit_registration_session()
-
-        trees = cls._validate_registration_targets(modules)
-        resolved = [cls._find_reusable_registration(module, tree) for module, tree in zip(modules, trees, strict=True)]
-
-        previous_module_counter = PatchedModule.module_counter
-        previous_session_mode = cls._session_mode
-        previous_exit_handler = cls._exit_handler
-        previous_session_report = cls._session_report
-        newly_registered: list[PatchedModule] = []
-        try:
-            cls._ensure_session()
-            for index, module in enumerate(modules):
-                if resolved[index] is not None:
-                    continue
-                wrapper = cls._register_module(module, explicit_head=True)
-                assert isinstance(wrapper, PatchedModule)
-                newly_registered.append(wrapper)
-                resolved[index] = wrapper
-
-            assert all(wrapper is not None for wrapper in resolved)
-            registrations = tuple(wrapper for wrapper in resolved if wrapper is not None)
-            cls._explicit_registrations.update({id(wrapper.__wrapped__): wrapper for wrapper in registrations})
-            return registrations
-        except Exception as error:
-            try:
-                cls._rollback_explicit_registrations(newly_registered)
-            except Exception as cleanup_error:
-                error.add_note(f"JIT registration cleanup failed; retry jit_reset(): {cleanup_error}")
-            finally:
-                if not cls._cleanup_pending:
-                    PatchedModule.module_counter = previous_module_counter
-                try:
-                    cls._rollback_explicit_registration_session(
-                        previous_session_mode,
-                        previous_exit_handler,
-                        previous_session_report,
-                        error,
-                    )
-                except Exception as report_error:
-                    error.add_note(f"JIT registration report finalization failed: {report_error}")
-            raise
-
-    @classmethod
-    def validate_explicit_registration_session(cls) -> None:
-        """Reject explicit registration while an incompatible JIT path is active."""
-        cls._raise_if_cleanup_pending()
-        cls._raise_if_session_mode_changed()
+        """Preflight the complete batch, then install independent targets without rollback."""
+        cls._validate_registration_targets(modules)
         if config.mode == JITMode.INSPECT:
             raise RuntimeError("register_for_jit_tuning() does not support JITMode.INSPECT")
-        if cls._torch_patched:
+        if cls._entry_path is not None:
             raise RuntimeError(
-                "register_for_jit_tuning() cannot run while global JIT constructor interception is active"
-            )
-        if any(isinstance(module, PatchedModule) and not module.explicit_head for module in cls._patched_modules):
-            raise RuntimeError(
-                "register_for_jit_tuning() cannot run after automatic JIT discovery; call jit_reset() first"
+                "Explicit JIT registration requires an unused worker; supply all targets once in a fresh worker"
             )
 
-    @classmethod
-    def _raise_if_session_mode_changed(cls) -> None:
-        """Require an explicit reset before changing the active JIT mode."""
-        if cls._session_mode is not None and cls._session_mode != config.mode:
-            raise RuntimeError("Call jit_reset() before switching JIT modes")
+        cls._entry_path = "explicit"
+        return cast(
+            tuple[PatchedModule, ...], tuple(cls._register_module(module, explicit_head=True) for module in modules)
+        )
 
     @classmethod
-    def _rollback_explicit_registrations(cls, wrappers: Sequence[PatchedModule]) -> None:
-        """Undo wrappers created by an explicit-registration transaction."""
-        first_error: Exception | None = None
-        for wrapper in reversed(wrappers):
-            try:
-                wrapper._update_state(PatchedModuleState.DETACHED)
-                wrapper._unpatch()
-            except Exception as error:
-                first_error = first_error or error
-        if first_error is not None:
-            cls._cleanup_pending = True
-            raise first_error
-
-    @classmethod
-    def _rollback_explicit_registration_session(
-        cls,
-        previous_session_mode: JITMode | None,
-        previous_exit_handler: Callable | None,
-        previous_session_report: TuneRunReport | None,
-        error: Exception,
-    ) -> None:
-        """Restore session globals when an explicit-registration transaction fails."""
-        try:
-            if cls._session_report is not previous_session_report:
-                cls._end_session_report(exception=error)
-        finally:
-            if not cls._cleanup_pending:
-                try:
-                    if cls._exit_handler is not previous_exit_handler and cls._exit_handler is not None:
-                        atexit.unregister(cls._exit_handler)
-                finally:
-                    cls._exit_handler = previous_exit_handler
-                    cls._session_mode = previous_session_mode
-                    cls._session_report = previous_session_report
-
-    @classmethod
-    def _validate_registration_targets(cls, modules: Sequence[torch.nn.Module]) -> list[set[int]]:
-        """Validate exclusions and disjoint ownership without changing module state."""
-        trees = [cls._module_tree_ids(module) for module in modules]
-        for index, module in enumerate(modules):
+    def _validate_registration_targets(cls, modules: Sequence[torch.nn.Module]) -> None:
+        """Reject exclusions and overlapping ownership before installing any wrapper."""
+        owned_ids: set[int] = set()
+        for module in modules:
             if not cls._is_allowed_to_tune(module):
                 raise ValueError(f"Explicit JIT target is excluded from tuning: {cls._module_label(module)}")
-            cls._raise_if_target_overlaps(module, trees[index], modules[:index], trees[:index])
-        return trees
-
-    @classmethod
-    def _raise_if_target_overlaps(
-        cls,
-        module: torch.nn.Module,
-        tree: set[int],
-        previous_modules: Sequence[torch.nn.Module],
-        previous_trees: Sequence[set[int]],
-    ) -> None:
-        """Reject overlapping ownership trees within one registration call."""
-        for previous_module, previous_tree in zip(previous_modules, previous_trees, strict=True):
-            if tree & previous_tree:
+            tree_ids = {id(owned_module) for owned_module in module.modules()}
+            if owned_ids & tree_ids:
                 raise ValueError(
-                    "Explicit JIT targets must have disjoint module ownership trees: "
-                    f"{cls._module_label(previous_module)} and {cls._module_label(module)}"
+                    "Explicit JIT targets must have disjoint module ownership trees: " + cls._module_label(module)
                 )
-
-    @classmethod
-    def _find_reusable_registration(
-        cls,
-        module: torch.nn.Module,
-        tree: set[int],
-    ) -> PatchedModule | None:
-        """Reuse registrations retained until reset, rejecting overlapping ownership."""
-        reusable: PatchedModule | None = None
-        existing_registrations = {id(existing): existing for existing in cls._patched_modules}
-        existing_registrations.update({id(existing): existing for existing in cls._explicit_registrations.values()})
-        for existing in existing_registrations.values():
-            existing_module = existing.__wrapped__
-            if not tree & cls._module_tree_ids(existing_module):
-                continue
-            if existing_module is module and isinstance(existing, PatchedModule) and existing.explicit_head:
-                reusable = existing
-                continue
-            raise ValueError(
-                "Explicit JIT target overlaps an existing JIT registration: "
-                f"{cls._module_label(module)} and {cls._module_label(existing_module)}"
-            )
-        return reusable
-
-    @staticmethod
-    def _module_tree_ids(module: torch.nn.Module) -> set[int]:
-        """Return identity keys for a module's ownership tree."""
-        return {id(owned_module) for owned_module in module.modules()}
+            owned_ids.update(tree_ids)
 
     @staticmethod
     def _module_label(module: torch.nn.Module) -> str:
@@ -349,37 +185,11 @@ class Patcher:
             cls._patched_modules.remove(module)
 
     @classmethod
-    def unpatch_torch(cls, unpatch_modules: bool = False):
-        """Unpatch torch.nn.Module.
-
-        Args:
-            unpatch_modules: if True, unpatch all modules, otherwise only torch.nn.Module
-        """
-        try:
-            if unpatch_modules:
-                first_error: Exception | None = None
-                for patched_module in list(cls._patched_modules):
-                    try:
-                        if isinstance(patched_module, PatchedModule):
-                            patched_module._restore_device_attribute_hierarchy()
-                    except Exception as error:
-                        first_error = first_error or error
-                for patched_module in list(cls._patched_modules):
-                    try:
-                        if isinstance(patched_module, PatchedModule):
-                            patched_module._update_state(PatchedModuleState.DETACHED)
-                        patched_module._unpatch()
-                    except Exception as error:
-                        first_error = first_error or error
-                if first_error is not None:
-                    cls._cleanup_pending = True
-                    raise first_error
-                cls._intercepted_classes.clear()
-                cls._cleanup_pending = False
-        finally:
-            if cls._original_module_init is not None:
-                torch.nn.Module.__init__ = cls._original_module_init
-            cls._torch_patched = False
+    def unpatch_torch(cls):
+        """Restore module constructors while keeping existing JIT forwards installed."""
+        if cls._original_module_init is not None:
+            torch.nn.Module.__init__ = cls._original_module_init
+        cls._torch_patched = False
 
     @classmethod
     def _is_allowed_to_tune(cls, module: torch.nn.Module) -> bool:
@@ -450,28 +260,3 @@ def patch_for_jit_tuning(func: Callable[..., T]) -> Callable[..., T]:
             return func(*args, **kwargs)
 
     return wrapper
-
-
-def jit_reset() -> None:
-    """End the active JIT session and restore modules patched by AITune.
-
-    Use this process-wide reset before switching JIT modes, beginning a new explicit
-    registration generation, or explicitly tearing down a same-process JIT session.
-    It is not required in the normal inference path. Existing
-    :class:`~aitune.torch.jit.registration.JITRegistration` handles remain readable,
-    but their modules report the detached state after reset.
-    """
-    try:
-        Patcher._end_session_report()
-    finally:
-        Patcher.unpatch_torch(unpatch_modules=True)
-        for registration in Patcher._explicit_registrations.values():
-            registration._update_state(PatchedModuleState.DETACHED)
-        Patcher._explicit_registrations.clear()
-        if Patcher._exit_handler is not None:
-            atexit.unregister(Patcher._exit_handler)
-        Patcher._exit_handler = None
-        Patcher._session_mode = None
-        Patcher._original_module_init = None
-        PatchedModule.reset()
-        InspectModule.reset()
