@@ -3,6 +3,7 @@
 """Torch Inductor AOT backend."""
 
 from collections.abc import Callable, Sequence
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
 from logging import getLogger
 from pathlib import Path
@@ -74,6 +75,10 @@ class TorchInductorAotBackendConfig(BackendConfig):
         data = asdict(replace(self, export_hook=None))
         data.pop("export_hook")
         return data
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "TorchInductorAotBackendConfig":
+        """Deep-copies the config but shares ``export_hook``, so state on the hook's owner is kept."""
+        return replace(self, inductor_configs=deepcopy(self.inductor_configs, memo))
 
     def key(self) -> str:
         """Returns the config key; a set ``export_hook`` adds its qualified name."""

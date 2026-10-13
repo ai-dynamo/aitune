@@ -118,7 +118,8 @@ backend = TorchInductorAotBackend(TorchInductorAotBackendConfig(export_hook=relu
 <Note>
 The hook is build-time only. It is not part of `to_dict()` or `to_json()`, so a config restored with
 `from_dict()` has no hook. The config `key()` and `describe()` use the hook's module and qualified name,
-so they are the same on all ranks and in all processes; give different hooks different names. The hook
+so they are the same on all ranks and in all processes; give different hooks different names. Tuning
+deep-copies the backend but not the hook, so a bound-method hook can store graphs on its object. The hook
 must keep the output values and structure of the program unchanged, because the call contract is captured from the
 original module. If the hook inserts custom operators, register them before loading the `.pt2`
 package with `ait.load`.

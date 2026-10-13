@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for TorchInductorAotBackend."""
 
+import copy
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -594,3 +595,19 @@ def test_export_hook_identity_uses_qualified_name():
     assert config.key() != TorchInductorAotBackendConfig().key()
     assert config.key() != TorchInductorAotBackendConfig(export_hook=lambda exported: exported).key()
     assert config.describe() == f"export_hook={hook_name}"
+
+
+def test_export_hook_is_shared_by_backend_deepcopy():
+    class Observer:
+        def hook(self, exported):
+            return exported
+
+    observer = Observer()
+    config = TorchInductorAotBackendConfig(inductor_configs={"max_autotune": True}, export_hook=observer.hook)
+    backend = TorchInductorAotBackend(config)
+
+    copied = copy.deepcopy(backend)
+
+    assert copied._config.export_hook.__self__ is observer
+    assert copied._config.inductor_configs == config.inductor_configs
+    assert copied._config.inductor_configs is not config.inductor_configs
