@@ -2,51 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Dynamo's image protocol, backed by the same pipeline as Python commands."""
 
-import argparse
 import io
 import json
-import logging
 import os
 import threading
 import time
-import traceback
 from pathlib import Path
 
-from ...config import load_config
-from ...data import read_inputs
-from ...records import artifact_metadata, configure_cache, contract, environment, source_identity, write_json
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
-    source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--model-id")
-    source.add_argument("--checkpoint")
-    parser.add_argument("--variant", required=True, choices=("original", "aitune"))
-    parser.add_argument("--run-dir", required=True)
-    args = parser.parse_args()
-    cfg = load_config(args.config)
-    directory = Path(args.run_dir)
-    rank = int(os.environ.get("RANK", "0"))
-    distributed = cfg["execution"]["gpu_count"] > 1
-    if distributed:
-        directory /= f"rank-{rank}"
-        directory.mkdir(parents=True, exist_ok=False)
-    configure_cache(directory)
-    logging.basicConfig(level=logging.INFO, format=f"%(asctime)s %(levelname)s [serve/{args.variant}/rank-{rank}] %(message)s")
-    from ...distributed import initialize, rank_config, shutdown
-    try:
-        if distributed:
-            initialize(cfg)
-            cfg = rank_config(cfg, rank)
-        execute(args, cfg, directory, rank)
-    except Exception:
-        write_json(directory / "error.json", {"rank": rank, "traceback": traceback.format_exc()})
-        raise
-    finally:
-        if distributed:
-            shutdown()
+from ..config import read_inputs
+from ..records import artifact_metadata, contract, environment, source_identity, write_json
 
 
 def map_request(request, cfg):
@@ -60,10 +24,8 @@ def map_request(request, cfg):
 def execute(args, cfg, directory, rank):
     import aitune.dynamo as dyn
 
-    from ...compilation import CompilationRecorder
-    from ...model import generate, load_model, synchronize
-    from ...telemetry import Sampler
-    from ...worker import compilation_counters, prepare
+    from ..metrics import CompilationRecorder, Sampler, compilation_counters, prepare
+    from ..model import generate, load_model, synchronize
 
     run_id = Path(args.run_dir).name
     name = f"flux-schnell-{args.variant}-{run_id}"
@@ -87,13 +49,26 @@ def execute(args, cfg, directory, rank):
         nonlocal sampler
         timing = prepare(pipe, cfg, records, compilation)
         sampler = Sampler(directory / "gpu-samples.jsonl", cfg["benchmark"]["sampling_interval_s"], stream=True).start()
-        write_json(directory / "service.json", {"run_id": run_id, "model_name": name, "rank": rank,
-            "variant": args.variant, "contract": contract(cfg, identity), "artifact_sha256": artifact["sha256"],
-            "environment": environment(), "timing": timing, "directory": str(directory),
-            "seed": cfg["deployment"]["seed"], "sampling_interval_s": cfg["benchmark"]["sampling_interval_s"]})
+        write_json(
+            directory / "service.json",
+            {
+                "run_id": run_id,
+                "model_name": name,
+                "rank": rank,
+                "variant": args.variant,
+                "contract": contract(cfg, identity),
+                "artifact_sha256": artifact["sha256"],
+                "environment": environment(),
+                "timing": timing,
+                "directory": str(directory),
+                "seed": cfg["deployment"]["seed"],
+                "sampling_interval_s": cfg["benchmark"]["sampling_interval_s"],
+            },
+        )
 
     def serve(prompt, seed):
         import torch
+
         with lock:
             # Dynamo invokes the callable in an executor thread; CUDA's current device is thread-local.
             torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", "0")))
@@ -107,20 +82,27 @@ def execute(args, cfg, directory, rank):
                 image.save(buffer, format="PNG")
             compiled = compilation_counters() != before or compilation.snapshot() != compile_records
             with (directory / "requests.jsonl").open("a") as log:
-                log.write(json.dumps({"start_unix_s": start, "end_unix_s": time.time(),
-                                      "compiled": compiled, "seed": seed}) + "\n")
+                log.write(
+                    json.dumps({"start_unix_s": start, "end_unix_s": time.time(), "compiled": compiled, "seed": seed})
+                    + "\n"
+                )
             if compiled:
                 raise RuntimeError("Unexpected runtime compilation after service warmup; restart and inspect workload")
             return buffer.getvalue()
 
     try:
-        dyn.dynamo_worker(serve, dyn.DynamoWorkerConfig(type="image", model_path=args.model_id or args.checkpoint,
-            model_name=name, namespace="flux_" + run_id.replace("-", "_"),
-            mapping=lambda request: map_request(request, cfg)), setup=setup, warmup=warmup)
+        dyn.dynamo_worker(
+            serve,
+            dyn.DynamoWorkerConfig(
+                type="image",
+                model_path=args.model_id or args.checkpoint,
+                model_name=name,
+                namespace="flux_" + run_id.replace("-", "_"),
+                mapping=lambda request: map_request(request, cfg),
+            ),
+            setup=setup,
+            warmup=warmup,
+        )
     finally:
         if sampler:
             sampler.stop()
-
-
-if __name__ == "__main__":
-    main()

@@ -2,20 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """CPU regression checks for hard failures and advisory SSIM thresholds."""
 
-from copy import deepcopy
-from pathlib import Path
 import tempfile
 import unittest
+from copy import deepcopy
+from pathlib import Path
 from unittest.mock import patch
 
-from PIL import Image
 import yaml
-
 from flux_schnell_recipe.config import Config, load_config
-from flux_schnell_recipe.correctness import compare, require_correctness
+from flux_schnell_recipe.evaluate import compare, require_correctness
+from PIL import Image
 
-
-LOGGER = "flux_schnell_recipe.correctness"
+LOGGER = "flux_schnell_recipe.evaluate"
 RECIPE = Path(__file__).resolve().parents[1] / "recipes/single-gpu.yaml"
 
 
@@ -27,13 +25,12 @@ class ThresholdTests(unittest.TestCase):
         self.records = [{"id": "first"}, {"id": "second"}]
         for item in self.records:
             Image.new("RGB", (8, 8)).save(self.directory / f"{item['id']}.png")
-        self.cfg = {"validation": {"threshold": 0.70, "soft_threshold": 0.95},
-                    "workload": {"width": 8, "height": 8}}
+        self.cfg = {"validation": {"threshold": 0.70, "soft_threshold": 0.95}, "workload": {"width": 8, "height": 8}}
 
     def compare_scores(self, *scores):
         # Supply exact SSIM values to exercise boundaries without depending on image rounding.
         with patch(f"{LOGGER}.score_images", side_effect=scores):
-            return compare(self.cfg, self.directory, self.directory, self.records[:len(scores)])
+            return compare(self.cfg, self.directory, self.directory, self.records[: len(scores)])
 
     def test_below_hard_threshold_fails(self):
         with self.assertNoLogs(LOGGER, level="WARNING"):
@@ -72,14 +69,27 @@ class ThresholdTests(unittest.TestCase):
                 self.assertIsNone(result["scores"][0]["soft_passed"])
 
     def test_soft_change_preserves_existing_hard_pass_evidence(self):
-        cfg = Config(self.directory / "recipe.yaml", {
-            "output_dir": str(self.directory), "inputs": {"validation": "inputs.jsonl"},
-            "validation": {"threshold": 0.70, "soft_threshold": 0.95}})
+        cfg = Config(
+            self.directory / "recipe.yaml",
+            {
+                "execution": {"gpu_count": 1},
+                "output_dir": str(self.directory),
+                "inputs": {"validation": "inputs.jsonl"},
+                "validation": {"threshold": 0.70, "soft_threshold": 0.95},
+            },
+        )
         metadata = {"contract": {}, "sha256": "artifact"}
-        evidence = {"passed": True, "threshold": 0.70, "contract": {},
-                    "artifact_sha256": "artifact", "validation_inputs_sha256": "inputs"}
-        with patch(f"{LOGGER}.read_json", side_effect=[{"report": "report.json"}, evidence]), \
-                patch(f"{LOGGER}.file_sha", return_value="inputs"):
+        evidence = {
+            "passed": True,
+            "threshold": 0.70,
+            "contract": {},
+            "artifact_sha256": "artifact",
+            "validation_inputs_sha256": "inputs",
+        }
+        with (
+            patch(f"{LOGGER}.read_json", side_effect=[{"report": "report.json"}, evidence]),
+            patch(f"{LOGGER}.file_sha", return_value="inputs"),
+        ):
             self.assertEqual(require_correctness(cfg, metadata), evidence)
 
 

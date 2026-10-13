@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Validate distributed strategy identity with the installed AITune backend, without GPUs."""
 
+import tempfile
+import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
-import tempfile
 from types import SimpleNamespace
-import unittest
 from unittest.mock import patch
 
 from flux_schnell_recipe import tune
@@ -52,13 +52,17 @@ class TuningConfigTests(unittest.TestCase):
             for rank in range(2):
                 # Exercise the recipe through strategy construction. Model execution is mocked;
                 # serialization and cache resolution are real AITune.
-                with patch.object(tune, "configure_cache"), patch.object(tune, "load_model"), \
-                        patch.object(tune, "synchronize"), patch.object(ait, "inspect"), \
-                        patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available"), \
-                        patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt"), \
-                        patch.object(backend_api, "TorchTensorRTConfig", CompileOptions), \
-                        patch.object(backend_api, "TorchTensorRTJitBackendConfig", CpuJitConfig), \
-                        patch.object(ait, "MaxThroughputStrategy", side_effect=capture):
+                with (
+                    patch.object(tune, "configure_cache"),
+                    patch.object(tune, "load_model"),
+                    patch.object(tune, "synchronize"),
+                    patch.object(ait, "inspect"),
+                    patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available"),
+                    patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt"),
+                    patch.object(backend_api, "TorchTensorRTConfig", CompileOptions),
+                    patch.object(backend_api, "TorchTensorRTJitBackendConfig", CpuJitConfig),
+                    patch.object(ait, "MaxThroughputStrategy", side_effect=capture),
+                ):
                     with self.assertRaises(StrategyCaptured):
                         tune.run(args, rank_config(cfg, rank), run_dir=root / f"rank-{rank}")
 

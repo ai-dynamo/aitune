@@ -5,21 +5,9 @@ name: multi-gpu
 model:
   base_model: black-forest-labs/FLUX.1-schnell
   revision: 741f7c3ce8b383c54771c7003378a50191e9efe9
-  checkpoint_format: diffusers-directory
-environment:
-  dockerfile: ../Dockerfile
-  base_image: nvcr.io/nvidia/pytorch:26.06-py3
-  evaluated_image_digest: null
-hardware:
-  tested: []
 execution:
   gpu_count: 2
-  parallelism: context-ulysses
-  compilation: runtime
-  weight_offloading: false
-precision:
-  allowed: [bf16]
-# The launcher writes tuned.rank-0-of-2.ait, tuned.rank-1-of-2.ait, and manifest.json here.
+# Each GPU saves its own artifact; a manifest records the completed run.
 artifact_path: ../results/multi-gpu/artifact/tuned.ait
 output_dir: ../results/multi-gpu
 inputs:
@@ -33,8 +21,6 @@ workload:
   num_inference_steps: 4
   guidance_scale: 0.0
   max_sequence_length: 256
-tuning:
-  batch_sizes: [1]
 benchmark:
   warmup_iterations: 3
   repetitions: 20
@@ -44,9 +30,7 @@ validation:
   threshold: 0.70
   soft_threshold: 0.95
 deployment:
-  targets: [dynamo]
   port: 8000
   seed: 42
-  concurrency: 1
   request_count: 20
   readiness_timeout_s: 1800

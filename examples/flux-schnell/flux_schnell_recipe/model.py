@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Schnell loading and seeded end-to-end Diffusers inference."""
 
-import os
 import logging
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 def check_gpu(cfg):
     import torch
     import torch.distributed as dist
+
     count = cfg["execution"]["gpu_count"]
     if int(os.environ.get("WORLD_SIZE", "1")) != count or int(os.environ.get("LOCAL_WORLD_SIZE", "1")) != count:
         raise ValueError("Launcher world size differs from execution.gpu_count; use the recipe CLI")
@@ -27,7 +29,9 @@ def check_gpu(cfg):
 def load_model(args, cfg, variant="original", source=None):
     import torch
     from diffusers import FluxPipeline
-    from .records import source_identity, contract, artifact_metadata
+
+    from .records import artifact_metadata, contract, source_identity
+
     check_gpu(cfg)
     source = source or source_identity(args, cfg)
     metadata = None
@@ -46,23 +50,16 @@ def load_model(args, cfg, variant="original", source=None):
     pipe = pipe.to("cuda")
     if cfg["execution"]["gpu_count"] > 1:
         from diffusers import ContextParallelConfig
+
         if pipe.transformer.config.num_attention_heads % cfg["execution"]["gpu_count"]:
             raise ValueError("Transformer attention heads must be divisible by the Ulysses degree")
         pipe.transformer.set_attention_backend("_native_cudnn")
-        pipe.transformer.enable_parallelism(config=ContextParallelConfig(
-            ulysses_degree=cfg["execution"]["gpu_count"]))
+        pipe.transformer.enable_parallelism(config=ContextParallelConfig(ulysses_degree=cfg["execution"]["gpu_count"]))
     pipe.set_progress_bar_config(disable=True)
     if metadata:
         import aitune.torch as ait
-        from .checkpoint import cpu_staging_storage
-        from .records import environment
-        current = environment()
-        built = metadata["environment"]
-        if current["gpu"]["compute_capability"] != built["gpu"]["compute_capability"]:
-            raise ValueError("GPU architecture differs from tuning; create a new artifact")
-        for name in ("aitune", "torch", "tensorrt", "torch-tensorrt", "diffusers", "transformers", "torchao"):
-            if current["packages"][name] != built["packages"][name]:
-                raise ValueError(f"{name} differs from the artifact build environment")
+
+        check_environment(metadata["environment"])
         logger.info("Restoring AITune artifact: %s", cfg.artifact)
         pipe = ait.load(pipe, cfg.artifact, storage=cpu_staging_storage())
     return pipe
@@ -70,15 +67,59 @@ def load_model(args, cfg, variant="original", source=None):
 
 def generate(pipe, cfg, item):
     import torch
+
     with torch.inference_mode():
-        image = pipe(prompt=item["prompt"], **cfg["workload"],
-                     generator=torch.Generator("cpu").manual_seed(item["seed"]),
-                     num_images_per_prompt=1, output_type="pil").images[0]
+        image = pipe(
+            prompt=item["prompt"],
+            **cfg["workload"],
+            generator=torch.Generator("cpu").manual_seed(item["seed"]),
+            num_images_per_prompt=1,
+            output_type="pil",
+        ).images[0]
     return image.convert("RGB")
 
 
 def synchronize():
     import torch
+
     torch.cuda.synchronize()
     if torch.distributed.is_initialized():
         torch.distributed.barrier()
+
+
+def save_images(pipe, cfg, records, directory):
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=False)
+    for index, item in enumerate(records, 1):
+        logger.info("Generating image %d/%d: %s", index, len(records), item["id"])
+        generate(pipe, cfg, item).save(directory / f"{item['id']}.png")
+    logger.info("Saved %d images to %s", len(records), directory)
+
+
+def cpu_staging_storage():
+    """Avoid duplicating CUDA weights when restoring a saved pipeline."""
+    import torch
+
+    from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
+    from aitune.torch.checkpoint.storage_tasks import STATE_DICT_FILE, TorchLoadTask
+
+    class CpuTorchLoadTask(TorchLoadTask):
+        def load(self, path, state_dict=None):
+            return torch.load(path / STATE_DICT_FILE, map_location="cpu", weights_only=False)
+
+    storage = LocalTorchStorage()
+    storage.load_tasks = [
+        CpuTorchLoadTask() if isinstance(task, TorchLoadTask) else task for task in storage.load_tasks
+    ]
+    return storage
+
+
+def check_environment(built):
+    from .records import environment
+
+    current = environment()
+    if current["gpu"]["compute_capability"] != built["gpu"]["compute_capability"]:
+        raise ValueError("GPU architecture differs from tuning; create a new artifact")
+    for name in ("aitune", "torch", "tensorrt", "torch-tensorrt", "diffusers", "transformers", "torchao"):
+        if current["packages"][name] != built["packages"][name]:
+            raise ValueError(f"{name} differs from the artifact build environment")

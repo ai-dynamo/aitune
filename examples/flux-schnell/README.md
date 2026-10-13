@@ -4,201 +4,144 @@ SPDX-License-Identifier: Apache-2.0
 -->
 # FLUX.1-schnell
 
-Tune [FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) with NVIDIA AITune,
-check image correctness, benchmark it, and serve custom prompts through Dynamo and a web app.
-This example is a draft; broader quality and hardware evaluation remain incomplete.
+Tune the FLUX.1-schnell Diffusers pipeline with NVIDIA AITune, compare its images and performance,
+and serve it through Dynamo with a small web app. Both recipes use BF16, batch size 1, 1024×1024
+images, and four denoising steps. The two-GPU recipe adds Ulysses context parallelism.
 
-The [single-GPU recipe](recipes/single-gpu.yaml) uses BF16, 1024×1024 images, four inference steps,
-and one image per request. Use the same config throughout the workflow below.
+## Start here in the code
 
-## 1. Build and run the container
+Read [tune.py](flux_schnell_recipe/tune.py) first: it loads the pipeline, calls `ait.inspect`, wraps
+the transformer and remaining modules with their tuning strategies, calls `ait.tune`, then `ait.save`.
+The transformer compares Torch-TensorRT and TorchInductor; other modules use AITune's default AOT candidates.
+[model.py](flux_schnell_recipe/model.py) shows loading the saved artifact into a fresh pipeline and seeded generation.
 
-You need Docker with NVIDIA Container Toolkit, a driver compatible with the CUDA 13.0 stack,
-and one NVIDIA GPU with native BF16 support. The full model and tuning candidates must fit in GPU memory;
-artifact loading also uses host RAM. Minimum memory requirements have not been established.
+| Files | Purpose |
+|---|---|
+| `recipes/`, `samples/`, `config.py` | Workload settings and prompt/seed inputs |
+| `tune.py`, `model.py` | The AITune workflow |
+| `evaluate.py`, `metrics.py` | Image validation, latency/throughput, compilation timing, GPU sampling |
+| `runtime.py`, `worker.py`, `distributed.py` | One execution path for single- and multi-GPU jobs |
+| `dynamo/`, `web.py`, `web.html` | Serving, deployment checks, and the prompt UI |
+| `records.py`, `cli.py` | Artifact metadata, run directories, and commands |
 
-Review the model's access requirements on Hugging Face and create a
-[Read token](https://huggingface.co/settings/tokens). From the repository root on the host:
+## Set up
+
+Use Docker with NVIDIA Container Toolkit, a CUDA 13.0-compatible driver, and a BF16-capable GPU.
+The model and compilation candidates must fit in GPU memory; artifact loading also uses host RAM.
+Minimum memory requirements have not been established. Review the
+[model's access requirements](https://huggingface.co/black-forest-labs/FLUX.1-schnell) and export
+`HF_TOKEN` if required. From the repository root:
 
 ```bash
-docker build -f examples/flux-schnell/Dockerfile \
-  --build-arg EXAMPLE_DIR=examples/flux-schnell -t aitune-flux-schnell .
-
+docker build -f examples/flux-schnell/Dockerfile -t aitune-flux-schnell .
 mkdir -p results/flux-schnell hf-cache
-read -rsp "Hugging Face token: " HF_TOKEN
-echo
-export HF_TOKEN
-
 docker run --gpus '"device=0"' --ipc=host --rm -it \
-  --name aitune-flux-schnell \
-  -e HF_TOKEN \
-  -p 127.0.0.1:8000:8000 \
-  -p 127.0.0.1:8080:8080 \
+  --name aitune-flux-schnell -e HF_TOKEN \
+  -p 127.0.0.1:8000:8000 -p 127.0.0.1:8080:8080 \
   -v "$PWD/results/flux-schnell:/workspace/flux-schnell/results" \
-  -v "$PWD/hf-cache:/cache/huggingface" \
-  aitune-flux-schnell
+  -v "$PWD/hf-cache:/cache/huggingface" aitune-flux-schnell
 ```
 
-Replace GPU index `0` if needed, keeping exactly one GPU visible. If `HF_TOKEN` is already exported,
-skip the token prompt. The container installs locked dependencies and opens a shell in `/workspace/flux-schnell`.
-Model downloads are cached on the host; artifacts, images, logs, and reports persist under
-the host's `results/flux-schnell/` directory.
+The following commands run **inside the container**, in `/workspace/flux-schnell`. Dependencies are
+locked; the model cache and results persist on the host. Rebuild the image after changing the example.
 
-For experimental two-GPU execution, recreate the container with `--gpus '"device=0,1"'` and use
-[`recipes/multi-gpu.yaml`](recipes/multi-gpu.yaml) throughout tuning, validation, serving, and the web app. Both matching BF16-capable GPUs must
-be visible inside the container with working NCCL communication. This recipe launches its own two workers;
-do not wrap `recipe` in `torchrun`. Both GPUs cooperate on each image using Ulysses context parallelism;
-the Dynamo service exposes one endpoint and processes one image request at a time.
-
-Before two-GPU tuning, check communication inside the container without loading the model:
+## Tune, validate, benchmark, generate
 
 ```bash
-NCCL_DEBUG=INFO uv run --frozen torchrun --standalone --nnodes=1 --nproc-per-node=2 --max-restarts=0 \
+uv run --frozen recipe tune
+uv run --frozen recipe correctness
+uv run --frozen recipe benchmark
+uv run --frozen recipe infer
+```
+
+Commands default to [recipes/single-gpu.yaml](recipes/single-gpu.yaml) and its pinned model revision.
+Use `--config PATH` to select another recipe, `--model-id ID` for another compatible Hub checkpoint,
+or `--checkpoint DIRECTORY` for a complete local Diffusers checkpoint. Use the same source and recipe
+throughout tuning, validation, inference, and serving.
+
+Tuning saves `results/single-gpu/artifact/tuned.ait` and its metadata. It refuses to overwrite an existing
+artifact directory: copy the recipe and choose a new `artifact_path` parent to retune. YAML paths are relative
+to the recipe file. Changing the model, image dimensions, or inference settings requires retuning.
+Backend selections and build timings are in AITune's `aitune-tuning.json` within the tuning run.
+
+Correctness generates reference and tuned PNGs in fresh processes and compares RGB SSIM. Benchmarking runs
+correctness first, then measures each variant in a fresh process after first-use compilation and warmup.
+Reports include throughput, latency, GPU memory/utilization, and compilation/warmup time; compilation during
+measurement rejects the run. Inference uses the prompts in `samples/inference.jsonl`.
+
+Each command prints its output path under `results/<recipe>/<command>/<run>/`. Worker logs stream to the
+terminal and remain with the reports. Single-GPU inference images are in `infer/<run>/aitune/images/`.
+
+## Use two GPUs
+
+Recreate the container with `--gpus '"device=0,1"'` and pass `--config recipes/multi-gpu.yaml` to every command:
+
+```bash
+uv run --frozen recipe tune --config recipes/multi-gpu.yaml
+uv run --frozen recipe correctness --config recipes/multi-gpu.yaml
+uv run --frozen recipe benchmark --config recipes/multi-gpu.yaml
+uv run --frozen recipe infer --config recipes/multi-gpu.yaml
+```
+
+Expose exactly two matching BF16-capable GPUs. The CLI launches both ranks; do not wrap `recipe` in `torchrun`.
+Each GPU saves its own artifact, and a manifest records the completed tuning run. Existing artifacts remain
+compatible. Both GPUs cooperate on each image; throughput counts each image once. Per-rank reports and images
+are under `rank-0/` and `rank-1/` within each variant directory.
+
+To check NCCL communication before loading the model:
+
+```bash
+uv run --frozen torchrun --standalone --nproc-per-node=2 --max-restarts=0 \
   --module flux_schnell_recipe.distributed --config recipes/multi-gpu.yaml --timeout 120
 ```
 
-Expect a passing report under `results/multi-gpu/preflight/<run>/`. Resolve communication failures before tuning.
-Two-GPU recipe commands stream worker logs with rank and startup-stage labels, plus elapsed time every 30 seconds.
+If direct GPU peer-to-peer communication hangs, try `export NCCL_P2P_DISABLE=1` and repeat the check.
+This helped on the reported two-H100 PCIe machine. On an affected machine, keep the variable set for all
+subsequent commands, including serving. The shared-memory fallback can affect performance.
 
-If the check hangs using direct GPU peer-to-peer communication, set this in the container shell and repeat it:
+## Serve through Dynamo
 
-```bash
-export NCCL_P2P_DISABLE=1
-```
-
-This allowed the communication check to pass and tuning to start on the reported two-H100 PCIe machine.
-Keep it set for tuning, correctness, benchmarking, inference, and serving on that machine. Repeat the export in each new
-shell, or add `-e NCCL_P2P_DISABLE=1` to `docker run`. The fallback uses host shared memory and can affect performance;
-use it for affected machines rather than enabling it for every multi-GPU run.
-
-Run the following model commands **inside the container**.
-
-## 2. Tune the model
+After tuning and checking correctness:
 
 ```bash
-uv run --frozen recipe tune \
-  --model-id black-forest-labs/FLUX.1-schnell --config recipes/single-gpu.yaml
+uv run --frozen recipe serve
 ```
 
-This tunes the pipeline using the bundled inputs and saves the artifact to
-`results/single-gpu/artifact/tuned.ait`, with metadata alongside it. The resolved configuration and
-tuning report are under `results/single-gpu/tune/<run>/`.
-
-Tuning refuses to overwrite an existing artifact directory. To tune again, copy the recipe and choose a new
-`artifact_path` parent directory. Pass that config to every subsequent command. Paths in YAML resolve relative
-to the config file. Changes to the model, image dimensions, or inference settings require retuning.
-
-## 3. Test and benchmark
-
-Check the saved artifact in a fresh model, then benchmark both the Original Model and AITune:
+The service loads the artifact and finishes compilation and warmup before printing `Ready at http://localhost:8000`.
+Leave it running. Open a second shell with `docker exec -it aitune-flux-schnell bash`, then run:
 
 ```bash
-uv run --frozen recipe correctness \
-  --model-id black-forest-labs/FLUX.1-schnell --config recipes/single-gpu.yaml
-
-uv run --frozen recipe benchmark \
-  --model-id black-forest-labs/FLUX.1-schnell --config recipes/single-gpu.yaml
+uv run --frozen recipe deployment-correctness
+uv run --frozen recipe deployment-benchmark
+uv run --frozen recipe web --host 0.0.0.0
 ```
 
-Correctness compares generated images using SSIM: the current provisional threshold is `0.70`, with warnings
-below `0.95`. Inspect the saved images as well; bundled prompts provide a smoke check, not a full quality evaluation.
-Images and scores are under `results/single-gpu/correctness/<run>/`.
+Open **http://localhost:8080** on the Docker host, enter a prompt, and select **Generate image**.
+Each generation uses a fresh random seed. The page displays elapsed time and a **Download PNG** button;
+it accepts one generation at a time and does not automatically save images to the results directory.
 
-Benchmarking repeats correctness, then measures each variant in a separate process after compilation and warmup.
-The report at `results/single-gpu/benchmark/<run>/report.json` includes throughput, latency, GPU memory and
-utilization, compilation time, and warmup time. Workers stream progress to the terminal and retain logs in each run.
+Deployment benchmarking runs correctness first and uses AIPerf at concurrency 1. To compare against the
+Original Model, stop the service and repeat serving and deployment checks with `--variant original`.
+For two GPUs, add `--config recipes/multi-gpu.yaml` to serving, deployment checks, and the web command.
+Dynamo exposes one endpoint; both ranks participate in each request and must finish warmup before readiness.
 
-To generate images from the prompts in `samples/inference.jsonl` without starting a service:
+The endpoint defaults to the recipe's port; override it with `--endpoint http://HOST:PORT`. Deployment measurements
+require a local service and shared results directory; the web app can connect remotely. For a remote Docker host,
+forward port 8080 with SSH. This is a local demo without authentication; the Docker command binds ports to host loopback.
 
-```bash
-uv run --frozen recipe infer \
-  --model-id black-forest-labs/FLUX.1-schnell --config recipes/single-gpu.yaml
-```
+API clients can use `POST /v1/images/generations` with the model ID from `/v1/models`, a `prompt`, `n: 1`,
+`size: "1024x1024"`, and `response_format: "b64_json"`. Optional `nvext: {"seed": 123}` chooses a seed;
+omitting it uses the recipe's deployment seed. The PNG is returned in `data[0].b64_json`.
+Press **Ctrl-C** in each shell to stop the web app and service; service shutdown also stops all workers.
 
-PNGs are saved to `results/single-gpu/infer/<run>/aitune/images/`.
+## Evaluation notes
 
-## 4. Deploy on Dynamo
+The provisional hard SSIM threshold is **0.70**, with warnings below **0.95**. Inspect the saved images as well:
+the bundled prompts are a smoke workload, not a representative quality evaluation. Replace the separate tuning,
+validation, and benchmark inputs with representative prompts for your application and calibrate the threshold.
 
-Start the service after tuning and checking correctness:
-
-```bash
-uv run --frozen recipe serve \
-  --model-id black-forest-labs/FLUX.1-schnell --config recipes/single-gpu.yaml \
-  --target dynamo --variant aitune
-```
-
-The service loads the artifact, completes first-use compilation and warmup, then prints
-`Ready at http://localhost:8000`. It keeps the model loaded for incoming prompts. Leave this shell running.
-Startup logs are in `results/single-gpu/serve-aitune/<run>/frontend.log` and `worker.log`.
-
-For two GPUs, first tune and check correctness with `recipes/multi-gpu.yaml`, then start:
-
-```bash
-uv run --frozen recipe serve \
-  --model-id black-forest-labs/FLUX.1-schnell --config recipes/multi-gpu.yaml \
-  --target dynamo --variant aitune
-```
-
-On machines needing the NCCL fallback above, keep `NCCL_P2P_DISABLE=1` exported in this shell.
-The service verifies `results/multi-gpu/artifact/manifest.json` and loads each rank's saved artifact.
-Existing two-GPU artifacts remain usable; adding deployment settings does not change their model contract.
-If using an older custom config with `deployment.targets: []`, copy the deployment settings from the updated
-two-GPU recipe. Rebuild the container to include the updated example code.
-
-Readiness requires both ranks to finish compilation and warmup and the model to register with Dynamo.
-Logs are under `results/multi-gpu/serve-aitune/<run>/`; `worker.log` includes both ranks, while
-`rank-0/` and `rank-1/` hold separate compiler records, request logs, and GPU samples.
-Stopping the service stops the frontend and both workers. Use `recipes/multi-gpu.yaml` for the deployment
-checks and web command below too. Deployment correctness compares against the two-GPU Original Model;
-benchmark reports include both GPUs and count each jointly generated image once.
-The two-H100 serving workflow still needs hardware validation; no multi-GPU performance results are claimed.
-
-From a **second host terminal**, open another shell in the same container:
-
-```bash
-docker exec -it aitune-flux-schnell bash
-cd /workspace/flux-schnell
-curl -fsS http://localhost:8000/v1/models
-```
-
-To check the running service and benchmark it with AIPerf, run in this second shell:
-
-```bash
-uv run --frozen recipe deployment-correctness --config recipes/single-gpu.yaml \
-  --target dynamo --variant aitune --endpoint http://localhost:8000
-
-uv run --frozen recipe deployment-benchmark --config recipes/single-gpu.yaml \
-  --target dynamo --variant aitune --endpoint http://localhost:8000
-```
-
-Reports are saved under `results/single-gpu/deployment-correctness-aitune/<run>/` and
-`results/single-gpu/deployment-benchmark-aitune/<run>/`. Deployment benchmarking also runs correctness first.
-To compare against the Original Model, stop the service and repeat the serving and deployment checks with
-`--variant original`.
-
-## 5. Generate images in the web app
-
-With the AITune service still running, start the web app in the second container shell:
-
-```bash
-uv run --frozen recipe web --config recipes/single-gpu.yaml --host 0.0.0.0
-```
-
-Open **http://localhost:8080** on the Docker host. Enter a prompt, select **Generate image**, and use
-**Download PNG** to save the result. The page shows elapsed time and displays the generated image.
-It reuses the running model, accepts one generation at a time, and uses the recipe's dimensions and steps.
-Each generation uses a new random seed, so repeating a prompt produces a different image.
-Images are not saved to the results directory automatically.
-
-The web app connects to port `8000` from the recipe by default. Use `--variant original` for an Original Model
-service or `--endpoint http://HOST:PORT` for another service address. For a remote Docker host, run
-`ssh -L 8080:localhost:8080 user@host` locally, then open the same browser URL. The web app is a local demo
-without authentication; the Docker command above publishes its port on host loopback only.
-
-For direct API clients, Dynamo accepts `POST /v1/images/generations` with the model ID from `/v1/models`,
-a `prompt`, `n: 1`, `size: "1024x1024"`, and `response_format: "b64_json"`. Supply `nvext: {"seed": 123}`
-to choose a seed; omitting it uses the recipe's deployment seed for reproducible validation and benchmarking.
-The PNG is returned in `data[0].b64_json`.
-
-Press **Ctrl-C** in the web shell to stop the app, and in the serving shell to stop Dynamo and release the model.
-Rebuild the image after source changes; recreate the container if it lacks the port mappings shown above.
+[Historical evaluation records](results/README.md) cover one RTX 6000 Ada. Broader quality/performance evaluation,
+another GPU architecture, and the complete two-H100 serving workflow remain unvalidated. Retain resolved recipes,
+environment/build information, artifacts, PNGs, and raw measurements with new results. GPU architecture and package
+versions must match the artifact's build environment. Runtime compilation timing covers compiler-frame intervals
+(including tracing and lowering), separately from tuning/search, artifact loading, and first-use duration.

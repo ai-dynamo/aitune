@@ -2,14 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Regression checks for checkpoint placement and worker diagnostics."""
 
-from pathlib import Path
 import io
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from flux_schnell_recipe.correctness import run_worker
+from flux_schnell_recipe.config import Config
+from flux_schnell_recipe.runtime import launch
 
 
 class WorkerFailureTests(unittest.TestCase):
@@ -18,16 +19,23 @@ class WorkerFailureTests(unittest.TestCase):
             run_dir = Path(directory)
             acknowledged = run_dir / "acknowledged"
             # The child can only succeed if its output reaches the terminal while it is alive.
-            command = [sys.executable, "-u", "-c", "\n".join([
-                "from pathlib import Path",
-                "import sys, time",
-                "print('worker is loading', flush=True)",
-                "deadline = time.monotonic() + 10",
-                "while not Path(sys.argv[1]).exists():",
-                "    if time.monotonic() > deadline: sys.exit(8)",
-                "    time.sleep(0.01)",
-                "print('worker finished', file=sys.stderr)",
-            ]), str(acknowledged)]
+            command = [
+                sys.executable,
+                "-u",
+                "-c",
+                "\n".join([
+                    "from pathlib import Path",
+                    "import sys, time",
+                    "print('worker is loading', flush=True)",
+                    "deadline = time.monotonic() + 10",
+                    "while not Path(sys.argv[1]).exists():",
+                    "    if time.monotonic() > deadline: sys.exit(8)",
+                    "    time.sleep(0.01)",
+                    "print('worker finished', file=sys.stderr)",
+                    "(Path(sys.argv[1]).parent / 'original/report.json').write_text('{}')",
+                ]),
+                str(acknowledged),
+            ]
 
             class Terminal(io.StringIO):
                 def write(self, text):
@@ -36,9 +44,12 @@ class WorkerFailureTests(unittest.TestCase):
                     return super().write(text)
 
             terminal = Terminal()
-            with patch("flux_schnell_recipe.correctness.worker_command", return_value=command), \
-                    patch("sys.stderr", terminal):
-                run_worker(None, None, "correctness", "original", run_dir)
+            cfg = Config(run_dir / "recipe.yaml", {"execution": {"gpu_count": 1}})
+            with (
+                patch("flux_schnell_recipe.runtime.worker_command", return_value=command),
+                patch("sys.stderr", terminal),
+            ):
+                self.assertEqual(launch(None, cfg, "correctness", "original", run_dir / "original"), [{}])
             self.assertEqual(terminal.getvalue(), (run_dir / "original.log").read_text())
             self.assertIn("worker finished", terminal.getvalue())
 
@@ -46,9 +57,10 @@ class WorkerFailureTests(unittest.TestCase):
         command = [sys.executable, "-c", "import sys; print('underlying error', file=sys.stderr); sys.exit(7)"]
         with tempfile.TemporaryDirectory() as directory:
             run_dir = Path(directory)
-            with patch("flux_schnell_recipe.correctness.worker_command", return_value=command):
+            cfg = Config(run_dir / "recipe.yaml", {"execution": {"gpu_count": 1}})
+            with patch("flux_schnell_recipe.runtime.worker_command", return_value=command):
                 with self.assertRaises(RuntimeError) as caught:
-                    run_worker(None, None, "correctness", "aitune", run_dir)
+                    launch(None, cfg, "correctness", "aitune", run_dir / "aitune")
             message = str(caught.exception)
             self.assertIn("status 7", message)
             self.assertIn(str(run_dir / "aitune.log"), message)
@@ -59,8 +71,9 @@ class WorkerFailureTests(unittest.TestCase):
 class CheckpointPlacementTests(unittest.TestCase):
     def test_cuda_checkpoint_is_staged_on_cpu(self):
         import torch
+        from flux_schnell_recipe.model import cpu_staging_storage
+
         from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
-        from flux_schnell_recipe.checkpoint import cpu_staging_storage
 
         if not torch.cuda.is_available():
             self.skipTest("CUDA required to exercise a checkpoint saved on GPU")

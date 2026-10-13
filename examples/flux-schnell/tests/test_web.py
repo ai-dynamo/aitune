@@ -3,17 +3,16 @@
 """Exercise browser-facing HTTP requests against a small fake Dynamo service."""
 
 import base64
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from flux_schnell_recipe.deployment.dynamo.web import create_server
+from flux_schnell_recipe.web import create_server
 
-PNG = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6S8AAAAASUVORK5CYII=")
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6S8AAAAASUVORK5CYII=")
 CFG = {"workload": {"width": 1024, "height": 1024, "num_inference_steps": 4}, "deployment": {"seed": 42}}
 
 
@@ -62,12 +61,18 @@ class WebTests(unittest.TestCase):
         self.url = self.start_server(create_server(CFG, endpoint, port=0))
 
     def generate(self, prompt="A lake at sunrise"):
-        return urlopen(Request(self.url + "/api/generate", data=json.dumps({"prompt": prompt}).encode(),
-                               headers={"Content-Type": "application/json"}), timeout=10)
+        return urlopen(
+            Request(
+                self.url + "/api/generate",
+                data=json.dumps({"prompt": prompt}).encode(),
+                headers={"Content-Type": "application/json"},
+            ),
+            timeout=10,
+        )
 
     def test_page_settings_and_prompt_to_png(self):
         with urlopen(self.url) as response:
-            self.assertIn(b'Your prompt', response.read())
+            self.assertIn(b"Your prompt", response.read())
         with urlopen(self.url + "/api/config") as response:
             settings = json.load(response)
             self.assertEqual(settings["seed"], "random")
@@ -79,9 +84,19 @@ class WebTests(unittest.TestCase):
         self.assertIsInstance(seed, int)
         self.assertGreaterEqual(seed, 0)
         self.assertLess(seed, 2**32)
-        self.assertEqual(self.payloads, [{"model": "flux-schnell-aitune-test", "prompt": "Custom prompt: café by the sea",
-                                         "n": 1, "size": "1024x1024", "response_format": "b64_json",
-                                         "nvext": {"seed": seed}}])
+        self.assertEqual(
+            self.payloads,
+            [
+                {
+                    "model": "flux-schnell-aitune-test",
+                    "prompt": "Custom prompt: café by the sea",
+                    "n": 1,
+                    "size": "1024x1024",
+                    "response_format": "b64_json",
+                    "nvext": {"seed": seed},
+                }
+            ],
+        )
 
     def test_empty_prompt_does_not_reach_service(self):
         with self.assertRaises(HTTPError) as caught:

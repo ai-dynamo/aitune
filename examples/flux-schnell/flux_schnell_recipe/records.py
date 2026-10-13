@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Run provenance and immutable output directories for this example."""
 
-from datetime import datetime, timezone
 import hashlib
 import importlib.metadata
 import json
 import os
-from pathlib import Path
 import platform
 import sys
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 
 
 def write_json(path, value):
@@ -43,8 +43,11 @@ def source_identity(args, cfg):
     root = Path(args.checkpoint).resolve()
     if not (root / "model_index.json").is_file():
         raise ValueError("--checkpoint must be a complete Diffusers directory with model_index.json")
-    files = {str(p.relative_to(root)): file_sha(p) for p in sorted(root.rglob("*"))
-             if p.is_file() and ".cache" not in p.relative_to(root).parts}
+    files = {
+        str(p.relative_to(root)): file_sha(p)
+        for p in sorted(root.rglob("*"))
+        if p.is_file() and ".cache" not in p.relative_to(root).parts
+    }
     return {"kind": "directory", "path": str(root), "files_sha256": digest(files)}
 
 
@@ -61,18 +64,35 @@ def new_run(cfg, phase):
 
 def configure_cache(run):
     # Set before importing AITune/Torch. All compiler caches persist with the run.
-    for key, subdir in (("AITUNE_CACHE_DIR", "aitune-cache"), ("TORCHINDUCTOR_CACHE_DIR", "inductor-cache"),
-                        ("TRITON_CACHE_DIR", "triton-cache"), ("CUDA_CACHE_PATH", "cuda-cache")):
+    for key, subdir in (
+        ("AITUNE_CACHE_DIR", "aitune-cache"),
+        ("TORCHINDUCTOR_CACHE_DIR", "inductor-cache"),
+        ("TRITON_CACHE_DIR", "triton-cache"),
+        ("CUDA_CACHE_PATH", "cuda-cache"),
+    ):
         os.environ[key] = str(run / subdir)
     os.environ["AITUNE_TUNING_DATA_PATH"] = str(run / "aitune-tuning.json")
 
 
 def environment():
-    import torch
     import pynvml as nv
+    import torch
+
     packages = {}
-    for name in ("aitune", "torch", "diffusers", "transformers", "torch-tensorrt", "tensorrt",
-                 "torchao", "ai-dynamo", "ai-dynamo-runtime", "aiperf", "nvidia-ml-py", "scikit-image"):
+    for name in (
+        "aitune",
+        "torch",
+        "diffusers",
+        "transformers",
+        "torch-tensorrt",
+        "tensorrt",
+        "torchao",
+        "ai-dynamo",
+        "ai-dynamo-runtime",
+        "aiperf",
+        "nvidia-ml-py",
+        "scikit-image",
+    ):
         try:
             packages[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
@@ -83,12 +103,24 @@ def environment():
         driver = nv.nvmlSystemGetDriverVersion()
     finally:
         nv.nvmlShutdown()
-    return {"python": sys.version, "platform": platform.platform(), "packages": packages,
-            "cuda": torch.version.cuda, "cudnn": torch.backends.cudnn.version(), "driver": driver,
-            "gpu": {"name": gpu.name, "uuid": str(gpu.uuid), "compute_capability": [gpu.major, gpu.minor],
-                    "memory_gib": gpu.total_memory / 2**30},
-            "container_digest": os.environ.get("RECIPE_IMAGE_DIGEST"),
-            "container_digest_missing_reason": None if os.environ.get("RECIPE_IMAGE_DIGEST") else "Set RECIPE_IMAGE_DIGEST to the evaluated image RepoDigest"}
+    return {
+        "python": sys.version,
+        "platform": platform.platform(),
+        "packages": packages,
+        "cuda": torch.version.cuda,
+        "cudnn": torch.backends.cudnn.version(),
+        "driver": driver,
+        "gpu": {
+            "name": gpu.name,
+            "uuid": str(gpu.uuid),
+            "compute_capability": [gpu.major, gpu.minor],
+            "memory_gib": gpu.total_memory / 2**30,
+        },
+        "container_digest": os.environ.get("RECIPE_IMAGE_DIGEST"),
+        "container_digest_missing_reason": None
+        if os.environ.get("RECIPE_IMAGE_DIGEST")
+        else "Set RECIPE_IMAGE_DIGEST to the evaluated image RepoDigest",
+    }
 
 
 def artifact_metadata(cfg):
@@ -101,6 +133,23 @@ def artifact_metadata(cfg):
 def deployment_artifact(cfg):
     if cfg["execution"]["gpu_count"] == 1:
         return artifact_metadata(cfg)
-    from .multi_gpu import read_manifest
     manifest = read_manifest(cfg)
     return {"contract": manifest["contract"], "sha256": [item["sha256"] for item in manifest["artifacts"]]}
+
+
+def read_manifest(cfg):
+    from .distributed import rank_config
+
+    manifest = read_json(cfg.artifact.parent / "manifest.json")
+    expected = contract(cfg, manifest["contract"]["source"])
+    if (
+        manifest["contract"] != expected
+        or manifest["gpu_count"] != 2
+        or [item["rank"] for item in manifest["artifacts"]] != [0, 1]
+    ):
+        raise ValueError("Multi-GPU artifact manifest differs from requested source/configuration")
+    for rank in range(2):
+        metadata = artifact_metadata(rank_config(cfg, rank))
+        if metadata["contract"] != expected or metadata["sha256"] != manifest["artifacts"][rank]["sha256"]:
+            raise ValueError("Rank artifact differs from the completed tuning manifest")
+    return manifest

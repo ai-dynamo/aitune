@@ -5,9 +5,9 @@ As of 2026-10-08, tuning, Python correctness, Python benchmarking, inference, an
 have saved results. The example remains a draft because the broader evaluation is incomplete.
 
 The [two-H100 recipe](../recipes/multi-gpu.yaml) is prepared but unmeasured. Follow the
-[multi-GPU procedure](../README.md#two-h100-evaluation) to generate `multi-gpu/` evidence beside the existing
+[multi-GPU procedure](../README.md#use-two-gpus) to generate `multi-gpu/` evidence beside the existing
 `single-gpu/` runs. It includes separate rank artifacts, fresh-model correctness for both ranks/variants,
-per-device telemetry, aggregate Python measurements and a command to import the results into the README.
+per-device telemetry and aggregate Python measurements.
 No H100 measurements or multi-GPU deployment results are claimed here.
 
 The records are in the repository-root `results/flux-schnell/single-gpu/` directory, mounted as
@@ -28,7 +28,7 @@ they require the retained results tree and are not bundled publication artifacts
 
 These runs used BF16, 1024×1024 images, four denoising steps, seed 42, and batch/concurrency 1. The Python
 benchmark measured 20 images per variant using the four bundled validation prompts. See the
-[model page](../README.md#recipe-and-performance) for the six-metric tables and measurement definitions.
+[example guide](../README.md#tune-validate-benchmark-generate) for the workflow and measurement definitions.
 Earlier correctness runs failed the initial 0.95 hard gate. The October 2 and 7 passing records predate the optional
 `soft_threshold` field; their scores would all trigger warnings under the current 0.95 soft threshold.
 Historical reports retain their original acceptance criteria.
@@ -53,4 +53,4 @@ per-variant environments, latency records, NVML samples, and raw AIPerf artifact
 
 Do not treat the bundled prompt samples as a representative quality or performance suite. Before publishing,
 evaluate a documented workload on at least two GPU architectures and return the reports listed in
-[the evaluation handoff](../EVALUATION.md). Missing measurements remain null with reasons.
+[the example's evaluation notes](../README.md#evaluation-notes). Missing measurements remain null with reasons.

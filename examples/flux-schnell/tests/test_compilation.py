@@ -2,17 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """Compiler timing aggregation and installed PyTorch integration."""
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
-from flux_schnell_recipe.compilation import CompilationRecorder, interval_seconds
+from flux_schnell_recipe.metrics import CompilationRecorder, interval_seconds
 
 
 class CompilationTests(unittest.TestCase):
     def test_union_does_not_double_count_nested_or_overlapping_spans(self):
-        records = [{"start_time_us": a, "end_time_us": b, "is_runtime": False}
-                   for a, b in ((0, 10), (2, 4), (8, 15), (20, 25))]
+        records = [
+            {"start_time_us": a, "end_time_us": b, "is_runtime": False} for a, b in ((0, 10), (2, 4), (8, 15), (20, 25))
+        ]
         records.append({"start_time_us": 0, "end_time_us": 100, "is_runtime": True})
         self.assertEqual(interval_seconds(records), 20 / 1e6)
         self.assertEqual(interval_seconds([]), 0)
@@ -23,6 +24,7 @@ class CompilationTests(unittest.TestCase):
 
     def test_torch_records_survive_reset_and_exclude_ordinary_inference(self):
         import torch
+
         with tempfile.TemporaryDirectory() as directory:
             recorder = CompilationRecorder(Path(directory))
             torch._dynamo.reset()
