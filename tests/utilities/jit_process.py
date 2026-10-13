@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from _pytest.reports import TestReport
+from _pytest.runner import CallInfo, get_reraise_exceptions
 
 _REPORT_PATH = "AITUNE_JIT_TEST_REPORTS"
 
@@ -20,6 +21,20 @@ def pytest_runtest_logreport(report):
     if report_path := os.environ.get(_REPORT_PATH):
         with Path(report_path).open("a") as stream:
             stream.write(json.dumps(report._to_json()) + "\n")
+
+
+def _teardown_parent(item, nextitem, reports):
+    """Finish retained collectors without invoking hooks for an uninitialized item."""
+    call = CallInfo.from_call(
+        lambda: item.session._setupstate.teardown_exact(nextitem),
+        "teardown",
+        reraise=get_reraise_exceptions(item.config),
+    )
+    report = item.ihook.pytest_runtest_makereport(item=item, call=call)
+    if not report.passed:
+        reports = [child for child in reports if child.when != "teardown" or not child.passed]
+        reports.append(report)
+    return reports
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -59,10 +74,15 @@ def pytest_runtest_protocol(item, nextitem):
         reports = []
         if report_path.exists():
             for line in report_path.read_text().splitlines():
-                reports.append(TestReport._from_json(json.loads(line)))
+                data = json.loads(line)
+                # JSON turns pytest's skip-location tuple into a list.
+                if isinstance(data["longrepr"], list):
+                    data["longrepr"] = tuple(data["longrepr"])
+                reports.append(TestReport._from_json(data))
         if not reports or (failed and not any(report.failed for report in reports)):
             reports.append(TestReport(item.nodeid, item.location, {}, "failed", output, "call"))
-        for report in reports:
+        # The preceding ordinary item may retain collectors shared with this item.
+        for report in _teardown_parent(item, nextitem, reports):
             item.ihook.pytest_runtest_logreport(report=report)
     item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
     return True
