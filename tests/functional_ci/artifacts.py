@@ -53,6 +53,7 @@ def _run_onnx(path: Path, inputs: list[torch.Tensor]) -> list[torch.Tensor]:
     import onnxruntime as ort
 
     session = ort.InferenceSession(str(path), providers=["CUDAExecutionProvider"])
+    assert session.get_providers()[0] == "CUDAExecutionProvider", session.get_providers()
     feed = {node.name: tensor.cpu().numpy() for node, tensor in zip(session.get_inputs(), inputs, strict=True)}
     return [torch.from_numpy(output).to(inputs[0].device) for output in session.run(None, feed)]
 
