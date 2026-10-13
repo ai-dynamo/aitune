@@ -14,9 +14,8 @@ from aitune.torch.backend import (
     TensorRTBackendConfig,
     TorchQuantizationConfig,
 )
-
-from .lifecycle import TENSORRT_FP32, Tolerance, run_lifecycle
-from .models import make_input, make_mlp
+from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, run_lifecycle
+from tests.functional_ci.models import make_input, make_mlp
 
 FP16 = Tolerance(rtol=1e-2, atol=1e-2)
 QUANTIZED = Tolerance(rtol=1e-1, atol=1e-1)
