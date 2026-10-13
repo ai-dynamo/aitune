@@ -8,8 +8,7 @@ from torch.nn import functional
 
 import aitune.torch as ait
 from aitune.torch.backend import KernelSelectorBackend
-
-from .lifecycle import Tolerance, selected_backend
+from tests.functional_ci.lifecycle import Tolerance, selected_backend
 
 FP16_ATTENTION = Tolerance(rtol=2e-3, atol=2e-3)
 
