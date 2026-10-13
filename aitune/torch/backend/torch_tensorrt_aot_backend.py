@@ -131,7 +131,6 @@ class TorchTensorRTAotBackend(Backend):
     """Backend that compiles model using TensorRT."""
 
     _build_mode = BuildMode.AHEAD_OF_TIME
-    _supports_external_device_management = True
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU, ExecutionMode.MULTI_GPU})
 
     # State dictionary keys

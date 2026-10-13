@@ -192,7 +192,6 @@ class Backend(ABC):
     _execution_modes: ClassVar[frozenset[ExecutionMode]]
     _build_mode: ClassVar[BuildMode]
     _supported_modules: ClassVar[frozenset[ModuleFormat]] = frozenset({ModuleFormat.TORCH})
-    _supports_external_device_management: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs) -> None:
         """Require each backend subclass to declare its execution and build modes."""
@@ -251,13 +250,13 @@ class Backend(ABC):
         if self.state != BackendState.INIT:
             raise RuntimeError(f"Backend {self.name} build should be called only once")
 
+        self._assert_external_device_management(module)
         with release_transient_memory():
             with report_backend_build(self, log_file=log_file):
                 try:
                     self._assert_supported_modules(module)
                     self._assert_device(device)
                     self._assert_execution_mode(module)
-                    self._assert_external_device_management(module)
                     self._set_device(device)
                     self._save_config(cache_dir)
                     ready_backend = self._build(module, graph_spec, samples, cache_dir)
@@ -287,14 +286,13 @@ class Backend(ABC):
             raise RuntimeError(f"Backend {self.name} does not support {execution_mode.value} execution")
 
     def _assert_external_device_management(self, module: nn.Module) -> None:
-        """Reject externally managed placement unless the backend explicitly supports it."""
-        from aitune.torch.utils.module import is_externally_managed_module
+        """Qualify externally placed sources before backend build can mutate them."""
+        from aitune.torch.utils.module import is_externally_managed_module, validate_external_backend
 
-        if (
-            is_externally_managed_module(module)
-            and type(self).__dict__.get("_supports_external_device_management", False) is not True
-        ):
-            raise RuntimeError(f"Backend {self.name} does not support external module device management")
+        if is_externally_managed_module(module):
+            validate_external_backend(self)
+        elif any(is_externally_managed_module(child) for child in module.modules()):
+            raise RuntimeError("Cannot build an unmarked ancestor of an externally managed subtree")
 
     @annotate(color="cyan")
     def activate(self):
@@ -533,7 +531,6 @@ class DummyBackend(Backend):
     _devices = ["cpu", "cuda"]
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
     _build_mode = BuildMode.AHEAD_OF_TIME
-    _supports_external_device_management = True
 
     def key(self) -> str:
         """Returns the key of the backend."""

@@ -3,9 +3,9 @@
 """PyTorch module utilities for parameter counting, device management, and memory offloading."""
 
 import inspect
-import weakref
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Optional
+from weakref import WeakValueDictionary
 
 import torch
 import torch.nn as nn
@@ -22,16 +22,7 @@ if TYPE_CHECKING:
     from aitune.torch.backend import Backend
 
 
-_EXTERNALLY_MANAGED_MODULE_ROOTS: dict[int, weakref.ReferenceType[nn.Module]] = {}
-
-
-def _remove_externally_managed_module(
-    module_id: int,
-    module_ref: weakref.ReferenceType[nn.Module],
-) -> None:
-    """Remove a dead external-placement root without being affected by object-id reuse."""
-    if _EXTERNALLY_MANAGED_MODULE_ROOTS.get(module_id) is module_ref:
-        _EXTERNALLY_MANAGED_MODULE_ROOTS.pop(module_id, None)
+_EXTERNALLY_MANAGED_MODULES: WeakValueDictionary[int, nn.Module] = WeakValueDictionary()
 
 
 def format_num_parameters(num: int) -> str:
@@ -139,70 +130,44 @@ def is_distributed_module(module: nn.Module) -> bool:
 
 
 def register_externally_managed_module(module: nn.Module) -> None:
-    """Preserve placement for a module tree owned by an external runtime.
+    """Preserve the fixed source tree's placement for each node's lifetime.
 
-    Registration is identity-scoped: copies of the module are not registered and remain movable by AITune.
+    Independent copies have new identities and remain movable. A surviving source child
+    stays protected after its former root is collected. Cross-tree tensor/storage aliases
+    and changing this ownership tree after registration are outside the caller contract.
     """
-    module_id = id(module)
-    module_ref = weakref.ref(
-        module,
-        lambda ref: _remove_externally_managed_module(module_id, ref),
-    )
-    _EXTERNALLY_MANAGED_MODULE_ROOTS[module_id] = module_ref
-
-
-def unregister_externally_managed_module(module: nn.Module) -> None:
-    """Stop preserving externally managed placement for a module tree."""
-    module_ref = _EXTERNALLY_MANAGED_MODULE_ROOTS.get(id(module))
-    if module_ref is not None and module_ref() is module:
-        _EXTERNALLY_MANAGED_MODULE_ROOTS.pop(id(module), None)
+    for owned_module in module.modules():
+        _EXTERNALLY_MANAGED_MODULES[id(owned_module)] = owned_module
 
 
 def is_externally_managed_module(module: nn.Module) -> bool:
-    """Return whether an external runtime owns placement through a registered root."""
-    direct_ref = _EXTERNALLY_MANAGED_MODULE_ROOTS.get(id(module))
-    if direct_ref is not None and direct_ref() is module:
-        return True
-
-    for module_id, module_ref in tuple(_EXTERNALLY_MANAGED_MODULE_ROOTS.items()):
-        root = module_ref()
-        if root is None:
-            _remove_externally_managed_module(module_id, module_ref)
-            continue
-        if any(owned_module is module for owned_module in root.modules()):
-            return True
-    return False
+    """Return whether this exact source node has externally owned placement."""
+    return _EXTERNALLY_MANAGED_MODULES.get(id(module)) is module
 
 
-def _has_externally_managed_descendant(module: nn.Module) -> bool:
-    """Return whether the module tree overlaps any externally managed tree."""
-    if not _EXTERNALLY_MANAGED_MODULE_ROOTS:
-        return False
+def validate_external_backend(backend: "Backend") -> None:
+    """Require a qualified eager or Inductor JIT candidate for external source placement."""
+    from aitune.torch.backend.torch_eager import TorchEagerBackend
+    from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 
-    module_ids = {id(owned_module) for owned_module in module.modules()}
-    for module_id, module_ref in tuple(_EXTERNALLY_MANAGED_MODULE_ROOTS.items()):
-        root = module_ref()
-        if root is None:
-            _remove_externally_managed_module(module_id, module_ref)
-            continue
-        if any(id(owned_module) in module_ids for owned_module in root.modules()):
-            return True
-    return False
+    if type(backend) is TorchEagerBackend:
+        return
+    if type(backend) is not TorchInductorJitBackend:
+        raise ValueError("External device management supports only TorchEagerBackend and TorchInductorJitBackend")
+    if (
+        backend._config.mode not in (None, "default", "max-autotune-no-cudagraphs")
+        or backend._config.options is not None
+    ):
+        raise ValueError(
+            "External Inductor JIT requires default or max-autotune-no-cudagraphs mode without custom options"
+        )
 
 
 def _can_move_module(module: nn.Module, *, operation: str) -> bool:
-    """Validate bulk placement changes without moving any part of the module.
-
-    Returns:
-        Whether AITune can relocate the whole tree. Distributed modules and trees
-        directly owned by an external runtime retain their existing placement.
-
-    Raises:
-        RuntimeError: An ordinary module contains an externally managed subtree.
-    """
-    if is_distributed_module(module) or is_externally_managed_module(module):
+    """Preserve protected sources and reject their unmarked ancestors before mutation."""
+    if is_externally_managed_module(module) or is_distributed_module(module):
         return False
-    if _has_externally_managed_descendant(module):
+    if any(is_externally_managed_module(child) for child in module.modules()):
         raise RuntimeError(
             f"Cannot {operation} {module.__class__.__name__}: it contains an externally managed subtree. "
             "Move independent ordinary submodules individually or manage placement through the external runtime."
