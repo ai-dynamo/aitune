@@ -147,6 +147,7 @@ class Patcher:
             MinLatencyStrategy,
             OneBackendStrategy,
         )
+        from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
         from aitune.torch.utils.module import validate_external_backend
 
         for module in modules:
@@ -159,7 +160,7 @@ class Patcher:
                 MaxThroughputStrategy,
                 LatencyBudgetStrategy,
             ):
-                backends = strategy._backends
+                backends = cast(MultiBackendStrategy, strategy)._backends
             else:
                 raise ValueError("External device management requires a supported built-in strategy")
             if not backends:
