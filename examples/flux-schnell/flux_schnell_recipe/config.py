@@ -4,7 +4,7 @@
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import yaml
@@ -25,6 +25,15 @@ class Config:
     @property
     def artifact(self):
         return Path(self["artifact_path"])
+
+
+def rank_config(cfg, rank):
+    count = cfg["execution"]["gpu_count"]
+    if count == 1:
+        return cfg
+    path = cfg.artifact
+    data = dict(cfg.data, artifact_path=str(path.with_name(f"{path.stem}.rank-{rank}-of-{count}{path.suffix}")))
+    return replace(cfg, data=data)
 
 
 def load_config(path):

@@ -9,8 +9,8 @@ import time
 import traceback
 from pathlib import Path
 
-from .config import load_config, read_inputs
-from .distributed import collect, initialize, rank_config, rank_directory, shutdown
+from .config import load_config, rank_config, read_inputs
+from .distributed import collect, initialize, rank_directory, shutdown
 from .metrics import CompilationRecorder, Sampler, compilation_counters, prepare
 from .model import generate, load_model, save_images, synchronize
 from .records import configure_cache, contract, environment, source_identity, write_json

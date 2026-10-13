@@ -12,6 +12,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .config import rank_config
+
 
 def write_json(path, value):
     path = Path(path)
@@ -138,8 +140,6 @@ def deployment_artifact(cfg):
 
 
 def read_manifest(cfg):
-    from .distributed import rank_config
-
     manifest = read_json(cfg.artifact.parent / "manifest.json")
     expected = contract(cfg, manifest["contract"]["source"])
     if (

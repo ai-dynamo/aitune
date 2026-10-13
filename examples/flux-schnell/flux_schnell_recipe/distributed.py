@@ -4,19 +4,9 @@
 
 import logging
 import os
-from dataclasses import replace
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
-
-
-def rank_config(cfg, rank):
-    count = cfg["execution"]["gpu_count"]
-    if count == 1:
-        return cfg
-    path = cfg.artifact
-    data = dict(cfg.data, artifact_path=str(path.with_name(f"{path.stem}.rank-{rank}-of-{count}{path.suffix}")))
-    return replace(cfg, data=data)
 
 
 def rank_directory(cfg, directory, rank=0):

@@ -5,7 +5,7 @@
 import logging
 import time
 
-from .config import read_inputs
+from .config import rank_config, read_inputs
 from .model import load_model, synchronize
 from .records import configure_cache, contract, environment, file_sha, new_run, source_identity, write_json
 
@@ -106,7 +106,6 @@ def run(args, cfg, run_dir=None):
 
 
 def distributed_tune(args, cfg):
-    from .distributed import rank_config
     from .metrics import phase_duration
     from .runtime import launch
 
