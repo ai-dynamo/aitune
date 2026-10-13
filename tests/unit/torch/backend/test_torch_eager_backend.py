@@ -112,7 +112,7 @@ def test_torch_eager_backend_with_autocast(autocast_dtype, model, sample_data, t
 def test_activate_restores_module_offloaded_by_another_backend(model, sample_data, tmp_path):
     backend = backend_build(TorchEagerBackend(), torch.float32, model, sample_data, tmp_path)
     backend.deactivate()
-    model.to("cpu")
+    model.to("cpu")  # deactivate() keeps the weights; this simulates offload() in another backend's _build()
 
     backend.activate()
 
