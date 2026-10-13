@@ -34,6 +34,7 @@ from aitune.torch.tune_data.reporting import (
     report_graph_tune,
     report_inspection_details,
     report_module_tune,
+    report_tune_run_end,
 )
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
@@ -106,8 +107,6 @@ class PatchedModule:
         """Initialize the patched module."""
         self.__wrapped__ = module
         self._explicit_head = explicit_head
-        self._session_mode = config.mode
-        self._unpatched = False
         self._class_before_device_patch: type[torch.nn.Module] | None = None
         self._patched_device_class: type[torch.nn.Module] | None = None
         # proxy forward, hooks
@@ -230,8 +229,8 @@ class PatchedModule:
                 raise_if_out_of_space(error, path=global_config.cache_dir)
                 # A failed backend may leave an ordinarily placed module on CPU.
                 move_module_to_device(current.__wrapped__, device)
-                current._unpatch()
                 current._update_state(ModuleState.EAGER)
+                current._unpatch()
                 for child in current._children:
                     child._allowed_to_tune = not child._should_be_skipped()  # child modules are allowed to tune
                     if child._should_be_tuned():
@@ -352,17 +351,15 @@ class PatchedModule:
         """Route forward calls to the appropriate state-specific handler.
 
         Cached references to module.forward keep using this router across state transitions.
-        After permanent unpatching they call the original forward without re-entering the JIT session.
+        Skipped, eager and detached children use the original forward.
         """
-        if self._state == ModuleState.DETACHED or self._unpatched:
-            return self._original_forward(*args, **kwargs)
-
-        if config.mode != self._session_mode:
-            raise RuntimeError("Call jit_reset() before switching JIT modes")
-
         forward_func = self._forward_routing.get(self._state)
         if forward_func is None:
-            raise ValueError(f"Module should not be called in the state: {self._state}")
+            return self._original_forward(*args, **kwargs)
+
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        Patcher._check_mode()
         return forward_func(wrapped, instance, args, kwargs)
 
     def _forward_init(self, wrapped, instance, args, kwargs):
@@ -400,6 +397,7 @@ class PatchedModule:
                 _to_hist(f"New child module: {str(self)}")
             else:
                 # too deep, skip the module
+                self._update_state(ModuleState.SKIPPED)
                 self._unpatch()
                 return self._original_forward(*args, **kwargs)
         else:
@@ -574,13 +572,6 @@ class PatchedModule:
         self._class_before_device_patch = None
         self._patched_device_class = None
 
-    def _restore_device_attribute_hierarchy(self) -> None:
-        """Restore AITune-generated device classes on this module and its ancestors."""
-        current: PatchedModule | None = self
-        while current is not None:
-            current._restore_device_attribute()
-            current = current._parent
-
     def __repr__(self):
         """Representation of the module."""
         return self.__str__()
@@ -710,26 +701,16 @@ class PatchedModule:
             _to_hist(f"No graph breaks in {module._name}. Checking took {duration:.2f}s")
 
     def _unpatch(self):
-        """Unpatch the module.
-
-        Cached forward references become pass-through calls immediately. Failed restoration
-        leaves the wrapper in the registry and blocks new registrations until cleanup succeeds.
-        """
+        """Restore normal forwarding for a skipped, eager or detached module."""
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 
-        self._unpatched = True
         self._allowed_to_tune = False
         try:
-            try:
-                self._restore_original_forward()
-                self._restore_device_attribute()
-            finally:
-                self.__wrapped__._forward_hooks = self._current_forward_hooks
-                self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
-        except Exception:
-            Patcher._cleanup_pending = True
-            raise
-
+            self._restore_original_forward()
+            self._restore_device_attribute()
+        finally:
+            self.__wrapped__._forward_hooks = self._current_forward_hooks
+            self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
         Patcher.unpatch_module(self)
 
     def _unpatch_hierarchy(self, include_self=False):
@@ -793,23 +774,9 @@ class PatchedModule:
         sink("\n".join(PatchedModule.history))
 
     @staticmethod
-    def reset():
-        """Reset PatchedModule state."""
-        PatchedModule.history.clear()
-        PatchedModule.heads.clear()
-        PatchedModule.stack.clear()
-        PatchedModule.patched_classes.clear()
-        PatchedModule.fq_name_counter.clear()
-        PatchedModule.attempted_tuning = False
-        PatchedModule.deferred_tuning_enabled = False
-        PatchedModule.module_counter = 0
-
-    @staticmethod
     def on_python_exit():
         """Give suggestions if tuning was not attempted."""
-        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
-
-        Patcher._end_session_report()
+        report_tune_run_end()
 
         if len(PatchedModule.heads) == 0:
             logging.error("JIT tuning has been enabled but no modules were found.")

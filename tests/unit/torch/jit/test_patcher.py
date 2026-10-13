@@ -2,18 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 """Test the patcher functions."""
 
+import doctest
 from importlib import import_module
 from unittest.mock import Mock
 
 import pytest
 import torch
 
+from aitune.torch.backend import TorchEagerBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
-from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import PatchedModule
-from aitune.torch.jit.patcher import Patcher, jit_reset, patch_for_jit_tuning, prepare_for_jit_tuning
+from aitune.torch.jit.patcher import (
+    Patcher,
+    patch_for_jit_tuning,
+    prepare_for_jit_tuning,
+)
 from aitune.torch.tune_data.reporting import has_active_report
+from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 
 
 def _module_with_module_name(module_name: str) -> torch.nn.Module:
@@ -21,17 +27,16 @@ def _module_with_module_name(module_name: str) -> torch.nn.Module:
     return module_cls()
 
 
-def test_jit_reset():
-    """Test jit_reset function."""
-    Patcher.patch_torch()
-    torch.nn.Linear(10, 5)
-    assert len(Patcher._patched_modules) == 1
-    jit_reset()
-    assert len(Patcher._patched_modules) == 0
-    assert len(Patcher._intercepted_classes) == 0
-    torch.nn.Linear(10, 5)
-    assert len(Patcher._patched_modules) == 0
-    assert len(Patcher._intercepted_classes) == 0
+@pytest.mark.parametrize("module_name", ["enable", "disable", "enable_inspection"])
+def test_activation_module_doctest_in_fresh_worker(module_name, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jit_config.device = torch.device("cpu")
+    jit_config.strategy = OneBackendStrategy(TorchEagerBackend()).enable_performance_validation(False)
+    result = doctest.testmod(import_module(f"aitune.torch.jit.{module_name}"))
+    assert result.failed == 0
+    assert result.attempted > 0
+    if module_name == "enable_inspection":
+        assert (tmp_path / "linear_net.html").exists()
 
 
 def test_eager_jit_tunes_when_ready(mocker):
@@ -50,8 +55,7 @@ def test_eager_jit_tunes_when_ready(mocker):
 def test_activation_allows_configuring_deferred_mode_before_first_eligible_module(mocker):
     jit_config.mode = JITMode.TUNE_EAGER
     Patcher.patch_torch()
-    assert Patcher._exit_handler is not None
-    assert Patcher._session_mode is None
+    assert Patcher._mode is None
     assert not has_active_report()
 
     jit_config.mode = JITMode.TUNE_DEFERRED
@@ -60,8 +64,7 @@ def test_activation_allows_configuring_deferred_mode_before_first_eligible_modul
     tune = mocker.patch.object(PatchedModule, "tune")
     module = torch.nn.Linear(2, 2)
 
-    assert Patcher._session_mode is JITMode.TUNE_DEFERRED
-    assert Patcher._session_report is not None
+    assert Patcher._mode is JITMode.TUNE_DEFERRED
     assert has_active_report()
     module(torch.ones(1, 2))
     tune.assert_not_called()
@@ -82,8 +85,7 @@ def test_excluded_constructors_do_not_start_reporting_or_bind_mode(mocker):
     torch.nn.Sequential()
     _module_with_module_name("unselected_package.child")
 
-    assert Patcher._session_mode is None
-    assert Patcher._session_report is None
+    assert Patcher._mode is None
     assert Patcher._patched_modules == []
     assert Patcher.intercepted_classes() == []
     assert not has_active_report()
@@ -91,32 +93,8 @@ def test_excluded_constructors_do_not_start_reporting_or_bind_mode(mocker):
 
     jit_config.mode = JITMode.TUNE_DEFERRED
     torch.nn.Linear(2, 2)
-    assert Patcher._session_mode is JITMode.TUNE_DEFERRED
+    assert Patcher._mode is JITMode.TUNE_DEFERRED
     start_report.assert_called_once()
-
-
-@pytest.mark.parametrize(
-    ("initial_mode", "exit_mode"),
-    [(JITMode.TUNE_EAGER, JITMode.INSPECT), (JITMode.INSPECT, JITMode.TUNE_DEFERRED)],
-)
-def test_unstarted_exit_dispatch_uses_current_mode(mocker, initial_mode, exit_mode):
-    inspection_exit = mocker.patch.object(InspectModule, "on_python_exit")
-    tuning_exit = mocker.patch.object(PatchedModule, "on_python_exit")
-    jit_config.mode = initial_mode
-    Patcher.patch_torch()
-    jit_config.mode = exit_mode
-
-    Patcher._exit_handler()
-
-    if exit_mode is JITMode.INSPECT:
-        inspection_exit.assert_called_once_with()
-        tuning_exit.assert_not_called()
-    else:
-        tuning_exit.assert_called_once_with()
-        inspection_exit.assert_not_called()
-    assert Patcher._session_mode is None
-    assert Patcher._session_report is None
-    assert not has_active_report()
 
 
 def test_constructor_interception_rejects_mode_change_after_registering_module():
@@ -125,10 +103,10 @@ def test_constructor_interception_rejects_mode_change_after_registering_module()
     registered = torch.nn.Linear(2, 2)
 
     jit_config.mode = JITMode.TUNE_DEFERRED
-    with pytest.raises(RuntimeError, match=r"Call jit_reset\(\) before switching JIT modes"):
+    with pytest.raises(RuntimeError, match=r"fresh worker"):
         torch.nn.Linear(2, 2)
 
-    assert Patcher._session_mode is JITMode.TUNE_EAGER
+    assert Patcher._mode is JITMode.TUNE_EAGER
     assert [wrapper.__wrapped__ for wrapper in Patcher._patched_modules] == [registered]
 
 

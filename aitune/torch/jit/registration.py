@@ -23,21 +23,12 @@ def _materialize_modules(modules: Iterable[torch.nn.Module]) -> list[torch.nn.Mo
 
     if not materialized:
         raise ValueError("modules must contain at least one torch.nn.Module")
+    unique: dict[int, torch.nn.Module] = {}
     for index, module in enumerate(materialized):
         if not isinstance(module, torch.nn.Module):
             raise TypeError(f"modules[{index}] must be a torch.nn.Module, got {type(module).__name__}")
-    return materialized
-
-
-def _unique_modules(modules: list[torch.nn.Module]) -> list[torch.nn.Module]:
-    """Deduplicate targets by identity while retaining input order."""
-    unique: list[torch.nn.Module] = []
-    seen_module_ids: set[int] = set()
-    for module in modules:
-        if id(module) not in seen_module_ids:
-            seen_module_ids.add(id(module))
-            unique.append(module)
-    return unique
+        unique.setdefault(id(module), module)
+    return list(unique.values())
 
 
 class JITRegistration:
@@ -79,7 +70,12 @@ def register_for_jit_tuning(modules: Iterable[torch.nn.Module]) -> JITRegistrati
 
     Unlike automatic JIT interception, registration does not patch construction of future
     ``torch.nn.Module`` instances. Each supplied module is treated as an independent tuning
-    head and otherwise follows the active JIT configuration.
+    head and otherwise follows the active JIT configuration. Supply the complete target set
+    once in an unused worker. Automatic discovery and explicit registration are alternative
+    entry paths, and the tuning mode stays fixed after the first wrapper is installed.
+
+    Validation runs before installation. A setup failure after installation begins may leave
+    earlier targets patched; it propagates without rollback and requires a fresh worker.
 
     Args:
         modules: Iterable of existing modules. Pass ``[module]`` for one module. Passing an
@@ -91,9 +87,6 @@ def register_for_jit_tuning(modules: Iterable[torch.nn.Module]) -> JITRegistrati
     Raises:
         TypeError: If ``modules`` is not iterable or contains a non-module value.
         ValueError: If ``modules`` is empty, a target is excluded, or target ownership trees overlap.
-        RuntimeError: If inspection mode or global constructor interception is active.
+        RuntimeError: If inspection mode or either JIT entry path is already active.
     """
-    Patcher.validate_explicit_registration_session()
-    materialized_modules = _materialize_modules(modules)
-    patched_modules = Patcher.register_modules(_unique_modules(materialized_modules))
-    return JITRegistration(patched_modules)
+    return JITRegistration(Patcher.register_modules(_materialize_modules(modules)))
