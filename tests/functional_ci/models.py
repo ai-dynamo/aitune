@@ -10,7 +10,7 @@ OUT_FEATURES = 64
 
 
 def make_mlp(device: torch.device, seed: int = 0) -> nn.Module:
-    """Return a seeded `IN_FEATURES -> 128 -> OUT_FEATURES` MLP in eval mode."""
+    """Return a seeded multi-layer perceptron (MLP) `IN_FEATURES -> 128 -> OUT_FEATURES` in eval mode."""
     with torch.random.fork_rng(devices=[device] if device.type == "cuda" else []):
         torch.manual_seed(seed)
         model = nn.Sequential(nn.Linear(IN_FEATURES, 128), nn.ReLU(), nn.Linear(128, OUT_FEATURES))
