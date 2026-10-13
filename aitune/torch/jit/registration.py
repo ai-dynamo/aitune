@@ -12,8 +12,8 @@ from aitune.torch.jit.patcher import Patcher
 from aitune.torch.tune_data.report_models import ModuleInspectionReport
 
 
-def _materialize_modules(modules: Iterable[torch.nn.Module]) -> list[torch.nn.Module]:
-    """Materialize and validate an explicit module iterable without mutating JIT state."""
+def _collect_modules(modules: Iterable[torch.nn.Module]) -> list[torch.nn.Module]:
+    """Collect, validate and deduplicate existing modules without mutating JIT state."""
     try:
         materialized = list(modules)
     except TypeError as error:
@@ -89,4 +89,4 @@ def register_for_jit_tuning(modules: Iterable[torch.nn.Module]) -> JITRegistrati
         ValueError: If ``modules`` is empty, a target is excluded, or target ownership trees overlap.
         RuntimeError: If inspection mode or either JIT entry path is already active.
     """
-    return JITRegistration(Patcher.register_modules(_materialize_modules(modules)))
+    return JITRegistration(Patcher.register_modules(_collect_modules(modules)))

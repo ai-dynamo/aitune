@@ -121,6 +121,25 @@ def test_prepare_for_tuning():
     assert patched_module.__wrapped__ == module
 
 
+@pytest.mark.parametrize("already_active", [False, True])
+def test_nested_preparation_preserves_the_outer_constructor_interception(already_active):
+    original_init = torch.nn.Module.__init__
+    if already_active:
+        Patcher.patch_torch()
+
+    with prepare_for_jit_tuning():
+        before = torch.nn.Linear(2, 2)
+        with prepare_for_jit_tuning():
+            nested = torch.nn.Linear(2, 2)
+        after = torch.nn.Linear(2, 2)
+        assert Patcher._torch_patched
+
+    assert [wrapper.__wrapped__ for wrapper in Patcher._patched_modules] == [before, nested, after]
+    assert Patcher._torch_patched is already_active
+    if not already_active:
+        assert torch.nn.Module.__init__ is original_init
+
+
 def test_patch_decorator():
     """Test prepare_for_tuning context manager."""
 

@@ -8,7 +8,7 @@ from importlib import import_module
 import pytest
 import torch
 
-import aitune.torch as aitune_torch
+from aitune import torch as aitune_torch
 from aitune.torch import JITRegistration, register_for_jit_tuning
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.jit.config import JITMode
