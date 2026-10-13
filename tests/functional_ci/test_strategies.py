@@ -17,10 +17,9 @@ from aitune.torch.backend import (
 )
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
+from tests.functional_ci.lifecycle import TENSORRT_FP32, selected_backend
+from tests.functional_ci.models import make_input, make_mlp
 from tests.toy_backends import BuildFailsBackend
-
-from .lifecycle import TENSORRT_FP32, selected_backend
-from .models import make_input, make_mlp
 
 PROFILING_STRATEGIES: dict[str, Callable[[list[Backend]], ait.MaxThroughputStrategy]] = {
     "max-throughput": ait.MaxThroughputStrategy,
