@@ -142,7 +142,9 @@ def test_abrupt_exit(capfd):
 
 @pytest.mark.parametrize("workers", [0, 1], ids=["serial", "xdist"])
 @pytest.mark.parametrize("finalizer_outcome", ["normal", "error", "skip", "both-errors"])
-def test_ordinary_isolated_ordinary_boundary_finalizes_collectors(isolated_project, workers, finalizer_outcome):
+def test_ordinary_isolated_ordinary_boundary_finalizes_collectors(
+    isolated_project, workers, finalizer_outcome, plugin_options=()
+):
     (isolated_project / "test_reports.py").unlink()
     (isolated_project / "conftest.py").write_text("""import os
 from pathlib import Path
@@ -213,7 +215,7 @@ def child_cleanup():
     yield
     raise RuntimeError("child finalizer failed")
 """)
-    result = run_isolated(isolated_project, workers, "-ra")
+    result = run_isolated(isolated_project, workers, "-ra", *plugin_options)
     output = result.stdout + result.stderr
     error_count = {"normal": 0, "error": 1, "skip": 0, "both-errors": 2}[finalizer_outcome]
     assert result.returncode == bool(error_count), output
@@ -237,3 +239,38 @@ def child_cleanup():
     assert Counter(event.removeprefix("setup:") for event in events if event.startswith("setup:")) == Counter(
         event.removeprefix("teardown:") for event in events if event.startswith("teardown:")
     )
+
+
+@pytest.mark.parametrize("workers", [0, 1], ids=["serial", "xdist"])
+@pytest.mark.parametrize("finalizer_outcome", ["normal", "error"])
+def test_rerun_plugin_does_not_customize_uninitialized_parent_report(isolated_project, workers, finalizer_outcome):
+    pytest.importorskip("pytest_rerunfailures")
+    test_ordinary_isolated_ordinary_boundary_finalizes_collectors(
+        isolated_project, workers, finalizer_outcome, plugin_options=("-p", "rerunfailures")
+    )
+
+
+@pytest.mark.parametrize("workers", [0, 1], ids=["serial", "xdist"])
+@pytest.mark.parametrize("finalizer_outcome", ["normal", "error"])
+def test_stateful_report_hooks_run_only_for_initialized_items(
+    isolated_project, workers, finalizer_outcome, monkeypatch
+):
+    # Model a report-hook setup prerequisite; this is not the external rerun plugin.
+    (isolated_project / "stateful_report_plugin.py").write_text("""import pytest
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item, call):
+    report = yield
+    if report.when == "setup":
+        item._terminal_errors = {}
+    item._terminal_errors[report.when] = report.failed
+    report.user_properties.append(("stateful_report_hook", "initialized"))
+    return report
+""")
+    monkeypatch.setenv("PYTEST_PLUGINS", "stateful_report_plugin")
+    test_ordinary_isolated_ordinary_boundary_finalizes_collectors(isolated_project, workers, finalizer_outcome)
+    for case in ElementTree.parse(isolated_project / "report.xml").iter("testcase"):
+        assert any(
+            prop.attrib == {"name": "stateful_report_hook", "value": "initialized"}
+            for prop in case.findall("properties/property")
+        )
