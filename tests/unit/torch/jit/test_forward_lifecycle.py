@@ -268,6 +268,9 @@ def test_child_hook_restoration_failure_propagates_after_successful_backend_buil
             return self.child(value)
 
     class HookRestoreFailsBackend(TorchEagerBackend):
+        _execution_modes = TorchEagerBackend._execution_modes
+        _build_mode = TorchEagerBackend._build_mode
+
         def _build(self, module, graph_spec, samples, cache_dir):
             built = super()._build(module, graph_spec, samples, cache_dir)
             assert isinstance(module, Parent)
