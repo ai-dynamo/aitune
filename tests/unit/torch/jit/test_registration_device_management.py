@@ -158,7 +158,7 @@ def test_external_marks_survive_tuning_skip_and_fallback(tmp_path, mocker, outco
         _EagerSubclass(),
         TorchInductorJitBackend(TorchInductorJitBackendConfig(mode="reduce-overhead")),
         TorchInductorJitBackend(TorchInductorJitBackendConfig(mode="max-autotune")),
-        TorchInductorJitBackend(TorchInductorJitBackendConfig(options={})),
+        TorchInductorJitBackend(TorchInductorJitBackendConfig(options={"max_autotune": True})),
     ],
 )
 def test_external_backend_qualification_fails_before_registration_and_direct_build(tmp_path, mocker, backend):
@@ -182,10 +182,18 @@ def test_external_backend_qualification_fails_before_registration_and_direct_bui
     move.assert_not_called()
 
 
-@pytest.mark.parametrize("mode", [None, "default", "max-autotune-no-cudagraphs"])
-def test_qualified_inductor_configuration_accepts_external_registration(tmp_path, mode):
+@pytest.mark.parametrize(
+    "config",
+    [
+        TorchInductorJitBackendConfig(),
+        TorchInductorJitBackendConfig(mode="default"),
+        TorchInductorJitBackendConfig(mode="max-autotune-no-cudagraphs"),
+        TorchInductorJitBackendConfig(options={}),
+    ],
+)
+def test_qualified_inductor_configuration_accepts_external_registration(tmp_path, config):
     _configure(tmp_path)
-    jit_config.strategy = OneBackendStrategy(TorchInductorJitBackend(TorchInductorJitBackendConfig(mode=mode)))
+    jit_config.strategy = OneBackendStrategy(TorchInductorJitBackend(config))
     source = _ModuleTree()
     registration = register_for_jit_tuning([source], device_management="external")
     assert registration.modules == (source,)

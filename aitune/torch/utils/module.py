@@ -154,9 +154,9 @@ def validate_external_backend(backend: "Backend") -> None:
         return
     if type(backend) is not TorchInductorJitBackend:
         raise ValueError("External device management supports only TorchEagerBackend and TorchInductorJitBackend")
-    if (
-        backend._config.mode not in (None, "default", "max-autotune-no-cudagraphs")
-        or backend._config.options is not None
+    if backend._config.mode not in (None, "default", "max-autotune-no-cudagraphs") or backend._config.options not in (
+        None,
+        {},
     ):
         raise ValueError(
             "External Inductor JIT requires default or max-autotune-no-cudagraphs mode without custom options"
