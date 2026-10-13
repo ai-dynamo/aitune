@@ -21,6 +21,7 @@ from aitune.torch import jit_config, register_for_jit_tuning
 from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.tune import deferred
+from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy import OneBackendStrategy
 
 
@@ -99,11 +100,11 @@ def run(mode, cache_dir):
 
     assert registration.modules == units == tuple(model)
     assert torch.nn.Module.__init__ is original_constructor
-    assert all(
-        isinstance(backend, TorchInductorJitBackend)
-        for wrapper in registration._patched_modules
-        for backend in wrapper._wrapper.backends.values()
-    )
+    for wrapper in registration._patched_modules:
+        tuned_module = wrapper._wrapper
+        assert isinstance(tuned_module, TunedModule)
+        assert tuned_module.backends
+        assert all(isinstance(backend, TorchInductorJitBackend) for backend in tuned_module.backends.values())
     assert counters["stats"]["unique_graphs"] > compiled_before, "No Dynamo graphs were compiled"
     print(f"{mode}: {len(units)} prepared units, two input shapes, real Inductor graphs, preserved forwards and hooks")
 
