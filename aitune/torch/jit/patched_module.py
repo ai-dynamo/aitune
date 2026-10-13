@@ -599,10 +599,12 @@ class PatchedModule:
         self.__wrapped__.forward = wrapt.decorator(self._forward_router)(self._original_forward)
 
     def _restore_original_forward(self):
-        """Restore the original forward and hooks.
+        """Temporarily restore the prepared forward while suspending its hooks.
 
         We need to disable hooks, otherwise they will be called twice.
         """
+        if self.__wrapped__.forward is self._original_forward:
+            return
         self._current_forward_pre_hooks = OrderedDict(self.__wrapped__._forward_pre_hooks)
         self._current_forward_hooks = OrderedDict(self.__wrapped__._forward_hooks)
         self.__wrapped__._forward_pre_hooks = OrderedDict()
