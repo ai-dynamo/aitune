@@ -90,6 +90,9 @@ class InspectModule:
         This method is called when the module is first called.
         It initializes the module and sets the state to INSPECT.
         """
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        Patcher._check_mode()
         params = count_parameters(self.__wrapped__)
         self._name += f" 📊{params}"
         if self._should_be_skipped():
@@ -123,6 +126,9 @@ class InspectModule:
 
     def _forward_inspect(self, wrapped, instance, args, kwargs):
         """Forward call for the inspect time."""
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        Patcher._check_mode()
         self._call_count += 1
         self._gather_args_kwargs(args, kwargs)
         self._restore_original_forward()
@@ -249,13 +255,6 @@ class InspectModule:
     def print_history(sink=print):
         """Prints history to the sink."""
         sink("\n".join(InspectModule.history))
-
-    @staticmethod
-    def reset():
-        """Reset PatchedModule state."""
-        InspectModule.history.clear()
-        InspectModule.heads.clear()
-        InspectModule.stack.clear()
 
     @staticmethod
     def save_report(path: str | Path, model_name: str = "Model"):

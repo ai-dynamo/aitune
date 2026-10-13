@@ -2,22 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for explicitly registering existing modules for JIT tuning."""
 
-from unittest.mock import Mock
+import json
+from importlib import import_module
 
 import pytest
 import torch
 
 import aitune.torch as aitune_torch
-from aitune.torch import JITRegistration, jit_reset, register_for_jit_tuning
+from aitune.torch import JITRegistration, register_for_jit_tuning
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
 from aitune.torch.jit.patcher import Patcher, prepare_for_jit_tuning
 from aitune.torch.jit.tune import deferred as jit_deferred
-from aitune.torch.tune_data.reporting import has_active_report
+from aitune.torch.tune_data.reporting import report_tune_run_end
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
-from aitune.torch.utils.module import is_externally_managed_module
 
 
 class _ParentModule(torch.nn.Module):
@@ -46,44 +46,6 @@ def _configure_deferred(tmp_path) -> None:
     jit_config.batch_axis_required = False
     jit_config.min_parameters = -1
     jit_config.cache_dir = tmp_path / "jit-cache"
-
-
-def _configure_dry_run(tmp_path, strategy: Mock) -> None:
-    _configure_deferred(tmp_path)
-    jit_config.dry_run = True
-    jit_config.dry_run_failure_probability = 0.0
-    jit_config.strategy = strategy
-
-
-def _strategy() -> Mock:
-    strategy = Mock()
-    strategy.clone.return_value = strategy
-    strategy.backend_results = []
-    return strategy
-
-
-def _settled_registration(tmp_path, state, module=None):
-    strategy = None
-    if state is ModuleState.EAGER:
-        strategy = _strategy()
-        strategy.tune_dry_run.side_effect = RuntimeError("forced tuning failure")
-        _configure_dry_run(tmp_path, strategy)
-    else:
-        _configure_deferred(tmp_path)
-        jit_config.min_parameters = 100
-    if module is None:
-        module = torch.nn.Linear(2, 2)
-    registration = register_for_jit_tuning([module])
-    wrapper = Patcher._patched_modules[0]
-    module(torch.ones(1, 2))
-    if state is ModuleState.EAGER:
-        assert strategy is not None
-        Patcher.enable_tune_deferred()
-        module(torch.ones(1, 2))
-        strategy.tune_dry_run.assert_called_once()
-    assert registration.state_counts == {state.value: 1}
-    assert Patcher._patched_modules == []
-    return module, registration, wrapper, strategy
 
 
 def test_registers_only_existing_modules_selected_by_the_caller(tmp_path):
@@ -132,125 +94,26 @@ def test_single_module_requires_an_iterable_and_generator_is_consumed_once(tmp_p
     assert registration.modules == (module,)
 
 
-def test_registration_deduplicates_modules_by_identity_and_is_idempotent(tmp_path):
+def test_registration_deduplicates_one_batch_and_rejects_another_batch(tmp_path):
     _configure_deferred(tmp_path)
     module = torch.nn.Linear(2, 2)
+    registration = register_for_jit_tuning([module, module])
+    installed_forward = module.forward
+    additional = torch.nn.Linear(2, 2)
 
-    first = register_for_jit_tuning([module, module])
-    second = register_for_jit_tuning([module])
+    for targets in ([module], [additional]):
+        with pytest.raises(RuntimeError, match="fresh worker"):
+            register_for_jit_tuning(targets)
 
-    assert first.modules == second.modules == (module,)
+    assert registration.modules == (module,)
     assert len(Patcher._patched_modules) == 1
-    assert first.reports[0].module_id == second.reports[0].module_id
-
-
-@pytest.mark.parametrize("state", [ModuleState.SKIPPED, ModuleState.EAGER])
-def test_repeated_registration_reuses_settled_target_without_retry(tmp_path, state):
-    module, first, wrapper, strategy = _settled_registration(tmp_path, state)
-    original_forward = module.forward
-    module_counter = PatchedModule.module_counter
-    heads = list(PatchedModule.heads)
-    expected = module(torch.ones(1, 2))
-
-    second = register_for_jit_tuning([module, module])
-    torch.testing.assert_close(module(torch.ones(1, 2)), expected)
-
-    assert second.modules == first.modules == (module,)
-    assert first._patched_modules == second._patched_modules == (wrapper,)
-    assert first.reports[0].module_id == second.reports[0].module_id
-    assert second.state_counts == {state.value: 1}
-    assert module.forward is original_forward
-    assert Patcher._patched_modules == []
-    assert PatchedModule.module_counter == module_counter
-    assert PatchedModule.heads == heads
-    if strategy is not None:
-        strategy.tune_dry_run.assert_called_once()
-
-
-@pytest.mark.parametrize("state", [ModuleState.SKIPPED, ModuleState.EAGER])
-def test_settled_target_retains_ownership_and_blocks_constructor_interception(tmp_path, state):
-    parent = _ParentModule()
-    module, registration, wrapper, _ = _settled_registration(tmp_path, state, parent.child)
-    original_module_init = torch.nn.Module.__init__
-
-    with pytest.raises(ValueError, match="overlaps an existing JIT registration"):
-        register_for_jit_tuning([parent])
-    with pytest.raises(RuntimeError, match="explicit JIT registrations are active"):
-        Patcher.patch_torch()
-
-    assert registration.state_counts == {state.value: 1}
-    assert Patcher._explicit_registrations == {id(module): wrapper}
-    assert Patcher._patched_modules == []
-    assert not Patcher._torch_patched
-    assert torch.nn.Module.__init__ is original_module_init
-    assert "forward" not in parent.__dict__
-
-
-@pytest.mark.parametrize("state", [ModuleState.SKIPPED, ModuleState.EAGER])
-def test_failed_mixed_registration_preserves_settled_target_and_rolls_back_new_targets(tmp_path, mocker, state):
-    module, first, wrapper, strategy = _settled_registration(tmp_path, state)
-    added = torch.nn.Linear(2, 2)
-    rejected = torch.nn.Linear(2, 2)
-    original_register = Patcher._register_module
-    history = dict(Patcher._explicit_registrations)
-    module_counter = PatchedModule.module_counter
-    report = Patcher._session_report
-    created = []
-
-    def register(target, **kwargs):
-        if target is rejected:
-            raise RuntimeError("registration failed")
-        new_wrapper = original_register(target, **kwargs)
-        created.append(new_wrapper)
-        return new_wrapper
-
-    register_mock = mocker.patch.object(Patcher, "_register_module", side_effect=register)
-    with pytest.raises(RuntimeError, match="registration failed"):
-        register_for_jit_tuning([module, added, rejected])
-
-    assert register_mock.call_count == 2
-    assert len(created) == 1
-    assert created[0].__wrapped__ is added
-    assert added.forward is created[0]._original_forward
-    assert "forward" not in rejected.__dict__
-    assert Patcher._explicit_registrations == history
-    assert Patcher._patched_modules == []
-    assert not Patcher._cleanup_pending
-    assert PatchedModule.module_counter == module_counter
-    assert Patcher._session_report is report
-    assert first.state_counts == {state.value: 1}
-    assert register_for_jit_tuning([module])._patched_modules == (wrapper,)
-    if strategy is not None:
-        strategy.tune_dry_run.assert_called_once()
-
-    replacement = register_for_jit_tuning([added])
-    assert replacement.state_counts == {"init": 1}
-    assert replacement.reports[0].module_id == module_counter
-    assert set(Patcher._explicit_registrations) == {id(module), id(added)}
-
-
-@pytest.mark.parametrize("state", [ModuleState.SKIPPED, ModuleState.EAGER])
-def test_reset_detaches_settled_handle_and_allows_a_fresh_registration_generation(tmp_path, state):
-    module, first, wrapper, _ = _settled_registration(tmp_path, state)
-
-    jit_reset()
-
-    assert first.state_counts == {"detached": 1}
-    assert Patcher._explicit_registrations == {}
-    assert Patcher._patched_modules == []
-    assert Patcher._session_mode is None
-    assert not has_active_report()
-
-    second = register_for_jit_tuning([module])
-    assert second.state_counts == {"init": 1}
-    assert second.reports[0].module_id == 0
-    assert second._patched_modules[0] is not wrapper
-    assert first.state_counts == {"detached": 1}
-    assert set(Patcher._explicit_registrations) == {id(module)}
+    assert module.forward is installed_forward
+    assert "forward" not in additional.__dict__
 
 
 def test_registration_handle_reports_live_explicit_head_state(tmp_path):
     _configure_deferred(tmp_path)
+    jit_config.strategy = OneBackendStrategy(TorchEagerBackend()).enable_performance_validation(False)
     modules = [torch.nn.Linear(2, 2), torch.nn.Linear(2, 2)]
     registration = register_for_jit_tuning(modules)
 
@@ -268,8 +131,9 @@ def test_registration_handle_reports_live_explicit_head_state(tmp_path):
     assert [report.allowed_to_tune for report in reports] == [True, True]
     assert [report.call_count for report in reports] == [1, 1]
 
-    for patched in Patcher._patched_modules:
-        patched._state = ModuleState.TUNED
+    jit_deferred()
+    for module in modules:
+        module(torch.ones(1, 2))
 
     assert registration.state_counts == {"tuned": 2}
     assert registration.all_tuned
@@ -344,6 +208,58 @@ def test_explicit_registration_deferred_tuning_preserves_all_recorded_routes(tmp
         torch.testing.assert_close(module(matrix), expected_matrix)
 
 
+def test_prepared_units_keep_identity_forward_hooks_and_reports_after_tuning(tmp_path, monkeypatch):
+    """Provider-owned prepared forwards are usable without a FlexTensor dependency."""
+    _configure_deferred(tmp_path)
+    jit_config.detect_graph_breaks = False
+    jit_config.strategy = OneBackendStrategy(TorchEagerBackend()).enable_performance_validation(False)
+    report_path = tmp_path / "report.json"
+    reporting = import_module("aitune.torch.tune_data.reporting")
+    monkeypatch.setattr(reporting.config, "tuning_data_output_path", report_path)
+    modules = [torch.nn.Linear(2, 2).eval(), torch.nn.Linear(2, 2).eval()]
+    traces = [[], []]
+
+    def prepare(module, trace):
+        original = module.forward
+
+        def prepared(value):
+            trace.append("enter")
+            result = original(value) + 7
+            trace.append("leave")
+            return result
+
+        module.forward = prepared
+        module.register_forward_pre_hook(lambda *_: trace.append("pre-hook"))
+        module.register_forward_hook(lambda *_: trace.append("post-hook"))
+        return prepared
+
+    forwards = [prepare(module, trace) for module, trace in zip(modules, traces, strict=True)]
+    value = torch.ones(1, 2)
+    expected = [module(value) for module in modules]
+    registration = register_for_jit_tuning(modules)
+    assert registration.modules == tuple(modules)
+    assert [wrapper._original_forward for wrapper in registration._patched_modules] == forwards
+
+    with torch.inference_mode():
+        for module in modules:
+            module(value)
+        jit_deferred()
+        for module in modules:
+            module(value)
+        assert registration.all_tuned
+        for module, trace, output in zip(modules, traces, expected, strict=True):
+            trace.clear()
+            torch.testing.assert_close(module(value), output)
+            assert trace == ["pre-hook", "enter", "leave", "post-hook"]
+
+    assert [report.module_id for report in registration.reports] == [0, 1]
+    report_tune_run_end()
+    telemetry = json.loads(report_path.read_text())
+    assert telemetry["mode"] == "JIT"
+    assert len(telemetry["modules"]) == 2
+    assert all("TorchEagerBackend" in report["graphs"][0]["selected_backend"] for report in telemetry["modules"])
+
+
 @pytest.mark.parametrize("modules", [[], [object()]])
 def test_registration_rejects_invalid_module_collections_without_mutation(modules, tmp_path):
     _configure_deferred(tmp_path)
@@ -351,21 +267,6 @@ def test_registration_rejects_invalid_module_collections_without_mutation(module
     with pytest.raises((TypeError, ValueError)):
         register_for_jit_tuning(modules)
 
-    assert Patcher._patched_modules == []
-
-
-def test_registration_rejects_invalid_device_management_without_mutation(tmp_path):
-    _configure_deferred(tmp_path)
-    module = torch.nn.Linear(2, 2)
-
-    with pytest.raises(ValueError, match="device_management"):
-        register_for_jit_tuning(
-            [module],
-            device_management="application",  # pytype: disable=wrong-arg-types
-        )
-
-    assert "forward" not in module.__dict__
-    assert not is_externally_managed_module(module)
     assert Patcher._patched_modules == []
 
 
@@ -397,35 +298,12 @@ def test_constructor_interception_rejects_an_active_explicit_registration(tmp_pa
     module = torch.nn.Linear(2, 2)
     register_for_jit_tuning([module])
 
-    with pytest.raises(RuntimeError, match="explicit JIT registrations"):
+    with pytest.raises(RuntimeError, match="fresh worker"):
         with prepare_for_jit_tuning():
             pass
 
     assert not Patcher._torch_patched
     assert len(Patcher._patched_modules) == 1
-
-
-@pytest.mark.parametrize(
-    ("initial_mode", "next_mode"),
-    [
-        (JITMode.TUNE_EAGER, JITMode.TUNE_DEFERRED),
-        (JITMode.TUNE_DEFERRED, JITMode.TUNE_EAGER),
-    ],
-)
-def test_registration_rejects_switching_tuning_mode_within_active_session(tmp_path, initial_mode, next_mode):
-    _configure_deferred(tmp_path)
-    jit_config.mode = initial_mode
-    first = torch.nn.Linear(2, 2)
-    second = torch.nn.Linear(2, 2)
-    register_for_jit_tuning([first])
-
-    jit_config.mode = next_mode
-    with pytest.raises(RuntimeError, match=r"Call jit_reset\(\) before switching JIT modes"):
-        register_for_jit_tuning([second])
-
-    assert Patcher._session_mode is initial_mode
-    assert [patched.__wrapped__ for patched in Patcher._patched_modules] == [first]
-    assert "forward" not in second.__dict__
 
 
 @pytest.mark.parametrize(
@@ -442,7 +320,7 @@ def test_registered_module_forward_rejects_switching_tuning_mode(tmp_path, initi
     register_for_jit_tuning([module])
 
     jit_config.mode = next_mode
-    with pytest.raises(RuntimeError, match=r"Call jit_reset\(\) before switching JIT modes"):
+    with pytest.raises(RuntimeError, match=r"fresh worker"):
         module(torch.ones(1, 2))
 
     patched = Patcher._patched_modules[0]
@@ -456,17 +334,12 @@ def test_registration_rejects_an_active_automatic_jit_session(tmp_path):
         automatic = torch.nn.Linear(2, 2)
     explicit = torch.nn.Linear(2, 2)
 
-    with pytest.raises(RuntimeError, match=r"automatic JIT discovery; call jit_reset\(\) first"):
+    with pytest.raises(RuntimeError, match="fresh worker"):
         register_for_jit_tuning([explicit])
 
     assert len(Patcher._patched_modules) == 1
     assert Patcher._patched_modules[0].__wrapped__ is automatic
     assert "forward" not in explicit.__dict__
-
-    jit_reset()
-
-    registration = register_for_jit_tuning([explicit])
-    assert registration.modules == (explicit,)
 
 
 def test_registration_rejects_excluded_exact_target_without_mutation(tmp_path):
@@ -492,20 +365,12 @@ def test_registration_rejects_overlapping_ownership_trees_atomically(tmp_path):
     assert "forward" not in parent.child.__dict__
     assert Patcher._patched_modules == []
 
-
-def test_registration_rejects_overlap_with_an_existing_explicit_registration(tmp_path):
-    _configure_deferred(tmp_path)
-    parent = _ParentModule()
+    other = _ParentModule()
+    other.child = parent.child
+    with pytest.raises(ValueError, match="disjoint"):
+        register_for_jit_tuning([parent, other])
     registration = register_for_jit_tuning([parent])
-    installed_forward = parent.forward
-
-    with pytest.raises(ValueError, match="overlaps an existing JIT registration"):
-        register_for_jit_tuning([parent.child])
-
     assert registration.modules == (parent,)
-    assert parent.forward is installed_forward
-    assert "forward" not in parent.child.__dict__
-    assert [patched.__wrapped__ for patched in Patcher._patched_modules] == [parent]
 
 
 def test_registration_validates_every_target_before_patching_any_target(tmp_path):
@@ -520,165 +385,47 @@ def test_registration_validates_every_target_before_patching_any_target(tmp_path
     assert Patcher._patched_modules == []
 
 
-def test_registration_rejects_conflicting_policy_without_stacking_proxies(tmp_path):
+def test_partial_installation_is_terminal_and_keeps_original_error(tmp_path, monkeypatch):
     _configure_deferred(tmp_path)
-    module = torch.nn.Linear(2, 2)
-    registration = register_for_jit_tuning([module])
-    proxied_forward = module.forward
+    first, second = torch.nn.Linear(2, 2), torch.nn.Linear(2, 2)
+    original_register = Patcher._register_module
+    failure = RuntimeError("registration failed")
 
-    with pytest.raises(ValueError, match="device_management"):
-        register_for_jit_tuning([module], device_management="external")
+    def register(module, **kwargs):
+        if module is second:
+            raise failure
+        return original_register(module, **kwargs)
 
-    assert module.forward is proxied_forward
-    assert registration.modules == (module,)
+    monkeypatch.setattr(Patcher, "_register_module", register)
+    with pytest.raises(RuntimeError) as raised:
+        register_for_jit_tuning([first, second])
+
+    assert raised.value is failure
+    assert "forward" in first.__dict__
+    assert "forward" not in second.__dict__
+    assert [wrapper.__wrapped__ for wrapper in Patcher._patched_modules] == [first]
+    with pytest.raises(RuntimeError, match="fresh worker"):
+        register_for_jit_tuning([second])
+
+
+def test_materializing_targets_cannot_hide_automatic_activation(tmp_path):
+    _configure_deferred(tmp_path)
+
+    def targets():
+        with prepare_for_jit_tuning():
+            yield torch.nn.Linear(2, 2)
+
+    with pytest.raises(RuntimeError, match="fresh worker"):
+        register_for_jit_tuning(targets())
+
     assert len(Patcher._patched_modules) == 1
-    assert not is_externally_managed_module(module)
+    assert Patcher._entry_path == "automatic"
 
 
-def test_mixed_registrations_keep_independent_device_policies(tmp_path):
-    _configure_deferred(tmp_path)
-    aitune_managed = torch.nn.Linear(2, 2)
-    externally_managed = torch.nn.Linear(2, 2)
-
-    register_for_jit_tuning([aitune_managed])
-    register_for_jit_tuning([externally_managed], device_management="external")
-
-    wrappers = {
-        patched.__wrapped__: patched for patched in Patcher._patched_modules if isinstance(patched, PatchedModule)
-    }
-    assert wrappers[aitune_managed].device_management == "aitune"
-    assert wrappers[externally_managed].device_management == "external"
-    assert not is_externally_managed_module(aitune_managed)
-    assert is_externally_managed_module(externally_managed)
-
-
-def test_registration_preserves_original_forward_when_hook_assignment_fails(tmp_path):
-    class RejectForwardHooks(torch.nn.Linear):
-        def __setattr__(self, name, value):
-            if name == "_forward_hooks" and self.__dict__.get("reject_forward_hooks", False):
-                object.__setattr__(self, "reject_forward_hooks", False)
-                raise RuntimeError("forward hook assignment rejected")
-            super().__setattr__(name, value)
-
-    _configure_deferred(tmp_path)
-    module = RejectForwardHooks(2, 2)
-    original_forward = module.forward
-    module.forward = original_forward
-    original_pre_hooks = module._forward_pre_hooks
-    original_hooks = module._forward_hooks
-    value = torch.ones(1, 2)
-    expected = module(value)
-    module.reject_forward_hooks = True
-
-    with pytest.raises(RuntimeError, match="forward hook assignment rejected"):
-        register_for_jit_tuning([module])
-
-    assert module.forward is original_forward
-    assert module._forward_pre_hooks is original_pre_hooks
-    assert module._forward_hooks is original_hooks
-    assert Patcher._patched_modules == []
-    assert Patcher._explicit_registrations == {}
-    assert not Patcher._cleanup_pending
-    assert Patcher._session_mode is None
-    assert Patcher._session_report is None
-    assert Patcher._exit_handler is None
-    assert PatchedModule.heads == []
-    assert PatchedModule.module_counter == 0
-    assert not has_active_report()
-    torch.testing.assert_close(module(value), expected)
-
-    jit_reset()
-
-    assert module.forward is original_forward
-    assert module._forward_pre_hooks is original_pre_hooks
-    assert module._forward_hooks is original_hooks
-    torch.testing.assert_close(module(value), expected)
-    replacement = register_for_jit_tuning([module])
-    assert replacement.reports[0].module_id == 0
-    assert replacement.state_counts == {"init": 1}
-
-
-def test_registration_rolls_back_partial_wrapper_and_new_session_on_failure(tmp_path, mocker):
-    _configure_deferred(tmp_path)
-    modules = [torch.nn.Linear(2, 2), torch.nn.Linear(2, 2)]
-    original_register_module = Patcher._register_module
-    call_count = 0
-
-    def register_module(module, *, explicit_head=False, device_management="aitune"):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 2:
-            raise RuntimeError("registration failed")
-        return original_register_module(
-            module,
-            explicit_head=explicit_head,
-            device_management=device_management,
-        )
-
-    mocker.patch.object(Patcher, "_register_module", side_effect=register_module)
-
-    with pytest.raises(RuntimeError, match="registration failed"):
-        register_for_jit_tuning(modules)
-
-    assert Patcher._patched_modules == []
-    assert Patcher._session_mode is None
-    assert Patcher._exit_handler is None
-    assert PatchedModule.module_counter == 0
-    assert not has_active_report()
-    assert all(module.forward.__func__ is torch.nn.Linear.forward for module in modules)
-
-
-def test_jit_reset_restores_all_targets_and_starts_a_clean_registration_session(tmp_path):
-    _configure_deferred(tmp_path)
-    modules = [torch.nn.Linear(2, 2) for _ in range(3)]
-    first = register_for_jit_tuning(modules)
-    first_handler = Patcher._exit_handler
-
-    assert [report.module_id for report in first.reports] == [0, 1, 2]
-    assert has_active_report()
-
-    jit_reset()
-
-    assert Patcher._patched_modules == []
-    assert PatchedModule.heads == []
-    assert PatchedModule.module_counter == 0
-    assert Patcher._exit_handler is None
-    assert not has_active_report()
-    assert all(module.forward.__func__ is torch.nn.Linear.forward for module in modules)
-    assert first.state_counts == {"detached": 3}
-    assert not first.all_tuned
-
-    replacement = torch.nn.Linear(2, 2)
-    second = register_for_jit_tuning([replacement])
-
-    assert second.reports[0].module_id == 0
-    assert Patcher._exit_handler is not None
-    assert Patcher._exit_handler is first_handler
-    assert has_active_report()
-
-
-def test_jit_reset_restores_aitune_generated_device_class(tmp_path):
-    strategy = _strategy()
-    _configure_dry_run(tmp_path, strategy)
-    module = torch.nn.Linear(2, 2)
-    original_class = module.__class__
-    register_for_jit_tuning([module])
-
-    module(torch.ones(1, 2))
-    Patcher.enable_tune_deferred()
-    module(torch.ones(1, 2))
-    assert module.__class__ is not original_class
-
-    jit_reset()
-
-    assert module.__class__ is original_class
-    assert module.forward.__func__ is torch.nn.Linear.forward
-
-
-def test_registration_api_and_jit_reset_are_exported_from_the_public_torch_api():
+def test_registration_public_api_has_no_reset():
     assert aitune_torch.register_for_jit_tuning is register_for_jit_tuning
     assert aitune_torch.JITRegistration is JITRegistration
-    assert aitune_torch.jit_reset is jit_reset
     assert "register_for_jit_tuning" in aitune_torch.__all__
     assert "JITRegistration" in aitune_torch.__all__
-    assert "jit_reset" in aitune_torch.__all__
+    assert not hasattr(aitune_torch, "jit_reset")
+    assert "jit_reset" not in aitune_torch.__all__

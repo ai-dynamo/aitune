@@ -15,7 +15,7 @@ import torch
 import wrapt
 
 from aitune.global_context import MODULE_CONTEXT_KEY, global_context
-from aitune.torch.backend.backend import Backend, BuildMode
+from aitune.torch.backend.backend import Backend
 from aitune.torch.config import config as global_config
 from aitune.torch.distributed import (
     coordinator,
@@ -23,7 +23,6 @@ from aitune.torch.distributed import (
     resolve_tuning_device,
 )
 from aitune.torch.jit.config import JITMode, config
-from aitune.torch.jit.dynamo import release_dynamo_recompile_capacity, reserve_dynamo_recompile_capacity
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.passthrough_module import PassthroughModule
 from aitune.torch.module.recording_module import RecordingModule
@@ -35,6 +34,7 @@ from aitune.torch.tune_data.reporting import (
     report_graph_tune,
     report_inspection_details,
     report_module_tune,
+    report_tune_run_end,
 )
 from aitune.torch.tune_strategy.mixin import FindMaxBatchSizeMixin
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
@@ -45,7 +45,6 @@ from aitune.torch.utils.module import (
     move_module_to_device,
     offload_after_tuning,
     register_externally_managed_module,
-    unregister_externally_managed_module,
 )
 from aitune.utils.disk_space import raise_if_out_of_space
 from aitune.utils.logging import write_exception_log
@@ -105,21 +104,13 @@ class PatchedModule:
     deferred_tuning_enabled: ClassVar[bool] = False
     module_counter: ClassVar[int] = 0
 
-    def __init__(
-        self,
-        module: torch.nn.Module,
-        *,
-        explicit_head: bool = False,
-        device_management: str = "aitune",
-    ):
+    def __init__(self, module: torch.nn.Module, *, explicit_head: bool = False, device_management: str = "aitune"):
         """Initialize the patched module."""
         self.__wrapped__ = module
         self._explicit_head = explicit_head
         self._device_management = device_management
-        self._session_mode = config.mode
-        self._unpatched = False
-        self._observed_route_count = 1
-        self._pending_dynamo_runtime_routes: set[SampleMetadata] = set()
+        if device_management == "external":
+            register_externally_managed_module(module)
         self._class_before_device_patch: type[torch.nn.Module] | None = None
         self._patched_device_class: type[torch.nn.Module] | None = None
         # proxy forward, hooks
@@ -145,24 +136,11 @@ class PatchedModule:
         }
         self._extra_state_info: str = ""  # for tracking purposes
         self._update_state(ModuleState.INIT)
-        if self._device_management == "external":
-            register_externally_managed_module(module)
 
     @property
     def explicit_head(self) -> bool:
         """Whether this module was registered as an exact JIT target."""
         return self._explicit_head
-
-    @property
-    def device_management(self) -> str:
-        """The module placement policy for this JIT target."""
-        return self._device_management
-
-    def _observed_route_count_value(self) -> int:
-        """Return a monotonic count of graph routes observed for this module."""
-        graph_specs = getattr(getattr(self, "_wrapper", None), "graph_specs", ())
-        self._observed_route_count = max(self._observed_route_count, len(graph_specs))
-        return self._observed_route_count
 
     @property
     def fq_name(self) -> str:
@@ -182,35 +160,6 @@ class PatchedModule:
         """
         if self._should_be_tuned():
             self.tune()
-
-    def _reserve_dynamo_tuning_capacity(self, strategy: TuneStrategy) -> None:
-        """Reserve Dynamo capacity for explicit same-frame compilation routes."""
-        if not self._explicit_head or config.dry_run:
-            return
-
-        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
-
-        reserve_dynamo_recompile_capacity(
-            self._id,
-            Patcher.explicit_route_count(),
-            strategy,
-            detect_graph_breaks=config.detect_graph_breaks,
-        )
-
-    def _release_dynamo_tuning_capacity(self) -> None:
-        """Release this explicit target's Dynamo reservation, if any."""
-        if self._explicit_head:
-            release_dynamo_recompile_capacity(self._id)
-
-    def _release_dynamo_tuning_capacity_if_complete(self) -> None:
-        """Release capacity when no selected JIT route still needs a first call."""
-        if not self._pending_dynamo_runtime_routes:
-            self._release_dynamo_tuning_capacity()
-
-    def _patch_tuned_device_attribute(self, device: torch.device) -> None:
-        """Expose AITune-managed placement without changing externally managed targets."""
-        if self._device_management == "aitune":
-            self._patch_device_attribute(device)
 
     @annotate(name="tune", color="yellow")
     def tune(
@@ -239,7 +188,6 @@ class PatchedModule:
             try:
                 with coordinator.raise_if_any_rank_fails(f"JIT tuning for {current.fq_name}"):
                     strategy = _build_strategy(current.__wrapped__)
-                    current._reserve_dynamo_tuning_capacity(strategy)
                     with report_module_tune(
                         module_name=current.__wrapped__.__class__.__name__,
                         num_parameters=count_parameters(current.__wrapped__),
@@ -264,37 +212,30 @@ class PatchedModule:
                                 module_name=current.fq_name,
                                 forward_signature=recording.forward_signature,
                             )
-                            current._pending_dynamo_runtime_routes = {
-                                route
-                                for route, backend in backends.items()
-                                if backend.build_mode is BuildMode.JUST_IN_TIME
-                            }
                             current._extra_state_info = ", ".join([backend.name for backend in backends.values()])
                         else:
-                            passthrough_device = device if current.device_management == "aitune" else None
+                            passthrough_device = device if current._device_management == "aitune" else None
                             current._wrapper = PassthroughModule(current.__wrapped__, device=passthrough_device)
                             current._extra_state_info = "dry-run tuning success"
 
                         # Tuning succeeded, so restore the current forward and unpatch its descendants.
                         current._handle_backend_added_hooks()
                         current._update_state(ModuleState.TUNED)
-                        current._patch_tuned_device_attribute(device)
+                        current._patch_device_attribute(device)
                         current._unpatch_hierarchy(include_self=False)
                         _to_hist(f"Model tuned: {str(current)}")
                         offload_after_tuning(
                             current.__wrapped__, backends.values(), device=global_config.device_after_tuning
                         )
-                        current._release_dynamo_tuning_capacity_if_complete()
             except Exception as error:
-                current._release_dynamo_tuning_capacity()
                 current._log_tuning_exception(error)
                 # Out-of-space errors must halt the process — the cache disk is full
                 # and silently falling back to eager would mask the real cause.
                 raise_if_out_of_space(error, path=global_config.cache_dir)
                 # A failed backend may leave an ordinarily placed module on CPU.
                 move_module_to_device(current.__wrapped__, device)
-                current._unpatch()
                 current._update_state(ModuleState.EAGER)
+                current._unpatch()
                 for child in current._children:
                     child._allowed_to_tune = not child._should_be_skipped()  # child modules are allowed to tune
                     if child._should_be_tuned():
@@ -415,17 +356,15 @@ class PatchedModule:
         """Route forward calls to the appropriate state-specific handler.
 
         Cached references to module.forward keep using this router across state transitions.
-        After permanent unpatching they call the original forward without re-entering the JIT session.
+        Skipped, eager and detached children use the original forward.
         """
-        if self._state == ModuleState.DETACHED or self._unpatched:
-            return self._original_forward(*args, **kwargs)
-
-        if config.mode != self._session_mode:
-            raise RuntimeError("Call jit_reset() before switching JIT modes")
-
         forward_func = self._forward_routing.get(self._state)
         if forward_func is None:
-            raise ValueError(f"Module should not be called in the state: {self._state}")
+            return self._original_forward(*args, **kwargs)
+
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        Patcher._check_mode()
         return forward_func(wrapped, instance, args, kwargs)
 
     def _forward_init(self, wrapped, instance, args, kwargs):
@@ -463,6 +402,7 @@ class PatchedModule:
                 _to_hist(f"New child module: {str(self)}")
             else:
                 # too deep, skip the module
+                self._update_state(ModuleState.SKIPPED)
                 self._unpatch()
                 return self._original_forward(*args, **kwargs)
         else:
@@ -537,20 +477,9 @@ class PatchedModule:
         """Forward call for the tuned state."""
         try:
             self._restore_original_forward()
-            if not self._pending_dynamo_runtime_routes:
-                return self._wrapper(*args, **kwargs)
-            route = self._wrapper.route_for_inputs(args, kwargs) if isinstance(self._wrapper, TunedModule) else None
-            result = self._wrapper(*args, **kwargs)
-            self._mark_dynamo_runtime_route_complete(route)
-            return result
+            return self._wrapper(*args, **kwargs)
         finally:
             self._proxy_forward()
-
-    def _mark_dynamo_runtime_route_complete(self, route: SampleMetadata | None) -> None:
-        """Release capacity after every selected JIT route runs successfully."""
-        if route is not None:
-            self._pending_dynamo_runtime_routes.discard(route)
-        self._release_dynamo_tuning_capacity_if_complete()
 
     def _create_graph_cache_dir(self, graph_spec_name: str) -> Path:
         """Create a cache directory for the graph."""
@@ -621,6 +550,8 @@ class PatchedModule:
         its parents in case parents objects do not have it's own parameters but include child module which has been
         tuned and move to a cpu device.
         """
+        if self._device_management == "external":
+            return
         todo = [self]
         while todo:
             current = todo.pop()
@@ -647,13 +578,6 @@ class PatchedModule:
             self.__wrapped__.__class__ = self._class_before_device_patch
         self._class_before_device_patch = None
         self._patched_device_class = None
-
-    def _restore_device_attribute_hierarchy(self) -> None:
-        """Restore AITune-generated device classes on this module and its ancestors."""
-        current: PatchedModule | None = self
-        while current is not None:
-            current._restore_device_attribute()
-            current = current._parent
 
     def __repr__(self):
         """Representation of the module."""
@@ -784,28 +708,16 @@ class PatchedModule:
             _to_hist(f"No graph breaks in {module._name}. Checking took {duration:.2f}s")
 
     def _unpatch(self):
-        """Unpatch the module.
-
-        Cached forward references become pass-through calls immediately. Failed restoration
-        leaves the wrapper in the registry and blocks new registrations until cleanup succeeds.
-        """
+        """Restore normal forwarding for a skipped, eager or detached module."""
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 
-        self._unpatched = True
         self._allowed_to_tune = False
         try:
-            try:
-                self._restore_original_forward()
-                self._restore_device_attribute()
-            finally:
-                self.__wrapped__._forward_hooks = self._current_forward_hooks
-                self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
-            if self._device_management == "external":
-                unregister_externally_managed_module(self.__wrapped__)
-        except Exception:
-            Patcher._cleanup_pending = True
-            raise
-
+            self._restore_original_forward()
+            self._restore_device_attribute()
+        finally:
+            self.__wrapped__._forward_hooks = self._current_forward_hooks
+            self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
         Patcher.unpatch_module(self)
 
     def _unpatch_hierarchy(self, include_self=False):
@@ -869,23 +781,9 @@ class PatchedModule:
         sink("\n".join(PatchedModule.history))
 
     @staticmethod
-    def reset():
-        """Reset PatchedModule state."""
-        PatchedModule.history.clear()
-        PatchedModule.heads.clear()
-        PatchedModule.stack.clear()
-        PatchedModule.patched_classes.clear()
-        PatchedModule.fq_name_counter.clear()
-        PatchedModule.attempted_tuning = False
-        PatchedModule.deferred_tuning_enabled = False
-        PatchedModule.module_counter = 0
-
-    @staticmethod
     def on_python_exit():
         """Give suggestions if tuning was not attempted."""
-        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
-
-        Patcher._end_session_report()
+        report_tune_run_end()
 
         if len(PatchedModule.heads) == 0:
             logging.error("JIT tuning has been enabled but no modules were found.")
@@ -930,5 +828,4 @@ def _build_strategy(module: torch.nn.Module) -> TuneStrategy:
     if isinstance(strategy, FindMaxBatchSizeMixin):
         strategy.enable_find_max_batch_size(False)
 
-    strategy._configure_for_module(module)
     return strategy

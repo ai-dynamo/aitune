@@ -12,9 +12,6 @@ from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.patcher import Patcher
 from aitune.torch.tune_data.report_models import ModuleInspectionReport
 
-DeviceManagement = Literal["aitune", "external"]
-_DEVICE_MANAGEMENT_POLICIES = ("aitune", "external")
-
 
 def _materialize_modules(modules: Iterable[torch.nn.Module]) -> list[torch.nn.Module]:
     """Materialize and validate an explicit module iterable without mutating JIT state."""
@@ -27,21 +24,12 @@ def _materialize_modules(modules: Iterable[torch.nn.Module]) -> list[torch.nn.Mo
 
     if not materialized:
         raise ValueError("modules must contain at least one torch.nn.Module")
+    unique: dict[int, torch.nn.Module] = {}
     for index, module in enumerate(materialized):
         if not isinstance(module, torch.nn.Module):
             raise TypeError(f"modules[{index}] must be a torch.nn.Module, got {type(module).__name__}")
-    return materialized
-
-
-def _unique_modules(modules: list[torch.nn.Module]) -> list[torch.nn.Module]:
-    """Deduplicate targets by identity while retaining input order."""
-    unique: list[torch.nn.Module] = []
-    seen_module_ids: set[int] = set()
-    for module in modules:
-        if id(module) not in seen_module_ids:
-            seen_module_ids.add(id(module))
-            unique.append(module)
-    return unique
+        unique.setdefault(id(module), module)
+    return list(unique.values())
 
 
 class JITRegistration:
@@ -79,40 +67,37 @@ class JITRegistration:
 
 
 def register_for_jit_tuning(
-    modules: Iterable[torch.nn.Module],
-    *,
-    device_management: DeviceManagement = "aitune",
+    modules: Iterable[torch.nn.Module], *, device_management: Literal["aitune", "external"] = "aitune"
 ) -> JITRegistration:
     """Register pre-existing modules as independent JIT tuning targets.
 
     Unlike automatic JIT interception, registration does not patch construction of future
     ``torch.nn.Module`` instances. Each supplied module is treated as an independent tuning
-    head and otherwise follows the active JIT configuration.
+    head and otherwise follows the active JIT configuration. Supply the complete target set
+    once in an unused worker. Automatic discovery and explicit registration are alternative
+    entry paths, and the tuning mode stays fixed after the first wrapper is installed.
+
+    Validation runs before installation. A setup failure after installation begins may leave
+    earlier targets patched; it propagates without rollback and requires a fresh worker.
 
     Args:
         modules: Iterable of existing modules. Pass ``[module]`` for one module. Passing an
             ``nn.ModuleList`` directly registers its elements.
-        device_management: ``"aitune"`` allows AITune to place the original module as usual.
-            ``"external"`` preserves placement of the original module tree while allowing
-            inputs, backend artifacts, and internal copies to move.
+        device_management: ``"aitune"`` permits ordinary source placement. ``"external"``
+            preserves the fixed source tree and prepared forwarding, without overriding its
+            device attribute. Configure only eager or qualified Inductor JIT candidates first.
+            Independent internal copies and recorded inputs may still move. The caller must
+            avoid shared tensors/storage with unrelated unprotected trees.
 
     Returns:
         A read-only registration view with live module states and inspection reports.
 
     Raises:
         TypeError: If ``modules`` is not iterable or contains a non-module value.
-        ValueError: If ``modules`` is empty, the device policy is invalid, a target is excluded,
-            or target ownership trees overlap.
-        RuntimeError: If inspection mode or global constructor interception is active.
+        ValueError: If ``modules`` is empty, a target is excluded, target ownership trees overlap,
+            or the device policy/candidate configuration is unsupported.
+        RuntimeError: If inspection mode or either JIT entry path is already active.
     """
-    if device_management not in _DEVICE_MANAGEMENT_POLICIES:
-        policies = ", ".join(repr(policy) for policy in _DEVICE_MANAGEMENT_POLICIES)
-        raise ValueError(f"device_management must be one of: {policies}")
-
-    Patcher.validate_explicit_registration_session()
-    materialized_modules = _materialize_modules(modules)
-    patched_modules = Patcher.register_modules(
-        _unique_modules(materialized_modules),
-        device_management=device_management,
-    )
-    return JITRegistration(patched_modules)
+    if device_management not in ("aitune", "external"):
+        raise ValueError("device_management must be 'aitune' or 'external'")
+    return JITRegistration(Patcher.register_modules(_materialize_modules(modules), device_management=device_management))

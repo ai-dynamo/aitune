@@ -111,16 +111,8 @@ def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
     raise ValueError(f"Invalid tuning mode: {mode}")  # pyright: ignore[reportUnreachable]
 
 
-def report_tune_run_start(mode: AITuneMode) -> TuneRunReport:
-    """Begin a tuning run, replacing any active report.
-
-    Args:
-        mode: Tuning mode recorded in the new report.
-
-    Returns:
-        The created report. Pass it as ``expected_report`` to
-        :func:`report_tune_run_end` to avoid finalizing a replacement report.
-    """
+def report_tune_run_start(mode: AITuneMode) -> None:
+    """Begin a tuning run. Call :func:`report_tune_run_end` when finished."""
     # Pre-flight: warn if the cache device is low on space. Runs regardless of whether
     # tuning-data collection is enabled, since the real cache writes happen either way.
     check_disk_space(config.cache_dir)
@@ -131,7 +123,6 @@ def report_tune_run_start(mode: AITuneMode) -> TuneRunReport:
     )
     _run_start_ts.set(time.perf_counter())
     _active_report.set(report)
-    return report
 
 
 def report_inspection_details(details: list[ModuleInspectionReport], *, replace: bool = True) -> None:
@@ -148,19 +139,10 @@ def report_inspection_details(details: list[ModuleInspectionReport], *, replace:
         report.inspection_details = list(inspection_details_by_id.values())
 
 
-def report_tune_run_end(
-    exception: BaseException | None = None, *, expected_report: TuneRunReport | None = None
-) -> None:
-    """Finish the active tuning run and flush the report to disk.
-
-    Args:
-        exception: Failure to record on the report before finalization.
-        expected_report: When provided, finalize only if this exact report is
-            still active. A different active report is left untouched. When
-            ``None``, finalize any active report.
-    """
+def report_tune_run_end(exception: BaseException | None = None) -> None:
+    """Finish the active tuning run and flush the report to disk."""
     report = _active_report.get()
-    if report is None or (expected_report is not None and report is not expected_report):
+    if report is None:
         return
     try:
         report.duration_s = time.perf_counter() - _run_start_ts.get()
@@ -177,19 +159,15 @@ def report_tune_run_end(
 
 @contextmanager
 def report_tune_run(mode: AITuneMode):
-    """Wrap a full tuning run, finalizing only the report created on entry.
-
-    A report started inside this context replaces its report and remains active
-    after exit. Previous reports are not restored.
-    """
-    report = report_tune_run_start(mode)
+    """Context manager that wraps a full tuning run."""
+    report_tune_run_start(mode)
     try:
         yield
     except BaseException as e:
-        report_tune_run_end(exception=e, expected_report=report)
+        report_tune_run_end(exception=e)
         raise
     else:
-        report_tune_run_end(expected_report=report)
+        report_tune_run_end()
 
 
 @contextmanager

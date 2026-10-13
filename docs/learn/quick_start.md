@@ -171,9 +171,13 @@ registration = register_for_jit_tuning([pipe.unet])
 For one module, pass `[model]`. For a collection such as the existing `ModuleList` in `model.blocks`, pass
 `register_for_jit_tuning(model.blocks)`. Explicit registration selects only the supplied modules and treats each one as
 an independent top-level JIT target. It otherwise follows the same eager or deferred runtime recording and tuning
-lifecycle. Do not enable automatic constructor interception in the same live JIT session. The returned registration
+lifecycle. Supply the complete target set once per Python worker and keep its mode and prepared model tree fixed.
+Do not enable automatic constructor interception in that worker. The returned registration
 provides live inspection reports, state counts, and an `all_tuned` snapshot. See
 [Registering Existing Modules](../guides/jit_tuning.md#registering-existing-modules) for the complete contract.
+
+Flex Tensor manager discovery and replanning integration will follow a compatible public Flex Tensor release; this
+example uses the provider-independent instance registration API.
 
 ### Configuring just-in-time tuning
 
