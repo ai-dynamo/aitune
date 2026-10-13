@@ -18,8 +18,14 @@ from aitune.torch.backend.backend import BuildMode, DummyBackend, ExecutionMode
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patcher import Patcher
-from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
-from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
+from aitune.torch.module.onnx_module import OnnxModule
+from aitune.torch.tune_strategy import (
+    FirstWinsStrategy,
+    LatencyBudgetStrategy,
+    MaxThroughputStrategy,
+    MinLatencyStrategy,
+    OneBackendStrategy,
+)
 from aitune.torch.utils.module import (
     is_externally_managed_module,
     move_module_to_device,
@@ -46,6 +52,15 @@ class _EagerSubclass(TorchEagerBackend):
     _build_mode = BuildMode.JUST_IN_TIME
 
 
+class _CustomOneBackendStrategy(OneBackendStrategy):
+    def _pre_tune(self, *args, **kwargs):
+        raise AssertionError("Custom source mutation must never be reached")
+
+
+class _CustomFirstWinsStrategy(FirstWinsStrategy):
+    pass
+
+
 def _configure(tmp_path):
     jit_config.mode = JITMode.TUNE_DEFERRED
     jit_config.device = torch.device("cpu")
@@ -54,6 +69,78 @@ def _configure(tmp_path):
     jit_config.detect_graph_breaks = False
     jit_config.cache_dir = tmp_path / "jit-cache"
     jit_config.strategy = OneBackendStrategy(TorchEagerBackend()).enable_performance_validation(False)
+
+
+@pytest.mark.parametrize(
+    "strategy",
+    [
+        OneBackendStrategy(TorchEagerBackend()),
+        FirstWinsStrategy([TorchEagerBackend()]),
+        MinLatencyStrategy([TorchEagerBackend()]),
+        MaxThroughputStrategy([TorchEagerBackend()]),
+        LatencyBudgetStrategy(latency_budget_ms=1.0, backends=[TorchEagerBackend()]),
+    ],
+)
+def test_external_registration_accepts_concrete_builtin_strategies(tmp_path, strategy):
+    _configure(tmp_path)
+    jit_config.strategy = strategy
+    source = _ModuleTree()
+
+    registration = register_for_jit_tuning([source], device_management="external")
+
+    assert registration.modules == (source,)
+    assert all(is_externally_managed_module(node) for node in source.modules())
+
+
+@pytest.mark.parametrize(
+    "strategy",
+    [
+        _CustomOneBackendStrategy(TorchEagerBackend()),
+        _CustomFirstWinsStrategy([TorchEagerBackend()]),
+        FirstWinsStrategy([]),
+        MinLatencyStrategy([]),
+        MaxThroughputStrategy([]),
+        LatencyBudgetStrategy(latency_budget_ms=1.0, backends=[]),
+    ],
+)
+def test_external_registration_rejects_custom_or_empty_strategy_before_installation(tmp_path, strategy):
+    _configure(tmp_path)
+    jit_config.strategy = strategy
+    source = _ModuleTree()
+
+    with pytest.raises(ValueError, match="External device management"):
+        register_for_jit_tuning([source], device_management="external")
+
+    assert "forward" not in source.__dict__
+    assert not any(is_externally_managed_module(node) for node in source.modules())
+    assert Patcher._entry_path is None
+    assert Patcher._patched_modules == []
+
+    jit_config.strategy = OneBackendStrategy(TorchEagerBackend())
+    registration = register_for_jit_tuning([source], device_management="external")
+    assert registration.modules == (source,)
+
+
+@pytest.mark.parametrize("backend", [TorchEagerBackend(), TorchInductorJitBackend()])
+def test_external_registration_rejects_onnx_in_the_complete_batch_before_installation(tmp_path, backend):
+    _configure(tmp_path)
+    jit_config.strategy = OneBackendStrategy(backend)
+    source = _ModuleTree()
+    onnx = OnnxModule(tmp_path / "unused.onnx")
+
+    with pytest.raises(RuntimeError, match="does not support onnx modules"):
+        register_for_jit_tuning([source, onnx], device_management="external")
+
+    for target in (source, onnx):
+        assert "forward" not in target.__dict__
+        assert not any(is_externally_managed_module(node) for node in target.modules())
+    assert onnx._session is None
+    assert onnx._device is None
+    assert Patcher._entry_path is None
+    assert Patcher._patched_modules == []
+
+    registration = register_for_jit_tuning([source], device_management="external")
+    assert registration.modules == (source,)
 
 
 def test_invalid_device_policy_is_rejected_before_installation(tmp_path):

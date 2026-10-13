@@ -140,20 +140,33 @@ class Patcher:
     @staticmethod
     def _validate_external_candidates(modules: Sequence[torch.nn.Module]) -> None:
         """Qualify the complete candidate set before touching an external source tree."""
-        from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
-        from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
+        from aitune.torch.tune_strategy import (
+            FirstWinsStrategy,
+            LatencyBudgetStrategy,
+            MaxThroughputStrategy,
+            MinLatencyStrategy,
+            OneBackendStrategy,
+        )
         from aitune.torch.utils.module import validate_external_backend
 
         for module in modules:
             strategy = config.resolve_strategy(module)
-            if isinstance(strategy, OneBackendStrategy):
+            if type(strategy) is OneBackendStrategy:
                 backends = [strategy._backend]
-            elif isinstance(strategy, MultiBackendStrategy):
+            elif type(strategy) in (
+                FirstWinsStrategy,
+                MinLatencyStrategy,
+                MaxThroughputStrategy,
+                LatencyBudgetStrategy,
+            ):
                 backends = strategy._backends
             else:
-                raise ValueError("External device management requires a strategy with explicit backend candidates")
+                raise ValueError("External device management requires a supported built-in strategy")
+            if not backends:
+                raise ValueError("External device management requires at least one backend candidate")
             for backend in backends:
                 validate_external_backend(backend)
+                backend._assert_supported_modules(module)
 
     @classmethod
     def _validate_registration_targets(cls, modules: Sequence[torch.nn.Module]) -> None:

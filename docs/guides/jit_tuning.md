@@ -176,16 +176,32 @@ jit_config.strategy = OneBackendStrategy(
 registration = register_for_jit_tuning(prepared_units, device_management="external")
 ```
 
+Use this startup sequence without changing the caller's placement ownership:
+
+1. Prepare the final units, forwards and hooks, and make the full model callable through its owner.
+2. Configure the tuning mode, supported candidates and a finite compiler budget before compiling units.
+3. Register the complete, disjoint target set once with `device_management="external"`.
+4. Run representative full-model passes to record routes; for deferred mode, enable tuning and run another normal pass.
+5. Warm and verify every recorded route before serving; check outputs and selected backends, not only `all_tuned`.
+6. Serve the same model while its caller/provider continues controlling residency and offloading.
+
+The owner must keep units resident for their calls, including tuning warmups. AITune does not pause that owner or take
+over placement during build. The qualified eager and Inductor candidates use the original module rather than making
+an AITune-owned second model copy, but compiler workspace and recorded inputs still require memory headroom.
+
 AITune preserves the original source instances and their prepared forwards. Its movement/offload paths skip protected
 source nodes through tuning, dry-run, skip and ordinary eager fallback; their device attributes are not overridden.
 An unprotected ancestor containing a protected node is rejected before AITune moves or builds it. AITune can still move
 recorded input copies and its owned artifacts. Application/provider placement operations remain the caller's responsibility.
 
-The initial external policy supports the exact `TorchEagerBackend` and `TorchInductorJitBackend` classes. Inductor mode
+The initial external policy accepts Torch source modules and the exact `TorchEagerBackend` and `TorchInductorJitBackend`
+classes. Inductor mode
 must be `None`, `"default"` or `"max-autotune-no-cudagraphs"`, without custom options. Other backend classes, subclasses,
-CUDA-graph modes and opaque custom strategies are rejected before installation. The ordinary default strategy includes
-unsupported external candidates, so supply a `OneBackendStrategy` or a standard multi-backend strategy with supported
-candidates explicitly. This placement boundary does not claim a validated Flex Tensor integration.
+CUDA-graph modes and ONNX source targets are rejected before installation. Use the exact `OneBackendStrategy`,
+`FirstWinsStrategy`, `MinLatencyStrategy`, `MaxThroughputStrategy` or `LatencyBudgetStrategy` class with a nonempty set of
+explicit supported candidates. Custom strategy subclasses are rejected. The ordinary default strategy includes
+unsupported external candidates, so configure the candidate set explicitly. Flex Tensor manager discovery and replanning
+remain deferred until the required APIs are publicly released; this flow does not claim a validated Flex Tensor integration.
 
 Protection follows each source node's lifetime, including a child that outlives its original root. Independent copies
 have new identities and remain movable. Keep the prepared module tree fixed and do not share its parameters, buffers
