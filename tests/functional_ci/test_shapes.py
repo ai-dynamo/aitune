@@ -91,6 +91,7 @@ def test_explicit_batch_dim(backend_id: str, device: torch.device):
 
     (graph_spec,) = tuned.graph_specs
     assert graph_spec.dynamic_shapes == dynamic_shapes
+    assert type(selected_backend(tuned)) is type(backend_factory())
     _assert_matches_eager(tuned, make_mlp(device), device, [1, 5, 8], tolerance)
 
 
