@@ -15,6 +15,7 @@ from aitune.torch.backend.backend import BackendState
 from aitune.torch.backend.torch_inductor_aot_backend import (
     TorchInductorAotBackend,
     TorchInductorAotBackendConfig,
+    TorchInductorAotBuildStep,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.forward_signature import ForwardSignature
@@ -524,3 +525,60 @@ def test_inductor_aot_config_from_dict_round_trip():
     original = TorchInductorAotBackendConfig(inductor_configs={"coordinate_descent_tuning": True})
     restored = TorchInductorAotBackendConfig.from_dict(original.to_dict())
     assert restored == original
+
+
+# --- export_hook ---
+
+
+def _build_on_cpu(mocker, tmp_path, backend):
+    model = ToyTorchModel().eval()
+    compile_mock = mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
+    mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
+    backend.build(
+        model,
+        model.graph_spec(batch_sizes=[1]),
+        model.samples(batch_sizes=[1]),
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
+    return compile_mock
+
+
+def test_export_hook_output_is_compiled(mocker, tmp_path):
+    received = []
+    returned = []
+
+    def hook(exported):
+        received.append(exported)
+        returned.append(exported.run_decompositions())
+        return returned[0]
+
+    backend = TorchInductorAotBackend(TorchInductorAotBackendConfig(export_hook=hook))
+    compile_mock = _build_on_cpu(mocker, tmp_path, backend)
+
+    (exported,) = received
+    assert isinstance(exported, torch.export.ExportedProgram)
+    targets = [str(node.target) for node in exported.graph_module.graph.nodes if node.op == "call_function"]
+    assert targets and all(target.startswith("aten.") for target in targets)
+    assert compile_mock.call_args.args[0] is returned[0]
+
+
+def test_export_hook_invalid_return_fails_export_step(mocker, tmp_path):
+    backend = TorchInductorAotBackend(TorchInductorAotBackendConfig(export_hook=lambda exported: None))
+
+    with pytest.raises(TypeError, match="export_hook must return"):
+        _build_on_cpu(mocker, tmp_path, backend)
+
+    assert backend._build_results == [{"step": TorchInductorAotBuildStep.TORCH_EXPORT, "success": False}]
+
+
+def test_export_hook_is_not_serialized():
+    config = TorchInductorAotBackendConfig(
+        inductor_configs={"max_autotune": True}, export_hook=lambda exported: exported
+    )
+    plain = TorchInductorAotBackendConfig(inductor_configs={"max_autotune": True})
+
+    assert "export_hook" not in config.to_dict()
+    assert config.key() == plain.key()
+    assert TorchInductorAotBackendConfig.from_dict(config.to_dict()) == plain
+    assert TorchInductorAotBackendConfig.from_dict({}).export_hook is None

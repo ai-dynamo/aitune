@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch Inductor AOT backend."""
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass, field, replace
 from logging import getLogger
 from pathlib import Path
 from typing import Any, cast
@@ -11,6 +11,7 @@ from typing import Any, cast
 import nvtx
 import torch
 import torch.nn as nn
+from torch.export import ExportedProgram
 
 from aitune.records import DeploymentArtifact, ModelFiles, RuntimeConfig, TensorSample
 from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
@@ -39,6 +40,9 @@ class TorchInductorAotBuildStep(BackendBuildStep):
     AOT_COMPILE = "AOT compile"
 
 
+ExportHook = Callable[[ExportedProgram], ExportedProgram]
+
+
 @dataclass
 class TorchInductorAotBackendConfig(BackendConfig):
     """Configuration for TorchInductorAotBackend.
@@ -48,9 +52,20 @@ class TorchInductorAotBackendConfig(BackendConfig):
             passed to ``torch._inductor.aoti_compile_and_package()``.
             Call ``torch._inductor.list_options()`` to see all available keys.
             Example: ``{"max_autotune": True, "coordinate_descent_tuning": True}``
+        export_hook (Callable): Called with the ``torch.export.ExportedProgram`` after export and before
+            ``aoti_compile_and_package()``. It may edit ``exported.graph_module`` in place and must return
+            the same or a new ``ExportedProgram``. Build-time only: not serialized and not part of ``key()``,
+            so a config restored with ``from_dict()`` has no hook.
     """
 
     inductor_configs: dict[str, Any] | None = None
+    export_hook: ExportHook | None = field(default=None, compare=False, repr=False)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Returns the serializable configuration, without ``export_hook``."""
+        data = asdict(replace(self, export_hook=None))
+        data.pop("export_hook")
+        return data
 
 
 class TorchInductorAotBackend(Backend):
@@ -122,7 +137,7 @@ class TorchInductorAotBackend(Backend):
 
         with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
             export_result = TorchExporter().export(module, samples[0], graph_spec, device=self._device)
-            exported = export_result.exported_program
+            exported = self._apply_export_hook(export_result.exported_program)
 
         # FIXME: This extra forward pass can mutate model state. Replace it with the shared export contract once the
         # exporter exposes the recorded output structure and tensor ordering.
@@ -145,6 +160,16 @@ class TorchInductorAotBackend(Backend):
 
         self._activate()
         return self
+
+    def _apply_export_hook(self, exported: ExportedProgram) -> ExportedProgram:
+        """Pass the exported program through the configured export hook."""
+        hook = self._config.export_hook
+        if hook is None:
+            return exported
+        result = hook(exported)
+        if not isinstance(result, ExportedProgram):
+            raise TypeError(f"export_hook must return torch.export.ExportedProgram, got {type(result).__name__}")
+        return result
 
     def _capture_call_contract(self, module: nn.Module, sample: Sample) -> None:
         """Capture PT2 tensor ordering without changing backend build success."""

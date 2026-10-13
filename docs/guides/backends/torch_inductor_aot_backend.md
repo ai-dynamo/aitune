@@ -54,6 +54,7 @@ ait.load(model, "my_model.ait")
 @dataclass
 class TorchInductorAotBackendConfig(BackendConfig):
     inductor_configs: dict[str, Any] | None = None
+    export_hook: Callable[[ExportedProgram], ExportedProgram] | None = None
 ```
 
 #### inductor_configs
@@ -86,6 +87,42 @@ See all available keys:
 import torch
 torch._inductor.list_options()
 ```
+
+#### export_hook
+
+Read or edit the FX graph before AOT Inductor compiles it. The backend calls the hook once per build,
+after `torch.export` and before `aoti_compile_and_package`. The hook receives the
+`torch.export.ExportedProgram`. Its `graph_module` is an ATen-level `torch.fx.GraphModule`, and each
+node has `nn_module_stack` metadata that maps it to the source module. The hook can edit the graph in
+place. It must return the same or a new `ExportedProgram`; any other value fails the `Torch export`
+build step with a `TypeError`.
+
+```python
+import torch
+from aitune.torch.backend import TorchInductorAotBackend, TorchInductorAotBackendConfig
+
+
+def gelu_to_relu(exported: torch.export.ExportedProgram) -> torch.export.ExportedProgram:
+    graph = exported.graph_module.graph
+    for node in graph.nodes:
+        if node.op == "call_function" and node.target is torch.ops.aten.gelu.default:
+            node.target = torch.ops.aten.relu.default
+            node.args = node.args[:1]
+            node.kwargs = {}
+    exported.graph_module.recompile()
+    return exported
+
+
+backend = TorchInductorAotBackend(TorchInductorAotBackendConfig(export_hook=gelu_to_relu))
+```
+
+<Note>
+The hook is build-time only. It is not part of `to_dict()`, `to_json()`, or the config `key()`,
+so cache keys stay stable and a config restored with `from_dict()` has no hook. The hook must keep
+the output structure of the program unchanged, because the call contract is captured from the
+original module. If the hook inserts custom operators, register them before loading the `.pt2`
+package with `ait.load`.
+</Note>
 
 ## Dynamic Shapes
 

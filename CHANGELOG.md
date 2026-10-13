@@ -13,6 +13,7 @@ title: "Changelog"
 - feat: generate Triton Model Analyzer configurations and representative Perf Analyzer input data during artifact publication
 - feat: resolve default AOT and JIT strategies per module using source format, execution topology, and compilation mode
 - feat: add tuning objectives and composable constraints through `resolve_strategy`, initially supporting maximum latency
+- feat: add `export_hook` to `TorchInductorAotBackendConfig` to read or edit the exported FX graph before AOT Inductor compilation
 - breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
 
 ## 0.6.0
