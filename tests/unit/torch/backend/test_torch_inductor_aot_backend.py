@@ -556,7 +556,8 @@ def test_export_hook_output_is_compiled(mocker, tmp_path):
     backend = TorchInductorAotBackend(TorchInductorAotBackendConfig(export_hook=hook))
     compile_mock = _build_on_cpu(mocker, tmp_path, backend)
 
-    (exported,) = received
+    assert len(received) == 1
+    exported = received[0]
     assert isinstance(exported, torch.export.ExportedProgram)
     targets = [str(node.target) for node in exported.graph_module.graph.nodes if node.op == "call_function"]
     assert targets and all(target.startswith("aten.") for target in targets)
@@ -572,13 +573,24 @@ def test_export_hook_invalid_return_fails_export_step(mocker, tmp_path):
     assert backend._build_results == [{"step": TorchInductorAotBuildStep.TORCH_EXPORT, "success": False}]
 
 
+def _identity_hook(exported):
+    return exported
+
+
 def test_export_hook_is_not_serialized():
-    config = TorchInductorAotBackendConfig(
-        inductor_configs={"max_autotune": True}, export_hook=lambda exported: exported
-    )
+    config = TorchInductorAotBackendConfig(inductor_configs={"max_autotune": True}, export_hook=_identity_hook)
     plain = TorchInductorAotBackendConfig(inductor_configs={"max_autotune": True})
 
     assert "export_hook" not in config.to_dict()
-    assert config.key() == plain.key()
     assert TorchInductorAotBackendConfig.from_dict(config.to_dict()) == plain
     assert TorchInductorAotBackendConfig.from_dict({}).export_hook is None
+
+
+def test_export_hook_identity_uses_qualified_name():
+    config = TorchInductorAotBackendConfig(export_hook=_identity_hook)
+    hook_name = f"{__name__}._identity_hook"
+
+    assert config.key() == TorchInductorAotBackendConfig(export_hook=_identity_hook).key()
+    assert config.key() != TorchInductorAotBackendConfig().key()
+    assert config.key() != TorchInductorAotBackendConfig(export_hook=lambda exported: exported).key()
+    assert config.describe() == f"export_hook={hook_name}"

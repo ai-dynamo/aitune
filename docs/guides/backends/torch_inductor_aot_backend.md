@@ -95,31 +95,31 @@ after `torch.export` and before `aoti_compile_and_package`. The hook receives th
 `torch.export.ExportedProgram`. Its `graph_module` is an ATen-level `torch.fx.GraphModule`, and each
 node has `nn_module_stack` metadata that maps it to the source module. The hook can edit the graph in
 place. It must return the same or a new `ExportedProgram`; any other value fails the `Torch export`
-build step with a `TypeError`.
+build step with a `TypeError`. The example below replaces each ReLU with an equivalent
+`clamp_min`, so the outputs pass the default tuning validation.
 
 ```python
 import torch
 from aitune.torch.backend import TorchInductorAotBackend, TorchInductorAotBackendConfig
 
 
-def gelu_to_relu(exported: torch.export.ExportedProgram) -> torch.export.ExportedProgram:
-    graph = exported.graph_module.graph
-    for node in graph.nodes:
-        if node.op == "call_function" and node.target is torch.ops.aten.gelu.default:
-            node.target = torch.ops.aten.relu.default
-            node.args = node.args[:1]
-            node.kwargs = {}
+def relu_to_clamp_min(exported: torch.export.ExportedProgram) -> torch.export.ExportedProgram:
+    for node in exported.graph_module.graph.nodes:
+        if node.op == "call_function" and node.target is torch.ops.aten.relu.default:
+            node.target = torch.ops.aten.clamp_min.default
+            node.args = (node.args[0], 0.0)
     exported.graph_module.recompile()
     return exported
 
 
-backend = TorchInductorAotBackend(TorchInductorAotBackendConfig(export_hook=gelu_to_relu))
+backend = TorchInductorAotBackend(TorchInductorAotBackendConfig(export_hook=relu_to_clamp_min))
 ```
 
 <Note>
-The hook is build-time only. It is not part of `to_dict()`, `to_json()`, or the config `key()`,
-so cache keys stay stable and a config restored with `from_dict()` has no hook. The hook must keep
-the output structure of the program unchanged, because the call contract is captured from the
+The hook is build-time only. It is not part of `to_dict()` or `to_json()`, so a config restored with
+`from_dict()` has no hook. The config `key()` and `describe()` use the hook's module and qualified name,
+so they are the same on all ranks and in all processes; give different hooks different names. The hook
+must keep the output values and structure of the program unchanged, because the call contract is captured from the
 original module. If the hook inserts custom operators, register them before loading the `.pt2`
 package with `ait.load`.
 </Note>

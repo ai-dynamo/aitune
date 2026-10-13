@@ -29,6 +29,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.module import move_module_to_device, offload
 from aitune.torch.utils.pt2_artifact import PT2CallContract, PT2CallContractState
+from aitune.utils.hashing import hash_string
 
 logger = getLogger(__name__)
 
@@ -43,6 +44,13 @@ class TorchInductorAotBuildStep(BackendBuildStep):
 ExportHook = Callable[[ExportedProgram], ExportedProgram]
 
 
+def _hook_name(hook: ExportHook) -> str:
+    """Process-independent hook identity: its module and qualified name."""
+    module = getattr(hook, "__module__", None) or type(hook).__module__
+    qualname = getattr(hook, "__qualname__", None) or type(hook).__qualname__
+    return f"{module}.{qualname}"
+
+
 @dataclass
 class TorchInductorAotBackendConfig(BackendConfig):
     """Configuration for TorchInductorAotBackend.
@@ -54,8 +62,8 @@ class TorchInductorAotBackendConfig(BackendConfig):
             Example: ``{"max_autotune": True, "coordinate_descent_tuning": True}``
         export_hook (Callable): Called with the ``torch.export.ExportedProgram`` after export and before
             ``aoti_compile_and_package()``. It may edit ``exported.graph_module`` in place and must return
-            the same or a new ``ExportedProgram``. Build-time only: not serialized and not part of ``key()``,
-            so a config restored with ``from_dict()`` has no hook.
+            the same or a new ``ExportedProgram``. Build-time only: not serialized, so a config restored
+            with ``from_dict()`` has no hook. ``key()`` and ``describe()`` use the hook's qualified name.
     """
 
     inductor_configs: dict[str, Any] | None = None
@@ -66,6 +74,20 @@ class TorchInductorAotBackendConfig(BackendConfig):
         data = asdict(replace(self, export_hook=None))
         data.pop("export_hook")
         return data
+
+    def key(self) -> str:
+        """Returns the config key; a set ``export_hook`` adds its qualified name."""
+        key = super().key()
+        if self.export_hook is None:
+            return key
+        return hash_string(f"{key}:{_hook_name(self.export_hook)}")
+
+    def describe(self) -> str:
+        """Describe changed fields, with ``export_hook`` as its qualified name."""
+        changed_fields = self._get_changed_fields(self, self.__class__(), exclude=["export_hook"])
+        if self.export_hook is not None:
+            changed_fields.append(f"export_hook={_hook_name(self.export_hook)}")
+        return ",".join(changed_fields)
 
 
 class TorchInductorAotBackend(Backend):
