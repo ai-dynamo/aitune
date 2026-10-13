@@ -23,10 +23,9 @@ from aitune.torch.backend import (
     TorchTensorRTAotBackendConfig,
     TorchTensorRTConfig,
 )
-
-from .artifacts import run_exported_artifact
-from .lifecycle import TENSORRT_FP32, Tolerance, run_lifecycle
-from .models import make_input, make_mlp
+from tests.functional_ci.artifacts import run_exported_artifact
+from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, run_lifecycle
+from tests.functional_ci.models import make_input, make_mlp
 
 
 def _torch_tensorrt_aot() -> Backend:
