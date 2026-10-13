@@ -10,9 +10,8 @@ from torch import nn
 
 import aitune.torch as ait
 from aitune.torch.backend import Backend, TensorRTBackend, TensorRTBackendConfig, TorchInductorAotBackend
-
-from .lifecycle import TENSORRT_FP32
-from .models import OUT_FEATURES, make_input, make_mlp
+from tests.functional_ci.lifecycle import TENSORRT_FP32
+from tests.functional_ci.models import OUT_FEATURES, make_input, make_mlp
 
 
 class TwoTower(nn.Module):
