@@ -30,8 +30,13 @@ def _teardown_parent(item, nextitem, reports):
         "teardown",
         reraise=get_reraise_exceptions(item.config),
     )
-    report = item.ihook.pytest_runtest_makereport(item=item, call=call)
-    if not report.passed:
+    if call.excinfo is not None:
+        # Parent setup/protocol plugins never initialized this isolated item.
+        report = TestReport.from_item_and_call(item, call)
+        for child in reports:
+            if child.when == "teardown" and child.passed:
+                report.sections.extend(child.sections)
+                report.user_properties.extend(child.user_properties)
         reports = [child for child in reports if child.when != "teardown" or not child.passed]
         reports.append(report)
     return reports
