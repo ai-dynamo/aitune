@@ -257,11 +257,13 @@ def prepare_for_jit_tuning():
         ...     model = torch.nn.Linear(10, 5)
         ...     # torch is automatically unpatched when exiting the block
     """
+    owns_interception = not Patcher._torch_patched
     Patcher.patch_torch()
     try:
         yield
     finally:
-        Patcher.unpatch_torch()
+        if owns_interception:
+            Patcher.unpatch_torch()
 
 
 def patch_for_jit_tuning(func: Callable[..., T]) -> Callable[..., T]:

@@ -13,8 +13,8 @@ from aitune.torch.jit.patcher import Patcher
 from aitune.torch.tune_data.report_models import ModuleInspectionReport
 
 
-def _materialize_modules(modules: Iterable[torch.nn.Module]) -> list[torch.nn.Module]:
-    """Materialize and validate an explicit module iterable without mutating JIT state."""
+def _collect_modules(modules: Iterable[torch.nn.Module]) -> list[torch.nn.Module]:
+    """Collect, validate and deduplicate existing modules without mutating JIT state."""
     try:
         materialized = list(modules)
     except TypeError as error:
@@ -100,4 +100,4 @@ def register_for_jit_tuning(
     """
     if device_management not in ("aitune", "external"):
         raise ValueError("device_management must be 'aitune' or 'external'")
-    return JITRegistration(Patcher.register_modules(_materialize_modules(modules), device_management=device_management))
+    return JITRegistration(Patcher.register_modules(_collect_modules(modules), device_management=device_management))
