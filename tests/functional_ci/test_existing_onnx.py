@@ -12,9 +12,8 @@ import torch
 import aitune.torch as ait
 from aitune.torch.backend import Backend, ONNXRuntimeBackend, TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.module.onnx_module import OnnxModule
-
-from .lifecycle import TENSORRT_FP32, selected_backend
-from .models import make_input, make_mlp
+from tests.functional_ci.lifecycle import TENSORRT_FP32, selected_backend
+from tests.functional_ci.models import make_input, make_mlp
 
 ONNX_BACKENDS: dict[str, Callable[[], Backend]] = {
     "tensorrt": lambda: TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, use_cuda_graphs=False)),
