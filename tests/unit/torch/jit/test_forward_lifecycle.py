@@ -9,7 +9,7 @@ from aitune.torch import register_for_jit_tuning
 from aitune.torch.backend import TorchEagerBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
-from aitune.torch.jit.patched_module import ModuleState
+from aitune.torch.jit.patched_module import ModuleState, PatchedModule
 from aitune.torch.jit.patcher import Patcher, prepare_for_jit_tuning
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from tests.toy_backends import BuildFailsBackend
@@ -183,6 +183,7 @@ def test_tuned_parent_restores_hooks_on_an_uncalled_owned_child():
     parent.unused.register_forward_pre_hook(lambda *_: trace.append("pre-hook"))
     parent.unused.register_forward_hook(lambda *_: trace.append("post-hook"))
     unused_wrapper = next(wrapper for wrapper in Patcher._patched_modules if wrapper.__wrapped__ is parent.unused)
+    assert isinstance(unused_wrapper, PatchedModule)
     value = torch.ones(1, 2)
     expected = torch.nn.functional.linear(value, parent.unused.weight, parent.unused.bias) + 7
     parent(value)
