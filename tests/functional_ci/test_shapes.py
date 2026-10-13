@@ -16,9 +16,8 @@ from aitune.torch.backend import (
     TensorRTBackendConfig,
     TorchInductorAotBackend,
 )
-
-from .lifecycle import TENSORRT_FP32, Tolerance, selected_backend
-from .models import IN_FEATURES, make_input, make_mlp
+from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, selected_backend
+from tests.functional_ci.models import IN_FEATURES, make_input, make_mlp
 
 
 def _tensorrt() -> Backend:
