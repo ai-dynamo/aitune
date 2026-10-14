@@ -20,6 +20,7 @@ from torch._dynamo.utils import counters
 from aitune.torch import jit_config, register_for_jit_tuning
 from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.jit.config import JITMode
+from aitune.torch.jit.patcher import Patcher
 from aitune.torch.jit.tune import deferred
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy import OneBackendStrategy
@@ -86,6 +87,8 @@ def run(mode, cache_dir):
     original_constructor = torch.nn.Module.__init__
     compiled_before = counters["stats"]["unique_graphs"]
     registration = register_for_jit_tuning(units)
+    # Registration leaves constructors unchanged; Dynamo may later wrap them for generation tagging.
+    assert torch.nn.Module.__init__ is original_constructor
 
     with torch.no_grad():
         for value, baseline in zip(values, expected, strict=True):
@@ -99,13 +102,17 @@ def run(mode, cache_dir):
             torch.testing.assert_close(model(value), baseline)
 
     assert registration.modules == units == tuple(model)
-    assert torch.nn.Module.__init__ is original_constructor
     for wrapper in registration._patched_modules:
         tuned_module = wrapper._wrapper
         assert isinstance(tuned_module, TunedModule)
         assert tuned_module.backends
         assert all(isinstance(backend, TorchInductorJitBackend) for backend in tuned_module.backends.values())
     assert counters["stats"]["unique_graphs"] > compiled_before, "No Dynamo graphs were compiled"
+    unrelated = Unit(len(units))
+    assert "forward" not in unrelated.__dict__
+    assert "forward" not in unrelated.layer.__dict__
+    assert not Patcher._torch_patched
+    assert tuple(Patcher._patched_modules) == registration._patched_modules
     print(f"{mode}: {len(units)} prepared units, two input shapes, real Inductor graphs, preserved forwards and hooks")
 
 
