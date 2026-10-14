@@ -1,18 +1,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Inspect, tune, and persist the pipeline and its provenance."""
+"""Inspect, wrap, tune, and save FLUX.1-schnell on one or two GPUs."""
 
 from __future__ import annotations
 
 import logging
 import time
 from argparse import Namespace
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from .config import Config, rank_config, read_inputs
-from .model import load_model, synchronize
-from .records import configure_cache, contract, environment, file_sha, new_run, source_identity, write_json
+from .config import Config, argument_parser, configure, configure_cache, rank_config, read_inputs, write_json
+from .distributed import collect, initialize, shutdown
+from .model import contract, load_model, synchronize
 
 if TYPE_CHECKING:
     from diffusers.pipelines.flux.pipeline_output import FluxPipelineOutput
@@ -21,14 +20,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def run(args: Namespace, cfg: Config, run_dir: Path | None = None) -> None:
-    if run_dir is None and cfg["execution"]["gpu_count"] > 1:
-        return distributed_tune(args, cfg)
-    # Exclusive directory creation also prevents two tuning processes overwriting one artifact.
-    if run_dir is None:
-        cfg.artifact.parent.mkdir(parents=True, exist_ok=False)
-        run_dir = new_run(cfg, "tune")
-    configure_cache(run_dir)
+def tune_model(args: Namespace, cfg: Config) -> dict[str, Any]:
+    if cfg.artifact.exists():
+        raise FileExistsError(f"Choose a new artifact_path to retune: {cfg.artifact}")
+    cfg.artifact.parent.mkdir(parents=True, exist_ok=True)
     logger.info("Loading PyTorch and AITune for tuning")
     import torch
 
@@ -41,9 +36,8 @@ def run(args: Namespace, cfg: Config, run_dir: Path | None = None) -> None:
         TorchTensorRTJitBackendConfig,
     )
 
-    source = source_identity(args, cfg)
     logger.info("Loading base model for tuning")
-    pipe = load_model(args, cfg, source=source)
+    pipe = load_model(args, cfg)
     samples = read_inputs(cfg["inputs"]["tune"])
     # AITune batches strings into lists and scalar seeds into one-element tensors.
 
@@ -68,7 +62,7 @@ def run(args: Namespace, cfg: Config, run_dir: Path | None = None) -> None:
         compile_options["use_distributed_mode_trace"] = True
         # Both ranks must describe the same strategy. AITune adds rank suffixes
         # to this common base path when it opens the actual timing cache files.
-        compile_options["timing_cache_path"] = str(run_dir.parent / "tensorrt-timing-cache.bin")
+        compile_options["timing_cache_path"] = str(cfg.artifact.parent / "tensorrt-timing-cache.bin")
     strategy = ait.MaxThroughputStrategy(
         backends=[
             TorchTensorRTJitBackend(
@@ -89,52 +83,37 @@ def run(args: Namespace, cfg: Config, run_dir: Path | None = None) -> None:
         ait.tune(invoke, dataset, batch_sizes=[1], ignore_failing_modules=False)
     synchronize()
     tuning_s = time.perf_counter() - start
-    tuning_end = time.perf_counter()
     logger.info("Tuning completed in %.1fs; saving artifact to %s", tuning_s, cfg.artifact)
     ait.save(pipe, cfg.artifact)
-    # AITune already records backend selections and build timings in aitune-tuning.json.
     metadata = {
-        "contract": contract(cfg, source),
-        "sha256": file_sha(cfg.artifact),
-        "tune_run": str(run_dir),
-        "environment": environment(),
+        "contract": contract(args, cfg),
         "inspection_s": inspection_s,
         "tuning_search_s": tuning_s,
-        "tuning_start_monotonic_s": start,
-        "tuning_end_monotonic_s": tuning_end,
-        "compilation_s": None,
-        "compilation_missing_reason": "Backend build timers include conversion and validation; pure compilation is not isolated",
-        "raw_build_timings": str(run_dir / "aitune-tuning.json"),
-        "cache_state": "new empty per-run compiler caches",
-        "tuning_inputs_sha256": file_sha(cfg["inputs"]["tune"]),
+        "artifact": str(cfg.artifact),
     }
     write_json(str(cfg.artifact) + ".json", metadata)
-    write_json(run_dir / "report.json", metadata)
-    logger.info("Saved tuning report: %s", run_dir / "report.json")
-    print(run_dir / "report.json")
+    return metadata
 
 
-def distributed_tune(args: Namespace, cfg: Config) -> None:
-    from .metrics import phase_duration
-    from .runtime import launch
+def main() -> None:
+    args = argument_parser(__doc__, source=True).parse_args()
+    cfg = configure(args)
+    configure_cache(cfg)
+    try:
+        rank = initialize(cfg)
+        ranks = collect(tune_model(args, rank_config(cfg, rank)))
+        if rank == 0:
+            report = {"gpu_count": len(ranks), "ranks": ranks}
+            if len(ranks) > 1:
+                report["artifacts"] = [
+                    {"rank": rank, "file": rank_config(cfg, rank).artifact.name} for rank in range(len(ranks))
+                ]
+                write_json(cfg.artifact.parent / "manifest.json", report)
+            write_json(cfg.output / "tune" / "report.json", report)
+            print(cfg.output / "tune" / "report.json", flush=True)
+    finally:
+        shutdown()
 
-    cfg.artifact.parent.mkdir(parents=True, exist_ok=False)
-    directory = new_run(cfg, "tune")
-    ranks = launch(args, cfg, "tune", "original", directory / "workers")
-    expected = contract(cfg, source_identity(args, cfg))
-    if any(rank["contract"] != expected for rank in ranks):
-        raise ValueError("Rank tuning contracts differ")
-    manifest = {
-        "contract": expected,
-        "gpu_count": len(ranks),
-        "tune_run": str(directory),
-        "tuning_search_s": phase_duration(ranks, "tuning"),
-        "ranks": ranks,
-        "artifacts": [
-            {"rank": rank, "file": rank_config(cfg, rank).artifact.name, "sha256": report["sha256"]}
-            for rank, report in enumerate(ranks)
-        ],
-    }
-    write_json(cfg.artifact.parent / "manifest.json", manifest)
-    write_json(directory / "report.json", manifest)
-    print(directory / "report.json", flush=True)
+
+if __name__ == "__main__":
+    main()

@@ -15,7 +15,7 @@ from importlib.resources import files
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .config import Config
+from .config import Config, argument_parser, configure
 
 logger = logging.getLogger(__name__)
 MAX_BODY = 64 * 1024
@@ -26,7 +26,7 @@ def generate_image(endpoint: str, variant: str, cfg: Config, prompt: str) -> byt
         models = json.load(response)["data"]
     names = [model["id"] for model in models if model["id"].startswith(f"flux-schnell-{variant}-")]
     if len(names) != 1:
-        raise ValueError(f"Expected one running FLUX {variant} service; found {len(names)}. Check recipe serve.")
+        raise ValueError(f"Expected one running FLUX {variant} service; found {len(names)}. Check run_dynamo.sh.")
     payload = {
         "model": names[0],
         "prompt": prompt,
@@ -109,10 +109,10 @@ class Handler(BaseHTTPRequestHandler):
             image = generate_image(self.server.endpoint, self.server.variant, self.server.cfg, prompt)
         except HTTPError as exc:
             logger.warning("Dynamo request failed: %s", exc)
-            self.error(502, f"Image service returned HTTP {exc.code}. Check its worker.log for details.")
+            self.error(502, f"Image service returned HTTP {exc.code}. Check its backend output for details.")
         except (URLError, OSError) as exc:
             logger.warning("Dynamo connection failed: %s", exc)
-            self.error(502, "Cannot reach the image service or the request timed out. Check recipe serve is ready.")
+            self.error(502, "Cannot reach the image service or the request timed out. Check run_dynamo.sh is ready.")
         except (ValueError, KeyError, TypeError) as exc:
             logger.warning("Invalid Dynamo response: %s", exc)
             self.error(502, str(exc))
@@ -150,3 +150,16 @@ def run(args: Namespace, cfg: Config) -> None:
             server.serve_forever()
         except KeyboardInterrupt:
             logger.info("Shutdown requested; stopping the web app")
+
+
+def main() -> None:
+    parser = argument_parser(__doc__)
+    parser.add_argument("--endpoint", help="Dynamo base URL; defaults to the recipe port")
+    parser.add_argument("--variant", choices=("original", "aitune"), default="aitune")
+    parser.add_argument("--port", type=int, default=8080)
+    args = parser.parse_args()
+    run(args, configure(args))
+
+
+if __name__ == "__main__":
+    main()

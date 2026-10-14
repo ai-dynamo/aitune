@@ -8,7 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TypeVar, cast
 
-from .config import Config
+from .config import Config, argument_parser, configure, write_json
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -79,22 +79,15 @@ def shutdown() -> None:
 
 def main() -> None:
     """User-run topology smoke check, before loading the model or tuning."""
-    import argparse
-
+    parser = argument_parser("Check two-GPU NCCL communication without loading the model")
+    parser.add_argument("--timeout", type=int, default=120)
+    args = parser.parse_args()
+    cfg = configure(args)
+    if cfg["execution"]["gpu_count"] != 2 or args.timeout <= 0:
+        parser.error("Use the two-GPU recipe and a positive timeout")
     import torch
     import torch.distributed as dist
 
-    from .config import load_config
-    from .records import environment, new_run, write_json
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
-    parser.add_argument("--timeout", type=int, default=120, help="NCCL operation timeout in seconds (default: 120)")
-    args = parser.parse_args()
-    if args.timeout <= 0:
-        parser.error("--timeout must be positive")
-    cfg = load_config(args.config)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     logger.info("Starting two-GPU communication check (no model loading)")
     try:
         rank = initialize(cfg, timeout_s=args.timeout)
@@ -110,16 +103,16 @@ def main() -> None:
         if not torch.all(source == sum(range(count))):
             raise RuntimeError("NCCL all-reduce produced incorrect data")
         logger.info("Rank %d all-reduce passed; collecting environment information", rank)
-        environments = collect(environment())
+        devices = collect({"name": torch.cuda.get_device_name(), "rank": rank})
         if rank == 0:
-            directory = new_run(cfg, "preflight")
+            directory = cfg.output / "preflight"
             write_json(
                 directory / "report.json",
                 {
                     "passed": True,
                     "gpu_count": count,
                     "collectives": ["all_to_all_single", "all_reduce"],
-                    "environments": environments,
+                    "devices": devices,
                 },
             )
             print(directory / "report.json", flush=True)

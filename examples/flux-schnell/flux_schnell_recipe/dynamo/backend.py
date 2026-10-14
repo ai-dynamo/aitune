@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Dynamo's image protocol, backed by the same pipeline as Python commands."""
+"""Serve the same FLUX pipeline through Dynamo's image protocol."""
 
 from __future__ import annotations
 
@@ -11,113 +11,142 @@ import threading
 import time
 from argparse import Namespace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from ..config import Config, InputRecord, Prompt, read_inputs
-from ..records import artifact_metadata, contract, environment, source_identity, write_json
+from ..config import Config, Prompt, argument_parser, configure, configure_cache, rank_config, read_inputs, write_json
+from ..distributed import collect, initialize, rank_directory, shutdown
+from ..metrics import CompilationRecorder, Sampler, compilation_counters, interval_seconds, phase_duration, prepare
+from ..model import contract, generate, load_model, load_tuned, synchronize
 
 if TYPE_CHECKING:
     from diffusers import FluxPipeline
     from dynamo.common.protocols.image_protocol import NvCreateImageRequest
 
-    from ..metrics import CompilationRecorder, Sampler
 
-
-def map_request(request: NvCreateImageRequest, cfg: Config) -> Prompt:
-    size = f"{cfg['workload']['width']}x{cfg['workload']['height']}"
-    if request.size not in (None, size) or getattr(request, "n", 1) not in (None, 1):
-        raise ValueError(f"This artifact accepts n=1 and size={size}")
-    seed = request.nvext.seed if request.nvext is not None else None
-    return {"prompt": request.prompt, "seed": cfg["deployment"]["seed"] if seed is None else seed}
-
-
-def execute(args: Namespace, cfg: Config, directory: Path, rank: int) -> None:
-    import aitune.dynamo as dyn
-
-    from ..metrics import CompilationRecorder, Sampler, compilation_counters, prepare
-    from ..model import generate, load_model, synchronize
-
-    run_id = Path(args.run_dir).name
-    name = f"flux-schnell-{args.variant}-{run_id}"
-    lock = threading.Lock()
-    sampler: Sampler | None = None
-    # setup() initializes these before warmup() and serve().
+class FluxDynamoBackend:
     pipe: FluxPipeline
-    identity: dict[str, Any]
-    artifact: dict[str, Any]
-    records: list[InputRecord]
     compilation: CompilationRecorder
 
-    def setup() -> None:
-        nonlocal pipe, identity, artifact, records, compilation
-        identity = source_identity(args, cfg)
-        artifact = artifact_metadata(cfg)
-        if contract(cfg, identity) != artifact["contract"]:
-            raise ValueError("Service source/configuration differs from the artifact")
-        records = read_inputs(cfg["inputs"]["validation"]) + read_inputs(cfg["inputs"]["benchmark"])
-        if any(r["seed"] != cfg["deployment"]["seed"] for r in records):
-            raise ValueError("Validation/benchmark seeds must match the configured default service seed")
-        compilation = CompilationRecorder(directory)
-        pipe = load_model(args, cfg, args.variant, identity)
+    def __init__(self, args: Namespace, cfg: Config, rank: int) -> None:
+        self.args, self.cfg, self.rank = args, cfg, rank
+        self.output = cfg.output / "serve" / args.variant
+        self.directory = rank_directory(cfg, self.output, rank)
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.name = f"flux-schnell-{args.variant}-{cfg['name']}-{os.environ.get('FLUX_RUN_ID', 'local')}"
+        self.lock = threading.Lock()
+        self.sampler: Sampler | None = None
 
-    def warmup() -> None:
-        nonlocal sampler
-        timing = prepare(pipe, cfg, records, compilation)
-        sampler = Sampler(directory / "gpu-samples.jsonl", cfg["benchmark"]["sampling_interval_s"], stream=True).start()
-        write_json(
-            directory / "service.json",
-            {
-                "run_id": run_id,
-                "model_name": name,
-                "rank": rank,
-                "variant": args.variant,
-                "contract": contract(cfg, identity),
-                "artifact_sha256": artifact["sha256"],
-                "environment": environment(),
-                "timing": timing,
-                "directory": str(directory),
-                "seed": cfg["deployment"]["seed"],
-                "sampling_interval_s": cfg["benchmark"]["sampling_interval_s"],
-            },
-        )
+    def setup(self) -> None:
+        self.compilation = CompilationRecorder(self.directory)
+        self.pipe = load_model(self.args, self.cfg)
+        if self.args.variant == "aitune":
+            self.pipe = load_tuned(self.pipe, self.args, self.cfg)
 
-    def serve(prompt: str, seed: int) -> bytes:
+    def warmup(self) -> None:
+        records = read_inputs(self.cfg["inputs"]["validation"]) + read_inputs(self.cfg["inputs"]["benchmark"])
+        timing = prepare(self.pipe, self.cfg, records, self.compilation)
+        (self.directory / "requests.jsonl").write_text("")
+        self.sampler = Sampler(
+            self.directory / "gpu-samples.jsonl", self.cfg["benchmark"]["sampling_interval_s"], stream=True
+        ).start()
+        ranks = collect({
+            "rank": self.rank,
+            "directory": str(self.directory),
+            "gpu_uuid": self.sampler.uuid,
+            "sampling_interval_s": self.cfg["benchmark"]["sampling_interval_s"],
+            "timing": timing,
+        })
+        compiler_records = collect(self.compilation.snapshot())
+        if self.rank == 0:
+            timings = [rank["timing"] for rank in ranks]
+            timing.update({
+                "first_use_s": phase_duration(timings, "first_use"),
+                "warmup_s": phase_duration(timings, "warmup"),
+                "compilation_s": interval_seconds([row for rows in compiler_records for row in rows]),
+                "raw_compilation": [row["raw_compilation"] for row in timings],
+            })
+            write_json(
+                self.output / "service.json",
+                {
+                    "model_name": self.name,
+                    "variant": self.args.variant,
+                    "contract": contract(self.args, self.cfg),
+                    "seed": self.cfg["deployment"]["seed"],
+                    "timing": timing,
+                    "ranks": ranks,
+                },
+            )
+
+    def map_request(self, request: NvCreateImageRequest) -> Prompt:
+        size = f"{self.cfg['workload']['width']}x{self.cfg['workload']['height']}"
+        if request.size not in (None, size) or getattr(request, "n", 1) not in (None, 1):
+            raise ValueError(f"This artifact accepts n=1 and size={size}")
+        seed = request.nvext.seed if request.nvext is not None else None
+        return {"prompt": request.prompt, "seed": self.cfg["deployment"]["seed"] if seed is None else seed}
+
+    def generate(self, prompt: str, seed: int) -> bytes:
         import torch
 
-        with lock:
-            # Dynamo invokes the callable in an executor thread; CUDA's current device is thread-local.
+        with self.lock:
+            # Dynamo calls this in an executor thread; the CUDA device is thread-local.
             torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", "0")))
-            before = compilation_counters()
-            compile_records = compilation.snapshot()
+            before, records = compilation_counters(), self.compilation.snapshot()
             start = time.time()
-            image = generate(pipe, cfg, {"prompt": prompt, "seed": seed})
+            image = generate(self.pipe, self.cfg, {"prompt": prompt, "seed": seed})
             synchronize()
             buffer = io.BytesIO()
-            if rank == 0:
+            if self.rank == 0:
                 image.save(buffer, format="PNG")
-            compiled = compilation_counters() != before or compilation.snapshot() != compile_records
-            with (directory / "requests.jsonl").open("a") as log:
+            compiled = compilation_counters() != before or self.compilation.snapshot() != records
+            with (self.directory / "requests.jsonl").open("a") as log:
                 log.write(
-                    json.dumps({"start_unix_s": start, "end_unix_s": time.time(), "compiled": compiled, "seed": seed})
+                    json.dumps({
+                        "start_unix_s": start,
+                        "end_unix_s": time.time(),
+                        "compiled": compiled,
+                        "seed": seed,
+                    })
                     + "\n"
                 )
-            if compiled:
-                raise RuntimeError("Unexpected runtime compilation after service warmup; restart and inspect workload")
+            if any(collect(compiled)):
+                raise RuntimeError("Unexpected compilation after service warmup; restart and inspect the workload")
             return buffer.getvalue()
 
+    def run(self) -> None:
+        import aitune.dynamo as dyn
+
+        try:
+            dyn.dynamo_worker(
+                self.generate,
+                dyn.DynamoWorkerConfig(
+                    type="image",
+                    model_path=self.args.model_id or self.args.checkpoint,
+                    model_name=self.name,
+                    namespace=self.name.replace("-", "_"),
+                    mapping=self.map_request,
+                ),
+                setup=self.setup,
+                warmup=self.warmup,
+            )
+        finally:
+            if self.sampler:
+                self.sampler.stop()
+
+
+def main() -> None:
+    parser = argument_parser(__doc__, source=True)
+    parser.add_argument("--variant", choices=("original", "aitune"), default="aitune")
+    args = parser.parse_args()
+    cfg = configure(args)
+    configure_cache(cfg)
+    if int(os.environ.get("RANK", "0")) == 0 and (pid_file := os.environ.get("FLUX_RANK0_PID_FILE")):
+        Path(pid_file).write_text(str(os.getpid()))
     try:
-        dyn.dynamo_worker(
-            serve,
-            dyn.DynamoWorkerConfig(
-                type="image",
-                model_path=args.model_id or args.checkpoint,
-                model_name=name,
-                namespace="flux_" + run_id.replace("-", "_"),
-                mapping=lambda request: map_request(request, cfg),
-            ),
-            setup=setup,
-            warmup=warmup,
-        )
+        rank = initialize(cfg)
+        FluxDynamoBackend(args, rank_config(cfg, rank), rank).run()
     finally:
-        if sampler:
-            sampler.stop()
+        shutdown()
+
+
+if __name__ == "__main__":
+    main()

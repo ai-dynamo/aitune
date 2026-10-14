@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Explicit, bounded single-GPU and context-parallel Schnell configurations."""
 
+import argparse
 import json
+import logging
+import os
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -178,3 +181,48 @@ def read_inputs(path: str | Path) -> list[InputRecord]:
     if not records:
         raise ValueError(f"No inputs in {path}")
     return records
+
+
+def argument_parser(description: str, *, source: bool = False) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument("--config", default="recipes/single-gpu.yaml", help="Recipe YAML")
+    if source:
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument("--model-id", help="Compatible Hub checkpoint (defaults to the recipe model)")
+        group.add_argument("--checkpoint", help="Complete local Diffusers checkpoint directory")
+    return parser
+
+
+def configure(args: argparse.Namespace) -> Config:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
+    cfg = load_config(args.config)
+    if hasattr(args, "model_id") and not args.model_id and not args.checkpoint:
+        args.model_id = cfg["model"]["base_model"]
+    if hasattr(args, "endpoint") and not args.endpoint:
+        args.endpoint = f"http://127.0.0.1:{cfg['deployment']['port']}"
+    return cfg
+
+
+def configure_cache(cfg: Config) -> None:
+    # Call before importing Torch/AITune. Reuse caches, with a separate default per rank.
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    directory = cfg.output / "cache" / f"rank-{os.environ.get('LOCAL_RANK', '0')}"
+    for key, subdir in (
+        ("AITUNE_CACHE_DIR", "aitune"),
+        ("TORCHINDUCTOR_CACHE_DIR", "inductor"),
+        ("TRITON_CACHE_DIR", "triton"),
+        ("CUDA_CACHE_PATH", "cuda"),
+    ):
+        os.environ.setdefault(key, str(directory / subdir))
+    directory.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("AITUNE_TUNING_DATA_PATH", str(directory / "aitune-tuning.json"))
+
+
+def write_json(path: str | Path, value: object) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+
+
+def read_json(path: str | Path) -> Any:
+    return json.loads(Path(path).read_text())

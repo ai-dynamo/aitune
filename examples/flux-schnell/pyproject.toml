@@ -22,7 +22,10 @@ dependencies = [
 ]
 
 [project.scripts]
-recipe = "flux_schnell_recipe.cli:main"
+tune = "flux_schnell_recipe.tune:main"
+inference = "flux_schnell_recipe.inference:main"
+dynamo-client = "flux_schnell_recipe.dynamo.client:main"
+web = "flux_schnell_recipe.web:main"
 
 [build-system]
 requires = ["setuptools>=80,<83"]

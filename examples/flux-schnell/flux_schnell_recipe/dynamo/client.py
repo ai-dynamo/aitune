@@ -17,10 +17,9 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from ..config import Config, InputRecord, read_inputs
-from ..evaluate import compare, require_correctness
+from ..config import Config, InputRecord, argument_parser, configure, read_inputs, read_json, write_json
+from ..inference import compare
 from ..metrics import Sampler
-from ..records import contract, deployment_artifact, new_run, read_json, write_json
 
 if TYPE_CHECKING:
     from PIL.Image import Image
@@ -33,20 +32,17 @@ def service_info(args: Namespace, cfg: Config) -> dict[str, Any]:
         raise ValueError("This implementation requires a local http://localhost:PORT base URL and shared results mount")
     if url.port != cfg["deployment"]["port"]:
         raise ValueError("Endpoint port differs from the selected recipe")
-    service = read_json(read_json(cfg.output / f"serve-{args.variant}-latest.json")["service"])
-    artifact = deployment_artifact(cfg)
-    if (
-        service["variant"] != args.variant
-        or service["contract"] != artifact["contract"]
-        or service["contract"] != contract(cfg, artifact["contract"]["source"])
-        or service["artifact_sha256"] != artifact["sha256"]
-        or service["seed"] != cfg["deployment"]["seed"]
-    ):
-        raise ValueError("Running service does not match this recipe/artifact")
+    service = read_json(cfg.output / "serve" / args.variant / "service.json")
+    expected = {
+        "source": service["contract"]["source"],
+        **{k: cfg[k] for k in ("model", "workload", "precision", "execution")},
+    }
+    if service["contract"] != expected or service["variant"] != args.variant:
+        raise ValueError("Running service differs from the selected recipe")
     with urlopen(args.endpoint.rstrip("/") + "/v1/models", timeout=10) as response:
         names = {item["id"] for item in json.load(response)["data"]}
     if service["model_name"] not in names:
-        raise ValueError("Recorded service is no longer registered; start recipe serve")
+        raise ValueError("Recorded service is no longer registered; start run_dynamo.sh")
     return service
 
 
@@ -59,6 +55,7 @@ def image_request(args: Namespace, cfg: Config, service: dict[str, Any], record:
         "n": 1,
         "size": f"{cfg['workload']['width']}x{cfg['workload']['height']}",
         "response_format": "b64_json",
+        "nvext": {"seed": record["seed"]},
     }
     request = Request(
         args.endpoint.rstrip("/") + "/v1/images/generations",
@@ -75,19 +72,17 @@ def image_request(args: Namespace, cfg: Config, service: dict[str, Any], record:
 
 def correctness(args: Namespace, cfg: Config) -> dict[str, Any]:
     service = service_info(args, cfg)
-    reference = require_correctness(cfg)
+    reference_dir = cfg.output / "correctness"
+    reference = read_json(reference_dir / "report.json")
     records = read_inputs(cfg["inputs"]["validation"])
-    if any(item["seed"] != service["seed"] for item in records):
-        raise ValueError("Validation seeds must match the service seed")
-    directory = new_run(cfg, f"deployment-correctness-{args.variant}")
+    if reference["contract"] != service["contract"] or reference["inputs"] != records:
+        raise ValueError("Run inference --mode correctness with this recipe and source to refresh reference PNGs")
+    directory = cfg.output / "deployment-correctness" / args.variant
     images = directory / "images"
-    images.mkdir()
+    images.mkdir(parents=True, exist_ok=True)
     for item in records:
         image_request(args, cfg, service, item).save(images / f"{item['id']}.png")
-    reference_dir = Path(reference["original"])
-    if cfg["execution"]["gpu_count"] > 1:
-        reference_dir /= "rank-0"
-    result = compare(cfg, reference_dir / "images", images, records)
+    result = compare(cfg, reference_dir / "original" / "images", images, records)
     result.update({"service": service, "reference": reference, "run_id": directory.name})
     write_json(directory / "report.json", result)
     print(directory / "report.json")
@@ -124,7 +119,7 @@ def server_measurement(
     selected = [row for row in samples if start <= row["unix_s"] <= end]
     (directory / "gpu-samples.jsonl").write_text("".join(json.dumps(row) + "\n" for row in selected))
     sampler = Sampler(directory / "gpu-samples.jsonl", service["sampling_interval_s"])
-    sampler.uuid = service["environment"]["gpu"]["uuid"]
+    sampler.uuid = service["gpu_uuid"]
     sampler.samples = [dict(row, monotonic_s=row["unix_s"]) for row in selected]
     gpu = sampler.summarize(start, end)
     requests = [json.loads(line) for line in (Path(service["directory"]) / "requests.jsonl").read_text().splitlines()]
@@ -138,8 +133,6 @@ def server_measurement(
 def server_telemetry(
     service: dict[str, Any], directory: Path, start: float, end: float, count: int | float
 ) -> dict[str, Any]:
-    if "ranks" not in service:
-        return {"gpu": server_measurement(service, directory, start, end, count)}
     gpus = [
         server_measurement(rank, directory / f"rank-{rank['rank']}", start, end, count) for rank in service["ranks"]
     ]
@@ -159,7 +152,8 @@ def benchmark(args: Namespace, cfg: Config) -> None:
     records = read_inputs(cfg["inputs"]["benchmark"])
     if any(item["seed"] != service["seed"] for item in records):
         raise ValueError("Benchmark seeds must match the service seed")
-    directory = new_run(cfg, f"deployment-benchmark-{args.variant}")
+    directory = cfg.output / "deployment-benchmark" / args.variant
+    directory.mkdir(parents=True, exist_ok=True)
     dataset = directory / "aiperf-inputs.jsonl"
     dataset.write_text("".join(json.dumps({"text": item["prompt"]}) + "\n" for item in records))
     artifacts = directory / "aiperf"
@@ -233,3 +227,27 @@ def benchmark(args: Namespace, cfg: Config) -> None:
     }
     write_json(directory / "report.json", report)
     print(directory / "report.json")
+
+
+def main() -> None:
+    parser = argument_parser(__doc__)
+    parser.add_argument("--mode", choices=("infer", "correctness", "benchmark"), default="infer")
+    parser.add_argument("--variant", choices=("original", "aitune"), default="aitune")
+    parser.add_argument("--endpoint", help="Local Dynamo base URL; defaults to the recipe port")
+    args = parser.parse_args()
+    cfg = configure(args)
+    if args.mode == "correctness":
+        correctness(args, cfg)
+    elif args.mode == "benchmark":
+        benchmark(args, cfg)
+    else:
+        service = service_info(args, cfg)
+        directory = cfg.output / "deployment-infer" / args.variant
+        directory.mkdir(parents=True, exist_ok=True)
+        for item in read_inputs(cfg["inputs"]["inference"]):
+            image_request(args, cfg, service, item).save(directory / f"{item['id']}.png")
+        print(directory)
+
+
+if __name__ == "__main__":
+    main()

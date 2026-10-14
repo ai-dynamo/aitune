@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .config import Config, InputRecord, Prompt
+from .config import Config, InputRecord, Prompt, read_json
 
 if TYPE_CHECKING:
     from diffusers import FluxPipeline
@@ -28,7 +28,7 @@ def check_gpu(cfg: Config) -> None:
 
     count = cfg["execution"]["gpu_count"]
     if int(os.environ.get("WORLD_SIZE", "1")) != count or int(os.environ.get("LOCAL_WORLD_SIZE", "1")) != count:
-        raise ValueError("Launcher world size differs from execution.gpu_count; use the recipe CLI")
+        raise ValueError("Launcher world size differs from execution.gpu_count; use torchrun for the two-GPU recipe")
     if not torch.cuda.is_available() or torch.cuda.device_count() != count:
         raise ValueError(f"Expose exactly {count} CUDA GPU(s)")
     if count > 1 and (not dist.is_initialized() or dist.get_world_size() != count):
@@ -39,21 +39,11 @@ def check_gpu(cfg: Config) -> None:
     torch.backends.cuda.matmul.allow_tf32 = False
 
 
-def load_model(
-    args: Namespace, cfg: Config, variant: str = "original", source: dict[str, Any] | None = None
-) -> FluxPipeline:
+def load_model(args: Namespace, cfg: Config) -> FluxPipeline:
     import torch
     from diffusers import FluxPipeline
 
-    from .records import artifact_metadata, contract, source_identity
-
     check_gpu(cfg)
-    source = source or source_identity(args, cfg)
-    metadata = None
-    if variant == "aitune":
-        metadata = artifact_metadata(cfg)
-        if metadata["contract"] != contract(cfg, source):
-            raise ValueError("Source, precision, execution, or workload differs from the tuning artifact; re-tune")
     kwargs = {"torch_dtype": torch.bfloat16, "use_safetensors": True}
     if args.model_id:
         kwargs["revision"] = cfg["model"]["revision"]
@@ -71,13 +61,37 @@ def load_model(
         pipe.transformer.set_attention_backend("_native_cudnn")
         pipe.transformer.enable_parallelism(config=ContextParallelConfig(ulysses_degree=cfg["execution"]["gpu_count"]))
     pipe.set_progress_bar_config(disable=True)
-    if metadata:
-        import aitune.torch as ait
-
-        check_environment(metadata["environment"])
-        logger.info("Restoring AITune artifact: %s", cfg.artifact)
-        pipe = ait.load(pipe, cfg.artifact, storage=cpu_staging_storage())
     return pipe
+
+
+def contract(args: Namespace, cfg: Config) -> dict[str, Any]:
+    if args.model_id:
+        source = {"kind": "hub", "id": args.model_id, "revision": cfg["model"]["revision"]}
+    else:
+        path = Path(args.checkpoint).resolve()
+        if not (path / "model_index.json").is_file():
+            raise ValueError("--checkpoint must be a complete Diffusers directory with model_index.json")
+        source = {"kind": "directory", "path": str(path)}
+    return {"source": source, **{key: cfg[key] for key in ("model", "workload", "precision", "execution")}}
+
+
+def load_tuned(pipe: FluxPipeline, args: Namespace, cfg: Config) -> FluxPipeline:
+    import aitune.torch as ait
+
+    saved = read_json(str(cfg.artifact) + ".json")["contract"]
+    # Older local-checkpoint sidecars also contain a directory digest.
+    saved["source"].pop("files_sha256", None)
+    if saved != contract(args, cfg):
+        raise ValueError("Model source or recipe differs from tuning; use the original recipe or re-tune")
+    if cfg["execution"]["gpu_count"] > 1:
+        manifest = read_json(cfg.artifact.parent / "manifest.json")
+        count = cfg["execution"]["gpu_count"]
+        if manifest["gpu_count"] != count or [item["rank"] for item in manifest["artifacts"]] != list(range(count)):
+            raise ValueError("Incomplete multi-GPU tuning manifest")
+        if not all((cfg.artifact.parent / item["file"]).is_file() for item in manifest["artifacts"]):
+            raise ValueError("Missing rank artifact")
+    logger.info("Restoring AITune artifact: %s", cfg.artifact)
+    return ait.load(pipe, cfg.artifact, storage=cpu_staging_storage())
 
 
 def generate(pipe: FluxPipeline, cfg: Config, item: Prompt | InputRecord) -> Image:
@@ -104,10 +118,12 @@ def synchronize() -> None:
 
 def save_images(pipe: FluxPipeline, cfg: Config, records: Sequence[InputRecord], directory: str | Path) -> None:
     directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=False)
+    directory.mkdir(parents=True, exist_ok=True)
     for index, item in enumerate(records, 1):
         logger.info("Generating image %d/%d: %s", index, len(records), item["id"])
-        generate(pipe, cfg, item).save(directory / f"{item['id']}.png")
+        image = generate(pipe, cfg, item)
+        if int(os.environ.get("RANK", "0")) == 0:
+            image.save(directory / f"{item['id']}.png")
     logger.info("Saved %d images to %s", len(records), directory)
 
 
@@ -127,14 +143,3 @@ def cpu_staging_storage() -> LocalTorchStorage:
         CpuTorchLoadTask() if isinstance(task, TorchLoadTask) else task for task in storage.load_tasks
     ]
     return storage
-
-
-def check_environment(built: dict[str, Any]) -> None:
-    from .records import environment
-
-    current = environment()
-    if current["gpu"]["compute_capability"] != built["gpu"]["compute_capability"]:
-        raise ValueError("GPU architecture differs from tuning; create a new artifact")
-    for name in ("aitune", "torch", "tensorrt", "torch-tensorrt", "diffusers", "transformers", "torchao"):
-        if current["packages"][name] != built["packages"][name]:
-            raise ValueError(f"{name} differs from the artifact build environment")

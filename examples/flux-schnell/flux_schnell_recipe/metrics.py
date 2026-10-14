@@ -13,8 +13,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
-from .config import Config, InputRecord
-from .records import write_json
+from .config import Config, InputRecord, write_json
 
 if TYPE_CHECKING:
     from diffusers import FluxPipeline
@@ -135,7 +134,7 @@ def prepare(
         "warmup_start_monotonic_s": start,
         "warmup_end_monotonic_s": warmup_end,
         "first_use_policy": "One unmeasured pass over every input before post-compilation warmup",
-        "cache_state": "new per-process compiler caches; artifact retains tuning-time state",
+        "cache_state": "reused per-rank compiler caches; artifact retains tuning-time state",
     }
 
 
