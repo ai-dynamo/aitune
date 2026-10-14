@@ -154,8 +154,42 @@ OpenAI-compatible image request, saves the response to `output.png`, and shuts e
 endpoint. AITune's `DynamoWorker` detects the initialized process group and coordinates each request across the
 follower ranks so all GPUs participate.
 
-Use the same visible GPU count for tuning and serving. The script is a functional deployment example, not a permanent
-server. It processes one request at a time, matching the single-image workload recorded during tuning.
+Use the same visible GPU count for tuning and serving. It processes one request at a time, matching the single-image
+workload recorded during tuning.
+
+### Prompt UI in a container
+
+Use `./run_dynamo.sh --serve` to keep Dynamo and the prompt UI running until stopped. The UI starts after the model is
+ready. It serves `flux_schnell/dynamo/web.html`, which is included in the example's Python package. The web server reads
+this example's `config.yaml` and proxies image requests to Dynamo. Each UI request uses a random seed. API clients can
+specify `nvext: {"seed": 123}` for repeatable generation; requests without a seed retain the default seed of zero.
+
+From the repository root, build the image and launch it with the checkpoints created by tuning:
+
+```bash
+docker build -f examples/FluxSchnell/Dockerfile -t aitune-flux-schnell:web .
+docker run -d --name aitune-flux-schnell-web --gpus all --ipc=host \
+  -p 127.0.0.1:8080:8080 \
+  -e HF_TOKEN -e HF_HOME=/cache/huggingface \
+  -v "$PWD/hf-cache":/cache/huggingface \
+  -v "$PWD/examples/FluxSchnell/checkpoints":/workspace/aitune/examples/FluxSchnell/checkpoints \
+  aitune-flux-schnell:web
+docker logs -f aitune-flux-schnell-web
+```
+
+Open [http://localhost:8080](http://localhost:8080) after the log prints `Web app:`. Model loading and backend compilation
+can take several minutes. The page supports entering a prompt, previewing the image, and downloading the PNG. Both
+the UI and Dynamo run inside the container; only the UI port is published on the host. Use
+`docker stop --time 60 aitune-flux-schnell-web` to stop the deployment.
+
+The Dockerfile accepts `--build-arg BASE_IMAGE=...` to reuse a compatible image with the CUDA dependencies already
+installed. The HTML is copied and installed with the `flux_schnell` package. To use a different config, mount it and
+set `AITUNE_EXAMPLE_CONFIG_PATH` for both the backend and UI. `WEB_HOST` and `WEB_PORT` control the UI listener; the
+container defaults to `0.0.0.0:8080`.
+
+When running from a checkout with the example environment activated, use `bash run_dynamo.sh --serve`. To attach the
+UI to an already running Dynamo deployment, use `python -m flux_schnell.dynamo.web --endpoint http://127.0.0.1:8000`.
+The web server also accepts `--page` (or `FLUX_WEB_PAGE`) to serve an alternative HTML file.
 
 ## Hardware metrics
 

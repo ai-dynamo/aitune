@@ -88,6 +88,7 @@ class FluxDynamoBackend:
         )
         return {
             "prompt": request.prompt,
+            "seed": request.nvext.seed if request.nvext and request.nvext.seed is not None else 0,
             "height": height,
             "width": width,
             "num_inference_steps": self._inference_steps,
@@ -103,6 +104,7 @@ class FluxDynamoBackend:
         num_inference_steps: int,
         guidance_scale: float,
         max_sequence_length: int,
+        seed: int = 0,
     ) -> bytes | None:
         """Generate and encode one image on rank zero."""
         result = self._run_pipeline(
@@ -112,6 +114,7 @@ class FluxDynamoBackend:
             num_inference_steps=num_inference_steps,
             guidance_scale=guidance_scale,
             max_sequence_length=max_sequence_length,
+            seed=seed,
         )
         if not is_rank_zero():
             return None
@@ -127,6 +130,7 @@ class FluxDynamoBackend:
         num_inference_steps: int,
         guidance_scale: float,
         max_sequence_length: int,
+        seed: int = 0,
     ):
         """Execute the pipeline under the per-process generation lock."""
         if self._pipeline is None:
@@ -139,7 +143,7 @@ class FluxDynamoBackend:
                 num_inference_steps=num_inference_steps,
                 guidance_scale=guidance_scale,
                 max_sequence_length=max_sequence_length,
-                generator=torch.Generator("cpu").manual_seed(0),
+                generator=torch.Generator("cpu").manual_seed(seed),
                 output_type="pil" if is_rank_zero() else "pt",
                 return_dict=True,
             )
