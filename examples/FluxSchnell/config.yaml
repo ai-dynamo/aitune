@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+Backend:
+  model_name: "black-forest-labs/FLUX.1-schnell"
+  tuned_model_path: "flux-schnell.ait"
+  context_parallel: "ulysses"
+  pretrained: true
+  prompt: "A futuristic cityscape with neon lights and flying cars"
+  sizes: [[1024, 1024]]
+  steps: 4
+  guidance_scale: 0.0
+  max_sequence_length: 256
+  force_tune: false
+  image_storage_path: "/images"
+  ServiceArgs:
+    workers: 1
+    resources:
+      cpu: "8"

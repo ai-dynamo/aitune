@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "ai-tune-flux-schnell-example"
+version = "0.1.0"
+description = "NVIDIA AITune FLUX.1-schnell Example"
+readme = "README.md"
+license = { text = "Apache 2.0" }
+requires-python = ">=3.11, <3.14"
+
+dependencies = [
+    "aitune",
+    "aitune-examples-common",
+    "diffusers>=0.36,<0.38",
+    "pillow",
+    "protobuf",
+    "sentencepiece",
+    "torch>=2.0.0",
+    "transformers<5",
+]
+
+[project.optional-dependencies]
+dynamo = [
+    "ai-dynamo>=1.3,<2.0.0",
+    "openai",
+    "uvicorn",
+    "aiohttp",
+    "aiofiles",
+    "uvloop",
+    "pyyaml",
+]
+
+[tool.uv.sources]
+aitune = { path = "../../", editable = true }
+aitune-examples-common = { path = "../../examples/common" }
+
+[project.scripts]
+tune = "flux_schnell.tune:main"
+inference = "flux_schnell.inference:main"
+
+[build-system]
+requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+namespaces = false
+include = ["flux_schnell*"]
+
+[tool.setuptools.package-data]
+flux_schnell = ["**/*"]
+
+[tool.aitune]
+docker_image = "nvcr.io/nvidia/pytorch:26.06-py3"
+variants = [
+    { arguments = { "quantization" = false } },
+    { arguments = { "quantization" = true } },
+    { arguments = { "context-parallel" = "ulysses", "quantization" = false }, additional_tags = ["gpu/4"], launcher = "torchrun", processes = 4 },
+]
+additional_tags = ["gpu/sm/120"]
+use_gated_hf_token = true
+allow_failure = true
