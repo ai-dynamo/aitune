@@ -1,40 +1,51 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""FLUX test client — calls the standard Dynamo OpenAI-compatible frontend."""
+"""Send the recipe's inference samples through the Dynamo image endpoint."""
 
-import argparse
 import base64
-import pathlib
+import json
+import time
 
 from openai import OpenAI
 
-from ..defaults import DEFAULT_IMAGE_SIZE, DEFAULT_PROMPT
-from ..model import MODEL_NAME
+from ..config import argument_parser, load_recipe
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--protocol", type=str.lower, choices=("http", "https"), default="http")
-    parser.add_argument("--host", default="localhost")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--prompt", default=DEFAULT_PROMPT)
-    parser.add_argument("--size", default=f"{DEFAULT_IMAGE_SIZE[0]}x{DEFAULT_IMAGE_SIZE[1]}")
-    parser.add_argument("--output", default="output.png")
-    args = parser.parse_args()
+def run(recipe):
+    client = OpenAI(base_url=recipe.endpoint + "/v1", api_key="unused", timeout=600)
+    samples = recipe.samples("inference")
+    workload = recipe["workload"]
+    output_dir = recipe.output_dir / "deployment"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    for index in range(recipe["deployment"]["request_count"]):
+        sample = samples[index % len(samples)]
+        started = time.perf_counter()
+        response = client.images.generate(
+            model=recipe["model"]["base_model"],
+            prompt=sample["prompt"],
+            n=1,
+            size=f"{workload['width']}x{workload['height']}",
+            response_format="b64_json",
+            extra_body={"nvext": {"seed": sample["seed"]}},
+        )
+        image = base64.b64decode(response.data[0].b64_json, validate=True)
+        if not image.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise ValueError("Dynamo did not return a PNG")
+        path = output_dir / f"{index:03d}-{sample['id']}.png"
+        path.write_bytes(image)
+        records.append({
+            "sample": sample["id"],
+            "seed": sample["seed"],
+            "image": path.name,
+            "latency_s": time.perf_counter() - started,
+        })
+        print(f"Image saved to {path}", flush=True)
+    (output_dir / "report.json").write_text(json.dumps(records, indent=2) + "\n")
 
-    client = OpenAI(
-        base_url=f"{args.protocol}://{args.host}:{args.port}/v1",
-        api_key="unused",
-    )
-    response = client.images.generate(
-        model=MODEL_NAME,
-        prompt=args.prompt,
-        size=args.size,
-        response_format="b64_json",
-    )
-    image_bytes = base64.b64decode(response.data[0].b64_json)
-    pathlib.Path(args.output).write_bytes(image_bytes)
-    print(f"Image saved to {args.output}")
+
+def main():
+    run(load_recipe(argument_parser(__doc__).parse_args().recipe))
 
 
 if __name__ == "__main__":

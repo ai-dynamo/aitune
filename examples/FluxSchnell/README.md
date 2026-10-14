@@ -1,203 +1,129 @@
 ---
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-title: "Tune FLUX.1-schnell on one or multiple GPUs"
+title: "Tune and serve FLUX.1-schnell using recipes"
 ---
 
-This example tunes the `black-forest-labs/FLUX.1-schnell` Diffusers pipeline with NVIDIA AITune. It demonstrates the
-complete ahead-of-time workflow: inspect the pipeline, tune selected modules, save the result, load it into a fresh
-pipeline, and compare original and tuned image generation.
+This example inspects, tunes, validates, and serves the FLUX.1-schnell Diffusers pipeline. YAML files in `recipes/` are
+its configuration source. Commands accept `--recipe`; model, workload, input, output, GPU, and serving settings are
+read from that file. With no argument, commands select `recipes/single-gpu.yaml` from the example working directory.
 
-The Schnell defaults follow the model card: four inference steps, guidance scale `0.0`, and maximum text
-sequence length `256`. The same settings are used for tuning, inference, and Dynamo serving. Schnell supports
-one to four steps and requires a maximum sequence length of at most 256.
+## Recipes and samples
 
-## What this example demonstrates
+- `recipes/single-gpu.yaml` uses one GPU and is the recipe for this machine.
+- `recipes/multi-gpu.yaml` uses two GPUs on one node. It is prepared for context-parallel execution; it has not been
+  validated on this single-GPU machine.
 
-- Tune a FLUX pipeline on one GPU.
-- Select the highest-throughput backend independently for the transformer and other tunable modules.
-- Save and load an AITune checkpoint.
-- Compare original and tuned generation time and output images.
-- Tune and run the transformer across multiple GPUs with Diffusers context parallelism.
-- Optionally evaluate TorchAO NVFP4 and FP8 transformer backends on one GPU.
-- Serve the tuned multi-GPU pipeline through NVIDIA Dynamo.
+All paths in a recipe are resolved relative to the YAML file, including `artifact_path`, `output_dir`, and `inputs`.
+The model is loaded at the exact `model.revision`. Each JSONL sample has an `id`, a `prompt`, and a `seed`:
 
-## Environment setup
+| Recipe input | Purpose |
+| --- | --- |
+| `inputs.tune` | Every sample is used for inspection and tuning. |
+| `inputs.inference` | Original/tuned inference images and Dynamo client requests. |
+| `inputs.validation` | Held-out original/tuned images used for correctness validation. |
+| `inputs.benchmark` | Samples cycled through during warmup and timed measurements. |
 
-FLUX.1-schnell is released under Apache 2.0. Accept the access conditions on its Hugging Face model page and
-make a Hugging Face token available in the environment before running the example.
+The supplied files contain two tuning prompts, four validation prompts, and one inference prompt. The generator is
+reset to the sample's seed on every call, so warmup does not change the measured image.
 
-The recommended environment is the NVIDIA PyTorch container used by the example tests. From the repository root:
+Generation settings come from `workload`. `execution.gpu_count` controls the number of worker processes, and
+`execution.context_parallel` selects `ulysses` or `ring`. `tuning.quantization` optionally includes TorchAO NVFP4 and
+FP8 transformer candidates; the supplied recipes leave it disabled. NVFP4 needs compatible Blackwell hardware.
+
+## Build and run in a container
+
+From the repository root:
 
 ```bash
-docker run --gpus all --ipc=host --rm -it \
-  -v "$PWD":/workspace/aitune \
-  -w /workspace/aitune/examples/FluxSchnell \
-  nvcr.io/nvidia/pytorch:26.06-py3
-python -m pip install uv
-uv sync
+docker build -f examples/FluxSchnell/Dockerfile -t aitune-flux-schnell:recipes .
+mkdir -p examples/FluxSchnell/results
+
+docker run --rm --gpus all --ipc=host \
+  -e HF_TOKEN -e HF_HOME=/cache/huggingface \
+  -v "$PWD/hf-cache":/cache/huggingface \
+  -v "$PWD/examples/FluxSchnell/results":/workspace/aitune/examples/FluxSchnell/results \
+  aitune-flux-schnell:recipes tune --recipe recipes/single-gpu.yaml
+
+docker run --rm --gpus all --ipc=host \
+  -e HF_TOKEN -e HF_HOME=/cache/huggingface \
+  -v "$PWD/hf-cache":/cache/huggingface \
+  -v "$PWD/examples/FluxSchnell/results":/workspace/aitune/examples/FluxSchnell/results \
+  aitune-flux-schnell:recipes inference --recipe recipes/single-gpu.yaml
 ```
 
-Alternatively, install the example in your own virtual environment from `examples/FluxSchnell`:
+The Dockerfile accepts `--build-arg BASE_IMAGE=...` to reuse a compatible CUDA image with dependencies installed.
+For a local environment, run `uv sync --extra dynamo` from `examples/FluxSchnell`, then use:
 
 ```bash
-pip install --extra-index-url https://pypi.nvidia.com .
+uv run tune --recipe recipes/single-gpu.yaml
+uv run inference --recipe recipes/single-gpu.yaml
 ```
 
-## Tune on one GPU
+Tuning compares Torch-TensorRT JIT and TorchInductor JIT for the transformer, plus optional TorchAO candidates.
+Other discovered modules use AITune's default backend strategy. Maximum-batch-size discovery is disabled to match
+the single-image workload. Each rank saves its own checkpoint; rank zero writes `tuned.manifest.json` only after all
+ranks have saved. Loading checks the model revision, workload, execution settings, and tuning settings against that
+manifest. Checkpoint tensors are staged on CPU to avoid duplicating the weights on the GPU during loading.
+
+## Inference, validation, and timing
+
+`inference` generates original and tuned images from `inputs.inference`, validates using `inputs.validation`, and
+benchmarks using `inputs.benchmark`. Results are saved under the recipe's `output_dir`:
+
+- `inference/{original,tuned}/<sample-id>.png`
+- `validation/{original,tuned}/<sample-id>.png`
+- `report.json`, with sample IDs, seeds, RGB SSIM scores, latency distributions, GPU memory samples, and speedup.
+
+RGB SSIM averages structural similarity over the three RGB channels using a 7×7 window and pixel values in `[0, 1]`.
+`validation.threshold` determines pass/fail; scores below `validation.soft_threshold` produce warnings. A failed hard
+threshold makes the command exit unsuccessfully after writing the report. Maximum absolute and relative pixel errors
+are also reported, but do not replace the recipe's SSIM acceptance criterion.
+
+`benchmark.warmup_iterations` and `benchmark.repetitions` are total iteration counts per original/tuned pipeline,
+cycling through the benchmark samples in file order. Timings synchronize all participating GPUs. Memory is sampled
+per rank at `benchmark.sampling_interval_s`; peak allocated GPU memory is also recorded.
+
+## Dynamo and the prompt UI
+
+After tuning, start the persistent deployment from the repository root:
 
 ```bash
-uv run tune \
-  --model-name black-forest-labs/FLUX.1-schnell \
-  --prompt "A futuristic cityscape with neon lights"
-```
-
-The command:
-
-1. Uses `aitune.torch.inspect` to find tunable pipeline modules.
-2. Wraps the transformer separately from the remaining modules.
-3. Profiles the configured backends and selects the highest-throughput backend for each module.
-4. Saves the tuned pipeline as an AITune checkpoint.
-
-The transformer compares Torch-TensorRT and TorchInductor with model-specific settings. Other tunable modules use
-the default dynamic backend candidates. Maximum-batch-size discovery is disabled for all modules to match this example's
-single-image inference and serving workload.
-
-### Optional transformer quantization
-
-On one GPU, add `--quantization` to include TorchAO NVFP4 and FP8 dynamic-quantization candidates for the transformer:
-
-```bash
-uv run tune --quantization
-```
-
-The other pipeline modules remain unquantized. NVFP4 requires a Blackwell GPU with CUDA capability 10.0 or newer.
-Quantization candidates are enabled only in the single-GPU functional-test variant.
-
-## Generate and compare images on one GPU
-
-After tuning, run inference with the same model and generation settings:
-
-```bash
-AITUNE_OUTPUT_DIR=output uv run inference \
-  --prompt "A beautiful landscape with mountains and a lake"
-```
-
-The inference command loads a fresh pipeline, generates an original image, loads the AITune checkpoint, and generates
-a tuned image. It logs both generation times and saves both images under `AITUNE_OUTPUT_DIR` (default: `output`).
-
-Inference and Dynamo use the example's checkpoint storage adapter to stage saved tensors on CPU before backend
-deployment. This avoids duplicating the model weights in GPU memory during reload. Standard checkpoint hash
-verification and artifact relocation are preserved.
-
-## Tune on multiple GPUs
-
-Launch one process per GPU. The example detects the `torchrun` world size and enables Diffusers context parallelism
-automatically. The following configuration uses four GPUs:
-
-```bash
-uv run torchrun --standalone --nproc-per-node=4 \
-  --log-dir logs --tee 3 --local-ranks-filter 0 \
-  --module flux_schnell.tune \
-  --context-parallel ulysses
-```
-
-The application initializes NCCL and enables Diffusers context parallelism on the transformer. AITune detects that
-existing distributed environment and coordinates inspection and tuning across all ranks. Each rank saves its own
-checkpoint artifact so processes never write to the same file.
-
-Run inference with the same GPU count and context-parallel mode used for tuning:
-
-```bash
-AITUNE_OUTPUT_DIR=output uv run torchrun --standalone --nproc-per-node=4 \
-  --log-dir logs --tee 3 --local-ranks-filter 0 \
-  --module flux_schnell.inference \
-  --context-parallel ulysses
-```
-
-Every rank participates in generation; rank 0 records timings and saves the images.
-
-### Keep distributed logs readable
-
-By default, `torchrun` sends output from every worker to the same console. The commands above use `--tee 3` to retain
-stdout and stderr from every worker under `--log-dir`, while `--local-ranks-filter 0` keeps the interactive console
-focused on local rank 0. On a multi-node run, local rank 0 from each node remains visible. This launcher-level approach
-keeps application logging unchanged and preserves per-rank diagnostics for investigation.
-
-## Options
-
-- `--model-name`: Hugging Face model name or path (default: `black-forest-labs/FLUX.1-schnell`).
-- `--prompt`: Text prompt used for inspection, tuning, or inference.
-- `--sizes`: Space-separated `width,height` pairs (default: `1024,1024`).
-- `--steps`: Number of diffusion steps (default: `4`).
-- `--guidance-scale`: Guidance scale (default: `0.0`).
-- `--max-sequence-length`: Maximum text sequence length (default: `256`).
-- `--tuned-model-path`: Base checkpoint path (default: `flux-schnell.ait`).
-- `--context-parallel`: `ulysses` or `ring` (default: `ulysses`).
-- `--quantization`: Add TorchAO NVFP4 and FP8 transformer candidates.
-
-## Serve the tuned pipeline with NVIDIA Dynamo
-
-Install the optional dependencies, tune with four GPUs, and expose the same four GPUs to the test service:
-
-```bash
-uv pip install ".[dynamo]"
-uv run torchrun --standalone --nproc-per-node=4 \
-  --log-dir logs --tee 3 --local-ranks-filter 0 \
-  --module flux_schnell.tune \
-  --context-parallel ulysses
-CUDA_VISIBLE_DEVICES=0,1,2,3 ./run_dynamo.sh
-```
-
-`run_dynamo.sh` starts the Dynamo frontend and one backend rank per visible GPU, waits for the model endpoint, sends one
-OpenAI-compatible image request, saves the response to `output.png`, and shuts everything down. Rank 0 owns the Dynamo
-endpoint. AITune's `DynamoWorker` detects the initialized process group and coordinates each request across the
-follower ranks so all GPUs participate.
-
-Use the same visible GPU count for tuning and serving. It processes one request at a time, matching the single-image
-workload recorded during tuning.
-
-### Prompt UI in a container
-
-Use `./run_dynamo.sh --serve` to keep Dynamo and the prompt UI running until stopped. The UI starts after the model is
-ready. It serves `flux_schnell/dynamo/web.html`, which is included in the example's Python package. The web server reads
-this example's `config.yaml` and proxies image requests to Dynamo. Each UI request uses a random seed. API clients can
-specify `nvext: {"seed": 123}` for repeatable generation; requests without a seed retain the default seed of zero.
-
-From the repository root, build the image and launch it with the checkpoints created by tuning:
-
-```bash
-docker build -f examples/FluxSchnell/Dockerfile -t aitune-flux-schnell:web .
 docker run -d --name aitune-flux-schnell-web --gpus all --ipc=host \
   -p 127.0.0.1:8080:8080 \
   -e HF_TOKEN -e HF_HOME=/cache/huggingface \
   -v "$PWD/hf-cache":/cache/huggingface \
-  -v "$PWD/examples/FluxSchnell/checkpoints":/workspace/aitune/examples/FluxSchnell/checkpoints \
-  aitune-flux-schnell:web
-docker logs -f aitune-flux-schnell-web
+  -v "$PWD/examples/FluxSchnell/results":/workspace/aitune/examples/FluxSchnell/results \
+  aitune-flux-schnell:recipes bash run_dynamo.sh --recipe recipes/single-gpu.yaml --serve
 ```
 
-Open [http://localhost:8080](http://localhost:8080) after the log prints `Web app:`. Model loading and backend compilation
-can take several minutes. The page supports entering a prompt, previewing the image, and downloading the PNG. Both
-the UI and Dynamo run inside the container; only the UI port is published on the host. Use
-`docker stop --time 60 aitune-flux-schnell-web` to stop the deployment.
+Open [http://localhost:8080](http://localhost:8080) when the log prints `Web app:`. Dynamo uses `deployment.port`; the
+UI uses `deployment.web_host` and `deployment.web_port`. If you change the web port, update the Docker port mapping.
+Both services run inside the container. Model loading and compilation can take several minutes; startup is bounded
+by `deployment.readiness_timeout_s`.
 
-The Dockerfile accepts `--build-arg BASE_IMAGE=...` to reuse a compatible image with the CUDA dependencies already
-installed. The HTML is copied and installed with the `flux_schnell` package. To use a different config, mount it and
-set `AITUNE_EXAMPLE_CONFIG_PATH` for both the backend and UI. `WEB_HOST` and `WEB_PORT` control the UI listener; the
-container defaults to `0.0.0.0:8080`.
+The UI serves the packaged `flux_schnell/dynamo/web.html`. It uses the recipe's dimensions and steps, and chooses a
+random seed for each prompt. API clients can send `nvext: {"seed": 123}`; requests without a seed use
+`deployment.seed`. Requests must use the recipe's image dimensions and generate one image at a time.
 
-When running from a checkout with the example environment activated, use `bash run_dynamo.sh --serve`. To attach the
-UI to an already running Dynamo deployment, use `python -m flux_schnell.dynamo.web --endpoint http://127.0.0.1:8000`.
-The web server also accepts `--page` (or `FLUX_WEB_PAGE`) to serve an alternative HTML file.
-
-## Hardware metrics
-
-Set `AITUNE_HARDWARE_METRICS=1` to collect GPU hardware metrics during tuning or inference:
+Without `--serve`, `run_dynamo.sh` waits for readiness, sends `deployment.request_count` requests using the inference
+samples and their seeds, saves PNGs and timings under `output_dir/deployment`, then shuts the services down. To run
+that client against the existing service, execute this inside the container:
 
 ```bash
-AITUNE_HARDWARE_METRICS=1 uv run inference
+python -m flux_schnell.dynamo.client --recipe recipes/single-gpu.yaml
 ```
 
-For model details, see the [FLUX.1-schnell model page](https://huggingface.co/black-forest-labs/FLUX.1-schnell). The multi-GPU
-setup follows the [Diffusers context-parallel inference guide](https://huggingface.co/docs/diffusers/training/distributed_inference#context-parallelism).
+Use `docker logs -f aitune-flux-schnell-web` to follow startup and `docker stop --timeout 60 aitune-flux-schnell-web` to
+stop the deployment.
+
+## Multiple GPUs
+
+Use `--recipe recipes/multi-gpu.yaml` for tuning, inference, and deployment on a machine exposing at least two GPUs.
+Each command automatically launches the configured number of ranks with `torchrun`; additional visible GPUs are not
+used. There is no separate GPU-count CLI override. Explicit external `torchrun` launches are also accepted, provided
+`WORLD_SIZE` equals the recipe's GPU count. The backend configures Diffusers context parallelism on every rank, and
+AITune coordinates distributed tuning and serving. Only rank zero writes images and reports.
+
+Use the same recipe and GPU count for tuning and serving. The multi-GPU recipe saves separate artifacts under
+`results/multi-gpu` and never shares the single-GPU checkpoint.

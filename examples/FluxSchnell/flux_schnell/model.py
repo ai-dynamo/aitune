@@ -1,45 +1,39 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Load a FLUX pipeline for single-GPU or context-parallel execution."""
+"""Load and execute the pinned FLUX pipeline described by a recipe."""
 
 import torch
 import torch.distributed as dist
 from diffusers import ContextParallelConfig, FluxPipeline
 
-from flux_schnell.context_parallel import ContextParallelMode
-from flux_schnell.defaults import DEFAULT_MODEL_NAME
-
-MODEL_NAME = DEFAULT_MODEL_NAME
+from .config import Recipe
+from .distributed import is_rank_zero
 
 
-def get_pipeline(
-    model_name: str = MODEL_NAME,
-    device: str = "cuda",
-    multi_gpu: bool = False,
-    context_parallel: ContextParallelMode = ContextParallelMode.ULYSSES,
-):
-    """Load a pretrained FLUX pipeline from Hugging Face.
-
-    Args:
-        model_name: Hugging Face model name or path.
-        device: Device on which to load the pipeline.
-        multi_gpu: Whether to apply Diffusers context parallelism.
-        context_parallel: Context-parallel attention mode.
-
-    Returns:
-        The loaded FLUX pipeline.
-    """
+def get_pipeline(recipe: Recipe):
     pipeline = FluxPipeline.from_pretrained(
-        model_name,
+        recipe["model"]["base_model"],
+        revision=recipe["model"]["revision"],
         torch_dtype=torch.bfloat16,
-    ).to(device)
-    if multi_gpu:
+    ).to(torch.device("cuda", torch.cuda.current_device()))
+    pipeline.set_progress_bar_config(disable=True)
+    if recipe.gpu_count > 1:
         pipeline.transformer.set_attention_backend("_native_cudnn")
-        world_size = dist.get_world_size()
-        context_parallel_configs = {
-            ContextParallelMode.RING: ContextParallelConfig(ring_degree=world_size),
-            ContextParallelMode.ULYSSES: ContextParallelConfig(ulysses_degree=world_size),
-        }
-        pipeline.transformer.enable_parallelism(config=context_parallel_configs[context_parallel])
+        mode = recipe["execution"]["context_parallel"]
+        pipeline.transformer.enable_parallelism(
+            config=ContextParallelConfig(**{f"{mode}_degree": dist.get_world_size()})
+        )
     torch.cuda.empty_cache()
     return pipeline
+
+
+def generate(pipeline, recipe: Recipe, sample: dict):
+    """Reset the sample seed for every invocation, including warmup and measurement."""
+    with torch.no_grad():
+        return pipeline(
+            prompt=sample["prompt"],
+            **recipe["workload"],
+            generator=torch.Generator("cpu").manual_seed(sample["seed"]),
+            output_type="pil" if is_rank_zero() else "pt",
+            return_dict=True,
+        )

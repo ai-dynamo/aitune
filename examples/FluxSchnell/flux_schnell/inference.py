@@ -1,148 +1,164 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Compare original and AITune-tuned FLUX image generation."""
+"""Generate sample images, validate RGB SSIM, and benchmark using a recipe."""
 
+import json
 import os
+import threading
 import time
 from logging import basicConfig, getLogger
-from pathlib import Path
 
+import numpy as np
 import torch
-from aitune_examples_common.checkpoint import relocated_checkpoint_path
+import torch.distributed as dist
+from skimage.metrics import structural_similarity
 
-import aitune.torch as ait
-from flux_schnell.checkpoint import cpu_checkpoint_storage
-from flux_schnell.cmd_args import parse_args
-from flux_schnell.context_parallel import ContextParallelMode
-from flux_schnell.distributed import distributed_output_path, is_rank_zero, synchronize
-from flux_schnell.distributed import initialize as initialize_distributed
-from flux_schnell.distributed import shutdown as shutdown_distributed
-from flux_schnell.model import get_pipeline
+from .checkpoint import check_checkpoint, load_checkpoint
+from .config import argument_parser, load_recipe
+from .distributed import initialize, is_rank_zero, launch, shutdown, synchronize
+from .model import generate, get_pipeline
 
 logger = getLogger(__name__)
 
 
-def _run_pipeline(pipeline, prompt, sizes, steps, guidance_scale, max_sequence_length, filename_prefix):
-    generated_images = []
-    for width, height in sizes:
-        kwargs = {
-            "prompt": prompt,
-            "height": height,
-            "width": width,
-            "num_inference_steps": steps,
-            "guidance_scale": guidance_scale,
-            "max_sequence_length": max_sequence_length,
-            "generator": torch.Generator("cpu").manual_seed(0),
-            "output_type": "pil" if is_rank_zero() else "pt",
+def _generate_samples(pipeline, recipe, split, variant):
+    images = {}
+    for sample in recipe.samples(split):
+        logger.info("%s %s sample: %s (seed=%s)", variant, split, sample["id"], sample["seed"])
+        output = generate(pipeline, recipe, sample)
+        synchronize()
+        if is_rank_zero():
+            image = output.images[0]
+            path = recipe.output_dir / split / variant / f"{sample['id']}.png"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            image.save(path)
+            images[sample["id"]] = np.asarray(image.convert("RGB"), dtype=np.float32) / 255.0
+    return images
+
+
+def _benchmark(pipeline, recipe):
+    samples = recipe.samples("benchmark")
+    settings = recipe["benchmark"]
+    for index in range(settings["warmup_iterations"]):
+        generate(pipeline, recipe, samples[index % len(samples)])
+    synchronize()
+    device = torch.cuda.current_device()
+    torch.cuda.reset_peak_memory_stats(device)
+    memory_samples = []
+    done = threading.Event()
+
+    def sample_memory():
+        while not done.is_set():
+            memory_samples.append(torch.cuda.memory_allocated(device) / 1024**2)
+            done.wait(settings["sampling_interval_s"])
+
+    monitor = threading.Thread(target=sample_memory, daemon=True)
+    monitor.start()
+    latencies = []
+    try:
+        for index in range(settings["repetitions"]):
+            synchronize()
+            start = time.perf_counter()
+            generate(pipeline, recipe, samples[index % len(samples)])
+            synchronize()
+            latencies.append(time.perf_counter() - start)
+    finally:
+        done.set()
+        monitor.join()
+    memory = {
+        "rank": dist.get_rank() if dist.is_initialized() else 0,
+        "peak_allocated_mib": torch.cuda.max_memory_allocated(device) / 1024**2,
+        "sampled_allocated_mib": memory_samples,
+    }
+    rank_memory = [memory]
+    if dist.is_initialized():
+        rank_memory = [None] * dist.get_world_size()
+        dist.all_gather_object(rank_memory, memory)
+    return {
+        "samples": [sample["id"] for sample in samples],
+        "warmup_iterations": settings["warmup_iterations"],
+        "repetitions": settings["repetitions"],
+        "sampling_interval_s": settings["sampling_interval_s"],
+        "latencies_s": latencies,
+        "mean_s": float(np.mean(latencies)),
+        "p50_s": float(np.percentile(latencies, 50)),
+        "p95_s": float(np.percentile(latencies, 95)),
+        "p99_s": float(np.percentile(latencies, 99)),
+        "images_per_second": len(latencies) / sum(latencies),
+        "gpu_memory": rank_memory,
+    }
+
+
+def _validate(original, tuned, settings):
+    results = []
+    for sample_id, baseline in original.items():
+        candidate = tuned[sample_id]
+        difference = np.abs(baseline - candidate)
+        score = float(structural_similarity(baseline, candidate, data_range=1.0, channel_axis=-1))
+        result = {
+            "id": sample_id,
+            "rgb_ssim": score,
+            "max_abs_diff": float(difference.max()),
+            "max_rel_error": float((difference / np.maximum(np.abs(baseline), 1e-8)).max()),
+            "passed": bool(np.isfinite(candidate).all() and score >= settings["threshold"]),
+            "warning": score < settings["soft_threshold"],
         }
-        if is_rank_zero():
-            logger.info("Warmup generation")
-        pipeline(**kwargs)
-        if is_rank_zero():
-            logger.info("Warmup generation done")
-
-        synchronize()
-        if is_rank_zero():
-            logger.info("%s generation", filename_prefix)
-        start = time.perf_counter()
-        images = pipeline(**kwargs)
-        synchronize()
-
-        if is_rank_zero():
-            logger.info(
-                "%s generation time (%dx%d): %.4f s",
-                filename_prefix,
-                width,
-                height,
-                time.perf_counter() - start,
+        if result["warning"]:
+            logger.warning(
+                "%s RGB SSIM %.4f is below soft threshold %.4f", sample_id, score, settings["soft_threshold"]
             )
-            generated_images.append((images[0][0], width, height))
-    return generated_images
+        results.append(result)
+    return {**settings, "samples": results, "passed": all(result["passed"] for result in results)}
 
 
-def _save_images(output_path, prompt, filename_prefix, generated_images):
-    output_path.mkdir(parents=True, exist_ok=True)
-    for image, width, height in generated_images:
-        image_path = output_path / f"flux_output_{filename_prefix}_{prompt[:20].replace(' ', '_')}_{width}x{height}.jpg"
-        image.save(image_path)
-        logger.info("Generated image saved to: %s", image_path)
-
-
-def do_inference(
-    model_name,
-    prompt,
-    sizes,
-    steps,
-    guidance_scale,
-    max_sequence_length,
-    tuned_model_path,
-    output_dir,
-    multi_gpu=False,
-    context_parallel=ContextParallelMode.ULYSSES,
-):
-    """Generate and save images before and after loading an AITune checkpoint.
-
-    Args:
-        model_name: Hugging Face model name or path.
-        prompt: Text prompt for image generation.
-        sizes: List of ``(width, height)`` tuples.
-        steps: Number of inference steps.
-        guidance_scale: Guidance scale.
-        max_sequence_length: Maximum sequence length.
-        tuned_model_path: Path from which to load the tuned model.
-        output_dir: Directory in which to save generated images.
-        multi_gpu: Whether to use Diffusers context parallelism.
-        context_parallel: Context-parallel attention mode.
-    """
-    pipeline = get_pipeline(model_name=model_name, multi_gpu=multi_gpu, context_parallel=context_parallel)
-
-    output_path = Path(output_dir)
+def do_inference(recipe):
+    manifest = check_checkpoint(recipe)
+    pipeline = get_pipeline(recipe)
+    validation_images, benchmarks = {}, {}
+    for variant in ("original", "tuned"):
+        if variant == "tuned":
+            pipeline = load_checkpoint(pipeline, recipe)
+        _generate_samples(pipeline, recipe, "inference", variant)
+        validation_images[variant] = _generate_samples(pipeline, recipe, "validation", variant)
+        benchmarks[variant] = _benchmark(pipeline, recipe)
+    passed = True
     if is_rank_zero():
-        logger.info("Generating images on original pipeline")
-    original_images = _run_pipeline(pipeline, prompt, sizes, steps, guidance_scale, max_sequence_length, "orig")
-    if is_rank_zero():
-        _save_images(output_path, prompt, "orig", original_images)
-    synchronize()
-
-    if is_rank_zero():
-        logger.info("Loading tuned pipeline")
-    pipeline = ait.load(pipeline, tuned_model_path, storage=cpu_checkpoint_storage())
-
-    if is_rank_zero():
-        logger.info("Generating images on tuned pipeline")
-    tuned_images = _run_pipeline(pipeline, prompt, sizes, steps, guidance_scale, max_sequence_length, "tuned")
-    if is_rank_zero():
-        _save_images(output_path, prompt, "tuned", tuned_images)
-    synchronize()
-
-
-def run_example(args, multi_gpu: bool) -> None:
-    """Generate images before and after loading the configured checkpoint."""
-    tuned_model_path = distributed_output_path(args.tuned_model_path)
-    do_inference(
-        model_name=args.model_name,
-        prompt=args.prompt,
-        sizes=args.sizes,
-        steps=args.steps,
-        guidance_scale=args.guidance_scale,
-        max_sequence_length=args.max_sequence_length,
-        tuned_model_path=relocated_checkpoint_path(tuned_model_path),
-        output_dir=os.environ.get("AITUNE_OUTPUT_DIR", "output"),
-        multi_gpu=multi_gpu,
-        context_parallel=args.context_parallel,
-    )
+        validation = _validate(validation_images["original"], validation_images["tuned"], recipe["validation"])
+        passed = validation["passed"]
+        report = {
+            "recipe": str(recipe.path),
+            "model": recipe["model"],
+            "gpu_count": recipe.gpu_count,
+            "inference_samples": recipe.samples("inference"),
+            "validation": validation,
+            "benchmark": benchmarks,
+            "speedup": benchmarks["original"]["mean_s"] / benchmarks["tuned"]["mean_s"],
+            "tuning_seconds": manifest["tuning_seconds"],
+        }
+        (recipe.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+        logger.info(
+            "Validation passed=%s; speedup=%.3fx; report=%s",
+            passed,
+            report["speedup"],
+            recipe.output_dir / "report.json",
+        )
+    if dist.is_initialized():
+        status = [passed]
+        dist.broadcast_object_list(status, src=0)
+        passed = status[0]
+    if not passed:
+        raise RuntimeError("Tuned output failed the recipe's RGB SSIM threshold; see report.json")
 
 
 def main():
-    """Initialize distributed execution, run the example, and release its resources."""
-    log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
-    basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
-    args = parse_args()
-    multi_gpu = initialize_distributed()
+    basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
+    recipe = load_recipe(argument_parser(__doc__).parse_args().recipe)
+    launch(recipe, "flux_schnell.inference")
+    initialize()
     try:
-        run_example(args, multi_gpu)
+        do_inference(recipe)
     finally:
-        shutdown_distributed()
+        shutdown()
 
 
 if __name__ == "__main__":

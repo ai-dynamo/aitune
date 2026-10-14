@@ -4,11 +4,9 @@
 
 from __future__ import annotations
 
-import argparse
 import base64
 import json
 import logging
-import os
 import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,9 +14,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-import yaml
-
-from ..defaults import DEFAULT_IMAGE_SIZE, DEFAULT_INFERENCE_STEPS, DEFAULT_MODEL_NAME
+from ..config import argument_parser, load_recipe
 
 logger = logging.getLogger(__name__)
 MAX_BODY = 64 * 1024
@@ -135,33 +131,22 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default=os.environ.get("AITUNE_EXAMPLE_CONFIG_PATH", "config.yaml"))
-    parser.add_argument("--endpoint", default="http://127.0.0.1:8000")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument(
-        "--page",
-        type=Path,
-        default=Path(os.environ.get("FLUX_WEB_PAGE", Path(__file__).with_name("web.html"))),
-        help="Image-generation HTML (defaults to web.html in this package)",
-    )
-    args = parser.parse_args()
-    with Path(args.config).open() as config_file:
-        backend = yaml.safe_load(config_file)["Backend"]
-    width, height = backend.get("sizes", [DEFAULT_IMAGE_SIZE])[0]
-    page = args.page.read_bytes()
-    with WebServer((args.host, args.port), Handler) as server:
+    recipe = load_recipe(argument_parser(__doc__).parse_args().recipe)
+    deployment, workload = recipe["deployment"], recipe["workload"]
+    with WebServer((deployment["web_host"], deployment["web_port"]), Handler) as server:
         server.cfg = {
-            "model_name": backend.get("model_name", DEFAULT_MODEL_NAME),
-            "width": width,
-            "height": height,
-            "steps": backend.get("steps", DEFAULT_INFERENCE_STEPS),
+            "model_name": recipe["model"]["base_model"],
+            "width": workload["width"],
+            "height": workload["height"],
+            "steps": workload["num_inference_steps"],
         }
-        server.endpoint = args.endpoint.rstrip("/")
-        server.page = page
+        server.endpoint = recipe.endpoint
+        server.page = Path(__file__).with_name("web.html").read_bytes()
         server.generation_lock = threading.Lock()
-        print(f"Web app: http://{args.host}:{server.server_port}; image service: {server.endpoint}", flush=True)
+        print(
+            f"Web app: http://{deployment['web_host']}:{server.server_port}; image service: {recipe.endpoint}",
+            flush=True,
+        )
         try:
             server.serve_forever()
         except KeyboardInterrupt:

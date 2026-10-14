@@ -3,10 +3,8 @@
 """Inspect and tune a FLUX pipeline on one or multiple GPUs."""
 
 import os
+import time
 from logging import basicConfig, getLogger
-
-import torch
-from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 
 import aitune.torch as ait
 from aitune.torch.backend import (
@@ -18,13 +16,11 @@ from aitune.torch.backend import (
     TorchTensorRTJitBackend,
     TorchTensorRTJitBackendConfig,
 )
-from flux_schnell.cmd_args import parse_args
-from flux_schnell.context_parallel import ContextParallelMode
-from flux_schnell.defaults import DEFAULT_BATCH_SIZE
-from flux_schnell.distributed import distributed_output_path, is_rank_zero, synchronize
-from flux_schnell.distributed import initialize as initialize_distributed
-from flux_schnell.distributed import shutdown as shutdown_distributed
-from flux_schnell.model import get_pipeline
+
+from .checkpoint import save_checkpoint
+from .config import argument_parser, load_recipe
+from .distributed import initialize, launch, shutdown
+from .model import generate, get_pipeline
 
 logger = getLogger(__name__)
 
@@ -52,11 +48,9 @@ def filter_fn(mod, fqn):
 
 
 def _transformer_strategy(
-    sizes: list[tuple[int, int]],
     multi_gpu=False,
     quantization=False,
 ):
-    dynamic = len(sizes) > 1
     backends = []
     if quantization:
         backends = [
@@ -67,130 +61,62 @@ def _transformer_strategy(
     backends += [
         TorchTensorRTJitBackend(
             config=TorchTensorRTJitBackendConfig(
-                dynamic=dynamic,
+                dynamic=False,
                 compile_config=TorchTensorRTConfig(
                     use_distributed_mode_trace=multi_gpu, min_block_size=50, truncate_double=True
                 ),
             )
         ),
-        TorchInductorJitBackend(config=TorchInductorJitBackendConfig(dynamic=dynamic)),
+        TorchInductorJitBackend(config=TorchInductorJitBackendConfig(dynamic=False)),
     ]
 
     strategy = ait.MaxThroughputStrategy(backends=backends)
     return strategy
 
 
-def tune_model(
-    model_name,
-    prompt,
-    sizes,
-    steps,
-    guidance_scale,
-    max_sequence_length,
-    tuned_model_path,
-    multi_gpu=False,
-    context_parallel=ContextParallelMode.ULYSSES,
-    quantization=False,
-):
-    """Inspect, tune, and save the FLUX pipeline.
+def tune_model(recipe):
+    """Inspect all tuning samples, select backends, and save rank-specific artifacts."""
+    pipeline = get_pipeline(recipe)
+    samples = recipe.samples("tune")
+    logger.info("Tuning samples: %s", [sample["id"] for sample in samples])
 
-    Args:
-        model_name: Hugging Face model name or path.
-        prompt: Text prompt for image generation.
-        sizes: List of ``(width, height)`` tuples.
-        steps: Number of inference steps.
-        guidance_scale: Guidance scale.
-        max_sequence_length: Maximum sequence length.
-        tuned_model_path: Path used to save the tuned model.
-        multi_gpu: Whether to use Diffusers context parallelism.
-        context_parallel: Context-parallel attention mode.
-        quantization: Whether to include TorchAO quantization backends for the transformer.
-    """
-    pipeline = get_pipeline(model_name=model_name, multi_gpu=multi_gpu, context_parallel=context_parallel)
+    def run_pipeline(prompt, seed):
+        return generate(pipeline, recipe, {"prompt": prompt, "seed": int(seed)})
 
-    def run_pipeline(*args, **kwargs):
-        for width, height in sizes:
-            print(f"Generating image with height={height} and width={width}")  # noqa: T201
-            pipeline(
-                *args,
-                height=height,
-                width=width,
-                num_inference_steps=steps,
-                guidance_scale=guidance_scale,
-                max_sequence_length=max_sequence_length,
-                generator=torch.Generator("cpu").manual_seed(0),
-                output_type="pil" if is_rank_zero() else "pt",
-                **kwargs,
-            )
-
-    input_data = [{"prompt": prompt}]
-
-    # Inspect the end-to-end pipeline to discover tunable modules.
+    input_data = [{"prompt": sample["prompt"], "seed": sample["seed"]} for sample in samples]
     modules_info = ait.inspect(
         pipeline,
         input_data,
         inference_function=run_pipeline,
-        number_of_iterations=1,
-        warmup_iterations=2,
+        number_of_iterations=len(samples),
+        warmup_iterations=recipe["benchmark"]["warmup_iterations"],
     )
     modules_info.describe()
-
-    transformer_strategy = _transformer_strategy(sizes=sizes, multi_gpu=multi_gpu, quantization=quantization)
-    # Match the single-image workload used by this example's inference and serving commands.
-    transformer_strategy.enable_find_max_batch_size(False)
+    transformer_strategy = _transformer_strategy(
+        multi_gpu=recipe.gpu_count > 1,
+        quantization=recipe["tuning"]["quantization"],
+    ).enable_find_max_batch_size(False)
     default_strategy = ait.resolve_strategy().enable_find_max_batch_size(False)
-
-    # Leave all modules except the transformer unquantized.
-    modules = [m for m in modules_info.get_modules() if m.name != "transformer"]
+    modules = [module for module in modules_info.get_modules() if module.name != "transformer"]
     pipeline = ait.wrap(pipeline, modules, strategy=default_strategy)
-
-    # Tune the transformer separately so quantization can be enabled independently.
-    pipeline.transformer = ait.module.Module(
-        pipeline.transformer,
-        name="transformer",
-        strategy=transformer_strategy,
-    )
-
-    # Record the generation workload and tune every wrapped module.
-    logger.info("Tuning pipeline: %s", model_name)
-    ait.tune(run_pipeline, input_data, batch_sizes=[DEFAULT_BATCH_SIZE])
-    logger.info("Tuning completed.")
-
-    if multi_gpu:
-        tuned_model_path = distributed_output_path(tuned_model_path)
-    ait.save(pipeline, tuned_model_path)
-    logger.info("Model saved to %s", tuned_model_path)
-    relocated_path = copy_checkpoint_to_tmp(tuned_model_path)
-    logger.info("Checkpoint copied to %s", relocated_path)
-
-
-def run_example(args, multi_gpu: bool) -> None:
-    """Inspect, tune, and save the configured FLUX pipeline."""
-    tune_model(
-        model_name=args.model_name,
-        prompt=args.prompt,
-        sizes=args.sizes,
-        steps=args.steps,
-        guidance_scale=args.guidance_scale,
-        max_sequence_length=args.max_sequence_length,
-        tuned_model_path=args.tuned_model_path,
-        multi_gpu=multi_gpu,
-        context_parallel=args.context_parallel,
-        quantization=args.quantization,
-    )
-    synchronize()
+    pipeline.transformer = ait.module.Module(pipeline.transformer, name="transformer", strategy=transformer_strategy)
+    started = time.perf_counter()
+    ait.tune(run_pipeline, input_data, batch_sizes=[1])
+    tuning_seconds = time.perf_counter() - started
+    save_checkpoint(pipeline, recipe, tuning_seconds)
+    logger.info("Saved %s; tuning took %.3f seconds", recipe.artifact_path, tuning_seconds)
 
 
 def main():
-    """Initialize distributed execution, run the example, and release its resources."""
-    log_level = os.environ.get("AITUNE_LOG_LEVEL", "INFO")
-    basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d %(name)s %(message)s", datefmt="%H:%M:%S", force=True)
-    args = parse_args()
-    multi_gpu = initialize_distributed()
+    basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
+    args = argument_parser(__doc__).parse_args()
+    recipe = load_recipe(args.recipe)
+    launch(recipe, "flux_schnell.tune")
+    initialize()
     try:
-        run_example(args, multi_gpu)
+        tune_model(recipe)
     finally:
-        shutdown_distributed()
+        shutdown()
 
 
 if __name__ == "__main__":

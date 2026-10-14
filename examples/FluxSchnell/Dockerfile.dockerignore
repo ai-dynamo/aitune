@@ -6,14 +6,13 @@
 !aitune/
 !aitune/**
 !examples/
-!examples/common/
-!examples/common/**
 !examples/FluxSchnell/
 !examples/FluxSchnell/**
 **/__pycache__
 **/*.pyc
 **/*.egg-info
 examples/FluxSchnell/.validation
+examples/FluxSchnell/results
 examples/FluxSchnell/checkpoints
 examples/FluxSchnell/output
 examples/FluxSchnell/output.png
