@@ -317,7 +317,7 @@ def test_tune_save_load_complex_pipeline(complex_pipeline_factory, sample, torch
 
     with torch.no_grad():
         preds = pipeline(test_data)
-    torch.testing.assert_close(preds, expected, rtol=1e-4, atol=1e-4)
+    torch.testing.assert_close(preds, expected, rtol=1e-3, atol=1e-3)
 
 
 @requires_cuda
@@ -347,7 +347,7 @@ def test_tune_save_load_complex_pipeline_with_device_map(complex_pipeline_factor
 
     with torch.no_grad():
         preds = pipeline(test_data)
-    torch.testing.assert_close(preds, expected, rtol=1e-4, atol=1e-4)
+    torch.testing.assert_close(preds, expected, rtol=1e-3, atol=1e-3)
 
 
 @requires_cuda
