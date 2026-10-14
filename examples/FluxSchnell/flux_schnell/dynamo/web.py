@@ -11,6 +11,7 @@ import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import TypedDict
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -20,7 +21,14 @@ logger = logging.getLogger(__name__)
 MAX_BODY = 64 * 1024
 
 
-def generate_image(endpoint: str, cfg: dict, prompt: str) -> bytes:
+class WebConfig(TypedDict):
+    model_name: str
+    width: int
+    height: int
+    steps: int
+
+
+def generate_image(endpoint: str, cfg: WebConfig, prompt: str) -> bytes:
     with urlopen(endpoint + "/v1/models", timeout=10) as response:
         models = json.load(response)["data"]
     names = [model["id"] for model in models if model["id"] == cfg["model_name"]]
@@ -50,7 +58,7 @@ def generate_image(endpoint: str, cfg: dict, prompt: str) -> bytes:
 
 
 class WebServer(ThreadingHTTPServer):
-    cfg: dict
+    cfg: WebConfig
     endpoint: str
     page: bytes
     generation_lock: threading.Lock

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Launch Dynamo and optionally keep the recipe's prompt UI running."""
 
+from __future__ import annotations
+
 import json
 import os
 import signal
@@ -9,14 +11,17 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Sequence
 from pathlib import Path
+from types import FrameType
+from typing import NoReturn
 from urllib.error import URLError
 from urllib.request import urlopen
 
-from ..config import argument_parser, load_recipe
+from ..config import Recipe, argument_parser, load_recipe
 
 
-def _ready(recipe):
+def _ready(recipe: Recipe) -> bool:
     try:
         with urlopen(recipe.endpoint + "/health", timeout=5) as response:
             health = response.read().decode()
@@ -29,7 +34,7 @@ def _ready(recipe):
         return False
 
 
-def _wait_ready(recipe, processes):
+def _wait_ready(recipe: Recipe, processes: Sequence[subprocess.Popen[bytes]]) -> None:
     deadline = time.monotonic() + recipe["deployment"]["readiness_timeout_s"]
     while time.monotonic() < deadline:
         if any(process.poll() is not None for process in processes):
@@ -41,7 +46,7 @@ def _wait_ready(recipe, processes):
     raise TimeoutError("Dynamo readiness exceeded deployment.readiness_timeout_s")
 
 
-def _stop(process):
+def _stop(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is None:
         process.terminate()
     try:
@@ -51,7 +56,7 @@ def _stop(process):
         process.wait()
 
 
-def run(recipe, serve):
+def run(recipe: Recipe, serve: bool) -> None:
     env = {
         **os.environ,
         "DYN_DISCOVERY_BACKEND": "file",
@@ -59,13 +64,13 @@ def run(recipe, serve):
         "DYN_REQUEST_PLANE": "tcp",
         "DYN_ROUTER_USE_KV_EVENTS": "false",
     }
-    processes = []
-    backend = None
+    processes: list[subprocess.Popen[bytes]] = []
+    backend: subprocess.Popen[bytes] | None = None
     with tempfile.TemporaryDirectory(prefix="flux-schnell-dynamo-") as directory:
         pid_file = Path(directory) / "rank-zero.pid"
         env["AITUNE_DYNAMO_RANK_ZERO_PID_FILE"] = str(pid_file)
 
-        def start(module, *arguments):
+        def start(module: str, *arguments: str) -> subprocess.Popen[bytes]:
             process = subprocess.Popen([sys.executable, "-m", module, *arguments], env=env, start_new_session=True)
             processes.append(process)
             return process
@@ -93,7 +98,7 @@ def run(recipe, serve):
                 _stop(process)
 
 
-def main():
+def main() -> None:
     parser = argument_parser(__doc__)
     parser.add_argument(
         "--serve", action="store_true", help="Keep Dynamo and the UI running instead of running the client"
@@ -101,7 +106,7 @@ def main():
     args = parser.parse_args()
     recipe = load_recipe(args.recipe)
 
-    def interrupted(_signal, _frame):
+    def interrupted(_signal: int, _frame: FrameType | None) -> NoReturn:
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, interrupted)

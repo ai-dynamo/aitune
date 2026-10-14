@@ -5,12 +5,13 @@
 import torch
 import torch.distributed as dist
 from diffusers import ContextParallelConfig, FluxPipeline
+from diffusers.pipelines.flux.pipeline_output import FluxPipelineOutput
 
-from .config import Recipe
+from .config import GenerationInput, Recipe, Sample
 from .distributed import is_rank_zero
 
 
-def get_pipeline(recipe: Recipe):
+def get_pipeline(recipe: Recipe) -> FluxPipeline:
     pipeline = FluxPipeline.from_pretrained(
         recipe["model"]["base_model"],
         revision=recipe["model"]["revision"],
@@ -27,7 +28,7 @@ def get_pipeline(recipe: Recipe):
     return pipeline
 
 
-def generate(pipeline, recipe: Recipe, sample: dict):
+def generate(pipeline: FluxPipeline, recipe: Recipe, sample: GenerationInput | Sample) -> FluxPipelineOutput:
     """Reset the sample seed for every invocation, including warmup and measurement."""
     with torch.no_grad():
         return pipeline(

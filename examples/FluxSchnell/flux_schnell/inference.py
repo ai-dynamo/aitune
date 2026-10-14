@@ -2,33 +2,88 @@
 # SPDX-License-Identifier: Apache-2.0
 """Generate sample images, validate RGB SSIM, and benchmark using a recipe."""
 
+from __future__ import annotations
+
 import json
 import os
 import threading
 import time
 from logging import basicConfig, getLogger
+from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import numpy as np
 import torch
 import torch.distributed as dist
+from numpy.typing import NDArray
+from PIL import Image
 from skimage.metrics import structural_similarity
 
 from .checkpoint import check_checkpoint, load_checkpoint
-from .config import argument_parser, load_recipe
+from .config import BenchmarkSettings, ModelSettings, Recipe, Sample, ValidationSettings, argument_parser, load_recipe
 from .distributed import initialize, is_rank_zero, launch, shutdown, synchronize
 from .model import generate, get_pipeline
 
+if TYPE_CHECKING:
+    from diffusers import FluxPipeline
+
 logger = getLogger(__name__)
 
+Variant = Literal["original", "tuned"]
+ImageSamples = dict[str, NDArray[np.float32]]
 
-def _generate_samples(pipeline, recipe, split, variant):
-    images = {}
+
+class GPUMemoryMeasurements(TypedDict):
+    rank: int
+    peak_allocated_mib: float
+    sampled_allocated_mib: list[float]
+
+
+class BenchmarkResult(BenchmarkSettings):
+    samples: list[str]
+    latencies_s: list[float]
+    mean_s: float
+    p50_s: float
+    p95_s: float
+    p99_s: float
+    images_per_second: float
+    gpu_memory: list[GPUMemoryMeasurements]
+
+
+class SampleValidationResult(TypedDict):
+    id: str
+    rgb_ssim: float
+    max_abs_diff: float
+    max_rel_error: float
+    passed: bool
+    warning: bool
+
+
+class ValidationResult(ValidationSettings):
+    samples: list[SampleValidationResult]
+    passed: bool
+
+
+class InferenceReport(TypedDict):
+    recipe: str
+    model: ModelSettings
+    gpu_count: int
+    inference_samples: list[Sample]
+    validation: ValidationResult
+    benchmark: dict[Variant, BenchmarkResult]
+    speedup: float
+    tuning_seconds: float
+
+
+def _generate_samples(
+    pipeline: FluxPipeline, recipe: Recipe, split: Literal["inference", "validation"], variant: str
+) -> ImageSamples:
+    images: ImageSamples = {}
     for sample in recipe.samples(split):
         logger.info("%s %s sample: %s (seed=%s)", variant, split, sample["id"], sample["seed"])
         output = generate(pipeline, recipe, sample)
         synchronize()
         if is_rank_zero():
-            image = output.images[0]
+            image = cast(Image.Image, output.images[0])  # Rank zero requests PIL output.
             path = recipe.output_dir / split / variant / f"{sample['id']}.png"
             path.parent.mkdir(parents=True, exist_ok=True)
             image.save(path)
@@ -36,7 +91,7 @@ def _generate_samples(pipeline, recipe, split, variant):
     return images
 
 
-def _benchmark(pipeline, recipe):
+def _benchmark(pipeline: FluxPipeline, recipe: Recipe) -> BenchmarkResult:
     samples = recipe.samples("benchmark")
     settings = recipe["benchmark"]
     for index in range(settings["warmup_iterations"]):
@@ -44,17 +99,17 @@ def _benchmark(pipeline, recipe):
     synchronize()
     device = torch.cuda.current_device()
     torch.cuda.reset_peak_memory_stats(device)
-    memory_samples = []
+    memory_samples: list[float] = []
     done = threading.Event()
 
-    def sample_memory():
+    def sample_memory() -> None:
         while not done.is_set():
             memory_samples.append(torch.cuda.memory_allocated(device) / 1024**2)
             done.wait(settings["sampling_interval_s"])
 
     monitor = threading.Thread(target=sample_memory, daemon=True)
     monitor.start()
-    latencies = []
+    latencies: list[float] = []
     try:
         for index in range(settings["repetitions"]):
             synchronize()
@@ -65,15 +120,16 @@ def _benchmark(pipeline, recipe):
     finally:
         done.set()
         monitor.join()
-    memory = {
+    memory: GPUMemoryMeasurements = {
         "rank": dist.get_rank() if dist.is_initialized() else 0,
         "peak_allocated_mib": torch.cuda.max_memory_allocated(device) / 1024**2,
         "sampled_allocated_mib": memory_samples,
     }
     rank_memory = [memory]
     if dist.is_initialized():
-        rank_memory = [None] * dist.get_world_size()
-        dist.all_gather_object(rank_memory, memory)
+        gathered: list[GPUMemoryMeasurements | None] = [None] * dist.get_world_size()
+        dist.all_gather_object(gathered, memory)
+        rank_memory = cast(list[GPUMemoryMeasurements], gathered)  # The collective fills every rank's slot.
     return {
         "samples": [sample["id"] for sample in samples],
         "warmup_iterations": settings["warmup_iterations"],
@@ -89,13 +145,13 @@ def _benchmark(pipeline, recipe):
     }
 
 
-def _validate(original, tuned, settings):
-    results = []
+def _validate(original: ImageSamples, tuned: ImageSamples, settings: ValidationSettings) -> ValidationResult:
+    results: list[SampleValidationResult] = []
     for sample_id, baseline in original.items():
         candidate = tuned[sample_id]
         difference = np.abs(baseline - candidate)
         score = float(structural_similarity(baseline, candidate, data_range=1.0, channel_axis=-1))
-        result = {
+        result: SampleValidationResult = {
             "id": sample_id,
             "rgb_ssim": score,
             "max_abs_diff": float(difference.max()),
@@ -111,11 +167,13 @@ def _validate(original, tuned, settings):
     return {**settings, "samples": results, "passed": all(result["passed"] for result in results)}
 
 
-def do_inference(recipe):
+def do_inference(recipe: Recipe) -> None:
     manifest = check_checkpoint(recipe)
     pipeline = get_pipeline(recipe)
-    validation_images, benchmarks = {}, {}
-    for variant in ("original", "tuned"):
+    validation_images: dict[Variant, ImageSamples] = {}
+    benchmarks: dict[Variant, BenchmarkResult] = {}
+    variants: tuple[Variant, ...] = ("original", "tuned")
+    for variant in variants:
         if variant == "tuned":
             pipeline = load_checkpoint(pipeline, recipe)
         _generate_samples(pipeline, recipe, "inference", variant)
@@ -125,7 +183,7 @@ def do_inference(recipe):
     if is_rank_zero():
         validation = _validate(validation_images["original"], validation_images["tuned"], recipe["validation"])
         passed = validation["passed"]
-        report = {
+        report: InferenceReport = {
             "recipe": str(recipe.path),
             "model": recipe["model"],
             "gpu_count": recipe.gpu_count,
@@ -150,7 +208,7 @@ def do_inference(recipe):
         raise RuntimeError("Tuned output failed the recipe's RGB SSIM threshold; see report.json")
 
 
-def main():
+def main() -> None:
     basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
     recipe = load_recipe(argument_parser(__doc__).parse_args().recipe)
     launch(recipe, "flux_schnell.inference")

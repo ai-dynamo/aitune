@@ -9,8 +9,10 @@ from pathlib import Path
 import torch
 import torch.distributed as dist
 
+from .config import Recipe
 
-def launch(recipe, module: str) -> None:
+
+def launch(recipe: Recipe, module: str) -> None:
     """Launch exactly the recipe's GPU count, preserving explicit torchrun launches."""
     available = torch.cuda.device_count()
     if available < recipe.gpu_count:

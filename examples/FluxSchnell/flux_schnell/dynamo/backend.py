@@ -2,24 +2,33 @@
 # SPDX-License-Identifier: Apache-2.0
 """Serve the selected recipe's tuned FLUX pipeline with NVIDIA Dynamo."""
 
+from __future__ import annotations
+
 import io
 import os
 import threading
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, cast
+
+from PIL import Image
 
 import aitune.dynamo as dyn
 
 from ..checkpoint import check_checkpoint, load_checkpoint
-from ..config import Recipe, argument_parser, load_recipe
+from ..config import GenerationInput, Recipe, argument_parser, load_recipe
 from ..distributed import initialize, is_rank_zero, launch, shutdown
 from ..model import generate, get_pipeline
+
+if TYPE_CHECKING:
+    from diffusers import FluxPipeline
+    from diffusers.pipelines.flux.pipeline_output import FluxPipelineOutput
+    from dynamo.common.protocols.image_protocol import NvCreateImageRequest
 
 
 class FluxDynamoBackend:
     def __init__(self, recipe: Recipe) -> None:
         self.recipe = recipe
-        self._pipeline = None
+        self._pipeline: FluxPipeline | None = None
         self._generation_lock = threading.Lock()
 
     def run(self) -> None:
@@ -45,7 +54,7 @@ class FluxDynamoBackend:
         if pid_file and is_rank_zero():
             Path(pid_file).write_text(str(os.getpid()))
 
-    def map_request(self, request: Any) -> dict:
+    def map_request(self, request: NvCreateImageRequest) -> GenerationInput:
         workload = self.recipe["workload"]
         expected_size = f"{workload['width']}x{workload['height']}"
         if request.size and request.size != expected_size:
@@ -64,10 +73,11 @@ class FluxDynamoBackend:
         if not is_rank_zero():
             return None
         buffer = io.BytesIO()
-        result.images[0].save(buffer, format="PNG")
+        image = cast(Image.Image, result.images[0])  # Rank zero requests PIL output.
+        image.save(buffer, format="PNG")
         return buffer.getvalue()
 
-    def _run_pipeline(self, prompt: str, seed: int):
+    def _run_pipeline(self, prompt: str, seed: int) -> FluxPipelineOutput:
         if self._pipeline is None:
             raise RuntimeError("FLUX pipeline is not initialized")
         with self._generation_lock:

@@ -5,19 +5,27 @@
 import base64
 import json
 import time
+from typing import TypedDict
 
 from openai import OpenAI
 
-from ..config import argument_parser, load_recipe
+from ..config import Recipe, argument_parser, load_recipe
 
 
-def run(recipe):
+class DeploymentRecord(TypedDict):
+    sample: str
+    seed: int
+    image: str
+    latency_s: float
+
+
+def run(recipe: Recipe) -> None:
     client = OpenAI(base_url=recipe.endpoint + "/v1", api_key="unused", timeout=600)
     samples = recipe.samples("inference")
     workload = recipe["workload"]
     output_dir = recipe.output_dir / "deployment"
     output_dir.mkdir(parents=True, exist_ok=True)
-    records = []
+    records: list[DeploymentRecord] = []
     for index in range(recipe["deployment"]["request_count"]):
         sample = samples[index % len(samples)]
         started = time.perf_counter()
@@ -44,7 +52,7 @@ def run(recipe):
     (output_dir / "report.json").write_text(json.dumps(records, indent=2) + "\n")
 
 
-def main():
+def main() -> None:
     run(load_recipe(argument_parser(__doc__).parse_args().recipe))
 
 
