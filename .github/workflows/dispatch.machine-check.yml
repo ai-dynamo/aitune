@@ -33,7 +33,7 @@ env:
   NCCL_NET: Socket
 
   # Actions version pins
-  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@v7.0.1
 
 defaults:
   run:
