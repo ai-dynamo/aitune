@@ -6,7 +6,9 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 import torch
+import wrapt
 
+from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.registration import JITRegistration, _collect_modules, register_for_jit_tuning
 from aitune.torch.module.tuned_module import TunedModule
 
@@ -63,6 +65,21 @@ def _manager_id(manager: Any) -> int:
     if not isinstance(manager_id, int) or isinstance(manager_id, bool):
         raise RuntimeError("FlexTensor must expose an integer compiled_offload_manager_id")
     return manager_id
+
+
+def _tuned_forward_signature(patched: PatchedModule) -> tuple[object, object, object]:
+    """Identify owned dispatch across proxies recreated by ordinary tuned inference."""
+    forward = patched.__wrapped__.forward
+    router = getattr(forward, "_self_wrapper", None)
+    if (
+        type(forward) is not wrapt.FunctionWrapper
+        or getattr(router, "__self__", None) is not patched
+        or getattr(router, "__func__", None) is not patched._forward_router.__func__
+        or forward.__wrapped__ is not patched._original_forward
+        or not isinstance(patched._wrapper, TunedModule)
+    ):
+        raise RuntimeError("FlexTensor strategy replanning replaced an installed AITune forward; use a fresh worker")
+    return forward.__wrapped__, router.__func__, patched._wrapper
 
 
 def register_flextensor_units(
@@ -132,7 +149,7 @@ def replan_flextensor(manager: Any, registration: JITRegistration, run_forward: 
         raise TypeError("run_forward must be a callback executing one complete manager model forward")
     if not _status(manager).can_request:
         raise RuntimeError("FlexTensor strategy replanning is unavailable; use a fresh worker")
-    forwards = [(patched.__wrapped__, patched.__wrapped__.forward) for patched in tuned]
+    forwards = [(patched, _tuned_forward_signature(patched)) for patched in tuned]
     count = manager.request_strategy_replan()
     if not isinstance(count, int) or isinstance(count, bool) or count <= 0:
         raise RuntimeError("FlexTensor request_strategy_replan() must return a positive integer forward count")
@@ -141,5 +158,11 @@ def replan_flextensor(manager: Any, registration: JITRegistration, run_forward: 
     status = _status(manager)
     if status.state != "done" or status.applied is not True:
         raise RuntimeError("FlexTensor did not complete and apply strategy replanning; use a fresh worker")
-    if any(module.forward is not forward for module, forward in forwards):
+    if any(
+        any(
+            actual is not expected
+            for actual, expected in zip(_tuned_forward_signature(patched), signature, strict=True)
+        )
+        for patched, signature in forwards
+    ):
         raise RuntimeError("FlexTensor strategy replanning replaced an installed AITune forward; use a fresh worker")

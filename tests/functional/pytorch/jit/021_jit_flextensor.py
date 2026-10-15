@@ -23,7 +23,7 @@ from torch._dynamo.utils import counters
 from aitune.torch import jit_config
 from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.jit.config import JITMode
-from aitune.torch.jit.flextensor import register_flextensor_units, replan_flextensor
+from aitune.torch.jit.flextensor import _tuned_forward_signature, register_flextensor_units, replan_flextensor
 from aitune.torch.jit.tune import deferred
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy import OneBackendStrategy
@@ -151,7 +151,7 @@ def run(mode, cache_dir):
         assert registration.all_tuned, registration.state_counts
         backends = selected_backends(registration)
         assert counters["stats"]["unique_graphs"] > compiled_before, "No Inductor graphs were compiled"
-        forwards = tuple(module.forward for module in units)
+        forward_signatures = tuple(_tuned_forward_signature(wrapper) for wrapper in registration._patched_modules)
         with ExitStack() as stack:
             spies = {
                 id(backend): stack.enter_context(patch.object(backend, "infer", wraps=backend.infer))
@@ -160,7 +160,11 @@ def run(mode, cache_dir):
             replan_flextensor(manager, registration, lambda: model(values[0]))
             status = manager.strategy_replan_status
             assert status.state == "done" and status.applied is True, status
-            assert all(module.forward is forward for module, forward in zip(units, forwards, strict=True))
+            assert all(
+                actual is original
+                for wrapper, signature in zip(registration._patched_modules, forward_signatures, strict=True)
+                for actual, original in zip(_tuned_forward_signature(wrapper), signature, strict=True)
+            ), "An offload unit changed its prepared forward, AITune router or tuned dispatcher after replan"
             assert all(
                 module.forward == forward
                 for (_, module), forward in zip(manager.resident_units(), resident_forwards, strict=True)
@@ -170,9 +174,10 @@ def run(mode, cache_dir):
             for value, baseline in zip(values, expected, strict=True):
                 torch.testing.assert_close(model(value), baseline)
             for wrapper in registration._patched_modules:
+                tuned = wrapper._wrapper
+                assert isinstance(tuned, TunedModule), "An offload unit lost its tuned routes after replan"
                 assert any(
-                    spies[id(backend)].call_count > calls_before[id(backend)]
-                    for backend in wrapper._wrapper.backends.values()
+                    spies[id(backend)].call_count > calls_before[id(backend)] for backend in tuned.backends.values()
                 ), "An offload unit bypassed all of its compiled routes after replan"
     print(f"{mode}: {len(units)} live units compiled; real offload and compiled dispatch survive strategy replan")
 

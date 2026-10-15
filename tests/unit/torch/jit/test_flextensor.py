@@ -6,11 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+import wrapt
 
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
-from aitune.torch.jit.flextensor import register_flextensor_units, replan_flextensor
+from aitune.torch.jit.flextensor import _tuned_forward_signature, register_flextensor_units, replan_flextensor
 from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.tune import deferred as jit_deferred
 from aitune.torch.module.tuned_module import TunedModule
@@ -52,6 +53,15 @@ class _Manager:
         if self.forward_calls == self.requested_count:
             self.strategy_replan_status = SimpleNamespace(state="done", can_request=False, applied=self.apply)
         return value
+
+
+class _ParentModule(torch.nn.Module):
+    def __init__(self, child):
+        super().__init__()
+        self.child = child
+
+    def forward(self, value):
+        return self.child(value)
 
 
 @pytest.fixture(autouse=True)
@@ -185,7 +195,7 @@ def test_empty_manager_batch_is_rejected(managers):
 
 def test_existing_core_target_preflight_rejects_overlapping_units():
     child = torch.nn.Linear(2, 2)
-    parent = torch.nn.Sequential(child)
+    parent = _ParentModule(child)
     manager = _Manager([parent, child])
 
     with pytest.raises(ValueError, match="disjoint"):
@@ -220,11 +230,17 @@ def test_replan_rejects_pending_targets_without_requesting_or_running_forwards(r
     assert manager.requests == manager.forward_calls == 0
 
 
-def test_real_tuned_eager_candidate_replans_exact_requested_count_and_preserves_forward():
+@pytest.mark.parametrize("prepared_forward", ["bound_method", "instance_function"])
+def test_real_tuned_eager_candidate_replans_exact_requested_count_and_preserves_forward(prepared_forward):
     manager = _Manager()
+    if prepared_forward == "instance_function":
+        original = manager.units[0][1].forward
+        manager.units[0][1].forward = lambda value: original(value)
     registration = register_flextensor_units([manager])
     _settle(manager, registration)
-    assert isinstance(registration._patched_modules[0]._wrapper, TunedModule)
+    patched = registration._patched_modules[0]
+    assert isinstance(patched._wrapper, TunedModule)
+    signature = _tuned_forward_signature(patched)
     installed_forward = registration.modules[0].forward
 
     with torch.inference_mode():
@@ -232,7 +248,10 @@ def test_real_tuned_eager_candidate_replans_exact_requested_count_and_preserves_
 
     assert manager.requests == 1
     assert manager.forward_calls == manager.requested_count
-    assert registration.modules[0].forward is installed_forward
+    assert registration.modules[0].forward is not installed_forward
+    assert all(
+        actual is expected for actual, expected in zip(_tuned_forward_signature(patched), signature, strict=True)
+    )
     assert manager.strategy_replan_status.applied is True
 
 
@@ -359,18 +378,81 @@ def test_replan_propagates_original_provider_and_callback_exceptions(origin, mon
     assert manager.forward_calls == 0
 
 
-def test_replan_detects_replacement_of_installed_aitune_forward():
+def _replace_dispatch(patched, replacement):
+    module = patched.__wrapped__
+    if replacement == "native_forward":
+        module.forward = patched._original_forward
+    elif replacement == "foreign_router":
+
+        def router(wrapped, instance, args, kwargs):
+            return wrapped(*args, **kwargs)
+
+        module.forward = wrapt.decorator(router)(patched._original_forward)
+    elif replacement == "foreign_owner":
+        other = PatchedModule(torch.nn.Linear(2, 2))
+        module.forward = wrapt.decorator(other._forward_router)(patched._original_forward)
+    elif replacement == "different_bound_self":
+        other = torch.nn.Linear(2, 2)
+        module.forward = wrapt.decorator(patched._forward_router)(other.forward)
+    elif replacement == "changed_original":
+        patched._original_forward = lambda value: value
+        patched._proxy_forward()
+    elif replacement == "dispatcher":
+        patched._wrapper = object()
+    else:
+
+        def forward(value):
+            return value
+
+        forward.__wrapped__ = patched._original_forward
+        forward._self_wrapper = patched._forward_router
+        module.forward = forward
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "native_forward",
+        "foreign_router",
+        "foreign_owner",
+        "different_bound_self",
+        "changed_original",
+        "dispatcher",
+        "forged",
+    ],
+)
+def test_replan_detects_replacement_of_installed_aitune_dispatch(replacement):
     manager = _Manager()
     registration = register_flextensor_units([manager])
     _settle(manager, registration)
-    selected = registration.modules[0]
+    patched = registration._patched_modules[0]
+    original, dispatcher = patched._original_forward, patched._wrapper
 
     def run_forward():
         value = manager.forward()
-        selected.forward = lambda value: value
+        if manager.forward_calls == manager.requested_count:
+            _replace_dispatch(patched, replacement)
         return value
 
-    with pytest.raises(RuntimeError, match="replaced an installed AITune forward"):
-        replan_flextensor(manager, registration, run_forward)
+    try:
+        with pytest.raises(RuntimeError, match="replaced an installed AITune forward"):
+            replan_flextensor(manager, registration, run_forward)
+    finally:
+        patched._original_forward, patched._wrapper = original, dispatcher
 
     assert manager.forward_calls == manager.requested_count
+
+
+@pytest.mark.parametrize(
+    "replacement", ["native_forward", "foreign_router", "foreign_owner", "different_bound_self", "forged"]
+)
+def test_preexisting_forward_replacement_fails_before_requesting_replan(replacement):
+    manager = _Manager()
+    registration = register_flextensor_units([manager])
+    _settle(manager, registration)
+    _replace_dispatch(registration._patched_modules[0], replacement)
+
+    with pytest.raises(RuntimeError, match="replaced an installed AITune forward"):
+        replan_flextensor(manager, registration, manager.forward)
+
+    assert manager.requests == manager.forward_calls == 0
