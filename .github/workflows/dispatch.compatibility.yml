@@ -97,7 +97,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12"]
+        python_version: ["3.11", "3.12", "3.13"]
         torch: [torch29, torch210, torch211, torch212]
         cuda:
           - &cu128
