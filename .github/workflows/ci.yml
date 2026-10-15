@@ -311,7 +311,8 @@ jobs:
       ${{ !cancelled() && needs.wheel.result == 'success' &&
           (needs.pytorch-image.result == 'success' || needs.pytorch-image.result == 'skipped') }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
-    timeout-minutes: 40
+    # Fresh-process JIT cases include native backend import time for every test.
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: read
