@@ -1,11 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+import json
+
 import datasets
 import numpy as np
 import pytest
 import torch
-from transformers import AutoTokenizer
+from transformers import GPT2TokenizerFast
 from transformers.data.data_collator import DataCollatorWithPadding
+from transformers.models.gpt2.tokenization_gpt2 import bytes_to_unicode
 
 from aitune.torch.dataloader import (
     DataLoaderFactory,
@@ -15,7 +18,6 @@ from aitune.torch.dataloader import (
     ensure_enough_samples,
     samples_generator,
 )
-from tests.utilities.prompts import PROMPTS_PATH
 
 
 def simulate_tuning_loop(dataset: DatasetLike, batch_sizes: list[int]):
@@ -242,8 +244,13 @@ def test_dynamic_shapes_fails():
         )
 
 
-def test_llm_padding_collator():
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+def test_llm_padding_collator(tmp_path):
+    vocab = {token: index for index, token in enumerate(bytes_to_unicode().values())}
+    vocab["<|endoftext|>"] = len(vocab)
+    vocab_file, merges_file = tmp_path / "vocab.json", tmp_path / "merges.txt"
+    vocab_file.write_text(json.dumps(vocab))
+    merges_file.write_text("#version: 0.2\n")
+    tokenizer = GPT2TokenizerFast(vocab_file=str(vocab_file), merges_file=str(merges_file))
 
     # Add padding token (fix for gpt2)
     tokenizer.pad_token = tokenizer.eos_token
@@ -257,9 +264,9 @@ def test_llm_padding_collator():
             return_tensors=None,  # Important: don't return tensors here
         )
 
-    # Load raw dataset first
-    dataset = datasets.load_dataset("json", data_files=str(PROMPTS_PATH), split="train[:100]").map(
-        tokenize, remove_columns=["prompt", "act"]
+    # No merges means one token per byte: these batches exercise padding and truncation.
+    dataset = datasets.Dataset.from_dict({"prompt": ["a", "a b", "a b c", "long " * 128] * 25}).map(
+        tokenize, remove_columns=["prompt"]
     )
 
     dl_config = DataLoaderFactory(dataset, collate_fn=DataCollatorWithPadding(tokenizer=tokenizer, padding=True))
@@ -279,6 +286,9 @@ def test_llm_padding_collator():
     assert kwargs["input_ids"].shape[0] == 4  # Batch size
     assert kwargs["attention_mask"].shape[0] == 4  # Batch size
     assert kwargs["input_ids"].shape == kwargs["attention_mask"].shape  # Same shape for both tensors
+    assert kwargs["input_ids"].shape[1] == 128
+    assert kwargs["attention_mask"].sum(dim=1).tolist() == [1, 3, 5, 128]
+    assert torch.all(kwargs["input_ids"][kwargs["attention_mask"] == 0] == tokenizer.pad_token_id)
 
 
 def test_custom_dataloader_shuffled_dataset():

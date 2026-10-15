@@ -100,6 +100,20 @@ A new process starts tuning again; use the explicit workflow below for saved art
 See the [JIT guide](https://docs.nvidia.com/aitune/guides/just-in-time-tuning/) for configuration and deferred tuning
 for pipelines.
 
+If another library or runtime has already constructed the modules you want to tune, register the final instances
+directly:
+
+```python
+from aitune.torch import register_for_jit_tuning
+
+registration = register_for_jit_tuning([pipe.unet])
+```
+
+Each registered module is an independent top-level JIT target. Do not combine explicit registration with automatic
+constructor interception in the same live JIT session. The returned registration exposes live inspection reports,
+state counts, and an `all_tuned` snapshot. See the
+[JIT tuning guide](docs/guides/jit_tuning.md#registering-existing-modules) for the complete contract.
+
 ### Ahead-of-time (AOT): prepare a reusable tuning artifact
 
 Ahead-of-time tuning prepares your model for deployment with a consistent flow:
