@@ -1,0 +1,5 @@
+.validation/
+results/
+checkpoints/
+output/
+output.png
