@@ -16,12 +16,15 @@ from aitune.torch.backend import (
     Backend,
     TorchAOBackend,
     TorchAOBackendConfig,
+    TorchEagerBackend,
     TorchInductorJitBackend,
     TorchInductorJitBackendConfig,
     TorchTensorRTConfig,
     TorchTensorRTJitBackend,
     TorchTensorRTJitBackendConfig,
 )
+from aitune.torch.distributed import coordinator
+from aitune.torch.module.wrapper_module import ModuleState
 
 from .checkpoint import save_checkpoint
 from .config import GenerationInput, Recipe, argument_parser, load_recipe
@@ -81,6 +84,18 @@ def _transformer_strategy(
     return strategy
 
 
+def _require_tuned_transformer(transformer: ait.module.Module) -> None:
+    """Reject passthrough and eager fallback on every rank before saving artifacts."""
+    with coordinator.raise_if_any_rank_fails("Checking tuned transformer"):
+        if transformer.state != ModuleState.TUNED:
+            logger.error("Transformer is in %s state; refusing to save a checkpoint", transformer.state)
+            raise RuntimeError("Transformer tuning did not produce a tuned module")
+        backends = transformer.module.backends
+        if not backends or any(isinstance(backend, TorchEagerBackend) for backend in backends.values()):
+            logger.error("Transformer has no optimized backend for every graph; refusing to save a checkpoint")
+            raise RuntimeError("Transformer tuning selected an eager fallback or no backend; check the tuning logs")
+
+
 def tune_model(recipe: Recipe) -> None:
     """Inspect all tuning samples, select backends, and save rank-specific artifacts."""
     pipeline = get_pipeline(recipe)
@@ -111,8 +126,9 @@ def tune_model(recipe: Recipe) -> None:
     pipeline = ait.wrap(pipeline, modules, strategy=default_strategy)
     pipeline.transformer = ait.module.Module(pipeline.transformer, name="transformer", strategy=transformer_strategy)
     started = time.perf_counter()
-    ait.tune(run_pipeline, input_data, batch_sizes=[1])
+    ait.tune(run_pipeline, input_data, batch_sizes=[1], ignore_failing_modules=False)
     tuning_seconds = time.perf_counter() - started
+    _require_tuned_transformer(pipeline.transformer)
     save_checkpoint(pipeline, recipe, tuning_seconds)
     logger.info("Saved %s; tuning took %.3f seconds", recipe.artifact_path, tuning_seconds)
 

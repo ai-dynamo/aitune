@@ -5,10 +5,13 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import secrets
+import socket
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -20,6 +23,27 @@ from ..config import argument_parser, load_recipe
 
 logger = logging.getLogger(__name__)
 MAX_BODY = 64 * 1024
+READ_TIMEOUT_S = 10.0
+MAX_CONNECTIONS = 32
+
+
+class _DeadlineReader(io.RawIOBase):
+    """Bound a whole read phase, including clients that keep sending small chunks."""
+
+    def __init__(self, connection: socket.socket) -> None:
+        super().__init__()
+        self.connection = connection
+        self.deadline = 0.0
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer: bytearray | memoryview) -> int:
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Request read deadline exceeded")
+        self.connection.settimeout(remaining)
+        return self.connection.recv_into(buffer)
 
 
 class WebConfig(BaseModel):
@@ -64,9 +88,47 @@ class WebServer(ThreadingHTTPServer):
     page: bytes
     generation_lock: threading.Lock
 
+    def __init__(self, server_address: tuple[str, int], handler_class: type[BaseHTTPRequestHandler]) -> None:
+        self._connection_slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
+        super().__init__(server_address, handler_class)
+
+    def process_request(self, request: socket.socket, client_address: tuple[str, int]) -> None:
+        if not self._connection_slots.acquire(blocking=False):
+            logger.warning("UI connection limit reached; closing connection from %s", client_address)
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._connection_slots.release()
+            logger.exception("Failed to start UI request handler for %s", client_address)
+            raise
+
+    def process_request_thread(self, request: socket.socket, client_address: tuple[str, int]) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._connection_slots.release()
+
 
 class Handler(BaseHTTPRequestHandler):
     server: WebServer
+
+    def setup(self) -> None:
+        super().setup()
+        self.rfile.close()
+        self._reader = _DeadlineReader(self.connection)
+        self.rfile = io.BufferedReader(self._reader)
+
+    def handle_one_request(self) -> None:
+        self._reader.deadline = time.monotonic() + READ_TIMEOUT_S
+        super().handle_one_request()
+
+    def parse_request(self) -> bool:
+        try:
+            return super().parse_request()
+        finally:
+            self.connection.settimeout(READ_TIMEOUT_S)
 
     def respond(self, status: int, body: bytes, content_type: str = "application/json") -> None:
         self.send_response(status)
@@ -106,6 +168,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             prompt = self.read_prompt()
+        except TimeoutError as exc:
+            logger.warning("Prompt body read timed out for %s: %s", self.client_address, exc)
+            self.close_connection = True
+            self.error(408, "Timed out reading prompt request")
+            return
         except (ValueError, UnicodeError) as exc:
             self.error(400, str(exc))
             return
@@ -134,7 +201,14 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         if not 0 < length <= MAX_BODY:
             raise ValueError("Prompt request must be between 1 byte and 64 KiB")
-        payload = json.loads(self.rfile.read(length))
+        self._reader.deadline = time.monotonic() + READ_TIMEOUT_S
+        try:
+            body = self.rfile.read(length)
+        finally:
+            self.connection.settimeout(READ_TIMEOUT_S)
+        if len(body) != length:
+            raise ValueError("Incomplete request body")
+        payload = json.loads(body)
         prompt = payload.get("prompt") if isinstance(payload, dict) else None
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("Enter a prompt first")

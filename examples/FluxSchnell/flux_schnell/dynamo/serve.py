@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Sequence
+from logging import basicConfig, getLogger
 from pathlib import Path
 from types import FrameType
 from typing import NoReturn
@@ -20,6 +21,8 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from ..config import Recipe, argument_parser, load_recipe
+
+logger = getLogger(__name__)
 
 
 def _ready(recipe: Recipe) -> bool:
@@ -31,7 +34,8 @@ def _ready(recipe: Recipe) -> bool:
         return '"dyn://aitune.backend.generate"' in health and any(
             model["id"] == recipe.model.base_model for model in models
         )
-    except (URLError, OSError, ValueError, KeyError):
+    except (URLError, OSError, ValueError, KeyError) as exc:
+        logger.debug("Dynamo readiness check failed at %s: %s", recipe.endpoint, exc)
         return False
 
 
@@ -51,14 +55,15 @@ def _stop(process: subprocess.Popen[bytes]) -> None:
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
-        pass
+        logger.debug("Process group %s already exited before SIGTERM", process.pid)
     try:
         process.wait(timeout=60)
     except subprocess.TimeoutExpired:
+        logger.warning("Process %s did not stop within 60 seconds; sending SIGKILL to its group", process.pid)
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
-            pass
+            logger.debug("Process group %s exited before SIGKILL", process.pid)
         process.wait()
 
 
@@ -99,13 +104,21 @@ def _serve(recipe: Recipe, smoke_test: bool) -> None:
                 try:
                     os.kill(int(pid_file.read_text()), signal.SIGTERM)
                     backend.wait(timeout=60)
-                except (ProcessLookupError, subprocess.TimeoutExpired):
-                    pass
+                except ProcessLookupError:
+                    logger.debug("Rank-zero process already exited; continuing process-group cleanup")
+                except subprocess.TimeoutExpired:
+                    logger.warning(
+                        "Backend process %s did not stop within 60 seconds of rank-zero SIGTERM; "
+                        "continuing process-group cleanup",
+                        backend.pid,
+                    )
             for process in reversed(processes):
                 _stop(process)
 
 
 def run(recipe: Recipe, smoke_test: bool = False) -> None:
+    basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
+
     def interrupted(_signal: int, _frame: FrameType | None) -> NoReturn:
         raise KeyboardInterrupt
 
@@ -113,7 +126,7 @@ def run(recipe: Recipe, smoke_test: bool = False) -> None:
     try:
         _serve(recipe, smoke_test)
     except KeyboardInterrupt:
-        pass
+        logger.info("Shutdown requested; deployment stopped")
 
 
 def command_parser() -> argparse.ArgumentParser:

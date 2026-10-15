@@ -25,6 +25,17 @@ FP8 transformer candidates; the supplied recipes leave it disabled. NVFP4 needs 
 
 ## Build and run in a container
 
+Before starting the container, sign in to Hugging Face and accept the model's access conditions on the
+[FLUX.1-schnell model page](https://huggingface.co/black-forest-labs/FLUX.1-schnell).
+Then create a [Hugging Face access token](https://huggingface.co/settings/tokens) for the same account with read access
+to the model repository. Export it in the host shell where you will run Docker:
+
+```bash
+export HF_TOKEN="hf_your_token_here"
+```
+
+The `-e HF_TOKEN` option in the command below passes this token into the container for model downloads.
+
 To build a Docker image for the example, run from the repository root:
 
 ```bash
@@ -63,6 +74,8 @@ uv run flux_schnell serve --recipe recipes/single-gpu.yaml
 
 ### Tuning
 Tuning compares Torch-TensorRT JIT and TorchInductor JIT for the transformer, plus optional TorchAO candidates.
+Module tuning failures abort the command. Before saving, every rank must have a non-eager backend for every
+transformer graph; passthrough and eager fallback (including when no candidate beats the baseline) are rejected.
 Other discovered modules use AITune's default backend strategy. Maximum-batch-size discovery is disabled to match
 the single-image workload. Each rank saves its own checkpoint; rank zero writes `tuned.manifest.json` only after all
 ranks have saved. Loading checks the model revision, workload, execution settings, and tuning settings against that
@@ -106,6 +119,10 @@ Open [http://localhost:8080](http://localhost:8080) when the log prints `Web app
 UI uses `deployment.web_host` and `deployment.web_port`. If you change the web port, update the Docker port mapping.
 Both services run inside the container. Model loading and compilation can take several minutes; startup is bounded
 by `deployment.readiness_timeout_s`.
+
+The UI allows at most 32 concurrent connections on any bind address and closes excess connections. Request headers
+and bodies each have a 10-second read deadline, including clients that send data slowly. Prompt bodies are limited
+to 64 KiB. These read deadlines do not include image generation time.
 
 The UI serves the packaged `flux_schnell/dynamo/web.html`. It uses the recipe's dimensions and steps, and chooses a
 random seed for each prompt. API clients can send `nvext: {"seed": 123}`; requests without a seed use
