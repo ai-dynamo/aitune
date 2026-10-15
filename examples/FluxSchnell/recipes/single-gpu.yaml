@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-# Implemented draft; no measured hardware support or performance claims yet.
+# Validated on one NVIDIA RTX 6000 Ada GPU; see README.md for the measured workload.
 name: single-gpu
 model:
   base_model: black-forest-labs/FLUX.1-schnell

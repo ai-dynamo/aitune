@@ -33,7 +33,7 @@ def generate_image(endpoint: str, cfg: WebConfig, prompt: str) -> bytes:
         models = json.load(response)["data"]
     names = [model["id"] for model in models if model["id"] == cfg["model_name"]]
     if len(names) != 1:
-        raise ValueError(f"Expected model {cfg['model_name']} in Dynamo; found {len(names)}. Check run_dynamo.sh.")
+        raise ValueError(f"Expected model {cfg['model_name']} in Dynamo; found {len(names)}. Check flux_schnell serve.")
     payload = {
         "model": names[0],
         "prompt": prompt,
@@ -118,7 +118,9 @@ class Handler(BaseHTTPRequestHandler):
             self.error(502, f"Image service returned HTTP {exc.code}. Check its backend output for details.")
         except (URLError, OSError) as exc:
             logger.warning("Dynamo connection failed: %s", exc)
-            self.error(502, "Cannot reach the image service or the request timed out. Check run_dynamo.sh is ready.")
+            self.error(
+                502, "Cannot reach the image service or the request timed out. Check flux_schnell serve is ready."
+            )
         except (ValueError, KeyError, TypeError) as exc:
             logger.warning("Invalid Dynamo response: %s", exc)
             self.error(502, str(exc))

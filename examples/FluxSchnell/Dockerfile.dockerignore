@@ -17,3 +17,5 @@ examples/FluxSchnell/checkpoints
 examples/FluxSchnell/output
 examples/FluxSchnell/output.png
 examples/FluxSchnell/.venv
+examples/FluxSchnell/build
+examples/FluxSchnell/dist

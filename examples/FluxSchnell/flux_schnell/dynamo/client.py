@@ -37,6 +37,8 @@ def run(recipe: Recipe) -> None:
             response_format="b64_json",
             extra_body={"nvext": {"seed": sample["seed"]}},
         )
+        if not response.data or len(response.data) != 1 or not response.data[0].b64_json:
+            raise ValueError("Dynamo must return exactly one base64-encoded image")
         image = base64.b64decode(response.data[0].b64_json, validate=True)
         if not image.startswith(b"\x89PNG\r\n\x1a\n"):
             raise ValueError("Dynamo did not return a PNG")

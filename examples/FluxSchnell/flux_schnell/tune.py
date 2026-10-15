@@ -114,16 +114,18 @@ def tune_model(recipe: Recipe) -> None:
     logger.info("Saved %s; tuning took %.3f seconds", recipe.artifact_path, tuning_seconds)
 
 
-def main() -> None:
+def run(recipe: Recipe) -> None:
     basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
-    args = argument_parser(__doc__).parse_args()
-    recipe = load_recipe(args.recipe)
     launch(recipe, "flux_schnell.tune")
     initialize()
     try:
         tune_model(recipe)
     finally:
         shutdown()
+
+
+def main() -> None:
+    run(load_recipe(argument_parser(__doc__).parse_args().recipe))
 
 
 if __name__ == "__main__":

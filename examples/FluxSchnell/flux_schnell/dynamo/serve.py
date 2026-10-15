@@ -1,9 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Launch Dynamo and optionally keep the recipe's prompt UI running."""
+"""Serve Dynamo and the prompt UI, or run a smoke test and shut down."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import signal
@@ -47,16 +48,21 @@ def _wait_ready(recipe: Recipe, processes: Sequence[subprocess.Popen[bytes]]) ->
 
 
 def _stop(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is None:
-        process.terminate()
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
     try:
         process.wait(timeout=60)
     except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         process.wait()
 
 
-def run(recipe: Recipe, serve: bool) -> None:
+def _serve(recipe: Recipe, smoke_test: bool) -> None:
     env = {
         **os.environ,
         "DYN_DISCOVERY_BACKEND": "file",
@@ -79,14 +85,15 @@ def run(recipe: Recipe, serve: bool) -> None:
             start("dynamo.frontend", "--http-port", str(recipe["deployment"]["port"]))
             backend = start("flux_schnell.dynamo.backend", "--recipe", str(recipe.path))
             _wait_ready(recipe, processes)
-            if serve:
+            if smoke_test:
+                subprocess.run(
+                    [sys.executable, "-m", "flux_schnell.dynamo.client", "--recipe", str(recipe.path)], check=True
+                )
+            else:
                 start("flux_schnell.dynamo.web", "--recipe", str(recipe.path))
                 while all(process.poll() is None for process in processes):
                     time.sleep(1)
                 raise RuntimeError("A deployment process exited")
-            subprocess.run(
-                [sys.executable, "-m", "flux_schnell.dynamo.client", "--recipe", str(recipe.path)], check=True
-            )
         finally:
             if backend is not None and pid_file.is_file() and backend.poll() is None:
                 try:
@@ -98,22 +105,28 @@ def run(recipe: Recipe, serve: bool) -> None:
                 _stop(process)
 
 
-def main() -> None:
-    parser = argument_parser(__doc__)
-    parser.add_argument(
-        "--serve", action="store_true", help="Keep Dynamo and the UI running instead of running the client"
-    )
-    args = parser.parse_args()
-    recipe = load_recipe(args.recipe)
-
+def run(recipe: Recipe, smoke_test: bool = False) -> None:
     def interrupted(_signal: int, _frame: FrameType | None) -> NoReturn:
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, interrupted)
     try:
-        run(recipe, args.serve)
+        _serve(recipe, smoke_test)
     except KeyboardInterrupt:
         pass
+
+
+def command_parser() -> argparse.ArgumentParser:
+    parser = argument_parser(__doc__)
+    parser.add_argument(
+        "--smoke_test", action="store_true", help="Run sample requests against Dynamo, then shut it down"
+    )
+    return parser
+
+
+def main() -> None:
+    args = command_parser().parse_args()
+    run(load_recipe(args.recipe), smoke_test=args.smoke_test)
 
 
 if __name__ == "__main__":

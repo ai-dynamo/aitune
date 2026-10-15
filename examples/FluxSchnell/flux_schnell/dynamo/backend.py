@@ -7,6 +7,7 @@ from __future__ import annotations
 import io
 import os
 import threading
+from logging import basicConfig
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -85,6 +86,7 @@ class FluxDynamoBackend:
 
 
 def main() -> None:
+    basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
     recipe = load_recipe(argument_parser(__doc__).parse_args().recipe)
     check_checkpoint(recipe)
     launch(recipe, "flux_schnell.dynamo.backend")

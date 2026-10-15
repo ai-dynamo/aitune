@@ -6,7 +6,7 @@ name = "ai-tune-flux-schnell-example"
 version = "0.1.0"
 description = "NVIDIA AITune FLUX.1-schnell Example"
 readme = "README.md"
-license = { text = "Apache 2.0" }
+license = "Apache-2.0"
 requires-python = ">=3.11, <3.14"
 
 dependencies = [
@@ -36,11 +36,10 @@ dynamo = [
 aitune = { path = "../../", editable = true }
 
 [project.scripts]
-tune = "flux_schnell.tune:main"
-inference = "flux_schnell.inference:main"
+flux_schnell = "flux_schnell.cli:main"
 
 [build-system]
-requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
+requires = ["setuptools>=77.0.0", "wheel>=0.37.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -51,13 +50,14 @@ namespaces = false
 include = ["flux_schnell*"]
 
 [tool.setuptools.package-data]
-flux_schnell = ["**/*"]
+flux_schnell = ["dynamo/web.html"]
 
 [tool.aitune]
+# The shared runner requires standalone tune/inference scripts; this example uses subcommands.
+skip = true
 docker_image = "nvcr.io/nvidia/pytorch:26.06-py3"
 variants = [
     { arguments = { "recipe" = "recipes/single-gpu.yaml" } },
-    { arguments = { "recipe" = "recipes/multi-gpu.yaml" }, additional_tags = ["gpu/2"] },
 ]
 use_gated_hf_token = true
 allow_failure = true

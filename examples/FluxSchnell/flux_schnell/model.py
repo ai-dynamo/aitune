@@ -2,13 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 """Load and execute the pinned FLUX pipeline described by a recipe."""
 
+from logging import getLogger
+from typing import Literal, cast
+
+import numpy as np
 import torch
 import torch.distributed as dist
 from diffusers import ContextParallelConfig, FluxPipeline
 from diffusers.pipelines.flux.pipeline_output import FluxPipelineOutput
+from numpy.typing import NDArray
+from PIL import Image
 
 from .config import GenerationInput, Recipe, Sample
-from .distributed import is_rank_zero
+from .distributed import is_rank_zero, synchronize
+
+logger = getLogger(__name__)
+
+Variant = Literal["original", "tuned"]
+ImageSamples = dict[str, NDArray[np.float32]]
 
 
 def get_pipeline(recipe: Recipe) -> FluxPipeline:
@@ -38,3 +49,20 @@ def generate(pipeline: FluxPipeline, recipe: Recipe, sample: GenerationInput | S
             output_type="pil" if is_rank_zero() else "pt",
             return_dict=True,
         )
+
+
+def generate_samples(
+    pipeline: FluxPipeline, recipe: Recipe, split: Literal["inference", "validation"], variant: Variant
+) -> ImageSamples:
+    images: ImageSamples = {}
+    for sample in recipe.samples(split):
+        logger.info("%s %s sample: %s (seed=%s)", variant, split, sample["id"], sample["seed"])
+        output = generate(pipeline, recipe, sample)
+        synchronize()
+        if is_rank_zero():
+            image = cast(Image.Image, output.images[0])  # Rank zero requests PIL output.
+            path = recipe.output_dir / split / variant / f"{sample['id']}.png"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            image.save(path)
+            images[sample["id"]] = np.asarray(image.convert("RGB"), dtype=np.float32) / 255.0
+    return images

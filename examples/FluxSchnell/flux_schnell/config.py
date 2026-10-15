@@ -153,6 +153,8 @@ class Recipe:
         samples: list[Sample] = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
         seen: set[str] = set()
         for sample in samples:
+            if not isinstance(sample, dict) or not {"id", "prompt", "seed"} <= sample.keys():
+                raise ValueError(f"{path}: each sample must be an object with id, prompt, and seed")
             sample_id = sample["id"]
             if not isinstance(sample_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", sample_id) or sample_id in seen:
                 raise ValueError(f"{path}: sample IDs must be unique, safe filenames")
@@ -176,6 +178,8 @@ def load_recipe(path: str | Path) -> Recipe:
     path = Path(path).resolve()
     with path.open() as stream:
         data = yaml.safe_load(stream)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: recipe must be a YAML mapping")
     required = {
         "model": ("base_model", "revision"),
         "execution": ("gpu_count", "context_parallel"),
