@@ -46,26 +46,19 @@ defaults:
 
 jobs:
   pytorch-gpu-nvcr-container:
-    name: PyTorch GPU ${{ matrix.torch_ci_image }}
+    name: PyTorch GPU on nvcr ${{ matrix.nvcr }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
     if: inputs.run_nvcr_container == true
     strategy:
       fail-fast: false
       matrix:
-        torch_ci_image:
-          - ghcr.io/ai-dynamo/aitune/nvcr-torch-25.08-py3:latest
-          - ghcr.io/ai-dynamo/aitune/nvcr-torch-25.10-py3:latest
-          - ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3:latest
-          - ghcr.io/ai-dynamo/aitune/nvcr-torch-26.03-py3:latest
-          - ghcr.io/ai-dynamo/aitune/nvcr-torch-26.05-py3:latest
-          - ghcr.io/ai-dynamo/aitune/nvcr-torch-26.06-py3:latest
-          - ghcr.io/ai-dynamo/aitune/nvcr-torch-26.08-py3:latest
+        nvcr: ["25.08", "25.10", "26.01", "26.03", "26.05", "26.06", "26.08"]
         include:
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-25.08-py3:latest
+          - nvcr: "25.08"
             extra_packages: "numpy<2.0 pyarrow<26"
     container:
-      image: ${{ matrix.torch_ci_image }}
+      image: ghcr.io/ai-dynamo/aitune/nvcr-torch-${{ matrix.nvcr }}-py3:latest
       options: -u 1000
     env:
       EXTRA_PACKAGES: ${{ matrix.extra_packages }}
@@ -88,7 +81,7 @@ jobs:
           pytest
 
   pytorch-gpu-cuda-python-matrix:
-    name: CUDA ${{ matrix.cuda.uv_torch_backend }} Python ${{ matrix.python_version }} ${{ matrix.torch }},onnxruntime-gpu-cuda${{ matrix.cuda.cuda_major }}
+    name: ${{ matrix.cuda.uv_torch_backend }} py${{ matrix.python_version }} ${{ matrix.torch }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
     if: inputs.run_cuda_matrix == true
@@ -142,7 +135,8 @@ jobs:
           python-version: ${{ matrix.python_version }}
           version: ${{ env.UV_VERSION }}
       # - run: nvidia-smi
-      - run: |
+      - name: Install and test
+        run: |
           uv venv
           printf "tensorrt\n" > cu12-excludes.txt
           uv pip install --torch-backend=${{ matrix.cuda.uv_torch_backend }} ".[${{ matrix.torch }},onnxruntime-gpu-cuda${{ matrix.cuda.cuda_major }},triton]" --group test ${{ matrix.cuda.uv_extra_args }}
