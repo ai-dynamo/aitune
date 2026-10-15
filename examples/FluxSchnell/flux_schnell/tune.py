@@ -85,23 +85,26 @@ def tune_model(recipe: Recipe) -> None:
     """Inspect all tuning samples, select backends, and save rank-specific artifacts."""
     pipeline = get_pipeline(recipe)
     samples = recipe.samples("tune")
-    logger.info("Tuning samples: %s", [sample["id"] for sample in samples])
+    logger.info("Tuning samples: %s", [sample.id for sample in samples])
 
-    def run_pipeline(prompt: str, seed: int | torch.Tensor) -> FluxPipelineOutput:
-        return generate(pipeline, recipe, {"prompt": prompt, "seed": int(seed)})
+    def run_pipeline(prompt: str | list[str], seed: int | torch.Tensor) -> FluxPipelineOutput:
+        # AITune's dataloader batches strings even for this single-image workload.
+        if isinstance(prompt, list):
+            (prompt,) = prompt
+        return generate(pipeline, recipe, GenerationInput(prompt=prompt, seed=int(seed)))
 
-    input_data: list[GenerationInput] = [{"prompt": sample["prompt"], "seed": sample["seed"]} for sample in samples]
+    input_data = [sample.model_dump(exclude={"id"}) for sample in samples]
     modules_info = ait.inspect(
         pipeline,
         input_data,
         inference_function=run_pipeline,
         number_of_iterations=len(samples),
-        warmup_iterations=recipe["benchmark"]["warmup_iterations"],
+        warmup_iterations=recipe.benchmark.warmup_iterations,
     )
     modules_info.describe()
     transformer_strategy = _transformer_strategy(
         multi_gpu=recipe.gpu_count > 1,
-        quantization=recipe["tuning"]["quantization"],
+        quantization=recipe.tuning.quantization,
     ).enable_find_max_batch_size(False)
     default_strategy = ait.resolve_strategy().enable_find_max_batch_size(False)
     modules = [module for module in modules_info.get_modules() if module.name != "transformer"]

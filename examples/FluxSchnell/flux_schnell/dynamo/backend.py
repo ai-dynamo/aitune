@@ -37,7 +37,7 @@ class FluxDynamoBackend:
         try:
             config = dyn.DynamoWorkerConfig(
                 type="image",
-                model_path=self.recipe["model"]["base_model"],
+                model_path=self.recipe.model.base_model,
                 mapping=self.map_request,
             )
             dyn.dynamo_worker(self.generate, config, setup=self.setup, warmup=self.warmup)
@@ -50,24 +50,20 @@ class FluxDynamoBackend:
 
     def warmup(self) -> None:
         sample = self.recipe.samples("inference")[0]
-        self._run_pipeline(sample["prompt"], sample["seed"])
+        self._run_pipeline(sample.prompt, sample.seed)
         pid_file = os.environ.get("AITUNE_DYNAMO_RANK_ZERO_PID_FILE")
         if pid_file and is_rank_zero():
             Path(pid_file).write_text(str(os.getpid()))
 
-    def map_request(self, request: NvCreateImageRequest) -> GenerationInput:
-        workload = self.recipe["workload"]
-        expected_size = f"{workload['width']}x{workload['height']}"
+    def map_request(self, request: NvCreateImageRequest) -> dict[str, str | int]:
+        workload = self.recipe.workload
+        expected_size = f"{workload.width}x{workload.height}"
         if request.size and request.size != expected_size:
             raise ValueError(f"This recipe was tuned for {expected_size}")
         if request.n not in (None, 1):
             raise ValueError("This recipe generates one image per request")
-        seed = (
-            request.nvext.seed
-            if request.nvext and request.nvext.seed is not None
-            else self.recipe["deployment"]["seed"]
-        )
-        return {"prompt": request.prompt, "seed": seed}
+        seed = request.nvext.seed if request.nvext and request.nvext.seed is not None else self.recipe.deployment.seed
+        return GenerationInput(prompt=request.prompt, seed=seed).model_dump()
 
     def generate(self, prompt: str, seed: int) -> bytes | None:
         result = self._run_pipeline(prompt, seed)
@@ -82,7 +78,7 @@ class FluxDynamoBackend:
         if self._pipeline is None:
             raise RuntimeError("FLUX pipeline is not initialized")
         with self._generation_lock:
-            return generate(self._pipeline, self.recipe, {"prompt": prompt, "seed": seed})
+            return generate(self._pipeline, self.recipe, GenerationInput(prompt=prompt, seed=seed))
 
 
 def main() -> None:

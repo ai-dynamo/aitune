@@ -15,6 +15,7 @@ dependencies = [
     "pillow",
     "numpy",
     "protobuf",
+    "pydantic>=2,<3",
     "pyyaml",
     "scikit-image",
     "sentencepiece",

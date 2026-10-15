@@ -3,168 +3,149 @@
 """Load recipe settings and sample files without command-line overrides."""
 
 import argparse
-import json
-import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypedDict, overload
+from typing import Annotated, Literal, Self
 
 import yaml
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationInfo, field_validator, model_validator
 
 SampleSplit = Literal["tune", "inference", "validation", "benchmark"]
 SAMPLE_SPLITS: tuple[SampleSplit, ...] = ("tune", "inference", "validation", "benchmark")
-RecipeKey = Literal[
-    "name",
-    "model",
-    "execution",
-    "tuning",
-    "artifact_path",
-    "output_dir",
-    "inputs",
-    "workload",
-    "benchmark",
-    "validation",
-    "deployment",
-]
+PositiveInt = Annotated[int, Field(strict=True, gt=0)]
+Seed = Annotated[int, Field(strict=True, ge=0, lt=2**32)]
+NonemptyStr = Annotated[str, Field(min_length=1)]
 
 
-class GenerationInput(TypedDict):
+class GenerationInput(BaseModel):
     prompt: str
-    seed: int
+    seed: Seed
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Prompt must not be empty")
+        return value
 
 
 class Sample(GenerationInput):
-    id: str
+    id: str = Field(pattern=r"^[A-Za-z0-9_-]+$")
 
 
-class ModelSettings(TypedDict):
-    base_model: str
-    revision: str
+class ModelSettings(BaseModel):
+    base_model: NonemptyStr
+    revision: NonemptyStr
 
 
-class ExecutionSettings(TypedDict):
-    gpu_count: int
+class ExecutionSettings(BaseModel):
+    gpu_count: PositiveInt
     context_parallel: Literal["ulysses", "ring"]
 
 
-class TuningSettings(TypedDict):
-    quantization: bool
+class TuningSettings(BaseModel):
+    quantization: StrictBool
 
 
-class WorkloadSettings(TypedDict):
-    width: int
-    height: int
-    num_inference_steps: int
-    guidance_scale: float
-    max_sequence_length: int
+class WorkloadSettings(BaseModel):
+    width: PositiveInt = Field(multiple_of=16)
+    height: PositiveInt = Field(multiple_of=16)
+    num_inference_steps: int = Field(strict=True, ge=1, le=4)
+    guidance_scale: float = Field(allow_inf_nan=False)
+    max_sequence_length: int = Field(strict=True, ge=1, le=256)
 
 
-class BenchmarkSettings(TypedDict):
-    warmup_iterations: int
-    repetitions: int
-    sampling_interval_s: float
+class BenchmarkSettings(BaseModel):
+    warmup_iterations: int = Field(strict=True, ge=0)
+    repetitions: PositiveInt
+    sampling_interval_s: float = Field(gt=0, allow_inf_nan=False)
 
 
-class ValidationSettings(TypedDict):
+class ValidationSettings(BaseModel):
     metric: Literal["rgb_ssim"]
-    threshold: float
-    soft_threshold: float
+    threshold: float = Field(ge=0, le=1)
+    soft_threshold: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_thresholds(self) -> Self:
+        if self.threshold > self.soft_threshold:
+            raise ValueError("Validation threshold must not exceed soft_threshold")
+        return self
 
 
-class DeploymentSettings(TypedDict):
-    port: int
-    web_host: str
-    web_port: int
-    seed: int
-    request_count: int
-    readiness_timeout_s: float
+class DeploymentSettings(BaseModel):
+    port: int = Field(strict=True, gt=0, lt=65536)
+    web_host: NonemptyStr
+    web_port: int = Field(strict=True, gt=0, lt=65536)
+    seed: Seed
+    request_count: PositiveInt
+    readiness_timeout_s: float = Field(gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_ports(self) -> Self:
+        if self.port == self.web_port:
+            raise ValueError("Deployment API and web ports must be distinct")
+        return self
 
 
-class RecipeData(TypedDict):
-    name: str
+class InputSettings(BaseModel):
+    tune: NonemptyStr
+    validation: NonemptyStr
+    inference: NonemptyStr
+    benchmark: NonemptyStr
+
+
+class Recipe(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    path: Path = Field(exclude=True)
+    name: NonemptyStr
     model: ModelSettings
     execution: ExecutionSettings
     tuning: TuningSettings
-    artifact_path: str
-    output_dir: str
-    inputs: dict[SampleSplit, str]
+    artifact_path: Path
+    output_dir: Path
+    inputs: InputSettings
     workload: WorkloadSettings
     benchmark: BenchmarkSettings
     validation: ValidationSettings
     deployment: DeploymentSettings
 
+    @field_validator("path")
+    @classmethod
+    def resolve_recipe_path(cls, value: Path) -> Path:
+        return value.resolve()
 
-@dataclass(frozen=True)
-class Recipe:
-    path: Path
-    data: RecipeData
+    @field_validator("artifact_path", "output_dir", mode="before")
+    @classmethod
+    def validate_output_path(cls, value: object) -> object:
+        if value == "":
+            raise ValueError("Output paths must not be empty")
+        return value
 
-    @overload
-    def __getitem__(self, key: Literal["name", "artifact_path", "output_dir"]) -> str: ...
+    @field_validator("artifact_path", "output_dir")
+    @classmethod
+    def resolve_output_path(cls, value: Path, info: ValidationInfo) -> Path:
+        recipe_path = info.data.get("path")
+        return (recipe_path.parent / value).resolve() if recipe_path is not None else value
 
-    @overload
-    def __getitem__(self, key: Literal["model"]) -> ModelSettings: ...
-
-    @overload
-    def __getitem__(self, key: Literal["execution"]) -> ExecutionSettings: ...
-
-    @overload
-    def __getitem__(self, key: Literal["tuning"]) -> TuningSettings: ...
-
-    @overload
-    def __getitem__(self, key: Literal["inputs"]) -> dict[SampleSplit, str]: ...
-
-    @overload
-    def __getitem__(self, key: Literal["workload"]) -> WorkloadSettings: ...
-
-    @overload
-    def __getitem__(self, key: Literal["benchmark"]) -> BenchmarkSettings: ...
-
-    @overload
-    def __getitem__(self, key: Literal["validation"]) -> ValidationSettings: ...
-
-    @overload
-    def __getitem__(self, key: Literal["deployment"]) -> DeploymentSettings: ...
-
-    def __getitem__(self, key: RecipeKey) -> object:
-        return self.data[key]
-
-    def resolve(self, value: str) -> Path:
+    def resolve(self, value: str | Path) -> Path:
         return (self.path.parent / value).resolve()
 
     @property
-    def artifact_path(self) -> Path:
-        return self.resolve(self["artifact_path"])
-
-    @property
-    def output_dir(self) -> Path:
-        return self.resolve(self["output_dir"])
-
-    @property
     def gpu_count(self) -> int:
-        return self["execution"]["gpu_count"]
+        return self.execution.gpu_count
 
     @property
     def endpoint(self) -> str:
-        return f"http://127.0.0.1:{self['deployment']['port']}"
+        return f"http://127.0.0.1:{self.deployment.port}"
 
     def samples(self, split: SampleSplit) -> list[Sample]:
-        path = self.resolve(self["inputs"][split])
-        samples: list[Sample] = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
-        seen: set[str] = set()
-        for sample in samples:
-            if not isinstance(sample, dict) or not {"id", "prompt", "seed"} <= sample.keys():
-                raise ValueError(f"{path}: each sample must be an object with id, prompt, and seed")
-            sample_id = sample["id"]
-            if not isinstance(sample_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", sample_id) or sample_id in seen:
-                raise ValueError(f"{path}: sample IDs must be unique, safe filenames")
-            if not isinstance(sample["prompt"], str) or not sample["prompt"].strip():
-                raise ValueError(f"{path}: {sample_id} needs a nonempty prompt")
-            if type(sample["seed"]) is not int or not 0 <= sample["seed"] < 2**32:
-                raise ValueError(f"{path}: {sample_id} needs an integer seed in [0, 2**32)")
-            seen.add(sample_id)
+        path = self.resolve(getattr(self.inputs, split))
+        samples = [Sample.model_validate_json(line) for line in path.read_text().splitlines() if line.strip()]
         if not samples:
             raise ValueError(f"{path}: sample file is empty")
+        if len({sample.id for sample in samples}) != len(samples):
+            raise ValueError(f"{path}: sample IDs must be unique")
         return samples
 
 
@@ -180,59 +161,7 @@ def load_recipe(path: str | Path) -> Recipe:
         data = yaml.safe_load(stream)
     if not isinstance(data, dict):
         raise ValueError(f"{path}: recipe must be a YAML mapping")
-    required = {
-        "model": ("base_model", "revision"),
-        "execution": ("gpu_count", "context_parallel"),
-        "tuning": ("quantization",),
-        "inputs": SAMPLE_SPLITS,
-        "workload": ("width", "height", "num_inference_steps", "guidance_scale", "max_sequence_length"),
-        "benchmark": ("warmup_iterations", "repetitions", "sampling_interval_s"),
-        "validation": ("metric", "threshold", "soft_threshold"),
-        "deployment": ("port", "seed", "request_count", "readiness_timeout_s", "web_host", "web_port"),
-    }
-    for key in ("name", "artifact_path", "output_dir"):
-        if not isinstance(data.get(key), str) or not data[key]:
-            raise ValueError(f"{path}: missing or invalid {key}")
-    for section, keys in required.items():
-        if not isinstance(data.get(section), dict) or set(keys) - data[section].keys():
-            raise ValueError(f"{path}: {section} requires {', '.join(keys)}")
-    recipe = Recipe(path, data)
-    _validate_settings(recipe)
+    recipe = Recipe.model_validate({**data, "path": path})
     for split in SAMPLE_SPLITS:
         recipe.samples(split)
     return recipe
-
-
-def _validate_settings(recipe: Recipe) -> None:
-    workload = recipe["workload"]
-    benchmark = recipe["benchmark"]
-    validation = recipe["validation"]
-    deployment = recipe["deployment"]
-    positive = [
-        recipe.gpu_count,
-        workload["width"],
-        workload["height"],
-        benchmark["repetitions"],
-        deployment["request_count"],
-    ]
-    if any(type(value) is not int or value < 1 for value in positive):
-        raise ValueError("GPU count, dimensions, repetitions, and request count must be positive integers")
-    if workload["width"] % 16 or workload["height"] % 16:
-        raise ValueError("FLUX image dimensions must be multiples of 16")
-    if not 1 <= workload["num_inference_steps"] <= 4 or not 1 <= workload["max_sequence_length"] <= 256:
-        raise ValueError("Schnell requires 1–4 steps and a maximum sequence length of 1–256")
-    if recipe["execution"]["context_parallel"] not in ("ulysses", "ring"):
-        raise ValueError("execution.context_parallel must be ulysses or ring")
-    if type(recipe["tuning"]["quantization"]) is not bool:
-        raise ValueError("tuning.quantization must be a boolean")
-    if benchmark["warmup_iterations"] < 0 or benchmark["sampling_interval_s"] <= 0:
-        raise ValueError("Benchmark warmup must be nonnegative and sampling interval positive")
-    if validation["metric"] != "rgb_ssim" or not 0 <= validation["threshold"] <= validation["soft_threshold"] <= 1:
-        raise ValueError("Validation requires rgb_ssim and 0 <= threshold <= soft_threshold <= 1")
-    if (
-        not all(0 < deployment[key] < 65536 for key in ("port", "web_port"))
-        or deployment["port"] == deployment["web_port"]
-    ):
-        raise ValueError("Deployment API and web ports must be distinct valid port numbers")
-    if deployment["readiness_timeout_s"] <= 0 or not 0 <= deployment["seed"] < 2**32:
-        raise ValueError("Deployment timeout must be positive and seed in [0, 2**32)")

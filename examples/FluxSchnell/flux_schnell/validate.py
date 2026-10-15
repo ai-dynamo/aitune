@@ -2,13 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Validate tuned images against the original pipeline using the recipe's validation samples."""
 
-import json
 import os
 from logging import basicConfig, getLogger
-from typing import TypedDict
 
 import numpy as np
 import torch.distributed as dist
+from pydantic import BaseModel
 from skimage.metrics import structural_similarity
 
 from .checkpoint import check_checkpoint, load_checkpoint
@@ -19,7 +18,7 @@ from .model import ImageSamples, generate_samples, get_pipeline
 logger = getLogger(__name__)
 
 
-class SampleValidationResult(TypedDict):
+class SampleValidationResult(BaseModel):
     id: str
     rgb_ssim: float
     max_abs_diff: float
@@ -33,7 +32,7 @@ class ValidationResult(ValidationSettings):
     passed: bool
 
 
-class ValidationReport(TypedDict):
+class ValidationReport(BaseModel):
     recipe: str
     model: ModelSettings
     gpu_count: int
@@ -47,20 +46,18 @@ def _validate(original: ImageSamples, tuned: ImageSamples, settings: ValidationS
         candidate = tuned[sample_id]
         difference = np.abs(baseline - candidate)
         score = float(structural_similarity(baseline, candidate, data_range=1.0, channel_axis=-1))
-        result: SampleValidationResult = {
-            "id": sample_id,
-            "rgb_ssim": score,
-            "max_abs_diff": float(difference.max()),
-            "max_rel_error": float((difference / np.maximum(np.abs(baseline), 1e-8)).max()),
-            "passed": bool(np.isfinite(candidate).all() and score >= settings["threshold"]),
-            "warning": score < settings["soft_threshold"],
-        }
-        if result["warning"]:
-            logger.warning(
-                "%s RGB SSIM %.4f is below soft threshold %.4f", sample_id, score, settings["soft_threshold"]
-            )
+        result = SampleValidationResult(
+            id=sample_id,
+            rgb_ssim=score,
+            max_abs_diff=float(difference.max()),
+            max_rel_error=float((difference / np.maximum(np.abs(baseline), 1e-8)).max()),
+            passed=bool(np.isfinite(candidate).all() and score >= settings.threshold),
+            warning=score < settings.soft_threshold,
+        )
+        if result.warning:
+            logger.warning("%s RGB SSIM %.4f is below soft threshold %.4f", sample_id, score, settings.soft_threshold)
         results.append(result)
-    return {**settings, "samples": results, "passed": all(result["passed"] for result in results)}
+    return ValidationResult(**settings.model_dump(), samples=results, passed=all(result.passed for result in results))
 
 
 def do_validation(recipe: Recipe) -> None:
@@ -72,16 +69,16 @@ def do_validation(recipe: Recipe) -> None:
     passed = True
     report_path = recipe.output_dir / "validation" / "report.json"
     if is_rank_zero():
-        validation = _validate(original, tuned, recipe["validation"])
-        passed = validation["passed"]
-        report: ValidationReport = {
-            "recipe": str(recipe.path),
-            "model": recipe["model"],
-            "gpu_count": recipe.gpu_count,
-            "validation_samples": recipe.samples("validation"),
-            "validation": validation,
-        }
-        report_path.write_text(json.dumps(report, indent=2) + "\n")
+        validation = _validate(original, tuned, recipe.validation)
+        passed = validation.passed
+        report = ValidationReport(
+            recipe=str(recipe.path),
+            model=recipe.model,
+            gpu_count=recipe.gpu_count,
+            validation_samples=recipe.samples("validation"),
+            validation=validation,
+        )
+        report_path.write_text(report.model_dump_json(indent=2) + "\n")
         logger.info("Validation passed=%s; report=%s", passed, report_path)
     if dist.is_initialized():
         status = [passed]

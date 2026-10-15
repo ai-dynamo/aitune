@@ -11,9 +11,10 @@ import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import TypedDict
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from pydantic import BaseModel
 
 from ..config import argument_parser, load_recipe
 
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 MAX_BODY = 64 * 1024
 
 
-class WebConfig(TypedDict):
+class WebConfig(BaseModel):
     model_name: str
     width: int
     height: int
@@ -31,14 +32,14 @@ class WebConfig(TypedDict):
 def generate_image(endpoint: str, cfg: WebConfig, prompt: str) -> bytes:
     with urlopen(endpoint + "/v1/models", timeout=10) as response:
         models = json.load(response)["data"]
-    names = [model["id"] for model in models if model["id"] == cfg["model_name"]]
+    names = [model["id"] for model in models if model["id"] == cfg.model_name]
     if len(names) != 1:
-        raise ValueError(f"Expected model {cfg['model_name']} in Dynamo; found {len(names)}. Check flux_schnell serve.")
+        raise ValueError(f"Expected model {cfg.model_name} in Dynamo; found {len(names)}. Check flux_schnell serve.")
     payload = {
         "model": names[0],
         "prompt": prompt,
         "n": 1,
-        "size": f"{cfg['width']}x{cfg['height']}",
+        "size": f"{cfg.width}x{cfg.height}",
         "response_format": "b64_json",
         "nvext": {"seed": secrets.randbits(32)},
     }
@@ -86,9 +87,9 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(
                 200,
                 json.dumps({
-                    "width": self.server.cfg["width"],
-                    "height": self.server.cfg["height"],
-                    "steps": self.server.cfg["steps"],
+                    "width": self.server.cfg.width,
+                    "height": self.server.cfg.height,
+                    "steps": self.server.cfg.steps,
                     "seed": "random",
                     "variant": "aitune",
                 }).encode(),
@@ -142,19 +143,19 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     recipe = load_recipe(argument_parser(__doc__).parse_args().recipe)
-    deployment, workload = recipe["deployment"], recipe["workload"]
-    with WebServer((deployment["web_host"], deployment["web_port"]), Handler) as server:
-        server.cfg = {
-            "model_name": recipe["model"]["base_model"],
-            "width": workload["width"],
-            "height": workload["height"],
-            "steps": workload["num_inference_steps"],
-        }
+    deployment, workload = recipe.deployment, recipe.workload
+    with WebServer((deployment.web_host, deployment.web_port), Handler) as server:
+        server.cfg = WebConfig(
+            model_name=recipe.model.base_model,
+            width=workload.width,
+            height=workload.height,
+            steps=workload.num_inference_steps,
+        )
         server.endpoint = recipe.endpoint
         server.page = Path(__file__).with_name("web.html").read_bytes()
         server.generation_lock = threading.Lock()
         print(
-            f"Web app: http://{deployment['web_host']}:{server.server_port}; image service: {recipe.endpoint}",
+            f"Web app: http://{deployment.web_host}:{server.server_port}; image service: {recipe.endpoint}",
             flush=True,
         )
         try:

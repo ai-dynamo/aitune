@@ -29,14 +29,14 @@ def _ready(recipe: Recipe) -> bool:
         with urlopen(recipe.endpoint + "/v1/models", timeout=5) as response:
             models = json.load(response)["data"]
         return '"dyn://aitune.backend.generate"' in health and any(
-            model["id"] == recipe["model"]["base_model"] for model in models
+            model["id"] == recipe.model.base_model for model in models
         )
     except (URLError, OSError, ValueError, KeyError):
         return False
 
 
 def _wait_ready(recipe: Recipe, processes: Sequence[subprocess.Popen[bytes]]) -> None:
-    deadline = time.monotonic() + recipe["deployment"]["readiness_timeout_s"]
+    deadline = time.monotonic() + recipe.deployment.readiness_timeout_s
     while time.monotonic() < deadline:
         if any(process.poll() is not None for process in processes):
             raise RuntimeError("A Dynamo process exited before readiness")
@@ -82,7 +82,7 @@ def _serve(recipe: Recipe, smoke_test: bool) -> None:
             return process
 
         try:
-            start("dynamo.frontend", "--http-port", str(recipe["deployment"]["port"]))
+            start("dynamo.frontend", "--http-port", str(recipe.deployment.port))
             backend = start("flux_schnell.dynamo.backend", "--recipe", str(recipe.path))
             _wait_ready(recipe, processes)
             if smoke_test:

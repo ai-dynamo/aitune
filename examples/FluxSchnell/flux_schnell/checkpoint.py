@@ -4,11 +4,11 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any
 
 import torch
+from pydantic import BaseModel
 
 import aitune.torch as ait
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from diffusers import FluxPipeline
 
 
-class CheckpointManifest(TypedDict):
+class CheckpointManifest(BaseModel):
     model: ModelSettings
     execution: ExecutionSettings
     workload: WorkloadSettings
@@ -61,23 +61,23 @@ def save_checkpoint(pipeline: FluxPipeline, recipe: Recipe, tuning_seconds: floa
         ]
         if not all(path.is_file() for path in artifacts):
             raise RuntimeError("Not every rank saved its checkpoint")
-        manifest: CheckpointManifest = {
-            "model": recipe["model"],
-            "execution": recipe["execution"],
-            "workload": recipe["workload"],
-            "tuning": recipe["tuning"],
-            "samples": recipe.samples("tune"),
-            "tuning_seconds": tuning_seconds,
-            "artifacts": [path.name for path in artifacts],
-        }
-        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        manifest = CheckpointManifest(
+            model=recipe.model,
+            execution=recipe.execution,
+            workload=recipe.workload,
+            tuning=recipe.tuning,
+            samples=recipe.samples("tune"),
+            tuning_seconds=tuning_seconds,
+            artifacts=[path.name for path in artifacts],
+        )
+        manifest_path.write_text(manifest.model_dump_json(indent=2) + "\n")
     synchronize()
 
 
 def check_checkpoint(recipe: Recipe) -> CheckpointManifest:
-    manifest: CheckpointManifest = json.loads(recipe.artifact_path.with_suffix(".manifest.json").read_text())
+    manifest = CheckpointManifest.model_validate_json(recipe.artifact_path.with_suffix(".manifest.json").read_text())
     for key in ("model", "execution", "workload", "tuning"):
-        if manifest[key] != recipe[key]:
+        if getattr(manifest, key) != getattr(recipe, key):
             raise ValueError(f"Checkpoint {key} differs from the selected recipe; tune this recipe first")
     for rank in range(recipe.gpu_count):
         path = distributed_output_path(recipe.artifact_path, rank, recipe.gpu_count)
