@@ -283,7 +283,6 @@ functional-test = [
     { name = "datasets", specifier = ">=3.3.2" },
     { name = "diffusers", specifier = ">=0.35.0,!=0.37.1" },
     { name = "fire" },
-    { name = "flash-attn-4", specifier = ">=4.0.0b33" },
     { name = "kernels", specifier = ">=0.12" },
     { name = "sageattention" },
     { name = "sentencepiece", specifier = ">=0.2.0" },
