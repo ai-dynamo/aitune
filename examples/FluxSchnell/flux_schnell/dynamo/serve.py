@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Serve Dynamo and the prompt UI, or run a smoke test and shut down."""
+"""Serve Dynamo and the prompt UI on one GPU, or run a smoke test and shut down."""
 
 from __future__ import annotations
 
@@ -118,6 +118,11 @@ def _serve(recipe: Recipe, smoke_test: bool) -> None:
 
 def run(recipe: Recipe, smoke_test: bool = False) -> None:
     basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
+    if recipe.gpu_count != 1 or int(os.environ.get("WORLD_SIZE", "1")) != 1:
+        raise ValueError(
+            "The serve command supports a single GPU. For multiple GPUs, start the Dynamo frontend, "
+            "torchrun backend, and web UI separately as shown in the README."
+        )
 
     def interrupted(_signal: int, _frame: FrameType | None) -> NoReturn:
         raise KeyboardInterrupt

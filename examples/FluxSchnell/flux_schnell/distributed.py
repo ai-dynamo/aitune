@@ -3,7 +3,6 @@
 """Distributed helpers owned by the Flux example."""
 
 import os
-import sys
 from pathlib import Path
 
 import torch
@@ -12,39 +11,23 @@ import torch.distributed as dist
 from .config import Recipe
 
 
-def launch(recipe: Recipe, module: str) -> None:
-    """Launch exactly the recipe's GPU count, preserving explicit torchrun launches."""
+def initialize(recipe: Recipe) -> None:
+    """Check the process count and initialize ranks launched by the user's torchrun command."""
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    if world_size != recipe.gpu_count:
+        raise RuntimeError(
+            f"Recipe needs {recipe.gpu_count} ranks, but WORLD_SIZE is {world_size}. "
+            f"Launch with torchrun --standalone --nproc-per-node={recipe.gpu_count} --module flux_schnell.<command> "
+            f"--recipe {recipe.path}"
+        )
     available = torch.cuda.device_count()
     if available < recipe.gpu_count:
         raise RuntimeError(f"Recipe needs {recipe.gpu_count} GPUs, but only {available} are visible")
-    if "WORLD_SIZE" not in os.environ and recipe.gpu_count > 1:
-        os.execv(
-            sys.executable,
-            [
-                sys.executable,
-                "-m",
-                "torch.distributed.run",
-                "--standalone",
-                f"--nproc-per-node={recipe.gpu_count}",
-                "--module",
-                module,
-                "--recipe",
-                str(recipe.path),
-            ],
-        )
-    world_size = int(os.environ.get("WORLD_SIZE", "1"))
-    if world_size != recipe.gpu_count:
-        raise RuntimeError(f"Recipe needs {recipe.gpu_count} ranks, but WORLD_SIZE is {world_size}")
-
-
-def initialize() -> bool:
-    """Initialize NCCL when ``torchrun`` launches more than one process."""
-    if int(os.environ.get("WORLD_SIZE", "1")) <= 1:
-        return False
+    if world_size == 1:
+        return
     local_rank = int(os.environ["LOCAL_RANK"])
     torch.cuda.set_device(local_rank)
     dist.init_process_group("nccl")
-    return True
 
 
 def is_rank_zero() -> bool:

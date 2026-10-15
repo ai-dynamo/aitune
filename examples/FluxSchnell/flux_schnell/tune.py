@@ -28,7 +28,7 @@ from aitune.torch.module.wrapper_module import ModuleState
 
 from .checkpoint import save_checkpoint
 from .config import GenerationInput, Recipe, argument_parser, load_recipe
-from .distributed import initialize, launch, shutdown
+from .distributed import initialize, shutdown
 from .model import generate, get_pipeline
 
 if TYPE_CHECKING:
@@ -135,8 +135,7 @@ def tune_model(recipe: Recipe) -> None:
 
 def run(recipe: Recipe) -> None:
     basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
-    launch(recipe, "flux_schnell.tune")
-    initialize()
+    initialize(recipe)
     try:
         tune_model(recipe)
     finally:

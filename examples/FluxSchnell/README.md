@@ -19,12 +19,13 @@ The model is loaded at the exact `model.revision`.
 The `inputs` section selects samples for tuning, validation, and inference. Each JSONL sample has an `id`, a `prompt`,
 and a `seed`. The generator is reset to the sample's seed on every call, including original/tuned comparisons during validation.
 
-Generation settings come from `workload`. `execution.gpu_count` controls the number of worker processes, and
+Generation settings come from `workload`. `execution.gpu_count` must match the number of worker processes, and
 `execution.context_parallel` selects `ulysses` or `ring`. `tuning.quantization` optionally includes TorchAO NVFP4 and
 FP8 transformer candidates; the supplied recipes leave it disabled. NVFP4 needs compatible Blackwell hardware.
 
-## Build and run in a container
+## Build and run a container
 
+### Prerequisites
 Before starting the container, sign in to Hugging Face and accept the model's access conditions on the
 [FLUX.1-schnell model page](https://huggingface.co/black-forest-labs/FLUX.1-schnell).
 Then create a [Hugging Face access token](https://huggingface.co/settings/tokens) for the same account with read access
@@ -34,13 +35,17 @@ to the model repository. Export it in the host shell where you will run Docker:
 export HF_TOKEN="hf_your_token_here"
 ```
 
-The `-e HF_TOKEN` option in the command below passes this token into the container for model downloads.
+The `-e HF_TOKEN` option in the `docker run` command below passes this token into the container for model downloads.
+
+### Building an image
 
 To build a Docker image for the example, run from the repository root:
 
 ```bash
 docker build -f examples/FluxSchnell/Dockerfile -t aitune-flux-schnell:recipes .
 ```
+
+### Running a container
 
 Then, enter the container:
 ```bash
@@ -64,7 +69,8 @@ uv sync --locked --extra dynamo
 ```
 
 ## Example steps
-Typical workflow with the example consists of running the following commands from within the container:
+For a single GPU, run the following commands from within the container. For multiple GPUs, use the explicit
+`torchrun` commands in [Multiple GPUs](#multiple-gpus).
 ```bash
 uv run flux_schnell tune --recipe recipes/single-gpu.yaml
 uv run flux_schnell validate --recipe recipes/single-gpu.yaml
@@ -112,7 +118,7 @@ It is possible to play with the model and deployment through a simple UI. Run
 uv run flux_schnell serve --recipe recipes/single-gpu.yaml
 ```
 
-By default, `serve` keeps Dynamo and the browser UI running until interrupted. Press Ctrl+C to stop it before
+For a single GPU, `serve` keeps Dynamo and the browser UI running until interrupted. Press Ctrl+C to stop it before
 running the smoke test, which starts its own deployment on the same port.
 
 Open [http://localhost:8080](http://localhost:8080) when the log prints `Web app:`. Dynamo uses `deployment.port`; the
@@ -141,13 +147,64 @@ test does not start the browser UI.
 
 ## Multiple GPUs
 
-Use `--recipe recipes/multi-gpu.yaml` for tuning, validation, inference, and deployment on a machine exposing at least
-two GPUs.
-Each command automatically launches the configured number of ranks with `torchrun`; additional visible GPUs are not
-used. There is no separate GPU-count CLI override. Tuning, validation, and inference also accept explicit external
-`torchrun` launches, provided `WORLD_SIZE` equals the recipe's GPU count. Run `serve` once; it launches the backend
-ranks itself. The backend configures Diffusers context parallelism on every rank, and
-AITune coordinates distributed tuning and serving. Only rank zero writes images and reports.
+Launch worker processes explicitly with `torchrun` on a machine exposing at least two GPUs. Run these commands
+inside the container, from `/workspace/aitune/examples/FluxSchnell`:
+
+```bash
+uv run torchrun --standalone --nproc-per-node=2 --log-dir logs/tune --tee 3 --local-ranks-filter 0 \
+  --module flux_schnell.tune --recipe recipes/multi-gpu.yaml
+uv run torchrun --standalone --nproc-per-node=2 --log-dir logs/validate --tee 3 --local-ranks-filter 0 \
+  --module flux_schnell.validate --recipe recipes/multi-gpu.yaml
+uv run torchrun --standalone --nproc-per-node=2 --log-dir logs/infer --tee 3 --local-ranks-filter 0 \
+  --module flux_schnell.infer --recipe recipes/multi-gpu.yaml
+```
+
+`--nproc-per-node` must equal the recipe's `execution.gpu_count`. The example checks `WORLD_SIZE` and fails if
+they differ; it does not launch additional processes. `--tee 3` saves stdout and stderr for every rank, while
+`--local-ranks-filter 0` displays only rank zero in the terminal. Additional visible GPUs are not used.
+Each rank configures Diffusers context parallelism, and AITune coordinates distributed tuning and serving.
+Only rank zero writes images and reports.
 
 Use the same recipe and GPU count for tuning and serving. The multi-GPU recipe saves separate artifacts under
 `results/multi-gpu` and never shares the single-GPU checkpoint.
+
+### Multi-GPU Dynamo deployment
+
+Start the frontend, backend, and UI in separate terminals inside the same container. Open additional shells with
+`docker exec -it aitune-flux-schnell bash`. In both the frontend and backend terminals, set:
+
+```bash
+export DYN_DISCOVERY_BACKEND=file
+export DYN_EVENT_PLANE=zmq
+export DYN_REQUEST_PLANE=tcp
+export DYN_ROUTER_USE_KV_EVENTS=false
+```
+
+In the first terminal, start the frontend. Its port must match `deployment.port` in the recipe:
+
+```bash
+uv run python -m dynamo.frontend --http-port 8000
+```
+
+In the second terminal, launch the backend ranks:
+
+```bash
+uv run torchrun --standalone --nproc-per-node=2 --log-dir logs/serve --tee 3 --local-ranks-filter 0 \
+  --module flux_schnell.dynamo.backend --recipe recipes/multi-gpu.yaml
+```
+
+Model loading and compilation can take several minutes. Once the backend is ready, start the UI in a third terminal:
+
+```bash
+uv run python -m flux_schnell.dynamo.web --recipe recipes/multi-gpu.yaml
+```
+
+Open [http://localhost:8080](http://localhost:8080). To send the recipe's smoke-test requests to the running deployment,
+use another terminal:
+
+```bash
+uv run python -m flux_schnell.dynamo.client --recipe recipes/multi-gpu.yaml
+```
+
+Stop each service with Ctrl+C in its terminal. The `flux_schnell serve` command, including `--smoke_test`, is for
+single-GPU deployments.

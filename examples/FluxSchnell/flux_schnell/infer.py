@@ -7,7 +7,7 @@ from logging import basicConfig, getLogger
 
 from .checkpoint import check_checkpoint, load_checkpoint
 from .config import Recipe, argument_parser, load_recipe
-from .distributed import initialize, is_rank_zero, launch, shutdown
+from .distributed import initialize, is_rank_zero, shutdown
 from .model import generate_samples, get_pipeline
 
 logger = getLogger(__name__)
@@ -23,8 +23,7 @@ def do_inference(recipe: Recipe) -> None:
 
 def run(recipe: Recipe) -> None:
     basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
-    launch(recipe, "flux_schnell.infer")
-    initialize()
+    initialize(recipe)
     try:
         do_inference(recipe)
     finally:

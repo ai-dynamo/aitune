@@ -25,7 +25,7 @@ def main() -> None:
         )
     commands.add_parser(
         "serve",
-        help="Keep Dynamo and the prompt UI running, or run a smoke test.",
+        help="Keep Dynamo and the prompt UI running on one GPU, or run a smoke test.",
         description=serve.__doc__,
         parents=[serve.command_parser()],
         add_help=False,

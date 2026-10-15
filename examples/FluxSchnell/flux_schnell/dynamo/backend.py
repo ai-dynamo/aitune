@@ -17,7 +17,7 @@ import aitune.dynamo as dyn
 
 from ..checkpoint import check_checkpoint, load_checkpoint
 from ..config import GenerationInput, Recipe, argument_parser, load_recipe
-from ..distributed import initialize, is_rank_zero, launch, shutdown
+from ..distributed import initialize, is_rank_zero, shutdown
 from ..model import generate, get_pipeline
 
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ class FluxDynamoBackend:
         self._generation_lock = threading.Lock()
 
     def run(self) -> None:
-        initialize()
+        initialize(self.recipe)
         try:
             config = dyn.DynamoWorkerConfig(
                 type="image",
@@ -84,8 +84,6 @@ class FluxDynamoBackend:
 def main() -> None:
     basicConfig(level=os.environ.get("AITUNE_LOG_LEVEL", "INFO"), force=True)
     recipe = load_recipe(argument_parser(__doc__).parse_args().recipe)
-    check_checkpoint(recipe)
-    launch(recipe, "flux_schnell.dynamo.backend")
     FluxDynamoBackend(recipe).run()
 
 
