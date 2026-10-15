@@ -48,10 +48,6 @@ env:
   NCCL_NET_PLUGIN: none
   NCCL_NET: Socket
 
-  # Actions version pins
-  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-
 defaults:
   run:
     shell: bash
@@ -86,7 +82,7 @@ jobs:
     env:
       EXTRA_PACKAGES: ${{ matrix.extra_packages }}
     steps:
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - run: |
@@ -158,10 +154,10 @@ jobs:
             | tar -xz --strip-components=1 -C "$node_dir"
           echo "$node_dir/bin" >> "$GITHUB_PATH"
           "$node_dir/bin/node" --version
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: *actions_setup_uv
+      - uses: astral-sh/setup-uv@v10.0.1
         env:
           RUNNER_TOOL_CACHE: ${{ runner.temp }}/tool-cache
         with:
