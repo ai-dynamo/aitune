@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Public-API lifecycle shared by functional cases: inspect, wrap, tune, infer, save, load, infer."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,9 +12,10 @@ from torch import nn
 import aitune.torch as ait
 from aitune.torch.backend import Backend
 from aitune.torch.module import Module
+from tests.functional_ci.models import make_input
 
 
-@dataclass
+@dataclass(frozen=True)
 class Tolerance:
     """Allowed difference between tuned and eager outputs."""
 
@@ -30,19 +31,29 @@ class Tolerance:
 TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
 
 
-@dataclass
-class LifecycleResult:
-    """Modules produced by `run_lifecycle`."""
-
-    tuned: Module
-    restored: Module
-
-
-def selected_backend(module: Module) -> Backend:
-    """Return the only backend selected for a single-graph module."""
+def selected_backend(module: Module, expected: type[Backend] | None = None) -> Backend:
+    """Return the only backend selected for a single-graph module; check its type when `expected` is given."""
     backends = module.module.backends
     assert len(backends) == 1, f"expected one selected backend, found {len(backends)}"
-    return next(iter(backends.values()))
+    (selected,) = backends.values()
+    assert expected is None or type(selected) is expected, f"selected {type(selected)}, expected {expected}"
+    return selected
+
+
+def assert_matches_eager(
+    tuned: Callable,
+    reference: Callable,
+    device: torch.device,
+    tolerance: Tolerance,
+    batch_sizes: Sequence[int] = (2,),
+    seeds: Sequence[int] = (5,),
+) -> None:
+    """Compare `tuned` with `reference` on a seeded `make_input` batch for each batch size and seed."""
+    with torch.no_grad():
+        for batch_size in batch_sizes:
+            for seed in seeds:
+                value = make_input(device, batch_size=batch_size, seed=seed)
+                tolerance.assert_close(tuned(value), reference(value))
 
 
 def pinned_strategy(backend: Backend) -> ait.OneBackendStrategy:
@@ -58,8 +69,8 @@ def run_lifecycle(
     value: torch.Tensor,
     checkpoint: Path,
     tolerance: Tolerance,
-) -> LifecycleResult:
-    """Tune `backend` on a fresh model, check outputs, then reload the checkpoint into a differently seeded model."""
+) -> Module:
+    """Tune `backend` on a fresh model, check outputs, then return the checkpoint reloaded into another seeded model."""
     strategy = pinned_strategy(backend)
     model = model_factory()
     with torch.no_grad():
@@ -69,8 +80,7 @@ def run_lifecycle(
     tuned = ait.wrap(model, inspected.get_modules(), strategy=strategy)
     ait.tune(tuned, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=value.device)
 
-    actual = selected_backend(tuned)
-    assert type(actual) is type(backend)
+    actual = selected_backend(tuned, type(backend))
     assert actual.key() == backend.key()
     assert actual.device == value.device
     assert len(tuned.graph_specs) == 1
@@ -82,7 +92,7 @@ def run_lifecycle(
     # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
     restored = ait.load(model_factory(seed=1), checkpoint)
     assert restored is not tuned
-    assert type(selected_backend(restored)) is type(backend)
+    selected_backend(restored, type(backend))
     with torch.no_grad():
         tolerance.assert_close(restored(value), expected)
-    return LifecycleResult(tuned=tuned, restored=restored)
+    return restored

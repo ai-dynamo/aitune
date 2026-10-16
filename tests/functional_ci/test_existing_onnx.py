@@ -11,7 +11,7 @@ import torch
 import aitune.torch as ait
 from aitune.torch.module.onnx_module import OnnxModule
 from tests.functional_ci.backends import BackendCase, with_backends
-from tests.functional_ci.lifecycle import pinned_strategy, selected_backend
+from tests.functional_ci.lifecycle import assert_matches_eager, pinned_strategy, selected_backend
 from tests.functional_ci.models import make_input, make_mlp
 
 
@@ -49,11 +49,9 @@ def test_existing_onnx(case: BackendCase, external_data: bool, device: torch.dev
     samples = [{"x": row} for row in make_input(device, batch_size=4).unbind(0)]
     ait.tune(tuned, samples, batch_sizes=[1, 4], device=device)
 
-    assert type(selected_backend(tuned)) is type(backend)
+    selected_backend(tuned, type(backend))
     reference = make_mlp(device)
-    with torch.no_grad():
-        for batch_size in (1, 3, 4):
-            value = make_input(device, batch_size=batch_size, seed=20 + batch_size)
-            outputs = tuned(x=value)
-            assert set(outputs) == {"y"}
-            case.tolerance.assert_close(outputs["y"], reference(value))
+    # `assert_close` on dicts also checks that `y` is the only output.
+    assert_matches_eager(
+        lambda x: tuned(x=x), lambda x: {"y": reference(x)}, device, case.tolerance, batch_sizes=(1, 3, 4)
+    )
