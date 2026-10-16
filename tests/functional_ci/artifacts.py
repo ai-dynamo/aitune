@@ -33,7 +33,8 @@ def _run_tensorrt_plan(path: Path, inputs: list[torch.Tensor]) -> list[torch.Ten
     input_names = [name for name in names if engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT]
     for name, tensor in zip(input_names, inputs, strict=True):
         context.set_input_shape(name, tuple(tensor.shape))
-        context.set_tensor_address(name, tensor.contiguous().data_ptr())
+        assert tensor.is_contiguous(), f"{name} must be contiguous; TensorRT reads it by address"
+        context.set_tensor_address(name, tensor.data_ptr())
     outputs = []
     for name in names:
         if name in input_names:
