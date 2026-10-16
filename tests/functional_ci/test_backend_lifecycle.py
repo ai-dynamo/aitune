@@ -10,8 +10,13 @@ import torch
 
 from aitune.torch.backend import (
     Backend,
+    ONNXExecutionProvider,
+    ONNXRuntimeBackend,
+    ONNXRuntimeBackendConfig,
     TensorRTBackend,
     TensorRTBackendConfig,
+    TorchAOBackend,
+    TorchAOBackendConfig,
     TorchEagerBackend,
     TorchInductorAotBackend,
     TorchTensorRTAotBackend,
@@ -22,7 +27,7 @@ from aitune.torch.backend import (
 from .lifecycle import Tolerance, run_lifecycle
 from .models import make_input, make_mlp
 
-# TensorRT fp32 on the SM120 PR runner differs from eager by about 3e-4 even with TF32 disabled.
+# TensorRT and ONNX Runtime fp32 on the SM120 PR runner differ from eager by about 3e-4 even with TF32 disabled.
 TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
 
 
@@ -42,11 +47,24 @@ def _tensorrt() -> Backend:
     return TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, use_cuda_graphs=False))
 
 
+def _onnx_runtime(provider: ONNXExecutionProvider) -> Callable[[], Backend]:
+    """Return a factory for an ONNX Runtime backend on one execution provider."""
+    return lambda: ONNXRuntimeBackend(ONNXRuntimeBackendConfig(execution_provider=provider))
+
+
+def _torchao_int8_weight_only() -> Backend:
+    """Build a TorchAO int8 weight-only backend compiled without autotuning."""
+    return TorchAOBackend(TorchAOBackendConfig(quantization="int8wo", mode="default"))
+
+
 BACKENDS: dict[str, tuple[Callable[[], Backend], Tolerance]] = {
     "torch-eager": (TorchEagerBackend, Tolerance()),
     "inductor-aot": (TorchInductorAotBackend, Tolerance()),
     "torch-tensorrt-aot": (_torch_tensorrt_aot, TENSORRT_FP32),
     "tensorrt": (_tensorrt, TENSORRT_FP32),
+    "onnxruntime-cuda": (_onnx_runtime(ONNXExecutionProvider.CUDA), TENSORRT_FP32),
+    "onnxruntime-tensorrt": (_onnx_runtime(ONNXExecutionProvider.TENSORRT), TENSORRT_FP32),
+    "torchao-int8wo": (_torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2)),
 }
 
 
