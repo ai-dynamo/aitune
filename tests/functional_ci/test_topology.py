@@ -2,15 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Partial wrapping of a shared submodule that produces several graphs."""
 
-from collections.abc import Callable
-
-import pytest
 import torch
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import Backend, TensorRTBackend, TensorRTBackendConfig, TorchInductorAotBackend
-from tests.functional_ci.lifecycle import TENSORRT_FP32
+from tests.functional_ci.backends import BACKENDS, with_backends
 from tests.functional_ci.models import OUT_FEATURES, make_input, make_mlp
 
 
@@ -31,16 +27,10 @@ class TwoTower(nn.Module):
         return self.head(self.encoder(x) + self.encoder(x.unsqueeze(1)).squeeze(1))
 
 
-TOPOLOGY_BACKENDS: dict[str, Callable[[], Backend]] = {
-    "inductor-aot": TorchInductorAotBackend,
-    "tensorrt": lambda: TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, use_cuda_graphs=False)),
-}
-
-
-@pytest.mark.parametrize("backend_id", TOPOLOGY_BACKENDS)
+@with_backends("multigraph")
 def test_partial_wrap_multigraph(backend_id: str, device: torch.device, tmp_path):
     """Wrap only the shared encoder; it tunes one graph per layout, hooks still fire, and the checkpoint reloads."""
-    backend = TOPOLOGY_BACKENDS[backend_id]()
+    backend, tolerance = BACKENDS[backend_id].factory(), BACKENDS[backend_id].tolerance
     strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
     value = make_input(device)
@@ -63,11 +53,11 @@ def test_partial_wrap_multigraph(backend_id: str, device: torch.device, tmp_path
     calls = []
     model.register_forward_hook(lambda *_: calls.append(1))
     with torch.no_grad():
-        torch.testing.assert_close(model(value), expected, rtol=TENSORRT_FP32.rtol, atol=TENSORRT_FP32.atol)
+        torch.testing.assert_close(model(value), expected, rtol=tolerance.rtol, atol=tolerance.atol)
     assert calls == [1]
 
     ait.save(model, tmp_path / "model.ait")
     model.encoder.deactivate()
     restored = ait.load(TwoTower(device), tmp_path / "model.ait")
     with torch.no_grad():
-        torch.testing.assert_close(restored(value), expected, rtol=TENSORRT_FP32.rtol, atol=TENSORRT_FP32.atol)
+        torch.testing.assert_close(restored(value), expected, rtol=tolerance.rtol, atol=tolerance.atol)
