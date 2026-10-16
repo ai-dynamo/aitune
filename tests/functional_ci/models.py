@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Deterministic toy models shared by functional cases."""
 
+from collections.abc import Generator
+from contextlib import contextmanager
+
 import torch
 from torch import nn
 
@@ -9,10 +12,17 @@ IN_FEATURES = 128
 OUT_FEATURES = 64
 
 
-def make_mlp(device: torch.device, seed: int = 0) -> nn.Module:
-    """Return a seeded multi-layer perceptron (MLP) `IN_FEATURES -> 128 -> OUT_FEATURES` in eval mode."""
+@contextmanager
+def seeded(device: torch.device, seed: int) -> Generator[None, None, None]:
+    """Seed the global RNG for the block, then restore the previous RNG state."""
     with torch.random.fork_rng(devices=[device] if device.type == "cuda" else []):
         torch.manual_seed(seed)
+        yield
+
+
+def make_mlp(device: torch.device, seed: int = 0) -> nn.Module:
+    """Return a seeded multi-layer perceptron (MLP) `IN_FEATURES -> 128 -> OUT_FEATURES` in eval mode."""
+    with seeded(device, seed):
         model = nn.Sequential(nn.Linear(IN_FEATURES, 128), nn.ReLU(), nn.Linear(128, OUT_FEATURES))
     return model.to(device).eval()
 

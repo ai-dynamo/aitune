@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """JIT mode cases: modules created under the patcher are tuned on live traffic."""
 
-from collections.abc import Callable
 from typing import cast
 
 import pytest
@@ -10,13 +9,6 @@ import torch
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import (
-    Backend,
-    TorchInductorJitBackend,
-    TorchTensorRTConfig,
-    TorchTensorRTJitBackend,
-    TorchTensorRTJitBackendConfig,
-)
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.inspect_module import InspectModule
@@ -24,7 +16,8 @@ from aitune.torch.jit.patched_module import ModuleState, PatchedModule
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
 from aitune.torch.jit.tune import deferred
 from aitune.torch.module.tuned_module import TunedModule
-from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
+from tests.functional_ci.backends import BackendCase, with_backends
+from tests.functional_ci.lifecycle import assert_matches_eager
 from tests.functional_ci.models import make_input, make_mlp
 
 
@@ -41,30 +34,11 @@ class JitMLP(nn.Module):
         return self.mlp(x)
 
 
-def _torch_tensorrt_jit() -> Backend:
-    """Build a Torch-TensorRT JIT backend that converts the whole graph in fp32."""
-    compile_config = TorchTensorRTConfig(
-        enabled_precisions={torch.float32},
-        min_block_size=1,
-        disable_tf32=True,
-        require_full_compilation=True,
-    )
-    # Dynamic batch compilation fails the max-shape correctness check (sympy `Infinity` bound), so compile per shape.
-    return TorchTensorRTJitBackend(TorchTensorRTJitBackendConfig(compile_config=compile_config, dynamic=False))
-
-
-JIT_BACKENDS: dict[str, tuple[Callable[[], Backend], Tolerance]] = {
-    "inductor-jit": (TorchInductorJitBackend, Tolerance()),
-    "torch-tensorrt-jit": (_torch_tensorrt_jit, TENSORRT_FP32),
-}
-
-
 @pytest.mark.parametrize("mode", [JITMode.TUNE_EAGER, JITMode.TUNE_DEFERRED], ids=lambda mode: mode.value)
-@pytest.mark.parametrize("backend_id", JIT_BACKENDS)
-def test_jit_tuning(backend_id: str, mode: JITMode, device: torch.device):
+@with_backends("jit")
+def test_jit_tuning(case: BackendCase, mode: JITMode, device: torch.device):
     """Record two batch sizes, tune in the requested mode, then serve an unseen in-range batch size."""
-    backend_factory, tolerance = JIT_BACKENDS[backend_id]
-    backend = backend_factory()
+    backend, tolerance = case.factory(), case.tolerance
     jit_config.mode = mode
     jit_config.device = device
     jit_config.min_samples = 2
@@ -85,8 +59,7 @@ def test_jit_tuning(backend_id: str, mode: JITMode, device: torch.device):
         assert head._state == ModuleState.TUNED
         (selected,) = cast(TunedModule, head._wrapper).backends.values()
         assert type(selected) is type(backend)
-        value = make_input(device, batch_size=3, seed=7)
-        torch.testing.assert_close(model(value), reference(value), rtol=tolerance.rtol, atol=tolerance.atol)
+        assert_matches_eager(model, reference, device, tolerance, batch_sizes=(3,), seeds=(7,))
 
 
 def test_jit_inspection_report(device: torch.device, tmp_path):

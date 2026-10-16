@@ -8,7 +8,7 @@ from torch.nn import functional
 
 import aitune.torch as ait
 from aitune.torch.backend import KernelSelectorBackend
-from tests.functional_ci.lifecycle import Tolerance, selected_backend
+from tests.functional_ci.lifecycle import Tolerance, pinned_strategy, selected_backend
 
 FP16_ATTENTION = Tolerance(rtol=2e-3, atol=2e-3)
 
@@ -30,17 +30,12 @@ def _qkv(device: torch.device, seed: int) -> tuple[torch.Tensor, ...]:
 def test_kernel_selector_attention(device: torch.device):
     """The selector evaluates attention providers, builds the delegate, and matches eager attention."""
     backend = KernelSelectorBackend()
-    strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
-    strategy.enable_find_max_batch_size(False)
-    tuned = ait.Module(Attention().eval(), "attention", strategy=strategy)
+    tuned = ait.Module(Attention().eval(), "attention", strategy=pinned_strategy(backend))
     with torch.no_grad():
         tuned(*_qkv(device, seed=0))
         tuned.tune(device=device)
 
-        selector = selected_backend(tuned)
-        assert type(selector) is KernelSelectorBackend
+        selector = selected_backend(tuned, KernelSelectorBackend)
         assert selector._runtime is not None and selector._runtime.plan.providers, "no attention provider selected"
         sample = _qkv(device, seed=1)
-        torch.testing.assert_close(
-            tuned(*sample), Attention()(*sample), rtol=FP16_ATTENTION.rtol, atol=FP16_ATTENTION.atol
-        )
+        FP16_ATTENTION.assert_close(tuned(*sample), Attention()(*sample))
