@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 import aitune.torch as ait
-from tests.functional_ci.backends import BACKENDS, with_backends
+from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.models import OUT_FEATURES, make_input, make_mlp
 
 
@@ -28,9 +28,9 @@ class TwoTower(nn.Module):
 
 
 @with_backends("multigraph")
-def test_partial_wrap_multigraph(backend_id: str, device: torch.device, tmp_path):
+def test_partial_wrap_multigraph(case: BackendCase, device: torch.device, tmp_path):
     """Wrap only the shared encoder; it tunes one graph per layout, hooks still fire, and the checkpoint reloads."""
-    backend, tolerance = BACKENDS[backend_id].factory(), BACKENDS[backend_id].tolerance
+    backend, tolerance = case.factory(), case.tolerance
     strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
     value = make_input(device)

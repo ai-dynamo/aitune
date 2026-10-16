@@ -16,7 +16,7 @@ from aitune.torch.jit.patched_module import ModuleState, PatchedModule
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
 from aitune.torch.jit.tune import deferred
 from aitune.torch.module.tuned_module import TunedModule
-from tests.functional_ci.backends import BACKENDS, with_backends
+from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.models import make_input, make_mlp
 
 
@@ -35,10 +35,9 @@ class JitMLP(nn.Module):
 
 @pytest.mark.parametrize("mode", [JITMode.TUNE_EAGER, JITMode.TUNE_DEFERRED], ids=lambda mode: mode.value)
 @with_backends("jit")
-def test_jit_tuning(backend_id: str, mode: JITMode, device: torch.device):
+def test_jit_tuning(case: BackendCase, mode: JITMode, device: torch.device):
     """Record two batch sizes, tune in the requested mode, then serve an unseen in-range batch size."""
-    backend = BACKENDS[backend_id].factory()
-    tolerance = BACKENDS[backend_id].tolerance
+    backend, tolerance = case.factory(), case.tolerance
     jit_config.mode = mode
     jit_config.device = device
     jit_config.min_samples = 2
