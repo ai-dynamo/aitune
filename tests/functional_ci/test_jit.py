@@ -17,6 +17,7 @@ from aitune.torch.jit.patcher import prepare_for_jit_tuning
 from aitune.torch.jit.tune import deferred
 from aitune.torch.module.tuned_module import TunedModule
 from tests.functional_ci.backends import BackendCase, with_backends
+from tests.functional_ci.lifecycle import assert_matches_eager
 from tests.functional_ci.models import make_input, make_mlp
 
 
@@ -58,8 +59,7 @@ def test_jit_tuning(case: BackendCase, mode: JITMode, device: torch.device):
         assert head._state == ModuleState.TUNED
         (selected,) = cast(TunedModule, head._wrapper).backends.values()
         assert type(selected) is type(backend)
-        value = make_input(device, batch_size=3, seed=7)
-        tolerance.assert_close(model(value), reference(value))
+        assert_matches_eager(model, reference, device, tolerance, batch_sizes=(3,), seeds=(7,))
 
 
 def test_jit_inspection_report(device: torch.device, tmp_path):
