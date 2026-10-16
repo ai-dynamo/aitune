@@ -366,10 +366,10 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: *actions_download_artifact
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist
           path: dist
@@ -377,7 +377,7 @@ jobs:
           python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
           python -m pytest -rfEs --durations=0 tests/functional_ci --junitxml=functional-ci.test-report.xml
       - if: always()
-        uses: *actions_upload_artifact
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: functional-ci-test-report
           path: functional-ci.test-report.xml
