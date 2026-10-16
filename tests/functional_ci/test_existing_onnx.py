@@ -11,7 +11,7 @@ import torch
 import aitune.torch as ait
 from aitune.torch.module.onnx_module import OnnxModule
 from tests.functional_ci.backends import BackendCase, with_backends
-from tests.functional_ci.lifecycle import selected_backend
+from tests.functional_ci.lifecycle import pinned_strategy, selected_backend
 from tests.functional_ci.models import make_input, make_mlp
 
 
@@ -43,9 +43,9 @@ def _export_mlp(device: torch.device, directory: Path, external_data: bool) -> P
 def test_existing_onnx(case: BackendCase, external_data: bool, device: torch.device, tmp_path):
     """Named ONNX inputs and outputs survive tuning and match the eager model across batch sizes."""
     backend = case.factory()
-    strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
-    strategy.enable_find_max_batch_size(False)
-    tuned = ait.Module(OnnxModule(_export_mlp(device, tmp_path, external_data)), "onnx-mlp", strategy=strategy)
+    tuned = ait.Module(
+        OnnxModule(_export_mlp(device, tmp_path, external_data)), "onnx-mlp", strategy=pinned_strategy(backend)
+    )
     samples = [{"x": row} for row in make_input(device, batch_size=4).unbind(0)]
     ait.tune(tuned, samples, batch_sizes=[1, 4], device=device)
 
@@ -56,6 +56,4 @@ def test_existing_onnx(case: BackendCase, external_data: bool, device: torch.dev
             value = make_input(device, batch_size=batch_size, seed=20 + batch_size)
             outputs = tuned(x=value)
             assert set(outputs) == {"y"}
-            torch.testing.assert_close(
-                outputs["y"], reference(value), rtol=case.tolerance.rtol, atol=case.tolerance.atol
-            )
+            case.tolerance.assert_close(outputs["y"], reference(value))
