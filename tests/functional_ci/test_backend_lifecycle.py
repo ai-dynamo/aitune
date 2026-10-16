@@ -23,9 +23,9 @@ from aitune.torch.backend import (
     TorchTensorRTAotBackendConfig,
     TorchTensorRTConfig,
 )
-
-from .lifecycle import TENSORRT_FP32, Tolerance, run_lifecycle
-from .models import make_input, make_mlp
+from tests.functional_ci.artifacts import run_exported_artifact
+from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, run_lifecycle
+from tests.functional_ci.models import make_input, make_mlp
 
 
 def _torch_tensorrt_aot() -> Backend:
@@ -54,6 +54,8 @@ def _torchao_int8_weight_only() -> Backend:
     return TorchAOBackend(TorchAOBackendConfig(quantization="int8wo", mode="default"))
 
 
+DEPLOYABLE = {"inductor-aot": "pt2", "tensorrt": "tensorrt_plan", "onnxruntime-cuda": "onnx"}
+
 BACKENDS: dict[str, tuple[Callable[[], Backend], Tolerance]] = {
     "torch-eager": (TorchEagerBackend, Tolerance()),
     "inductor-aot": (TorchInductorAotBackend, Tolerance()),
@@ -67,12 +69,16 @@ BACKENDS: dict[str, tuple[Callable[[], Backend], Tolerance]] = {
 
 @pytest.mark.parametrize("backend_id", BACKENDS)
 def test_backend_lifecycle(backend_id: str, device: torch.device, tmp_path):
-    """Tune, infer, save, and reload the toy MLP with one backend."""
+    """Tune, infer, save, and reload the toy MLP; run the exported artifact natively where deployable."""
     backend_factory, tolerance = BACKENDS[backend_id]
-    run_lifecycle(
-        backend_factory(),
-        partial(make_mlp, device),
-        make_input(device),
-        tmp_path / "model.ait",
-        tolerance,
-    )
+    value = make_input(device)
+    result = run_lifecycle(backend_factory(), partial(make_mlp, device), value, tmp_path / "model.ait", tolerance)
+    if backend_id not in DEPLOYABLE:
+        return
+
+    artifact = result.restored.artifact()
+    assert artifact.model.format == DEPLOYABLE[backend_id]
+    (output,) = run_exported_artifact(artifact, tmp_path / "exported", [value])
+    with torch.no_grad():
+        expected = make_mlp(device)(value)
+    torch.testing.assert_close(output, expected, rtol=tolerance.rtol, atol=tolerance.atol)
