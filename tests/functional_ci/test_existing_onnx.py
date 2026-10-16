@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tune an existing ONNX file, with inline or external weights, through `OnnxModule`."""
 
-from collections.abc import Callable
 from pathlib import Path
 
 import onnx
@@ -10,15 +9,10 @@ import pytest
 import torch
 
 import aitune.torch as ait
-from aitune.torch.backend import Backend, ONNXRuntimeBackend, TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.module.onnx_module import OnnxModule
-from tests.functional_ci.lifecycle import TENSORRT_FP32, selected_backend
+from tests.functional_ci.backends import BACKENDS, with_backends
+from tests.functional_ci.lifecycle import selected_backend
 from tests.functional_ci.models import make_input, make_mlp
-
-ONNX_BACKENDS: dict[str, Callable[[], Backend]] = {
-    "tensorrt": lambda: TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, use_cuda_graphs=False)),
-    "onnxruntime-cuda": ONNXRuntimeBackend,
-}
 
 
 def _export_mlp(device: torch.device, directory: Path, external_data: bool) -> Path:
@@ -45,10 +39,11 @@ def _export_mlp(device: torch.device, directory: Path, external_data: bool) -> P
 
 
 @pytest.mark.parametrize("external_data", [False, True], ids=["inline", "external-data"])
-@pytest.mark.parametrize("backend_id", ONNX_BACKENDS)
+@with_backends("onnx_input")
 def test_existing_onnx(backend_id: str, external_data: bool, device: torch.device, tmp_path):
     """Named ONNX inputs and outputs survive tuning and match the eager model across batch sizes."""
-    backend = ONNX_BACKENDS[backend_id]()
+    backend = BACKENDS[backend_id].factory()
+    tolerance = BACKENDS[backend_id].tolerance
     strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
     tuned = ait.Module(OnnxModule(_export_mlp(device, tmp_path, external_data)), "onnx-mlp", strategy=strategy)
@@ -62,4 +57,4 @@ def test_existing_onnx(backend_id: str, external_data: bool, device: torch.devic
             value = make_input(device, batch_size=batch_size, seed=20 + batch_size)
             outputs = tuned(x=value)
             assert set(outputs) == {"y"}
-            torch.testing.assert_close(outputs["y"], reference(value), rtol=TENSORRT_FP32.rtol, atol=TENSORRT_FP32.atol)
+            torch.testing.assert_close(outputs["y"], reference(value), rtol=tolerance.rtol, atol=tolerance.atol)

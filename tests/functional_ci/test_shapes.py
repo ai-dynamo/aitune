@@ -4,32 +4,14 @@
 
 from collections.abc import Callable
 
-import pytest
 import torch
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import (
-    Backend,
-    ONNXRuntimeBackend,
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchInductorAotBackend,
-)
-from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, selected_backend
+from aitune.torch.backend import Backend
+from tests.functional_ci.backends import BACKENDS, with_backends
+from tests.functional_ci.lifecycle import Tolerance, selected_backend
 from tests.functional_ci.models import IN_FEATURES, make_input, make_mlp
-
-
-def _tensorrt() -> Backend:
-    """Build a standalone TensorRT backend without TF32 and CUDA graphs."""
-    return TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, use_cuda_graphs=False))
-
-
-SHAPE_BACKENDS: dict[str, tuple[Callable[[], Backend], Tolerance]] = {
-    "inductor-aot": (TorchInductorAotBackend, Tolerance()),
-    "tensorrt": (_tensorrt, TENSORRT_FP32),
-    "onnxruntime-cuda": (ONNXRuntimeBackend, TENSORRT_FP32),
-}
 
 # Row sums accumulate the per-element TensorRT error over `OUT_FEATURES` values.
 TENSORRT_ROW_SUM = Tolerance(rtol=1e-3, atol=5e-3)
@@ -68,10 +50,10 @@ def _assert_matches_eager(
             torch.testing.assert_close(tuned(value), reference(value), rtol=tolerance.rtol, atol=tolerance.atol)
 
 
-@pytest.mark.parametrize("backend_id", SHAPE_BACKENDS)
+@with_backends("dynamic_batch")
 def test_recorded_batch_range(backend_id: str, device: torch.device):
     """Batch bounds come from recorded batch sizes; seen and unseen in-range batch sizes match eager."""
-    backend_factory, tolerance = SHAPE_BACKENDS[backend_id]
+    backend_factory, tolerance = BACKENDS[backend_id].factory, BACKENDS[backend_id].tolerance
     tuned = ait.Module(make_mlp(device), "mlp", strategy=_strategy(backend_factory()))
     ait.tune(tuned, list(make_input(device, batch_size=8).unbind(0)), batch_sizes=[1, 4], device=device)
 
@@ -81,10 +63,10 @@ def test_recorded_batch_range(backend_id: str, device: torch.device):
     _assert_matches_eager(tuned, make_mlp(device), device, [1, 2, 3, 4], tolerance)
 
 
-@pytest.mark.parametrize("backend_id", SHAPE_BACKENDS)
+@with_backends("dynamic_batch")
 def test_explicit_batch_dim(backend_id: str, device: torch.device):
     """A user `BatchDim` widens the compiled range beyond the single recorded batch size."""
-    backend_factory, tolerance = SHAPE_BACKENDS[backend_id]
+    backend_factory, tolerance = BACKENDS[backend_id].factory, BACKENDS[backend_id].tolerance
     dynamic_shapes = {"input": (ait.BatchDim("batch", min=1, max=8, opt=4), IN_FEATURES)}
     tuned = ait.Module(make_mlp(device), "mlp", strategy=_strategy(backend_factory()), dynamic_shapes=dynamic_shapes)
     ait.tune(tuned, list(make_input(device, batch_size=2).unbind(0)), batch_sizes=[2], device=device)
@@ -95,10 +77,10 @@ def test_explicit_batch_dim(backend_id: str, device: torch.device):
     _assert_matches_eager(tuned, make_mlp(device), device, [1, 5, 8], tolerance)
 
 
-@pytest.mark.parametrize("backend_id", ["inductor-aot", "tensorrt"])
+@with_backends("structured_io")
 def test_structured_io(backend_id: str, device: torch.device):
     """Nested dict input, a float and a `None` argument, and a nested dict/tuple output survive tuning."""
-    backend_factory, tolerance = SHAPE_BACKENDS[backend_id]
+    backend_factory, tolerance = BACKENDS[backend_id].factory, BACKENDS[backend_id].tolerance
     tolerance = TENSORRT_ROW_SUM if backend_id == "tensorrt" else tolerance
     bias = torch.linspace(-1, 1, IN_FEATURES, device=device)
     reference = StructuredModel(make_mlp(device))
