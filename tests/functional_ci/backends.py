@@ -29,17 +29,21 @@ from aitune.torch.backend import (
 )
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
 
-Capability = Literal["save_load", "dynamic_batch", "structured_io", "multigraph", "onnx_input", "jit"]
+Capability = Literal["save_load", "export", "dynamic_batch", "structured_io", "multigraph", "onnx_input", "jit"]
 
 
 @dataclass(frozen=True)
 class BackendCase:
-    """One backend in the table; `artifact_format` is set when the backend exports a deployable artifact."""
+    """One backend in the table; `artifact_format` is the deployable artifact format of `export` backends."""
 
     factory: Callable[[], Backend]
     tolerance: Tolerance
     capabilities: frozenset[str]
     artifact_format: str | None = None
+
+    def __post_init__(self):
+        """Keep the `export` capability and `artifact_format` in step."""
+        assert ("export" in self.capabilities) == (self.artifact_format is not None), "set both or neither"
 
 
 def _torch_tensorrt_config() -> TorchTensorRTConfig:
@@ -62,9 +66,9 @@ def _torch_tensorrt_jit() -> Backend:
     )
 
 
-def _tensorrt() -> Backend:
-    """Build a standalone TensorRT backend without TF32 and CUDA graphs."""
-    return TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, use_cuda_graphs=False))
+def tensorrt_backend(**overrides) -> Backend:
+    """Build a standalone TensorRT backend without TF32 and CUDA graphs; `overrides` replace config fields."""
+    return TensorRTBackend(TensorRTBackendConfig(**{"enable_tf32": False, "use_cuda_graphs": False, **overrides}))
 
 
 def _onnx_runtime(provider: ONNXExecutionProvider) -> Callable[[], Backend]:
@@ -87,20 +91,20 @@ BACKENDS: dict[str, BackendCase] = {
     "inductor-aot": BackendCase(
         TorchInductorAotBackend,
         Tolerance(),
-        _capabilities("save_load", "dynamic_batch", "structured_io", "multigraph"),
+        _capabilities("save_load", "export", "dynamic_batch", "structured_io", "multigraph"),
         artifact_format="pt2",
     ),
     "torch-tensorrt-aot": BackendCase(_torch_tensorrt_aot, TENSORRT_FP32, _capabilities("save_load")),
     "tensorrt": BackendCase(
-        _tensorrt,
+        tensorrt_backend,
         TENSORRT_FP32,
-        _capabilities("save_load", "dynamic_batch", "structured_io", "multigraph", "onnx_input"),
+        _capabilities("save_load", "export", "dynamic_batch", "structured_io", "multigraph", "onnx_input"),
         artifact_format="tensorrt_plan",
     ),
     "onnxruntime-cuda": BackendCase(
         _onnx_runtime(ONNXExecutionProvider.CUDA),
         TENSORRT_FP32,
-        _capabilities("save_load", "dynamic_batch", "onnx_input"),
+        _capabilities("save_load", "export", "dynamic_batch", "onnx_input"),
         artifact_format="onnx",
     ),
     "onnxruntime-tensorrt": BackendCase(
@@ -116,5 +120,5 @@ BACKENDS: dict[str, BackendCase] = {
 
 def with_backends(*capabilities: Capability) -> pytest.MarkDecorator:
     """Parametrize `case` over every backend that has all `capabilities`; other backends get no case."""
-    ids = [backend_id for backend_id, case in BACKENDS.items() if case.capabilities.issuperset(capabilities)]
-    return pytest.mark.parametrize("case", [BACKENDS[backend_id] for backend_id in ids], ids=ids)
+    selected = {backend_id: case for backend_id, case in BACKENDS.items() if case.capabilities.issuperset(capabilities)}
+    return pytest.mark.parametrize("case", list(selected.values()), ids=list(selected))

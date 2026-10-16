@@ -8,7 +8,7 @@ from torch import nn
 import aitune.torch as ait
 from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.lifecycle import pinned_strategy
-from tests.functional_ci.models import OUT_FEATURES, make_input, make_mlp
+from tests.functional_ci.models import OUT_FEATURES, make_input, make_mlp, seeded
 
 
 class TwoTower(nn.Module):
@@ -18,8 +18,7 @@ class TwoTower(nn.Module):
         """Build seeded submodules on `device`."""
         super().__init__()
         self.encoder = make_mlp(device)
-        with torch.random.fork_rng(devices=[device] if device.type == "cuda" else []):
-            torch.manual_seed(2)
+        with seeded(device, 2):
             self.head = nn.Linear(OUT_FEATURES, 8).to(device).eval()
             self.unused = nn.Linear(4, 4).to(device).eval()
 

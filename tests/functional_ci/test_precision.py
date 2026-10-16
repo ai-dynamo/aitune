@@ -7,20 +7,15 @@ from functools import partial
 import pytest
 import torch
 
-from aitune.torch.backend import (
-    ONNXAutoCastConfig,
-    ONNXQuantizationConfig,
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchQuantizationConfig,
-)
-from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, run_lifecycle
+from aitune.torch.backend import ONNXAutoCastConfig, ONNXQuantizationConfig, TorchQuantizationConfig
+from tests.functional_ci.backends import tensorrt_backend
+from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, assert_matches_eager, run_lifecycle
 from tests.functional_ci.models import make_input, make_mlp
 
 FP16 = Tolerance(rtol=1e-2, atol=1e-2)
 QUANTIZED = Tolerance(rtol=1e-1, atol=1e-1)
 
-# id: (TensorRTBackendConfig kwargs, tolerance, minimum compute capability)
+# id: (`tensorrt_backend` overrides, tolerance, minimum compute capability)
 PRECISION_CASES = {
     "autocast-fp16": ({"quantization_config": ONNXAutoCastConfig(precision="fp16")}, FP16, (7, 0)),
     "onnx-int8": ({"quantization_config": ONNXQuantizationConfig(precision="int8")}, QUANTIZED, (7, 5)),
@@ -33,17 +28,13 @@ PRECISION_CASES = {
 
 @pytest.mark.parametrize("case_id", PRECISION_CASES)
 def test_tensorrt_precision_lifecycle(case_id: str, device: torch.device, tmp_path):
-    """Tune, infer, save, and reload a TensorRT engine built with the requested precision or runtime option."""
+    """Tune, save, and reload a TensorRT engine with the requested precision or runtime option, then replay it."""
     config_kwargs, tolerance, min_capability = PRECISION_CASES[case_id]
     capability = torch.cuda.get_device_capability(device)
     if capability < min_capability:
         pytest.skip(f"{case_id} needs compute capability {min_capability}, GPU has {capability}")
 
-    backend = TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, **{"use_cuda_graphs": False, **config_kwargs}))
-    result = run_lifecycle(backend, partial(make_mlp, device), make_input(device), tmp_path / "model.ait", tolerance)
-    if config_kwargs.get("use_cuda_graphs"):
-        reference = make_mlp(device)
-        with torch.no_grad():
-            for seed in (11, 12):
-                value = make_input(device, seed=seed)
-                tolerance.assert_close(result.restored(value), reference(value))
+    backend = tensorrt_backend(**config_kwargs)
+    restored = run_lifecycle(backend, partial(make_mlp, device), make_input(device), tmp_path / "model.ait", tolerance)
+    # Two new inputs check that a replayed engine (for example a CUDA graph) does not reuse stale input buffers.
+    assert_matches_eager(restored, make_mlp(device), device, tolerance, seeds=(11, 12))
