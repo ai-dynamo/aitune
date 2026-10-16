@@ -29,14 +29,12 @@ from aitune.torch.backend import (
 )
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
 
-Capability = Literal[
-    "save_load", "artifact", "dynamic_batch", "dynamic_dims", "structured_io", "multigraph", "onnx_input", "jit"
-]
+Capability = Literal["save_load", "dynamic_batch", "structured_io", "multigraph", "onnx_input", "jit"]
 
 
 @dataclass(frozen=True)
 class BackendCase:
-    """One backend in the table; `artifact_format` is the deployment artifact format for `artifact` cases."""
+    """One backend in the table; `artifact_format` is set when the backend exports a deployable artifact."""
 
     factory: Callable[[], Backend]
     tolerance: Tolerance
@@ -84,20 +82,20 @@ BACKENDS: dict[str, BackendCase] = {
     "inductor-aot": BackendCase(
         TorchInductorAotBackend,
         Tolerance(),
-        frozenset({"save_load", "artifact", "dynamic_batch", "structured_io", "multigraph"}),
+        frozenset({"save_load", "dynamic_batch", "structured_io", "multigraph"}),
         artifact_format="pt2",
     ),
     "torch-tensorrt-aot": BackendCase(_torch_tensorrt_aot, TENSORRT_FP32, frozenset({"save_load"})),
     "tensorrt": BackendCase(
         _tensorrt,
         TENSORRT_FP32,
-        frozenset({"save_load", "artifact", "dynamic_batch", "structured_io", "multigraph", "onnx_input"}),
+        frozenset({"save_load", "dynamic_batch", "structured_io", "multigraph", "onnx_input"}),
         artifact_format="tensorrt_plan",
     ),
     "onnxruntime-cuda": BackendCase(
         _onnx_runtime(ONNXExecutionProvider.CUDA),
         TENSORRT_FP32,
-        frozenset({"save_load", "artifact", "dynamic_batch", "onnx_input"}),
+        frozenset({"save_load", "dynamic_batch", "onnx_input"}),
         artifact_format="onnx",
     ),
     "onnxruntime-tensorrt": BackendCase(
@@ -110,8 +108,6 @@ BACKENDS: dict[str, BackendCase] = {
 
 
 def with_backends(*capabilities: Capability) -> pytest.MarkDecorator:
-    """Parametrize `backend_id` over every backend that has all `capabilities`; other backends get no case."""
-    backend_ids = [backend_id for backend_id, case in BACKENDS.items() if case.capabilities.issuperset(capabilities)]
-    # An empty list would make pytest skip the test, so fail at collection instead.
-    assert backend_ids, f"no backend in BACKENDS has {capabilities}"
-    return pytest.mark.parametrize("backend_id", backend_ids)
+    """Parametrize `case` over every backend that has all `capabilities`; other backends get no case."""
+    ids = [backend_id for backend_id, case in BACKENDS.items() if case.capabilities.issuperset(capabilities)]
+    return pytest.mark.parametrize("case", [BACKENDS[backend_id] for backend_id in ids], ids=ids)

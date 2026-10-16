@@ -7,19 +7,17 @@ from functools import partial
 import torch
 
 from tests.functional_ci.artifacts import run_exported_artifact
-from tests.functional_ci.backends import BACKENDS, with_backends
+from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.lifecycle import run_lifecycle
 from tests.functional_ci.models import make_input, make_mlp
 
 
 @with_backends("save_load")
-def test_backend_lifecycle(backend_id: str, device: torch.device, tmp_path):
+def test_backend_lifecycle(case: BackendCase, device: torch.device, tmp_path):
     """Tune, infer, save, and reload the toy MLP; run the exported artifact natively where deployable."""
-    case = BACKENDS[backend_id]
-    tolerance = case.tolerance
     value = make_input(device)
-    result = run_lifecycle(case.factory(), partial(make_mlp, device), value, tmp_path / "model.ait", tolerance)
-    if "artifact" not in case.capabilities:
+    result = run_lifecycle(case.factory(), partial(make_mlp, device), value, tmp_path / "model.ait", case.tolerance)
+    if case.artifact_format is None:
         return
 
     artifact = result.restored.artifact()
@@ -27,4 +25,4 @@ def test_backend_lifecycle(backend_id: str, device: torch.device, tmp_path):
     (output,) = run_exported_artifact(artifact, tmp_path / "exported", [value])
     with torch.no_grad():
         expected = make_mlp(device)(value)
-    torch.testing.assert_close(output, expected, rtol=tolerance.rtol, atol=tolerance.atol)
+    torch.testing.assert_close(output, expected, rtol=case.tolerance.rtol, atol=case.tolerance.atol)
