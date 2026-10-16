@@ -281,7 +281,7 @@ jobs:
   pytorch-cpu:
     name: PyTorch CPU
     needs: [wheel, pytorch-image]
-    if: >-
+    if: &wheel_and_image_ready >-
       ${{ !cancelled() && needs.wheel.result == 'success' &&
           (needs.pytorch-image.result == 'success' || needs.pytorch-image.result == 'skipped') }}
     runs-on: linux-amd64-cpu32
@@ -313,9 +313,7 @@ jobs:
   pytorch-gpu:
     name: PyTorch GPU
     needs: [wheel, pytorch-image]
-    if: >-
-      ${{ !cancelled() && needs.wheel.result == 'success' &&
-          (needs.pytorch-image.result == 'success' || needs.pytorch-image.result == 'skipped') }}
+    if: *wheel_and_image_ready
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 40
     permissions:
@@ -351,4 +349,36 @@ jobs:
           path: |
             coverage.xml
             pytorch-gpu.test-report.xml
+          if-no-files-found: ignore
+
+  functional-ci:
+    name: Functional CI GPU
+    needs: [wheel, pytorch-image]
+    if: *wheel_and_image_ready
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.wheel.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: dist
+          path: dist
+      - run: |
+          python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
+          python -m pytest -rfEs --durations=0 tests/functional_ci --junitxml=functional-ci.test-report.xml
+      - if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: functional-ci-test-report
+          path: functional-ci.test-report.xml
           if-no-files-found: ignore

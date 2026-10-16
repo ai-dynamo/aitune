@@ -216,6 +216,7 @@ explicit = true
 log_cli = true
 log_cli_level = "INFO"
 addopts = ["--quiet", "--import-mode=importlib", "--doctest-modules"]
+empty_parameter_set_mark = "fail_at_collect"
 pythonpath = ["."]
 testpaths = ["aitune", "tests/unit"]
 markers = [

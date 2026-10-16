@@ -45,12 +45,19 @@ except (ImportError, RuntimeError, OSError):
             use_explicit_typing: Whether to use explicit typing. Defaults to True.
             workspace_size: TensorRT workspace size. Defaults to 0.
             use_distributed_mode_trace: Enable distributed tracing. Defaults to False.
+            min_block_size: Minimum number of operators in a TensorRT block. Defaults to 5.
+            disable_tf32: Whether to disable TF32 in TensorRT layers. Defaults to False.
+            require_full_compilation: Whether to require one TensorRT engine for the whole graph.
+                Defaults to False.
         """
 
         enabled_precisions: set[torch.dtype] | None = None
         use_explicit_typing: bool = True
         workspace_size: int = 0
         use_distributed_mode_trace: bool = False
+        min_block_size: int = 5
+        disable_tf32: bool = False
+        require_full_compilation: bool = False
 
 
 logger = getLogger(__name__)
