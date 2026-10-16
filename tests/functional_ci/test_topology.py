@@ -7,6 +7,7 @@ from torch import nn
 
 import aitune.torch as ait
 from tests.functional_ci.backends import BackendCase, with_backends
+from tests.functional_ci.lifecycle import pinned_strategy
 from tests.functional_ci.models import OUT_FEATURES, make_input, make_mlp
 
 
@@ -31,8 +32,6 @@ class TwoTower(nn.Module):
 def test_partial_wrap_multigraph(case: BackendCase, device: torch.device, tmp_path):
     """Wrap only the shared encoder; it tunes one graph per layout, hooks still fire, and the checkpoint reloads."""
     backend, tolerance = case.factory(), case.tolerance
-    strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
-    strategy.enable_find_max_batch_size(False)
     value = make_input(device)
     model = TwoTower(device)
     with torch.no_grad():
@@ -42,7 +41,7 @@ def test_partial_wrap_multigraph(case: BackendCase, device: torch.device, tmp_pa
     found = inspected.get_modules()
     assert not any(info.module is model.unused for info in found)
     (encoder_info,) = (info for info in found if info.module is model.encoder)
-    ait.wrap(model, [encoder_info], strategy=strategy)
+    ait.wrap(model, [encoder_info], strategy=pinned_strategy(backend))
     ait.tune(model, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=device)
 
     assert isinstance(model.encoder, ait.Module)
@@ -53,11 +52,11 @@ def test_partial_wrap_multigraph(case: BackendCase, device: torch.device, tmp_pa
     calls = []
     model.register_forward_hook(lambda *_: calls.append(1))
     with torch.no_grad():
-        torch.testing.assert_close(model(value), expected, rtol=tolerance.rtol, atol=tolerance.atol)
+        tolerance.assert_close(model(value), expected)
     assert calls == [1]
 
     ait.save(model, tmp_path / "model.ait")
     model.encoder.deactivate()
     restored = ait.load(TwoTower(device), tmp_path / "model.ait")
     with torch.no_grad():
-        torch.testing.assert_close(restored(value), expected, rtol=tolerance.rtol, atol=tolerance.atol)
+        tolerance.assert_close(restored(value), expected)

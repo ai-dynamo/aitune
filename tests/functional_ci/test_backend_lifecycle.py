@@ -25,4 +25,4 @@ def test_backend_lifecycle(case: BackendCase, device: torch.device, tmp_path):
     (output,) = run_exported_artifact(artifact, tmp_path / "exported", [value])
     with torch.no_grad():
         expected = make_mlp(device)(value)
-    torch.testing.assert_close(output, expected, rtol=case.tolerance.rtol, atol=case.tolerance.atol)
+    case.tolerance.assert_close(output, expected)

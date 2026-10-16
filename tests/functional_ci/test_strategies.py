@@ -17,7 +17,7 @@ from aitune.torch.backend import (
 )
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
-from tests.functional_ci.lifecycle import TENSORRT_FP32, selected_backend
+from tests.functional_ci.lifecycle import TENSORRT_FP32, pinned_strategy, selected_backend
 from tests.functional_ci.models import make_input, make_mlp
 from tests.toy_backends import BuildFailsBackend
 
@@ -44,9 +44,7 @@ def _assert_matches_eager(tuned: ait.Module, device: torch.device, batch_size: i
     """Compare the tuned module with a fresh eager MLP."""
     value = make_input(device, batch_size=batch_size, seed=5)
     with torch.no_grad():
-        torch.testing.assert_close(
-            tuned(value), make_mlp(device)(value), rtol=TENSORRT_FP32.rtol, atol=TENSORRT_FP32.atol
-        )
+        TENSORRT_FP32.assert_close(tuned(value), make_mlp(device)(value))
 
 
 def test_first_wins_falls_back_after_build_failure(device: torch.device):
@@ -81,7 +79,6 @@ def test_find_max_batch_size(device: torch.device):
 
 def test_dry_run_keeps_eager(device: torch.device):
     """A dry run checks the strategy without building or activating a backend."""
-    strategy = ait.OneBackendStrategy(TorchInductorAotBackend()).enable_performance_validation(False)
-    tuned = _tune(strategy.enable_find_max_batch_size(False), device, dry_run=True)
+    tuned = _tune(pinned_strategy(TorchInductorAotBackend()), device, dry_run=True)
     assert tuned.state != ModuleState.TUNED
     _assert_matches_eager(tuned, device)

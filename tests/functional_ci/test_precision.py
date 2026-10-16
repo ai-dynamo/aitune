@@ -46,6 +46,4 @@ def test_tensorrt_precision_lifecycle(case_id: str, device: torch.device, tmp_pa
         with torch.no_grad():
             for seed in (11, 12):
                 value = make_input(device, seed=seed)
-                torch.testing.assert_close(
-                    result.restored(value), reference(value), rtol=tolerance.rtol, atol=tolerance.atol
-                )
+                tolerance.assert_close(result.restored(value), reference(value))

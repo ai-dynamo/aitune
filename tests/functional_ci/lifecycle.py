@@ -21,6 +21,10 @@ class Tolerance:
     rtol: float = 1e-4
     atol: float = 1e-5
 
+    def assert_close(self, actual, expected) -> None:
+        """Assert that `actual` matches `expected` within this tolerance."""
+        torch.testing.assert_close(actual, expected, rtol=self.rtol, atol=self.atol)
+
 
 # TensorRT and ONNX Runtime fp32 on the SM120 PR runner differ from eager by about 3e-4 even with TF32 disabled.
 TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
@@ -41,6 +45,13 @@ def selected_backend(module: Module) -> Backend:
     return next(iter(backends.values()))
 
 
+def pinned_strategy(backend: Backend) -> ait.OneBackendStrategy:
+    """Select exactly `backend` without performance validation or max-batch discovery."""
+    strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
+    strategy.enable_find_max_batch_size(False)
+    return strategy
+
+
 def run_lifecycle(
     backend: Backend,
     model_factory: Callable[..., nn.Module],
@@ -49,9 +60,7 @@ def run_lifecycle(
     tolerance: Tolerance,
 ) -> LifecycleResult:
     """Tune `backend` on a fresh model, check outputs, then reload the checkpoint into a differently seeded model."""
-    strategy = ait.OneBackendStrategy(backend)
-    strategy.enable_performance_validation(False)
-    strategy.enable_find_max_batch_size(False)
+    strategy = pinned_strategy(backend)
     model = model_factory()
     with torch.no_grad():
         expected = model(value)
@@ -66,7 +75,7 @@ def run_lifecycle(
     assert actual.device == value.device
     assert len(tuned.graph_specs) == 1
     with torch.no_grad():
-        torch.testing.assert_close(tuned(value), expected, rtol=tolerance.rtol, atol=tolerance.atol)
+        tolerance.assert_close(tuned(value), expected)
 
     ait.save(tuned, checkpoint)
     tuned.deactivate()
@@ -75,5 +84,5 @@ def run_lifecycle(
     assert restored is not tuned
     assert type(selected_backend(restored)) is type(backend)
     with torch.no_grad():
-        torch.testing.assert_close(restored(value), expected, rtol=tolerance.rtol, atol=tolerance.atol)
+        tolerance.assert_close(restored(value), expected)
     return LifecycleResult(tuned=tuned, restored=restored)

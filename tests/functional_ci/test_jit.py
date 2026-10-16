@@ -59,7 +59,7 @@ def test_jit_tuning(case: BackendCase, mode: JITMode, device: torch.device):
         (selected,) = cast(TunedModule, head._wrapper).backends.values()
         assert type(selected) is type(backend)
         value = make_input(device, batch_size=3, seed=7)
-        torch.testing.assert_close(model(value), reference(value), rtol=tolerance.rtol, atol=tolerance.atol)
+        tolerance.assert_close(model(value), reference(value))
 
 
 def test_jit_inspection_report(device: torch.device, tmp_path):
