@@ -38,7 +38,7 @@ class BackendCase:
 
     factory: Callable[[], Backend]
     tolerance: Tolerance
-    capabilities: frozenset[Capability]
+    capabilities: frozenset[str]
     artifact_format: str | None = None
 
 
@@ -77,33 +77,40 @@ def _torchao_int8_weight_only() -> Backend:
     return TorchAOBackend(TorchAOBackendConfig(quantization="int8wo", mode="default"))
 
 
+def _capabilities(*capabilities: Capability) -> frozenset[str]:
+    """Build a capability set; the `Capability` parameter lets pytype reject a misspelled name."""
+    return frozenset(capabilities)
+
+
 BACKENDS: dict[str, BackendCase] = {
-    "torch-eager": BackendCase(TorchEagerBackend, Tolerance(), frozenset({"save_load"})),
+    "torch-eager": BackendCase(TorchEagerBackend, Tolerance(), _capabilities("save_load")),
     "inductor-aot": BackendCase(
         TorchInductorAotBackend,
         Tolerance(),
-        frozenset({"save_load", "dynamic_batch", "structured_io", "multigraph"}),
+        _capabilities("save_load", "dynamic_batch", "structured_io", "multigraph"),
         artifact_format="pt2",
     ),
-    "torch-tensorrt-aot": BackendCase(_torch_tensorrt_aot, TENSORRT_FP32, frozenset({"save_load"})),
+    "torch-tensorrt-aot": BackendCase(_torch_tensorrt_aot, TENSORRT_FP32, _capabilities("save_load")),
     "tensorrt": BackendCase(
         _tensorrt,
         TENSORRT_FP32,
-        frozenset({"save_load", "dynamic_batch", "structured_io", "multigraph", "onnx_input"}),
+        _capabilities("save_load", "dynamic_batch", "structured_io", "multigraph", "onnx_input"),
         artifact_format="tensorrt_plan",
     ),
     "onnxruntime-cuda": BackendCase(
         _onnx_runtime(ONNXExecutionProvider.CUDA),
         TENSORRT_FP32,
-        frozenset({"save_load", "dynamic_batch", "onnx_input"}),
+        _capabilities("save_load", "dynamic_batch", "onnx_input"),
         artifact_format="onnx",
     ),
     "onnxruntime-tensorrt": BackendCase(
-        _onnx_runtime(ONNXExecutionProvider.TENSORRT), TENSORRT_FP32, frozenset({"save_load"})
+        _onnx_runtime(ONNXExecutionProvider.TENSORRT), TENSORRT_FP32, _capabilities("save_load")
     ),
-    "torchao-int8wo": BackendCase(_torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2), frozenset({"save_load"})),
-    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), frozenset({"jit"})),
-    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, frozenset({"jit"})),
+    "torchao-int8wo": BackendCase(
+        _torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2), _capabilities("save_load")
+    ),
+    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("jit")),
+    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("jit")),
 }
 
 

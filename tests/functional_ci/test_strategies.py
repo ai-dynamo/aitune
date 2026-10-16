@@ -11,12 +11,12 @@ import aitune.torch as ait
 from aitune.torch.backend import (
     Backend,
     TensorRTBackend,
-    TensorRTBackendConfig,
     TorchEagerBackend,
     TorchInductorAotBackend,
 )
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
+from tests.functional_ci.backends import BACKENDS
 from tests.functional_ci.lifecycle import TENSORRT_FP32, pinned_strategy, selected_backend
 from tests.functional_ci.models import make_input, make_mlp
 from tests.toy_backends import BuildFailsBackend
@@ -26,11 +26,6 @@ PROFILING_STRATEGIES: dict[str, Callable[[list[Backend]], ait.MaxThroughputStrat
     "min-latency": ait.MinLatencyStrategy,
     "latency-budget": lambda backends: ait.LatencyBudgetStrategy(latency_budget_ms=10_000, backends=backends),
 }
-
-
-def _tensorrt() -> TensorRTBackend:
-    """Build a standalone TensorRT backend without TF32 and CUDA graphs."""
-    return TensorRTBackend(TensorRTBackendConfig(enable_tf32=False, use_cuda_graphs=False))
 
 
 def _tune(strategy, device: torch.device, dry_run: bool = False, batch_sizes: tuple[int, ...] = (2,)) -> ait.Module:
@@ -59,7 +54,11 @@ def test_first_wins_falls_back_after_build_failure(device: torch.device):
 @pytest.mark.parametrize("strategy_id", PROFILING_STRATEGIES)
 def test_profiling_strategy_diagnostic(strategy_id: str, device: torch.device):
     """Profiling strategies pick one of the candidates and record the eager comparison in diagnostic mode."""
-    strategy = PROFILING_STRATEGIES[strategy_id]([TorchEagerBackend(), TorchInductorAotBackend(), _tensorrt()])
+    strategy = PROFILING_STRATEGIES[strategy_id]([
+        TorchEagerBackend(),
+        TorchInductorAotBackend(),
+        BACKENDS["tensorrt"].factory(),
+    ])
     strategy.enable_performance_validation(PerformanceValidationMode.DIAGNOSTIC).enable_find_max_batch_size(False)
     tuned = _tune(strategy, device)
     assert type(selected_backend(tuned)) in {TorchEagerBackend, TorchInductorAotBackend, TensorRTBackend}
@@ -69,7 +68,7 @@ def test_profiling_strategy_diagnostic(strategy_id: str, device: torch.device):
 
 def test_find_max_batch_size(device: torch.device):
     """Max-batch discovery extends the dynamic TensorRT range beyond the recorded batch sizes."""
-    strategy = ait.OneBackendStrategy(_tensorrt()).enable_performance_validation(False)
+    strategy = ait.OneBackendStrategy(BACKENDS["tensorrt"].factory()).enable_performance_validation(False)
     tuned = _tune(strategy, device, batch_sizes=(1, 2))
     (graph_spec,) = tuned.graph_specs
     max_batch_size = graph_spec.get_max_batch_size()
