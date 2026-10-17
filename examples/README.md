@@ -107,6 +107,13 @@ to find configurations and commands you can adapt with your own compatible check
       <td>Ahead of time, Runtime</td>
       <td>Ahead of time, Runtime</td><td>Dynamo</td>
     </tr>
+    <tr>
+      <th scope="row">Video outpainting</th>
+      <td><a href="./LTX23OutpaintAITuneFlexTensor/README.md">LTX 2.3 mini benchmark</a></td>
+      <td><a href="https://huggingface.co/dg845/LTX-2.3-Diffusers">Hugging Face</a></td>
+      <td>BF16</td><td>FlexTensor</td>
+      <td>Runtime; manual benchmark</td><td>-</td><td>In-process only</td>
+    </tr>
   </tbody>
 </table>
 
