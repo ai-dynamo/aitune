@@ -4,6 +4,7 @@
 
 from collections import Counter
 from collections.abc import Iterable
+from typing import Literal
 
 import torch
 
@@ -65,7 +66,9 @@ class JITRegistration:
         return bool(self._patched_modules) and all(module._state.value == "tuned" for module in self._patched_modules)
 
 
-def register_for_jit_tuning(modules: Iterable[torch.nn.Module]) -> JITRegistration:
+def register_for_jit_tuning(
+    modules: Iterable[torch.nn.Module], *, device_management: Literal["aitune", "external"] = "aitune"
+) -> JITRegistration:
     """Register pre-existing modules as independent JIT tuning targets.
 
     Unlike automatic JIT interception, registration does not patch construction of future
@@ -80,13 +83,21 @@ def register_for_jit_tuning(modules: Iterable[torch.nn.Module]) -> JITRegistrati
     Args:
         modules: Iterable of existing modules. Pass ``[module]`` for one module. Passing an
             ``nn.ModuleList`` directly registers its elements.
+        device_management: ``"aitune"`` permits ordinary source placement. ``"external"``
+            preserves the fixed source tree and prepared forwarding, without overriding its
+            device attribute. Configure only eager or qualified Inductor JIT candidates first.
+            Independent internal copies and recorded inputs may still move. The caller must
+            avoid shared tensors/storage with unrelated unprotected trees.
 
     Returns:
         A read-only registration view with live module states and inspection reports.
 
     Raises:
         TypeError: If ``modules`` is not iterable or contains a non-module value.
-        ValueError: If ``modules`` is empty, a target is excluded, or target ownership trees overlap.
+        ValueError: If ``modules`` is empty, a target is excluded, target ownership trees overlap,
+            or the device policy/candidate configuration is unsupported.
         RuntimeError: If inspection mode or either JIT entry path is already active.
     """
-    return JITRegistration(Patcher.register_modules(_collect_modules(modules)))
+    if device_management not in ("aitune", "external"):
+        raise ValueError("device_management must be 'aitune' or 'external'")
+    return JITRegistration(Patcher.register_modules(_collect_modules(modules), device_management=device_management))

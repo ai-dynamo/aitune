@@ -5,7 +5,7 @@
 # /// script
 # scope = "always"
 # allow_failure = false
-# arguments = [{mode = "eager"}, {mode = "deferred"}]
+# arguments = [{mode = "eager", device_management = "aitune"}, {mode = "deferred", device_management = "aitune"}, {mode = "eager", device_management = "external"}, {mode = "deferred", device_management = "external"}]
 # ///
 
 import argparse
@@ -31,6 +31,12 @@ class Unit(torch.nn.Module):
         super().__init__()
         self.layer = torch.nn.Linear(16, 16)
         self.offset = (index + 1) / 100
+        self.placement_locked = False
+
+    def to(self, *args, **kwargs):
+        if self.placement_locked:
+            raise AssertionError("AITune attempted to move a caller-owned source")
+        return super().to(*args, **kwargs)
 
     def forward(self, value):
         return self.layer(value).tanh()
@@ -49,7 +55,7 @@ def post_hook(module, args, output):
     return output * 1.5
 
 
-def run(mode, cache_dir):
+def run(mode, device_management, cache_dir):
     torch.manual_seed(17)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
@@ -74,6 +80,9 @@ def run(mode, cache_dir):
     values = [torch.randn(batch, 16, device="cuda") for batch in (1, 2)]
     with torch.no_grad():
         expected = [model(value).clone() for value in values]
+    if device_management == "external":
+        for unit in units:
+            unit.placement_locked = True
 
     jit_config.mode = JITMode.TUNE_EAGER if mode == "eager" else JITMode.TUNE_DEFERRED
     jit_config.device = "cuda"
@@ -86,7 +95,7 @@ def run(mode, cache_dir):
     ).enable_performance_validation(False)
     original_constructor = torch.nn.Module.__init__
     compiled_before = counters["stats"]["unique_graphs"]
-    registration = register_for_jit_tuning(units)
+    registration = register_for_jit_tuning(units, device_management=device_management)
     # Registration leaves constructors unchanged; Dynamo may later wrap them for generation tagging.
     assert torch.nn.Module.__init__ is original_constructor
 
@@ -113,13 +122,19 @@ def run(mode, cache_dir):
     assert "forward" not in unrelated.layer.__dict__
     assert not Patcher._torch_patched
     assert tuple(Patcher._patched_modules) == registration._patched_modules
-    print(f"{mode}: {len(units)} prepared units, two input shapes, real Inductor graphs, preserved forwards and hooks")
+    print(
+        f"{mode}/{device_management}: {len(units)} prepared units, two input shapes, "
+        "real Inductor graphs, preserved forwards and hooks"
+    )
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("eager", "deferred"), default="deferred")
+    parser.add_argument(
+        "--device-management", "--device_management", choices=("aitune", "external"), default="external"
+    )
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="aitune-prepared-units-") as directory:
-        run(args.mode, Path(directory))
+        run(args.mode, args.device_management, Path(directory))

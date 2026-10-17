@@ -123,7 +123,7 @@ def test_backend_requires_explicit_execution_modes():
 
 def test_backend_rejects_unsupported_multi_gpu_execution(mocker):
     module = nn.Linear(2, 2)
-    mocker.patch("aitune.torch.backend.backend.is_distributed_module", return_value=True)
+    mocker.patch("aitune.torch.utils.module.is_distributed_module", return_value=True)
 
     with pytest.raises(RuntimeError, match="does not support multi_gpu execution"):
         SleepBackend()._assert_execution_mode(module)
@@ -131,7 +131,7 @@ def test_backend_rejects_unsupported_multi_gpu_execution(mocker):
 
 def test_multi_gpu_only_backend_rejects_single_gpu_execution(mocker):
     module = nn.Linear(2, 2)
-    mocker.patch("aitune.torch.backend.backend.is_distributed_module", return_value=False)
+    mocker.patch("aitune.torch.utils.module.is_distributed_module", return_value=False)
 
     with pytest.raises(RuntimeError, match="does not support single_gpu execution"):
         MultiGpuOnlySleepBackend()._assert_execution_mode(module)
@@ -140,7 +140,7 @@ def test_multi_gpu_only_backend_rejects_single_gpu_execution(mocker):
 @pytest.mark.parametrize("distributed", [False, True])
 def test_backend_accepts_declared_execution_modes(mocker, distributed):
     module = nn.Linear(2, 2)
-    mocker.patch("aitune.torch.backend.backend.is_distributed_module", return_value=distributed)
+    mocker.patch("aitune.torch.utils.module.is_distributed_module", return_value=distributed)
 
     AllExecutionModesSleepBackend()._assert_execution_mode(module)
 
