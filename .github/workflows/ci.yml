@@ -373,12 +373,26 @@ jobs:
         with:
           name: dist
           path: dist
-      - run: |
+      - name: Functional CI tests
+        run: |
           python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
           python -m pytest -rfEs --durations=0 tests/functional_ci --junitxml=functional-ci.test-report.xml
+        env:
+          AITUNE_MATRIX_RESULTS: functional-ci.matrix-updates.json
       - if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: functional-ci-test-report
           path: functional-ci.test-report.xml
+          if-no-files-found: ignore
+      - name: Feature matrix
+        if: always() && hashFiles('functional-ci.matrix-updates.json') != ''
+        run: |
+          cp tests/functional_ci/feature_matrix.html functional-ci.feature-matrix.html
+          python tests/functional_ci/update_matrix.py functional-ci.feature-matrix.html functional-ci.matrix-updates.json
+      - if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: functional-ci-feature-matrix
+          path: functional-ci.feature-matrix.html
           if-no-files-found: ignore
