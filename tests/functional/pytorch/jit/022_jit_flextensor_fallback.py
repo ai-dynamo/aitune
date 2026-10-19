@@ -6,8 +6,10 @@
 # dependencies = ["flextensor==0.5.0"]
 # scope = "always"
 # allow_failure = false
+# arguments = [{setup = "manual"}, {setup = "helper"}]
 # ///
 
+import argparse
 import json
 import logging
 import tempfile
@@ -20,7 +22,12 @@ import torch
 from aitune.torch import jit_config, snapshot_tuning_data
 from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.jit.config import JITMode
-from aitune.torch.jit.flextensor import FlexTensorUnit, register_flextensor_units, replan_flextensor
+from aitune.torch.jit.flextensor import (
+    FlexTensorUnit,
+    prepare_flextensor_units,
+    register_flextensor_units,
+    replan_flextensor,
+)
 from aitune.torch.jit.tune import deferred
 from aitune.torch.task.profiling import ModelExecutionTimeMeasuringStrategy
 from aitune.torch.tune_strategy import OneBackendStrategy, PerformanceValidationMode
@@ -102,7 +109,7 @@ def assert_failed_compile(registration, cache_dir):
 
 
 @collect_tuning_data(__file__)
-def run(cache_dir):
+def run(cache_dir, setup):
     torch.manual_seed(31)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
@@ -133,21 +140,24 @@ def run(cache_dir):
     resident_head_bytes = sum(parameter.numel() * parameter.element_size() for parameter in model.head.parameters())
     strategy_budget_bytes = managed_limit_bytes - resident_head_bytes
     budget_fraction = strategy_budget_bytes / torch.cuda.get_device_properties(0).total_memory
-    model.layers = torch.nn.ModuleList(FlexTensorUnit(block) for block in model.layers)
-    model = ft.offload(
-        model.to("cpu"),
-        ft.OffloadConfig(
-            include_patterns=["layers.*"],
-            external_compile=True,
-            transfer_mode="allocation_block_transfer",
-            num_blocks=2,
-            min_blocks=2,
-            max_gpu_mem_fraction=budget_fraction,
-            discovery_iters=1,
-            profiling_iters=3,
-        ),
+    config = ft.OffloadConfig(
+        include_patterns=["layers.*"],
+        external_compile=True,
+        transfer_mode="allocation_block_transfer",
+        num_blocks=2,
+        min_blocks=2,
+        max_gpu_mem_fraction=budget_fraction,
+        discovery_iters=1,
+        profiling_iters=3,
     )
-    manager = ft.get_offload_manager()
+    model = model.to("cpu")
+    if setup == "helper":
+        prepared = prepare_flextensor_units(model, ft_config=config)
+        model, manager = prepared.model, prepared.manager
+    else:
+        model.layers = torch.nn.ModuleList(FlexTensorUnit(block) for block in model.layers)
+        model = ft.offload(model, config)
+        manager = ft.get_offload_manager()
     with torch.no_grad():
         for _ in range(manager.iters_before_inference):
             model(values[0])
@@ -221,6 +231,7 @@ def run(cache_dir):
         json.dumps({
             "result": "PASS",
             "mode": "deferred",
+            "setup": setup,
             "selected_unit": 1,
             "state_counts": registration.state_counts,
             "compile_failure": failure,
@@ -239,5 +250,8 @@ def run(cache_dir):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--setup", choices=("manual", "helper"), default="manual")
+    args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="aitune-flextensor-fallback-") as directory:
-        run(Path(directory))
+        run(Path(directory), args.setup)

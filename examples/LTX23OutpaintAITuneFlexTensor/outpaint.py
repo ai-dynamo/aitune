@@ -446,13 +446,11 @@ def generate(
 def configure_flextensor(pipe: Any, args: argparse.Namespace) -> Any:
     import flextensor
 
-    from aitune.torch.jit.flextensor import FlexTensorUnit
+    from aitune.torch.jit.flextensor import prepare_flextensor_units
 
     transformer = pipe.transformer
     if len(transformer.transformer_blocks) != BLOCKS:
         raise RuntimeError(f"the pinned pretrained model must contain all {BLOCKS} blocks")
-    for index, block in enumerate(transformer.transformer_blocks):
-        transformer.transformer_blocks[index] = FlexTensorUnit(block)
     for parameter in transformer.parameters(recurse=False):
         parameter.data = parameter.data.to("cuda:0")
     for name, buffer in transformer.named_buffers(recurse=False):
@@ -471,20 +469,14 @@ def configure_flextensor(pipe: Any, args: argparse.Namespace) -> Any:
         profile_storage_dir=str(profile_dir),
         enable_diagnostics=True,
     )
-    # This identity compile_fn activates FT's compiled, retained-view-profile path;
-    # it does NOT call torch.compile. AITune alone compiles the inner compute later.
-    compile_fn = (lambda module: module) if args.finalization == "retain-profile" else None
-    if args.reuse_profile:
-        pipe.transformer = flextensor.offload_from_profile(
-            transformer,
-            str(profile_dir),
-            config=config,
-            name=MANAGER_NAME,
-            compile_fn=compile_fn,
-        )
-    else:
-        pipe.transformer = flextensor.offload(transformer, config=config, name=MANAGER_NAME, compile_fn=compile_fn)
-    return flextensor.get_offload_manager(MANAGER_NAME)
+    prepared = prepare_flextensor_units(
+        pipe,
+        target="transformer",
+        ft_config=config,
+        name=MANAGER_NAME,
+        load_profile_from=profile_dir if args.reuse_profile else None,
+    )
+    return prepared.manager
 
 
 class MemoryProbe:
@@ -499,12 +491,18 @@ class MemoryProbe:
         self.peak_device_used = None
         self.stop = threading.Event()
         self.nvml = None
+        self.handle = None
         try:
             import pynvml
 
             pynvml.nvmlInit()
+            try:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            except Exception:
+                pynvml.nvmlShutdown()
+                raise
             self.nvml = pynvml
-            self.handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            self.handle = handle
         except Exception:
             pass
         torch.cuda.reset_peak_memory_stats()

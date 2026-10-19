@@ -1,14 +1,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Explicit registration and synchronous replanning through FlexTensor's public API."""
+"""Optional preparation, registration and synchronous replanning for FlexTensor."""
 
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from inspect import getattr_static
+from os import PathLike, fspath
 from types import MethodType
 from typing import Any, NamedTuple
 
 import torch
 import wrapt
 
+from aitune.torch.jit._flextensor_preparation import _prepare_policy
 from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.registration import JITRegistration, _collect_modules, register_for_jit_tuning
 from aitune.torch.module.tuned_module import TunedModule
@@ -40,6 +44,107 @@ class FlexTensorUnit(torch.nn.Module):
     def forward(self, *args: Any, **kwargs: Any) -> Any:
         """Delegate arguments and return values unchanged to the original module."""
         return self.compute(*args, **kwargs)
+
+
+@dataclass(frozen=True)
+class PreparedFlexTensor:
+    """Public setup result; the model is FlexTensor's exact phase-following proxy.
+
+    ``effective_config`` is a validated shallow copy with selectors adapted to the
+    inserted shells. ``unit_paths`` are the planned boundaries in the original model.
+    Use the manager's public live-unit discovery after startup, not cached unit objects.
+    """
+
+    model: torch.nn.Module
+    manager: Any
+    effective_config: Any
+    unit_paths: tuple[str, ...]
+
+
+def _preparation_target(owner: Any, target: str | None) -> tuple[torch.nn.Module, Any, str | None]:
+    """Resolve an explicit owner attribute without guessing a module's parent."""
+    parent, leaf = None, None
+    if target is not None:
+        if not isinstance(target, str) or not target or any(not part for part in target.split(".")):
+            raise ValueError("target must be a nonempty dotted attribute path")
+        parts = target.split(".")
+        parent = owner
+        for part in parts[:-1]:
+            parent = getattr(parent, part)
+        leaf = parts[-1]
+        owner = getattr(parent, leaf)
+        descriptor = getattr_static(parent, leaf, None)
+        if isinstance(descriptor, property) and descriptor.fset is None:
+            raise ValueError("target must be writable so FlexTensor's returned model can be installed")
+    if not isinstance(owner, torch.nn.Module):
+        raise TypeError("the model or target must be a torch.nn.Module")
+    return owner, parent, leaf
+
+
+def _retain_profile(module: torch.nn.Module) -> torch.nn.Module:
+    """Activate public compiled view profiling without compiling the residency shell."""
+    return module
+
+
+def prepare_flextensor_units(
+    model_or_owner: Any,
+    *,
+    ft_config: Any,
+    target: str | None = None,
+    name: str = "default",
+    load_profile_from: str | PathLike[str] | None = None,
+) -> PreparedFlexTensor:
+    """Prepare residency shells and public FlexTensor offloading without running the model.
+
+    Pass an unprepared model, or its owner and ``target="transformer"`` (dotted paths
+    are supported). In the latter form the exact returned FT proxy is installed on
+    the owner using ordinary attribute assignment. Otherwise use the returned ``model``.
+    The existing manual :class:`FlexTensorUnit` and public FT setup remain available.
+
+    ``ft_config`` is a public ``flextensor.OffloadConfig`` whose selectors refer to the
+    original model, before ``compute.`` is inserted. A validated shallow copy preserves
+    unit boundaries and parameter residency policy; unrelated settings are retained. Wrapping
+    does not copy or move weights; FT still owns placement and any provider snapshots.
+    Non-executable containers, cross-boundary aliases and unrepresentable
+    selector translations are rejected rather than changing their meaning.
+
+    External compilation uses no compile callback. Otherwise ``profile_mode="view"``
+    uses an identity callback to retain FT's profile without compiling the shells.
+    A supplied profile path calls public ``offload_from_profile``; it is never inferred.
+
+    Use a fresh worker, unprepared model and unused named manager. The helper does not
+    execute startup, register JIT targets, tune, warm routes or replan. Do those explicitly
+    using the existing APIs. Provider and custom-setter errors propagate; there is no
+    rollback or recovery after setup starts. FlexTensor is imported only on this call.
+    """
+    model, parent, leaf = _preparation_target(model_or_owner, target)
+    if not isinstance(name, str) or not name.strip() or name != name.strip():
+        raise ValueError("name must be a nonempty manager name without surrounding whitespace")
+    profile_path = None if load_profile_from is None else fspath(load_profile_from)
+    if profile_path is not None and (not isinstance(profile_path, str) or not profile_path):
+        raise ValueError("load_profile_from must be a nonempty string or path")
+
+    import flextensor as ft
+
+    if not isinstance(ft_config, ft.OffloadConfig):
+        raise TypeError("ft_config must be a flextensor.OffloadConfig")
+    if not ft_config.external_compile and ft_config.profile_mode != "view":
+        raise ValueError("Use external_compile=True or retained profile_mode='view' for AITune preparation")
+    compile_fn = None if ft_config.external_compile else _retain_profile
+    manager = ft.get_offload_manager(name)
+    if manager.model is not None or getattr(manager.phase, "value", None) != "not_initialized":
+        raise RuntimeError("FlexTensor preparation requires an unused named manager in a fresh worker")
+    effective_config, unit_paths = _prepare_policy(model, ft_config, FlexTensorUnit)
+    for path in unit_paths:
+        model.set_submodule(path, FlexTensorUnit(model.get_submodule(path)))
+    kwargs = {"config": effective_config, "name": name, "compile_fn": compile_fn}
+    if profile_path is None:
+        proxy = ft.offload(model, **kwargs)
+    else:
+        proxy = ft.offload_from_profile(model, profile_path, **kwargs)
+    if leaf is not None:
+        setattr(parent, leaf, proxy)
+    return PreparedFlexTensor(proxy, manager, effective_config, unit_paths)
 
 
 class _ManagerBoundary(NamedTuple):
@@ -177,7 +282,7 @@ def register_flextensor_units(
 
     The caller records representative whole-model forwards, arms deferred tuning when
     needed, and warms every selected route before calling :func:`replan_flextensor`.
-    FlexTensor is optional and is not imported by this module.
+    FlexTensor is optional; registration does not import it.
     """
     unique_managers = tuple({id(manager): manager for manager in managers}.values())
     if not unique_managers:

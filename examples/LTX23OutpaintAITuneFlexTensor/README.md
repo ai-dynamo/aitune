@@ -83,7 +83,8 @@ python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py compare
 Defaults put caches, JSON, logs and media under `tuning/ltx23_outpaint/`, which is ignored by Git. Override `--work-dir`
 and `--model-cache` together when using another location. Do not run the modes concurrently on the same GPU or reuse
 one process's JIT/provider state for another mode. The manual staged benchmark is excluded from the shared export/
-deployment-project runner; the always-on JIT021/JIT022 functional scripts test the native integration contract.
+deployment-project runner. The always-on JIT021/JIT022 functional scripts test manual and helper setup through the
+same native tuning/fallback assertions; JIT023 checks selector policies and saved-profile compatibility through public APIs.
 
 For a matched profile-loading control, preserve the profile-building baseline's results and rerun baseline with
 `--reuse-profile` in another fresh process, using the same warmups/runs. This gives both FT arms the same startup path.
@@ -103,6 +104,34 @@ values are recorded. The adapter itself does not reserve/restore compiler capaci
 Every transformer block is wrapped once in `FlexTensorUnit` before provider preparation. FlexTensor selects the outer
 shells; the adapter registers their final live `compute` children, which are the complete original transformer blocks.
 Warmup, correctness and profiling run within an outer residency call without replaying its transfers.
+
+The example uses the optional preparation helper. With `ltx_model` already constructed and `cfg` holding the example's
+FT configuration (`include_patterns=["transformer_blocks.*"]`), setup is:
+
+```python
+from aitune.torch.jit.flextensor import prepare_flextensor_units
+
+prepared = prepare_flextensor_units(
+    ltx_model,
+    target="transformer",
+    ft_config=cfg,
+    name="ltx23-outpaint-mini",
+    load_profile_from=profile_dir if reuse_profile else None,
+)
+manager = prepared.manager
+```
+
+Here `profile_dir` is the workload's profile directory and `reuse_profile` selects explicit profile loading. The helper
+installs FT's exact returned proxy on `ltx_model.transformer`; no subsequent parent assignment is needed. Selectors refer
+to the original, unwrapped transformer. A validated configuration copy preserves unit boundaries and parameter
+residency policy without changing the caller's configuration. Wrapping does not copy or move weights; FT still owns
+placement and any provider snapshots. The example's direct-root parameter/buffer placement remains an explicit
+application step before this call.
+
+Preparation does not execute the pipeline or trigger tuning. The example then finishes FT startup, registers the final
+live compute children in one batch, records both stages, enables deferred tuning, and warms all serving routes before
+retaining or replanning the strategy. The original [manual wrapping and FT setup](../../docs/guides/flextensor.md#manual-setup)
+remain available; use one setup path in a fresh worker, not both on the same model.
 
 The default `--finalization retain-profile` uses the provider's identity `compile_fn` plus view-profile mode in both
 FlexTensor arms. It preserves the pre-AITune profile/strategy and does not claim compiled-timing replanning.

@@ -6,7 +6,16 @@
 # dependencies = ["flextensor==0.5.0"]
 # scope = "always"
 # allow_failure = false
-# arguments = [{mode = "eager"}, {mode = "deferred"}, {mode = "deferred", performance = "enabled"}, {mode = "deferred", finalization = "profile"}]
+# arguments = [
+#   {mode = "eager"},
+#   {mode = "deferred"},
+#   {mode = "deferred", performance = "enabled"},
+#   {mode = "deferred", finalization = "profile"},
+#   {mode = "eager", setup = "helper"},
+#   {mode = "deferred", setup = "helper"},
+#   {mode = "deferred", performance = "enabled", setup = "helper"},
+#   {mode = "deferred", finalization = "profile", setup = "helper"},
+# ]
 # ///
 
 import argparse
@@ -28,6 +37,7 @@ from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.flextensor import (
     FlexTensorUnit,
     _tuned_forward_signature,
+    prepare_flextensor_units,
     register_flextensor_units,
     replan_flextensor,
 )
@@ -161,7 +171,7 @@ def tune_targets(registration, run_forward, values, expected, mode):
 
 
 @collect_tuning_data(__file__)
-def run(mode, performance, finalization, cache_dir):
+def run(mode, performance, finalization, setup, cache_dir):
     torch.manual_seed(29)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
@@ -180,23 +190,30 @@ def run(mode, performance, finalization, cache_dir):
     resident_head_bytes = sum(parameter.numel() * parameter.element_size() for parameter in model.head.parameters())
     strategy_budget_bytes = managed_limit_bytes - resident_head_bytes
     budget_fraction = strategy_budget_bytes / torch.cuda.get_device_properties(0).total_memory
-    # Preparation is a production adapter operation, not a test-side provider patch.
-    model.layers = torch.nn.ModuleList(FlexTensorUnit(block) for block in model.layers)
-    model = ft.offload(
-        model.to("cpu"),
-        ft.OffloadConfig(
-            include_patterns=["layers.*"],
-            external_compile=finalization == "replan",
-            transfer_mode="allocation_block_transfer",
-            num_blocks=2,
-            min_blocks=2,
-            max_gpu_mem_fraction=budget_fraction,
-            discovery_iters=1,
-            profiling_iters=3,
-        ),
-        compile_fn=(lambda module: module) if finalization == "profile" else None,
+    config = ft.OffloadConfig(
+        include_patterns=["layers.*"],
+        external_compile=finalization == "replan",
+        transfer_mode="allocation_block_transfer",
+        num_blocks=2,
+        min_blocks=2,
+        max_gpu_mem_fraction=budget_fraction,
+        discovery_iters=1,
+        profiling_iters=3,
     )
-    manager = ft.get_offload_manager()
+    model = model.to("cpu")
+    if setup == "helper":
+        prepared = prepare_flextensor_units(model, ft_config=config)
+        model, manager = prepared.model, prepared.manager
+        assert prepared.unit_paths == tuple(f"layers.{index}" for index in range(10))
+    else:
+        # Keep the original manual option under the identical acceptance assertions.
+        model.layers = torch.nn.ModuleList(FlexTensorUnit(block) for block in model.layers)
+        model = ft.offload(
+            model,
+            config,
+            compile_fn=(lambda module: module) if finalization == "profile" else None,
+        )
+        manager = ft.get_offload_manager()
     with torch.no_grad():
         for _ in range(manager.iters_before_inference):
             model(values[0])
@@ -289,6 +306,7 @@ def run(mode, performance, finalization, cache_dir):
             "mode": mode,
             "performance": performance,
             "finalization": finalization,
+            "setup": setup,
             "units": len(units),
             "graphs": graph_count,
             "profiling_measurements": measurements,
@@ -314,6 +332,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=("eager", "deferred"), default="deferred")
     parser.add_argument("--performance", choices=("diagnostic", "enabled"), default="diagnostic")
     parser.add_argument("--finalization", choices=("replan", "profile"), default="replan")
+    parser.add_argument("--setup", choices=("manual", "helper"), default="manual")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="aitune-flextensor-") as directory:
-        run(args.mode, args.performance, args.finalization, Path(directory))
+        run(args.mode, args.performance, args.finalization, args.setup, Path(directory))
