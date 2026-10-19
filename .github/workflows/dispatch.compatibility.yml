@@ -73,11 +73,14 @@ jobs:
           pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --no-deps --force-reinstall --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
           pip list
           nvidia-smi
-          python -c "import sys; print(sys.version)"
-          python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
-          python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
-          python -c "import tensorrt; print(tensorrt.__version__)"
-          python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+          python -c "
+          import sys, torch, tensorrt, torch_tensorrt
+          print(sys.version)
+          print(torch.__version__, torch.version.cuda)
+          print(torch.cuda.is_available()); torch.cuda.init()
+          print(tensorrt.__version__)
+          print(torch_tensorrt.__version__)
+          "
           pytest
 
   pytorch-gpu-cuda-python-matrix:
