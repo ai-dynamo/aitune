@@ -21,15 +21,6 @@ env:
   UV_VERSION: 0.12.8
   UV_PYTHON: &python_version "3.12"
 
-  # Actions version pins
-  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-  _ACTIONS_DOWNLOAD_ARTIFACT: &actions_download_artifact actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-  _ACTIONS_UPLOAD_ARTIFACT: &actions_upload_artifact actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-  _ACTIONS_DOCKER_LOGIN: &actions_docker_login docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-  _ACTIONS_DOCKER_BUILD_PUSH: &actions_docker_build_push docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-
-
 defaults:
   run:
     shell: bash
@@ -39,14 +30,14 @@ jobs:
     name: Build wheel
     runs-on: linux-amd64-cpu4
     steps:
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: *actions_setup_uv
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: *python_version
       - run: uv build
-      - uses: *actions_upload_artifact
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: dist
           path: dist/
@@ -65,19 +56,19 @@ jobs:
       matrix:
         torch_ci_image_base: [25.08-py3, 25.10-py3, 26.01-py3, 26.03-py3, 26.05-py3, 26.06-py3, 26.08-py3]
     steps:
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: *actions_download_artifact
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist
           path: dist
-      - uses: *actions_docker_login
+      - uses: docker/login-action@v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: *actions_docker_build_push
+      - uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: .github/docker/Dockerfile
@@ -105,19 +96,19 @@ jobs:
           - triton_ci_image_base: 26.05-py3
             aitune_extras: triton,torch212
     steps:
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: *actions_download_artifact
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist
           path: dist
-      - uses: *actions_docker_login
+      - uses: docker/login-action@v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: *actions_docker_build_push
+      - uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: .github/docker/triton.Dockerfile
@@ -142,19 +133,19 @@ jobs:
             - 12.9.2-devel-ubuntu24.04
             - 13.0.3-devel-ubuntu24.04
     steps:
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: *actions_download_artifact
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist
           path: dist
-      - uses: *actions_docker_login
+      - uses: docker/login-action@v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: *actions_docker_build_push
+      - uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: .github/docker/cuda.Dockerfile

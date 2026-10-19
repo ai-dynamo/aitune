@@ -4,7 +4,7 @@ name: Compatibility
 
 on:
   workflow_dispatch:
-    inputs:
+    inputs: &inputs
       run_nvcr_container:
         description: Run NVCR container
         type: boolean
@@ -16,15 +16,7 @@ on:
   merge_group:
     branches: [main]
   workflow_call:
-    inputs:
-      run_nvcr_container:
-        description: Run NVCR container
-        type: boolean
-        default: true
-      run_cuda_matrix:
-        description: Run CUDA Python matrix
-        type: boolean
-        default: true
+    inputs: *inputs
 permissions:
   contents: read
   packages: read
@@ -48,60 +40,48 @@ env:
   NCCL_NET_PLUGIN: none
   NCCL_NET: Socket
 
-  # Actions version pins
-  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  _ACTIONS_SETUP_UV: &actions_setup_uv astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-
 defaults:
   run:
     shell: bash
 
 jobs:
   pytorch-gpu-nvcr-container:
-    name: PyTorch GPU ${{ matrix.torch_ci_image }}
+    name: PyTorch GPU on nvcr ${{ matrix.nvcr }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
     if: inputs.run_nvcr_container == true
     strategy:
       fail-fast: false
       matrix:
+        nvcr: ["25.08", "25.10", "26.01", "26.03", "26.05", "26.06", "26.08"]
         include:
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-25.08-py3:latest
-            extra_packages: "numpy<2.0"
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-25.10-py3:latest
-            extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3:latest
-            extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.03-py3:latest
-            extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.05-py3:latest
-            extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.06-py3:latest
-            extra_packages: ""
-          - torch_ci_image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.08-py3:latest
-            extra_packages: ""
+          - nvcr: "25.08"
+            extra_packages: "numpy<2.0 pyarrow<26"
     container:
-      image: ${{ matrix.torch_ci_image }}
+      image: ghcr.io/ai-dynamo/aitune/nvcr-torch-${{ matrix.nvcr }}-py3:latest
       options: -u 1000
     env:
       EXTRA_PACKAGES: ${{ matrix.extra_packages }}
     steps:
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - run: pip install ".[triton]" --group test ${EXTRA_PACKAGES:+"$EXTRA_PACKAGES"}
-      - run: pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --no-deps --force-reinstall --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
-      - run: pip list
-      - run: nvidia-smi
-      - run: python -c "import sys; print(sys.version)"
-      - run: python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
-      - run: python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
-      - run: python -c "import tensorrt; print(tensorrt.__version__)"
-      - run: python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
-      - run: pytest
+      - name: Install and test
+        run: |
+          # shellcheck disable=SC2086 # split EXTRA_PACKAGES into separate requirements
+          pip install ".[triton]" --group test $EXTRA_PACKAGES
+          pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --no-deps --force-reinstall --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+          pip list
+          nvidia-smi
+          python -c "import sys; print(sys.version)"
+          python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
+          python -c "import torch; print(torch.cuda.is_available()); torch.cuda.init()"
+          python -c "import tensorrt; print(tensorrt.__version__)"
+          python -c "import torch_tensorrt; print(torch_tensorrt.__version__)"
+          pytest
 
   pytorch-gpu-cuda-python-matrix:
-    name: CUDA ${{ matrix.variant.uv_torch_backend }} Python ${{ matrix.python_version }} ${{ matrix.variant.aitune_extras }}
+    name: ${{ matrix.cuda.uv_torch_backend }} py${{ matrix.python_version }} ${{ matrix.torch }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
     if: inputs.run_cuda_matrix == true
@@ -110,35 +90,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12"]
-        variant:
-          - uv_torch_backend: cu128
+        python_version: ["3.11", "3.12", "3.13"]
+        torch: [torch29, torch210, torch211, torch212]
+        cuda:
+          - &cu128
+            uv_torch_backend: cu128
             cuda_image: 12.9.2-devel-ubuntu24.04
-            aitune_extras: torch29,onnxruntime-gpu-cuda12
+            cuda_major: 12
             uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
+          - &cu130
+            uv_torch_backend: cu130
+            cuda_image: 13.0.3-devel-ubuntu24.04
+            cuda_major: 13
+            uv_extra_args: ""
+        exclude:
           # no torch-tensorrt==2.10 in pypi
-          - uv_torch_backend: cu128
-            cuda_image: 12.9.2-devel-ubuntu24.04
-            aitune_extras: torch211,onnxruntime-gpu-cuda12
-            uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
-          - uv_torch_backend: cu130
-            cuda_image: 13.0.3-devel-ubuntu24.04
-            aitune_extras: torch29,onnxruntime-gpu-cuda13
-            uv_extra_args: ""
-          - uv_torch_backend: cu130
-            cuda_image: 13.0.3-devel-ubuntu24.04
-            aitune_extras: torch210,onnxruntime-gpu-cuda13
-            uv_extra_args: ""
-          - uv_torch_backend: cu130
-            cuda_image: 13.0.3-devel-ubuntu24.04
-            aitune_extras: torch211,onnxruntime-gpu-cuda13
-            uv_extra_args: ""
-          - uv_torch_backend: cu130
-            cuda_image: 13.0.3-devel-ubuntu24.04
-            aitune_extras: torch212,onnxruntime-gpu-cuda13
-            uv_extra_args: ""
+          - torch: torch210
+            cuda: *cu128
+          - torch: torch212
+            cuda: *cu128
+        include:
+          - python_version: "3.14"
+            torch: torch214
+            cuda: *cu130
     container:
-      image: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.variant.cuda_image }}:latest
+      image: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda.cuda_image }}:latest
     steps:
       - name: Install Node for local act
         if: ${{ env.ACT == 'true' }}
@@ -149,21 +125,22 @@ jobs:
             | tar -xz --strip-components=1 -C "$node_dir"
           echo "$node_dir/bin" >> "$GITHUB_PATH"
           "$node_dir/bin/node" --version
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: *actions_setup_uv
+      - uses: astral-sh/setup-uv@v10.0.1
         env:
           RUNNER_TOOL_CACHE: ${{ runner.temp }}/tool-cache
         with:
           python-version: ${{ matrix.python_version }}
           version: ${{ env.UV_VERSION }}
       # - run: nvidia-smi
-      - run: |
+      - name: Install and test
+        run: |
           uv venv
           printf "tensorrt\n" > cu12-excludes.txt
-          uv pip install --torch-backend=${{ matrix.variant.uv_torch_backend }} ".[${{ matrix.variant.aitune_extras }},triton]" --group test ${{ matrix.variant.uv_extra_args }}
+          uv pip install --torch-backend=${{ matrix.cuda.uv_torch_backend }} ".[${{ matrix.torch }},onnxruntime-gpu-cuda${{ matrix.cuda.cuda_major }},triton]" --group test ${{ matrix.cuda.uv_extra_args }}
           uv pip list
           .venv/bin/python .github/scripts/sanity/print_versions.py
-          .venv/bin/python .github/scripts/sanity/check_onnxruntime_cuda.py --cuda-major-version=${{ contains(matrix.variant.uv_torch_backend, 'cu128') && '12' || '13' }}
+          .venv/bin/python .github/scripts/sanity/check_onnxruntime_cuda.py --cuda-major-version=${{ matrix.cuda.cuda_major }}
           .venv/bin/python -m pytest -q -rf
