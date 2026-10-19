@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Kernel selection for scaled dot-product attention delegated to Torch Inductor JIT."""
 
+import pytest
 import torch
 from torch import nn
 from torch.nn import functional
@@ -27,6 +28,13 @@ def _qkv(device: torch.device, seed: int) -> tuple[torch.Tensor, ...]:
     return tuple(torch.randn(2, 8, 256, 64, device=device, dtype=torch.float16, generator=generator) for _ in range(3))
 
 
+@pytest.mark.matrix(
+    "models.tensor-inputs/kernel-selector",
+    "models.static-shapes/kernel-selector",
+    "models.single-graph/kernel-selector",
+    "modes.aot-tune/kernel-selector",
+    "topology.kernel-selector/single-gpu",
+)
 def test_kernel_selector_attention(device: torch.device):
     """The selector evaluates attention providers, builds the delegate, and matches eager attention."""
     backend = KernelSelectorBackend()

@@ -4,6 +4,7 @@
 
 from functools import partial
 
+import pytest
 import torch
 
 import aitune.torch as ait
@@ -13,12 +14,22 @@ from tests.functional_ci.lifecycle import assert_matches_eager, pinned_strategy,
 from tests.functional_ci.models import make_input, make_mlp
 
 
+@pytest.mark.matrix(
+    "models.tensor-inputs",
+    "models.static-shapes",
+    "models.single-graph",
+    "modes.aot-tune",
+    "modes.aot-save-load",
+    "topology.{backend}/single-gpu",
+    "strategies.one-backend/aot-tune",
+)
 @with_backends("save_load")
 def test_backend_lifecycle(case: BackendCase, device: torch.device, tmp_path):
     """Tune, infer, save, and reload the toy MLP."""
     run_lifecycle(case.factory(), partial(make_mlp, device), make_input(device), tmp_path / "model.ait", case.tolerance)
 
 
+@pytest.mark.matrix("modes.aot-export")
 @with_backends("export")
 def test_exported_artifact(case: BackendCase, device: torch.device, tmp_path):
     """The tuned module exports a deployable artifact that runs natively, without AITune, and matches eager."""

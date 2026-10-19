@@ -36,6 +36,7 @@ def _tune(strategy, device: torch.device, dry_run: bool = False, batch_sizes: tu
     return tuned
 
 
+@pytest.mark.matrix("strategies.first-wins/aot-tune", "strategies.first-wins/selection-checked")
 def test_first_wins_falls_back_after_build_failure(device: torch.device):
     """A backend that fails to build is skipped and the next candidate is selected."""
     strategy = ait.FirstWinsStrategy([BuildFailsBackend(RuntimeError), TorchInductorAotBackend()])
@@ -45,6 +46,7 @@ def test_first_wins_falls_back_after_build_failure(device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, TENSORRT_FP32)
 
 
+@pytest.mark.matrix("strategies.{strategy_id}/aot-tune", "strategies.validation-diagnostic/aot-tune")
 @pytest.mark.parametrize("strategy_id", PROFILING_STRATEGIES)
 def test_profiling_strategy_diagnostic(strategy_id: str, device: torch.device):
     """Profiling strategies pick one of the candidates and record the eager comparison in diagnostic mode."""
@@ -60,6 +62,7 @@ def test_profiling_strategy_diagnostic(strategy_id: str, device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, TENSORRT_FP32)
 
 
+@pytest.mark.matrix("strategies.find-max-batch-size/aot-tune", "strategies.find-max-batch-size/selection-checked")
 def test_find_max_batch_size(device: torch.device):
     """Max-batch discovery extends the dynamic TensorRT range beyond the recorded batch sizes."""
     strategy = ait.OneBackendStrategy(BACKENDS["tensorrt"].factory()).enable_performance_validation(False)
@@ -70,6 +73,7 @@ def test_find_max_batch_size(device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, TENSORRT_FP32, batch_sizes=(max_batch_size,))
 
 
+@pytest.mark.matrix("strategies.dry-run/aot-tune", "strategies.dry-run/selection-checked")
 def test_dry_run_keeps_eager(device: torch.device):
     """A dry run checks the strategy without building or activating a backend."""
     tuned = _tune(pinned_strategy(TorchInductorAotBackend()), device, dry_run=True)

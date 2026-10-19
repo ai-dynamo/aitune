@@ -38,6 +38,7 @@ def _export_mlp(device: torch.device, directory: Path, external_data: bool) -> P
     return external
 
 
+@pytest.mark.matrix("modes.aot-existing-onnx")
 @pytest.mark.parametrize("external_data", [False, True], ids=["inline", "external-data"])
 @with_backends("onnx_input")
 def test_existing_onnx(case: BackendCase, external_data: bool, device: torch.device, tmp_path):

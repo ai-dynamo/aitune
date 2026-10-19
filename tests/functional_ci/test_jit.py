@@ -34,6 +34,12 @@ class JitMLP(nn.Module):
         return self.mlp(x)
 
 
+@pytest.mark.matrix(
+    "modes.jit-{mode.value}",
+    "models.tensor-inputs",
+    "topology.{backend}/single-gpu",
+    "strategies.one-backend/jit-tune",
+)
 @pytest.mark.parametrize("mode", [JITMode.TUNE_EAGER, JITMode.TUNE_DEFERRED], ids=lambda mode: mode.value)
 @with_backends("jit")
 def test_jit_tuning(case: BackendCase, mode: JITMode, device: torch.device):
@@ -62,6 +68,7 @@ def test_jit_tuning(case: BackendCase, mode: JITMode, device: torch.device):
         assert_matches_eager(model, reference, device, tolerance, batch_sizes=(3,), seeds=(7,))
 
 
+@pytest.mark.matrix("modes.jit-inspect/torch-eager")
 def test_jit_inspection_report(device: torch.device, tmp_path):
     """Inspect mode records the model hierarchy without tuning and writes an HTML report."""
     jit_config.mode = JITMode.INSPECT

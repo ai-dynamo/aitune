@@ -5,6 +5,7 @@
 from collections.abc import Callable
 from dataclasses import replace
 
+import pytest
 import torch
 from torch import nn
 
@@ -30,6 +31,7 @@ class StructuredModel(nn.Module):
         return {"out": hidden, "stats": (hidden.sum(-1), hidden.amax(-1))}
 
 
+@pytest.mark.matrix("models.dynamic-batch-recorded")
 @with_backends("dynamic_batch")
 def test_recorded_batch_range(case: BackendCase, device: torch.device):
     """Batch bounds come from recorded batch sizes; seen and unseen in-range batch sizes match eager."""
@@ -43,6 +45,7 @@ def test_recorded_batch_range(case: BackendCase, device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, case.tolerance, batch_sizes=(1, 2, 3, 4))
 
 
+@pytest.mark.matrix("models.dynamic-batch-user")
 @with_backends("dynamic_batch")
 def test_explicit_batch_dim(case: BackendCase, device: torch.device):
     """A user `BatchDim` widens the compiled range beyond the single recorded batch size."""
@@ -57,6 +60,11 @@ def test_explicit_batch_dim(case: BackendCase, device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, case.tolerance, batch_sizes=(1, 5, 8))
 
 
+@pytest.mark.matrix(
+    "models.non-tensor-inputs",
+    "models.nested-inputs",
+    "models.structured-outputs",
+)
 @with_backends("structured_io")
 def test_structured_io(case: BackendCase, device: torch.device):
     """Nested dict input, a float and a `None` argument, and a nested dict/tuple output survive tuning."""

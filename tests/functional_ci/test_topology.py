@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Partial wrapping of a shared submodule that produces several graphs."""
 
+import pytest
 import torch
 from torch import nn
 
@@ -27,6 +28,7 @@ class TwoTower(nn.Module):
         return self.head(self.encoder(x) + self.encoder(x.unsqueeze(1)).squeeze(1))
 
 
+@pytest.mark.matrix("models.multiple-graphs", "modes.aot-inspect-wrap")
 @with_backends("multigraph")
 def test_partial_wrap_multigraph(case: BackendCase, device: torch.device, tmp_path):
     """Wrap only the shared encoder; it tunes one graph per layout, hooks still fire, and the checkpoint reloads."""

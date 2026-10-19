@@ -26,6 +26,7 @@ PRECISION_CASES = {
 }
 
 
+@pytest.mark.matrix("other.{case_id}/functional-ci")
 @pytest.mark.parametrize("case_id", PRECISION_CASES)
 def test_tensorrt_precision_lifecycle(case_id: str, device: torch.device, tmp_path):
     """Tune, save, and reload a TensorRT engine with the requested precision or runtime option, then replay it."""
