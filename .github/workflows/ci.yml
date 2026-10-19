@@ -386,8 +386,9 @@ jobs:
           path: functional-ci.test-report.xml
           if-no-files-found: ignore
       - name: Feature matrix
-        if: always() && hashFiles('functional-ci.matrix-updates.json') != ''
+        if: always()
         run: |
+          test -s functional-ci.matrix-updates.json
           cp tests/functional_ci/feature_matrix.html functional-ci.feature-matrix.html
           python tests/functional_ci/update_matrix.py functional-ci.feature-matrix.html functional-ci.matrix-updates.json
       - if: always()
