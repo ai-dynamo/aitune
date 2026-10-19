@@ -265,9 +265,10 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             error_log.write_text("".join(traceback.format_exception(e)))
 
         outcome, gathered_results = coordinator.collect_results(result, local_error)
+        if backend.is_active:
+            backend.deactivate()
+
         if not outcome.succeeded:
-            if backend.is_active:
-                backend.deactivate()
             log(
                 "⚠️ %s baseline failed (log: %s), performance check skipped",
                 module_type,
@@ -343,7 +344,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         batching: bool,
         max_batch_size: int,
     ) -> _TuneCandidate | None:
-        """Builds, validates, and profiles each backend; returns the best candidate."""
+        """Builds, validates, and profiles each backend; returns the best candidate but inactive."""
         best: _TuneCandidate | None = None
 
         for backend in self._backends:
@@ -358,9 +359,10 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                 samples,
                 self._get_profiling_config(batching, max_batch_size),
             )
+            if built.is_active:
+                built.deactivate()
+
             if result is None:
-                if built.is_active:
-                    built.deactivate()
                 log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
                 continue
 
@@ -385,8 +387,6 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                     sink=self._sink,
                 )
                 if best is None or self._is_better(result, best.result):
-                    if best is not None and best.backend.is_active:
-                        best.backend.deactivate()
                     log(
                         "🎯 new best %s for %s is %s, speedup=%s, batch size: %s",
                         self._metric_label,
@@ -398,14 +398,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                         sink=self._sink,
                     )
                     best = _TuneCandidate(backend=built, result=result)
-                else:
-                    if built.is_active:
-                        built.deactivate()
             except Exception:
-                if built.is_active:
-                    built.deactivate()
                 log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
-
         return best
 
     def _record_perf_result(self, backend: Backend, result: BackendProfilingResult) -> BackendPerfResult | None:

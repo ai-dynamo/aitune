@@ -32,9 +32,6 @@ env:
   NCCL_NET_PLUGIN: none
   NCCL_NET: Socket
 
-  # Actions version pins
-  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
 defaults:
   run:
     shell: bash
@@ -51,7 +48,7 @@ jobs:
       NCCL_DEBUG_SUBSYS: INIT,NET,GRAPH
       UCX_LOG_LEVEL: info
     steps:
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - run: nvidia-smi
