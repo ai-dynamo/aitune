@@ -111,6 +111,8 @@ class TorchEagerBackend(Backend):
 
     def _activate(self):
         """Activates runner."""
+        move_module_to_device(self._orig_module, self._device)
+
         if self._config.autocast_enabled:
             self._infer = self._infer_with_autocast
 
