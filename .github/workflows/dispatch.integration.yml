@@ -37,7 +37,7 @@ concurrency:
 env:
   PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
-  UV_VERSION: 0.12.8
+  UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: &python_version "3.12"
   PYTORCH_CI_IMAGE: ${{ inputs.pytorch_ci_image || format('ghcr.io/{0}:{1}', github.repository, github.sha) }}
 
