@@ -16,7 +16,10 @@ def main() -> None:
         sys.exit("no test suites in JUnit report")
     tests = sum(int(suite.get("tests", "0")) for suite in suites)
     failures = sum(int(suite.get("failures", "0")) + int(suite.get("errors", "0")) for suite in suites)
-    sys.stdout.write(f"Functional CI: {failures} failed / {tests} tests. [Feature matrix report]({sys.argv[2]})\n")
+    icon = ":white_check_mark:" if tests and not failures else ":x:"
+    sys.stdout.write(
+        f"{icon} Functional CI: {failures} failed / {tests} tests. [Feature matrix report]({sys.argv[2]})\n"
+    )
 
 
 if __name__ == "__main__":
