@@ -197,8 +197,9 @@ class InputConfig:
     """Configuration for an input tensor.
 
     Floating-point and complex dtypes sample uniformly between ``min_value``
-    and ``max_value``. Integer and boolean dtypes require integer bounds and
-    sample discrete values in ``[min_value, max_value)``.
+    and ``max_value``, defaulting to an upper bound of 1. Integer and boolean
+    dtypes require an explicit integer ``max_value`` and sample discrete values
+    in ``[min_value, max_value)``. Set ``max_value=2`` to sample both boolean values.
 
     Example basic usage:
 
@@ -216,12 +217,16 @@ class InputConfig:
     dtype: torch.dtype = torch.float32
     kwarg_name: str | None = None
     min_value: int | float = 0
-    max_value: int | float = 1
+    max_value: int | float | None = None
 
     def __post_init__(self):
-        """Post-initialization hook."""
+        """Resolve shape and continuous sampling defaults; require discrete upper bounds."""
         if self.max_input is None:
             self.max_input = self.min_input
+        if self.max_value is None:
+            if not (self.dtype.is_floating_point or self.dtype.is_complex):
+                raise ValueError("max_value must be specified for integer and boolean dtypes")
+            self.max_value = 1
 
 
 class DynamicShapeDataset(list, torch.utils.data.Dataset):

@@ -8,6 +8,64 @@ from aitune.torch.dataloader import InputConfig, MinMaxRandomDataset, samples_ge
 
 
 @pytest.mark.parametrize("dtype", [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8, torch.bool])
+@pytest.mark.parametrize("bounds", [{}, {"min_value": 0}, {"max_value": None}])
+def test_discrete_inputs_require_explicit_upper_bound(dtype, bounds):
+    with pytest.raises(ValueError, match="max_value must be specified for integer and boolean dtypes"):
+        InputConfig((4,), dtype=dtype, **bounds)
+
+
+@pytest.mark.parametrize("dtype", [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8, torch.bool])
+@pytest.mark.parametrize("include_min_max_shapes", [False, True])
+def test_discrete_inputs_preserve_explicit_zero_one_range(dtype, include_min_max_shapes):
+    dataset = MinMaxRandomDataset(
+        3,
+        [InputConfig((4,), (8,), dtype=dtype, min_value=0, max_value=1)],
+        include_min_max_shapes=include_min_max_shapes,
+    )
+
+    for index in range(len(dataset)):
+        tensor = dataset[index][0]
+        assert tensor.dtype == dtype
+        assert torch.count_nonzero(tensor) == 0
+
+
+@pytest.mark.parametrize("include_min_max_shapes", [False, True])
+def test_boolean_inputs_with_explicit_upper_bound_sample_both_values(include_min_max_shapes):
+    torch.manual_seed(42)
+    dataset = MinMaxRandomDataset(
+        3,
+        [InputConfig((128,), (256,), dtype=torch.bool, max_value=2)],
+        include_min_max_shapes=include_min_max_shapes,
+    )
+
+    values = torch.cat([dataset[index][0] for index in range(len(dataset))])
+    assert torch.any(values)
+    assert torch.any(~values)
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64, torch.complex64, torch.complex128])
+@pytest.mark.parametrize("include_min_max_shapes", [False, True])
+def test_floating_inputs_preserve_default_upper_bound(dtype, include_min_max_shapes):
+    np.random.seed(21)
+    torch.manual_seed(42)
+    expected = MinMaxRandomDataset(
+        3,
+        [InputConfig((4,), (8,), dtype=dtype, max_value=1)],
+        include_min_max_shapes=include_min_max_shapes,
+    )
+    np.random.seed(21)
+    torch.manual_seed(42)
+    actual = MinMaxRandomDataset(
+        3,
+        [InputConfig((4,), (8,), dtype=dtype)],
+        include_min_max_shapes=include_min_max_shapes,
+    )
+
+    for index in range(len(actual)):
+        assert torch.equal(actual[index][0], expected[index][0])
+
+
+@pytest.mark.parametrize("dtype", [torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8, torch.bool])
 @pytest.mark.parametrize("include_min_max_shapes", [False, True])
 def test_integer_random_inputs(dtype, include_min_max_shapes):
     upper_bound = 2 if dtype == torch.bool else 17
