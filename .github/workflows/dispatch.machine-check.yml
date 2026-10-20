@@ -32,9 +32,6 @@ env:
   NCCL_NET_PLUGIN: none
   NCCL_NET: Socket
 
-  # Actions version pins
-  _ACTIONS_CHECKOUT: &actions_checkout actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
 defaults:
   run:
     shell: bash
@@ -51,17 +48,11 @@ jobs:
       NCCL_DEBUG_SUBSYS: INIT,NET,GRAPH
       UCX_LOG_LEVEL: info
     steps:
-      - uses: *actions_checkout
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - run: nvidia-smi
       - run: nvidia-smi -L
       - run: nvidia-smi topo -m
-      - run: |
-          python -c "import sys; print(sys.version)"
-          python -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA version:', torch.version.cuda)"
-          python -c "import torch; print('CUDA is available:', torch.cuda.is_available()); torch.cuda.init()"
-          python -c "import torch; print('CUDA devices:', torch.cuda.device_count())"
-          python -c "import tensorrt; print('TensorRT version:', tensorrt.__version__)"
-          python -c "import torch_tensorrt; print('Torch-TensorRT version:', torch_tensorrt.__version__)"
+      - run: python .github/scripts/sanity/check_gpu_stack.py
       - run: python .github/scripts/sanity/check_nccl_4_rank.py

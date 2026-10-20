@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import itertools
+from types import SimpleNamespace
+
 import onnx
 import pytest
 import torch
@@ -537,8 +540,13 @@ def test_get_modules_rejects_invalid_min_execution_ratio(min_execution_ratio: fl
         modules_info.get_modules(min_execution_ratio=min_execution_ratio)
 
 
-def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset):
+def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset, mocker):
     """Test getting executed modules with a limit."""
+    # Make every module call take one fake time unit so ordering by total time is deterministic
+    mocker.patch(
+        "aitune.torch.inspecting.module_inspector.time",
+        SimpleNamespace(perf_counter=itertools.count().__next__),
+    )
     # When inspecting custom object with various attributes
     modules_info = inspect(custom_object, sample_dataset, number_of_iterations=TEST_NUMBER_OF_ITERATIONS)
 

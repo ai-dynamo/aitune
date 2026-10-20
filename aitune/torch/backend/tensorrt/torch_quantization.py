@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
 import modelopt
-import modelopt.torch.quantization as mtq
 import torch
 import torch.nn as nn
 from packaging.version import Version
@@ -122,6 +121,8 @@ class TorchQuantizer:
 
         # Quantize the model
         logger.info("Starting model quantization with config: %s", config.quantization_config)
+        import modelopt.torch.quantization as mtq
+
         with annotate("build: Model quantization"):
             quantized_model = mtq.quantize(model_copy, quant_config, forward_loop)
 
@@ -205,6 +206,8 @@ class TorchQuantizer:
             ImportError: If ModelOpt is not available
             ValueError: If configuration name is not supported
         """
+        import modelopt.torch.quantization as mtq
+
         config_mapping = {
             "NVFP4_DEFAULT_CFG": mtq.NVFP4_DEFAULT_CFG,
             "FP8_DEFAULT_CFG": mtq.FP8_DEFAULT_CFG,
