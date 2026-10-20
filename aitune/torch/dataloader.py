@@ -196,6 +196,10 @@ def samples_generator(
 class InputConfig:
     """Configuration for an input tensor.
 
+    Floating-point and complex dtypes sample uniformly between ``min_value``
+    and ``max_value``. Integer and boolean dtypes require integer bounds and
+    sample discrete values in ``[min_value, max_value)``.
+
     Example basic usage:
 
     >>> InputConfig(min_input=(3, 24, 24), max_input=(3, 48, 48), kwarg_name="input")
@@ -314,14 +318,19 @@ class MinMaxRandomDataset(DynamicShapeDataset):
         min_x, max_x = cfg.min_input, cfg.max_input
         max_shape = np.array(max_x) + 1
         shapes = np.random.randint(min_x, max_shape).tolist()
-        tensor = torch.empty(shapes, dtype=cfg.dtype).uniform_(cfg.min_value, cfg.max_value)
-        return tensor
+        return self._sample_tensor(cfg, shapes)
 
     def _get_min_tensor(self, cfg: InputConfig):
-        return torch.empty(cfg.min_input, dtype=cfg.dtype).uniform_(cfg.min_value, cfg.max_value)
+        return self._sample_tensor(cfg, cfg.min_input)
 
     def _get_max_tensor(self, cfg: InputConfig):
-        return torch.empty(cfg.max_input, dtype=cfg.dtype).uniform_(cfg.min_value, cfg.max_value)
+        return self._sample_tensor(cfg, cfg.max_input)
+
+    def _sample_tensor(self, cfg: InputConfig, shape: Sequence[int]) -> torch.Tensor:
+        tensor = torch.empty(shape, dtype=cfg.dtype)
+        if tensor.is_floating_point() or tensor.is_complex():
+            return tensor.uniform_(cfg.min_value, cfg.max_value)
+        return tensor.random_(cfg.min_value, cfg.max_value)
 
 
 class SingleBatchDatasetWrapper(torch.utils.data.Dataset):
