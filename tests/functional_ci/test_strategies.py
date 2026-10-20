@@ -73,7 +73,7 @@ def test_find_max_batch_size(device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, TENSORRT_FP32, batch_sizes=(max_batch_size,))
 
 
-@pytest.mark.matrix("strategies.dry-run/aot-tune", "strategies.dry-run/selection-checked")
+@pytest.mark.matrix("strategies.dry-run/aot-tune")
 def test_dry_run_keeps_eager(device: torch.device):
     """A dry run checks the strategy without building or activating a backend."""
     tuned = _tune(pinned_strategy(TorchInductorAotBackend()), device, dry_run=True)

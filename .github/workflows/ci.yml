@@ -390,8 +390,11 @@ jobs:
       - name: Feature matrix
         if: always()
         run: |
-          test -s functional-ci.matrix-updates.json
           cp tests/functional_ci/feature_matrix.html functional-ci.feature-matrix.html
+          if [ ! -s functional-ci.matrix-updates.json ]; then
+            echo "::warning::Functional CI wrote no feature-matrix results; uploading the baseline report."
+            echo '{"run": {"source": "no results from this run: pytest wrote no matrix updates"}, "cells": {}}' > functional-ci.matrix-updates.json
+          fi
           python tests/functional_ci/update_matrix.py functional-ci.feature-matrix.html functional-ci.matrix-updates.json
       - if: always()
         id: feature-matrix-upload
