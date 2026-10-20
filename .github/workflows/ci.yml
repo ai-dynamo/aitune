@@ -379,6 +379,12 @@ jobs:
           python -m pytest -rfEs --durations=0 tests/functional_ci --junitxml=functional-ci.test-report.xml
         env:
           AITUNE_MATRIX_RESULTS: functional-ci.matrix-updates.json
+      - if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: functional-ci-test-report
+          path: functional-ci.test-report.xml
+          if-no-files-found: ignore
       - name: Feature matrix
         if: always()
         id: feature-matrix
