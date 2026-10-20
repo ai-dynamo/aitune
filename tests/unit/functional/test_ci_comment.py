@@ -12,15 +12,21 @@ import pytest
 @pytest.mark.parametrize(
     ("xml_attrs", "expected"),
     [
-        ('tests="7" failures="2" errors="1"', ":x: Functional CI: 3 failed / 7 tests."),
-        ('tests="42" failures="0" errors="0"', ":white_check_mark: Functional CI: 0 failed / 42 tests."),
-        ('tests="0"', ":x: Functional CI: 0 failed / 0 tests."),
+        (
+            'tests="7" failures="2" errors="1" skipped="1"',
+            ":x: Functional tests: 3 passed, 1 skipped, 3 failed",
+        ),
+        (
+            'tests="42" failures="0" errors="0" skipped="0"',
+            ":white_check_mark: Functional tests: 42 passed, 0 failed",
+        ),
+        ('tests="0" skipped="0"', ":x: Functional tests: 0 passed, 0 failed"),
     ],
 )
 def test_comment_counts_failures_and_errors_and_links_report(tmp_path, xml_attrs, expected):
     report = tmp_path / "report.xml"
     report.write_text(
-        f'<testsuites><testsuite {xml_attrs} skipped="1" /></testsuites>',
+        f"<testsuites><testsuite {xml_attrs} /></testsuites>",
         encoding="utf-8",
     )
     script = Path(__file__).resolve().parents[3] / ".github/scripts/functional_ci_comment.py"
@@ -31,4 +37,4 @@ def test_comment_counts_failures_and_errors_and_links_report(tmp_path, xml_attrs
         text=True,
         check=True,
     )
-    assert result.stdout.strip() == f"{expected} [Feature matrix report]({url})"
+    assert result.stdout.strip() == f"{expected}\n\n[Feature matrix report]({url})"
