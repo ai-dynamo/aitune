@@ -1,0 +1,126 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+"""Backend table for cross-backend cases: factory, tolerance, and the features each backend is tested on."""
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal
+
+import pytest
+import torch
+
+from aitune.torch.backend import (
+    Backend,
+    ONNXExecutionProvider,
+    ONNXRuntimeBackend,
+    ONNXRuntimeBackendConfig,
+    TensorRTBackend,
+    TensorRTBackendConfig,
+    TorchAOBackend,
+    TorchAOBackendConfig,
+    TorchEagerBackend,
+    TorchInductorAotBackend,
+    TorchInductorJitBackend,
+    TorchTensorRTAotBackend,
+    TorchTensorRTAotBackendConfig,
+    TorchTensorRTConfig,
+    TorchTensorRTJitBackend,
+    TorchTensorRTJitBackendConfig,
+)
+from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
+
+Capability = Literal["save_load", "export", "dynamic_batch", "structured_io", "multigraph", "onnx_input", "jit"]
+
+
+@dataclass(frozen=True)
+class BackendCase:
+    """One backend in the table; `artifact_format` is the deployable artifact format of `export` backends."""
+
+    factory: Callable[[], Backend]
+    tolerance: Tolerance
+    capabilities: frozenset[str]
+    artifact_format: str | None = None
+
+    def __post_init__(self):
+        """Keep the `export` capability and `artifact_format` in step."""
+        assert ("export" in self.capabilities) == (self.artifact_format is not None), "set both or neither"
+
+
+def _torch_tensorrt_config() -> TorchTensorRTConfig:
+    """Convert the whole graph in fp32 without TF32."""
+    return TorchTensorRTConfig(
+        enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True, require_full_compilation=True
+    )
+
+
+def _torch_tensorrt_aot() -> Backend:
+    """Build a Torch-TensorRT AOT backend."""
+    return TorchTensorRTAotBackend(TorchTensorRTAotBackendConfig(compile_config=_torch_tensorrt_config()))
+
+
+def _torch_tensorrt_jit() -> Backend:
+    """Build a Torch-TensorRT JIT backend."""
+    # Dynamic batch compilation fails the max-shape correctness check (sympy `Infinity` bound), so compile per shape.
+    return TorchTensorRTJitBackend(
+        TorchTensorRTJitBackendConfig(compile_config=_torch_tensorrt_config(), dynamic=False)
+    )
+
+
+def tensorrt_backend(**overrides) -> Backend:
+    """Build a standalone TensorRT backend without TF32 and CUDA graphs; `overrides` replace config fields."""
+    return TensorRTBackend(TensorRTBackendConfig(**{"enable_tf32": False, "use_cuda_graphs": False, **overrides}))
+
+
+def _onnx_runtime(provider: ONNXExecutionProvider) -> Callable[[], Backend]:
+    """Return a factory for an ONNX Runtime backend on one execution provider."""
+    return lambda: ONNXRuntimeBackend(ONNXRuntimeBackendConfig(execution_provider=provider))
+
+
+def _torchao_int8_weight_only() -> Backend:
+    """Build a TorchAO int8 weight-only backend compiled without autotuning."""
+    return TorchAOBackend(TorchAOBackendConfig(quantization="int8wo", mode="default"))
+
+
+def _capabilities(*capabilities: Capability) -> frozenset[str]:
+    """Build a capability set; the `Capability` parameter lets pytype reject a misspelled name."""
+    return frozenset(capabilities)
+
+
+BACKENDS: dict[str, BackendCase] = {
+    "torch-eager": BackendCase(TorchEagerBackend, Tolerance(), _capabilities("save_load")),
+    "inductor-aot": BackendCase(
+        TorchInductorAotBackend,
+        Tolerance(),
+        _capabilities("save_load", "export", "dynamic_batch", "structured_io", "multigraph"),
+        artifact_format="pt2",
+    ),
+    "torch-tensorrt-aot": BackendCase(_torch_tensorrt_aot, TENSORRT_FP32, _capabilities("save_load")),
+    "tensorrt": BackendCase(
+        tensorrt_backend,
+        TENSORRT_FP32,
+        _capabilities("save_load", "export", "dynamic_batch", "structured_io", "multigraph", "onnx_input"),
+        artifact_format="tensorrt_plan",
+    ),
+    "onnxruntime-cuda": BackendCase(
+        _onnx_runtime(ONNXExecutionProvider.CUDA),
+        TENSORRT_FP32,
+        _capabilities("save_load", "export", "dynamic_batch", "onnx_input"),
+        artifact_format="onnx",
+    ),
+    "onnxruntime-tensorrt": BackendCase(
+        _onnx_runtime(ONNXExecutionProvider.TENSORRT), TENSORRT_FP32, _capabilities("save_load")
+    ),
+    "torchao-int8wo": BackendCase(
+        _torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2), _capabilities("save_load")
+    ),
+    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("jit")),
+    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("jit")),
+}
+
+
+def with_backends(*capabilities: Capability) -> pytest.MarkDecorator:
+    """Parametrize `case` over every backend that has all `capabilities`; raise if no backend has them."""
+    selected = {backend_id: case for backend_id, case in BACKENDS.items() if case.capabilities.issuperset(capabilities)}
+    if not selected:
+        raise ValueError(f"no backend in BACKENDS has all capabilities {capabilities}")
+    return pytest.mark.parametrize("case", list(selected.values()), ids=list(selected))
