@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Literal
 
 import pytest
-import torch
 
 from aitune.torch.backend import (
     Backend,
@@ -48,9 +47,7 @@ class BackendCase:
 
 def _torch_tensorrt_config() -> TorchTensorRTConfig:
     """Convert the whole graph in fp32 without TF32."""
-    return TorchTensorRTConfig(
-        enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True, require_full_compilation=True
-    )
+    return TorchTensorRTConfig(min_block_size=1, disable_tf32=True, require_full_compilation=True)
 
 
 def _torch_tensorrt_aot() -> Backend:

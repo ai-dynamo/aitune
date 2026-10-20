@@ -31,17 +31,25 @@ logger = logging.getLogger(__name__)
 class ONNXExporter:
     """Class for exporting PyTorch modules to ONNX format."""
 
-    def __init__(self, output_path: Path, use_dynamo: bool = False, opset_version: int | None = None):
+    def __init__(
+        self,
+        output_path: Path,
+        use_dynamo: bool = False,
+        opset_version: int | None = None,
+        custom_translation_table=None,
+    ):
         """Initialize the ONNX exporter.
 
         Args:
             output_path: Directory to save the ONNX files
             use_dynamo: Whether to use torch.dynamo for export
             opset_version: ONNX opset version to use
+            custom_translation_table: Optional ONNX translations for PyTorch operators.
         """
         self.use_dynamo = use_dynamo
         self.opset_version = opset_version
         self.output_path = output_path
+        self.custom_translation_table = custom_translation_table
 
     def export(
         self,
@@ -137,6 +145,7 @@ class ONNXExporter:
             input_names=input_names,
             output_names=output_names,
             dynamic_shapes=dynamic_shapes,
+            custom_translation_table=self.custom_translation_table,
             verbose=verbose,
             **export_kwargs,
         )

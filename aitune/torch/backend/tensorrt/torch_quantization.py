@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
 import modelopt
+import onnx
 import torch
 import torch.nn as nn
+from onnxscript import opset18 as op
 from packaging.version import Version
 
 from aitune.torch.module.sample_store import Sample
@@ -29,6 +31,20 @@ QuantizationConfig = Literal[
 ]
 
 HAS_NVFP4_FP8_MHA_CONFIG = Version(modelopt.__version__) >= Version("0.35.0")
+
+
+def onnx_int8_quantize(inputs, amax, num_bits, exponent_bits, unsigned, narrow_range):
+    """Translate ModelOpt's INT8 fake quantization to ONNX quantize/dequantize nodes."""
+    if (num_bits, exponent_bits, unsigned, narrow_range) != (8, 0, False, False):
+        raise ValueError("Only signed INT8 ModelOpt quantization is supported for ONNX export")
+    axis = next((i for i, size in enumerate(amax.shape) if size != 1), None)
+    amax = op.Squeeze(amax, axes=[i for i in range(len(amax.shape)) if i != axis]) if amax.shape else amax
+    scale = op.Div(amax, 127.0)
+    scale = op.Where(op.Equal(scale, op.CastLike(0.0, scale)), op.CastLike(1.0, scale), scale)
+    zero_point = op.Cast(op.Mul(scale, 0.0), to=onnx.TensorProto.INT8)
+    return op.DequantizeLinear(
+        op.QuantizeLinear(inputs, scale, zero_point, axis=axis or 0), scale, zero_point, axis=axis or 0
+    )
 
 
 def _validate_torch_quantization_config(config_name: str) -> None:

@@ -37,7 +37,7 @@ from aitune.torch.backend.tensorrt.tensorrt_builder import TensorRTBuilder
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
 from aitune.torch.backend.tensorrt.tensorrt_runtime import TensorRTRuntime
 from aitune.torch.backend.tensorrt.torch_output_allocator import TorchOutputAllocator
-from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig, TorchQuantizer
+from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig, TorchQuantizer, onnx_int8_quantize
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.config import config as global_config
 from aitune.torch.distributed import distributed_output_path
@@ -428,7 +428,19 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     config=self._config.quantization_config,
                 )
 
-            onnx_path_quantized = self._export_onnx(module, graph_spec, samples[0], cache_dir, suffix="ptq")
+            quantization_config = self._config.quantization_config
+            if (
+                isinstance(quantization_config, TorchQuantizationConfig)
+                and quantization_config.quantization_config == "INT8_DEFAULT_CFG"
+            ):
+                from modelopt.torch.quantization.utils import export_torch_mode
+
+                with export_torch_mode():
+                    onnx_path_quantized = self._export_onnx(
+                        module, graph_spec, samples[0], cache_dir, suffix="ptq", int8_translation=onnx_int8_quantize
+                    )
+            else:
+                onnx_path_quantized = self._export_onnx(module, graph_spec, samples[0], cache_dir, suffix="ptq")
 
             with annotate("build: Offloading model to cpu device"):
                 offload(module, device="cpu")
@@ -591,7 +603,13 @@ class TensorRTBackend(Backend, TensorRTRunner):
             raise e
 
     def _export_onnx(
-        self, module: nn.Module, graph_spec: GraphSpec, sample: Sample, cache_dir: Path, suffix: str = ""
+        self,
+        module: nn.Module,
+        graph_spec: GraphSpec,
+        sample: Sample,
+        cache_dir: Path,
+        suffix: str = "",
+        int8_translation=None,
     ) -> Path:
         """Export Torch or copy an ONNX graph and its external weights into the backend cache."""
         step = TensorRTBuildStep.ONNX_EXPORT
@@ -604,6 +622,9 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     use_dynamo=self._config.use_dynamo,
                     opset_version=self._config.opset_version,
                     output_path=path,
+                    custom_translation_table=(
+                        {torch.ops.tensorrt.quantize_op.default: int8_translation} if int8_translation else None
+                    ),
                 )
                 exporter.export(module=module, sample=sample, graph_spec=graph_spec)
                 size = path.stat().st_size

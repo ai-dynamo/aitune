@@ -78,7 +78,9 @@ def run_lifecycle(
 
     inspected = ait.inspect(model, [value], number_of_iterations=1, warmup_iterations=1)
     tuned = ait.wrap(model, inspected.get_modules(), strategy=strategy)
-    ait.tune(tuned, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=value.device)
+    ait.tune(
+        tuned, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=value.device, ignore_failing_modules=False
+    )
 
     actual = selected_backend(tuned, type(backend))
     assert actual.key() == backend.key()
