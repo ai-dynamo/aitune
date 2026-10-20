@@ -357,8 +357,6 @@ jobs:
     if: *wheel_and_image_ready
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 30
-    outputs:
-      report_url: ${{ steps.feature-matrix-upload.outputs.artifact-url }}
     permissions:
       contents: read
       packages: read
@@ -381,12 +379,6 @@ jobs:
           python -m pytest -rfEs --durations=0 tests/functional_ci --junitxml=functional-ci.test-report.xml
         env:
           AITUNE_MATRIX_RESULTS: functional-ci.matrix-updates.json
-      - if: always()
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: functional-ci-test-report
-          path: functional-ci.test-report.xml
-          if-no-files-found: ignore
       - name: Feature matrix
         if: always()
         id: feature-matrix
@@ -399,42 +391,8 @@ jobs:
           fi
           python tests/functional_ci/update_matrix.py functional-ci.feature-matrix.html functional-ci.matrix-updates.json
       - if: always()
-        id: feature-matrix-upload
         uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ steps.feature-matrix.outputs.name }}
           path: functional-ci.feature-matrix.html
           if-no-files-found: ignore
-
-  functional-ci-report:
-    name: Functional CI PR report
-    needs: functional-ci
-    if: >-
-      ${{ !cancelled() && github.event_name == 'push' &&
-          startsWith(github.ref, 'refs/heads/pull-request/') &&
-          (needs.functional-ci.result == 'success' || needs.functional-ci.result == 'failure') &&
-          needs.functional-ci.outputs.report_url != '' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v8.0.1
-        with:
-          name: functional-ci-test-report
-      - name: Comment on copied PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPORT_URL: ${{ needs.functional-ci.outputs.report_url }}
-        run: |
-          if [[ "$GITHUB_REF" =~ ^refs/heads/pull-request/([0-9]+)$ ]]; then
-            pr_number="${BASH_REMATCH[1]}"
-          else
-            echo "Not a copied PR branch: $GITHUB_REF" >&2
-            exit 1
-          fi
-          body="$(python .github/scripts/functional_ci_comment.py functional-ci.test-report.xml "$REPORT_URL")"
-          gh api "repos/$GITHUB_REPOSITORY/issues/$pr_number/comments" -f body="$body"
