@@ -119,6 +119,8 @@ BACKENDS: dict[str, BackendCase] = {
 
 
 def with_backends(*capabilities: Capability) -> pytest.MarkDecorator:
-    """Parametrize `case` over every backend that has all `capabilities`; other backends get no case."""
+    """Parametrize `case` over every backend that has all `capabilities`; raise if no backend has them."""
     selected = {backend_id: case for backend_id, case in BACKENDS.items() if case.capabilities.issuperset(capabilities)}
+    if not selected:
+        raise ValueError(f"no backend in BACKENDS has all capabilities {capabilities}")
     return pytest.mark.parametrize("case", list(selected.values()), ids=list(selected))
