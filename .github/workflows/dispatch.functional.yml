@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       pytorch_ci_image:
-        description: PyTorch image selected by CI; empty uses the commit image
+        description: PyTorch image; empty uses vars.TORCH_CI_IMAGE
         type: string
-        default: 'ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3:latest'
+        default: ''
   merge_group:
     branches: [main]
   workflow_call:
@@ -37,9 +37,9 @@ concurrency:
 env:
   PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
-  UV_VERSION: 0.12.8
+  UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: &python_version "3.12"
-  PYTORCH_CI_IMAGE: ${{ inputs.pytorch_ci_image || format('ghcr.io/{0}:{1}', github.repository, github.sha) }}
+  PYTORCH_CI_IMAGE: ${{ inputs.pytorch_ci_image || (github.event_name == 'workflow_dispatch' && vars.TORCH_CI_IMAGE) || format('ghcr.io/{0}:{1}', github.repository, github.sha) }}
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
   # plugin. RTX runners have no EFA provider, so OFI initialization fails and

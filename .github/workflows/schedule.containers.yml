@@ -18,7 +18,7 @@ concurrency:
 env:
   PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
-  UV_VERSION: 0.12.8
+  UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: &python_version "3.12"
 
 defaults:
@@ -36,6 +36,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: *python_version
+          version: ${{ env.UV_VERSION }}
       - run: uv build
       - uses: actions/upload-artifact@v7.0.1
         with:
@@ -169,7 +170,7 @@ jobs:
         runner: [prod-aitune-tester-rtx-pro-4500-v1]
     # Pull the freshly pushed PR CI image onto the GPU node so the first PR job of the day starts warm.
     container:
-      image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3:latest
+      image: ${{ vars.TORCH_CI_IMAGE }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

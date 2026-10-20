@@ -28,7 +28,7 @@ concurrency:
 env:
   PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
-  UV_VERSION: 0.12.8
+  UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: "3.12"
   ONNXRUNTIME_VERSION: 1.24.4
 
