@@ -377,8 +377,6 @@ jobs:
         run: |
           python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
           python -m pytest -rfEs --durations=0 tests/functional_ci --junitxml=functional-ci.test-report.xml
-        env:
-          AITUNE_MATRIX_RESULTS: functional-ci.matrix-updates.json
       - if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
