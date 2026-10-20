@@ -385,20 +385,3 @@ jobs:
           name: functional-ci-test-report
           path: functional-ci.test-report.xml
           if-no-files-found: ignore
-      - name: Feature matrix
-        if: always()
-        id: feature-matrix
-        run: |
-          echo "name=functional-ci-feature-matrix-$(echo "$GITHUB_REF_NAME" | tr '/' '-')-$(date -u +%Y%m%dT%H%M%SZ)" >> "$GITHUB_OUTPUT"
-          cp tests/functional_ci/feature_matrix.html functional-ci.feature-matrix.html
-          if [ ! -s functional-ci.matrix-updates.json ]; then
-            echo "::warning::Functional CI wrote no feature-matrix results; uploading the baseline report."
-            echo '{"run": {"source": "no results from this run: pytest wrote no matrix updates"}, "cells": {}}' > functional-ci.matrix-updates.json
-          fi
-          python tests/functional_ci/update_matrix.py functional-ci.feature-matrix.html functional-ci.matrix-updates.json
-      - if: always()
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: ${{ steps.feature-matrix.outputs.name }}
-          path: functional-ci.feature-matrix.html
-          if-no-files-found: ignore

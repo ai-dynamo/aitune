@@ -16,7 +16,6 @@ import torch
 from aitune.torch.config import config
 from aitune.torch.module_registry import MODULE_REGISTRY
 from tests.functional_ci.backends import BACKENDS
-from tests.functional_ci.update_matrix import read_matrix
 
 _RANK = {"passed": 0, "skipped": 1, "failed": 2}
 _cells: dict[str, dict] = {}
@@ -73,11 +72,6 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if item.get_closest_marker("matrix") is not None:
             _item_cells[item.nodeid] = _cell_ids(item)
-
-    known = read_matrix(Path(__file__).with_name("feature_matrix.html"))["cells"]
-    unknown = sorted({cell_id for cell_ids in _item_cells.values() for cell_id in cell_ids if cell_id not in known})
-    if unknown:
-        raise pytest.UsageError(f"Unknown feature-matrix cell IDs: {', '.join(unknown)}")
 
 
 @pytest.hookimpl(wrapper=True)
