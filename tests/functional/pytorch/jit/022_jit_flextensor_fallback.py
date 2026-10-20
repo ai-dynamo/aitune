@@ -18,6 +18,7 @@ from pathlib import Path
 
 import flextensor as ft
 import torch
+from _tuning_data_artifacts import collect_tuning_data
 
 from aitune.torch import jit_config, snapshot_tuning_data
 from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
@@ -31,7 +32,6 @@ from aitune.torch.jit.flextensor import (
 from aitune.torch.jit.tune import deferred
 from aitune.torch.task.profiling import ModelExecutionTimeMeasuringStrategy
 from aitune.torch.tune_strategy import OneBackendStrategy, PerformanceValidationMode
-from tests.functional.pytorch.jit._tuning_data_artifacts import collect_tuning_data
 
 WIDTH = 4096
 

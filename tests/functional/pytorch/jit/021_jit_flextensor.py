@@ -29,6 +29,7 @@ from unittest.mock import patch
 
 import flextensor as ft
 import torch
+from _tuning_data_artifacts import collect_tuning_data
 from torch._dynamo.utils import counters
 
 from aitune.torch import jit_config, snapshot_tuning_data
@@ -46,7 +47,6 @@ from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.task.profiling import ModelExecutionTimeMeasuringStrategy
 from aitune.torch.tune_strategy import OneBackendStrategy, PerformanceValidationMode
 from aitune.torch.tune_strategy.tune_strategy import check_inference_output_correctness
-from tests.functional.pytorch.jit._tuning_data_artifacts import collect_tuning_data
 
 WIDTH = 4096
 
