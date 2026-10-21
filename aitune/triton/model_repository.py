@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 PublicationError = AITunePublicationError
 
 _CONFIG_FILE_NAME = "config.pbtxt"
+# Triton's ONNX Runtime backend opens model.onnx inside a multi-file model directory.
+_ONNX_DIRECTORY_ENTRY = "model.onnx"
 _MODEL_CONFIGS: dict[str, type[BaseModelConfig]] = {
     "tensorrt": TensorRTModelConfig,
     "onnxruntime": ONNXRuntimeModelConfig,
@@ -139,7 +141,7 @@ def _publish_deployment_artifact(
         (model_directory / _CONFIG_FILE_NAME).write_text(config_text)
         destination = version_directory / file_name
         if artifact.model.additional_files:
-            destination = destination / file_name
+            destination = destination / _ONNX_DIRECTORY_ENTRY
         artifact.model.export_files(destination)
         repository_path = repository.resolve()
         write_model_analyzer_config(
@@ -247,8 +249,8 @@ def _publish_existing_model(
     if relative_paths and not isinstance(config, ONNXRuntimeModelConfig):
         raise AITunePublicationError("Only ONNX models support additional files")
     file_name = config.default_model_filename or layouts[type(config)]
-    if Path(file_name) in relative_paths:
-        raise AITuneUserInputError(f"An additional file cannot overwrite {file_name}")
+    if Path(_ONNX_DIRECTORY_ENTRY) in relative_paths:
+        raise AITuneUserInputError(f"An additional file cannot overwrite {_ONNX_DIRECTORY_ENTRY}")
     resource_files = _resource_files(config, resources or {})
     repository = Path(path)
     model_directory = repository / config.name
@@ -257,7 +259,7 @@ def _publish_existing_model(
         (model_directory / _CONFIG_FILE_NAME).write_text(config.to_pbtxt())
         destination = version_directory / file_name
         if relative_paths:
-            destination = destination / file_name
+            destination = destination / _ONNX_DIRECTORY_ENTRY
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
         for relative in relative_paths:
