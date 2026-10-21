@@ -103,15 +103,11 @@ class ONNXModelInfo:
                 self._opsets[domain] = entry.version
             self._opset_version = self._opsets.get("")
 
-            # Extract producer info if available
-            self._producer_name = model.producer_name if hasattr(model, "producer_name") else None
-            self._producer_version = model.producer_version if hasattr(model, "producer_version") else None
-
-            # Extract model version if available
-            self._model_version = model.model_version if hasattr(model, "model_version") else None
-
-            # Extract doc string if available
-            self._doc_string = model.doc_string if hasattr(model, "doc_string") else None
+            # Protobuf fields always exist; unset fields return "" or 0.
+            self._producer_name = model.producer_name
+            self._producer_version = model.producer_version
+            self._model_version = model.model_version
+            self._doc_string = model.doc_string
 
             logger.info("Extracted information for model:")
             logger.info("  Inputs: %s", self._input_names)
@@ -254,7 +250,7 @@ class ONNXModelInfo:
         return self._precision
 
     @property
-    def producer_name(self) -> str | None:
+    def producer_name(self) -> str:
         """Name of the producer/framework that created the model.
 
         Returns:
@@ -263,7 +259,7 @@ class ONNXModelInfo:
         return self._producer_name
 
     @property
-    def producer_version(self) -> str | None:
+    def producer_version(self) -> str:
         """Version of the producer/framework that created the model.
 
         Returns:
@@ -272,7 +268,7 @@ class ONNXModelInfo:
         return self._producer_version
 
     @property
-    def model_version(self) -> int | None:
+    def model_version(self) -> int:
         """Version of the model.
 
         Returns:
@@ -281,7 +277,7 @@ class ONNXModelInfo:
         return self._model_version
 
     @property
-    def doc_string(self) -> str | None:
+    def doc_string(self) -> str:
         """Documentation string of the model.
 
         Returns:

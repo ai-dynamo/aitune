@@ -165,7 +165,8 @@ def test_backend_build_rejects_unsupported_onnx_module(backend_cls, tmp_path):
         backend.build(OnnxModule(tmp_path / "model.onnx"), None, [], torch.device("cpu"), tmp_path)
 
     assert backend.state == BackendState.INIT
-    assert backend.device is None
+    with pytest.raises(RuntimeError, match="is not set"):
+        _ = backend.device
     assert not (tmp_path / "config.json").exists()
 
 
