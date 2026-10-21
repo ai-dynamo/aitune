@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for model state storage functionality."""
 
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -415,6 +416,34 @@ def test_state_dict_from_pipeline_preserves_direct_passthrough_wrapper_state():
     assert list(state_dict["failed"].keys()) == ["weight", "bias"]
     for name, value in state_dict["failed"].items():
         torch.testing.assert_close(value, expected_state_dict[name])
+
+
+def test_nested_pipeline_wrapper_save_load():
+    """Test saving and loading a nested pipeline wrapper."""
+
+    class Vae(torch.nn.Module):
+        decoder: Any
+
+        def __init__(self):
+            super().__init__()
+            self.decoder = torch.nn.Linear(2, 2)
+
+    class Pipeline:
+        def __init__(self):
+            self.vae = Vae()
+
+    pipeline = Pipeline()
+    pipeline.vae.decoder = Module(pipeline.vae.decoder, "decoder")
+    expected = {name: value.detach().clone() for name, value in pipeline.vae.decoder.__wrapped__.state_dict().items()}
+    pipeline.vae.decoder.enable_passthrough()
+
+    state_dict = TorchCheckpoint.state_dict_from_pipeline(pipeline)
+    assert list(state_dict) == ["vae.decoder"]
+
+    restored = Pipeline()
+    TorchCheckpoint.load_state_dict_for_pipeline(restored, state_dict, {})
+    for name, value in restored.vae.decoder.state_dict().items():
+        torch.testing.assert_close(value, expected[name])
 
 
 @requires_cuda

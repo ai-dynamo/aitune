@@ -114,11 +114,24 @@ class TorchCheckpoint(Checkpoint):
         Returns:
             dict: A dictionary mapping attribute names to Module objects.
         """
-        modules = {}
+        modules: dict[str, torch.nn.Module | WrapperModule] = {}
+
+        def add_wrapped_children(module: TorchModule, prefix: str) -> None:
+            for child_name, child in module._modules.items():
+                if child is None:
+                    continue
+                child_path = f"{prefix}.{child_name}"
+                if isinstance(child, WrapperModule):
+                    modules[child_path] = child
+                elif isinstance(child, TorchModule):
+                    add_wrapped_children(child, child_path)
 
         for name, attr in vars(pipeline).items():
-            if isinstance(attr, (torch.nn.Module, WrapperModule)):
+            if isinstance(attr, WrapperModule):
                 modules[name] = attr
+            elif isinstance(attr, TorchModule):
+                modules[name] = attr
+                add_wrapped_children(attr, name)
 
         return modules
 
@@ -267,17 +280,25 @@ class TorchCheckpoint(Checkpoint):
         """
         matched_modules = set()
         for name, module_state_dict in state_dict.items():
-            if hasattr(pipeline, name):
-                module = getattr(pipeline, name)
-                if isinstance(module, (torch.nn.Module, WrapperModule)):
-                    matched_modules.add(name)
-                    setattr(
-                        pipeline,
-                        name,
-                        TorchCheckpoint.load_state_dict_for_module(module, module_state_dict, device_map, name),
-                    )
-                else:
-                    raise ValueError(f"Module {name} is not a torch.nn.Module or WrapperModule")
+            path = name.split(".")
+            parent = pipeline
+            for component in path[:-1]:
+                parent = getattr(parent, component, None)
+                if parent is None:
+                    break
+            else:
+                attribute = path[-1]
+                if hasattr(parent, attribute):
+                    module = getattr(parent, attribute)
+                    if isinstance(module, (torch.nn.Module, WrapperModule)):
+                        matched_modules.add(name)
+                        setattr(
+                            parent,
+                            attribute,
+                            TorchCheckpoint.load_state_dict_for_module(module, module_state_dict, device_map, name),
+                        )
+                    else:
+                        raise ValueError(f"Module {name} is not a torch.nn.Module or WrapperModule")
 
         unmatched_keys = set(state_dict.keys()).difference(matched_modules)
         if unmatched_keys:
