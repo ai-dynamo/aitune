@@ -126,7 +126,7 @@ Now you can make your changes locally.
    tests:
 
 ```shell
-$ make lint  # pre-commit, pytype, and functional-test metadata validation
+$ make lint  # pre-commit, pyrefly, and functional-test metadata validation
 $ make test  # unit tests and doctests in the active virtual environment
 ```
 

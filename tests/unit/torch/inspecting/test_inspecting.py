@@ -352,7 +352,7 @@ def test_inspect_with_invalid_input():
     """Test inspecting with invalid input."""
     # When inspecting with invalid input
     with pytest.raises(TypeError):
-        inspect(None, torch.randn(10, 10))  # pytype: disable=wrong-arg-types
+        inspect(None, torch.randn(10, 10))
 
 
 def test_inspect_with_multiple_forward_calls(simple_model, sample_dataset):

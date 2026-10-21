@@ -59,8 +59,8 @@ jobs:
       - run: uv sync --frozen --group dev
       - run: uv run pre-commit run --all-files
 
-  pytype:
-    name: Pytype
+  pyrefly:
+    name: Pyrefly
     runs-on: linux-amd64-cpu16
     steps:
       - uses: actions/checkout@v7.0.1
@@ -71,16 +71,16 @@ jobs:
           python-version: *python_version
           version: ${{ env.UV_VERSION }}
       - run: uv sync --frozen --group dev --group test --extra triton
-      - name: Pytype checker
+      - name: Pyrefly checker
         run: |
           set -o pipefail
-          uv run pytype --keep-going -j auto aitune tests examples | tee pytype.log
+          uv run pyrefly check --error-stale-baseline 2>&1 | tee pyrefly.log
 
       - if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: pytype-log
-          path: pytype.log
+          name: pyrefly-log
+          path: pyrefly.log
           if-no-files-found: ignore
 
   license-headers:

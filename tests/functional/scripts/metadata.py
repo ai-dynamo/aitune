@@ -36,7 +36,7 @@ SUPPORTED_PROJECT_WORKFLOWS = ("dynamo", "triton")
 try:
     import tomllib
 except ImportError:
-    import tomli as tomllib  # pytype: disable=import-error
+    import tomli as tomllib
 
 
 class Scope(IntEnum):

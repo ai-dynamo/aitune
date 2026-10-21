@@ -296,7 +296,7 @@ class Module(wrapt.CallableObjectProxy):
             self.TYPE_KEY: Module.__name__,  # self.__class__ returns wrapped class, use direct class object instead
             self.NAME_KEY: self._self_name,
             self.DYNAMIC_SHAPES_KEY: self._self_dynamic_shapes,
-            self.TUNED_MODULE_KEY: self._self_wrapper.to_dict(),  # pytype: disable=attribute-error
+            self.TUNED_MODULE_KEY: self._self_wrapper.to_dict(),
         }
         return destination
 

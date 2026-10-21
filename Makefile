@@ -74,9 +74,9 @@ docs-serve: docs ## serve Fern docs locally
 	fern docs dev
 
 
-lint: ## check style with pre-commit and pytype
+lint: ## check style with pre-commit and pyrefly
 	pre-commit run --all-files
-	pytype aitune tests -j auto
+	pyrefly check
 	$(MAKE) validate-functional
 
 validate-functional: ## validate PEP-723 / [tool.aitune] metadata for functional tests and examples

@@ -86,9 +86,7 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
         pickle_protocol: Pickle protocol for saved compiled artifacts. Defaults to 5.
     """
 
-    compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
-        default_factory=TorchTensorRTConfig
-    )
+    compile_config: TorchTensorRTConfig = field(default_factory=TorchTensorRTConfig)
     pickle_protocol: int = 5
 
     def describe(self) -> str:

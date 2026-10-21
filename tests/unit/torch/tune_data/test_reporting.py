@@ -148,7 +148,7 @@ def test_snapshot_config_jit_mode_describes_strategy(mocker):
 
 def test_snapshot_config_invalid_mode_raises():
     with pytest.raises(ValueError, match="Invalid tuning mode"):
-        snapshot_config("UNKNOWN")  # pytype: disable=wrong-arg-types
+        snapshot_config("UNKNOWN")
 
 
 # ---------------------------------------------------------------------------

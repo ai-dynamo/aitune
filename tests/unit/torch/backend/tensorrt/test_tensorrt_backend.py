@@ -1448,21 +1448,21 @@ def test_onnx_autocast_config_rejects_invalid_precision():
     from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
 
     with pytest.raises(ValueError, match="Unsupported autocast precision"):
-        ONNXAutoCastConfig(precision="invalid")  # pytype: disable=wrong-arg-types
+        ONNXAutoCastConfig(precision="invalid")
 
 
 def test_onnx_quantization_config_rejects_invalid_precision():
     from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig
 
     with pytest.raises(ValueError, match="Unsupported precision"):
-        ONNXQuantizationConfig(precision="invalid")  # pytype: disable=wrong-arg-types
+        ONNXQuantizationConfig(precision="invalid")
 
 
 def test_torch_quantization_config_rejects_invalid_config():
     from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig
 
     with pytest.raises(ValueError, match="Unsupported quantization_config"):
-        TorchQuantizationConfig(quantization_config="invalid")  # pytype: disable=wrong-arg-types
+        TorchQuantizationConfig(quantization_config="invalid")
 
 
 def test_tensorrt_config_onnx_autocast_round_trip():

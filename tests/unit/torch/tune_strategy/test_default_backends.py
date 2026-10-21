@@ -154,7 +154,7 @@ def test_dynamic_strategy_maps_latency_limit():
 )
 def test_resolve_strategy_rejects_invalid_options(kwargs, error):
     with pytest.raises(ValueError, match=error):
-        resolve_strategy(**kwargs)  # pytype: disable=wrong-arg-types
+        resolve_strategy(**kwargs)
 
 
 def test_max_latency_constraint_rejects_non_positive_value():
