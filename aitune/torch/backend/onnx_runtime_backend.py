@@ -228,7 +228,7 @@ class ONNXRuntimeBackend(Backend):
     def _export_onnx(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> None:
         """Export a Torch module and preserve its output structure."""
         self._output_object = self._get_output_object(module=module, sample=samples[0])
-        module = module.eval().to(self._device)
+        module = module.eval().to(self.device)
         self._onnx_model_artifact = ArtifactPath(cache_dir, "model_raw.onnx")
         onnx_exporter = ONNXExporter(
             output_path=self._onnx_model_artifact.path,
@@ -262,7 +262,7 @@ class ONNXRuntimeBackend(Backend):
         self._session = onnxruntime.InferenceSession(str(model_artifact.path), providers=providers)
         if self._samples is not None:
             try:
-                self._warmup(self._samples.iter_samples(self._device))
+                self._warmup(self._samples.iter_samples(self.device))
             except Exception:
                 self._deactivate()
                 raise
@@ -392,7 +392,7 @@ class ONNXRuntimeBackend(Backend):
         Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
         the output object.
         """
-        module.to(self._device)
+        module.to(self.device)
         args, kwargs = sample
         with torch.no_grad():
             output_object = module(*args, **kwargs)

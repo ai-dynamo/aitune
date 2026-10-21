@@ -154,7 +154,7 @@ class TorchInductorJitBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self.device.type),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -216,7 +216,7 @@ class TorchInductorJitBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self.device.type),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -269,7 +269,7 @@ class TorchInductorJitBackend(Backend):
     def _iter_samples(self):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""
         if self._samples is not None:
-            return self._samples.iter_samples(self._device)
+            return self._samples.iter_samples(self.device)
         if self._data is not None:
             return iter(self._data)
         raise RuntimeError("Backend has no warmup data. Please call build() first.")

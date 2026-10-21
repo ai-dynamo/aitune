@@ -72,7 +72,7 @@ def test_export_model_matrix(use_auto, strict, model_name, model_factory, batch_
     samples = model.samples(batch_sizes=batch_sizes)
     graph_spec = model.graph_spec(batch_sizes=batch_sizes)
 
-    export_result = TorchExporter(use_auto=use_auto, strict=strict).export(model, samples[0], graph_spec)
+    export_result = TorchExporter(use_auto=use_auto, strict=strict).export(model, samples[0], graph_spec, device="cpu")
 
     assert (export_result.dynamic_shapes is not None) is is_dynamic
     exported_module = export_result.exported_program.module()
@@ -115,7 +115,7 @@ def test_export_retries_constraint_violations_with_bounded_dynamic_hints(mocker)
         use_auto=False,
         strict=False,
         fallback_to_dynamic_hints=True,
-    ).export(model, sample, graph_spec)
+    ).export(model, sample, graph_spec, device="cpu")
 
     assert export.call_count == 2
     height = result.dynamic_shapes["x"][2]
@@ -137,6 +137,6 @@ def test_export_does_not_retry_when_dynamic_shapes_cannot_be_relaxed(mocker):
     )
 
     with pytest.raises(ConstraintViolationError, match="constraint violation"):
-        TorchExporter(fallback_to_dynamic_hints=True).export(model, sample, graph_spec)
+        TorchExporter(fallback_to_dynamic_hints=True).export(model, sample, graph_spec, device="cpu")
 
     export.assert_called_once()

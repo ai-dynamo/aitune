@@ -225,7 +225,7 @@ class KernelSelectorBackend(Backend):
 
         with runtime.applied():
             self._delegate_backend = self._delegate_backend.build(
-                module, graph_spec, samples, self._device, delegate_cache_dir
+                module, graph_spec, samples, self.device, delegate_cache_dir
             )
 
         if self._build_mode is BuildMode.JUST_IN_TIME:
@@ -305,7 +305,7 @@ class KernelSelectorBackend(Backend):
         if self._runtime is not None:
             self._runtime.activate()
         try:
-            self._delegate_backend.deploy(self._device)
+            self._delegate_backend.deploy(self.device)
         except Exception:
             if self._runtime is not None:
                 self._runtime.deactivate()

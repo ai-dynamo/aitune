@@ -940,7 +940,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
         the output object.
         """
-        module.to(self._device)
+        module.to(self.device)
         args, kwargs = sample
         with torch.no_grad():
             output_object = module(*args, **kwargs)

@@ -121,7 +121,7 @@ class TorchInductorAotBackend(Backend):
         move_module_to_device(module, self.device)
 
         with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
-            export_result = TorchExporter().export(module, samples[0], graph_spec, device=self._device)
+            export_result = TorchExporter().export(module, samples[0], graph_spec, device=self.device)
             exported = export_result.exported_program
 
         # FIXME: This extra forward pass can mutate model state. Replace it with the shared export contract once the
@@ -165,7 +165,7 @@ class TorchInductorAotBackend(Backend):
         """Load the compiled model from disk."""
         compiled_model_artifact = cast(ArtifactPath, self._compiled_model_artifact)
         logger.debug("Loading compiled AOT Inductor runner from %s.", compiled_model_artifact)
-        device_index = self.device.index if self.device.index is not None else 0
+        device_index = self.device.index or 0
         self._runner = torch._inductor.aoti_load_package(str(compiled_model_artifact.path), device_index=device_index)
 
     def _create_artifact(self) -> DeploymentArtifact:

@@ -80,7 +80,7 @@ class TorchEagerBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device),
+                device_type=str(self.device),
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -128,7 +128,7 @@ class TorchEagerBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device),
+                device_type=str(self.device),
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
