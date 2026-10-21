@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Self, cast
 
 import nvtx
 import torch
@@ -113,7 +113,7 @@ class TorchInductorAotBackend(Backend):
         except (OSError, RuntimeError, ValueError) as error:
             raise RuntimeError(f"PT2 artifact is not available for deployment: {error}") from error
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Export and compile the model with AOT Inductor, then load the runner."""
         self._graph_spec = graph_spec
         self._samples = samples

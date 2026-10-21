@@ -5,7 +5,7 @@
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 import torch
 import torch.nn as nn
@@ -186,7 +186,7 @@ class TorchTensorRTJitBackend(Backend):
         settings["timing_cache_path"] = resolved_path.as_posix()
         return settings
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Build the model with Torch compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
         module = module.eval()

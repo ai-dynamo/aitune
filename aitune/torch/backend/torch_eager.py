@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import torch
 import torch.nn as nn
@@ -95,7 +95,7 @@ class TorchEagerBackend(Backend):
 
         return None
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Builds the model."""
         move_module_to_device(module, self.device)
 

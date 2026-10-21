@@ -6,7 +6,7 @@ import torch
 
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTBackendConfig
 from tests.toy_models.torch_models import ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_sample_store, requires_cuda
 
 # Constants for testing
 IN_FEATURES = 32
@@ -43,7 +43,9 @@ def test_runner_integration_with_different_batch_sizes(tmp_path):
             reference_outputs[batch_size] = reference_output
 
     # Build TensorRT engine with dynamic batch support
-    backend = backend.build(model, graph_spec, samples, device=torch.device("cuda"), cache_dir=tmp_path)
+    backend = backend.build(
+        model, graph_spec, make_sample_store(samples, tmp_path), device=torch.device("cuda"), cache_dir=tmp_path
+    )
     # Note: build() already calls activate() internally
 
     try:

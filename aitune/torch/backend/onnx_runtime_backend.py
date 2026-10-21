@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Self, cast
 
 import nvtx
 import onnx
@@ -188,7 +188,7 @@ class ONNXRuntimeBackend(Backend):
         except (OSError, RuntimeError, ValueError) as error:
             raise RuntimeError(f"ONNX artifact is not available: {error}") from error
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Use an existing ONNX file or export Torch, then load the session."""
         self._graph_spec = graph_spec
 

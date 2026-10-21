@@ -10,7 +10,7 @@ from collections.abc import Generator
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 import torch
 import torch.nn as nn
@@ -243,7 +243,7 @@ class Backend(ABC):
         device: torch.device,
         cache_dir: Path,
         log_file: Path | None = None,
-    ) -> "Backend":
+    ) -> Self:
         """Build the model with the given arguments.
 
         After building, the backend should be activated.
@@ -426,7 +426,7 @@ class Backend(ABC):
         return self.state == BackendState.ACTIVE
 
     @abstractmethod
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> "Backend":
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Build the model with the given arguments.
 
         After building, the backend should be activated.
@@ -534,7 +534,7 @@ class DummyBackend(Backend):
         """Returns the description of the backend."""
         return "Dummy backend"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Build the model with the given arguments."""
         return self
 

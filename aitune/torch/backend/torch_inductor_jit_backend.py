@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Any, get_args
+from typing import Any, Self, get_args
 
 import torch
 import torch.nn as nn
@@ -169,7 +169,7 @@ class TorchInductorJitBackend(Backend):
 
         return None
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Builds the model with torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
         move_module_to_device(module, self.device)

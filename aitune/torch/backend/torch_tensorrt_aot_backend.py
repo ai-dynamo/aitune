@@ -5,7 +5,7 @@
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Self, cast
 
 import torch
 import torch.nn as nn
@@ -194,7 +194,7 @@ class TorchTensorRTAotBackend(Backend):
         graph_spec: GraphSpec,
         samples: SampleStore,
         cache_dir: Path,
-    ) -> Backend:
+    ) -> Self:
         """Build the model with TensorRT.
 
         Exports the module via ``torch.export.export`` with shared ``Dim`` instances

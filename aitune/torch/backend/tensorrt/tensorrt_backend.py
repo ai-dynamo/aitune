@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Self, cast
 
 import torch
 import torch.nn as nn
@@ -349,7 +349,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         optimization_profiles_dir.mkdir(parents=True, exist_ok=True)
         return optimization_profiles_dir / "model_optimization_profiles.json"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Build the TensorRT model.
 
         This method will export the module to ONNX and build a TensorRT engine from it using Polygraphy.
