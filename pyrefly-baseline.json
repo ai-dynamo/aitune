@@ -1821,13 +1821,6 @@
       "severity": "error"
     },
     {
-      "column": 27,
-      "path": "aitune/torch/dataloader.py",
-      "name": "no-matching-overload",
-      "concise_description": "No matching overload found for function `torch._C._VariableFunctions.empty` called with arguments: (Size | None, dtype=dtype)",
-      "severity": "error"
-    },
-    {
       "column": 41,
       "path": "aitune/torch/dataloader.py",
       "name": "bad-argument-type",
@@ -1867,6 +1860,27 @@
       "path": "aitune/torch/dataloader.py",
       "name": "bad-assignment",
       "concise_description": "`DataLoaderFactory | Dataset[Unknown] | Sequence[Unknown]` is not assignable to attribute `dataset` with type `Dataset[Unknown] | Sequence[Unknown]`",
+      "severity": "error"
+    },
+    {
+      "column": 51,
+      "path": "aitune/torch/dataloader.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `float | int | None` is not assignable to parameter `to` with type `float` in function `torch._C.TensorBase.uniform_`",
+      "severity": "error"
+    },
+    {
+      "column": 31,
+      "path": "aitune/torch/dataloader.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `float | int` is not assignable to parameter `from_` with type `int` in function `torch._C.TensorBase.random_`",
+      "severity": "error"
+    },
+    {
+      "column": 46,
+      "path": "aitune/torch/dataloader.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `float | int | None` is not assignable to parameter `to` with type `int | None` in function `torch._C.TensorBase.random_`",
       "severity": "error"
     },
     {
@@ -2945,13 +2959,6 @@
       "path": "examples/FLUX/flux/tune.py",
       "name": "unexpected-keyword",
       "concise_description": "Unexpected keyword argument `use_distributed_mode_trace` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 59,
-      "path": "examples/FLUX/flux/tune.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `min_block_size` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
       "severity": "error"
     },
     {
@@ -4128,6 +4135,202 @@
       "path": "tests/functional/pytorch/kernel_forge/001_module_function_kernel_profiler_flux_test.py",
       "name": "bad-index",
       "concise_description": "Cannot index into `dict[str, list[tuple[int, tuple[tuple[Unknown, ...], dict[Unknown, Unknown]]]]]`",
+      "severity": "error"
+    },
+    {
+      "column": 14,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `Logger` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 25,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `Logger` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 15,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `Runtime` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 78,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `TensorIOMode` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 18,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `float32` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 46,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `float16` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 9,
+      "path": "tests/functional_ci/backends.py",
+      "name": "unexpected-keyword",
+      "concise_description": "Unexpected keyword argument `enabled_precisions` in function `torch_tensorrt.dynamo._settings.CompilationSettings.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 81,
+      "path": "tests/functional_ci/backends.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `CompilationSettings | aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig` is not assignable to parameter `compile_config` with type `CompilationSettings | aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig` in function `aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 50,
+      "path": "tests/functional_ci/backends.py",
+      "name": "bad-argument-type",
+      "concise_description": "Unpacked keyword argument `bool | Unknown` is not assignable to parameter `timing_cache` with type `Path | None` in function `aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBackendConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 50,
+      "path": "tests/functional_ci/backends.py",
+      "name": "bad-argument-type",
+      "concise_description": "Unpacked keyword argument `bool | Unknown` is not assignable to parameter `profiles` with type `TensorRTProfileMode | list[TensorRTProfile]` in function `aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBackendConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 50,
+      "path": "tests/functional_ci/backends.py",
+      "name": "bad-argument-type",
+      "concise_description": "Unpacked keyword argument `bool | Unknown` is not assignable to parameter `device` with type `str` in function `aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBackendConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 50,
+      "path": "tests/functional_ci/backends.py",
+      "name": "bad-argument-type",
+      "concise_description": "Unpacked keyword argument `bool | Unknown` is not assignable to parameter `quantization_config` with type `ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None` in function `aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBackendConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 50,
+      "path": "tests/functional_ci/backends.py",
+      "name": "bad-argument-type",
+      "concise_description": "Unpacked keyword argument `bool | Unknown` is not assignable to parameter `cuda_graph_cache_policy` with type `Literal['lfu', 'lru']` in function `aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBackendConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 16,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `backends`",
+      "severity": "error"
+    },
+    {
+      "column": 5,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `PerformanceValidationMixin` has no attribute `enable_find_max_batch_size`",
+      "severity": "error"
+    },
+    {
+      "column": 12,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "bad-return",
+      "concise_description": "Returned type `PerformanceValidationMixin` is not assignable to declared return type `OneBackendStrategy`",
+      "severity": "error"
+    },
+    {
+      "column": 31,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `selected_backend`",
+      "severity": "error"
+    },
+    {
+      "column": 16,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `object` has no attribute `graph_specs`",
+      "severity": "error"
+    },
+    {
+      "column": 32,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "not-callable",
+      "concise_description": "Expected a callable, got `object`",
+      "severity": "error"
+    },
+    {
+      "column": 14,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
+      "severity": "error"
+    },
+    {
+      "column": 5,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `object` has no attribute `deactivate`",
+      "severity": "error"
+    },
+    {
+      "column": 22,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module` is not assignable to parameter `module` with type `aitune.torch.module.wrapper_module.Module` in function `selected_backend`",
+      "severity": "error"
+    },
+    {
+      "column": 12,
+      "path": "tests/functional_ci/lifecycle.py",
+      "name": "bad-return",
+      "concise_description": "Returned type `aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module` is not assignable to declared return type `aitune.torch.module.wrapper_module.Module`",
+      "severity": "error"
+    },
+    {
+      "column": 16,
+      "path": "tests/functional_ci/test_kernel_selector.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `Backend` has no attribute `_runtime`",
+      "severity": "error"
+    },
+    {
+      "column": 50,
+      "path": "tests/functional_ci/test_kernel_selector.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `object` has no attribute `plan`",
+      "severity": "error"
+    },
+    {
+      "column": 99,
+      "path": "tests/functional_ci/test_shapes.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `dict[str, tuple[BatchDim, int]]` is not assignable to parameter `dynamic_shapes` with type `dict[ForwardInputPath, tuple[DynamicDim | int, ...]] | None` in function `aitune.torch.module.wrapper_module.Module.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 5,
+      "path": "tests/functional_ci/test_strategies.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `PerformanceValidationMixin` has no attribute `enable_find_max_batch_size`",
+      "severity": "error"
+    },
+    {
+      "column": 44,
+      "path": "tests/functional_ci/test_topology.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `backends`",
       "severity": "error"
     },
     {
@@ -6361,6 +6564,125 @@
       "path": "tests/unit/torch/test_dynamic_shapes.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `dict[str | tuple[str, str], tuple[BatchDim, int] | tuple[DynamicDim]]` is not assignable to parameter `dynamic_shapes` with type `dict[ForwardInputPath, tuple[DynamicDim | int, ...]] | None` in function `aitune.torch.dynamic_shapes.dynamic_shapes_to_json`",
+      "severity": "error"
+    },
+    {
+      "column": 21,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 22,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 22,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[128]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 30,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[256]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 22,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 22,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 22,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[16]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 22,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 26,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 32,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 26,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 26,
+      "path": "tests/unit/torch/test_random_dataset.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
       "severity": "error"
     },
     {
