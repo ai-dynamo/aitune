@@ -493,7 +493,7 @@ class Backend(ABC):
             device: The device to set the backend on.
         """
         if device is not None:
-            self._device = device
+            self._device = torch.device(device)
 
         if self._device is None:
             raise ValueError("Device is not set. Please set the device before deploying.")
