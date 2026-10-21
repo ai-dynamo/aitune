@@ -64,13 +64,6 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "bad-override-param-name",
-      "concise_description": "Class member `KernelSelectorBackendConfig.from_dict` overrides parent class `BackendConfig` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
       "column": 64,
       "path": "aitune/torch/backend/kernel_selector_backend.py",
       "name": "not-iterable",
@@ -1513,20 +1506,6 @@
       "severity": "error"
     },
     {
-      "column": 1,
-      "path": "aitune/torch/backend/torch_tensorrt_logging.py",
-      "name": "deprecated",
-      "concise_description": "Call to deprecated overload `contextlib.contextmanager`",
-      "severity": "error"
-    },
-    {
-      "column": 1,
-      "path": "aitune/torch/backend/torch_tensorrt_logging.py",
-      "name": "deprecated",
-      "concise_description": "Call to deprecated overload `contextlib.contextmanager`",
-      "severity": "error"
-    },
-    {
       "column": 45,
       "path": "aitune/torch/backend/torchao_backend.py",
       "name": "unbound-name",
@@ -1716,13 +1695,6 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "aitune/torch/checkpoint/storage_tasks.py",
-      "name": "bad-override-param-name",
-      "concise_description": "Class member `CopyBackendArtifactsTask.save` overrides parent class `SaveTask` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
       "column": 53,
       "path": "aitune/torch/checkpoint/storage_tasks.py",
       "name": "bad-argument-type",
@@ -1835,13 +1807,6 @@
       "severity": "error"
     },
     {
-      "column": 17,
-      "path": "aitune/torch/dataloader.py",
-      "name": "pytorch-efficiency-lint-item-call",
-      "concise_description": "`Tensor.item()` causes implicit GPU-to-CPU synchronization",
-      "severity": "error"
-    },
-    {
       "column": 28,
       "path": "aitune/torch/dataloader.py",
       "name": "unsupported-operation",
@@ -1881,13 +1846,6 @@
       "path": "aitune/torch/dataloader.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `float | int | None` is not assignable to parameter `to` with type `int | None` in function `torch._C.TensorBase.random_`",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "aitune/torch/distributed.py",
-      "name": "deprecated",
-      "concise_description": "Call to deprecated overload `contextlib.contextmanager`",
       "severity": "error"
     },
     {

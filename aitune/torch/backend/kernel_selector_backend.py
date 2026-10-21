@@ -129,7 +129,7 @@ class KernelSelectorBackendConfig(BackendConfig):
         )
 
     @classmethod
-    def from_dict(cls, _data: dict) -> "KernelSelectorBackendConfig":
+    def from_dict(cls, data: dict) -> "KernelSelectorBackendConfig":
         """Reject deserialization of one-way kernel source metadata."""
         raise NotImplementedError(f"{cls.__name__} supports one-way serialization only")
 

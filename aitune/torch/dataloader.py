@@ -475,6 +475,15 @@ def _list_data_collator(features: list[list]) -> list:
     return batch
 
 
+def _label_dtype(label: object) -> torch.dtype:
+    """Return the batch dtype for a label without reading tensor values from the GPU."""
+    if isinstance(label, torch.Tensor):
+        is_integer = not (label.is_floating_point() or label.is_complex() or label.is_quantized)
+    else:
+        is_integer = isinstance(label, int)
+    return torch.long if is_integer else torch.float
+
+
 def _map_data_collator(features: list) -> dict:
     """Transformers default data collector copied from source.
 
@@ -491,9 +500,7 @@ def _map_data_collator(features: list) -> dict:
     # Ensure that tensor is created with the correct type
     # (it should be automatically the case, but let's make sure of it.)
     if "label" in first and first["label"] is not None:
-        label = first["label"].item() if isinstance(first["label"], torch.Tensor) else first["label"]
-        dtype = torch.long if isinstance(label, int) else torch.float
-        batch["labels"] = torch.tensor([f["label"] for f in features], dtype=dtype)
+        batch["labels"] = torch.tensor([f["label"] for f in features], dtype=_label_dtype(first["label"]))
     elif "label_ids" in first and first["label_ids"] is not None:
         if isinstance(first["label_ids"], torch.Tensor):
             batch["labels"] = torch.stack([f["label_ids"] for f in features])
