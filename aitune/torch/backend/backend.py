@@ -402,11 +402,11 @@ class Backend(ABC):
         return self.__class__.__name__
 
     @property
-    def device(self) -> torch.device:
+    def device(self) -> torch.device | None:
         """Get the device of the backend.
 
         Returns:
-            The device the module is using.
+            The device the module is using, or None if the device is not set yet.
         """
         return self._device
 

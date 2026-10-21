@@ -217,7 +217,7 @@ class SampleMetadata:
         return self._strict
 
     @property
-    def tensor_data(self) -> tuple[tuple[Locator, TensorSpec]]:
+    def tensor_data(self) -> tuple[tuple[Locator, TensorSpec], ...]:
         """Get list of tensor data."""
         return self._tensor_data
 

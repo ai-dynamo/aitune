@@ -1,24 +1,10 @@
 {
   "errors": [
     {
-      "column": 16,
-      "path": "aitune/exceptions.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `Path | None` is not assignable to declared return type `Path`",
-      "severity": "error"
-    },
-    {
       "column": 44,
       "path": "aitune/torch/artifact.py",
       "name": "bad-index",
       "concise_description": "Cannot index into `dict[dtype, DType]`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/backend/backend.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `Unknown | None` is not assignable to declared return type `device`",
       "severity": "error"
     },
     {
@@ -1737,13 +1723,6 @@
       "severity": "error"
     },
     {
-      "column": 16,
-      "path": "aitune/torch/checkpoint/torch_checkpoint.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `dict[Unknown, aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module]` is not assignable to declared return type `dict[str, torch.nn.modules.module.Module]`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "aitune/torch/checkpoint/torch_checkpoint.py",
       "name": "bad-argument-type",
@@ -2066,48 +2045,6 @@
       "severity": "error"
     },
     {
-      "column": 33,
-      "path": "aitune/torch/libs/onnx/onnx_model_info.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `None` is not assignable to parameter `object` with type `int` in function `list.append`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/libs/onnx/onnx_model_info.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `dict[Unknown, list[int]]` is not assignable to declared return type `dict[str, list[int | str | None]]`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/libs/onnx/onnx_model_info.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `str | None` is not assignable to declared return type `str`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/libs/onnx/onnx_model_info.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `str | None` is not assignable to declared return type `str`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/libs/onnx/onnx_model_info.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `int | None` is not assignable to declared return type `int`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/libs/onnx/onnx_model_info.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `str | None` is not assignable to declared return type `str`",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "aitune/torch/module/exact_sample_metadata.py",
       "name": "bad-override",
@@ -2161,13 +2098,6 @@
       "path": "aitune/torch/module/onnx_module.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Unknown | None` is not assignable to parameter `session` with type `InferenceSession` in function `aitune.torch.libs.onnx.runtime.run_onnx`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/module/sample_metadata.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `tuple[tuple[Locator, TensorSpec], ...]` is not assignable to declared return type `tuple[tuple[Locator, TensorSpec]]`",
       "severity": "error"
     },
     {
@@ -2231,13 +2161,6 @@
       "path": "aitune/torch/module/wrapper_module.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `device`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/module/wrapper_module.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `device | None` is not assignable to declared return type `device`",
       "severity": "error"
     },
     {
@@ -2322,13 +2245,6 @@
       "path": "aitune/torch/task/profiling/measuring_strategy.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Unknown | None` is not assignable to parameter `model_name` with type `str` in function `aitune.torch.task.profiling.events.ProfilingResultEvent.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "aitune/torch/task/profiling/metrics.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `floating` is not assignable to declared return type `float`",
       "severity": "error"
     },
     {
@@ -2518,13 +2434,6 @@
       "path": "aitune/torch/utils/module.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `object` has no attribute `to`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "aitune/torch/utils/shapes.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `object | Any | None` is not assignable to declared return type `dict[str, Any] | None`",
       "severity": "error"
     },
     {

@@ -78,11 +78,11 @@ class TunedModule:
         return output
 
     @property
-    def device(self) -> torch.device:
+    def device(self) -> torch.device | None:
         """Get the device of the module.
 
         Returns:
-            The device the module is using.
+            The device the module is using, or None if the backend device is not set yet.
         """
         return list(self._backends.values())[0].device
 

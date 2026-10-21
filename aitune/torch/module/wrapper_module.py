@@ -143,11 +143,11 @@ class Module(wrapt.CallableObjectProxy):
         return self._module_cache_dir()
 
     @property
-    def device(self) -> torch.device:
+    def device(self) -> torch.device | None:
         """Get the device of the module.
 
         Returns:
-            The device the module is using.
+            The device the module is using, or None if the module has no parameters.
         """
         # Note: collect device from tuned module (_wrapper) to indicate correct device when loading HF pipeline.
         if self._self_state == ModuleState.TUNED:

@@ -187,11 +187,11 @@ class ONNXModelInfo:
     @staticmethod
     def _get_tensor_shapes(value_info_list) -> dict[str, list[int | str | None]]:
         """Extract shapes from ONNX graph ValueInfoProto list (e.g. model.graph.input)."""
-        shapes = {}
+        shapes: dict[str, list[int | str | None]] = {}
         for val in value_info_list:
             if not val.type.HasField("tensor_type") or not val.type.tensor_type.HasField("shape"):
                 continue
-            dims = []
+            dims: list[int | str | None] = []
             for d in val.type.tensor_type.shape.dim:
                 if d.HasField("dim_value"):
                     dims.append(int(d.dim_value))
@@ -254,7 +254,7 @@ class ONNXModelInfo:
         return self._precision
 
     @property
-    def producer_name(self) -> str:
+    def producer_name(self) -> str | None:
         """Name of the producer/framework that created the model.
 
         Returns:
@@ -263,7 +263,7 @@ class ONNXModelInfo:
         return self._producer_name
 
     @property
-    def producer_version(self) -> str:
+    def producer_version(self) -> str | None:
         """Version of the producer/framework that created the model.
 
         Returns:
@@ -272,7 +272,7 @@ class ONNXModelInfo:
         return self._producer_version
 
     @property
-    def model_version(self) -> int:
+    def model_version(self) -> int | None:
         """Version of the model.
 
         Returns:
@@ -281,7 +281,7 @@ class ONNXModelInfo:
         return self._model_version
 
     @property
-    def doc_string(self) -> str:
+    def doc_string(self) -> str | None:
         """Documentation string of the model.
 
         Returns:
