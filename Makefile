@@ -76,7 +76,7 @@ docs-serve: docs ## serve Fern docs locally
 
 lint: ## check style with pre-commit and pyrefly
 	pre-commit run --all-files
-	pyrefly check
+	pyrefly check --error-stale-baseline
 	$(MAKE) validate-functional
 
 validate-functional: ## validate PEP-723 / [tool.aitune] metadata for functional tests and examples
