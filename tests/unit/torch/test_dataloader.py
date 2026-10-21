@@ -12,6 +12,7 @@ from aitune.torch.dataloader import (
     DatasetLike,
     InputConfig,
     MinMaxRandomDataset,
+    _map_data_collator,
     ensure_enough_samples,
     samples_generator,
 )
@@ -490,3 +491,20 @@ def test_ensure_enough_samples_empty_dataset():
     assert len(dataset) == 0
 
     assert dataset == []
+
+
+@pytest.mark.parametrize(
+    ("label", "expected_dtype"),
+    [
+        (1, torch.long),
+        (1.5, torch.float),
+        (torch.tensor(1), torch.long),
+        (torch.tensor(True), torch.long),
+        (torch.tensor(1.5), torch.float),
+    ],
+)
+def test_map_data_collator_label_dtype(label, expected_dtype):
+    batch = _map_data_collator([{"label": label, "x": torch.ones(2)}, {"label": label, "x": torch.ones(2)}])
+
+    assert batch["labels"].dtype == expected_dtype
+    assert batch["labels"].shape == (2,)
