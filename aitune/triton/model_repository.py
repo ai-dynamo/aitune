@@ -125,11 +125,12 @@ def _publish_deployment_artifact(
 
     file_name, multi_file = _artifact_layout(artifact)
     _validate_artifact_files(artifact, multi_file=multi_file)
-    config = _model_config(artifact, model_name=model_name, config=config)
-    _validate_version_policy(config, model_version)
-    _resource_files(config, {})
+    model_config = _model_config(artifact, model_name=model_name, config=config)
+    file_name = model_config.default_model_filename or file_name
+    _validate_version_policy(model_config, model_version)
+    _resource_files(model_config, {})
     try:
-        config_text = config.to_pbtxt()
+        config_text = model_config.to_pbtxt()
     except (TypeError, ValueError) as error:
         raise AITunePublicationError(f"Invalid Triton configuration for {model_name!r}: {error}") from error
 
@@ -144,7 +145,7 @@ def _publish_deployment_artifact(
         repository_path = repository.resolve()
         write_model_analyzer_config(
             artifact,
-            config=config.to_protobuf(),
+            config=model_config.to_protobuf(),
             model_directory=model_directory,
             destination=repository_path.parent / f"{repository_path.name}-model-analyzer" / model_name,
             options=model_analyzer or ModelAnalyzerConfig(),
