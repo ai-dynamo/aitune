@@ -168,7 +168,7 @@ class TunedModule:
         backends_data = []
         is_any_jit = False
         for sample_metadata, backend in self._backends.items():
-            backends_data.append((sample_metadata.to_dict(), backend.to_dict()))  # pytype: disable=attribute-error
+            backends_data.append((sample_metadata.to_dict(), backend.to_dict()))
             if backend.build_mode == BuildMode.JUST_IN_TIME:
                 is_any_jit = True
 

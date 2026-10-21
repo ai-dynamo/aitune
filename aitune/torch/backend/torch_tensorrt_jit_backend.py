@@ -73,9 +73,7 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         autocast_dtype: Autocast dtype to use when autocast is enabled. Defaults to None.
     """
 
-    compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
-        default_factory=TorchTensorRTConfig
-    )
+    compile_config: TorchTensorRTConfig = field(default_factory=TorchTensorRTConfig)
     fullgraph: bool = False
     dynamic: bool | None = None
     autocast_enabled: bool = False

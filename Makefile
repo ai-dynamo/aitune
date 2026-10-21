@@ -48,7 +48,6 @@ clean-test: ## remove test and coverage artifacts
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
-	rm -fr .pytype/
 	rm -fr .coverage*
 	rm -f *-report.xml
 
@@ -74,9 +73,9 @@ docs-serve: docs ## serve Fern docs locally
 	fern docs dev
 
 
-lint: ## check style with pre-commit and pytype
+lint: ## check style with pre-commit and pyrefly
 	pre-commit run --all-files
-	pytype aitune tests -j auto
+	pyrefly check --error-stale-baseline
 	$(MAKE) validate-functional
 
 validate-functional: ## validate PEP-723 / [tool.aitune] metadata for functional tests and examples

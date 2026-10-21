@@ -10,7 +10,7 @@ This file provides guidance to AI coding agents working in this repository.
 
 ```bash
 make install-dev          # editable install with all dev deps (uses --extra-index-url https://pypi.nvidia.com)
-make lint                 # pre-commit --all-files + pytype
+make lint                 # pre-commit --all-files + pyrefly
 make test                 # pytest (unit tests + doctests)
 make coverage             # coverage report → htmlcov/
 make docs-serve           # Fern docs dev server (run 'make fern-setup' first)
@@ -76,7 +76,8 @@ Every production file must begin with:
 ```
 
 - **Formatter/linter:** `ruff` (line length 120, Google-style docstrings, complexity ≤ 10).
-- **Static analysis:** `pytype` (import-error and module-attr checks disabled).
+- **Static analysis:** `pyrefly` (config in `pyproject.toml`). CI fails on errors not listed in
+  `pyrefly-baseline.json`. After fixing listed errors, run `pyrefly check --prune-baseline`.
 - Keep docstring examples runnable; pytest executes doctests.
 - `tests/` and `examples/` are exempt from docstring and `print` rules.
 

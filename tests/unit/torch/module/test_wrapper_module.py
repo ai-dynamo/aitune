@@ -397,8 +397,8 @@ def test_tune_with_list_of_strategies(torch_device):
     module(2, b=2)
     module.tune(dry_run=False, device=torch_device)
 
-    module._self_strategy_list[0].tune.assert_called_once()  # pytype: disable=attribute-error
-    module._self_strategy_list[1].tune.assert_called_once()  # pytype: disable=attribute-error
+    module._self_strategy_list[0].tune.assert_called_once()
+    module._self_strategy_list[1].tune.assert_called_once()
     assert module.state == ModuleState.TUNED
 
     with pytest.raises(RuntimeError, match="Module is already tuned. Use force=True to reset tuned module."):
@@ -431,8 +431,8 @@ def test_tune_with_dict_of_strategies(torch_device):
     module(2)
     module.tune(dry_run=False, device=torch_device)
 
-    module._self_strategy_map[graph1].tune.assert_called_once()  # pytype: disable=attribute-error
-    module._self_strategy_map[graph2].tune.assert_called_once()  # pytype: disable=attribute-error
+    module._self_strategy_map[graph1].tune.assert_called_once()
+    module._self_strategy_map[graph2].tune.assert_called_once()
     assert module.state == ModuleState.TUNED
 
     with pytest.raises(RuntimeError, match="Module is already tuned. Use force=True to reset tuned module."):

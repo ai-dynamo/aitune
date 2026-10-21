@@ -200,7 +200,7 @@ def test_wrap_module_state_preservation(simple_model):
     wrapped_model = wrap(simple_model, [ModuleInfo(module=simple_model)])
 
     # Then the state should be preserved
-    assert torch.allclose(wrapped_model[0].weight, original_weight)  # pytype: disable=unsupported-operands
+    assert torch.allclose(wrapped_model[0].weight, original_weight)
 
 
 def test_wrap_custom_object():

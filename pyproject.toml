@@ -137,7 +137,7 @@ dev = [
     "ipykernel",
     "pre-commit",
     "pre-commit-uv",
-    "pytype",
+    "pyrefly==1.4.0",
     "tox",
     "uv>=0.9.0",
 ]
@@ -282,8 +282,18 @@ paths = ["aitune"]
 sort_by_size = true
 verbose = false
 
-[tool.pytype]
-disable = ["import-error", "module-attr"]
+[tool.pyrefly]
+project-includes = ["aitune", "tests", "examples"]
+python-version = "3.11"
+preset = "default"
+baseline = "pyrefly-baseline.json"
+
+[tool.pyrefly.errors]
+missing-import = "ignore"
+deprecated = "error"
+pytorch-efficiency-lint-redundant-to-call = "error"
+pytorch-efficiency-lint-cuda-call = "error"
+pytorch-efficiency-lint-item-call = "error"
 
 # the following enables autowrapt to conditionally enable JIT tuning i.e. `AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning python script.py`
 [project.entry-points.aitune_enable_jit_tuning]

@@ -218,7 +218,7 @@ def test_invalid_quantization_type():
 
 def test_torchao_config_rejects_invalid_mode():
     with pytest.raises(ValueError, match="Invalid mode"):
-        TorchAOBackendConfig(quantization="int8wo", mode="invalid")  # pytype: disable=wrong-arg-types
+        TorchAOBackendConfig(quantization="int8wo", mode="invalid")
 
 
 def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import datasets
-from transformers import T5Tokenizer  # pytype: disable=import-error
+from transformers import T5Tokenizer
 
 from aitune.torch.dataloader import DataLoaderFactory
 

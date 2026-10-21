@@ -26,7 +26,6 @@ def get_model(model_name: str = "nvidia/parakeet-ctc-0.6b") -> nemo.collections.
 
     # Note: Allowing nemo object to be un/serialized (torch.load) #
     torch.serialization.add_safe_globals([
-        # pytype: disable=module-attr
         nemo.core.neural_types.neural_type.NeuralType,
         nemo.core.neural_types.elements.MelSpectrogramType,
         nemo.core.neural_types.axes.AxisType,
@@ -35,7 +34,6 @@ def get_model(model_name: str = "nvidia/parakeet-ctc-0.6b") -> nemo.collections.
         nemo.core.neural_types.elements.SpectrogramType,
         nemo.core.neural_types.elements.IntType,
         nemo.core.neural_types.elements.AcousticEncodedRepresentation,
-        # pytype: enable=module-attr
     ])
 
     asr_model = nemo.collections.asr.models.EncDecCTCModel.from_pretrained(model_name=model_name)

@@ -5,7 +5,7 @@ import random
 
 import datasets
 from PIL import Image
-from transformers import AutoImageProcessor  # pytype: disable=import-error
+from transformers import AutoImageProcessor
 
 from aitune.torch.dataloader import samples_generator
 
