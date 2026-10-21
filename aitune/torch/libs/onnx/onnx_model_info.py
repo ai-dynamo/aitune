@@ -103,7 +103,7 @@ class ONNXModelInfo:
                 self._opsets[domain] = entry.version
             self._opset_version = self._opsets.get("")
 
-            # Protobuf fields always exist; unset fields return "" or 0.
+            # Unset protobuf scalar fields return their defaults ("" or 0), never None.
             self._producer_name = model.producer_name
             self._producer_version = model.producer_version
             self._model_version = model.model_version

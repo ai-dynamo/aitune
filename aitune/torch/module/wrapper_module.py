@@ -147,7 +147,7 @@ class Module(wrapt.CallableObjectProxy):
         """Get the device of the module.
 
         Returns:
-            The device the module is using, or None if the module has no parameters.
+            The device the module is using, or None if the module is not tuned and has no parameters.
         """
         # Note: collect device from tuned module (_wrapper) to indicate correct device when loading HF pipeline.
         if self._self_state == ModuleState.TUNED:
