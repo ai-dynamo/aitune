@@ -213,7 +213,7 @@ class KernelSelectorBackend(Backend):
         cache_dir: Path,
     ) -> Backend:
         """Select providers and build the delegate while the plan is applied."""
-        move_module_to_device(module, self._device)
+        move_module_to_device(module, self.device)
 
         optimizer = self._create_optimizer()
         plan = optimizer.make_plan(module, samples, module=module)

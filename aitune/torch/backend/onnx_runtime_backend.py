@@ -249,7 +249,7 @@ class ONNXRuntimeBackend(Backend):
           ("CUDAExecutionProvider", {"device_id": ...})]``
         """
         ep = self._config.execution_provider or ONNXExecutionProvider.CUDA
-        cuda_ep = ("CUDAExecutionProvider", {"device_id": self._device.index})
+        cuda_ep = ("CUDAExecutionProvider", {"device_id": self.device.index})
         if ep == ONNXExecutionProvider.TENSORRT:
             return ["TensorrtExecutionProvider", cuda_ep]
         return [cuda_ep]
@@ -377,7 +377,7 @@ class ONNXRuntimeBackend(Backend):
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference through the shared ONNX Runtime I/O binding executor."""
         inputs = self._prepare_inputs(args, kwargs)
-        return self._prepare_outputs(run_onnx(self._session, inputs, self._device))
+        return self._prepare_outputs(run_onnx(self._session, inputs, self.device))
 
     def _get_output_object(self, module: nn.Module, sample: Sample) -> Any:
         """Get the output object from the module and sample.

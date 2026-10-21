@@ -368,7 +368,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._graph_spec = graph_spec
         self._samples = samples
 
-        cuda_set_device(self._device)
+        cuda_set_device(self.device)
         if isinstance(module, OnnxModule):
             module.deactivate()
             if isinstance(self._config.quantization_config, TorchQuantizationConfig):
@@ -718,7 +718,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         engine_artifact = cast(ArtifactPath, self._engine_artifact)
         optimization_profiles_artifact = cast(ArtifactPath, self._trt_optimization_profiles_artifact)
 
-        cuda_set_device(self._device)
+        cuda_set_device(self.device)
 
         self._trt_runtime = TensorRTRuntime()
         engine_bytes = self._trt_runtime.load_engine(engine_path=engine_artifact.path)

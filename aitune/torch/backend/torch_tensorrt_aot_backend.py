@@ -211,10 +211,10 @@ class TorchTensorRTAotBackend(Backend):
         logger.info("Start compiling torch module with Torch-TensorRT using torch_tensorrt.dynamo.compile.")
 
         model = module.eval()
-        move_module_to_device(model, self._device)
+        move_module_to_device(model, self.device)
 
         # Set the device for the TensorRT backend compilation
-        self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
+        self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self.device))
 
         with self._track_build_step(TorchTensorRTAotBuildStep.TORCH_EXPORT):
             # ``use_auto=False`` first tries the finite explicit ranges required by TensorRT optimization
