@@ -60,8 +60,8 @@ def get_mean_executions_per_second(results: list[ProfilingResultEvent]) -> float
     Returns:
         Executions per second based on mean execution time.
     """
-    mean_execution_time = float(np.mean([result.execution_time for result in results]))
-    return 1e9 / mean_execution_time
+    mean_execution_time = np.mean([result.execution_time for result in results])
+    return float(1e9 / mean_execution_time)
 
 
 def get_latency(results: list[ProfilingResultEvent]) -> float:
