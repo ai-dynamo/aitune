@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from dataclasses import dataclass
-from typing import cast
 from unittest.mock import Mock
 
 import pytest
@@ -75,7 +74,9 @@ def torch_tensorrt_jit_backend(torch_tensorrt_jit_backend_config, torch_device, 
 
 
 @requires_cuda
-def backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path, mocker):
+def backend_build(
+    torch_tensorrt_jit_backend: TorchTensorRTJitBackend, model, sample_data, torch_device, tmp_path, mocker
+):
     torch_mod = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch")
     torch_mod.compile = mocker.MagicMock(return_value=model)
 
@@ -86,7 +87,6 @@ def backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, 
         device=torch_device,
         cache_dir=tmp_path,
     )
-    backend = cast(TorchTensorRTJitBackend, backend)
     return torch_mod, backend
 
 
@@ -363,7 +363,7 @@ def test_mock_infer(torch_tensorrt_jit_backend, model, sample_data, torch_device
 
 @requires_cuda
 def test_torch_compile_backend_infer_not_activated(
-    torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path, mocker
+    torch_tensorrt_jit_backend: TorchTensorRTJitBackend, model, sample_data, torch_device, tmp_path, mocker
 ):
     torch_mod = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch")
     torch_mod.compile = mocker.MagicMock(return_value=model)
@@ -380,7 +380,6 @@ def test_torch_compile_backend_infer_not_activated(
         device=torch_device,
         cache_dir=tmp_path,
     )
-    backend = cast(TorchTensorRTJitBackend, backend)
 
     backend._compiled_module = None
 
@@ -390,7 +389,7 @@ def test_torch_compile_backend_infer_not_activated(
 
 @requires_cuda
 def test_torch_compile_backend_deactivate(
-    torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path, mocker
+    torch_tensorrt_jit_backend: TorchTensorRTJitBackend, model, sample_data, torch_device, tmp_path, mocker
 ):
     torch_mod = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch")
     torch_mod.compile = mocker.MagicMock(return_value=model)
