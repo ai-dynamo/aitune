@@ -478,7 +478,7 @@ def _list_data_collator(features: list[list]) -> list:
 def _label_dtype(label: object) -> torch.dtype:
     """Return the batch dtype for a label without reading tensor values from the GPU."""
     if isinstance(label, torch.Tensor):
-        is_integer = not (label.is_floating_point() or label.is_complex())
+        is_integer = not (label.is_floating_point() or label.is_complex() or label.is_quantized)
     else:
         is_integer = isinstance(label, int)
     return torch.long if is_integer else torch.float
