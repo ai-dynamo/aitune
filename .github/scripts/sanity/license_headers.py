@@ -35,7 +35,7 @@ LicenseInfo = collections.namedtuple(
     ],
 )
 
-EXCLUDE_DIRECTORIES = ["tools", ".pytype", ".cache"]
+EXCLUDE_DIRECTORIES = ["tools", ".cache"]
 DEFAULT_LICENSE_TEMPLATE = str(Path(__file__).parent / "license_header.template")
 
 

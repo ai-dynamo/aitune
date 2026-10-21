@@ -59,16 +59,7 @@ jobs:
       - run: uv sync --frozen --group dev --group test --extra triton
       - run: uv run pre-commit run --all-files
       - name: Pyrefly checker
-        run: |
-          set -o pipefail
-          uv run pyrefly check --error-stale-baseline 2>&1 | tee pyrefly.log
-
-      - if: always()
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: pyrefly-log
-          path: pyrefly.log
-          if-no-files-found: ignore
+        run: uv run pyrefly check --error-stale-baseline
 
   license-headers:
     name: License headers
