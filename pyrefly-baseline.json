@@ -8,20 +8,6 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "aitune/torch/backend/backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `DummyBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `DummyBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
       "column": 64,
       "path": "aitune/torch/backend/kernel_selector_backend.py",
       "name": "not-iterable",
@@ -75,62 +61,6 @@
       "path": "aitune/torch/backend/kernel_selector_backend.py",
       "name": "not-iterable",
       "concise_description": "Type `None` is not iterable",
-      "severity": "error"
-    },
-    {
-      "column": 30,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `kernel_providers`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `kernel_generators`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `provider_min_time_share_percent`",
-      "severity": "error"
-    },
-    {
-      "column": 46,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `generator_min_time_share_percent`",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `generation_timeout`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `KernelSelectorBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `KernelSelectorBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 37,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "bad-assignment",
-      "concise_description": "`None` is not assignable to attribute `_delegate_backend` with type `Backend | TorchInductorJitBackend`",
       "severity": "error"
     },
     {
@@ -155,20 +85,6 @@
       "severity": "error"
     },
     {
-      "column": 45,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `key`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `describe`",
-      "severity": "error"
-    },
-    {
       "column": 34,
       "path": "aitune/torch/backend/onnx_runtime_backend.py",
       "name": "missing-attribute",
@@ -183,27 +99,6 @@
       "severity": "error"
     },
     {
-      "column": 24,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `use_dynamo`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `opset_version`",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `execution_provider`",
-      "severity": "error"
-    },
-    {
       "column": 29,
       "path": "aitune/torch/backend/onnx_runtime_backend.py",
       "name": "bad-assignment",
@@ -215,13 +110,6 @@
       "path": "aitune/torch/backend/onnx_runtime_backend.py",
       "name": "bad-assignment",
       "concise_description": "`Sequence[Unknown]` is not assignable to attribute `_output_nodes` with type `list[Unknown] | None`",
-      "severity": "error"
-    },
-    {
-      "column": 49,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `execution_provider`",
       "severity": "error"
     },
     {
@@ -260,31 +148,10 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `ONNXRuntimeBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `to_dict`",
-      "severity": "error"
-    },
-    {
       "column": 36,
       "path": "aitune/torch/backend/onnx_runtime_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `to_dict`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `ONNXRuntimeBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
       "severity": "error"
     },
     {
@@ -299,195 +166,6 @@
       "path": "aitune/torch/backend/tensorrt/onnx_quantization.py",
       "name": "bad-assignment",
       "concise_description": "`dict[str, ndarray]` is not assignable to dict key `calibration_data` with type `Literal['awq_clip', 'awq_full', 'awq_lite', 'entropy', 'fp8', 'int4', 'int8', 'max', 'rtn_dq'] | str | None`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `key`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `describe`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `timing_cache`",
-      "severity": "error"
-    },
-    {
-      "column": 29,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `*args` with type `PathLike[str] | str` in function `pathlib.Path.__new__`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization_config`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization_config`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization_config`",
-      "severity": "error"
-    },
-    {
-      "column": 36,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `workspace_size`",
-      "severity": "error"
-    },
-    {
-      "column": 40,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `optimization_level`",
-      "severity": "error"
-    },
-    {
-      "column": 41,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `compatibility_level`",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `enable_tf32`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization_config`",
-      "severity": "error"
-    },
-    {
-      "column": 36,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `workspace_size`",
-      "severity": "error"
-    },
-    {
-      "column": 40,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `optimization_level`",
-      "severity": "error"
-    },
-    {
-      "column": 41,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `compatibility_level`",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `enable_tf32`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization_config`",
-      "severity": "error"
-    },
-    {
-      "column": 36,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `workspace_size`",
-      "severity": "error"
-    },
-    {
-      "column": 40,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `optimization_level`",
-      "severity": "error"
-    },
-    {
-      "column": 41,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `compatibility_level`",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `enable_tf32`",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `use_dynamo`",
-      "severity": "error"
-    },
-    {
-      "column": 35,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `opset_version`",
-      "severity": "error"
-    },
-    {
-      "column": 36,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `workspace_size`",
-      "severity": "error"
-    },
-    {
-      "column": 40,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `optimization_level`",
-      "severity": "error"
-    },
-    {
-      "column": 41,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `compatibility_level`",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `enable_tf32`",
       "severity": "error"
     },
     {
@@ -519,45 +197,10 @@
       "severity": "error"
     },
     {
-      "column": 24,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `max_cuda_graphs`",
-      "severity": "error"
-    },
-    {
-      "column": 20,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `cuda_graph_cache_policy`",
-      "severity": "error"
-    },
-    {
       "column": 28,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "not-iterable",
       "concise_description": "Type `None` is not iterable",
-      "severity": "error"
-    },
-    {
-      "column": 40,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `use_cuda_graphs`",
-      "severity": "error"
-    },
-    {
-      "column": 40,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `max_cuda_graphs`",
-      "severity": "error"
-    },
-    {
-      "column": 48,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `cuda_graph_cache_policy`",
       "severity": "error"
     },
     {
@@ -631,13 +274,6 @@
       "severity": "error"
     },
     {
-      "column": 12,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `use_cuda_graphs`",
-      "severity": "error"
-    },
-    {
       "column": 24,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "missing-attribute",
@@ -666,45 +302,10 @@
       "severity": "error"
     },
     {
-      "column": 27,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `profiles`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `profiles`",
-      "severity": "error"
-    },
-    {
       "column": 25,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `object` has no attribute `shape`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `profiles`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `profiles`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `use_cuda_graphs`",
       "severity": "error"
     },
     {
@@ -722,13 +323,6 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TensorRTBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
       "column": 36,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "missing-attribute",
@@ -736,31 +330,38 @@
       "severity": "error"
     },
     {
-      "column": 45,
+      "column": 28,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization_config`",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None` is not assignable to parameter `config` with type `TorchQuantizationConfig` in function `aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer.quantize`",
       "severity": "error"
     },
     {
-      "column": 32,
+      "column": 28,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `to_dict`",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None` is not assignable to parameter `config` with type `ONNXQuantizationConfig` in function `aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizer.quantize`",
       "severity": "error"
     },
     {
-      "column": 41,
+      "column": 28,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `use_cuda_graphs`",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None` is not assignable to parameter `config` with type `ONNXAutoCastConfig` in function `aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCast.autocast`",
       "severity": "error"
     },
     {
-      "column": 9,
+      "column": 24,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TensorRTBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
+      "name": "not-iterable",
+      "concise_description": "Type `TensorRTProfileMode` is not iterable",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
+      "name": "not-iterable",
+      "concise_description": "Type `TensorRTProfileMode` is not iterable",
       "severity": "error"
     },
     {
@@ -876,27 +477,6 @@
       "severity": "error"
     },
     {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `key`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `describe`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_dtype`",
-      "severity": "error"
-    },
-    {
       "column": 35,
       "path": "aitune/torch/backend/torch_eager.py",
       "name": "not-callable",
@@ -911,31 +491,10 @@
       "severity": "error"
     },
     {
-      "column": 12,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_enabled`",
-      "severity": "error"
-    },
-    {
       "column": 31,
       "path": "aitune/torch/backend/torch_eager.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Unknown | None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_enabled`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_dtype`",
       "severity": "error"
     },
     {
@@ -957,34 +516,6 @@
       "path": "aitune/torch/backend/torch_eager.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Unknown | None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_enabled`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchEagerBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `to_dict`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchEagerBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
       "severity": "error"
     },
     {
@@ -995,80 +526,10 @@
       "severity": "error"
     },
     {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `key`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `describe`",
-      "severity": "error"
-    },
-    {
-      "column": 34,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `inductor_configs`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `None`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchInductorAotBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchInductorAotBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `key`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `describe`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_dtype`",
-      "severity": "error"
-    },
-    {
-      "column": 57,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `dynamic`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_enabled`",
       "severity": "error"
     },
     {
@@ -1081,34 +542,6 @@
     {
       "column": 23,
       "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `fullgraph`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `mode`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `options`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_dtype`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `None`",
       "severity": "error"
@@ -1118,34 +551,6 @@
       "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `None`",
-      "severity": "error"
-    },
-    {
-      "column": 57,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_enabled`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchInductorJitBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `to_dict`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchInductorJitBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
       "severity": "error"
     },
     {
@@ -1160,34 +565,6 @@
       "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `BackendConfig` has no attribute `dynamic`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `key`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `describe`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `compile_config`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `compile_config`",
       "severity": "error"
     },
     {
@@ -1212,13 +589,6 @@
       "severity": "error"
     },
     {
-      "column": 17,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `pickle_protocol`",
-      "severity": "error"
-    },
-    {
       "column": 22,
       "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
@@ -1226,20 +596,6 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchTensorRTAotBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchTensorRTAotBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
       "column": 13,
       "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
@@ -1254,31 +610,10 @@
       "severity": "error"
     },
     {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
+      "column": 9,
+      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `key`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `describe`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `compile_config`",
-      "severity": "error"
-    },
-    {
-      "column": 57,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `dynamic`",
+      "concise_description": "Object of class `TorchTensorRTConfig` has no attribute `device`",
       "severity": "error"
     },
     {
@@ -1286,20 +621,6 @@
       "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Unknown | None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `fullgraph`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_dtype`",
       "severity": "error"
     },
     {
@@ -1314,34 +635,6 @@
       "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `None`",
-      "severity": "error"
-    },
-    {
-      "column": 57,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `autocast_enabled`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchTensorRTJitBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `to_dict`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchTensorRTJitBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
       "severity": "error"
     },
     {
@@ -1394,27 +687,6 @@
       "severity": "error"
     },
     {
-      "column": 45,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `key`",
-      "severity": "error"
-    },
-    {
-      "column": 45,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `describe`",
-      "severity": "error"
-    },
-    {
-      "column": 57,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `dynamic`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "aitune/torch/backend/torchao_backend.py",
       "name": "not-callable",
@@ -1422,101 +694,10 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchAOBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `to_dict`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `TorchAOBackend.from_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization_config`",
-      "severity": "error"
-    },
-    {
-      "column": 97,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `filter_fn`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `fullgraph`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `mode`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "aitune/torch/backend/torchao_backend.py",
       "name": "no-matching-overload",
       "concise_description": "No matching overload found for function `iter` called with arguments: (Unknown | None)",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `filter_fn`",
-      "severity": "error"
-    },
-    {
-      "column": 59,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization_config`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization`",
-      "severity": "error"
-    },
-    {
-      "column": 49,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `quantization_config`",
       "severity": "error"
     },
     {
@@ -2003,13 +1184,6 @@
       "severity": "error"
     },
     {
-      "column": 22,
-      "path": "aitune/torch/module/tuned_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `OrderedDict[SampleMetadata, Unknown | None]` is not assignable to parameter `backends` with type `OrderedDict[SampleMetadata, Backend]` in function `TunedModule.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "aitune/torch/module/wrapper_module.py",
       "name": "missing-attribute",
@@ -2195,7 +1369,7 @@
       "column": 28,
       "path": "aitune/torch/tune_strategy/mixin/performance_validation_mixin.py",
       "name": "bad-argument-type",
-      "concise_description": "Argument `Backend | None` is not assignable to parameter `backend` with type `Backend` in function `aitune.torch.tune_strategy.tune_strategy.TuneStrategy._post_tune`",
+      "concise_description": "Argument `Backend[Unknown] | None` is not assignable to parameter `backend` with type `Backend[Unknown]` in function `aitune.torch.tune_strategy.tune_strategy.TuneStrategy._post_tune`",
       "severity": "error"
     },
     {
@@ -2227,13 +1401,6 @@
       "severity": "error"
     },
     {
-      "column": 25,
-      "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Backend | None` is not assignable to parameter `backend` with type `Backend` in function `_TuneCandidate.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 24,
       "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
       "name": "bad-argument-type",
@@ -2241,10 +1408,17 @@
       "severity": "error"
     },
     {
+      "column": 25,
+      "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `Backend[Unknown] | None` is not assignable to parameter `backend` with type `Backend[Unknown]` in function `_TuneCandidate.__init__`",
+      "severity": "error"
+    },
+    {
       "column": 28,
       "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
       "name": "bad-argument-type",
-      "concise_description": "Argument `Backend | None` is not assignable to parameter `backend` with type `Backend` in function `aitune.torch.tune_strategy.tune_strategy.TuneStrategy._post_tune`",
+      "concise_description": "Argument `Backend[Unknown] | None` is not assignable to parameter `backend` with type `Backend[Unknown]` in function `aitune.torch.tune_strategy.tune_strategy.TuneStrategy._post_tune`",
       "severity": "error"
     },
     {
@@ -2528,17 +1702,17 @@
       "severity": "error"
     },
     {
-      "column": 38,
-      "path": "examples/BERT/bert/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[TensorRTBackend]` is not assignable to parameter `backends` with type `list[Backend]` in function `aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 14,
       "path": "examples/BERT/bert/tune.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
+      "severity": "error"
+    },
+    {
+      "column": 38,
+      "path": "examples/BERT/bert/tune.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `list[TensorRTBackend]` is not assignable to parameter `backends` with type `list[Backend[Unknown]]` in function `aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.__init__`",
       "severity": "error"
     },
     {
@@ -2654,13 +1828,6 @@
       "severity": "error"
     },
     {
-      "column": 51,
-      "path": "examples/FLUX/flux/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[TorchAOBackend | TorchInductorJitBackend | TorchTensorRTJitBackend] | list[Unknown]` is not assignable to parameter `backends` with type `list[Backend]` in function `aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 13,
       "path": "examples/FLUX/flux/tune.py",
       "name": "not-callable",
@@ -2686,6 +1853,13 @@
       "path": "examples/FLUX/flux/tune.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
+      "severity": "error"
+    },
+    {
+      "column": 51,
+      "path": "examples/FLUX/flux/tune.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `list[TorchAOBackend | TorchInductorJitBackend | TorchTensorRTJitBackend] | list[Unknown]` is not assignable to parameter `backends` with type `list[Backend[Unknown]]` in function `aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.__init__`",
       "severity": "error"
     },
     {
@@ -2976,13 +2150,6 @@
       "severity": "error"
     },
     {
-      "column": 43,
-      "path": "examples/ResNet/resnet/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[TensorRTBackend | TorchAOBackend | TorchInductorJitBackend]` is not assignable to parameter `backends` with type `list[Backend]` in function `aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 24,
       "path": "examples/ResNet/resnet/tune.py",
       "name": "bad-argument-type",
@@ -2994,6 +2161,13 @@
       "path": "examples/ResNet/resnet/tune.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
+      "severity": "error"
+    },
+    {
+      "column": 43,
+      "path": "examples/ResNet/resnet/tune.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `list[TensorRTBackend | TorchAOBackend | TorchInductorJitBackend]` is not assignable to parameter `backends` with type `list[Backend[Unknown]]` in function `aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.__init__`",
       "severity": "error"
     },
     {
@@ -3571,13 +2745,6 @@
       "severity": "error"
     },
     {
-      "column": 8,
-      "path": "tests/functional/pytorch/031_aitune_torch_tune_resnet_onnx_runtime_backend_test.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `use_dynamo`",
-      "severity": "error"
-    },
-    {
       "column": 14,
       "path": "tests/functional/pytorch/031_aitune_torch_tune_resnet_onnx_runtime_backend_test.py",
       "name": "bad-argument-type",
@@ -3778,13 +2945,6 @@
       "path": "tests/functional/pytorch/052_aitune_torch_tensorrt_cuda_graphs_test.py",
       "name": "no-matching-overload",
       "concise_description": "No matching overload found for function `sum` called with arguments: (Generator[bool | float | list[Unknown]])",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "tests/functional/pytorch/052_aitune_torch_tensorrt_cuda_graphs_test.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `max_cuda_graphs`",
       "severity": "error"
     },
     {
@@ -4016,13 +3176,6 @@
       "path": "tests/functional_ci/test_topology.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/toy_backends.py",
-      "name": "bad-override",
-      "concise_description": "Class member `SleepBackend.to_dict` overrides parent class `Backend` in an inconsistent manner",
       "severity": "error"
     },
     {
@@ -4327,20 +3480,6 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "tests/unit/torch/backend/test_kernel_selector_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `_RecordingJitDelegate.to_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/backend/test_kernel_selector_backend.py",
-      "name": "bad-override",
-      "concise_description": "Class member `_RecordingJitDelegate.from_dict` overrides parent class `Backend` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
       "column": 37,
       "path": "tests/unit/torch/backend/test_kernel_selector_backend.py",
       "name": "bad-argument-type",
@@ -4366,13 +3505,6 @@
       "path": "tests/unit/torch/backend/test_kernel_selector_backend.py",
       "name": "bad-argument-type",
       "concise_description": "Unpacked keyword argument `_ReluProvider | Unknown` is not assignable to parameter `generation_timeout` with type `float` in function `aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/unit/torch/backend/test_kernel_selector_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `module`",
       "severity": "error"
     },
     {
@@ -4436,13 +3568,6 @@
       "path": "tests/unit/torch/backend/test_kernel_selector_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `module`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/unit/torch/backend/test_kernel_selector_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `Backend | TorchInductorJitBackend` has no attribute `deploy_calls`",
       "severity": "error"
     },
     {
@@ -4530,20 +3655,6 @@
       "severity": "error"
     },
     {
-      "column": 12,
-      "path": "tests/unit/torch/backend/test_torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `dynamic`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/unit/torch/backend/test_torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `dynamic`",
-      "severity": "error"
-    },
-    {
       "column": 52,
       "path": "tests/unit/torch/backend/test_torch_inductor_jit_backend.py",
       "name": "bad-argument-type",
@@ -4614,13 +3725,6 @@
       "severity": "error"
     },
     {
-      "column": 12,
-      "path": "tests/unit/torch/backend/test_torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `compile_config`",
-      "severity": "error"
-    },
-    {
       "column": 91,
       "path": "tests/unit/torch/backend/test_torch_tensorrt_aot_backend.py",
       "name": "bad-argument-type",
@@ -4663,24 +3767,24 @@
       "severity": "error"
     },
     {
-      "column": 24,
-      "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `TorchTensorRTTestConfig` is not assignable to parameter `compile_config` with type `CompilationSettings | TorchTensorRTConfig` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackendConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `TorchTensorRTTestConfig` is not assignable to parameter `compile_config` with type `CompilationSettings | TorchTensorRTConfig` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackendConfig.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 12,
-      "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
+      "path": "tests/unit/torch/backend/test_torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `dynamic`",
+      "concise_description": "Object of class `TorchTensorRTConfig` has no attribute `timing_cache_path`",
+      "severity": "error"
+    },
+    {
+      "column": 24,
+      "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `TorchTensorRTTestConfig` is not assignable to parameter `compile_config` with type `CompilationSettings | TorchTensorRTConfig` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackendConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 24,
+      "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `TorchTensorRTTestConfig` is not assignable to parameter `compile_config` with type `CompilationSettings | TorchTensorRTConfig` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackendConfig.__init__`",
       "severity": "error"
     },
     {
@@ -4688,13 +3792,6 @@
       "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `TorchTensorRTTimingCacheTestConfig` is not assignable to parameter `compile_config` with type `CompilationSettings | TorchTensorRTConfig` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackendConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `compile_config`",
       "severity": "error"
     },
     {
@@ -4723,13 +3820,6 @@
       "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `TorchTensorRTTestConfig` is not assignable to parameter `compile_config` with type `CompilationSettings | TorchTensorRTConfig` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackendConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `BackendConfig | None` has no attribute `dynamic`",
       "severity": "error"
     },
     {
@@ -4765,6 +3855,13 @@
       "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `TorchTensorRTTestConfig` is not assignable to parameter `compile_config` with type `CompilationSettings | TorchTensorRTConfig` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTJitBackendConfig.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 12,
+      "path": "tests/unit/torch/backend/test_torch_tensorrt_jit_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `TorchTensorRTConfig` has no attribute `timing_cache_path`",
       "severity": "error"
     },
     {
@@ -5601,20 +4698,6 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "tests/unit/torch/module/test_graph_bindings.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `BackendConfig` has no attribute `profiles`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/module/test_graph_bindings.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `profiles`",
-      "severity": "error"
-    },
-    {
       "column": 32,
       "path": "tests/unit/torch/module/test_graph_bindings.py",
       "name": "bad-assignment",
@@ -5626,20 +4709,6 @@
       "path": "tests/unit/torch/module/test_graph_bindings.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `int | str | tuple[int | str, ...]` is not assignable to parameter `path` with type `str | tuple[int | str, ...]` in function `aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.add_input_shape`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/module/test_graph_bindings.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `BackendConfig` has no attribute `profiles`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/module/test_graph_bindings.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `profiles`",
       "severity": "error"
     },
     {
@@ -5807,7 +4876,7 @@
       "column": 18,
       "path": "tests/unit/torch/module/test_tuned_module.py",
       "name": "bad-argument-type",
-      "concise_description": "Argument `OrderedDict[SampleMetadata, TorchInductorJitBackend]` is not assignable to parameter `backends` with type `OrderedDict[SampleMetadata, Backend]` in function `aitune.torch.module.tuned_module.TunedModule.__init__`",
+      "concise_description": "Argument `OrderedDict[SampleMetadata, TorchInductorJitBackend]` is not assignable to parameter `backends` with type `OrderedDict[SampleMetadata, Backend[Unknown]]` in function `aitune.torch.module.tuned_module.TunedModule.__init__`",
       "severity": "error"
     },
     {
@@ -6598,7 +5667,7 @@
       "column": 43,
       "path": "tests/unit/torch/tune_strategy/test_profiling_tune_strategy.py",
       "name": "bad-argument-type",
-      "concise_description": "Argument `list[SleepBackend]` is not assignable to parameter `backends` with type `list[Backend]` in function `aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.__init__`",
+      "concise_description": "Argument `list[SleepBackend]` is not assignable to parameter `backends` with type `list[Backend[Unknown]]` in function `aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.__init__`",
       "severity": "error"
     },
     {
