@@ -2423,41 +2423,6 @@
       "severity": "error"
     },
     {
-      "column": 14,
-      "path": "aitune/triton/model_repository.py",
-      "name": "bad-assignment",
-      "concise_description": "`BaseModelConfig` is not assignable to variable `config` with type `ONNXRuntimeModelConfig | TensorRTModelConfig | TorchAOTIModelConfig | None`",
-      "severity": "error"
-    },
-    {
-      "column": 30,
-      "path": "aitune/triton/model_repository.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `ONNXRuntimeModelConfig | TensorRTModelConfig | TorchAOTIModelConfig | None` is not assignable to parameter `config` with type `BaseModelConfig` in function `_validate_version_policy`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "aitune/triton/model_repository.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `ONNXRuntimeModelConfig | TensorRTModelConfig | TorchAOTIModelConfig | None` is not assignable to parameter `config` with type `BaseModelConfig` in function `_resource_files`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/triton/model_repository.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `to_pbtxt`",
-      "severity": "error"
-    },
-    {
-      "column": 20,
-      "path": "aitune/triton/model_repository.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `to_protobuf`",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "aitune/utils/monitoring/hardware_metrics/ipc.py",
       "name": "missing-attribute",
