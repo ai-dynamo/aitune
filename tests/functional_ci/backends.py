@@ -94,7 +94,7 @@ BACKENDS: dict[str, BackendCase] = {
         _capabilities("save_load", "export", "dynamic_batch", "structured_io", "multigraph"),
         artifact_format="pt2",
     ),
-    "torch-tensorrt-aot": BackendCase(_torch_tensorrt_aot, TENSORRT_FP32, _capabilities("save_load")),
+    "torch-tensorrt-aot": BackendCase(_torch_tensorrt_aot, TENSORRT_FP32, _capabilities("save_load", "dynamic_batch")),
     "tensorrt": BackendCase(
         tensorrt_backend,
         TENSORRT_FP32,
