@@ -503,6 +503,7 @@ def test_aliased_nested_pipeline_wrapper_load_ignores_duplicate_keys(monkeypatch
 
     def load_module(*args):
         calls.append(args)
+        args[2].pop(args[3], None)
         return replacement
 
     monkeypatch.setattr(
@@ -511,12 +512,14 @@ def test_aliased_nested_pipeline_wrapper_load_ignores_duplicate_keys(monkeypatch
         staticmethod(load_module),
     )
     state_dict = {"decoder": {}, "vae.decoder": {}}
+    device_map = {"decoder": torch.device("cpu"), "vae.decoder": torch.device("cpu")}
 
-    TorchCheckpoint.load_state_dict_for_pipeline(restored, state_dict, {})
+    TorchCheckpoint.load_state_dict_for_pipeline(restored, state_dict, device_map)
 
     assert len(calls) == 1
     assert restored.decoder is replacement
     assert restored.vae.decoder is replacement
+    assert device_map == {}
 
 
 @requires_cuda

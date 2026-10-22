@@ -317,6 +317,7 @@ class TorchCheckpoint(Checkpoint):
                         matched_modules.add(name)
                         if id(module) in restored_module_ids:
                             # This alias was restored by an earlier key.
+                            device_map.pop(name, None)
                             continue
                         restored_module = TorchCheckpoint.load_state_dict_for_module(
                             module, module_state_dict, device_map, name
