@@ -330,20 +330,6 @@
       "severity": "error"
     },
     {
-      "column": 54,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-specialization",
-      "concise_description": "`object` is not assignable to upper bound `SupportsDunderGT[Any] | SupportsDunderLT[Any]` of type variable `SupportsRichComparisonT`",
-      "severity": "error"
-    },
-    {
-      "column": 96,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-specialization",
-      "concise_description": "`object` is not assignable to upper bound `SupportsDunderGT[Any] | SupportsDunderLT[Any]` of type variable `SupportsRichComparisonT`",
-      "severity": "error"
-    },
-    {
       "column": 59,
       "path": "aitune/torch/backend/tensorrt/tensorrt_builder.py",
       "name": "missing-module-attribute",
@@ -684,13 +670,6 @@
       "path": "aitune/torch/backend/torchao_backend.py",
       "name": "no-matching-overload",
       "concise_description": "No matching overload found for function `iter` called with arguments: (Unknown | None)",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `AOBaseConfig | None` is not assignable to parameter `config` with type `AOBaseConfig` in function `torchao.quantization.quant_api.quantize_`",
       "severity": "error"
     },
     {

@@ -505,8 +505,10 @@ class Backend(ABC, Generic[ConfigType]):
 
     def _save_config(self, cache_dir: Path) -> None:
         """Store backend configuration metadata when configuration is available."""
-        if not isinstance(self._config, BackendConfig):
+        if self._config is None:
             return
+        if not isinstance(self._config, BackendConfig):
+            raise TypeError(f"Backend config must be a BackendConfig, got {type(self._config).__name__}")
 
         config_path = cache_dir / "config.json"
         self._config.to_json(config_path)

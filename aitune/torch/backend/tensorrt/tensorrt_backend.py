@@ -1185,7 +1185,7 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         }
         input_names = set(bindings)
         for profile in user_profiles:
-            profile_names = set(profile.profile)
+            profile_names = cast(set[str], set(profile.profile))
             missing_names = input_names - profile_names
             unknown_names = profile_names - input_names
             if missing_names or unknown_names:

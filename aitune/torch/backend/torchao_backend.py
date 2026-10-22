@@ -327,7 +327,9 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         model = copy.deepcopy(self._orig_module)
         move_module_to_device(self._orig_module, "cpu")
 
-        quantize_(model, config=self._config.quantization_config, device=self.device, filter_fn=self._config.filter_fn)
+        quantization_config = self._config.quantization_config
+        assert quantization_config is not None, "quantization_config is set in TorchAOBackendConfig.__post_init__"
+        quantize_(model, config=quantization_config, device=self.device, filter_fn=self._config.filter_fn)
         self._quant_module = torch.compile(
             model=model,
             fullgraph=self._config.fullgraph,
