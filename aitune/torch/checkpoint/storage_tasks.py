@@ -597,9 +597,9 @@ def check_checkpoint_valid(path: Path) -> bool:
         return False  # there is no unzipped folder
 
     # Try both SHA-256 and SHA-512 files
-    for sha_type in ["256", "512"]:
-        aside_sha_path = path.parent / f"sha{sha_type}_sums.txt"
-        inside_sha_path = path / f"sha{sha_type}_sums.txt"
+    for sha_type in ("256", "512"):
+        inside_sha_path = get_sha_sums_path(path, sha_type)
+        aside_sha_path = path.parent / inside_sha_path.name
 
         if aside_sha_path.exists() and inside_sha_path.exists():
             return aside_sha_path.read_text(encoding="utf-8") == inside_sha_path.read_text(encoding="utf-8")
