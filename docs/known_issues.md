@@ -29,7 +29,9 @@ title: "Known Issues and Limitations"
   `BatchDim` and spatial `DynamicDim` inputs shaped `(batch, channels, height, width)`, but reloading its saved `.pt2`
   artifact fails in PyTorch's exported-program loader with `assert vr is not None`. Passing toy-model coverage using
   a 3D public input does not cover this image-input path. The same 4D regression passes on the tested PyTorch
-  2.11–2.14 stacks. See [issue #118](https://github.com/ai-dynamo/aitune/issues/118) for exact builds and results.
+  2.11–2.14 stacks. Upgrade PyTorch and Torch-TensorRT to a compatible stack using PyTorch 2.11 or later, or use
+  TensorRT, Torch Inductor AOT, or ONNX Runtime with the CUDA execution provider. See
+  [issue #118](https://github.com/ai-dynamo/aitune/issues/118) for exact builds and results.
 - **Kernel providers with strict Torch Export on PyTorch 2.8 and 2.9.** PyTorch 2.8 and 2.9 strict export cannot capture
   the forward hooks that temporarily replace `torch.nn.functional` kernels and can fail with a guard-export assertion.
   This is a generic limitation affecting every kernel provider, including SageAttention, when `KernelSelectorBackend`
