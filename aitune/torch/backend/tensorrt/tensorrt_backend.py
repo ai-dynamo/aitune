@@ -71,27 +71,6 @@ class TensorRTBuildStep(BackendBuildStep):
     ONNX_AUTOCAST = "ONNX autocast"
 
 
-class TensorRTRunner:
-    """TensorRT runner for model acceleration.
-
-    This class provides functionality to run TensorRT engines from PyTorch models.
-    """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize the TensorRT runner.
-
-        Args:
-            *args: Additional arguments
-            **kwargs: Additional keyword arguments
-        """
-        super().__init__(*args, **kwargs)
-        self._context = None
-        self._io_tensors = None
-        self._input_names = None
-        self._output_names = None
-        self._engine_info = None
-
-
 class TensorRTProfileMode(Enum):
     """Mode how TRT optimization profiles will be generated for TensorRT engine.
 
@@ -211,7 +190,7 @@ class TensorRTBackendConfig(BackendConfig):
         return state_dict
 
 
-class TensorRTBackend(Backend[TensorRTBackendConfig], TensorRTRunner):
+class TensorRTBackend(Backend[TensorRTBackendConfig]):
     """TensorRT backend for model acceleration.
 
     This class builds and runs TensorRT engines from PyTorch models or existing OnnxModule graphs.
