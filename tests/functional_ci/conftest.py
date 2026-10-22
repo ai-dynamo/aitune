@@ -18,6 +18,12 @@ from aitune.torch.module_registry import MODULE_REGISTRY
 from tests.functional_ci.backends import BACKENDS
 
 _RANK = {"passed": 0, "skipped": 1, "failed": 2}
+_CELL_NOTES = {
+    "models.dynamic-non-batch/torch-tensorrt-aot": (
+        " [Known limitation: dynamic 4D image reload fails on PyTorch 2.8–2.10; issue #118]"
+        "(https://github.com/ai-dynamo/aitune/issues/118)"
+    ),
+}
 _cells: dict[str, dict] = {}
 _item_cells: dict[str, list[str]] = {}
 
@@ -98,7 +104,8 @@ def pytest_sessionfinish(session):
             "state": cell["state"],
             "run": (
                 f"{cell['state']}: {cell['culprit']}" if "culprit" in cell else f"passed: {len(cell['tests'])} test(s)"
-            ),
+            )
+            + _CELL_NOTES.get(cell_id, ""),
         }
         for cell_id, cell in sorted(_cells.items())
     }
