@@ -330,6 +330,20 @@
       "severity": "error"
     },
     {
+      "column": 54,
+      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
+      "name": "bad-specialization",
+      "concise_description": "`object` is not assignable to upper bound `SupportsDunderGT[Any] | SupportsDunderLT[Any]` of type variable `SupportsRichComparisonT`",
+      "severity": "error"
+    },
+    {
+      "column": 96,
+      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
+      "name": "bad-specialization",
+      "concise_description": "`object` is not assignable to upper bound `SupportsDunderGT[Any] | SupportsDunderLT[Any]` of type variable `SupportsRichComparisonT`",
+      "severity": "error"
+    },
+    {
       "column": 59,
       "path": "aitune/torch/backend/tensorrt/tensorrt_builder.py",
       "name": "missing-module-attribute",
