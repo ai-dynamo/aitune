@@ -13,11 +13,8 @@ from packaging.version import Version
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import (
-    TorchTensorRTAotBackend,
-    TorchTensorRTAotBackendConfig,
-    TorchTensorRTConfig,
-)
+from aitune.torch.backend import TorchTensorRTAotBackend, TorchTensorRTAotBackendConfig
+from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTConfig
 from aitune.torch.dynamic_shapes import DynamicShapes
 from aitune.torch.libs.torch import torch_exporter
 from tests.functional_ci.backends import BACKENDS, BackendCase, with_backends
