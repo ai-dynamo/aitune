@@ -4,15 +4,24 @@
 
 from collections.abc import Callable
 from dataclasses import replace
+from unittest.mock import patch
 
 import pytest
 import torch
+from packaging.version import Version
 from torch import nn
 
 import aitune.torch as ait
-from tests.functional_ci.backends import BackendCase, with_backends
-from tests.functional_ci.lifecycle import assert_matches_eager, pinned_strategy, selected_backend
-from tests.functional_ci.models import IN_FEATURES, make_input, make_mlp
+from aitune.torch.backend.torch_tensorrt_aot_backend import (
+    TorchTensorRTAotBackend,
+    TorchTensorRTAotBackendConfig,
+    TorchTensorRTConfig,
+)
+from aitune.torch.dynamic_shapes import DynamicShapes
+from aitune.torch.libs.torch import torch_exporter
+from tests.functional_ci.backends import BACKENDS, BackendCase, with_backends
+from tests.functional_ci.lifecycle import TENSORRT_FP32, assert_matches_eager, pinned_strategy, selected_backend
+from tests.functional_ci.models import IN_FEATURES, make_input, make_mlp, make_spatial_model, seeded
 
 
 class StructuredModel(nn.Module):
@@ -58,6 +67,108 @@ def test_explicit_batch_dim(case: BackendCase, device: torch.device):
     assert graph_spec.dynamic_shapes == dynamic_shapes
     selected_backend(tuned, type(backend))
     assert_matches_eager(tuned, make_mlp(device), device, case.tolerance, batch_sizes=(1, 5, 8))
+
+
+@pytest.mark.matrix("models.dynamic-non-batch")
+@with_backends("dynamic_non_batch")
+def test_explicit_spatial_dims(case: BackendCase, device: torch.device):
+    """User batch and spatial dimensions allow unseen sizes after recording one input shape."""
+    backend = case.factory()
+    spatial = ait.DynamicDim("spatial", min=16, opt=24, max=32)
+    dynamic_shapes: DynamicShapes = {"input": (ait.BatchDim("batch", min=1, opt=2, max=2), spatial, spatial)}
+    tuned = ait.Module(
+        make_spatial_model(device), "spatial", strategy=pinned_strategy(backend), dynamic_shapes=dynamic_shapes
+    )
+    generator = torch.Generator(device=device).manual_seed(1)
+    sample = torch.randn(1, 24, 24, device=device, generator=generator)
+    ait.tune(tuned, list(sample.unbind(0)), batch_sizes=[1], device=device)
+
+    (graph_spec,) = tuned.graph_specs
+    assert graph_spec.dynamic_shapes == dynamic_shapes
+    selected_backend(tuned, type(backend))
+    reference = make_spatial_model(device)
+    with torch.no_grad():
+        for batch_size, size in ((1, 16), (2, 24), (2, 32), (1, 23)):
+            value = torch.randn(batch_size, size, size, device=device, generator=generator)
+            case.tolerance.assert_close(tuned(value), reference(value))
+
+
+# The matrix hook records xfail as skipped, so this regression deliberately has no matrix marker.
+@pytest.mark.xfail(
+    Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10)),
+    reason="PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)",
+    raises=ValueError,
+    strict=True,
+)
+def test_torch_tensorrt_4d_image_dims(device: torch.device):
+    """Compile and reload normal image inputs with user batch and spatial dimensions."""
+    with seeded(device, 0):
+        model = nn.Sequential(
+            nn.Conv2d(3, 4, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(1),
+        )
+    model = model.to(device).eval()
+    generator = torch.Generator(device=device).manual_seed(1)
+    values = [
+        torch.randn(batch_size, 3, size, size, device=device, generator=generator)
+        for batch_size, size in ((1, 24), (1, 16), (2, 32), (2, 23))
+    ]
+    with torch.no_grad():
+        expected = [model(value) for value in values]
+
+    backend = TorchTensorRTAotBackend(
+        TorchTensorRTAotBackendConfig(
+            compile_config=TorchTensorRTConfig(min_block_size=1, require_full_compilation=True, disable_tf32=True)
+        )
+    )
+    spatial = ait.DynamicDim("spatial", min=16, opt=24, max=32)
+    tuned = ait.Module(
+        model,
+        "image-spatial",
+        strategy=pinned_strategy(backend),
+        dynamic_shapes={"input": (ait.BatchDim("batch", min=1, opt=2, max=2), 3, spatial, spatial)},
+    )
+    ait.tune(tuned, list(values[0].unbind(0)), batch_sizes=[1], device=device, ignore_failing_modules=False)
+
+    selected_backend(tuned, TorchTensorRTAotBackend)
+    with torch.no_grad():
+        for value, output in zip(values, expected, strict=True):
+            TENSORRT_FP32.assert_close(tuned(value), output)
+
+
+@pytest.mark.matrix("models.dynamic-non-batch/torch-tensorrt-aot")
+def test_spatial_dims_export_retry(device: torch.device):
+    """A spatial divisibility constraint triggers bounded-hint export retry and still compiles."""
+    with seeded(device, 0):
+        model = nn.Sequential(
+            nn.Unflatten(1, (1, -1)),
+            nn.PixelUnshuffle(2),
+            nn.Conv2d(4, 4, kernel_size=3, padding=1),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(1),
+        )
+        model = model.to(device).eval()
+        values = [torch.randn(1, size, size, device=device) for size in (16, 24, 32, 22)]
+    with torch.no_grad():
+        expected = [model(value) for value in values]
+
+    backend = BACKENDS["torch-tensorrt-aot"].factory()
+    spatial = ait.DynamicDim("spatial", min=16, opt=24, max=32)
+    tuned = ait.Module(
+        model,
+        "even-spatial",
+        strategy=pinned_strategy(backend),
+        dynamic_shapes={"input": (1, spatial, spatial)},
+    )
+    with patch.object(torch_exporter, "_as_dynamic_hints", wraps=torch_exporter._as_dynamic_hints) as retry:
+        ait.tune(tuned, list(values[1].unbind(0)), batch_sizes=[1], device=device)
+    retry.assert_called_once()
+    selected_backend(tuned, type(backend))
+    with torch.no_grad():
+        for value, output in zip(values, expected, strict=True):
+            TENSORRT_FP32.assert_close(tuned(value), output)
 
 
 @pytest.mark.matrix(

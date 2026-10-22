@@ -25,6 +25,11 @@ title: "Known Issues and Limitations"
 - **Distributed checkpoints.** Multi-GPU tuning produces rank-local artifacts. Loading with a different world size or
   rank topology is not supported, and AITune does not currently package distributed artifacts into one portable
   checkpoint.
+- **Torch-TensorRT AOT with dynamic 4D image inputs on PyTorch 2.8–2.10.** Tested stacks can compile a CNN with
+  `BatchDim` and spatial `DynamicDim` inputs shaped `(batch, channels, height, width)`, but reloading its saved `.pt2`
+  artifact fails in PyTorch's exported-program loader with `assert vr is not None`. Passing toy-model coverage using
+  a 3D public input does not cover this image-input path. The same 4D regression passes on the tested PyTorch
+  2.11–2.14 stacks. See [issue #118](https://github.com/ai-dynamo/aitune/issues/118) for exact builds and results.
 - **Kernel providers with strict Torch Export on PyTorch 2.8 and 2.9.** PyTorch 2.8 and 2.9 strict export cannot capture
   the forward hooks that temporarily replace `torch.nn.functional` kernels and can fail with a guard-export assertion.
   This is a generic limitation affecting every kernel provider, including SageAttention, when `KernelSelectorBackend`

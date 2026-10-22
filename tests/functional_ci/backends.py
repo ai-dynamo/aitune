@@ -29,7 +29,9 @@ from aitune.torch.backend import (
 )
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
 
-Capability = Literal["save_load", "export", "dynamic_batch", "structured_io", "multigraph", "onnx_input", "jit"]
+Capability = Literal[
+    "save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph", "onnx_input", "jit"
+]
 
 
 @dataclass(frozen=True)
@@ -91,14 +93,18 @@ BACKENDS: dict[str, BackendCase] = {
     "inductor-aot": BackendCase(
         TorchInductorAotBackend,
         Tolerance(),
-        _capabilities("save_load", "export", "dynamic_batch", "structured_io", "multigraph"),
+        _capabilities("save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph"),
         artifact_format="pt2",
     ),
-    "torch-tensorrt-aot": BackendCase(_torch_tensorrt_aot, TENSORRT_FP32, _capabilities("save_load")),
+    "torch-tensorrt-aot": BackendCase(
+        _torch_tensorrt_aot, TENSORRT_FP32, _capabilities("save_load", "dynamic_non_batch")
+    ),
     "tensorrt": BackendCase(
         tensorrt_backend,
         TENSORRT_FP32,
-        _capabilities("save_load", "export", "dynamic_batch", "structured_io", "multigraph", "onnx_input"),
+        _capabilities(
+            "save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph", "onnx_input"
+        ),
         artifact_format="tensorrt_plan",
     ),
     "onnxruntime-cuda": BackendCase(
