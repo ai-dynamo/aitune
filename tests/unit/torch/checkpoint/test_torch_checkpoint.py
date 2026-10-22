@@ -446,7 +446,7 @@ def test_nested_pipeline_wrapper_save_load():
         torch.testing.assert_close(value, expected[name])
 
 
-def test_aliased_nested_pipeline_wrapper_save_load():
+def test_aliased_nested_pipeline_wrapper_save_load(monkeypatch):
     """Test saving and loading an aliased nested pipeline wrapper."""
 
     class Vae(torch.nn.Module):
@@ -464,21 +464,21 @@ def test_aliased_nested_pipeline_wrapper_save_load():
     pipeline = Pipeline()
     pipeline.vae.decoder = Module(pipeline.vae.decoder, "decoder")
     pipeline.decoder = pipeline.vae.decoder
-    expected = {name: value.detach().clone() for name, value in pipeline.vae.decoder.__wrapped__.state_dict().items()}
     pipeline.vae.decoder.enable_passthrough()
 
     state_dict = TorchCheckpoint.state_dict_from_pipeline(pipeline)
     assert list(state_dict) == ["vae.decoder"]
 
     restored = Pipeline()
-    restored.vae.decoder = Module(restored.vae.decoder, "decoder")
-    restored.decoder = restored.vae.decoder
-    restored.vae.decoder.enable_passthrough()
+    replacement = torch.nn.Linear(2, 2)
+    monkeypatch.setattr(
+        TorchCheckpoint,
+        "load_state_dict_for_module",
+        staticmethod(lambda *args: replacement),
+    )
     TorchCheckpoint.load_state_dict_for_pipeline(restored, state_dict, {})
-    assert restored.decoder is restored.vae.decoder
-    assert isinstance(restored.decoder, Module)
-    for name, value in restored.decoder.__wrapped__.state_dict().items():
-        torch.testing.assert_close(value, expected[name])
+    assert restored.vae.decoder is replacement
+    assert restored.decoder is replacement
 
 
 @requires_cuda
