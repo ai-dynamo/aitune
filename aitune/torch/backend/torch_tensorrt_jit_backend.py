@@ -118,7 +118,7 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         return cls(**data)
 
 
-class TorchTensorRTJitBackend(Backend):
+class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
     """Torch TensorRT thought torch.compile(backend="torch_tensorrt").
 
     Backend does not use intermediate formats, and compiled model is not stored.
@@ -148,12 +148,9 @@ class TorchTensorRTJitBackend(Backend):
         Args:
             config: Configuration for torch compile with torch_tensorrt
         """
-        super().__init__()
+        super().__init__(config or TorchTensorRTJitBackendConfig())
         assert_cuda_is_available()
         assert_torch_tensorrt()
-
-        # initialize variables
-        self._config = config or TorchTensorRTJitBackendConfig()
 
         # build variables
         self._compiled_module = None

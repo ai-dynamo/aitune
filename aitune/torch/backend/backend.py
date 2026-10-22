@@ -10,7 +10,7 @@ from collections.abc import Generator
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Generic, Self, TypeVar
 
 import torch
 import torch.nn as nn
@@ -184,8 +184,11 @@ class BackendConfig:
         return changed_fields
 
 
+ConfigT = TypeVar("ConfigT", bound=BackendConfig | None)
+
+
 @with_backend_context
-class Backend(ABC):
+class Backend(ABC, Generic[ConfigT]):
     """Backend interface for tuning a module."""
 
     # Supported devices types
@@ -214,11 +217,11 @@ class Backend(ABC):
         if not isinstance(cls.__dict__["_build_mode"], BuildMode):
             raise TypeError(f"{cls.__name__}._build_mode must be a BuildMode value")
 
-    def __init__(self):
+    def __init__(self, config: ConfigT = None):
         """Initialize the backend."""
         self.state = BackendState.INIT
         self._device: torch.device | None = None
-        self._config: BackendConfig | None = None
+        self._config: ConfigT = config
         self._build_results = []
 
     @contextlib.contextmanager
@@ -374,7 +377,7 @@ class Backend(ABC):
         ...
 
     @abstractmethod
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """Returns the state_dict of the backend.
 
         Files or directories required to restore the backend must be represented by
@@ -386,7 +389,7 @@ class Backend(ABC):
 
     @classmethod
     @abstractmethod
-    def from_dict(cls, module: torch.nn.Module | None, state_dict: dict):
+    def from_dict(cls, module: torch.nn.Module | None, state_dict: dict) -> Self:
         """Creates a backend from a module and state_dict.
 
         Artifact values have already been relocated by the checkpoint loader and
@@ -500,7 +503,7 @@ class Backend(ABC):
 
     def _save_config(self, cache_dir: Path) -> None:
         """Store backend configuration metadata when configuration is available."""
-        if self._config is None:
+        if not isinstance(self._config, BackendConfig):
             return
 
         config_path = cache_dir / "config.json"

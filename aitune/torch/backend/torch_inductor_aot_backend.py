@@ -53,7 +53,7 @@ class TorchInductorAotBackendConfig(BackendConfig):
     inductor_configs: dict[str, Any] | None = None
 
 
-class TorchInductorAotBackend(Backend):
+class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
     """Backend that compiles models using AOT Inductor (``torch._inductor.aoti_compile_and_package``).
 
     Requires PyTorch >= 2.6.
@@ -89,8 +89,7 @@ class TorchInductorAotBackend(Backend):
         Args:
             config: Configuration for AOT Inductor compilation.
         """
-        super().__init__()
-        self._config = config or TorchInductorAotBackendConfig()
+        super().__init__(config or TorchInductorAotBackendConfig())
         self._compiled_model_artifact: ArtifactPath | None = None
         self._runner = None
         self._graph_spec: GraphSpec | None = None

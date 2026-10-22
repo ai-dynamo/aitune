@@ -211,7 +211,7 @@ class TensorRTBackendConfig(BackendConfig):
         return state_dict
 
 
-class TensorRTBackend(Backend, TensorRTRunner):
+class TensorRTBackend(Backend[TensorRTBackendConfig], TensorRTRunner):
     """TensorRT backend for model acceleration.
 
     This class builds and runs TensorRT engines from PyTorch models or existing OnnxModule graphs.
@@ -246,9 +246,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Args:
             config: Configuration for TensorRT backend
         """
-        super().__init__()
-
-        self._config = config or TensorRTBackendConfig()
+        super().__init__(config or TensorRTBackendConfig())
 
         if self._config.profiles == TensorRTProfileMode.SAMPLES_USED and global_config.max_num_samples_stored <= 1:
             raise ValueError(
@@ -1279,7 +1277,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         }
 
     @classmethod
-    def from_dict(cls, module: torch.nn.Module, state_dict: dict):
+    def from_dict(cls, module: torch.nn.Module | None, state_dict: dict):
         """Creates a backend from a state_dict."""
         backend = cls()
         backend._engine_artifact = state_dict[cls.STATE_ENGINE_PATH]
