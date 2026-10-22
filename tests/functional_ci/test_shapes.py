@@ -4,6 +4,7 @@
 
 from collections.abc import Callable
 from dataclasses import replace
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -95,10 +96,11 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
         for value in values:
             case.tolerance.assert_close(tuned(value), reference(value))
 
-    ait.save(tuned, tmp_path / "model.ait")
+    ait.save(cast(nn.Module, tuned), tmp_path / "model.ait")
     tuned.deactivate()
     # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
     restored = ait.load(make_spatial_model(device, seed=1), tmp_path / "model.ait")
+    assert isinstance(restored, ait.Module)
     selected_backend(restored, type(backend))
     with torch.no_grad():
         for value in values:
