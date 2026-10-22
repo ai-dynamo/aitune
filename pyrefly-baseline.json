@@ -330,41 +330,6 @@
       "severity": "error"
     },
     {
-      "column": 28,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None` is not assignable to parameter `config` with type `TorchQuantizationConfig` in function `aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer.quantize`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None` is not assignable to parameter `config` with type `ONNXQuantizationConfig` in function `aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizer.quantize`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None` is not assignable to parameter `config` with type `ONNXAutoCastConfig` in function `aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCast.autocast`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "not-iterable",
-      "concise_description": "Type `TensorRTProfileMode` is not iterable",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "not-iterable",
-      "concise_description": "Type `TensorRTProfileMode` is not iterable",
-      "severity": "error"
-    },
-    {
       "column": 59,
       "path": "aitune/torch/backend/tensorrt/tensorrt_builder.py",
       "name": "missing-module-attribute",
