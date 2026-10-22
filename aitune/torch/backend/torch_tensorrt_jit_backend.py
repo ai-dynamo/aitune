@@ -148,9 +148,9 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
         Args:
             config: Configuration for torch compile with torch_tensorrt
         """
-        super().__init__(config or TorchTensorRTJitBackendConfig())
         assert_cuda_is_available()
         assert_torch_tensorrt()
+        super().__init__(config or TorchTensorRTJitBackendConfig())
 
         # build variables
         self._compiled_module = None

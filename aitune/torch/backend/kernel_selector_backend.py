@@ -151,7 +151,7 @@ class KernelSelectorBackendConfig(BackendConfig):
         }
 
 
-class KernelSelectorBackend(Backend[KernelSelectorBackendConfig]):
+class KernelSelectorBackend(Backend[KernelSelectorBackendConfig | None]):
     """Select kernel providers and apply their plan while building a delegate backend.
 
     The backend adopts the delegate's build mode and supported execution modes. A JIT delegate keeps the selected
@@ -269,6 +269,8 @@ class KernelSelectorBackend(Backend[KernelSelectorBackendConfig]):
 
     def _create_optimizer(self) -> KernelOptimizer:
         """Create the kernel optimizer from backend configuration."""
+        if self._config is None:
+            raise RuntimeError("Kernel selector configuration is required to create the optimizer")
         return KernelOptimizer(
             kernel_providers=self._config.kernel_providers,
             kernel_generators=self._config.kernel_generators,
@@ -341,7 +343,7 @@ class KernelSelectorBackend(Backend[KernelSelectorBackendConfig]):
         delegate_backend = delegate_class.from_dict(module, delegate_state)
 
         backend = cls.__new__(cls)
-        Backend.__init__(backend)  # pyrefly: ignore[bad-argument-type]
+        Backend.__init__(backend)
         backend._delegate_backend = delegate_backend
         backend._runtime = None
         backend._adopt_delegate_modes()

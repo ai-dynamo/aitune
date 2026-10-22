@@ -3592,6 +3592,20 @@
       "severity": "error"
     },
     {
+      "column": 12,
+      "path": "tests/unit/torch/backend/test_kernel_selector_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `module`",
+      "severity": "error"
+    },
+    {
+      "column": 12,
+      "path": "tests/unit/torch/backend/test_kernel_selector_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of type `Backend[Unknown] | TorchInductorJitBackend` has no attribute `deploy_calls`",
+      "severity": "error"
+    },
+    {
       "column": 22,
       "path": "tests/unit/torch/backend/test_onnx_runtime_backend.py",
       "name": "missing-attribute",
