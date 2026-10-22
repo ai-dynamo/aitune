@@ -110,7 +110,7 @@ BACKENDS: dict[str, BackendCase] = {
     "onnxruntime-cuda": BackendCase(
         _onnx_runtime(ONNXExecutionProvider.CUDA),
         TENSORRT_FP32,
-        _capabilities("save_load", "export", "dynamic_batch", "onnx_input"),
+        _capabilities("save_load", "export", "dynamic_batch", "dynamic_non_batch", "onnx_input"),
         artifact_format="onnx",
     ),
     "onnxruntime-tensorrt": BackendCase(

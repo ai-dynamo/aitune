@@ -71,8 +71,8 @@ def test_explicit_batch_dim(case: BackendCase, device: torch.device):
 
 @pytest.mark.matrix("models.dynamic-non-batch")
 @with_backends("dynamic_non_batch")
-def test_explicit_spatial_dims(case: BackendCase, device: torch.device):
-    """User batch and spatial dimensions allow unseen sizes after recording one input shape."""
+def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path):
+    """User batch and spatial dimensions allow unseen sizes after recording one input shape, also after reload."""
     backend = case.factory()
     spatial = ait.DynamicDim("spatial", min=16, opt=24, max=32)
     dynamic_shapes: DynamicShapes = {"input": (ait.BatchDim("batch", min=1, opt=2, max=2), spatial, spatial)}
@@ -87,19 +87,25 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device):
     assert graph_spec.dynamic_shapes == dynamic_shapes
     selected_backend(tuned, type(backend))
     reference = make_spatial_model(device)
+    values = [
+        torch.randn(batch_size, size, size, device=device, generator=generator)
+        for batch_size, size in ((1, 16), (2, 24), (2, 32), (1, 23))
+    ]
     with torch.no_grad():
-        for batch_size, size in ((1, 16), (2, 24), (2, 32), (1, 23)):
-            value = torch.randn(batch_size, size, size, device=device, generator=generator)
+        for value in values:
             case.tolerance.assert_close(tuned(value), reference(value))
+
+    ait.save(tuned, tmp_path / "model.ait")
+    tuned.deactivate()
+    # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
+    restored = ait.load(make_spatial_model(device, seed=1), tmp_path / "model.ait")
+    selected_backend(restored, type(backend))
+    with torch.no_grad():
+        for value in values:
+            case.tolerance.assert_close(restored(value), reference(value))
 
 
 # The matrix hook records xfail as skipped, so this regression deliberately has no matrix marker.
-@pytest.mark.xfail(
-    Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10)),
-    reason="PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)",
-    raises=ValueError,
-    strict=True,
-)
 def test_torch_tensorrt_4d_image_dims(device: torch.device):
     """Compile and reload normal image inputs with user batch and spatial dimensions."""
     with seeded(device, 0):
@@ -130,7 +136,13 @@ def test_torch_tensorrt_4d_image_dims(device: torch.device):
         strategy=pinned_strategy(backend),
         dynamic_shapes={"input": (ait.BatchDim("batch", min=1, opt=2, max=2), 3, spatial, spatial)},
     )
-    ait.tune(tuned, list(values[0].unbind(0)), batch_sizes=[1], device=device, ignore_failing_modules=False)
+    samples = list(values[0].unbind(0))
+    if Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10)):
+        # Torch-TensorRT reloads the artifact at the end of the build and wraps the loader assertion.
+        with pytest.raises(ValueError, match="valid Torchscript module or ExportedProgram"):
+            ait.tune(tuned, samples, batch_sizes=[1], device=device, ignore_failing_modules=False)
+        pytest.xfail("PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)")
+    ait.tune(tuned, samples, batch_sizes=[1], device=device, ignore_failing_modules=False)
 
     selected_backend(tuned, TorchTensorRTAotBackend)
     with torch.no_grad():

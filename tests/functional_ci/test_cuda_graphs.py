@@ -17,7 +17,7 @@ from tests.functional_ci.models import IN_FEATURES, make_input, make_mlp
 LENGTHS = (16, 32, 64, 24)
 
 
-@pytest.mark.matrix("models.dynamic-non-batch/tensorrt")
+@pytest.mark.matrix("other.cuda-graphs-sequence-lengths/functional-ci")
 def test_dynamic_sequence_excludes_cuda_graph_capture(device: torch.device):
     """An explicit sequence range runs normally with CUDA graphs enabled, including unrecorded lengths."""
     backend = tensorrt_backend(use_cuda_graphs=True, use_dynamo=False, opset_version=20)
@@ -46,7 +46,7 @@ def test_dynamic_sequence_excludes_cuda_graph_capture(device: torch.device):
         capture.assert_not_called()
 
 
-@pytest.mark.matrix("models.dynamic-non-batch/tensorrt")
+@pytest.mark.matrix("other.cuda-graphs-sequence-lengths/functional-ci")
 def test_sequence_profiles_capture_and_reuse_cuda_graphs(device: torch.device):
     """Each static sequence profile captures once and reuses its graph after switching to other lengths."""
     profiles = [
