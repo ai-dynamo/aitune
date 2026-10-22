@@ -182,11 +182,11 @@ class BackendConfig:
         return changed_fields
 
 
-ConfigT = TypeVar("ConfigT", bound=BackendConfig | None)
+ConfigType = TypeVar("ConfigType", bound=BackendConfig | None)
 
 
 @with_backend_context
-class Backend(ABC, Generic[ConfigT]):
+class Backend(ABC, Generic[ConfigType]):
     """Backend interface for tuning a module."""
 
     # Supported devices types
@@ -215,11 +215,11 @@ class Backend(ABC, Generic[ConfigT]):
         if not isinstance(cls.__dict__["_build_mode"], BuildMode):
             raise TypeError(f"{cls.__name__}._build_mode must be a BuildMode value")
 
-    def __init__(self, config: ConfigT = None):
+    def __init__(self, config: ConfigType = None):
         """Initialize the backend."""
         self.state = BackendState.INIT
         self._device: torch.device | None = None
-        self._config: ConfigT = config
+        self._config: ConfigType = config
         self._build_results = []
 
     @contextlib.contextmanager
