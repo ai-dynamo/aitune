@@ -481,6 +481,44 @@ def test_aliased_nested_pipeline_wrapper_save_load(monkeypatch):
     assert restored.decoder is replacement
 
 
+def test_aliased_nested_pipeline_wrapper_load_ignores_duplicate_keys(monkeypatch):
+    """Test loading an aliased wrapper from duplicate checkpoint keys."""
+
+    class Vae(torch.nn.Module):
+        decoder: Any
+
+        def __init__(self):
+            super().__init__()
+            self.decoder = torch.nn.Linear(2, 2)
+
+    class Pipeline:
+        def __init__(self):
+            self.vae = Vae()
+            self.decoder = self.vae.decoder
+
+    restored = Pipeline()
+    restored.decoder = restored.vae.decoder
+    replacement = torch.nn.Linear(2, 2)
+    calls = []
+
+    def load_module(*args):
+        calls.append(args)
+        return replacement
+
+    monkeypatch.setattr(
+        TorchCheckpoint,
+        "load_state_dict_for_module",
+        staticmethod(load_module),
+    )
+    state_dict = {"decoder": {}, "vae.decoder": {}}
+
+    TorchCheckpoint.load_state_dict_for_pipeline(restored, state_dict, {})
+
+    assert len(calls) == 1
+    assert restored.decoder is replacement
+    assert restored.vae.decoder is replacement
+
+
 @requires_cuda
 def test_state_dict_from_pipeline_no_tuned_modules(pipeline_factory):
     """Test that ValueError is raised when trying to get state dict from a pipeline with no tuned modules."""

@@ -301,6 +301,7 @@ class TorchCheckpoint(Checkpoint):
         """
         matched_modules = set()
         module_paths = TorchCheckpoint.get_pipeline_module_paths(pipeline)
+        restored_module_ids = set()
         for name, module_state_dict in state_dict.items():
             path = name.split(".")
             parent = pipeline
@@ -314,11 +315,15 @@ class TorchCheckpoint(Checkpoint):
                     module = getattr(parent, attribute)
                     if isinstance(module, (torch.nn.Module, WrapperModule)):
                         matched_modules.add(name)
+                        if id(module) in restored_module_ids:
+                            # This alias was restored by an earlier key.
+                            continue
                         restored_module = TorchCheckpoint.load_state_dict_for_module(
                             module, module_state_dict, device_map, name
                         )
                         for owner, child_name in module_paths[id(module)]:
                             setattr(owner, child_name, restored_module)
+                        restored_module_ids.add(id(restored_module))
                     else:
                         raise ValueError(f"Module {name} is not a torch.nn.Module or WrapperModule")
 
