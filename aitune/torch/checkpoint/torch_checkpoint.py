@@ -105,7 +105,7 @@ class TorchCheckpoint(Checkpoint):
         return module_or_pipeline
 
     @staticmethod
-    def get_pipeline_modules(pipeline: Any) -> dict[str, torch.nn.Module]:
+    def get_pipeline_modules(pipeline: Any) -> dict[str, torch.nn.Module | WrapperModule]:
         """Get the modules from the pipeline.
 
         Args:

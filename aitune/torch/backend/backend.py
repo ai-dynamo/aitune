@@ -217,7 +217,7 @@ class Backend(ABC):
     def __init__(self):
         """Initialize the backend."""
         self.state = BackendState.INIT
-        self._device = None
+        self._device: torch.device | None = None
         self._config: BackendConfig | None = None
         self._build_results = []
 
@@ -407,7 +407,12 @@ class Backend(ABC):
 
         Returns:
             The device the module is using.
+
+        Raises:
+            RuntimeError: If the device is not set yet by build() or deploy().
         """
+        if self._device is None:
+            raise RuntimeError(f"Device of backend {self.name} is not set. Call build() or deploy() first.")
         return self._device
 
     @property

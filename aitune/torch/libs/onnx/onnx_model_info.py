@@ -103,15 +103,11 @@ class ONNXModelInfo:
                 self._opsets[domain] = entry.version
             self._opset_version = self._opsets.get("")
 
-            # Extract producer info if available
-            self._producer_name = model.producer_name if hasattr(model, "producer_name") else None
-            self._producer_version = model.producer_version if hasattr(model, "producer_version") else None
-
-            # Extract model version if available
-            self._model_version = model.model_version if hasattr(model, "model_version") else None
-
-            # Extract doc string if available
-            self._doc_string = model.doc_string if hasattr(model, "doc_string") else None
+            # Unset protobuf scalar fields return their defaults ("" or 0), never None.
+            self._producer_name = model.producer_name
+            self._producer_version = model.producer_version
+            self._model_version = model.model_version
+            self._doc_string = model.doc_string
 
             logger.info("Extracted information for model:")
             logger.info("  Inputs: %s", self._input_names)
@@ -187,11 +183,11 @@ class ONNXModelInfo:
     @staticmethod
     def _get_tensor_shapes(value_info_list) -> dict[str, list[int | str | None]]:
         """Extract shapes from ONNX graph ValueInfoProto list (e.g. model.graph.input)."""
-        shapes = {}
+        shapes: dict[str, list[int | str | None]] = {}
         for val in value_info_list:
             if not val.type.HasField("tensor_type") or not val.type.tensor_type.HasField("shape"):
                 continue
-            dims = []
+            dims: list[int | str | None] = []
             for d in val.type.tensor_type.shape.dim:
                 if d.HasField("dim_value"):
                     dims.append(int(d.dim_value))
