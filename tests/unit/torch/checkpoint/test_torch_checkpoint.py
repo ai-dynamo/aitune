@@ -446,6 +446,41 @@ def test_nested_pipeline_wrapper_save_load():
         torch.testing.assert_close(value, expected[name])
 
 
+def test_aliased_nested_pipeline_wrapper_save_load():
+    """Test saving and loading an aliased nested pipeline wrapper."""
+
+    class Vae(torch.nn.Module):
+        decoder: Any
+
+        def __init__(self):
+            super().__init__()
+            self.decoder = torch.nn.Linear(2, 2)
+
+    class Pipeline:
+        def __init__(self):
+            self.vae = Vae()
+            self.decoder = self.vae.decoder
+
+    pipeline = Pipeline()
+    pipeline.vae.decoder = Module(pipeline.vae.decoder, "decoder")
+    pipeline.decoder = pipeline.vae.decoder
+    expected = {name: value.detach().clone() for name, value in pipeline.vae.decoder.__wrapped__.state_dict().items()}
+    pipeline.vae.decoder.enable_passthrough()
+
+    state_dict = TorchCheckpoint.state_dict_from_pipeline(pipeline)
+    assert list(state_dict) == ["vae.decoder"]
+
+    restored = Pipeline()
+    restored.vae.decoder = Module(restored.vae.decoder, "decoder")
+    restored.decoder = restored.vae.decoder
+    restored.vae.decoder.enable_passthrough()
+    TorchCheckpoint.load_state_dict_for_pipeline(restored, state_dict, {})
+    assert restored.decoder is restored.vae.decoder
+    assert isinstance(restored.decoder, Module)
+    for name, value in restored.decoder.__wrapped__.state_dict().items():
+        torch.testing.assert_close(value, expected[name])
+
+
 @requires_cuda
 def test_state_dict_from_pipeline_no_tuned_modules(pipeline_factory):
     """Test that ValueError is raised when trying to get state dict from a pipeline with no tuned modules."""

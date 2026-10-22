@@ -147,10 +147,12 @@ class TorchCheckpoint(Checkpoint):
         """
         state_dict = OrderedDict()
         pipeline_modules = TorchCheckpoint.get_pipeline_modules(pipeline)
+        saved_module_ids = set()
 
         for name, module in pipeline_modules.items():
-            if isinstance(module, WrapperModule):
+            if isinstance(module, WrapperModule) and id(module) not in saved_module_ids:
                 state_dict[name] = module.state_dict()
+                saved_module_ids.add(id(module))
         if not state_dict:
             raise ValueError("No tuned modules found in the pipeline")
         return state_dict
@@ -259,6 +261,25 @@ class TorchCheckpoint(Checkpoint):
         return final_module
 
     @staticmethod
+    def get_pipeline_module_paths(pipeline: Any) -> dict[int, list[tuple[Any, str]]]:
+        """Get all paths to modules in a pipeline."""
+        module_paths: dict[int, list[tuple[Any, str]]] = {}
+
+        def add_path(module: TorchModule | WrapperModule, owner: Any, name: str) -> None:
+            module_paths.setdefault(id(module), []).append((owner, name))
+
+        for name, module in vars(pipeline).items():
+            if isinstance(module, (TorchModule, WrapperModule)):
+                add_path(module, pipeline, name)
+            if isinstance(module, TorchModule):
+                for _, parent in module.named_modules(remove_duplicate=False):
+                    for child_name, child in parent._modules.items():
+                        if child is not None:
+                            add_path(child, parent, child_name)
+
+        return module_paths
+
+    @staticmethod
     def load_state_dict_for_pipeline(pipeline, state_dict, device_map: dict[str, torch.device]):
         """Load a state dictionary into a pipeline.
 
@@ -279,6 +300,7 @@ class TorchCheckpoint(Checkpoint):
                         if a matched attribute is not a torch.nn.Module or WrapperModule.
         """
         matched_modules = set()
+        module_paths = TorchCheckpoint.get_pipeline_module_paths(pipeline)
         for name, module_state_dict in state_dict.items():
             path = name.split(".")
             parent = pipeline
@@ -292,11 +314,11 @@ class TorchCheckpoint(Checkpoint):
                     module = getattr(parent, attribute)
                     if isinstance(module, (torch.nn.Module, WrapperModule)):
                         matched_modules.add(name)
-                        setattr(
-                            parent,
-                            attribute,
-                            TorchCheckpoint.load_state_dict_for_module(module, module_state_dict, device_map, name),
+                        restored_module = TorchCheckpoint.load_state_dict_for_module(
+                            module, module_state_dict, device_map, name
                         )
+                        for owner, child_name in module_paths[id(module)]:
+                            setattr(owner, child_name, restored_module)
                     else:
                         raise ValueError(f"Module {name} is not a torch.nn.Module or WrapperModule")
 
