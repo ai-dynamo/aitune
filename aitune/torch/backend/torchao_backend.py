@@ -329,7 +329,7 @@ class TorchAOBackend(Backend):
         model = copy.deepcopy(self._orig_module)
         move_module_to_device(self._orig_module, "cpu")
 
-        quantize_(model, config=self._config.quantization_config, device=self._device, filter_fn=self._config.filter_fn)
+        quantize_(model, config=self._config.quantization_config, device=self.device, filter_fn=self._config.filter_fn)
         self._quant_module = torch.compile(
             model=model,
             fullgraph=self._config.fullgraph,
@@ -343,7 +343,7 @@ class TorchAOBackend(Backend):
     def _iter_samples(self):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""
         if self._samples is not None:
-            return self._samples.iter_samples(self._device)
+            return self._samples.iter_samples(self.device)
         return iter(self._data)
 
     def _check_hardware_compatibility(self, module: nn.Module) -> None:

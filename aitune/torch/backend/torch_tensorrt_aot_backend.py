@@ -211,10 +211,10 @@ class TorchTensorRTAotBackend(Backend):
         logger.info("Start compiling torch module with Torch-TensorRT using torch_tensorrt.dynamo.compile.")
 
         model = module.eval()
-        move_module_to_device(model, self._device)
+        move_module_to_device(model, self.device)
 
         # Set the device for the TensorRT backend compilation
-        self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
+        self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self.device))
 
         with self._track_build_step(TorchTensorRTAotBuildStep.TORCH_EXPORT):
             # ``use_auto=False`` first tries the finite explicit ranges required by TensorRT optimization
@@ -228,7 +228,7 @@ class TorchTensorRTAotBackend(Backend):
                 model,
                 samples[0],
                 graph_spec,
-                device=self._device,
+                device=self.device,
             )
             exported = export_result.exported_program
             _, kwargs = export_result.sample
@@ -299,7 +299,7 @@ class TorchTensorRTAotBackend(Backend):
         exported_model_artifact = cast(ArtifactPath, self._exported_model_artifact)
         with torch_tensorrt_errors(torch_tensorrt):
             loaded = torch_tensorrt.load(exported_model_artifact.path.as_posix())
-            self._opt_module = loaded.module().to(self._device)
+            self._opt_module = loaded.module().to(self.device)
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with TensorRT engine.

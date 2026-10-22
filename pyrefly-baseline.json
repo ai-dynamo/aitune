@@ -78,13 +78,6 @@
       "severity": "error"
     },
     {
-      "column": 39,
-      "path": "aitune/torch/backend/kernel_selector_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
       "column": 30,
       "path": "aitune/torch/backend/kernel_selector_backend.py",
       "name": "missing-attribute",
@@ -211,13 +204,6 @@
       "severity": "error"
     },
     {
-      "column": 59,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `index`",
-      "severity": "error"
-    },
-    {
       "column": 29,
       "path": "aitune/torch/backend/onnx_runtime_backend.py",
       "name": "bad-assignment",
@@ -271,13 +257,6 @@
       "path": "aitune/torch/backend/onnx_runtime_backend.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `InferenceSession | None` is not assignable to parameter `session` with type `InferenceSession` in function `aitune.torch.libs.onnx.runtime.run_onnx`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device` in function `aitune.torch.libs.onnx.runtime.run_onnx`",
       "severity": "error"
     },
     {
@@ -348,13 +327,6 @@
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `object` is not assignable to parameter `*args` with type `PathLike[str] | str` in function `pathlib.Path.__new__`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.cuda_utils.set_device`",
       "severity": "error"
     },
     {
@@ -544,13 +516,6 @@
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `elapsed_time`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.cuda_utils.set_device`",
       "severity": "error"
     },
     {
@@ -946,13 +911,6 @@
       "severity": "error"
     },
     {
-      "column": 39,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
       "column": 12,
       "path": "aitune/torch/backend/torch_eager.py",
       "name": "missing-attribute",
@@ -964,13 +922,6 @@
       "path": "aitune/torch/backend/torch_eager.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Unknown | None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
-      "column": 50,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.module.move_module_to_device`",
       "severity": "error"
     },
     {
@@ -1006,13 +957,6 @@
       "path": "aitune/torch/backend/torch_eager.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Unknown | None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
-      "column": 50,
-      "path": "aitune/torch/backend/torch_eager.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.module.move_module_to_device`",
       "severity": "error"
     },
     {
@@ -1065,31 +1009,10 @@
       "severity": "error"
     },
     {
-      "column": 39,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
       "column": 34,
       "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of type `BackendConfig | None` has no attribute `inductor_configs`",
-      "severity": "error"
-    },
-    {
-      "column": 46,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `index`",
-      "severity": "error"
-    },
-    {
-      "column": 106,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Literal[0] | object | Unknown` is not assignable to parameter `device_index` with type `int` in function `torch._inductor.aoti_load_package`",
       "severity": "error"
     },
     {
@@ -1128,13 +1051,6 @@
       "severity": "error"
     },
     {
-      "column": 33,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `type`",
-      "severity": "error"
-    },
-    {
       "column": 23,
       "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
       "name": "missing-attribute",
@@ -1149,13 +1065,6 @@
       "severity": "error"
     },
     {
-      "column": 39,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
       "column": 12,
       "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
       "name": "missing-attribute",
@@ -1167,13 +1076,6 @@
       "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Unknown | None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
-      "column": 50,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.module.move_module_to_device`",
       "severity": "error"
     },
     {
@@ -1195,13 +1097,6 @@
       "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of type `BackendConfig | None` has no attribute `options`",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `type`",
       "severity": "error"
     },
     {
@@ -1289,13 +1184,6 @@
       "severity": "error"
     },
     {
-      "column": 38,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
@@ -1307,13 +1195,6 @@
       "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `Device`",
-      "severity": "error"
-    },
-    {
-      "column": 84,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.cuda_utils.get_device`",
       "severity": "error"
     },
     {
@@ -1408,38 +1289,10 @@
       "severity": "error"
     },
     {
-      "column": 50,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.module.move_module_to_device`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `type`",
-      "severity": "error"
-    },
-    {
-      "column": 57,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.cuda_utils.get_device`",
-      "severity": "error"
-    },
-    {
       "column": 27,
       "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of type `BackendConfig | None` has no attribute `fullgraph`",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `type`",
       "severity": "error"
     },
     {
@@ -1597,7 +1450,7 @@
       "severity": "error"
     },
     {
-      "column": 98,
+      "column": 97,
       "path": "aitune/torch/backend/torchao_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of type `BackendConfig | None` has no attribute `filter_fn`",

@@ -58,7 +58,7 @@ class TorchExporter:
         sample: Sample,
         graph_spec: GraphSpec,
         *,
-        device: torch.device | str | None = None,
+        device: torch.device | str,
     ) -> TorchExportResult:
         """Prepare the sample, build matching shape constraints, and export the module.
 
@@ -66,14 +66,13 @@ class TorchExporter:
             module: Module to export.
             sample: Representative positional and keyword inputs.
             graph_spec: Recorded input and output metadata.
-            device: Optional destination for every tensor leaf in the prepared sample.
+            device: Destination for every tensor leaf in the prepared sample.
 
         Returns:
             The exported program and the exact sample and constraints used for capture.
         """
         prepared_sample = prepare_export_sample(sample, graph_spec)
-        if device is not None:
-            prepared_sample = move_tensors_to_device(prepared_sample, device)
+        prepared_sample = move_tensors_to_device(prepared_sample, device)
         args, kwargs = prepared_sample
         dynamic_shapes = build_dynamic_shapes(prepared_sample, graph_spec, use_auto=self.use_auto)
         log_dynamic_shapes(dynamic_shapes)

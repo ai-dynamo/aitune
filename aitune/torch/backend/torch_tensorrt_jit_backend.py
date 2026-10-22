@@ -207,11 +207,11 @@ class TorchTensorRTJitBackend(Backend):
         logger.info("Start compiling torch module with torch.compile(backend='torch_tensorrt').")
         torch._dynamo.reset()
 
-        move_module_to_device(self._orig_module, self._device)
+        move_module_to_device(self._orig_module, self.device)
 
         compile_options = self._compile_settings()
-        if self._device.type == "cuda":
-            compile_options["device"] = get_cuda_device(self._device)
+        if self.device.type == "cuda":
+            compile_options["device"] = get_cuda_device(self.device)
         else:
             compile_options.pop("device", None)
 
@@ -233,7 +233,7 @@ class TorchTensorRTJitBackend(Backend):
         """Run inference with autocast enabled."""
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device.type),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -280,7 +280,7 @@ class TorchTensorRTJitBackend(Backend):
     def _iter_samples(self):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""
         if self._samples is not None:
-            return self._samples.iter_samples(self._device)
+            return self._samples.iter_samples(self.device)
         if self._data is not None:
             return iter(self._data)
         raise RuntimeError("Backend has no warmup data. Please call build() first.")

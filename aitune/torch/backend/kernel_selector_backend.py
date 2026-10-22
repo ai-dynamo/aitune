@@ -213,7 +213,7 @@ class KernelSelectorBackend(Backend):
         cache_dir: Path,
     ) -> Backend:
         """Select providers and build the delegate while the plan is applied."""
-        move_module_to_device(module, self._device)
+        move_module_to_device(module, self.device)
 
         optimizer = self._create_optimizer()
         plan = optimizer.make_plan(module, samples, module=module)
@@ -225,7 +225,7 @@ class KernelSelectorBackend(Backend):
 
         with runtime.applied():
             self._delegate_backend = self._delegate_backend.build(
-                module, graph_spec, samples, self._device, delegate_cache_dir
+                module, graph_spec, samples, self.device, delegate_cache_dir
             )
 
         if self._build_mode is BuildMode.JUST_IN_TIME:
@@ -305,7 +305,7 @@ class KernelSelectorBackend(Backend):
         if self._runtime is not None:
             self._runtime.activate()
         try:
-            self._delegate_backend.deploy(self._device)
+            self._delegate_backend.deploy(self.device)
         except Exception:
             if self._runtime is not None:
                 self._runtime.deactivate()

@@ -80,7 +80,7 @@ class TorchEagerBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -97,7 +97,7 @@ class TorchEagerBackend(Backend):
 
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Builds the model."""
-        move_module_to_device(module, self._device)
+        move_module_to_device(module, self.device)
 
         self._orig_module = module
         self._graph_spec = graph_spec
@@ -111,7 +111,7 @@ class TorchEagerBackend(Backend):
 
     def _activate(self):
         """Activates runner."""
-        move_module_to_device(self._orig_module, self._device)
+        move_module_to_device(self._orig_module, self.device)
 
         if self._config.autocast_enabled:
             self._infer = self._infer_with_autocast
@@ -128,7 +128,7 @@ class TorchEagerBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -159,7 +159,7 @@ class TorchEagerBackend(Backend):
 
     def _deploy(self):
         """Deploys the backend."""
-        move_module_to_device(self._orig_module, self._device)
+        move_module_to_device(self._orig_module, self.device)
         if self._config.autocast_enabled:
             self._infer = self._infer_with_autocast
 

@@ -505,6 +505,7 @@ def test_profile_context_setup_failure_propagates(profile_backend, failure):
 
 def test_activation_starts_with_empty_profile_cache(trtre_backend, mocker):
     backend = trtre_backend
+    backend._device = torch.device("cuda:0")
     backend._config.max_cuda_graphs = 2
     backend._config.cuda_graph_cache_policy = "lru"
     backend._engine_artifact = Mock()

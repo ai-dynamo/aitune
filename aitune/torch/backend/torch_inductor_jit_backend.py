@@ -154,7 +154,7 @@ class TorchInductorJitBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device.type),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -172,7 +172,7 @@ class TorchInductorJitBackend(Backend):
     def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
         """Builds the model with torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
-        move_module_to_device(module, self._device)
+        move_module_to_device(module, self.device)
         self._orig_module = module
         if self._config.autocast_enabled:
             self._required_casting_dtype = self._get_required_casting_dtype(module, samples)
@@ -183,7 +183,7 @@ class TorchInductorJitBackend(Backend):
 
     def _compile(self):
         logger.info("Start compiling torch module.")
-        move_module_to_device(self._orig_module, self._device)
+        move_module_to_device(self._orig_module, self.device)
 
         self._compiled_module = torch.compile(
             self._orig_module,
@@ -216,7 +216,7 @@ class TorchInductorJitBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device.type),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -269,7 +269,7 @@ class TorchInductorJitBackend(Backend):
     def _iter_samples(self):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""
         if self._samples is not None:
-            return self._samples.iter_samples(self._device)
+            return self._samples.iter_samples(self.device)
         if self._data is not None:
             return iter(self._data)
         raise RuntimeError("Backend has no warmup data. Please call build() first.")
