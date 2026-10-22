@@ -13,7 +13,7 @@ from packaging.version import Version
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend.torch_tensorrt_aot_backend import (
+from aitune.torch.backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
     TorchTensorRTConfig,
@@ -107,17 +107,21 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
             case.tolerance.assert_close(restored(value), reference(value))
 
 
-# The matrix hook records xfail as skipped, so this regression deliberately has no matrix marker.
-def test_torch_tensorrt_4d_image_dims(device: torch.device, tmp_path):
-    """Compile, save, and reload normal image inputs with user batch and spatial dimensions."""
-    with seeded(device, 0):
+def _make_image_model(device: torch.device, seed: int) -> nn.Module:
+    with seeded(device, seed):
         model = nn.Sequential(
             nn.Conv2d(3, 4, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(1),
         )
-    model = model.to(device).eval()
+    return model.to(device).eval()
+
+
+# The matrix hook records xfail as skipped, so this regression deliberately has no matrix marker.
+def test_torch_tensorrt_4d_image_dims(device: torch.device, tmp_path):
+    """Compile, save, and reload normal image inputs with user batch and spatial dimensions."""
+    model = _make_image_model(device, seed=0)
     generator = torch.Generator(device=device).manual_seed(1)
     values = [
         torch.randn(batch_size, 3, size, size, device=device, generator=generator)
@@ -126,6 +130,7 @@ def test_torch_tensorrt_4d_image_dims(device: torch.device, tmp_path):
     with torch.no_grad():
         expected = [model(value) for value in values]
 
+    # Not the shared factory: it passes `enabled_precisions`, which Torch-TensorRT 2.14 rejects, and this runs on 2.11+.
     backend = TorchTensorRTAotBackend(
         TorchTensorRTAotBackendConfig(
             compile_config=TorchTensorRTConfig(min_block_size=1, require_full_compilation=True, disable_tf32=True)
@@ -140,7 +145,7 @@ def test_torch_tensorrt_4d_image_dims(device: torch.device, tmp_path):
     )
     samples = list(values[0].unbind(0))
     if Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10)):
-        # Torch-TensorRT reloads the artifact at the end of the build and wraps the loader assertion.
+        # AITune's `_activate` reloads the artifact via `torch_tensorrt.load`, which wraps the assertion in ValueError.
         with pytest.raises(ValueError, match="valid Torchscript module or ExportedProgram"):
             ait.tune(tuned, samples, batch_sizes=[1], device=device, ignore_failing_modules=False)
         pytest.xfail("PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)")
@@ -153,7 +158,8 @@ def test_torch_tensorrt_4d_image_dims(device: torch.device, tmp_path):
 
     ait.save(cast(nn.Module, tuned), tmp_path / "model.ait")
     tuned.deactivate()
-    restored = ait.load(model, tmp_path / "model.ait")
+    # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
+    restored = ait.load(_make_image_model(device, seed=1), tmp_path / "model.ait")
     assert isinstance(restored, ait.Module)
     selected_backend(restored, TorchTensorRTAotBackend)
     with torch.no_grad():
