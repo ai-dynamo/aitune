@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import MISSING, dataclass, fields
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Literal, get_args
+from typing import Any, Literal, Self, get_args
 
 import torch
 import torch.nn as nn
@@ -244,7 +244,7 @@ class TorchAOBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Builds the model with torchao quantization and torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
 

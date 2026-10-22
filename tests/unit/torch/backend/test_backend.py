@@ -23,6 +23,7 @@ from aitune.torch.backend.backend import (
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.utils.hashing import hash_string
 from tests.toy_backends import SleepBackend
+from tests.utilities.helpers import make_sample_store
 
 
 @dataclass
@@ -175,7 +176,7 @@ def test_backend_build_releases_unused_memory(mocker, tmp_path):
     mocker.patch("aitune.torch.utils.memory.torch.cuda.is_available", return_value=True)
     empty_cache = mocker.patch("aitune.torch.utils.memory.torch.cuda.empty_cache")
 
-    DummyBackend().build(nn.Identity(), Mock(), [], torch.device("cpu"), tmp_path)
+    DummyBackend().build(nn.Identity(), Mock(), make_sample_store([], tmp_path), torch.device("cpu"), tmp_path)
 
     collect.assert_called_once()
     empty_cache.assert_called_once()
@@ -187,7 +188,7 @@ def test_backend_build_saves_available_config(tmp_path):
     backend = DummyBackend()
     backend._config = config
 
-    backend.build(nn.Identity(), Mock(), [], torch.device("cpu"), tmp_path)
+    backend.build(nn.Identity(), Mock(), make_sample_store([], tmp_path), torch.device("cpu"), tmp_path)
 
     with open(tmp_path / "config.json") as config_file:
         assert json.load(config_file) == config.to_dict()

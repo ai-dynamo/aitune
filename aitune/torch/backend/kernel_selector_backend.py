@@ -4,7 +4,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import torch.nn as nn
 from torch.nn.attention import SDPBackend
@@ -211,7 +211,7 @@ class KernelSelectorBackend(Backend):
         graph_spec: GraphSpec,
         samples: SampleStore,
         cache_dir: Path,
-    ) -> Backend:
+    ) -> Self:
         """Select providers and build the delegate while the plan is applied."""
         move_module_to_device(module, self.device)
 
