@@ -380,13 +380,26 @@ ordinary modules and `ExecutionMode.MULTI_GPU` when the backend can preserve dis
 activation compiles or otherwise requires the original PyTorch module, declare the backend as just-in-time so AITune
 retains that module:
 
+Parameterize `Backend` with your config class, so that type checkers know the type of `self._config`. Pass the
+config to `super().__init__()`:
+
 ```python
-from aitune.torch.backend import Backend, BuildMode, ExecutionMode
+from dataclasses import dataclass
+
+from aitune.torch.backend.backend import Backend, BackendConfig, BuildMode, ExecutionMode
 
 
-class CustomJitBackend(Backend):
+@dataclass
+class CustomBackendConfig(BackendConfig):
+    workspace_size: int = 1 << 30
+
+
+class CustomJitBackend(Backend[CustomBackendConfig]):
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
     _build_mode = BuildMode.JUST_IN_TIME
+
+    def __init__(self, config: CustomBackendConfig | None = None):
+        super().__init__(config or CustomBackendConfig())
 ```
 
 For serialization with `ait.load` and `ait.save`, the `to_dict` and `from_dict` methods are used. Anything placed in
