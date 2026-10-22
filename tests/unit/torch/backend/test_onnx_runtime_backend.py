@@ -79,9 +79,12 @@ def mock_onnx(mocker, graph_spec):
     """
 
     def _export(*args, **kwargs):
-        Path(kwargs["f"]).write_bytes(b"onnx-model")
+        program = Mock()
+        program.save.side_effect = lambda path, **_: Path(path).write_bytes(b"onnx-model")
+        return program
 
     export = mocker.patch("torch.onnx.export", side_effect=_export)
+    mocker.patch("aitune.torch.libs.onnx.onnx_exporter.TopologicalSortPass")
     mocker.patch("onnx.checker.check_model")
     mocker.patch(
         "aitune.torch.libs.onnx.runtime.memcpy_to_torch",
@@ -290,9 +293,14 @@ def test_build_includes_onnx_external_data_in_the_artifact(
     mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
 ):
     def export_with_external_data(*args, **kwargs):
-        model_path = Path(kwargs["f"])
-        model_path.write_bytes(b"onnx-model")
-        Path(f"{model_path}.data").write_bytes(b"external-data")
+        program = Mock()
+
+        def _save(path, **_):
+            Path(path).write_bytes(b"onnx-model")
+            Path(f"{path}.data").write_bytes(b"external-data")
+
+        program.save.side_effect = _save
+        return program
 
     mock_onnx.side_effect = export_with_external_data
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
@@ -587,9 +595,14 @@ def test_checkpoint_loaded_backend_recreates_external_data_artifact(
     mock_onnx, model, graph_spec, sample_data, torch_device, tmp_path, execution_provider
 ):
     def export_with_external_data(*args, **kwargs):
-        model_path = Path(kwargs["f"])
-        model_path.write_bytes(b"onnx-model")
-        Path(f"{model_path}.data").write_bytes(b"external-data")
+        program = Mock()
+
+        def _save(path, **_):
+            Path(path).write_bytes(b"onnx-model")
+            Path(f"{path}.data").write_bytes(b"external-data")
+
+        program.save.side_effect = _save
+        return program
 
     mock_onnx.side_effect = export_with_external_data
     backend = ONNXRuntimeBackend(ONNXRuntimeBackendConfig(execution_provider=execution_provider)).build(
