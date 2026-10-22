@@ -26,6 +26,26 @@ PROMPT = "A futuristic cityscape with neon lights and flying cars"
 COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
 
 
+# Known TensorRT failures on the toy Flux blocks; strict, so a fixed TensorRT fails CI with XPASS until removed.
+KNOWN_FAILURES = {
+    "test_pipeline_lifecycle[torch-tensorrt-aot]": (
+        "TensorRT Myelin internal error on LayerNorm+SDPA blocks: 'logical memory size (384) should be equal "
+        "to non-opaque payload size (3072)'"
+    ),
+    "test_pipeline_jit[torch-tensorrt-jit]": (
+        "torch.compile(backend='torch_tensorrt') rejects int64 embedding ids; the blocks also hit the TensorRT "
+        "Myelin payload-size error"
+    ),
+}
+
+
+@pytest.fixture(autouse=True)
+def _known_failure(request: pytest.FixtureRequest) -> None:
+    reason = KNOWN_FAILURES.get(request.node.name)
+    if reason:
+        request.applymarker(pytest.mark.xfail(strict=True, reason=reason))
+
+
 def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor:
     """Generate deterministic toy images."""
     return pipeline(prompt, generator=torch.Generator(device=pipeline.device).manual_seed(0))
