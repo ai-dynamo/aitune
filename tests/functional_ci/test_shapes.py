@@ -108,8 +108,8 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
 
 
 # The matrix hook records xfail as skipped, so this regression deliberately has no matrix marker.
-def test_torch_tensorrt_4d_image_dims(device: torch.device):
-    """Compile and reload normal image inputs with user batch and spatial dimensions."""
+def test_torch_tensorrt_4d_image_dims(device: torch.device, tmp_path):
+    """Compile, save, and reload normal image inputs with user batch and spatial dimensions."""
     with seeded(device, 0):
         model = nn.Sequential(
             nn.Conv2d(3, 4, kernel_size=3, padding=1),
@@ -150,6 +150,15 @@ def test_torch_tensorrt_4d_image_dims(device: torch.device):
     with torch.no_grad():
         for value, output in zip(values, expected, strict=True):
             TENSORRT_FP32.assert_close(tuned(value), output)
+
+    ait.save(cast(nn.Module, tuned), tmp_path / "model.ait")
+    tuned.deactivate()
+    restored = ait.load(model, tmp_path / "model.ait")
+    assert isinstance(restored, ait.Module)
+    selected_backend(restored, TorchTensorRTAotBackend)
+    with torch.no_grad():
+        for value, output in zip(values, expected, strict=True):
+            TENSORRT_FP32.assert_close(restored(value), output)
 
 
 @pytest.mark.matrix("models.dynamic-non-batch/torch-tensorrt-aot")
