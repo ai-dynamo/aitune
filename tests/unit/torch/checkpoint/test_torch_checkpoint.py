@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for model state storage functionality."""
 
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -415,6 +416,105 @@ def test_state_dict_from_pipeline_preserves_direct_passthrough_wrapper_state():
     assert list(state_dict["failed"].keys()) == ["weight", "bias"]
     for name, value in state_dict["failed"].items():
         torch.testing.assert_close(value, expected_state_dict[name])
+
+
+class Vae(torch.nn.Module):
+    decoder: Any
+
+    def __init__(self):
+        super().__init__()
+        self.decoder = torch.nn.Linear(2, 2)
+
+
+class Pipeline:
+    def __init__(self):
+        self.vae = Vae()
+
+
+def test_nested_pipeline_wrapper_save_load():
+    """Test saving and loading a nested pipeline wrapper."""
+    pipeline = Pipeline()
+    pipeline.vae.decoder = Module(pipeline.vae.decoder, "decoder")
+    expected = {name: value.detach().clone() for name, value in pipeline.vae.decoder.__wrapped__.state_dict().items()}
+    pipeline.vae.decoder.enable_passthrough()
+
+    state_dict = TorchCheckpoint.state_dict_from_pipeline(pipeline)
+    assert list(state_dict) == ["vae.decoder"]
+
+    restored = Pipeline()
+    TorchCheckpoint.load_state_dict_for_pipeline(restored, state_dict, {})
+    for name, value in restored.vae.decoder.state_dict().items():
+        torch.testing.assert_close(value, expected[name])
+
+
+@pytest.mark.parametrize("key", ["missing", "vae.missing", "missing.decoder", "vae.decoder.missing"])
+def test_pipeline_load_rejects_missing_module_path(key):
+    """Test loading a key that does not resolve to a pipeline module."""
+    with pytest.raises(ValueError, match="not found in the pipeline"):
+        TorchCheckpoint.load_state_dict_for_pipeline(Pipeline(), {key: {}}, {})
+
+
+def test_pipeline_load_rejects_non_module_attribute():
+    """Test loading a key that points to an attribute that is not a module."""
+    pipeline = Pipeline()
+    pipeline.scale = 1.0
+    with pytest.raises(ValueError, match="not found in the pipeline"):
+        TorchCheckpoint.load_state_dict_for_pipeline(pipeline, {"scale": {}}, {})
+
+
+class PipelineWithDecoderAlias:
+    def __init__(self):
+        self.vae = Vae()
+        self.decoder = self.vae.decoder
+
+
+def test_aliased_nested_pipeline_wrapper_save_load(monkeypatch):
+    """Test saving and loading an aliased nested pipeline wrapper."""
+    pipeline = PipelineWithDecoderAlias()
+    pipeline.vae.decoder = Module(pipeline.vae.decoder, "decoder")
+    pipeline.decoder = pipeline.vae.decoder
+    pipeline.vae.decoder.enable_passthrough()
+
+    state_dict = TorchCheckpoint.state_dict_from_pipeline(pipeline)
+    assert list(state_dict) == ["vae.decoder"]
+
+    restored = PipelineWithDecoderAlias()
+    replacement = torch.nn.Linear(2, 2)
+    monkeypatch.setattr(
+        TorchCheckpoint,
+        "load_state_dict_for_module",
+        staticmethod(lambda *args: replacement),
+    )
+    TorchCheckpoint.load_state_dict_for_pipeline(restored, state_dict, {})
+    assert restored.vae.decoder is replacement
+    assert restored.decoder is replacement
+
+
+def test_aliased_nested_pipeline_wrapper_load_ignores_duplicate_keys(monkeypatch):
+    """Test loading an aliased wrapper from duplicate checkpoint keys."""
+    restored = PipelineWithDecoderAlias()
+    replacement = torch.nn.Linear(2, 2)
+    calls = []
+
+    def load_module(*args):
+        calls.append(args)
+        args[2].pop(args[3], None)
+        return replacement
+
+    monkeypatch.setattr(
+        TorchCheckpoint,
+        "load_state_dict_for_module",
+        staticmethod(load_module),
+    )
+    state_dict = {"decoder": {}, "vae.decoder": {}}
+    device_map = {"decoder": torch.device("cpu"), "vae.decoder": torch.device("cpu")}
+
+    TorchCheckpoint.load_state_dict_for_pipeline(restored, state_dict, device_map)
+
+    assert len(calls) == 1
+    assert restored.decoder is replacement
+    assert restored.vae.decoder is replacement
+    assert device_map == {}
 
 
 @requires_cuda
