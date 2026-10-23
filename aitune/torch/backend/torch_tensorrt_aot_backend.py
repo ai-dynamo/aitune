@@ -359,17 +359,19 @@ class TorchTensorRTAotBackend(Backend):
         return backend
 
 
-def _restore_constant_inputs(program: ExportedProgram) -> ExportedProgram:
-    """Declare non-tensor user inputs as constants, as ``torch.export`` does.
+def _restore_constant_inputs(program: ExportedProgram) -> None:
+    """Declare non-tensor user inputs of ``program`` as constants in place, as ``torch.export`` does.
 
     Torch-TensorRT declares every placeholder as a tensor input, so serializing e.g. a float or ``None`` kwarg fails.
     """
-    values = {node.name: node.meta["val"] for node in program.graph.nodes if node.op == "placeholder"}
+    values = {
+        node.name: node.meta["val"] for node in program.graph.nodes if node.op == "placeholder" and "val" in node.meta
+    }
     for spec in program.graph_signature.input_specs:
-        value = values.get(spec.arg.name, spec)
-        if spec.kind == InputKind.USER_INPUT and isinstance(value, int | float | bool | str | None):
-            spec.arg = ConstantArgument(name=spec.arg.name, value=value)
-    return program
+        if spec.kind == InputKind.USER_INPUT and spec.arg.name in values:
+            value = values[spec.arg.name]
+            if value is None or _is_primitive(value):
+                spec.arg = ConstantArgument(name=spec.arg.name, value=value)
 
 
 def _export_compiled_model(module: nn.Module) -> ExportedProgram:
@@ -379,7 +381,9 @@ def _export_compiled_model(module: nn.Module) -> ExportedProgram:
     """
     export = torch_tensorrt.dynamo.export
     legacy = {"use_legacy_exporter": True} if "use_legacy_exporter" in inspect.signature(export).parameters else {}
-    return _restore_constant_inputs(export(module, **legacy))
+    program = export(module, **legacy)
+    _restore_constant_inputs(program)
+    return program
 
 
 def _save_compiled_model(
