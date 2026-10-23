@@ -26,26 +26,6 @@ PROMPT = "A futuristic cityscape with neon lights and flying cars"
 COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
 
 
-# Known TensorRT failures on the toy Flux blocks; strict, so a fixed TensorRT fails CI with XPASS until removed.
-KNOWN_FAILURES = {
-    "test_pipeline_lifecycle[torch-tensorrt-aot]": (
-        "TensorRT Myelin internal error on LayerNorm+SDPA blocks: 'logical memory size (384) should be equal "
-        "to non-opaque payload size (3072)'"
-    ),
-    "test_pipeline_jit[torch-tensorrt-jit]": (
-        "torch.compile(backend='torch_tensorrt') rejects int64 embedding ids; the blocks also hit the TensorRT "
-        "Myelin payload-size error"
-    ),
-}
-
-
-@pytest.fixture(autouse=True)
-def _known_failure(request: pytest.FixtureRequest) -> None:
-    reason = KNOWN_FAILURES.get(request.node.name)
-    if reason:
-        request.applymarker(pytest.mark.xfail(strict=True, reason=reason))
-
-
 def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor:
     """Generate deterministic toy images."""
     return pipeline(prompt, generator=torch.Generator(device=pipeline.device).manual_seed(0))
@@ -63,8 +43,20 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
     return components
 
 
+# Strict: a fixed TensorRT fails CI with XPASS until the mark is removed.
 @pytest.mark.matrix("models.pipelines", "modes.aot-inspect-wrap", "modes.aot-save-load")
-@with_backends("save_load")
+@with_backends(
+    "save_load",
+    marks={
+        "torch-tensorrt-aot": pytest.mark.xfail(
+            strict=True,
+            reason=(
+                "TensorRT Myelin internal error on LayerNorm+SDPA blocks: 'logical memory size (384) should be equal "
+                "to non-opaque payload size (3072)'"
+            ),
+        )
+    },
+)
 def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
     """Inspect, tune, save, and restore the pipeline with each save/load backend."""
     backend = case.factory()
@@ -103,7 +95,18 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
 
 
 @pytest.mark.matrix("models.pipelines", "modes.jit-tune_eager")
-@with_backends("jit")
+@with_backends(
+    "jit",
+    marks={
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            strict=True,
+            reason=(
+                "torch.compile(backend='torch_tensorrt') rejects int64 embedding ids; the blocks also hit the TensorRT "
+                "Myelin payload-size error"
+            ),
+        )
+    },
+)
 def test_pipeline_jit(case: BackendCase, device: torch.device):
     """Tune the pipeline's four JIT heads from two prompt batch sizes."""
     expected = generate(ToyFluxPipeline(device), PROMPT)
