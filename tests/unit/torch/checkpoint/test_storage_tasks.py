@@ -4,6 +4,7 @@
 
 import logging
 import shutil
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -610,7 +611,7 @@ def test_check_checkpoint_valid_only_aside_sha_sums(tmp_path):
     test_dir.mkdir()
 
     # Create only the aside sha_sums file
-    aside_sha_sums_file = tmp_path / "sha256_sums.txt"
+    aside_sha_sums_file = tmp_path / get_sha_sums_path(test_dir).name
     aside_sha_sums_file.write_text("test_content")
 
     result = check_checkpoint_valid(test_dir)
@@ -623,7 +624,7 @@ def test_check_checkpoint_valid_only_inside_sha_sums(tmp_path):
     test_dir.mkdir()
 
     # Create only the inside sha_sums file
-    inside_sha_sums_file = test_dir / "sha256_sums.txt"
+    inside_sha_sums_file = get_sha_sums_path(test_dir)
     inside_sha_sums_file.write_text("test_content")
 
     result = check_checkpoint_valid(test_dir)
@@ -637,8 +638,8 @@ def test_check_checkpoint_valid_matching_sha_sums_files(tmp_path, sha_type):
     test_dir.mkdir()
 
     # Create both sha files with matching content
-    aside_sha_file = tmp_path / f"sha{sha_type}_sums.txt"
-    inside_sha_file = test_dir / f"sha{sha_type}_sums.txt"
+    inside_sha_file = get_sha_sums_path(test_dir, sha_type)
+    aside_sha_file = tmp_path / inside_sha_file.name
     test_content = "test_content"
 
     aside_sha_file.write_text(test_content)
@@ -655,14 +656,33 @@ def test_check_checkpoint_valid_different_sha_sums_files(tmp_path, sha_type):
     test_dir.mkdir()
 
     # Create both sha files with different content
-    aside_sha_file = tmp_path / f"sha{sha_type}_sums.txt"
-    inside_sha_file = test_dir / f"sha{sha_type}_sums.txt"
+    inside_sha_file = get_sha_sums_path(test_dir, sha_type)
+    aside_sha_file = tmp_path / inside_sha_file.name
 
     aside_sha_file.write_text("content1")
     inside_sha_file.write_text("content2")
 
     result = check_checkpoint_valid(test_dir)
     assert result is False
+
+
+@pytest.mark.parametrize("sha_type", ["256", "512"])
+def test_check_checkpoint_valid_after_compressed_save(tmp_path, monkeypatch, sha_type):
+    """A checkpoint written by ShaSumsSaveTask and ZipSaveTask is recognized as already extracted."""
+    test_dir = tmp_path / "test_checkpoint"
+    test_dir.mkdir()
+    (test_dir / "weights.bin").write_bytes(b"weights")
+
+    ShaSumsSaveTask(sha_type=sha_type).save(test_dir, {})
+    ZipSaveTask().save(test_dir, {})
+
+    assert check_checkpoint_valid(test_dir) is True
+
+    def fail_extractall(*args, **kwargs):
+        raise AssertionError("valid checkpoint should not be extracted again")
+
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", fail_extractall)
+    assert UnzipLoadTask().load(test_dir) == {}
 
 
 @pytest.mark.parametrize("sha_type", ["256", "512"])
