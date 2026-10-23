@@ -105,6 +105,26 @@ def test_save_compiled_model_without_retracing(mocker, tmp_path: Path):
     )
 
 
+def test_save_compiled_model_uses_legacy_exporter_when_available(mocker, tmp_path: Path):
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    program = mocker.MagicMock()
+    exporter_flags = []
+
+    def export(gm: nn.Module, *, use_legacy_exporter: bool = False):  # Torch-TensorRT 2.11+ signature
+        exporter_flags.append(use_legacy_exporter)
+        return program
+
+    mock_torch_tensorrt.dynamo.export = export
+
+    _save_compiled_model(
+        mocker.Mock(spec=nn.Module), tmp_path / "model.pt", sample=((), {}), dynamic_shapes=None, pickle_protocol=5
+    )
+
+    assert exporter_flags == [True]
+    mock_torch_tensorrt.save.assert_called_once_with(program, (tmp_path / "model.pt").as_posix(), pickle_protocol=5)
+
+
 def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path: Path):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """TorchTensorRT backend with AOT compilation and intermediate model save."""
 
+import inspect
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
@@ -371,6 +372,16 @@ def _restore_constant_inputs(program: ExportedProgram) -> ExportedProgram:
     return program
 
 
+def _export_compiled_model(module: nn.Module) -> ExportedProgram:
+    """Export a compiled graph as ``torch_tensorrt.save(retrace=False)`` does.
+
+    From Torch-TensorRT 2.11, that save uses the legacy exporter, but ``dynamo.export`` defaults to the new one.
+    """
+    export = torch_tensorrt.dynamo.export
+    legacy = {"use_legacy_exporter": True} if "use_legacy_exporter" in inspect.signature(export).parameters else {}
+    return _restore_constant_inputs(export(module, **legacy))
+
+
 def _save_compiled_model(
     module: nn.Module,
     path: Path,
@@ -381,7 +392,7 @@ def _save_compiled_model(
     """Save a compiled graph and retry a known export error with retracing."""
     try:
         with torch_tensorrt_errors(torch_tensorrt):
-            program = _restore_constant_inputs(torch_tensorrt.dynamo.export(module))
+            program = _export_compiled_model(module)
             torch_tensorrt.save(program, path.as_posix(), pickle_protocol=pickle_protocol)
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
     except SpecViolationError:
