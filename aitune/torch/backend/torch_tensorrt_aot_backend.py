@@ -10,6 +10,8 @@ from typing import Any, ClassVar, Self, cast
 import torch
 import torch.nn as nn
 from torch._export.verifier import SpecViolationError
+from torch.export import ExportedProgram
+from torch.export.graph_signature import ConstantArgument, InputKind
 
 from aitune.torch.backend.backend import (
     Backend,
@@ -356,6 +358,19 @@ class TorchTensorRTAotBackend(Backend):
         return backend
 
 
+def _restore_constant_inputs(program: ExportedProgram) -> ExportedProgram:
+    """Declare non-tensor user inputs as constants, as ``torch.export`` does.
+
+    Torch-TensorRT declares every placeholder as a tensor input, so serializing e.g. a float kwarg fails.
+    """
+    values = {node.name: node.meta.get("val") for node in program.graph.nodes if node.op == "placeholder"}
+    for spec in program.graph_signature.input_specs:
+        value = values.get(spec.arg.name)
+        if spec.kind == InputKind.USER_INPUT and isinstance(value, int | float | bool | str):
+            spec.arg = ConstantArgument(name=spec.arg.name, value=value)
+    return program
+
+
 def _save_compiled_model(
     module: nn.Module,
     path: Path,
@@ -363,20 +378,13 @@ def _save_compiled_model(
     dynamic_shapes: dict[str, Any] | None,
     pickle_protocol: int,
 ) -> None:
-    """Save a compiled graph and retry known serialization errors with retracing.
-
-    ``KeyError`` comes from ``torch.export`` serialization when the graph has a non-tensor input, e.g. a float kwarg.
-    """
+    """Save a compiled graph and retry a known export error with retracing."""
     try:
         with torch_tensorrt_errors(torch_tensorrt):
-            torch_tensorrt.save(
-                module,
-                path.as_posix(),
-                retrace=False,
-                pickle_protocol=pickle_protocol,
-            )
+            program = _restore_constant_inputs(torch_tensorrt.dynamo.export(module))
+            torch_tensorrt.save(program, path.as_posix(), pickle_protocol=pickle_protocol)
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
-    except (SpecViolationError, KeyError):
+    except SpecViolationError:
         logger.warning(
             "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
             exc_info=True,
