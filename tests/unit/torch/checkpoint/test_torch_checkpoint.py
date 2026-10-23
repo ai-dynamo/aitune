@@ -418,20 +418,21 @@ def test_state_dict_from_pipeline_preserves_direct_passthrough_wrapper_state():
         torch.testing.assert_close(value, expected_state_dict[name])
 
 
+class Vae(torch.nn.Module):
+    decoder: Any
+
+    def __init__(self):
+        super().__init__()
+        self.decoder = torch.nn.Linear(2, 2)
+
+
+class Pipeline:
+    def __init__(self):
+        self.vae = Vae()
+
+
 def test_nested_pipeline_wrapper_save_load():
     """Test saving and loading a nested pipeline wrapper."""
-
-    class Vae(torch.nn.Module):
-        decoder: Any
-
-        def __init__(self):
-            super().__init__()
-            self.decoder = torch.nn.Linear(2, 2)
-
-    class Pipeline:
-        def __init__(self):
-            self.vae = Vae()
-
     pipeline = Pipeline()
     pipeline.vae.decoder = Module(pipeline.vae.decoder, "decoder")
     expected = {name: value.detach().clone() for name, value in pipeline.vae.decoder.__wrapped__.state_dict().items()}
@@ -446,22 +447,15 @@ def test_nested_pipeline_wrapper_save_load():
         torch.testing.assert_close(value, expected[name])
 
 
+class PipelineWithDecoderAlias:
+    def __init__(self):
+        self.vae = Vae()
+        self.decoder = self.vae.decoder
+
+
 def test_aliased_nested_pipeline_wrapper_save_load(monkeypatch):
     """Test saving and loading an aliased nested pipeline wrapper."""
-
-    class Vae(torch.nn.Module):
-        decoder: Any
-
-        def __init__(self):
-            super().__init__()
-            self.decoder = torch.nn.Linear(2, 2)
-
-    class Pipeline:
-        def __init__(self):
-            self.vae = Vae()
-            self.decoder = self.vae.decoder
-
-    pipeline = Pipeline()
+    pipeline = PipelineWithDecoderAlias()
     pipeline.vae.decoder = Module(pipeline.vae.decoder, "decoder")
     pipeline.decoder = pipeline.vae.decoder
     pipeline.vae.decoder.enable_passthrough()
@@ -469,7 +463,7 @@ def test_aliased_nested_pipeline_wrapper_save_load(monkeypatch):
     state_dict = TorchCheckpoint.state_dict_from_pipeline(pipeline)
     assert list(state_dict) == ["vae.decoder"]
 
-    restored = Pipeline()
+    restored = PipelineWithDecoderAlias()
     replacement = torch.nn.Linear(2, 2)
     monkeypatch.setattr(
         TorchCheckpoint,
@@ -483,20 +477,7 @@ def test_aliased_nested_pipeline_wrapper_save_load(monkeypatch):
 
 def test_aliased_nested_pipeline_wrapper_load_ignores_duplicate_keys(monkeypatch):
     """Test loading an aliased wrapper from duplicate checkpoint keys."""
-
-    class Vae(torch.nn.Module):
-        decoder: Any
-
-        def __init__(self):
-            super().__init__()
-            self.decoder = torch.nn.Linear(2, 2)
-
-    class Pipeline:
-        def __init__(self):
-            self.vae = Vae()
-            self.decoder = self.vae.decoder
-
-    restored = Pipeline()
+    restored = PipelineWithDecoderAlias()
     restored.decoder = restored.vae.decoder
     replacement = torch.nn.Linear(2, 2)
     calls = []

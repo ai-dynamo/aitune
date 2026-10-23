@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch checkpoint module."""
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -263,10 +263,10 @@ class TorchCheckpoint(Checkpoint):
     @staticmethod
     def get_pipeline_module_paths(pipeline: Any) -> dict[int, list[tuple[Any, str]]]:
         """Get all paths to modules in a pipeline."""
-        module_paths: dict[int, list[tuple[Any, str]]] = {}
+        module_paths: dict[int, list[tuple[Any, str]]] = defaultdict(list)
 
         def add_path(module: TorchModule | WrapperModule, owner: Any, name: str) -> None:
-            module_paths.setdefault(id(module), []).append((owner, name))
+            module_paths[id(module)].append((owner, name))
 
         for name, module in vars(pipeline).items():
             if isinstance(module, (TorchModule, WrapperModule)):
@@ -311,22 +311,25 @@ class TorchCheckpoint(Checkpoint):
                     break
             else:
                 attribute = path[-1]
-                if hasattr(parent, attribute):
-                    module = getattr(parent, attribute)
-                    if isinstance(module, (torch.nn.Module, WrapperModule)):
-                        matched_modules.add(name)
-                        if id(module) in restored_module_ids:
-                            # This alias was restored by an earlier key.
-                            device_map.pop(name, None)
-                            continue
-                        restored_module = TorchCheckpoint.load_state_dict_for_module(
-                            module, module_state_dict, device_map, name
-                        )
-                        for owner, child_name in module_paths[id(module)]:
-                            setattr(owner, child_name, restored_module)
-                        restored_module_ids.add(id(restored_module))
-                    else:
-                        raise ValueError(f"Module {name} is not a torch.nn.Module or WrapperModule")
+                if not hasattr(parent, attribute):
+                    raise ValueError(f"Module {name} is not a torch.nn.Module or WrapperModule")
+
+                module = getattr(parent, attribute)
+                if not isinstance(module, (torch.nn.Module, WrapperModule)):
+                    continue
+
+                matched_modules.add(name)
+                if id(module) in restored_module_ids:
+                    # This alias was restored by an earlier key.
+                    device_map.pop(name, None)
+                    continue
+
+                restored_module = TorchCheckpoint.load_state_dict_for_module(
+                    module, module_state_dict, device_map, name
+                )
+                for owner, child_name in module_paths[id(module)]:
+                    setattr(owner, child_name, restored_module)
+                restored_module_ids.add(id(restored_module))
 
         unmatched_keys = set(state_dict.keys()).difference(matched_modules)
         if unmatched_keys:
