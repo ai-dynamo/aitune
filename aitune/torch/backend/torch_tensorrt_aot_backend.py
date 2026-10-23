@@ -408,13 +408,9 @@ def _save_compiled_model(
             exc_info=True,
         )
         with torch_tensorrt_errors(torch_tensorrt):
-            torch_tensorrt.save(
-                module,
-                path.as_posix(),
-                retrace=True,
-                arg_inputs=args,
-                kwarg_inputs=kwargs or None,
-                dynamic_shapes=dynamic_shapes,
-                pickle_protocol=pickle_protocol,
+            # Torch-TensorRT 2.8-2.10 `save(retrace=True)` ignores `dynamic_shapes`, so export here as 2.11+ does.
+            program = torch.export.export(
+                module, tuple(args), kwargs or None, dynamic_shapes=dynamic_shapes, strict=False
             )
+            torch_tensorrt.save(program, path.as_posix(), pickle_protocol=pickle_protocol)
         logger.info("Saved the Torch-TensorRT artifact using the retracing fallback.")

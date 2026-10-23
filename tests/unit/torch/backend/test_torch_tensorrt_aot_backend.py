@@ -132,24 +132,18 @@ def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path
     module = mocker.Mock(spec=nn.Module)
     sample = ((torch.ones(1),), {"mask": torch.ones(1)})
     dynamic_shapes = {"x": {0: mocker.sentinel.batch}}
+    mock_export = mocker.patch("torch.export.export")
 
     _save_compiled_model(module, tmp_path / "model.pt", sample, dynamic_shapes=dynamic_shapes, pickle_protocol=5)
 
+    mock_export.assert_called_once_with(module, sample[0], sample[1], dynamic_shapes=dynamic_shapes, strict=False)
     assert mock_torch_tensorrt.save.call_args_list == [
         mocker.call(
             mock_torch_tensorrt.dynamo.export.return_value,
             (tmp_path / "model.pt").as_posix(),
             pickle_protocol=5,
         ),
-        mocker.call(
-            module,
-            (tmp_path / "model.pt").as_posix(),
-            retrace=True,
-            arg_inputs=sample[0],
-            kwarg_inputs=sample[1],
-            dynamic_shapes=dynamic_shapes,
-            pickle_protocol=5,
-        ),
+        mocker.call(mock_export.return_value, (tmp_path / "model.pt").as_posix(), pickle_protocol=5),
     ]
 
 
