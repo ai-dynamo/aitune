@@ -408,7 +408,7 @@ def _save_compiled_model(
             exc_info=True,
         )
         with torch_tensorrt_errors(torch_tensorrt):
-            # Torch-TensorRT 2.8-2.10 `save(retrace=True)` ignores `dynamic_shapes`, so export here as 2.11+ does.
+            # Torch-TensorRT 2.8-2.10 `save(retrace=True)` ignores `dynamic_shapes`, so export here with them.
             program = torch.export.export(
                 module, tuple(args), kwargs or None, dynamic_shapes=dynamic_shapes, strict=False
             )
