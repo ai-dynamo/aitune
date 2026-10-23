@@ -31,7 +31,7 @@ class TorchEagerBackendConfig(BackendConfig):
     autocast_dtype: torch.dtype | None = None
 
 
-class TorchEagerBackend(Backend):
+class TorchEagerBackend(Backend[TorchEagerBackendConfig]):
     """Backend that runs the model in eager mode with/without autocast.
 
     Note: inference is done with torch.no_grad() context. The torch.inference_mode() context must not be used
@@ -51,8 +51,7 @@ class TorchEagerBackend(Backend):
 
     def __init__(self, config: TorchEagerBackendConfig | None = None):
         """Initializes backend."""
-        super().__init__()
-        self._config = config or TorchEagerBackendConfig()
+        super().__init__(config or TorchEagerBackendConfig())
         self._orig_module = None
         self._graph_spec = None
         self._required_casting_dtype = None

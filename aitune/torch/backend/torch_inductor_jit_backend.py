@@ -91,7 +91,7 @@ class TorchInductorJitBackendConfig(BackendConfig):
             raise ValueError(f"Invalid mode: {self.mode!r}. Supported values: {get_args(TorchCompileMode)}")
 
 
-class TorchInductorJitBackend(Backend):
+class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
     """Backend that does torch compilation with Inductor."""
 
     _build_mode = BuildMode.JUST_IN_TIME
@@ -116,10 +116,7 @@ class TorchInductorJitBackend(Backend):
         Args:
             config: Configuration for torch compile with inductor backend
         """
-        super().__init__()
-
-        # initialize variables
-        self._config = config or TorchInductorJitBackendConfig()
+        super().__init__(config or TorchInductorJitBackendConfig())
 
         # build variables
         self._compiled_module = None

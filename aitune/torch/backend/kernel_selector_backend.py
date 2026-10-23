@@ -151,7 +151,7 @@ class KernelSelectorBackendConfig(BackendConfig):
         }
 
 
-class KernelSelectorBackend(Backend):
+class KernelSelectorBackend(Backend[KernelSelectorBackendConfig | None]):
     """Select kernel providers and apply their plan while building a delegate backend.
 
     The backend adopts the delegate's build mode and supported execution modes. A JIT delegate keeps the selected
@@ -183,8 +183,7 @@ class KernelSelectorBackend(Backend):
             delegate_backend: Backend that compiles or executes the module after provider selection. Defaults to
                 :class:`TorchInductorJitBackend`.
         """
-        super().__init__()
-        self._config = config if config is not None else KernelSelectorBackendConfig()
+        super().__init__(config if config is not None else KernelSelectorBackendConfig())
         self._delegate_backend = delegate_backend if delegate_backend is not None else TorchInductorJitBackend()
         self._runtime: KernelProviderRuntime | None = None
         self._adopt_delegate_modes()
@@ -270,6 +269,8 @@ class KernelSelectorBackend(Backend):
 
     def _create_optimizer(self) -> KernelOptimizer:
         """Create the kernel optimizer from backend configuration."""
+        if self._config is None:
+            raise RuntimeError("Kernel selector configuration is required to create the optimizer")
         return KernelOptimizer(
             kernel_providers=self._config.kernel_providers,
             kernel_generators=self._config.kernel_generators,

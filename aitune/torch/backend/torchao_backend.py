@@ -197,7 +197,7 @@ class TorchAOBackendConfig(BackendConfig):
         return self._QUANTIZATION_CONFIGS[quantization]
 
 
-class TorchAOBackend(Backend):
+class TorchAOBackend(Backend[TorchAOBackendConfig]):
     """Backend that does torch quantization.
 
     If you would like to use customize quantization, you can pass in a quantization config.
@@ -224,9 +224,7 @@ class TorchAOBackend(Backend):
         Args:
             config: The configuration to use.
         """
-        super().__init__()
-        # initialize variables
-        self._config = config or TorchAOBackendConfig(quantization=DEFAULT_QUANTIZATION)
+        super().__init__(config or TorchAOBackendConfig(quantization=DEFAULT_QUANTIZATION))
 
         # build variables
         self._quant_module = None
@@ -329,7 +327,9 @@ class TorchAOBackend(Backend):
         model = copy.deepcopy(self._orig_module)
         move_module_to_device(self._orig_module, "cpu")
 
-        quantize_(model, config=self._config.quantization_config, device=self.device, filter_fn=self._config.filter_fn)
+        quantization_config = self._config.quantization_config
+        assert quantization_config is not None, "quantization_config is set in TorchAOBackendConfig.__post_init__"
+        quantize_(model, config=quantization_config, device=self.device, filter_fn=self._config.filter_fn)
         self._quant_module = torch.compile(
             model=model,
             fullgraph=self._config.fullgraph,
