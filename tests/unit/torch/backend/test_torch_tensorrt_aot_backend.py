@@ -145,12 +145,12 @@ def test_save_compiled_model_does_not_retrace_after_oserror(mocker, tmp_path: Pa
     mock_torch_tensorrt.save.assert_called_once()
 
 
-def test_restore_constant_inputs_makes_float_kwarg_serializable(tmp_path: Path):
+def test_restore_constant_inputs_makes_non_tensor_kwargs_serializable(tmp_path: Path):
     class ScaledModel(nn.Module):
-        def forward(self, x: torch.Tensor, scale: float) -> torch.Tensor:
-            return x * scale
+        def forward(self, x: torch.Tensor, scale: float, mask: torch.Tensor | None = None) -> torch.Tensor:
+            return x * scale if mask is None else x * scale * mask
 
-    program = torch.export.export(ScaledModel(), (torch.ones(2),), {"scale": 2.0})
+    program = torch.export.export(ScaledModel(), (torch.ones(2),), {"scale": 2.0, "mask": None})
     # Torch-TensorRT declares every placeholder as a tensor input.
     for spec in program.graph_signature.input_specs:
         spec.arg = TensorArgument(name=spec.arg.name)
@@ -162,10 +162,11 @@ def test_restore_constant_inputs_makes_float_kwarg_serializable(tmp_path: Path):
     assert [spec.arg for spec in program.graph_signature.input_specs] == [
         TensorArgument(name="x"),
         ConstantArgument(name="scale", value=2.0),
+        ConstantArgument(name="mask", value=None),
     ]
     torch.export.save(program, tmp_path / "model.pt2")
     loaded = torch.export.load(tmp_path / "model.pt2").module()
-    assert torch.equal(loaded(torch.ones(2), scale=2.0), torch.full((2,), 2.0))
+    assert torch.equal(loaded(torch.ones(2), scale=2.0, mask=None), torch.full((2,), 2.0))
 
 
 @pytest.fixture

@@ -1240,6 +1240,13 @@
       "severity": "error"
     },
     {
+      "column": 48,
+      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `dynamo`",
+      "severity": "error"
+    },
+    {
       "column": 13,
       "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",

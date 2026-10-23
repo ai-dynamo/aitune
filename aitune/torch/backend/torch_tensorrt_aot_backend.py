@@ -361,12 +361,12 @@ class TorchTensorRTAotBackend(Backend):
 def _restore_constant_inputs(program: ExportedProgram) -> ExportedProgram:
     """Declare non-tensor user inputs as constants, as ``torch.export`` does.
 
-    Torch-TensorRT declares every placeholder as a tensor input, so serializing e.g. a float kwarg fails.
+    Torch-TensorRT declares every placeholder as a tensor input, so serializing e.g. a float or ``None`` kwarg fails.
     """
-    values = {node.name: node.meta.get("val") for node in program.graph.nodes if node.op == "placeholder"}
+    values = {node.name: node.meta["val"] for node in program.graph.nodes if node.op == "placeholder"}
     for spec in program.graph_signature.input_specs:
-        value = values.get(spec.arg.name)
-        if spec.kind == InputKind.USER_INPUT and isinstance(value, int | float | bool | str):
+        value = values.get(spec.arg.name, spec)
+        if spec.kind == InputKind.USER_INPUT and isinstance(value, int | float | bool | str | None):
             spec.arg = ConstantArgument(name=spec.arg.name, value=value)
     return program
 
