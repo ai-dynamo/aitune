@@ -103,10 +103,11 @@ def test_save_compiled_model_without_retracing(mocker, tmp_path: Path):
     )
 
 
-def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path: Path):
+@pytest.mark.parametrize("error", [SpecViolationError("direct save failed"), KeyError("scale")])
+def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path: Path, error: Exception):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
-    mock_torch_tensorrt.save.side_effect = [SpecViolationError("direct save failed"), None]
+    mock_torch_tensorrt.save.side_effect = [error, None]
     module = mocker.Mock(spec=nn.Module)
     sample = ((mocker.sentinel.input,), {"output_hidden_states": True})
     dynamic_shapes = {"x": {0: mocker.sentinel.batch}}

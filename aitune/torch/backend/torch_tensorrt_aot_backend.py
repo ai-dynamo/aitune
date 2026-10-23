@@ -363,7 +363,10 @@ def _save_compiled_model(
     dynamic_shapes: dict[str, Any] | None,
     pickle_protocol: int,
 ) -> None:
-    """Save a compiled graph and retry a known export error with retracing."""
+    """Save a compiled graph and retry known serialization errors with retracing.
+
+    ``KeyError`` comes from ``torch.export`` serialization when the graph has a non-tensor input, e.g. a float kwarg.
+    """
     try:
         with torch_tensorrt_errors(torch_tensorrt):
             torch_tensorrt.save(
@@ -373,7 +376,7 @@ def _save_compiled_model(
                 pickle_protocol=pickle_protocol,
             )
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
-    except SpecViolationError:
+    except (SpecViolationError, KeyError):
         logger.warning(
             "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
             exc_info=True,
