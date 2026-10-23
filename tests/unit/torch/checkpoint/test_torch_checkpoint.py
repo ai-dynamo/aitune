@@ -493,7 +493,6 @@ def test_aliased_nested_pipeline_wrapper_save_load(monkeypatch):
 def test_aliased_nested_pipeline_wrapper_load_ignores_duplicate_keys(monkeypatch):
     """Test loading an aliased wrapper from duplicate checkpoint keys."""
     restored = PipelineWithDecoderAlias()
-    restored.decoder = restored.vae.decoder
     replacement = torch.nn.Linear(2, 2)
     calls = []
 
