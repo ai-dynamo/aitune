@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch checkpoint module."""
 
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -84,8 +84,8 @@ class TorchCheckpoint(Checkpoint):
             if the saved state contains tuning information.
 
         Raises:
-            ValueError: If a module in the state_dict is not found in the pipeline or
-                        if a matched attribute is not a torch.nn.Module or WrapperModule.
+            ValueError: If a module in the state_dict is not found in the pipeline, including keys that point to an
+                attribute that is not a torch.nn.Module or WrapperModule.
 
         """
         # Convert device_map to torch.device
@@ -112,26 +112,22 @@ class TorchCheckpoint(Checkpoint):
             pipeline: The pipeline object to extract modules from.
 
         Returns:
-            dict: A dictionary mapping attribute names to Module objects.
+            dict: A dictionary mapping dotted module paths to modules. The walk does not descend into
+                WrapperModule instances.
         """
         modules: dict[str, torch.nn.Module | WrapperModule] = {}
 
-        def add_wrapped_children(module: TorchModule, prefix: str) -> None:
+        def add_module(path: str, module: torch.nn.Module | WrapperModule) -> None:
+            modules[path] = module
+            if isinstance(module, WrapperModule):
+                return
             for child_name, child in module._modules.items():
-                if child is None:
-                    continue
-                child_path = f"{prefix}.{child_name}"
-                if isinstance(child, WrapperModule):
-                    modules[child_path] = child
-                elif isinstance(child, TorchModule):
-                    add_wrapped_children(child, child_path)
+                if child is not None:
+                    add_module(f"{path}.{child_name}", child)
 
         for name, attr in vars(pipeline).items():
-            if isinstance(attr, WrapperModule):
-                modules[name] = attr
-            elif isinstance(attr, TorchModule):
-                modules[name] = attr
-                add_wrapped_children(attr, name)
+            if isinstance(attr, (torch.nn.Module, WrapperModule)):
+                add_module(name, attr)
 
         return modules
 
@@ -261,25 +257,6 @@ class TorchCheckpoint(Checkpoint):
         return final_module
 
     @staticmethod
-    def get_pipeline_module_paths(pipeline: Any) -> dict[int, list[tuple[Any, str]]]:
-        """Get all paths to modules in a pipeline."""
-        module_paths: dict[int, list[tuple[Any, str]]] = defaultdict(list)
-
-        def add_path(module: TorchModule | WrapperModule, owner: Any, name: str) -> None:
-            module_paths[id(module)].append((owner, name))
-
-        for name, module in vars(pipeline).items():
-            if isinstance(module, (TorchModule, WrapperModule)):
-                add_path(module, pipeline, name)
-            if isinstance(module, TorchModule):
-                for _, parent in module.named_modules(remove_duplicate=False):
-                    for child_name, child in parent._modules.items():
-                        if child is not None:
-                            add_path(child, parent, child_name)
-
-        return module_paths
-
-    @staticmethod
     def load_state_dict_for_pipeline(pipeline, state_dict, device_map: dict[str, torch.device]):
         """Load a state dictionary into a pipeline.
 
@@ -296,40 +273,32 @@ class TorchCheckpoint(Checkpoint):
             The pipeline with loaded modules.
 
         Raises:
-            ValueError: If a module in the state_dict is not found in the pipeline or
-                        if a matched attribute is not a torch.nn.Module or WrapperModule.
+            ValueError: If a module in the state_dict is not found in the pipeline, including keys that point to an
+                attribute that is not a torch.nn.Module or WrapperModule.
         """
+        modules = TorchCheckpoint.get_pipeline_modules(pipeline)
         matched_modules = set()
-        module_paths = TorchCheckpoint.get_pipeline_module_paths(pipeline)
-        restored_module_ids = set()
+        restored_modules = {}
         for name, module_state_dict in state_dict.items():
-            path = name.split(".")
-            parent = pipeline
-            for component in path[:-1]:
-                parent = getattr(parent, component, None)
-                if parent is None:
-                    break
-            else:
-                attribute = path[-1]
-                if not hasattr(parent, attribute):
-                    raise ValueError(f"Module {name} is not a torch.nn.Module or WrapperModule")
+            module = modules.get(name)
+            if module is None:
+                # reported below as not found
+                continue
+            matched_modules.add(name)
+            if id(module) in restored_modules:
+                # Checkpoints can store one key for each alias of a module. Restore the module only once.
+                device_map.pop(name, None)
+                continue
+            restored_modules[id(module)] = TorchCheckpoint.load_state_dict_for_module(
+                module, module_state_dict, device_map, name
+            )
 
-                module = getattr(parent, attribute)
-                if not isinstance(module, (torch.nn.Module, WrapperModule)):
-                    continue
-
-                matched_modules.add(name)
-                if id(module) in restored_module_ids:
-                    # This alias was restored by an earlier key.
-                    device_map.pop(name, None)
-                    continue
-
-                restored_module = TorchCheckpoint.load_state_dict_for_module(
-                    module, module_state_dict, device_map, name
-                )
-                for owner, child_name in module_paths[id(module)]:
-                    setattr(owner, child_name, restored_module)
-                restored_module_ids.add(id(restored_module))
+        # Replace the module on all its paths, so that aliases stay the same object.
+        for path, module in modules.items():
+            if id(module) in restored_modules:
+                owner_path, _, attribute = path.rpartition(".")
+                owner = modules[owner_path] if owner_path else pipeline
+                setattr(owner, attribute, restored_modules[id(module)])
 
         unmatched_keys = set(state_dict.keys()).difference(matched_modules)
         if unmatched_keys:

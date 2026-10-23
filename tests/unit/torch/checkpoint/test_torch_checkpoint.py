@@ -447,6 +447,21 @@ def test_nested_pipeline_wrapper_save_load():
         torch.testing.assert_close(value, expected[name])
 
 
+@pytest.mark.parametrize("key", ["missing", "vae.missing", "missing.decoder", "vae.decoder.missing"])
+def test_pipeline_load_rejects_missing_module_path(key):
+    """Test loading a key that does not resolve to a pipeline module."""
+    with pytest.raises(ValueError, match="not found in the pipeline"):
+        TorchCheckpoint.load_state_dict_for_pipeline(Pipeline(), {key: {}}, {})
+
+
+def test_pipeline_load_rejects_non_module_attribute():
+    """Test loading a key that points to an attribute that is not a module."""
+    pipeline = Pipeline()
+    pipeline.scale = 1.0
+    with pytest.raises(ValueError, match="not found in the pipeline"):
+        TorchCheckpoint.load_state_dict_for_pipeline(pipeline, {"scale": {}}, {})
+
+
 class PipelineWithDecoderAlias:
     def __init__(self):
         self.vae = Vae()
