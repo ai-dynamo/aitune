@@ -27,6 +27,18 @@ def make_mlp(device: torch.device, seed: int = 0) -> nn.Module:
     return model.to(device).eval()
 
 
+def make_image_model(device: torch.device, seed: int = 0) -> nn.Module:
+    """Return a seeded CNN accepting `(batch, 3, height, width)` image inputs."""
+    with seeded(device, seed):
+        model = nn.Sequential(
+            nn.Conv2d(3, 4, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(1),
+        )
+    return model.to(device).eval()
+
+
 def make_spatial_model(device: torch.device, seed: int = 0) -> nn.Module:
     """Return a seeded grayscale CNN accepting `(batch, height, width)` inputs."""
     with seeded(device, seed):
