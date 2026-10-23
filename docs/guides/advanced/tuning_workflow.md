@@ -378,26 +378,15 @@ To write a custom backend, extend the `Backend` base class and `BackendConfig` d
 Every custom backend must declare its supported execution modes and build mode. Include `ExecutionMode.SINGLE_GPU` for
 ordinary modules and `ExecutionMode.MULTI_GPU` when the backend can preserve distributed module execution. If
 activation compiles or otherwise requires the original PyTorch module, declare the backend as just-in-time so AITune
-retains that module. Parameterize `Backend` with your config class, so that type checkers know the type of
-`self._config`, and pass the config to `super().__init__()`:
+retains that module:
 
 ```python
-from dataclasses import dataclass
-
-from aitune.torch.backend.backend import Backend, BackendConfig, BuildMode, ExecutionMode
+from aitune.torch.backend import Backend, BuildMode, ExecutionMode
 
 
-@dataclass
-class CustomBackendConfig(BackendConfig):
-    workspace_size: int = 1 << 30
-
-
-class CustomJitBackend(Backend[CustomBackendConfig]):
+class CustomJitBackend(Backend):
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
     _build_mode = BuildMode.JUST_IN_TIME
-
-    def __init__(self, config: CustomBackendConfig | None = None):
-        super().__init__(config or CustomBackendConfig())
 ```
 
 For serialization with `ait.load` and `ait.save`, the `to_dict` and `from_dict` methods are used. Anything placed in
