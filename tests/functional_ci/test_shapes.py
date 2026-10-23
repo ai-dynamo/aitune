@@ -109,7 +109,10 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
 
 @pytest.mark.matrix("models.dynamic-non-batch/torch-tensorrt-aot")
 def test_spatial_dims_export_retry(device: torch.device):
-    """A spatial divisibility constraint triggers bounded-hint export retry and still compiles."""
+    """Torch-TensorRT AOT exports again with bounded dynamic hints if strict export rejects the user's spatial dims.
+
+    `PixelUnshuffle(2)` needs even H and W, but the `DynamicDim` allows odd sizes, so strict export fails once.
+    """
     with seeded(device, 0):
         model = nn.Sequential(
             nn.Unflatten(1, (1, -1)),
