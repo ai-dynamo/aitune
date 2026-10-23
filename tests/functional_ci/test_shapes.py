@@ -68,7 +68,10 @@ def test_explicit_batch_dim(case: BackendCase, device: torch.device):
 @pytest.mark.matrix("models.dynamic-non-batch")
 @with_backends("dynamic_non_batch")
 def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path):
-    """User batch and spatial dimensions allow unseen image sizes after recording one input shape, also after reload."""
+    """Tune from one 24x24 sample with a user `BatchDim` and spatial `DynamicDim`, then run other batch and image sizes.
+
+    The tuned module and the module reloaded from its checkpoint both match eager at sizes that were not recorded.
+    """
     backend = case.factory()
     spatial = ait.DynamicDim("spatial", min=16, opt=24, max=32)
     dynamic_shapes: DynamicShapes = {"input": (ait.BatchDim("batch", min=1, opt=2, max=2), 3, spatial, spatial)}
