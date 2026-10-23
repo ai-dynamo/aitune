@@ -88,5 +88,4 @@ def get_throughput(results: list[ProfilingResultEvent], batch_size: int | None =
         Throughput in samples per second.
     """
     batch_size = batch_size or get_batch_size(results)
-    executions_per_second = get_mean_executions_per_second(results)
-    return batch_size * executions_per_second
+    return batch_size * get_mean_executions_per_second(results)
