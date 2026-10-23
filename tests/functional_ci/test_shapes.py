@@ -19,6 +19,8 @@ from tests.functional_ci.backends import BACKENDS, BackendCase, with_backends
 from tests.functional_ci.lifecycle import TENSORRT_FP32, assert_matches_eager, pinned_strategy, selected_backend
 from tests.functional_ci.models import IN_FEATURES, make_image_model, make_input, make_mlp, seeded
 
+TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10))
+
 
 class StructuredModel(nn.Module):
     """Model with a nested dict input, non-tensor and optional arguments, and a nested dict/tuple output."""
@@ -66,7 +68,18 @@ def test_explicit_batch_dim(case: BackendCase, device: torch.device):
 
 
 @pytest.mark.matrix("models.dynamic-non-batch")
-@with_backends("dynamic_non_batch")
+@with_backends(
+    "dynamic_non_batch",
+    marks={
+        # AITune's `_activate` reloads the artifact via `torch_tensorrt.load`, which wraps the loader assertion in ValueError.
+        "torch-tensorrt-aot": pytest.mark.xfail(
+            TORCH_2_8_TO_2_10,
+            reason="PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)",
+            raises=ValueError,
+            strict=True,
+        )
+    },
+)
 def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path):
     """Tune from one 24x24 sample with a user `BatchDim` and spatial `DynamicDim`, then run other batch and image sizes.
 
@@ -80,12 +93,7 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
     )
     generator = torch.Generator(device=device).manual_seed(1)
     samples = list(torch.randn(1, 3, 24, 24, device=device, generator=generator).unbind(0))
-    if case is BACKENDS["torch-tensorrt-aot"] and Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10)):
-        # AITune's `_activate` reloads the artifact via `torch_tensorrt.load`, which wraps the assertion in ValueError.
-        with pytest.raises(ValueError, match="valid Torchscript module or ExportedProgram"):
-            ait.tune(tuned, samples, batch_sizes=[1], device=device, ignore_failing_modules=False)
-        pytest.xfail("PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)")
-    ait.tune(tuned, samples, batch_sizes=[1], device=device)
+    ait.tune(tuned, samples, batch_sizes=[1], device=device, ignore_failing_modules=False)
 
     (graph_spec,) = tuned.graph_specs
     assert graph_spec.dynamic_shapes == dynamic_shapes
