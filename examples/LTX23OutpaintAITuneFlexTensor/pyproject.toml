@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "ai-tune-ltx23-outpaint-flextensor-example"
+version = "0.1.0"
+description = "Small pretrained LTX 2.3 outpaint with AITune and FlexTensor"
+readme = "README.md"
+license = { text = "Apache 2.0" }
+requires-python = ">=3.11, <3.14"
+dependencies = [
+    "aitune",
+    "accelerate>=1.12,<2",
+    "av>=16,<20",
+    "diffusers @ git+https://github.com/huggingface/diffusers.git@9159a587b1f148a2cc911deb72b6d755508ef38b",
+    "flextensor==0.5.0",
+    "huggingface-hub>=0.36,<1",
+    "numpy",
+    "peft==0.18.1",
+    "pillow",
+    "protobuf",
+    "psutil",
+    "safetensors",
+    "sentencepiece",
+    "transformers>=4.57.6,<5",
+]
+
+[tool.uv.sources]
+aitune = { path = "../../", editable = true }
+
+[tool.aitune]
+# Manual staged benchmark, not the export/deployment project workflow. The native
+# integration contract is exercised by the always-on JIT021/JIT022 GPU scripts.
+skip = true
+
+[build-system]
+requires = ["setuptools>=65.3.0", "wheel>=0.37.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["outpaint"]
