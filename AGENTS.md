@@ -87,7 +87,7 @@ Key fixtures in `conftest.py` (all autouse unless noted):
 
 - `module_registry_cleanup` — clears the global module registry after each test.
 - `aitune_cache_dir` — isolates the AITune cache in a temporary path per test.
-- `jit_cleanup` — calls `jit_reset()` before and after each test.
+- JIT-mutating tests and JIT doctests run in fresh Python processes; there is no production JIT reset API.
 - `aitune_logging_setup` — initializes logging; set `AITUNE_TESTS_LOG_LEVEL=DEBUG`
   for verbose test logs.
 - `torch_device` (not autouse) — selects the test device; override with
