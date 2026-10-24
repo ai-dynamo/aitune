@@ -5,6 +5,7 @@
 import inspect
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Optional
+from weakref import WeakValueDictionary
 
 import torch
 import torch.nn as nn
@@ -18,7 +19,10 @@ from aitune.torch.utils.memory import cleanup_memory
 from aitune.utils.monitoring import annotate
 
 if TYPE_CHECKING:
-    from aitune.torch.backend.backend import Backend
+    from aitune.torch.backend import Backend
+
+
+_EXTERNALLY_MANAGED_MODULES: WeakValueDictionary[int, nn.Module] = WeakValueDictionary()
 
 
 def format_num_parameters(num: int) -> str:
@@ -125,9 +129,62 @@ def is_distributed_module(module: nn.Module) -> bool:
     return is_integration_distributed_module(module)
 
 
+def register_externally_managed_module(module: nn.Module) -> None:
+    """Preserve the fixed source tree's placement for each node's lifetime.
+
+    Independent copies have new identities and remain movable. A surviving source child
+    stays protected after its former root is collected. Cross-tree tensor/storage aliases
+    and changing this ownership tree after registration are outside the caller contract.
+    """
+    for owned_module in module.modules():
+        _EXTERNALLY_MANAGED_MODULES[id(owned_module)] = owned_module
+
+
+def is_externally_managed_module(module: nn.Module) -> bool:
+    """Return whether this exact source node has externally owned placement."""
+    return _EXTERNALLY_MANAGED_MODULES.get(id(module)) is module
+
+
+def validate_external_backend(backend: "Backend") -> None:
+    """Require a qualified eager or Inductor JIT candidate for external source placement."""
+    from aitune.torch.backend.torch_eager import TorchEagerBackend
+    from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
+
+    if type(backend) is TorchEagerBackend:
+        return
+    if type(backend) is not TorchInductorJitBackend:
+        raise ValueError("External device management supports only TorchEagerBackend and TorchInductorJitBackend")
+    if backend._config.mode not in (None, "default", "max-autotune-no-cudagraphs") or backend._config.options not in (
+        None,
+        {},
+    ):
+        raise ValueError(
+            "External Inductor JIT requires default or max-autotune-no-cudagraphs mode without custom options"
+        )
+
+
+def _can_move_module(module: nn.Module, *, operation: str) -> bool:
+    """Preserve protected sources and reject their unmarked ancestors before mutation."""
+    if is_externally_managed_module(module) or is_distributed_module(module):
+        return False
+    if any(is_externally_managed_module(child) for child in module.modules()):
+        raise RuntimeError(
+            f"Cannot {operation} {module.__class__.__name__}: it contains an externally managed subtree. "
+            "Move independent ordinary submodules individually or manage placement through the external runtime."
+        )
+    return True
+
+
 def move_module_to_device(module: nn.Module, device: str | torch.device) -> None:
-    """Move an ordinary module while preserving distributed module placement."""
-    if not is_distributed_module(module):
+    """Move an ordinary module while preserving application-managed placement.
+
+    Distributed and externally managed modules retain their existing placement.
+
+    Raises:
+        RuntimeError: The ordinary module contains an externally managed subtree;
+            no part of its tree is moved.
+    """
+    if _can_move_module(module, operation="move"):
         module.to(device)
 
 
@@ -142,13 +199,17 @@ def move_tensors_to_device(value: Any, device: str | torch.device) -> Any:
 
 
 def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
-    """Offload an ordinary module while preserving distributed placement.
+    """Offload an ordinary module while preserving application-managed placement.
 
     Args:
         model: Model to offload, including any nested ONNX Runtime sessions.
         device: Device to offload to. ONNX modules use CPU for meta.
+
+    Raises:
+        RuntimeError: The ordinary module contains an externally managed subtree;
+            no tensors or ONNX sessions are moved and memory cleanup is skipped.
     """
-    if is_distributed_module(model):
+    if not _can_move_module(model, operation="offload"):
         return
 
     with annotate("Offloading module"):

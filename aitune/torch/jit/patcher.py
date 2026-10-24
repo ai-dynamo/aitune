@@ -75,6 +75,7 @@ class Patcher:
         module: torch.nn.Module,
         *,
         explicit_head: bool = False,
+        device_management: str = "aitune",
     ) -> PatchedModule | InspectModule:
         """Start ordinary reporting once and install one module wrapper."""
         if cls._mode is None:
@@ -85,7 +86,7 @@ class Patcher:
         if config.mode == JITMode.INSPECT:
             patched_module: PatchedModule | InspectModule = InspectModule(module)
         else:
-            patched_module = PatchedModule(module, explicit_head=explicit_head)
+            patched_module = PatchedModule(module, explicit_head=explicit_head, device_management=device_management)
         cls._patched_modules.append(patched_module)
         return patched_module
 
@@ -113,9 +114,13 @@ class Patcher:
         cls._torch_patched = True
 
     @classmethod
-    def register_modules(cls, modules: Sequence[torch.nn.Module]) -> tuple[PatchedModule, ...]:
+    def register_modules(
+        cls, modules: Sequence[torch.nn.Module], *, device_management: str = "aitune"
+    ) -> tuple[PatchedModule, ...]:
         """Preflight the complete batch, then install independent targets without rollback."""
         cls._validate_registration_targets(modules)
+        if device_management == "external":
+            cls._validate_external_candidates(modules)
         if config.mode == JITMode.INSPECT:
             raise RuntimeError("register_for_jit_tuning() does not support JITMode.INSPECT")
         if cls._entry_path is not None:
@@ -125,8 +130,44 @@ class Patcher:
 
         cls._entry_path = "explicit"
         return cast(
-            tuple[PatchedModule, ...], tuple(cls._register_module(module, explicit_head=True) for module in modules)
+            tuple[PatchedModule, ...],
+            tuple(
+                cls._register_module(module, explicit_head=True, device_management=device_management)
+                for module in modules
+            ),
         )
+
+    @staticmethod
+    def _validate_external_candidates(modules: Sequence[torch.nn.Module]) -> None:
+        """Qualify the complete candidate set before touching an external source tree."""
+        from aitune.torch.tune_strategy import (
+            FirstWinsStrategy,
+            LatencyBudgetStrategy,
+            MaxThroughputStrategy,
+            MinLatencyStrategy,
+            OneBackendStrategy,
+        )
+        from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
+        from aitune.torch.utils.module import validate_external_backend
+
+        for module in modules:
+            strategy = config.resolve_strategy(module)
+            if type(strategy) is OneBackendStrategy:
+                backends = [strategy._backend]
+            elif type(strategy) in (
+                FirstWinsStrategy,
+                MinLatencyStrategy,
+                MaxThroughputStrategy,
+                LatencyBudgetStrategy,
+            ):
+                backends = cast(MultiBackendStrategy, strategy)._backends
+            else:
+                raise ValueError("External device management requires a supported built-in strategy")
+            if not backends:
+                raise ValueError("External device management requires at least one backend candidate")
+            for backend in backends:
+                validate_external_backend(backend)
+                backend._assert_supported_modules(module)
 
     @classmethod
     def _validate_registration_targets(cls, modules: Sequence[torch.nn.Module]) -> None:

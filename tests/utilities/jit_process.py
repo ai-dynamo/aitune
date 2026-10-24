@@ -50,7 +50,14 @@ def pytest_runtest_protocol(item, nextitem):
     if item.path.suffix != ".py":
         return None
     source = item.path.read_text()
-    names = ("prepare_for_jit_tuning", "register_for_jit_tuning", "Patcher", "PatchedModule", "InspectModule")
+    names = (
+        "prepare_for_jit_tuning",
+        "register_for_jit_tuning",
+        "register_externally_managed_module",
+        "Patcher",
+        "PatchedModule",
+        "InspectModule",
+    )
     if not any(name in source for name in names):
         return None
     item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)

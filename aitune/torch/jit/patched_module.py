@@ -44,6 +44,7 @@ from aitune.torch.utils.module import (
     format_num_parameters,
     move_module_to_device,
     offload_after_tuning,
+    register_externally_managed_module,
 )
 from aitune.utils.disk_space import raise_if_out_of_space
 from aitune.utils.logging import write_exception_log
@@ -103,10 +104,13 @@ class PatchedModule:
     deferred_tuning_enabled: ClassVar[bool] = False
     module_counter: ClassVar[int] = 0
 
-    def __init__(self, module: torch.nn.Module, *, explicit_head: bool = False):
+    def __init__(self, module: torch.nn.Module, *, explicit_head: bool = False, device_management: str = "aitune"):
         """Initialize the patched module."""
         self.__wrapped__ = module
         self._explicit_head = explicit_head
+        self._device_management = device_management
+        if device_management == "external":
+            register_externally_managed_module(module)
         self._class_before_device_patch: type[torch.nn.Module] | None = None
         self._patched_device_class: type[torch.nn.Module] | None = None
         # proxy forward, hooks
@@ -211,7 +215,8 @@ class PatchedModule:
                             )
                             current._extra_state_info = ", ".join([backend.name for backend in backends.values()])
                         else:
-                            current._wrapper = PassthroughModule(current.__wrapped__, device=device)
+                            passthrough_device = device if current._device_management == "aitune" else None
+                            current._wrapper = PassthroughModule(current.__wrapped__, device=passthrough_device)
                             current._extra_state_info = "dry-run tuning success"
 
             except Exception as error:
@@ -549,6 +554,8 @@ class PatchedModule:
         its parents in case parents objects do not have it's own parameters but include child module which has been
         tuned and move to a cpu device.
         """
+        if self._device_management == "external":
+            return
         todo = [self]
         while todo:
             current = todo.pop()
