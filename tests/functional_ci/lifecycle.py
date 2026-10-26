@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import Backend
+from aitune.torch.backend import Backend, ONNXExecutionProvider, ONNXRuntimeBackend
 from aitune.torch.module import Module
 from tests.functional_ci.models import make_input
 
@@ -37,6 +37,13 @@ def selected_backend(module: Module, expected: type[Backend] | None = None) -> B
     assert len(backends) == 1, f"expected one selected backend, found {len(backends)}"
     (selected,) = backends.values()
     assert expected is None or type(selected) is expected, f"selected {type(selected)}, expected {expected}"
+    if (
+        isinstance(selected, ONNXRuntimeBackend)
+        and selected._config.execution_provider == ONNXExecutionProvider.TENSORRT
+    ):
+        # ONNX Runtime falls back to the CUDA provider if the TensorRT provider cannot start.
+        assert selected._session is not None
+        assert selected._session.get_providers()[0] == "TensorrtExecutionProvider", selected._session.get_providers()
     return selected
 
 
