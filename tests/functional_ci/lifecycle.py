@@ -32,7 +32,10 @@ TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
 
 
 def selected_backend(module: Module, expected: type[Backend] | None = None) -> Backend:
-    """Return the only backend selected for a single-graph module; check its type when `expected` is given."""
+    """Return the only backend selected for a single-graph module.
+
+    Check its type when `expected` is given, and that an ONNX Runtime TensorRT backend runs on the TensorRT provider.
+    """
     backends = module.module.backends
     assert len(backends) == 1, f"expected one selected backend, found {len(backends)}"
     (selected,) = backends.values()
@@ -65,7 +68,8 @@ def assert_matches_eager(
 
 def pinned_strategy(backend: Backend) -> ait.OneBackendStrategy:
     """Select exactly `backend` without performance validation or max-batch discovery."""
-    strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
+    strategy = ait.OneBackendStrategy(backend)
+    strategy.enable_performance_validation(False)
     strategy.enable_find_max_batch_size(False)
     return strategy
 

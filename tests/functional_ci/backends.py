@@ -4,7 +4,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
 import torch
@@ -70,7 +70,8 @@ def _torch_tensorrt_jit() -> Backend:
 
 def tensorrt_backend(**overrides) -> Backend:
     """Build a standalone TensorRT backend without TF32 and CUDA graphs; `overrides` replace config fields."""
-    return TensorRTBackend(TensorRTBackendConfig(**{"enable_tf32": False, "use_cuda_graphs": False, **overrides}))
+    config: dict[str, Any] = {"enable_tf32": False, "use_cuda_graphs": False, **overrides}
+    return TensorRTBackend(TensorRTBackendConfig(**config))
 
 
 def _onnx_runtime(provider: ONNXExecutionProvider) -> Callable[[], Backend]:
