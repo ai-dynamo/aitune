@@ -8,6 +8,7 @@ from typing import cast
 
 import pytest
 import torch
+from packaging.version import Version
 from torch import nn
 
 import aitune.torch as ait
@@ -21,6 +22,8 @@ from aitune.torch.module.tuned_module import TunedModule
 from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.flux import ToyFluxPipeline
 from tests.functional_ci.lifecycle import Tolerance, pinned_strategy, selected_backend
+
+TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10))
 
 PROMPT = "A futuristic cityscape with neon lights and flying cars"
 COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
@@ -95,7 +98,18 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
 @pytest.mark.matrix("models.pipelines", "modes.jit-tune_eager")
 @with_backends(
     "jit",
-    marks={},
+    marks={
+        # Torch-TRT 2.12+ falls back to the original graph: the test passes, but the CLIP head runs in PyTorch.
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            TORCH_2_8_TO_2_10,
+            strict=True,
+            reason=(
+                "Torch-TRT < 2.12 rejects the int64 constant-folded CLIP position ids in `aten.embedding`, "
+                "then its fallback fails with `AttributeError: _frozen_param0`, so the CLIP head is not tuned"
+            ),
+            raises=AssertionError,
+        )
+    },
 )
 def test_pipeline_jit(case: BackendCase, device: torch.device):
     """Tune the pipeline's four JIT heads from two prompt batch sizes."""
