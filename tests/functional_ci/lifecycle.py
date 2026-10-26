@@ -5,7 +5,7 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -13,7 +13,6 @@ from torch import nn
 import aitune.torch as ait
 from aitune.torch.backend import Backend, ONNXExecutionProvider, ONNXRuntimeBackend
 from aitune.torch.module import Module
-from aitune.torch.module.tuned_module import TunedModule
 from tests.functional_ci.models import make_input
 
 
@@ -39,7 +38,7 @@ def selected_backend(module: Module, expected: type[Backend] | None = None) -> B
     Check its type when `expected` is given. For an ONNX Runtime TensorRT backend, check that the session did not fall
     back from the TensorRT provider.
     """
-    backends = cast(TunedModule, module.module).backends
+    backends: dict[Any, Backend] = getattr(module.module, "backends", {})
     assert len(backends) == 1, f"expected one selected backend, found {len(backends)}"
     (selected,) = backends.values()
     assert expected is None or type(selected) is expected, f"selected {type(selected)}, expected {expected}"
