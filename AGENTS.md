@@ -78,6 +78,8 @@ Every production file must begin with:
 - **Formatter/linter:** `ruff` (line length 120, Google-style docstrings, complexity ≤ 10).
 - **Static analysis:** `pyrefly` (config in `pyproject.toml`). CI fails on errors not listed in
   `pyrefly-baseline.json`. After fixing listed errors, run `pyrefly check --prune-baseline`.
+  When a change edits a file with baselined errors, fix them if the fix is small and typing-only (no
+  runtime behavior change). Do not add new entries to the baseline.
 - Keep docstring examples runnable; pytest executes doctests.
 - `tests/` and `examples/` are exempt from docstring and `print` rules.
 
