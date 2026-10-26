@@ -34,7 +34,7 @@ env:
   UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: &python_version "3.11"
   NODE_VERSION: &node_version "25"
-  FERN_VERSION: "5.110.0"
+  FERN_VERSION: "5.168.0"
   TORCH_CI_IMAGE: ${{ vars.TORCH_CI_IMAGE }}
   PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
