@@ -3012,62 +3012,6 @@
     },
     {
       "column": 16,
-      "path": "tests/functional_ci/lifecycle.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "tests/functional_ci/lifecycle.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `selected_backend`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "tests/functional_ci/lifecycle.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `graph_specs`",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "tests/functional_ci/lifecycle.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "tests/functional_ci/lifecycle.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/functional_ci/lifecycle.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `deactivate`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "tests/functional_ci/lifecycle.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module` is not assignable to parameter `module` with type `aitune.torch.module.wrapper_module.Module` in function `selected_backend`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/functional_ci/lifecycle.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module` is not assignable to declared return type `aitune.torch.module.wrapper_module.Module`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
       "path": "tests/functional_ci/test_kernel_selector.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `Backend` has no attribute `_runtime`",

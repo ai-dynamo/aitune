@@ -5,6 +5,7 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import torch
 from torch import nn
@@ -12,6 +13,7 @@ from torch import nn
 import aitune.torch as ait
 from aitune.torch.backend import Backend, ONNXExecutionProvider, ONNXRuntimeBackend
 from aitune.torch.module import Module
+from aitune.torch.module.tuned_module import TunedModule
 from tests.functional_ci.models import make_input
 
 
@@ -34,9 +36,10 @@ TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
 def selected_backend(module: Module, expected: type[Backend] | None = None) -> Backend:
     """Return the only backend selected for a single-graph module.
 
-    Check its type when `expected` is given, and that an ONNX Runtime TensorRT backend runs on the TensorRT provider.
+    Check its type when `expected` is given. For an ONNX Runtime TensorRT backend, check that the session did not fall
+    back from the TensorRT provider.
     """
-    backends = module.module.backends
+    backends = cast(TunedModule, module.module).backends
     assert len(backends) == 1, f"expected one selected backend, found {len(backends)}"
     (selected,) = backends.values()
     assert expected is None or type(selected) is expected, f"selected {type(selected)}, expected {expected}"
@@ -45,8 +48,9 @@ def selected_backend(module: Module, expected: type[Backend] | None = None) -> B
         and selected._config.execution_provider == ONNXExecutionProvider.TENSORRT
     ):
         # ONNX Runtime falls back to the CUDA provider if the TensorRT provider cannot start.
-        assert selected._session is not None
-        assert selected._session.get_providers()[0] == "TensorrtExecutionProvider", selected._session.get_providers()
+        assert selected._session is not None, "ONNX Runtime session is not active"
+        providers = selected._session.get_providers()
+        assert providers[0] == "TensorrtExecutionProvider", providers
     return selected
 
 
@@ -88,7 +92,7 @@ def run_lifecycle(
         expected = model(value)
 
     inspected = ait.inspect(model, [value], number_of_iterations=1, warmup_iterations=1)
-    tuned = ait.wrap(model, inspected.get_modules(), strategy=strategy)
+    tuned = cast(Module, ait.wrap(model, inspected.get_modules(), strategy=strategy))
     ait.tune(tuned, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=value.device)
 
     actual = selected_backend(tuned, type(backend))
@@ -98,10 +102,10 @@ def run_lifecycle(
     with torch.no_grad():
         tolerance.assert_close(tuned(value), expected)
 
-    ait.save(tuned, checkpoint)
+    ait.save(cast(nn.Module, tuned), checkpoint)
     tuned.deactivate()
     # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
-    restored = ait.load(model_factory(seed=1), checkpoint)
+    restored = cast(Module, ait.load(model_factory(seed=1), checkpoint))
     assert restored is not tuned
     selected_backend(restored, type(backend))
     with torch.no_grad():
