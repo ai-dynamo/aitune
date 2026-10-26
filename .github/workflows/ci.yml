@@ -144,12 +144,6 @@ jobs:
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
 
-      - name: Publish dev docs
-        if: github.event_name == 'schedule'
-        run: fern generate --docs
-        env:
-          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
-
   wheel:
     name: Build wheel
     runs-on: linux-amd64-cpu4

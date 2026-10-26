@@ -53,3 +53,32 @@ jobs:
       pytorch_ci_image: ${{ needs.ci.outputs.pytorch_ci_image }}
     secrets:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  publish-dev-docs:
+    name: Publish dev docs
+    if: github.ref == 'refs/heads/main'
+    runs-on: linux-amd64-cpu4
+    permissions:
+      contents: read
+    env:
+      FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          path: aitune
+          persist-credentials: false
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: docs-website
+          path: docs-website
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "25"
+      - run: npm install -g "fern-api@$(node -p "require('./aitune/fern/fern.config.json').version")"
+
+      - run: make -C aitune docs
+      - run: aitune/fern/sync_dev_docs.sh aitune docs-website
+      - name: Publish docs-website with the synced dev version
+        run: fern generate --docs
+        working-directory: docs-website/fern
