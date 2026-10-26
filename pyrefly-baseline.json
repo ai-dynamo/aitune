@@ -3130,13 +3130,6 @@
       "severity": "error"
     },
     {
-      "column": 99,
-      "path": "tests/functional_ci/test_shapes.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `dict[str, tuple[BatchDim, int]]` is not assignable to parameter `dynamic_shapes` with type `dict[ForwardInputPath, tuple[DynamicDim | int, ...]] | None` in function `aitune.torch.module.wrapper_module.Module.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 5,
       "path": "tests/functional_ci/test_strategies.py",
       "name": "missing-attribute",
