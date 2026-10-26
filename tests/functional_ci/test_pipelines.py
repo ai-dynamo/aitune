@@ -50,10 +50,8 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
     marks={
         "torch-tensorrt-aot": pytest.mark.xfail(
             strict=True,
-            reason=(
-                "TensorRT Myelin internal error on LayerNorm+SDPA blocks: 'logical memory size (384) should be equal "
-                "to non-opaque payload size (3072)'"
-            ),
+            reason=("torch_tensorrt/dynamo/conversion/_TRTInterpreter.py, line 703, in run assert cuda_engine"),
+            raises=AssertionError,  # expected one selected backend, found 0",
         )
     },
 )
@@ -97,15 +95,7 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
 @pytest.mark.matrix("models.pipelines", "modes.jit-tune_eager")
 @with_backends(
     "jit",
-    marks={
-        "torch-tensorrt-jit": pytest.mark.xfail(
-            strict=True,
-            reason=(
-                "torch.compile(backend='torch_tensorrt') rejects int64 embedding ids; the blocks also hit the TensorRT "
-                "Myelin payload-size error"
-            ),
-        )
-    },
+    marks={},
 )
 def test_pipeline_jit(case: BackendCase, device: torch.device):
     """Tune the pipeline's four JIT heads from two prompt batch sizes."""
