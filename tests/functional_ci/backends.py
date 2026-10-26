@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Backend table for cross-backend cases: factory, tolerance, and the features each backend is tested on."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Literal
 
@@ -124,9 +124,20 @@ BACKENDS: dict[str, BackendCase] = {
 }
 
 
-def with_backends(*capabilities: Capability) -> pytest.MarkDecorator:
-    """Parametrize `case` over every backend that has all `capabilities`; raise if no backend has them."""
+def with_backends(
+    *capabilities: Capability, marks: Mapping[str, pytest.MarkDecorator] | None = None
+) -> pytest.MarkDecorator:
+    """Parametrize `case` over backends with all `capabilities`; raise if none match.
+
+    `marks` maps a backend id to marks for that case only, e.g. a strict `pytest.mark.xfail` for a known failure.
+    """
+    marks = marks or {}
     selected = {backend_id: case for backend_id, case in BACKENDS.items() if case.capabilities.issuperset(capabilities)}
     if not selected:
         raise ValueError(f"no backend in BACKENDS has all capabilities {capabilities}")
-    return pytest.mark.parametrize("case", list(selected.values()), ids=list(selected))
+    if unknown := marks.keys() - selected.keys():
+        raise ValueError(f"marks for backends without capabilities {capabilities}: {sorted(unknown)}")
+    return pytest.mark.parametrize(
+        "case",
+        [pytest.param(case, marks=marks.get(backend_id, ()), id=backend_id) for backend_id, case in selected.items()],
+    )

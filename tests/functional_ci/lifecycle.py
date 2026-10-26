@@ -5,6 +5,7 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import torch
 from torch import nn
@@ -33,7 +34,7 @@ TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
 
 def selected_backend(module: Module, expected: type[Backend] | None = None) -> Backend:
     """Return the only backend selected for a single-graph module; check its type when `expected` is given."""
-    backends = module.module.backends
+    backends: dict[Any, Backend] = getattr(module.module, "backends", {})
     assert len(backends) == 1, f"expected one selected backend, found {len(backends)}"
     (selected,) = backends.values()
     assert expected is None or type(selected) is expected, f"selected {type(selected)}, expected {expected}"
