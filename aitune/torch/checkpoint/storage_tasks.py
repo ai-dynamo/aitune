@@ -591,17 +591,20 @@ def check_checkpoint_valid(path: Path) -> bool:
 
     Returns:
         bool: True if the checkpoint is valid, False otherwise.
-        Checkpoint is valid if there is sha file aside path and inside path are the same.
+        Checkpoint is valid if the sha file inside path is the same as the one stored in the archive.
     """
-    if not path.exists():
-        return False  # there is no unzipped folder
+    zip_path = path.with_name(path.name + AIT_EXTENSION)
+    if not path.exists() or not zip_path.exists():
+        return False  # there is no unzipped folder or no archive
 
-    # Try both SHA-256 and SHA-512 files
-    for sha_type in ("256", "512"):
-        inside_sha_path = get_sha_sums_path(path, sha_type)
-        aside_sha_path = path.parent / inside_sha_path.name
-
-        if aside_sha_path.exists() and inside_sha_path.exists():
-            return aside_sha_path.read_text(encoding="utf-8") == inside_sha_path.read_text(encoding="utf-8")
+    # Compare with the copy inside the archive, the one aside it may come from an older save
+    with zipfile.ZipFile(zip_path) as zip_fp:
+        for sha_type in ("256", "512"):
+            inside_sha_path = get_sha_sums_path(path, sha_type)
+            try:
+                archived_sha_sums = zip_fp.read(inside_sha_path.name).decode("utf-8")
+            except KeyError:
+                continue
+            return inside_sha_path.is_file() and inside_sha_path.read_text(encoding="utf-8") == archived_sha_sums
 
     return False
