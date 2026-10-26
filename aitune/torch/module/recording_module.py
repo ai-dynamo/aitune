@@ -16,6 +16,7 @@ from aitune.exceptions import AITuneUserInputError
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
 from aitune.torch.dynamic_shapes import DynamicShapes
+from aitune.torch.module.call_compatibility import prefers_keyword_arguments
 from aitune.torch.module.forward_signature import ForwardInputPath, ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
@@ -57,7 +58,9 @@ class RecordingModule:
         self._name = name
         self._config = config if config is not None else global_config
         self._forward_call = module.__call__
-        self._forward_signature = ForwardSignature.from_callable(module.forward)
+        self._forward_signature = ForwardSignature.from_callable(
+            module.forward, prefer_keyword_arguments=prefers_keyword_arguments(module)
+        )
         self._dynamic_shapes = dynamic_shapes or {}
         self._cache_dir_resolver = cache_dir_resolver
 
