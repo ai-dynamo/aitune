@@ -7,9 +7,8 @@ import torch
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import TorchEagerBackend
 from tests.functional_ci.backends import BackendCase, with_backends
-from tests.functional_ci.lifecycle import selected_backend
+from tests.functional_ci.lifecycle import pinned_strategy, selected_backend
 from tests.functional_ci.models import make_input, make_mlp
 
 
@@ -33,20 +32,27 @@ class BranchingModel(nn.Module):
 @pytest.mark.matrix("models.graph-breaks")
 @with_backends()
 def test_graph_break(case: BackendCase, device: torch.device):
-    """Tune on the positive branch only; the negative branch must still match eager.
+    """`graph_breaks` backends compile around the data-dependent branch; export backends fail to export it.
 
-    `graph_breaks` backends compile around the break; export backends fail to export, so the strategy falls back to
-    Torch eager instead of a graph traced through one branch.
+    Tuning sees only the positive branch, so the negative branch proves the split graph covers both.
     """
     backend = case.factory()
-    strategy = ait.FirstWinsStrategy([backend, TorchEagerBackend()])
-    strategy.enable_performance_validation(False)
-    strategy.enable_find_max_batch_size(False)
-    tuned = ait.Module(BranchingModel(device), "branching", strategy=strategy)
+    tuned = ait.Module(BranchingModel(device), "branching", strategy=pinned_strategy(backend))
     value = make_input(device).abs()
-    ait.tune(tuned, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=device)
+    samples = list(value.unbind(0))
+    if "graph_breaks" not in case.capabilities:
+        with pytest.raises(Exception, match="(?i)data-dependent"):
+            ait.tune(
+                tuned,
+                samples,
+                batch_sizes=[value.shape[0]],
+                device=device,
+                ignore_failing_modules=False,
+            )
+        return
 
-    selected_backend(tuned, type(backend) if "graph_breaks" in case.capabilities else TorchEagerBackend)
+    ait.tune(tuned, samples, batch_sizes=[value.shape[0]], device=device)
+    selected_backend(tuned, type(backend))
     reference = BranchingModel(device)
     with torch.no_grad():
         for branch_input in (value, -value):
