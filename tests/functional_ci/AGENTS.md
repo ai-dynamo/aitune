@@ -75,6 +75,8 @@ To add a backend, add one `BACKENDS` entry. Give it only the capabilities that p
 
 A capability is a feature that a backend supports and is tested on. `with_backends(*capabilities)` runs the test
 for each backend that has all of them. It raises `ValueError` when no backend matches.
+Before selecting capabilities for a test, read the actual `Capability` names and each backend's `capabilities`
+in `tests/functional_ci/backends.py`. Treat that code as the source of truth if the summary below differs.
 
 | Capability | Meaning | Tests |
 | --- | --- | --- |
@@ -141,8 +143,4 @@ With `AITUNE_MATRIX_RESULTS=<path>`, the session writes:
  "cells": {"modes.aot-export/tensorrt": {"state": "passed", "run": "passed: 1 test(s)"}}}
 ```
 
-For a `skipped` or `failed` cell, `run` is `<state>: <test id> (<reason>)`. CI uploads the JSON with the JUnit XML
-in the `functional-ci-test-report` artifact. The ai-tune-ci `tools/functional/update_matrix.py` merges it into
-`feature_matrix.html`. Do not add an HTML report or a matrix updater to this repository.
-
-Multi-GPU (`ExecutionMode.MULTI_GPU`) is not covered here; unit tests and `tests/functional/` cover it.
+For a `skipped` or `failed` cell, `run` is `<state>: <test id> (<reason>)`. CI uploads the JSON with the JUnit XML.
