@@ -3,6 +3,9 @@
 """Inspecting and patching modules."""
 
 from logging import getLogger
+from typing import TypeVar, cast
+
+import torch
 
 from aitune.torch.inspecting.module_info import ModuleInfo
 from aitune.torch.module.wrapper_module import Module, StrategyList, StrategyMap
@@ -12,15 +15,17 @@ from aitune.utils.logging import setup_logging
 
 logger = getLogger(__name__)
 
+T = TypeVar("T")
+
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 
 def wrap(
-    obj: object,
+    obj: T,
     modules: list[ModuleInfo],
     strategy: StrategyOption | None = None,
     strategies: StrategyList | StrategyMap | None = None,
-) -> object:
+) -> T:
     """Wrap provided modules with inspection logic.
 
     Args:
@@ -37,7 +42,12 @@ def wrap(
     for module_info in modules:
         logger.info("Wrapping module: %s", module_info.object_path or module_info.name or obj.__class__.__name__)
         if module_info.parent is None:
-            return Module(obj, name=obj.__class__.__name__, strategy=strategy, strategies=strategies)
+            return cast(
+                T,
+                Module(
+                    cast(torch.nn.Module, obj), name=obj.__class__.__name__, strategy=strategy, strategies=strategies
+                ),
+            )
 
         ait_module = Module(module_info.module, name=module_info.name, strategy=strategy, strategies=strategies)
         module_info.parent.set_wrapped(module_info.name, ait_module)

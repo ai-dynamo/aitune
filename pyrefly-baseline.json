@@ -890,13 +890,6 @@
       "severity": "error"
     },
     {
-      "column": 27,
-      "path": "aitune/torch/inspecting/wrapping.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.module.wrapper_module.Module.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 77,
       "path": "aitune/torch/jit/inspect_module.py",
       "name": "bad-assignment",
@@ -999,48 +992,6 @@
       "path": "aitune/torch/kernel_forge/module_function_kernel_profiler.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `tuple[Unknown]` is not assignable to parameter `value` with type `tuple[()]` in function `_contextvars.ContextVar.set`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/libs/onnx/onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `custom_translation_table` with type `dict[(...) -> Unknown, (...) -> Unknown] | None` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/libs/onnx/onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `artifacts_dir` with type `PathLike[Unknown] | str` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/libs/onnx/onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `dynamic_axes` with type `Mapping[str, Mapping[int, str]] | Mapping[str, Sequence[int]] | None` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/libs/onnx/onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `training` with type `TrainingMode` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/libs/onnx/onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `operator_export_type` with type `OperatorExportTypes` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/libs/onnx/onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `custom_opsets` with type `Mapping[str, int] | None` in function `torch.onnx.export`",
       "severity": "error"
     },
     {
@@ -1471,38 +1422,10 @@
       "severity": "error"
     },
     {
-      "column": 30,
-      "path": "aitune/triton/config/common.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 48,
-      "path": "aitune/triton/config/common.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 36,
-      "path": "aitune/triton/config/common.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
       "column": 5,
       "path": "aitune/triton/config/onnx_runtime.py",
       "name": "bad-override-mutable-attribute",
       "concise_description": "Class member `ONNXRuntimeModelConfig.platform` overrides parent class `BaseModelConfig` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 30,
-      "path": "aitune/triton/config/onnx_runtime.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
       "severity": "error"
     },
     {
@@ -1513,59 +1436,10 @@
       "severity": "error"
     },
     {
-      "column": 30,
-      "path": "aitune/triton/config/tensorrt.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 44,
-      "path": "aitune/triton/config/tensorrt.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelInstanceGroup` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 17,
-      "path": "aitune/triton/config/tensorrt.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelInstanceGroup` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 17,
-      "path": "aitune/triton/config/tensorrt.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelInstanceGroup` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
       "column": 5,
       "path": "aitune/triton/config/torch_aoti.py",
       "name": "bad-override-mutable-attribute",
       "concise_description": "Class member `TorchAOTIModelConfig.platform` overrides parent class `BaseModelConfig` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/triton/model_analyzer.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 43,
-      "path": "aitune/triton/model_analyzer.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/triton/model_analyzer.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
       "severity": "error"
     },
     {
@@ -1646,13 +1520,6 @@
       "severity": "error"
     },
     {
-      "column": 21,
-      "path": "examples/BERT/bert/triton/promote.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
       "column": 25,
       "path": "examples/BERT/bert/tune.py",
       "name": "pytorch-efficiency-lint-cuda-call",
@@ -1692,20 +1559,6 @@
       "path": "examples/E5Large/e5large/inference.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `Tensor`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "examples/E5Large/e5large/tune.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `encode`",
-      "severity": "error"
-    },
-    {
-      "column": 10,
-      "path": "examples/E5Large/e5large/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {
@@ -1779,13 +1632,6 @@
       "severity": "error"
     },
     {
-      "column": 18,
-      "path": "examples/ESM2/esm2/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
       "column": 21,
       "path": "examples/FLUX/flux/tune.py",
       "name": "unexpected-keyword",
@@ -1797,34 +1643,6 @@
       "path": "examples/FLUX/flux/tune.py",
       "name": "unexpected-keyword",
       "concise_description": "Unexpected keyword argument `truncate_double` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "examples/FLUX/flux/tune.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "examples/FLUX/flux/tune.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `transformer`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "examples/FLUX/flux/tune.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `transformer`",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "examples/FLUX/flux/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {
@@ -1933,20 +1751,6 @@
       "severity": "error"
     },
     {
-      "column": 16,
-      "path": "examples/ParakeetCTC/parakeet_ctc/tune.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `transcribe`",
-      "severity": "error"
-    },
-    {
-      "column": 10,
-      "path": "examples/ParakeetCTC/parakeet_ctc/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
       "column": 36,
       "path": "examples/ParakeetRNNT/parakeet_rnnt/dynamo/backend.py",
       "name": "bad-argument-type",
@@ -2007,20 +1811,6 @@
       "path": "examples/ParakeetRNNT/parakeet_rnnt/inference.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `Tensor`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "examples/ParakeetRNNT/parakeet_rnnt/tune.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `transcribe`",
-      "severity": "error"
-    },
-    {
-      "column": 10,
-      "path": "examples/ParakeetRNNT/parakeet_rnnt/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {
@@ -2115,13 +1905,6 @@
       "severity": "error"
     },
     {
-      "column": 21,
-      "path": "examples/ResNet/resnet/triton/promote.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
       "column": 24,
       "path": "examples/ResNet/resnet/tune.py",
       "name": "bad-argument-type",
@@ -2143,31 +1926,10 @@
       "severity": "error"
     },
     {
-      "column": 13,
-      "path": "examples/StableDiffusion/stable_diffusion/tune.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 10,
-      "path": "examples/StableDiffusion/stable_diffusion/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
       "column": 12,
       "path": "examples/YOLO/yolo/model.py",
       "name": "pytorch-efficiency-lint-cuda-call",
       "concise_description": "`Tensor.cuda()` hard-codes the target device",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "examples/YOLO/yolo/triton/promote.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
       "severity": "error"
     },
     {
@@ -2591,48 +2353,6 @@
       "severity": "error"
     },
     {
-      "column": 21,
-      "path": "tests/functional/pytorch/012_aitune_torch_tune_stable_diffusion_tensorrt_test.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "tests/functional/pytorch/012_aitune_torch_tune_stable_diffusion_tensorrt_test.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
-      "column": 30,
-      "path": "tests/functional/pytorch/014_aitune_torch_tune_flux_tensorrt_modelopt_fp8_test.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "tests/functional/pytorch/014_aitune_torch_tune_flux_tensorrt_modelopt_fp8_test.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "tests/functional/pytorch/016_aitune_torch_tune_stable_diffusion_tensorrt_with_onnx_dynamo_test.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "tests/functional/pytorch/016_aitune_torch_tune_stable_diffusion_tensorrt_with_onnx_dynamo_test.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
       "column": 31,
       "path": "tests/functional/pytorch/019_aitune_torch_tune_module_with_cuda_graphs.py",
       "name": "missing-attribute",
@@ -2647,48 +2367,6 @@
       "severity": "error"
     },
     {
-      "column": 18,
-      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `Logger` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 29,
-      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `Logger` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 15,
-      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `Runtime` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 73,
-      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `TensorIOMode` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 73,
-      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `TensorIOMode` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 49,
-      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `float32` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
       "column": 14,
       "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
       "name": "bad-argument-type",
@@ -2703,20 +2381,6 @@
       "severity": "error"
     },
     {
-      "column": 21,
-      "path": "tests/functional/pytorch/029_aitune_torch_tune_stable_diffusion_torch_inductor_aot_backend_test.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "tests/functional/pytorch/029_aitune_torch_tune_stable_diffusion_torch_inductor_aot_backend_test.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
       "column": 14,
       "path": "tests/functional/pytorch/031_aitune_torch_tune_resnet_onnx_runtime_backend_test.py",
       "name": "bad-argument-type",
@@ -2728,34 +2392,6 @@
       "path": "tests/functional/pytorch/031_aitune_torch_tune_resnet_onnx_runtime_backend_test.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `Tensor`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "tests/functional/pytorch/032_aitune_torch_tune_stable_diffusion_onnx_runtime_backend_test.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "tests/functional/pytorch/032_aitune_torch_tune_stable_diffusion_onnx_runtime_backend_test.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "tests/functional/pytorch/035_aitune_torch_tune_stable_diffusion_onnx_runtime_tensorrt_ep_test.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "tests/functional/pytorch/035_aitune_torch_tune_stable_diffusion_onnx_runtime_tensorrt_ep_test.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `module` with type `Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {
@@ -2955,48 +2591,6 @@
       "severity": "error"
     },
     {
-      "column": 14,
-      "path": "tests/functional_ci/artifacts.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `Logger` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "tests/functional_ci/artifacts.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `Logger` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 15,
-      "path": "tests/functional_ci/artifacts.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `Runtime` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 78,
-      "path": "tests/functional_ci/artifacts.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `TensorIOMode` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "tests/functional_ci/artifacts.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `float32` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 46,
-      "path": "tests/functional_ci/artifacts.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `float16` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "tests/functional_ci/backends.py",
       "name": "unexpected-keyword",
@@ -3053,13 +2647,6 @@
       "severity": "error"
     },
     {
-      "column": 36,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.samples`",
-      "severity": "error"
-    },
-    {
       "column": 42,
       "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
       "name": "bad-argument-type",
@@ -3081,17 +2668,10 @@
       "severity": "error"
     },
     {
-      "column": 36,
+      "column": 42,
       "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
       "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.samples`",
-      "severity": "error"
-    },
-    {
-      "column": 34,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.inputs`",
+      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.graph_spec`",
       "severity": "error"
     },
     {
@@ -3102,80 +2682,10 @@
       "severity": "error"
     },
     {
-      "column": 36,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.samples`",
-      "severity": "error"
-    },
-    {
       "column": 42,
       "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.graph_spec`",
-      "severity": "error"
-    },
-    {
-      "column": 50,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.samples`",
-      "severity": "error"
-    },
-    {
-      "column": 42,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.graph_spec`",
-      "severity": "error"
-    },
-    {
-      "column": 34,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.inputs`",
-      "severity": "error"
-    },
-    {
-      "column": 61,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.samples`",
-      "severity": "error"
-    },
-    {
-      "column": 67,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.graph_spec`",
-      "severity": "error"
-    },
-    {
-      "column": 61,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.samples`",
-      "severity": "error"
-    },
-    {
-      "column": 67,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.graph_spec`",
-      "severity": "error"
-    },
-    {
-      "column": 36,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.samples`",
-      "severity": "error"
-    },
-    {
-      "column": 34,
-      "path": "tests/unit/torch/backend/tensorrt/test_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.inputs`",
       "severity": "error"
     },
     {
@@ -3445,13 +2955,6 @@
       "severity": "error"
     },
     {
-      "column": 81,
-      "path": "tests/unit/torch/backend/test_onnx_runtime_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.graph_spec`",
-      "severity": "error"
-    },
-    {
       "column": 21,
       "path": "tests/unit/torch/backend/test_onnx_runtime_backend.py",
       "name": "missing-attribute",
@@ -3610,13 +3113,6 @@
       "path": "tests/unit/torch/backend/test_torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `path`",
-      "severity": "error"
-    },
-    {
-      "column": 53,
-      "path": "tests/unit/torch/backend/test_torch_tensorrt_aot_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `tests.toy_models.torch_models.ToyTorchModel.samples`",
       "severity": "error"
     },
     {
@@ -3788,13 +3284,6 @@
       "severity": "error"
     },
     {
-      "column": 23,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `linear`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "tests/unit/torch/inspecting/test_wrapping.py",
       "name": "bad-argument-type",
@@ -3813,20 +3302,6 @@
       "path": "tests/unit/torch/inspecting/test_wrapping.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `keys`",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `object`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "bad-index",
-      "concise_description": "Cannot index into `object`",
       "severity": "error"
     },
     {
@@ -3865,52 +3340,10 @@
       "severity": "error"
     },
     {
-      "column": 23,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "bad-index",
-      "concise_description": "Cannot index into `object`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "bad-index",
-      "concise_description": "Cannot index into `object`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "bad-index",
-      "concise_description": "Cannot index into `object`",
-      "severity": "error"
-    },
-    {
       "column": 39,
       "path": "tests/unit/torch/inspecting/test_wrapping.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `dict[str, Linear | ReLU]` is not assignable to parameter `module` with type `Module` in function `aitune.torch.inspecting.module_info.ModuleInfo.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "bad-index",
-      "concise_description": "Cannot index into `object`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "bad-index",
-      "concise_description": "Cannot index into `object`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "bad-index",
-      "concise_description": "Cannot index into `object`",
       "severity": "error"
     },
     {
@@ -3932,27 +3365,6 @@
       "path": "tests/unit/torch/inspecting/test_wrapping.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `list[Linear]` is not assignable to parameter `module` with type `Module` in function `aitune.torch.inspecting.module_info.ModuleInfo.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `linear`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `dict`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "tests/unit/torch/inspecting/test_wrapping.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `list`",
       "severity": "error"
     },
     {
@@ -4243,48 +3655,6 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `custom_translation_table` with type `dict[(...) -> Unknown, (...) -> Unknown] | None` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `artifacts_dir` with type `PathLike[Unknown] | str` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `dynamic_axes` with type `Mapping[str, Mapping[int, str]] | Mapping[str, Sequence[int]] | None` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `training` with type `TrainingMode` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `operator_export_type` with type `OperatorExportTypes` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `custom_opsets` with type `Mapping[str, int] | None` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
       "column": 5,
       "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
       "name": "missing-attribute",
@@ -4387,48 +3757,6 @@
       "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
       "name": "unsupported-operation",
       "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `custom_translation_table` with type `dict[(...) -> Unknown, (...) -> Unknown] | None` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `artifacts_dir` with type `PathLike[Unknown] | str` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `dynamic_axes` with type `Mapping[str, Mapping[int, str]] | Mapping[str, Sequence[int]] | None` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `training` with type `TrainingMode` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `operator_export_type` with type `OperatorExportTypes` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/libs/onnx/test_onnx_exporter.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `bool` is not assignable to parameter `custom_opsets` with type `Mapping[str, int] | None` in function `torch.onnx.export`",
       "severity": "error"
     },
     {
@@ -4971,24 +4299,10 @@
       "severity": "error"
     },
     {
-      "column": 58,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[3], Literal[48], Literal[48]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 35,
       "path": "tests/unit/torch/test_dataloader.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `tuple[Literal[1]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 51,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[1]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
       "severity": "error"
     },
     {
@@ -4999,38 +4313,10 @@
       "severity": "error"
     },
     {
-      "column": 58,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[3], Literal[48], Literal[48]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 35,
       "path": "tests/unit/torch/test_dataloader.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `tuple[Literal[1]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 51,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[1]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[3], Literal[24], Literal[24]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 55,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[3], Literal[48], Literal[48]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
       "severity": "error"
     },
     {
@@ -5038,41 +4324,6 @@
       "path": "tests/unit/torch/test_dataloader.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `tuple[Literal[3], Literal[24], Literal[24]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 59,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[3], Literal[48], Literal[48]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 39,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[3], Literal[24], Literal[24]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 62,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[3], Literal[48], Literal[48]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 39,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[1]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 55,
-      "path": "tests/unit/torch/test_dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[1]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
       "severity": "error"
     },
     {
@@ -5178,125 +4429,6 @@
       "path": "tests/unit/torch/test_dynamic_shapes.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `dict[str | tuple[str, str], tuple[BatchDim, int] | tuple[DynamicDim]]` is not assignable to parameter `dynamic_shapes` with type `dict[ForwardInputPath, tuple[DynamicDim | int, ...]] | None` in function `aitune.torch.dynamic_shapes.dynamic_shapes_to_json`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[128]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 30,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[256]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[16]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 26,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[8]]` is not assignable to parameter `max_input` with type `Size | None` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 26,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 26,
-      "path": "tests/unit/torch/test_random_dataset.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Literal[4]]` is not assignable to parameter `min_input` with type `Size` in function `aitune.torch.dataloader.InputConfig.__init__`",
       "severity": "error"
     },
     {
@@ -5640,55 +4772,6 @@
       "path": "tests/unit/torch/utils/test_shapes.py",
       "name": "unsupported-operation",
       "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `str | tuple[int] | Unknown` is not assignable to parameter `name` with type `bytearray | bytes | str` in function `aitune.triton.config.common.TritonTensorConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `str | tuple[int] | Unknown` is not assignable to parameter `is_shape_tensor` with type `Decimal | bool | float | int | str` in function `aitune.triton.config.common.TritonTensorConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `str | tuple[int] | Unknown` is not assignable to parameter `is_non_linear_format_io` with type `Decimal | bool | float | int | str` in function `aitune.triton.config.common.TritonTensorConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `str | tuple[int] | Unknown` is not assignable to parameter `optional` with type `Decimal | bool | float | int | str` in function `aitune.triton.config.common.TritonTensorConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `str | tuple[int] | Unknown` is not assignable to parameter `format` with type `Literal['FORMAT_NCHW', 'FORMAT_NHWC', 'FORMAT_NONE']` in function `aitune.triton.config.common.TritonTensorConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `str | tuple[int] | Unknown` is not assignable to parameter `allow_ragged_batch` with type `Decimal | bool | float | int | str` in function `aitune.triton.config.common.TritonTensorConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "bad-argument-type",
-      "concise_description": "Unpacked keyword argument `str | tuple[int] | Unknown` is not assignable to parameter `label_filename` with type `bytearray | bytes | str | None` in function `aitune.triton.config.common.TritonTensorConfig.__init__`",
       "severity": "error"
     },
     {
@@ -6084,34 +5167,6 @@
       "severity": "error"
     },
     {
-      "column": 51,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 41,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `DataType` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 38,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelInput` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 59,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelQueuePolicy` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
       "column": 37,
       "path": "tests/unit/triton/test_config.py",
       "name": "bad-argument-type",
@@ -6154,20 +5209,6 @@
       "severity": "error"
     },
     {
-      "column": 42,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `BatchInput` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 43,
-      "path": "tests/unit/triton/test_config.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `BatchOutput` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
       "column": 57,
       "path": "tests/unit/triton/test_model_analyzer.py",
       "name": "bad-argument-type",
@@ -6182,55 +5223,6 @@
       "severity": "error"
     },
     {
-      "column": 40,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 41,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `TYPE_INT64` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
       "column": 77,
       "path": "tests/unit/triton/test_publish.py",
       "name": "unbound-name",
@@ -6242,62 +5234,6 @@
       "path": "tests/unit/triton/test_publish.py",
       "name": "unbound-name",
       "concise_description": "`config` may be uninitialized",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 40,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 74,
-      "path": "tests/unit/triton/test_publish.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "tests/unit/triton/test_publish_existing.py",
-      "name": "missing-attribute",
-      "concise_description": "No attribute `ModelConfig` in module `tritonclient.grpc.model_config_pb2`",
       "severity": "error"
     },
     {
