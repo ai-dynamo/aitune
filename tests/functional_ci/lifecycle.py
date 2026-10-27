@@ -32,24 +32,25 @@ class Tolerance:
 TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
 
 
-def selected_backend(module: Module, expected: type[Backend] | None = None) -> Backend:
-    """Return the only backend selected for a single-graph module.
+def assert_tensorrt_provider_active(backend: Backend) -> None:
+    """For an ONNX Runtime TensorRT backend, check that the session did not fall back from the TensorRT provider."""
+    if not (
+        isinstance(backend, ONNXRuntimeBackend) and backend._config.execution_provider == ONNXExecutionProvider.TENSORRT
+    ):
+        return
+    # ONNX Runtime falls back to the CUDA provider if the TensorRT provider cannot start.
+    assert backend._session is not None, "ONNX Runtime session is not active"
+    providers = backend._session.get_providers()
+    assert providers[0] == "TensorrtExecutionProvider", providers
 
-    Check its type when `expected` is given. For an ONNX Runtime TensorRT backend, check that the session did not fall
-    back from the TensorRT provider.
-    """
+
+def selected_backend(module: Module, expected: type[Backend] | None = None) -> Backend:
+    """Return the only backend selected for a single-graph module; check its type when `expected` is given."""
     backends: dict[Any, Backend] = getattr(module.module, "backends", {})
     assert len(backends) == 1, f"expected one selected backend, found {len(backends)}"
     (selected,) = backends.values()
     assert expected is None or type(selected) is expected, f"selected {type(selected)}, expected {expected}"
-    if (
-        isinstance(selected, ONNXRuntimeBackend)
-        and selected._config.execution_provider == ONNXExecutionProvider.TENSORRT
-    ):
-        # ONNX Runtime falls back to the CUDA provider if the TensorRT provider cannot start.
-        assert selected._session is not None, "ONNX Runtime session is not active"
-        providers = selected._session.get_providers()
-        assert providers[0] == "TensorrtExecutionProvider", providers
+    assert_tensorrt_provider_active(selected)
     return selected
 
 
