@@ -21,7 +21,6 @@ Use --basetemp=/path/to/artifacts to choose where ONNX, reports, and checkpoints
 
 import json
 from pathlib import Path
-from typing import cast
 
 import pytest
 import torch
@@ -90,7 +89,8 @@ def test_onnx_bert(tmp_path: Path) -> None:
             device="cuda",
             ignore_failing_modules=False,
         )
-        (backend,) = cast(TunedModule, module.module).backends.values()
+        assert isinstance(module.module, TunedModule)
+        (backend,) = module.module.backends.values()
         results = strategy.perf_validation_results
         assert len(results) == 2
         assert all(result["success"] for result in strategy.backend_results)
@@ -120,8 +120,8 @@ def test_onnx_bert(tmp_path: Path) -> None:
             torch.testing.assert_close(module(input_ids=requests[:batch]), expected[batch], rtol=1e-2, atol=1e-2)
         print(f"Artifacts: {tmp_path}")
     finally:
-        if module is not None and module.state.name == "TUNED":
-            for backend in cast(TunedModule, module.module).backends.values():
+        if module is not None and isinstance(module.module, TunedModule):
+            for backend in module.module.backends.values():
                 backend._deactivate()
         source.deactivate()
 

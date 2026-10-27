@@ -16,7 +16,6 @@ Run: python -m pytest tests/functional/onnx/004_onnx_names_checkpoint.py -q -s
 """
 
 from pathlib import Path
-from typing import cast
 
 import onnx
 import pytest
@@ -105,7 +104,8 @@ def test_onnx_names_checkpoint(tmp_path: Path, backend_type, layout: str, monkey
     monkeypatch.setattr(torch.onnx, "export", unexpected_export)
     try:
         tune(module, dataset, batch_sizes=[1, 2, 4], device="cuda", ignore_failing_modules=False)
-        (backend,) = cast(TunedModule, module.module).backends.values()
+        assert isinstance(module.module, TunedModule)
+        (backend,) = module.module.backends.values()
         assert isinstance(backend, backend_type)
         _assert_metadata(backend._graph_spec)
         for batch in [1, 3, 4]:
@@ -121,7 +121,8 @@ def test_onnx_names_checkpoint(tmp_path: Path, backend_type, layout: str, monkey
         path.unlink()
         (tmp_path / "weights.bin").unlink()
         module = load(module, checkpoint)
-        (backend,) = cast(TunedModule, module.module).backends.values()
+        assert isinstance(module.module, TunedModule)
+        (backend,) = module.module.backends.values()
         assert isinstance(backend, backend_type)
         _assert_metadata(backend._graph_spec)
         for batch in [1, 3, 4]:
@@ -133,8 +134,8 @@ def test_onnx_names_checkpoint(tmp_path: Path, backend_type, layout: str, monkey
             )
     finally:
         # Loaded backends are deployed; release their resources directly for test cleanup.
-        if module.state.name == "TUNED":
-            for backend in cast(TunedModule, module.module).backends.values():
+        if isinstance(module.module, TunedModule):
+            for backend in module.module.backends.values():
                 backend._deactivate()
         source.deactivate()
 

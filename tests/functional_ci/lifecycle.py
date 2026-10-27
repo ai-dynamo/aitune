@@ -5,7 +5,7 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import torch
 from torch import nn
@@ -92,7 +92,8 @@ def run_lifecycle(
         expected = model(value)
 
     inspected = ait.inspect(model, [value], number_of_iterations=1, warmup_iterations=1)
-    tuned = cast(Module, ait.wrap(model, inspected.get_modules(), strategy=strategy))
+    tuned = ait.wrap(model, inspected.get_modules(), strategy=strategy)
+    assert isinstance(tuned, Module)
     ait.tune(tuned, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=value.device)
 
     actual = selected_backend(tuned, type(backend))
@@ -105,7 +106,8 @@ def run_lifecycle(
     ait.save(tuned, checkpoint)
     tuned.deactivate()
     # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
-    restored = cast(Module, ait.load(model_factory(seed=1), checkpoint))
+    restored = ait.load(model_factory(seed=1), checkpoint)
+    assert isinstance(restored, Module)
     assert restored is not tuned
     selected_backend(restored, type(backend))
     with torch.no_grad():

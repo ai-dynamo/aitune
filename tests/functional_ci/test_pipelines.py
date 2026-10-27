@@ -88,7 +88,8 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
     for module in _components(pipeline).values():
         module.deactivate()
 
-    restored = cast(ToyFluxPipeline, ait.load(ToyFluxPipeline(device, seed=1), checkpoint))
+    restored = ait.load(ToyFluxPipeline(device, seed=1), checkpoint)
+    assert isinstance(restored, ToyFluxPipeline)
     assert restored is not pipeline
     for module in _components(restored).values():
         selected_backend(module, type(backend))
