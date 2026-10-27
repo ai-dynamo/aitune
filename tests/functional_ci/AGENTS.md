@@ -4,26 +4,32 @@
 ---
 # AGENTS.md: tests/functional_ci
 
-Fast GPU functional tests for the AITune public API. Each test tunes a small seeded toy model with a real backend
-and compares the output with eager PyTorch.
+Fast GPU functional tests for the AITune public API. Most tests tune a small seeded toy model with a backend from
+`BACKENDS` and compare the output with eager PyTorch. Strategy and kernel-selector tests build their own backends.
 
 ```bash
 pytest -rfEs tests/functional_ci                                        # whole suite, needs CUDA
-pytest tests/functional_ci/test_shapes.py -k tensorrt                   # one file, one backend id
+pytest tests/functional_ci/test_shapes.py -k tensorrt                   # one file, backend ids with "tensorrt"
 AITUNE_MATRIX_RESULTS=matrix.json pytest tests/functional_ci            # also write the feature-matrix JSON
 ```
 
-CI runs the suite in the `Functional CI tests` job of `.github/workflows/ci.yml`. The suite fails (does not skip)
-when CUDA is not available.
+CI runs the suite in the `Functional CI tests` step of the `Functional CI GPU` job in `.github/workflows/ci.yml`.
+The suite fails (does not skip) when CUDA is not available.
 
 ## Rules
 
 - Use only plain `torch` toy models: no diffusers, Hugging Face, or other model libraries, and no weight downloads.
 - Keep toys realistic. If a toy finds a backend gap that also affects real models, fix AITune, not the toy.
+- Give each test a `@pytest.mark.matrix(...)` marker for the feature-matrix cells that it proves.
+
+Backend tests (tests that use `BACKENDS`) also follow these rules:
+
 - Pin the backend with `pinned_strategy(backend)` from `lifecycle.py`.
 - Compare with eager through `run_lifecycle` or `assert_matches_eager` and the backend tolerance.
 - Write one test per backend group or outcome. Select the group with `with_backends(...)`, not an `if` in the body.
-- Give each test a `@pytest.mark.matrix(...)` marker for the feature-matrix cells that it proves.
+
+`test_strategies.py` and `test_kernel_selector.py` test strategy selection and `KernelSelectorBackend`, so they build
+their own strategies.
 
 ## Files
 
@@ -95,7 +101,8 @@ Put a strict mark on one backend case through `marks=`:
 ```
 
 `marks` raises `ValueError` for a backend id that the capabilities do not select. Do not call `pytest.xfail()` in a
-test body, and do not use string conditions on params. Use public upstream issue links, not internal bug IDs.
+test body, and do not use string conditions on params. Use public issue references such as `aitune#118`, not
+internal bug IDs.
 
 ## Feature matrix and IDs
 
@@ -106,8 +113,9 @@ proves. `conftest.py` formats each template with `str.format`:
 - Other names are pytest params, for example `{case_id}`, `{strategy_id}`, `{mode.value}`.
 - A template without `/` gets `/{backend}` added, so it needs a `case` param from `with_backends`.
 
-Cell state is the worst outcome of its tests: `failed` > `skipped` > `passed`. A strict `xfail` counts as
-`skipped`. Cell IDs are not validated against the matrix; only the template formatting is checked.
+Cell state is the worst outcome of its tests: `failed` > `skipped` > `passed`. A strict `xfail` that fails counts as
+`skipped`; a strict XPASS counts as `failed`. Cell IDs are not validated against the matrix; only the template
+formatting is checked.
 
 | Table | Row examples | Column |
 | --- | --- | --- |
