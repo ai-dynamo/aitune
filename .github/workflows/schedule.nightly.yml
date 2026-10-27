@@ -54,39 +54,10 @@ jobs:
     secrets:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
-  publish-dev-docs:
+  docs:
     name: Publish dev docs
-    if: github.ref == 'refs/heads/main'
-    runs-on: linux-amd64-cpu4
+    uses: ./.github/workflows/dispatch.docs.yml
+    secrets:
+      FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
     permissions:
       contents: write
-    env:
-      FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          path: aitune
-          persist-credentials: false
-      - uses: actions/checkout@v7.0.1
-        with:
-          ref: docs-website
-          path: docs-website
-      - uses: actions/setup-node@v7.0.0
-        with:
-          node-version: "25"
-      - run: npm install -g fern-api
-
-      - run: make -C aitune docs
-      - run: aitune/.github/scripts/fern/sync_dev_docs.sh aitune docs-website
-      - name: Commit the synced dev version
-        working-directory: docs-website
-        run: |
-          git add -A
-          git diff --cached --quiet || git -c user.name="github-actions[bot]" \
-            -c user.email="github-actions[bot]@users.noreply.github.com" \
-            commit -m "docs(fern): sync dev from main" -m "Source commit: ${{ github.sha }}"
-      - name: Publish docs-website with the synced dev version
-        run: fern generate --docs
-        working-directory: docs-website/fern
-      - name: Push the synced dev version to docs-website
-        run: git -C docs-website push origin HEAD:docs-website
