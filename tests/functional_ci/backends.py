@@ -122,8 +122,8 @@ BACKENDS: dict[str, BackendCase] = {
     "torchao-int8wo": BackendCase(
         _torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2), _capabilities("save_load")
     ),
-    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("jit")),
-    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("jit")),
+    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("save_load", "jit")),
+    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("save_load", "jit")),
 }
 
 
