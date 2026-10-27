@@ -59,7 +59,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: linux-amd64-cpu4
     permissions:
-      contents: read
+      contents: write
     env:
       FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
     steps:
@@ -71,7 +71,6 @@ jobs:
         with:
           ref: docs-website
           path: docs-website
-          persist-credentials: false
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: "25"
@@ -79,6 +78,15 @@ jobs:
 
       - run: make -C aitune docs
       - run: aitune/.github/scripts/fern/sync_dev_docs.sh aitune docs-website
+      - name: Commit the synced dev version
+        working-directory: docs-website
+        run: |
+          git add -A
+          git diff --cached --quiet || git -c user.name="github-actions[bot]" \
+            -c user.email="github-actions[bot]@users.noreply.github.com" \
+            commit -m "docs(fern): sync dev from main" -m "Source commit: ${{ github.sha }}"
       - name: Publish docs-website with the synced dev version
         run: fern generate --docs
         working-directory: docs-website/fern
+      - name: Push the synced dev version to docs-website
+        run: git -C docs-website push origin HEAD:docs-website
