@@ -28,6 +28,17 @@ TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (
 PROMPT = "A futuristic cityscape with neon lights and flying cars"
 COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
 
+# Torch-TRT 2.12+ falls back to the original graph: the test passes, but the CLIP text encoder runs in PyTorch.
+TORCH_TENSORRT_JIT_CLIP_XFAIL = pytest.mark.xfail(
+    TORCH_2_8_TO_2_10,
+    strict=True,
+    reason=(
+        "Torch-TRT < 2.12 rejects the int64 constant-folded CLIP position ids in `aten.embedding`, "
+        "then its fallback fails with `AttributeError: _frozen_param0`, so the CLIP text encoder is not tuned"
+    ),
+    raises=AssertionError,
+)
+
 
 def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor:
     """Generate deterministic toy images."""
@@ -55,7 +66,8 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
             strict=True,
             reason=("torch_tensorrt/dynamo/conversion/_TRTInterpreter.py, line 703, in run assert cuda_engine"),
             raises=AssertionError,  # expected one selected backend, found 0",
-        )
+        ),
+        "torch-tensorrt-jit": TORCH_TENSORRT_JIT_CLIP_XFAIL,
     },
 )
 def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
@@ -98,18 +110,7 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
 @pytest.mark.matrix("models.pipelines", "modes.jit-tune_eager")
 @with_backends(
     "jit",
-    marks={
-        # Torch-TRT 2.12+ falls back to the original graph: the test passes, but the CLIP head runs in PyTorch.
-        "torch-tensorrt-jit": pytest.mark.xfail(
-            TORCH_2_8_TO_2_10,
-            strict=True,
-            reason=(
-                "Torch-TRT < 2.12 rejects the int64 constant-folded CLIP position ids in `aten.embedding`, "
-                "then its fallback fails with `AttributeError: _frozen_param0`, so the CLIP head is not tuned"
-            ),
-            raises=AssertionError,
-        )
-    },
+    marks={"torch-tensorrt-jit": TORCH_TENSORRT_JIT_CLIP_XFAIL},
 )
 def test_pipeline_jit(case: BackendCase, device: torch.device):
     """Tune the pipeline's four JIT heads from two prompt batch sizes."""
