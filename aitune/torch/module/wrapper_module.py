@@ -7,7 +7,7 @@ from collections.abc import Callable
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 
 import torch
 import wrapt
@@ -552,4 +552,4 @@ def sanitize_model_name(model_name: str | None) -> str | None:
     return model_name.replace("/", "_") if model_name else None
 
 
-ModuleOrPipeline = torch.nn.Module | Module | Callable[..., Any]
+ModuleOrPipelineT = TypeVar("ModuleOrPipelineT", bound=torch.nn.Module | Module | Callable[..., Any])

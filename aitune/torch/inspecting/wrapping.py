@@ -3,29 +3,27 @@
 """Inspecting and patching modules."""
 
 from logging import getLogger
-from typing import TypeVar, cast
+from typing import cast
 
 import torch
 
 from aitune.torch.inspecting.module_info import ModuleInfo
-from aitune.torch.module.wrapper_module import Module, ModuleOrPipeline, StrategyList, StrategyMap
+from aitune.torch.module.wrapper_module import Module, ModuleOrPipelineT, StrategyList, StrategyMap
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.resolver import StrategyOption
 from aitune.utils.logging import setup_logging
 
 logger = getLogger(__name__)
 
-T = TypeVar("T", bound=ModuleOrPipeline)
-
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 
 def wrap(
-    obj: T,
+    obj: ModuleOrPipelineT,
     modules: list[ModuleInfo],
     strategy: StrategyOption | None = None,
     strategies: StrategyList | StrategyMap | None = None,
-) -> T | Module:
+) -> ModuleOrPipelineT | Module:
     """Wrap provided modules with inspection logic.
 
     Args:

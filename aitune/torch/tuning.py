@@ -6,7 +6,7 @@ import shutil
 from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
-from typing import TypeVar, cast
+from typing import cast
 
 import torch
 
@@ -19,7 +19,7 @@ from aitune.torch.config import AITuneMode, aitune_cache_dir
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
 from aitune.torch.distributed import coordinator, distributed_cache_dir
 from aitune.torch.module.tensor_spec import InfoLevel
-from aitune.torch.module.wrapper_module import Module, ModuleOrPipeline, ModuleState
+from aitune.torch.module.wrapper_module import Module, ModuleOrPipelineT, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import report_tune_run
 from aitune.torch.utils.cuda_utils import synchronize as cuda_synchronize
@@ -29,8 +29,6 @@ from aitune.utils.timer import Timer
 
 logger = getLogger(__name__)
 
-
-ModuleOrPipelineT = TypeVar("ModuleOrPipelineT", bound=ModuleOrPipeline)
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
@@ -129,7 +127,7 @@ def tune(
 
 
 def save(
-    module: ModuleOrPipeline,
+    module: ModuleOrPipelineT,
     path: str | Path,
     storage: Storage | None = None,
 ) -> None:
