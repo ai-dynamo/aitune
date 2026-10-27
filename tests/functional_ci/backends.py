@@ -30,7 +30,15 @@ from aitune.torch.backend import (
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
 
 Capability = Literal[
-    "save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph", "onnx_input", "jit"
+    "save_load",
+    "export",
+    "dynamic_batch",
+    "dynamic_non_batch",
+    "structured_io",
+    "multigraph",
+    "onnx_input",
+    "jit",
+    "graph_breaks",
 ]
 
 
@@ -90,7 +98,7 @@ def _capabilities(*capabilities: Capability) -> frozenset[str]:
 
 
 BACKENDS: dict[str, BackendCase] = {
-    "torch-eager": BackendCase(TorchEagerBackend, Tolerance(), _capabilities("save_load")),
+    "torch-eager": BackendCase(TorchEagerBackend, Tolerance(), _capabilities("save_load", "graph_breaks")),
     "inductor-aot": BackendCase(
         TorchInductorAotBackend,
         Tolerance(),
@@ -122,10 +130,10 @@ BACKENDS: dict[str, BackendCase] = {
         _capabilities("save_load", "dynamic_batch", "dynamic_non_batch"),
     ),
     "torchao-int8wo": BackendCase(
-        _torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2), _capabilities("save_load")
+        _torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2), _capabilities("save_load", "graph_breaks")
     ),
-    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("jit")),
-    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("jit")),
+    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("jit", "graph_breaks")),
+    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("jit", "graph_breaks")),
 }
 
 
