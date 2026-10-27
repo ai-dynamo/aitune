@@ -76,7 +76,7 @@ def test_recorded_batch_range(case: BackendCase, device: torch.device):
 @pytest.mark.matrix("models.dynamic-batch-user")
 @with_backends("dynamic_batch")
 def test_explicit_batch_dim(case: BackendCase, device: torch.device):
-    """A user `BatchDim` widens the compiled range beyond the single recorded batch size."""
+    """A user `BatchDim` makes the batch dimension dynamic beyond the single recorded batch size."""
     backend = case.factory()
     dynamic_shapes: DynamicShapes = {"input": (ait.BatchDim("batch", min=1, max=8, opt=4), IN_FEATURES)}
     tuned = ait.Module(make_mlp(device), "mlp", strategy=pinned_strategy(backend), dynamic_shapes=dynamic_shapes)
