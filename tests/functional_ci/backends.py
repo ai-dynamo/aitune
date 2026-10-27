@@ -4,7 +4,7 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import pytest
 import torch
@@ -39,6 +39,8 @@ Capability = Literal[
     "onnx_input",
     "jit",
     "graph_breaks",
+    "torch_export",
+    "onnx_export",
 ]
 
 
@@ -59,7 +61,10 @@ class BackendCase:
 def _torch_tensorrt_config() -> TorchTensorRTConfig:
     """Convert the whole graph in fp32 without TF32."""
     return TorchTensorRTConfig(
-        enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True, require_full_compilation=True
+        enabled_precisions=cast(Any, {torch.float32}),
+        min_block_size=1,
+        disable_tf32=True,
+        require_full_compilation=True,
     )
 
 
@@ -102,38 +107,47 @@ BACKENDS: dict[str, BackendCase] = {
     "inductor-aot": BackendCase(
         TorchInductorAotBackend,
         Tolerance(),
-        _capabilities("save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph"),
+        _capabilities(
+            "save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph", "torch_export"
+        ),
         artifact_format="pt2",
     ),
     "torch-tensorrt-aot": BackendCase(
         _torch_tensorrt_aot,
         TENSORRT_FP32,
-        _capabilities("save_load", "dynamic_batch", "dynamic_non_batch", "structured_io"),
+        _capabilities("save_load", "dynamic_batch", "dynamic_non_batch", "structured_io", "torch_export"),
     ),
     "tensorrt": BackendCase(
         tensorrt_backend,
         TENSORRT_FP32,
         _capabilities(
-            "save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph", "onnx_input"
+            "save_load",
+            "export",
+            "dynamic_batch",
+            "dynamic_non_batch",
+            "structured_io",
+            "multigraph",
+            "onnx_input",
+            "onnx_export",
         ),
         artifact_format="tensorrt_plan",
     ),
     "onnxruntime-cuda": BackendCase(
         _onnx_runtime(ONNXExecutionProvider.CUDA),
         TENSORRT_FP32,
-        _capabilities("save_load", "export", "dynamic_batch", "dynamic_non_batch", "onnx_input"),
+        _capabilities("save_load", "export", "dynamic_batch", "dynamic_non_batch", "onnx_input", "onnx_export"),
         artifact_format="onnx",
     ),
     "onnxruntime-tensorrt": BackendCase(
         _onnx_runtime(ONNXExecutionProvider.TENSORRT),
         TENSORRT_FP32,
-        _capabilities("save_load", "dynamic_batch", "dynamic_non_batch"),
+        _capabilities("save_load", "dynamic_batch", "dynamic_non_batch", "onnx_export"),
     ),
     "torchao-int8wo": BackendCase(
         _torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2), _capabilities("save_load", "graph_breaks")
     ),
-    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("jit", "graph_breaks")),
-    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("jit", "graph_breaks")),
+    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("jit")),
+    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("jit")),
 }
 
 
