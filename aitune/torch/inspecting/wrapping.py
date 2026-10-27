@@ -3,7 +3,7 @@
 """Inspecting and patching modules."""
 
 from logging import getLogger
-from typing import Any, TypeVar, cast
+from typing import TypeVar, cast
 
 import torch
 
@@ -15,7 +15,7 @@ from aitune.utils.logging import setup_logging
 
 logger = getLogger(__name__)
 
-T = TypeVar("T", bound=ModuleOrPipeline | list[Any] | dict[Any, Any])
+T = TypeVar("T", bound=ModuleOrPipeline)
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
