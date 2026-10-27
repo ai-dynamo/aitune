@@ -32,12 +32,8 @@ class Tolerance:
 TENSORRT_FP32 = Tolerance(rtol=1e-3, atol=1e-3)
 
 
-def assert_tensorrt_provider_active(backend: Backend) -> None:
-    """For an ONNX Runtime TensorRT backend, check that the session did not fall back from the TensorRT provider."""
-    if not (
-        isinstance(backend, ONNXRuntimeBackend) and backend._config.execution_provider == ONNXExecutionProvider.TENSORRT
-    ):
-        return
+def assert_tensorrt_provider_active(backend: ONNXRuntimeBackend) -> None:
+    """Check that the session did not fall back from the TensorRT provider."""
     # ONNX Runtime falls back to the CUDA provider if the TensorRT provider cannot start.
     assert backend._session is not None, "ONNX Runtime session is not active"
     providers = backend._session.get_providers()
@@ -50,7 +46,11 @@ def selected_backend(module: Module, expected: type[Backend] | None = None) -> B
     assert len(backends) == 1, f"expected one selected backend, found {len(backends)}"
     (selected,) = backends.values()
     assert expected is None or type(selected) is expected, f"selected {type(selected)}, expected {expected}"
-    assert_tensorrt_provider_active(selected)
+    if (
+        isinstance(selected, ONNXRuntimeBackend)
+        and selected._config.execution_provider == ONNXExecutionProvider.TENSORRT
+    ):
+        assert_tensorrt_provider_active(selected)
     return selected
 
 
