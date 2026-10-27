@@ -1352,13 +1352,6 @@
       "severity": "error"
     },
     {
-      "column": 22,
-      "path": "aitune/torch/tuning.py",
-      "name": "bad-assignment",
-      "concise_description": "`aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module` is not assignable to variable `module` with type `torch.nn.modules.module.Module`",
-      "severity": "error"
-    },
-    {
       "column": 68,
       "path": "aitune/torch/tuning.py",
       "name": "bad-argument-type",
@@ -1538,13 +1531,6 @@
       "path": "examples/BERT/bert/tune.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `ONNXRuntimeBackend` is not assignable to parameter `object` with type `TensorRTBackend` in function `list.append`",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "examples/BERT/bert/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {
@@ -1912,13 +1898,6 @@
       "severity": "error"
     },
     {
-      "column": 10,
-      "path": "examples/ResNet/resnet/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
       "column": 43,
       "path": "examples/ResNet/resnet/tune.py",
       "name": "bad-argument-type",
@@ -1930,13 +1909,6 @@
       "path": "examples/YOLO/yolo/model.py",
       "name": "pytorch-efficiency-lint-cuda-call",
       "concise_description": "`Tensor.cuda()` hard-codes the target device",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "examples/YOLO/yolo/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {
@@ -2129,20 +2101,6 @@
       "severity": "error"
     },
     {
-      "column": 14,
-      "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.load`",
-      "severity": "error"
-    },
-    {
       "column": 22,
       "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
       "name": "missing-attribute",
@@ -2185,20 +2143,6 @@
       "severity": "error"
     },
     {
-      "column": 14,
-      "path": "tests/functional/onnx/005_onnx_unet_models.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "tests/functional/onnx/005_onnx_unet_models.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.load`",
-      "severity": "error"
-    },
-    {
       "column": 35,
       "path": "tests/functional/onnx/005_onnx_unet_models.py",
       "name": "missing-attribute",
@@ -2234,20 +2178,6 @@
       "severity": "error"
     },
     {
-      "column": 14,
-      "path": "tests/functional/onnx/006_onnx_bert.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "tests/functional/onnx/006_onnx_bert.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.load`",
-      "severity": "error"
-    },
-    {
       "column": 35,
       "path": "tests/functional/onnx/006_onnx_bert.py",
       "name": "missing-attribute",
@@ -2280,13 +2210,6 @@
       "path": "tests/functional/onnx/007_onnx_yolo.py",
       "name": "not-iterable",
       "concise_description": "Type `None` is not iterable",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "tests/functional/onnx/007_onnx_yolo.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {
@@ -2367,10 +2290,45 @@
       "severity": "error"
     },
     {
-      "column": 14,
+      "column": 18,
       "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `Logger` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 29,
+      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `Logger` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 15,
+      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `Runtime` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 73,
+      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `TensorIOMode` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 73,
+      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `TensorIOMode` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 49,
+      "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `float32` in module `tensorrt`",
       "severity": "error"
     },
     {
@@ -2378,13 +2336,6 @@
       "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `Tensor`",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "tests/functional/pytorch/031_aitune_torch_tune_resnet_onnx_runtime_backend_test.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {
@@ -2469,13 +2420,6 @@
       "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {
@@ -2588,6 +2532,48 @@
       "path": "tests/functional/pytorch/kernel_forge/001_module_function_kernel_profiler_flux_test.py",
       "name": "bad-index",
       "concise_description": "Cannot index into `dict[str, list[tuple[int, tuple[tuple[Unknown, ...], dict[Unknown, Unknown]]]]]`",
+      "severity": "error"
+    },
+    {
+      "column": 14,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `Logger` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 25,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `Logger` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 15,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `Runtime` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 78,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `TensorIOMode` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 18,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `float32` in module `tensorrt`",
+      "severity": "error"
+    },
+    {
+      "column": 46,
+      "path": "tests/functional_ci/artifacts.py",
+      "name": "missing-attribute",
+      "concise_description": "No attribute `float16` in module `tensorrt`",
       "severity": "error"
     },
     {
@@ -3953,13 +3939,6 @@
       "path": "tests/unit/torch/module/test_onnx_module.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
-      "column": 14,
-      "path": "tests/unit/torch/module/test_onnx_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `aitune.torch.module.wrapper_module.Module` is not assignable to parameter `module` with type `torch.nn.modules.module.Module` in function `aitune.torch.tuning.save`",
       "severity": "error"
     },
     {

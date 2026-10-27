@@ -145,7 +145,7 @@ def tune_model(
     pipeline = ait.wrap(pipeline, modules, strategy=default_strategy)
 
     # Tune the transformer separately so quantization can be enabled independently.
-    pipeline.transformer = ait.module.Module(
+    pipeline.transformer = ait.module.Module(  # pyrefly: ignore[missing-attribute]
         pipeline.transformer,
         name="transformer",
         strategy=transformer_strategy,

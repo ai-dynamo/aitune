@@ -125,7 +125,7 @@ def tune(
 
 
 def save(
-    module: torch.nn.Module,
+    module: torch.nn.Module | Module,
     path: str | Path,
     storage: Storage | None = None,
 ) -> None:
@@ -164,7 +164,7 @@ def save(
 
 
 def load(
-    module: torch.nn.Module,
+    module: torch.nn.Module | Module,
     path: str | Path,
     storage: Storage | None = None,
     device_map: dict[str, torch.device] | None = None,
