@@ -4,6 +4,7 @@
 
 import contextvars
 import inspect
+import os
 from collections import defaultdict
 from collections.abc import Callable, Generator, Iterable, Sequence
 from contextlib import contextmanager
@@ -51,6 +52,31 @@ def prime_cuda_profiler() -> None:
         torch.cuda.synchronize()
 
     _cuda_profiler_primed = True
+
+
+def teardown_cuda_profiler() -> None:
+    """Detach CUPTI so later CUDA work runs without profiler overhead.
+
+    Kineto keeps CUPTI attached after a CUDA profiler session unless ``TEARDOWN_CUPTI=1``. Attached CUPTI slows
+    down later inference in the same process. This helper sets the variable and runs one discarded session; Kineto
+    calls ``cuptiFinalize`` after it ends. The variable is not restored because Kineto reads it again in a background
+    thread after finalize. An explicit user value other than ``"1"`` is kept and teardown is skipped.
+    """
+    global _cuda_profiler_primed  # noqa: PLW0603
+
+    if not _cuda_profiler_primed:
+        return
+
+    if os.environ.setdefault("TEARDOWN_CUPTI", "1") != "1":
+        logger.warning("TEARDOWN_CUPTI is not '1'; CUPTI stays attached and may slow down inference.")
+        return
+
+    with profile(activities=[ProfilerActivity.CUDA]):
+        torch.zeros(1, device="cuda").relu_()
+    torch.cuda.synchronize()
+
+    # The next session starts with fresh CUPTI state and needs priming again.
+    _cuda_profiler_primed = False
 
 
 class _ProfilingItem(TypedDict):
@@ -141,6 +167,27 @@ class ModuleFunctionKernelProfiler:
             "kernel profiler sample count",
         )
 
+        try:
+            profiling_data, function_data = self._profile_kernels(function, data, named_modules, warmup_iterations)
+        finally:
+            teardown_cuda_profiler()
+
+        torch.cuda.empty_cache()
+
+        if profiling_data:
+            profiling_df = pd.DataFrame(profiling_data)
+        else:
+            profiling_df = pd.DataFrame(columns=tuple(_ProfilingItem.__annotations__))
+        return profiling_df, function_data
+
+    def _profile_kernels(
+        self,
+        function: Callable,
+        data: Sequence[Sample] | None,
+        named_modules: list[tuple[str, nn.Module]],
+        warmup_iterations: int,
+    ) -> tuple[list[_ProfilingItem], dict[str, FunctionData]]:
+        """Run the CUDA profiler sessions and match kernel events with module function calls."""
         # Discard the process's first profiler session before collecting model events; see the helper's rationale.
         with coordinator.raise_if_any_rank_fails("Priming CUDA profiler"):
             prime_cuda_profiler()
@@ -167,14 +214,7 @@ class ModuleFunctionKernelProfiler:
                         with coordinator.raise_if_any_rank_fails("Profiling module functions"):
                             self._run_inference(function, data)
 
-        torch.cuda.empty_cache()
-
-        profiling_data, function_data = self._match_events_with_data(prof.profiler.function_events, named_modules)
-        if profiling_data:
-            profiling_df = pd.DataFrame(profiling_data)
-        else:
-            profiling_df = pd.DataFrame(columns=tuple(_ProfilingItem.__annotations__))
-        return profiling_df, function_data
+        return self._match_events_with_data(prof.profiler.function_events, named_modules)
 
     def describe_results(
         self,

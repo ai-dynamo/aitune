@@ -974,7 +974,7 @@
       "severity": "error"
     },
     {
-      "column": 70,
+      "column": 45,
       "path": "aitune/torch/kernel_forge/module_function_kernel_profiler.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `function_events`",

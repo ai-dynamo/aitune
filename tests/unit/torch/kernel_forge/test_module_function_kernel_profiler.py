@@ -3,6 +3,7 @@
 
 """Tests for module_function_kernel_profiler helpers."""
 
+import os
 from unittest.mock import call
 
 import pandas as pd
@@ -10,7 +11,9 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
+from torch.profiler import ProfilerActivity
 
+from aitune.torch.kernel_forge import module_function_kernel_profiler as kernel_profiler_module
 from aitune.torch.kernel_forge.module_function_kernel_profiler import (
     FunctionData,
     ModuleFunctionKernelProfiler,
@@ -18,6 +21,7 @@ from aitune.torch.kernel_forge.module_function_kernel_profiler import (
     _ProfilingItem,
     _SummaryItem,
     get_tensor_size,
+    teardown_cuda_profiler,
 )
 from tests.utilities.helpers import requires_cuda
 
@@ -185,6 +189,87 @@ def test_profile_coordinates_distributed_execution(mocker):
         call("Preparing module function kernel profiler"),
         call("Profiling module functions"),
     ]
+
+
+@pytest.fixture
+def cupti_teardown_env(monkeypatch):
+    """Isolate TEARDOWN_CUPTI and the priming flag, which teardown changes for the whole process."""
+    monkeypatch.delenv("TEARDOWN_CUPTI", raising=False)
+    monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", False)
+    return monkeypatch
+
+
+def test_teardown_cuda_profiler_skips_when_profiler_was_not_primed(cupti_teardown_env, mocker):
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+
+    teardown_cuda_profiler()
+
+    profile.assert_not_called()
+    assert "TEARDOWN_CUPTI" not in os.environ
+
+
+def test_teardown_cuda_profiler_runs_session_with_teardown_enabled(cupti_teardown_env, mocker):
+    cupti_teardown_env.setattr(kernel_profiler_module, "_cuda_profiler_primed", True)
+    mocker.patch.object(kernel_profiler_module, "torch")
+    teardown_values = []
+    profile = mocker.patch.object(
+        kernel_profiler_module,
+        "profile",
+        side_effect=lambda **_: teardown_values.append(os.environ.get("TEARDOWN_CUPTI")) or mocker.MagicMock(),
+    )
+
+    teardown_cuda_profiler()
+
+    profile.assert_called_once_with(activities=[ProfilerActivity.CUDA])
+    assert teardown_values == ["1"]
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._cuda_profiler_primed is False
+
+
+def test_teardown_cuda_profiler_keeps_explicitly_disabled_teardown(cupti_teardown_env, mocker, caplog):
+    cupti_teardown_env.setattr(kernel_profiler_module, "_cuda_profiler_primed", True)
+    cupti_teardown_env.setenv("TEARDOWN_CUPTI", "0")
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+
+    teardown_cuda_profiler()
+
+    profile.assert_not_called()
+    assert os.environ["TEARDOWN_CUPTI"] == "0"
+    assert kernel_profiler_module._cuda_profiler_primed is True
+    assert "TEARDOWN_CUPTI is not '1'" in caplog.text
+
+
+@requires_cuda
+def test_profile_tears_down_cupti_when_profiling_fails(cupti_teardown_env, mocker):
+    class _FailingModule(nn.Module):
+        def forward(self, x):
+            raise RuntimeError("boom")
+
+    teardown = mocker.patch.object(kernel_profiler_module, "teardown_cuda_profiler")
+    module = _FailingModule()
+    data = [((torch.randn(1, device="cuda"),), {})]
+
+    with pytest.raises(RuntimeError, match="boom"):
+        ModuleFunctionKernelProfiler().profile(module, data, warmup_iterations=0)
+
+    teardown.assert_called_once_with()
+
+
+@requires_cuda
+def test_profile_detaches_cupti_and_reprimes_next_profile(cupti_teardown_env):
+    profiler = ModuleFunctionKernelProfiler()
+    net = _MultipleLinearLayerModel().to("cuda")
+    data = net.samples(batch_sizes=[2], device="cuda")
+
+    first_df, _ = profiler.profile(net, data)
+
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._cuda_profiler_primed is False
+
+    second_df, _ = profiler.profile(net, data)
+
+    _assert_linear_kernel_attribution(second_df)
+    assert len(second_df) == len(first_df)
 
 
 def test_nearest_parent_label_no_cpu_parent():
