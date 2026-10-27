@@ -84,11 +84,11 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
     case.tolerance.assert_close(generate(pipeline, PROMPT), expected)
 
     checkpoint = tmp_path / "pipeline.ait"
-    ait.save(cast(nn.Module, pipeline), checkpoint)
+    ait.save(pipeline, checkpoint)
     for module in _components(pipeline).values():
         module.deactivate()
 
-    restored = cast(ToyFluxPipeline, ait.load(cast(nn.Module, ToyFluxPipeline(device, seed=1)), checkpoint))
+    restored = cast(ToyFluxPipeline, ait.load(ToyFluxPipeline(device, seed=1), checkpoint))
     assert restored is not pipeline
     for module in _components(restored).values():
         selected_backend(module, type(backend))

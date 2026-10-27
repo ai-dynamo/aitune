@@ -102,7 +102,7 @@ def run_lifecycle(
     with torch.no_grad():
         tolerance.assert_close(tuned(value), expected)
 
-    ait.save(cast(nn.Module, tuned), checkpoint)
+    ait.save(tuned, checkpoint)
     tuned.deactivate()
     # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
     restored = cast(Module, ait.load(model_factory(seed=1), checkpoint))

@@ -22,6 +22,7 @@ Use --basetemp=/path/to/artifacts to choose where ONNX, reports, and checkpoints
 
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 import torch
@@ -32,6 +33,7 @@ from aitune.torch import MaxThroughputStrategy, Module, PerformanceValidationMod
 from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend, TensorRTBackendConfig
 from aitune.torch.dataloader import DynamicShapeDataset
 from aitune.torch.module import OnnxModule
+from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.task.profiling import ProfilingConfig
 
 
@@ -100,7 +102,7 @@ def test_onnx_bringup_model(tmp_path: Path, model_name: str) -> None:
             device="cuda",
             ignore_failing_modules=False,
         )
-        (backend,) = module.module.backends.values()
+        (backend,) = cast(TunedModule, module.module).backends.values()
         results = strategy.perf_validation_results
         assert len(results) == 2
         assert all(result["success"] for result in strategy.backend_results)
@@ -131,7 +133,7 @@ def test_onnx_bringup_model(tmp_path: Path, model_name: str) -> None:
         print(f"Artifacts: {tmp_path}")
     finally:
         if module is not None and module.state.name == "TUNED":
-            for backend in module.module.backends.values():
+            for backend in cast(TunedModule, module.module).backends.values():
                 backend._deactivate()
         source.deactivate()
 

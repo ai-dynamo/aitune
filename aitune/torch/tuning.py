@@ -6,6 +6,7 @@ import shutil
 from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
+from typing import TypeVar, cast
 
 import torch
 
@@ -27,6 +28,8 @@ from aitune.utils.monitoring import annotate
 from aitune.utils.timer import Timer
 
 logger = getLogger(__name__)
+
+T = TypeVar("T")
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
@@ -125,14 +128,14 @@ def tune(
 
 
 def save(
-    module: torch.nn.Module | Module,
+    module: object,
     path: str | Path,
     storage: Storage | None = None,
 ) -> None:
     """Save the tuned module to a file.
 
     Args:
-        module: The module to save.
+        module: The module or pipeline to save.
         path: The path to save the module to.
         storage: The storage to use to save the module. If not provided, a local storage will be used.
 
@@ -164,16 +167,16 @@ def save(
 
 
 def load(
-    module: torch.nn.Module | Module,
+    module: T,
     path: str | Path,
     storage: Storage | None = None,
     device_map: dict[str, torch.device] | None = None,
     disable_external_logging: bool = True,
-) -> torch.nn.Module | Module:
+) -> T | Module:
     """Load the tuned module from a file.
 
     Args:
-        module: The module to load.
+        module: The module or pipeline to load the checkpoint into.
         path: The path to load the module from.
         storage: The storage to use to load the module. If not provided, a local storage will be used.
         device_map: The device map to load modules to. Overrides the device of stored in state dict.
@@ -189,12 +192,12 @@ def load(
 
         # Measure loading time
         with Timer("Load checkpoint", silent=True) as timer:
-            module = checkpoint.load(module, path=path, device_map=device_map)
+            loaded = checkpoint.load(module, path=path, device_map=device_map)
             cuda_synchronize()
 
         logger.info("✅ Checkpoint loaded from: %s in %.2f seconds", path, timer.elapsed)
 
-        return module
+        return cast(T | Module, loaded)
 
 
 def _reject_already_tuned_modules() -> None:

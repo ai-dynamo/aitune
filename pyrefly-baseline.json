@@ -1541,13 +1541,6 @@
       "severity": "error"
     },
     {
-      "column": 16,
-      "path": "examples/E5Large/e5large/inference.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `Tensor`",
-      "severity": "error"
-    },
-    {
       "column": 26,
       "path": "examples/ESM2/esm2/dynamo/backend.py",
       "name": "not-callable",
@@ -1730,13 +1723,6 @@
       "severity": "error"
     },
     {
-      "column": 16,
-      "path": "examples/ParakeetCTC/parakeet_ctc/inference.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `Tensor`",
-      "severity": "error"
-    },
-    {
       "column": 36,
       "path": "examples/ParakeetRNNT/parakeet_rnnt/dynamo/backend.py",
       "name": "bad-argument-type",
@@ -1790,13 +1776,6 @@
       "path": "examples/ParakeetRNNT/parakeet_rnnt/dynamo/client.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `BaseException` has no attribute `get`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "examples/ParakeetRNNT/parakeet_rnnt/inference.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `Tensor`",
       "severity": "error"
     },
     {
@@ -2094,45 +2073,10 @@
       "severity": "error"
     },
     {
-      "column": 22,
-      "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `Module | Tensor | Unknown | None` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `Tensor` has no attribute `name`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `Module | Tensor | Unknown | None` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "tests/functional/onnx/005_onnx_unet_models.py",
       "name": "pytorch-efficiency-lint-cuda-call",
       "concise_description": "`Tensor.cuda()` hard-codes the target device",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "tests/functional/onnx/005_onnx_unet_models.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `backends`",
       "severity": "error"
     },
     {
@@ -2143,20 +2087,6 @@
       "severity": "error"
     },
     {
-      "column": 35,
-      "path": "tests/functional/onnx/005_onnx_unet_models.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `Tensor` has no attribute `name`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "tests/functional/onnx/005_onnx_unet_models.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `Module | Tensor | Unknown | None` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "tests/functional/onnx/006_onnx_bert.py",
       "name": "pytorch-efficiency-lint-cuda-call",
@@ -2164,31 +2094,10 @@
       "severity": "error"
     },
     {
-      "column": 22,
-      "path": "tests/functional/onnx/006_onnx_bert.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
       "column": 52,
       "path": "tests/functional/onnx/006_onnx_bert.py",
       "name": "not-iterable",
       "concise_description": "Type `None` is not iterable",
-      "severity": "error"
-    },
-    {
-      "column": 35,
-      "path": "tests/functional/onnx/006_onnx_bert.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `Tensor` has no attribute `name`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "tests/functional/onnx/006_onnx_bert.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `Module | Tensor | Unknown | None` has no attribute `backends`",
       "severity": "error"
     },
     {
@@ -2334,13 +2243,6 @@
     {
       "column": 29,
       "path": "tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `Tensor`",
-      "severity": "error"
-    },
-    {
-      "column": 29,
-      "path": "tests/functional/pytorch/031_aitune_torch_tune_resnet_onnx_runtime_backend_test.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `Tensor`",
       "severity": "error"
