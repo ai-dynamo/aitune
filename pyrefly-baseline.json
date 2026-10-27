@@ -2997,13 +2997,6 @@
       "severity": "error"
     },
     {
-      "column": 9,
-      "path": "tests/functional_ci/backends.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `enabled_precisions` in function `torch_tensorrt.dynamo._settings.CompilationSettings.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 81,
       "path": "tests/functional_ci/backends.py",
       "name": "bad-argument-type",

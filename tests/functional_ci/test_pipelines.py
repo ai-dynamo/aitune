@@ -8,6 +8,7 @@ from typing import cast
 
 import pytest
 import torch
+from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 from torch import nn
 
@@ -23,21 +24,16 @@ from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.flux import ToyFluxPipeline
 from tests.functional_ci.lifecycle import Tolerance, pinned_strategy, selected_backend
 
-TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10))
-
 PROMPT = "A futuristic cityscape with neon lights and flying cars"
 COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
 
-# Torch-TRT 2.12+ falls back to the original graph: the test passes, but the CLIP text encoder runs in PyTorch.
-TORCH_TENSORRT_JIT_CLIP_XFAIL = pytest.mark.xfail(
-    TORCH_2_8_TO_2_10,
-    strict=True,
-    reason=(
-        "Torch-TRT < 2.12 rejects the int64 constant-folded CLIP position ids in `aten.embedding`, "
-        "then its fallback fails with `AttributeError: _frozen_param0`, so the CLIP text encoder is not tuned"
-    ),
-    raises=AssertionError,
-)
+# NGC builds are pre-releases (2.10.0a0+...), which sort below 2.10; `base_version` strips that.
+TORCH_VERSION = Version(Version(torch.__version__).base_version)
+
+
+# Subclasses `AssertionError` so that the `torch-tensorrt-aot` xfail, which expects any `AssertionError`, still matches.
+class ClipTextEncoderNotTunedError(AssertionError):
+    """Raised when tuning leaves the CLIP text encoder without a backend."""
 
 
 def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor:
@@ -67,7 +63,15 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
             reason=("torch_tensorrt/dynamo/conversion/_TRTInterpreter.py, line 703, in run assert cuda_engine"),
             raises=AssertionError,  # expected one selected backend, found 0",
         ),
-        "torch-tensorrt-jit": TORCH_TENSORRT_JIT_CLIP_XFAIL,
+        # Torch-TRT cannot convert the CLIP text encoder: it rejects the int64 position ids passed to `aten.embedding`
+        # and falls back to PyTorch for the whole encoder. On 2.10-2.12 that fallback crashes, so the encoder is not
+        # tuned. On 2.8, 2.9, 2.13, and 2.14 the fallback works and the test passes, with CLIP running in PyTorch.
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            TORCH_VERSION in SpecifierSet(">=2.10,<2.13"),
+            strict=True,
+            reason="Torch-TRT 2.10-2.12 crashes in its PyTorch fallback for the CLIP text encoder (`_frozen_param0`)",
+            raises=ClipTextEncoderNotTunedError,
+        ),
     },
 )
 def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
@@ -90,6 +94,8 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
     ait.wrap(pipeline, modules, strategy=pinned_strategy(backend))
     ait.tune(run, [PROMPT], batch_sizes=[1], device=device)
 
+    if not getattr(_components(pipeline)["text_encoder"].module, "backends", None):
+        raise ClipTextEncoderNotTunedError("no backend was selected for the CLIP text encoder")
     for module in _components(pipeline).values():
         assert selected_backend(module, type(backend)).key() == backend.key()
         assert len(module.graph_specs) == 1
@@ -110,7 +116,15 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
 @pytest.mark.matrix("models.pipelines", "modes.jit-tune_eager")
 @with_backends(
     "jit",
-    marks={"torch-tensorrt-jit": TORCH_TENSORRT_JIT_CLIP_XFAIL},
+    marks={
+        # Same Torch-TRT crash as in `test_pipeline_lifecycle`; the comment there explains it.
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            TORCH_VERSION in SpecifierSet(">=2.10,<2.13"),
+            strict=True,
+            reason="Torch-TRT 2.10-2.12 crashes in its PyTorch fallback for the CLIP text encoder (`_frozen_param0`)",
+            raises=ClipTextEncoderNotTunedError,
+        )
+    },
 )
 def test_pipeline_jit(case: BackendCase, device: torch.device):
     """Tune the pipeline's four JIT heads from two prompt batch sizes."""
@@ -134,6 +148,9 @@ def test_pipeline_jit(case: BackendCase, device: torch.device):
         "ToyFluxTransformer",
         "ToyDecoder",
     }
+    (clip,) = (head for head in heads if head._name.split(" ")[0] == "ToyClipTextEncoder")
+    if clip._state != ModuleState.TUNED:
+        raise ClipTextEncoderNotTunedError(f"the CLIP text encoder head was not tuned; its state is {clip._state}")
     assert all(head._state == ModuleState.TUNED for head in heads)
     assert all(
         type(selected) is type(backend)
