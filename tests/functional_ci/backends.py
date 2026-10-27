@@ -4,7 +4,7 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import pytest
 import torch
@@ -61,10 +61,7 @@ class BackendCase:
 def _torch_tensorrt_config() -> TorchTensorRTConfig:
     """Convert the whole graph in fp32 without TF32."""
     return TorchTensorRTConfig(
-        enabled_precisions=cast(Any, {torch.float32}),
-        min_block_size=1,
-        disable_tf32=True,
-        require_full_compilation=True,
+        enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True, require_full_compilation=True
     )
 
 
