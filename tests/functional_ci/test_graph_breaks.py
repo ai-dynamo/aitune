@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import Backend
+from aitune.torch.backend import Backend, TorchTensorRTJitBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
@@ -93,6 +93,9 @@ def test_graph_break_onnx(case: BackendCase, device: torch.device):
 def test_graph_break_jit(case: BackendCase, device: torch.device):
     """JIT backends compile the head around the branch."""
     backend = case.factory()
+    if isinstance(backend, TorchTensorRTJitBackend):
+        # Raise instead of silently running the graph in PyTorch when TensorRT cannot build it.
+        cast(Any, backend._config.compile_config).pass_through_build_failures = True
     jit_config.mode = JITMode.TUNE_EAGER
     jit_config.device = device
     jit_config.min_samples = 2
