@@ -6,7 +6,7 @@ import shutil
 from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Protocol, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 import torch
 
@@ -30,14 +30,7 @@ from aitune.utils.timer import Timer
 logger = getLogger(__name__)
 
 
-class Pipeline(Protocol):
-    """Callable object whose attributes hold the modules, e.g. a diffusers pipeline."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Run the pipeline."""
-
-
-T = TypeVar("T", bound=torch.nn.Module | Module | Pipeline)
+T = TypeVar("T", bound=torch.nn.Module | Module | Callable[..., Any])
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
@@ -136,7 +129,7 @@ def tune(
 
 
 def save(
-    module: torch.nn.Module | Module | Pipeline,
+    module: torch.nn.Module | Module | Callable[..., Any],
     path: str | Path,
     storage: Storage | None = None,
 ) -> None:

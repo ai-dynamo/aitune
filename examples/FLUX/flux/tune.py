@@ -142,10 +142,10 @@ def tune_model(
 
     # Leave all modules except the transformer unquantized.
     modules = [m for m in modules_info.get_modules() if m.name != "transformer"]
-    pipeline = ait.wrap(pipeline, modules, strategy=default_strategy)
+    ait.wrap(pipeline, modules, strategy=default_strategy)
 
     # Tune the transformer separately so quantization can be enabled independently.
-    pipeline.transformer = ait.module.Module(  # pyrefly: ignore[missing-attribute]
+    pipeline.transformer = ait.module.Module(
         pipeline.transformer,
         name="transformer",
         strategy=transformer_strategy,
