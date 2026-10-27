@@ -134,7 +134,7 @@ def test_onnx_names_checkpoint(tmp_path: Path, backend_type, layout: str, monkey
             )
     finally:
         # Loaded backends are deployed; release their resources directly for test cleanup.
-        if module.state.name == "TUNED" and isinstance(module.module, TunedModule):
+        if isinstance(module.module, TunedModule):
             for backend in module.module.backends.values():
                 backend._deactivate()
         source.deactivate()
