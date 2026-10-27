@@ -35,7 +35,6 @@ class Pipeline(Protocol):
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run the pipeline."""
-        ...
 
 
 T = TypeVar("T", bound=torch.nn.Module | Module | Pipeline)
