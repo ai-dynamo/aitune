@@ -1632,6 +1632,13 @@
       "severity": "error"
     },
     {
+      "column": 5,
+      "path": "examples/FLUX/flux/tune.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `Module` has no attribute `transformer`",
+      "severity": "error"
+    },
+    {
       "column": 18,
       "path": "examples/JitTuning/jit_tuning/diffusion.py",
       "name": "bad-assignment",
