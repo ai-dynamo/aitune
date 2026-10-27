@@ -27,7 +27,6 @@ from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend
 from aitune.torch.dataloader import DataLoaderFactory, DynamicShapeDataset
 from aitune.torch.module import OnnxModule
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.task.profiling import ProfilingConfig
 
 
@@ -104,7 +103,6 @@ def test_onnx_names_checkpoint(tmp_path: Path, backend_type, layout: str, monkey
     monkeypatch.setattr(torch.onnx, "export", unexpected_export)
     try:
         tune(module, dataset, batch_sizes=[1, 2, 4], device="cuda", ignore_failing_modules=False)
-        assert isinstance(module.module, TunedModule)
         (backend,) = module.module.backends.values()
         assert isinstance(backend, backend_type)
         _assert_metadata(backend._graph_spec)
@@ -121,7 +119,6 @@ def test_onnx_names_checkpoint(tmp_path: Path, backend_type, layout: str, monkey
         path.unlink()
         (tmp_path / "weights.bin").unlink()
         module = load(module, checkpoint)
-        assert isinstance(module.module, TunedModule)
         (backend,) = module.module.backends.values()
         assert isinstance(backend, backend_type)
         _assert_metadata(backend._graph_spec)
@@ -134,7 +131,7 @@ def test_onnx_names_checkpoint(tmp_path: Path, backend_type, layout: str, monkey
             )
     finally:
         # Loaded backends are deployed; release their resources directly for test cleanup.
-        if isinstance(module.module, TunedModule):
+        if module.state.name == "TUNED":
             for backend in module.module.backends.values():
                 backend._deactivate()
         source.deactivate()

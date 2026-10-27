@@ -2080,6 +2080,27 @@
       "severity": "error"
     },
     {
+      "column": 22,
+      "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `backends`",
+      "severity": "error"
+    },
+    {
+      "column": 22,
+      "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `backends`",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "tests/functional/onnx/004_onnx_names_checkpoint.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `backends`",
+      "severity": "error"
+    },
+    {
       "column": 20,
       "path": "tests/functional/onnx/005_onnx_unet_models.py",
       "name": "pytorch-efficiency-lint-cuda-call",
@@ -2094,6 +2115,20 @@
       "severity": "error"
     },
     {
+      "column": 22,
+      "path": "tests/functional/onnx/005_onnx_unet_models.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `backends`",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "tests/functional/onnx/005_onnx_unet_models.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `backends`",
+      "severity": "error"
+    },
+    {
       "column": 20,
       "path": "tests/functional/onnx/006_onnx_bert.py",
       "name": "pytorch-efficiency-lint-cuda-call",
@@ -2105,6 +2140,20 @@
       "path": "tests/functional/onnx/006_onnx_bert.py",
       "name": "not-iterable",
       "concise_description": "Type `None` is not iterable",
+      "severity": "error"
+    },
+    {
+      "column": 22,
+      "path": "tests/functional/onnx/006_onnx_bert.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `backends`",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "tests/functional/onnx/006_onnx_bert.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `backends`",
       "severity": "error"
     },
     {

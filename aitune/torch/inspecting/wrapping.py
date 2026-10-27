@@ -3,19 +3,19 @@
 """Inspecting and patching modules."""
 
 from logging import getLogger
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 
 import torch
 
 from aitune.torch.inspecting.module_info import ModuleInfo
-from aitune.torch.module.wrapper_module import Module, StrategyList, StrategyMap
+from aitune.torch.module.wrapper_module import Module, ModuleOrPipeline, StrategyList, StrategyMap
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.resolver import StrategyOption
 from aitune.utils.logging import setup_logging
 
 logger = getLogger(__name__)
 
-T = TypeVar("T")
+T = TypeVar("T", bound=ModuleOrPipeline | list[Any] | dict[Any, Any])
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
