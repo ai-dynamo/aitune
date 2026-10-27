@@ -4,7 +4,7 @@
 #
 # Sync the docs of an aitune checkout into the dev version of a docs-website checkout.
 # Same steps as sync_dev_docs in ai-tune-ci docs.gitlab-ci.yml (release-docs).
-# Usage: fern/sync_dev_docs.sh <aitune-checkout> <docs-website-checkout>
+# Usage: .github/scripts/fern/sync_dev_docs.sh <aitune-checkout> <docs-website-checkout>
 set -euo pipefail
 
 src=$(realpath "$1")

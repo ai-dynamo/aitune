@@ -78,7 +78,7 @@ jobs:
       - run: npm install -g "fern-api@$(node -p "require('./aitune/fern/fern.config.json').version")"
 
       - run: make -C aitune docs
-      - run: aitune/fern/sync_dev_docs.sh aitune docs-website
+      - run: aitune/.github/scripts/fern/sync_dev_docs.sh aitune docs-website
       - name: Publish docs-website with the synced dev version
         run: fern generate --docs
         working-directory: docs-website/fern
