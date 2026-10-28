@@ -99,9 +99,14 @@ def test_multiple_graphs_jit(case: BackendCase, device: torch.device):
         assert [type(selected) for selected in cast(TunedModule, head._wrapper).backends.values()] == [
             type(backend)
         ] * 3
-        for batch_size in (1, 4):
-            for args in _layouts(make_input(device, batch_size=batch_size, seed=7)):
-                case.tolerance.assert_close(model(*args), reference(*args))
+        assert_matches_eager(
+            lambda value: tuple(model(*args) for args in _layouts(value)),
+            lambda value: tuple(reference(*args) for args in _layouts(value)),
+            device,
+            case.tolerance,
+            batch_sizes=(1, 4),
+            seeds=(7,),
+        )
 
 
 @pytest.mark.matrix("models.multiple-graphs", "modes.aot-tune")
