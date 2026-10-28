@@ -162,11 +162,12 @@ def test_validate_forward_input_path_rejects_invalid_paths(path):
         validate_forward_input_path(path)
 
 
-def test_equivalent_calls_have_same_normalized_layout():
+@pytest.mark.parametrize("prefer_keyword_arguments", [False, True])
+def test_equivalent_calls_have_same_normalized_layout(prefer_keyword_arguments):
     def forward(x, y):
         return x + y
 
-    signature = ForwardSignature.from_callable(forward)
+    signature = ForwardSignature.from_callable(forward, prefer_keyword_arguments=prefer_keyword_arguments)
 
     for args, kwargs in (
         ((1, 2), {}),
@@ -175,29 +176,84 @@ def test_equivalent_calls_have_same_normalized_layout():
         ((), {"y": 2, "x": 1}),
     ):
         normalized = signature.normalize(args, kwargs)
-        assert normalized.args == (1, 2)
-        assert normalized.kwargs == {}
+        assert normalized.args == (() if prefer_keyword_arguments else (1, 2))
+        assert normalized.kwargs == ({"x": 1, "y": 2} if prefer_keyword_arguments else {})
 
 
-def test_normalize_supports_all_parameter_kinds():
+@pytest.mark.parametrize("prefer_keyword_arguments", [False, True])
+def test_normalize_supports_all_parameter_kinds(prefer_keyword_arguments):
     def forward(positional, /, optional=None, *args, keyword=None, **kwargs):
         return positional, optional, args, keyword, kwargs
 
-    signature = ForwardSignature.from_callable(forward)
+    signature = ForwardSignature.from_callable(forward, prefer_keyword_arguments=prefer_keyword_arguments)
     normalized = signature.normalize(
         (1,),
         {"optional": 2, "keyword": 3, "extra": 4},
     )
 
-    assert normalized.args == (1, 2)
-    assert normalized.kwargs == {"keyword": 3, "extra": 4}
+    assert normalized.args == ((1,) if prefer_keyword_arguments else (1, 2))
+    expected_kwargs = {"keyword": 3, "extra": 4}
+    if prefer_keyword_arguments:
+        expected_kwargs["optional"] = 2
+    assert normalized.kwargs == expected_kwargs
     assert forward(*normalized.args, **normalized.kwargs) == (1, 2, (), 3, {"extra": 4})
 
+    normalized = signature.normalize((1, 2, 5, 6), {"keyword": 3, "extra": 4})
+    assert normalized.args == (1, 2, 5, 6)
+    assert normalized.kwargs == {"keyword": 3, "extra": 4}
+    assert forward(*normalized.args, **normalized.kwargs) == (1, 2, (5, 6), 3, {"extra": 4})
 
-def test_forward_signature_serialization_round_trip():
+
+@pytest.mark.parametrize("prefer_keyword_arguments", [False, True])
+def test_forward_signature_serialization_round_trip(prefer_keyword_arguments):
     def forward(x, optional=None, *args, keyword=None, **kwargs):
         pass
 
-    signature = ForwardSignature.from_callable(forward)
+    signature = ForwardSignature.from_callable(forward, prefer_keyword_arguments=prefer_keyword_arguments)
 
     assert ForwardSignature.from_dict(signature.to_dict()) == signature
+
+
+def test_normalized_call_supports_decorators_requiring_keyword_arguments():
+    def typed(forward):
+        @functools.wraps(forward)
+        def wrapped(self, *args, **kwargs):
+            if args:
+                raise TypeError("All arguments must be passed by kwargs only for typed methods")
+            return forward(self, **kwargs)
+
+        return wrapped
+
+    class Model:
+        @typed
+        def forward(self, input_signal, input_signal_length):
+            return input_signal + input_signal_length
+
+    model = Model()
+    signature = ForwardSignature.from_callable(model.forward, prefer_keyword_arguments=True)
+    normalized = signature.normalize((), {"input_signal": 2, "input_signal_length": 3})
+
+    assert model.forward(*normalized.args, **normalized.kwargs) == 5
+
+
+def test_default_signature_keeps_positional_call_layout():
+    inspected = ForwardSignature.from_callable(_forward)
+    for signature in (inspected, ForwardSignature(inspected.parameters)):
+        assert not signature.prefer_keyword_arguments
+        normalized = signature.normalize((), {"x": 1, "y": 2, "scale": 3})
+        assert normalized.args == (1, 2)
+        assert normalized.kwargs == {"scale": 3}
+
+
+def test_legacy_checkpoint_keeps_positional_compiled_call_layout():
+    signature = ForwardSignature.from_callable(_forward, prefer_keyword_arguments=True)
+    legacy = signature.to_dict()
+    del legacy["prefer_keyword_arguments"]
+
+    restored = ForwardSignature.from_dict(legacy)
+    normalized = restored.normalize((), {"x": 1, "y": 2, "scale": 3})
+
+    assert normalized.args == (1, 2)
+    assert normalized.kwargs == {"scale": 3}
+    assert _forward(*normalized.args, **normalized.kwargs) == 9
+    assert ForwardSignature.from_dict(restored.to_dict()) == restored

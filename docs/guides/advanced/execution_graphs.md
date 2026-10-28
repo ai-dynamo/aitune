@@ -131,6 +131,14 @@ metadata = SampleMetadata.from_inputs(forward_inputs.arguments)
 
 Equivalent positional and keyword calls therefore produce the same parameter-keyed input representation.
 
+By default, graphs replay positional-or-keyword parameters positionally when possible. A centralized module
+compatibility rule enables keyword replay for subclasses of NeMo's `nemo.core.classes.common.Typing`, whose
+type-checking decorator can require keyword calls even when the wrapped forward signature allows positional
+arguments. This rule also covers user-defined subclasses and applies even when NeMo type checking is disabled.
+Positional-only parameters remain positional. When a call includes non-empty `*args`, preceding parameters also
+remain positional so the variadic arguments bind correctly. The replay policy is saved in each graph's signature;
+loading a checkpoint preserves that policy. Older checkpoints without a saved policy retain the positional default.
+
 Let's explore different input patterns:
 
 ```python

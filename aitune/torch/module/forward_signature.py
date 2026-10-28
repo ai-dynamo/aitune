@@ -107,7 +107,9 @@ class ForwardSignature:
     """
 
     parameters: tuple[ForwardParameter, ...]
+    prefer_keyword_arguments: bool = False
     _signature: inspect.Signature = field(init=False, repr=False, compare=False)
+    _keyword_signature: inspect.Signature = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Build the inspect signature used for call binding."""
@@ -116,32 +118,58 @@ class ForwardSignature:
             "_signature",
             inspect.Signature([parameter.to_parameter() for parameter in self.parameters]),
         )
+        keyword_parameters = [
+            parameter.replace(kind=inspect.Parameter.KEYWORD_ONLY)
+            if parameter.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+            else parameter
+            for parameter in self._signature.parameters.values()
+        ]
+        object.__setattr__(
+            self,
+            "_keyword_signature",
+            inspect.Signature(sorted(keyword_parameters, key=lambda parameter: parameter.kind)),
+        )
 
     @staticmethod
-    def from_callable(forward: Any) -> "ForwardSignature":
-        """Inspect a forward callable."""
+    def from_callable(forward: Any, *, prefer_keyword_arguments: bool = False) -> "ForwardSignature":
+        """Inspect a forward callable with an optional keyword replay policy."""
         partial = _find_partial(forward)
         signature = (
             inspect.signature(partial, follow_wrapped=False) if partial is not None else inspect.signature(forward)
         )
         return ForwardSignature(
-            tuple(ForwardParameter.from_parameter(parameter) for parameter in signature.parameters.values())
+            tuple(ForwardParameter.from_parameter(parameter) for parameter in signature.parameters.values()),
+            prefer_keyword_arguments=prefer_keyword_arguments,
         )
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "ForwardSignature":
         """Restore a signature from a dictionary."""
-        return ForwardSignature(tuple(ForwardParameter(**parameter) for parameter in data["parameters"]))
+        return ForwardSignature(
+            tuple(ForwardParameter(**parameter) for parameter in data["parameters"]),
+            prefer_keyword_arguments=data.get("prefer_keyword_arguments", False),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the signature to a serializable dictionary."""
         return {
+            "prefer_keyword_arguments": self.prefer_keyword_arguments,
             "parameters": [
                 {"name": parameter.name, "kind": parameter.kind, "has_default": parameter.has_default}
                 for parameter in self.parameters
-            ]
+            ],
         }
 
     def normalize(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> inspect.BoundArguments:
-        """Match args and kwargs to forward parameters in a consistent layout."""
-        return self._signature.bind(*args, **kwargs)
+        """Match args and kwargs to forward parameters in a consistent layout.
+
+        By default, positional-or-keyword parameters are replayed positionally when possible. Opting into keyword
+        replay supports decorators that require keyword calls despite their wrapped signature. Positional-only
+        parameters remain positional; non-empty variadic arguments also keep preceding parameters positional.
+        """
+        bound = self._signature.bind(*args, **kwargs)
+        if not self.prefer_keyword_arguments or any(
+            parameter.kind == "VAR_POSITIONAL" and bound.arguments.get(parameter.name) for parameter in self.parameters
+        ):
+            return bound
+        return inspect.BoundArguments(self._keyword_signature, bound.arguments)
