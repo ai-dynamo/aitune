@@ -3,6 +3,7 @@
 """Unit tests for ONNXExporter."""
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import onnx
@@ -608,7 +609,7 @@ def test_does_onnx_export_work_with_nested_tensors(simple_module_and_args, torch
     assert dynamic_shapes["zw"]["w"][0] is torch.export.Dim.AUTO
 
     model_path = tmp_path / "nested_tensors.onnx"
-    export_kwargs = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
+    export_kwargs: dict[str, Any] = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
     ep = torch.onnx.export(
         module,
         args=(),
@@ -719,7 +720,7 @@ def test_does_onnx_export_work_with_nested_tensors_list(simple_module_and_args, 
     assert dynamic_shapes["zw"][1][0] is torch.export.Dim.AUTO
 
     model_path = tmp_path / "nested_tensors.onnx"
-    export_kwargs = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
+    export_kwargs: dict[str, Any] = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
     ep = torch.onnx.export(
         module,
         args=(),

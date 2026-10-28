@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
+
 import pytest
 from google.protobuf import text_format
 from pydantic import ValidationError
@@ -21,16 +23,22 @@ from aitune.triton.config import TritonDataType, TritonTensorConfig
 
 
 def tensor(**kwargs):
-    return TritonTensorConfig(**{"name": "x", "data_type": "TYPE_FP32", "dims": (4,)} | kwargs)
+    fields: dict[str, Any] = {"name": "x", "data_type": "TYPE_FP32", "dims": (4,)} | kwargs
+    return TritonTensorConfig(**fields)
 
 
 def config(backend="onnx", **kwargs):
-    options = {"name": "model", "max_batch_size": 8, "inputs": (tensor(),), "outputs": (tensor(name="y"),)} | kwargs
+    options: dict[str, Any] = {
+        "name": "model",
+        "max_batch_size": 8,
+        "inputs": (tensor(),),
+        "outputs": (tensor(name="y"),),
+    } | kwargs
     if backend == "trt":
-        return TensorRTModelConfig(**{"optimization_profile_indices": (0,)} | options)
+        return TensorRTModelConfig(**({"optimization_profile_indices": (0,)} | options))
     if backend == "pt2":
-        return TorchAOTIModelConfig(**{"structured_call": False} | options)
-    return ONNXRuntimeModelConfig(**{"execution_provider": "cuda"} | options)
+        return TorchAOTIModelConfig(**({"structured_call": False} | options))
+    return ONNXRuntimeModelConfig(**({"execution_provider": "cuda"} | options))
 
 
 def roundtrip(model):
