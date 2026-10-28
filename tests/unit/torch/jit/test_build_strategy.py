@@ -5,6 +5,7 @@
 from unittest.mock import Mock
 
 import pytest
+import torch
 
 from aitune.torch.jit.config import config
 from aitune.torch.jit.patched_module import _build_strategy
@@ -22,7 +23,7 @@ def reset_jit_config():
 
 def test_build_strategy_default_is_max_throughput_with_find_max_batch_size_disabled():
     # No override; resolve_strategy() builds the default MaxThroughputStrategy.
-    strategy = _build_strategy()
+    strategy = _build_strategy(torch.nn.Identity())
 
     assert isinstance(strategy, MaxThroughputStrategy)
     assert strategy._enable_find_max_batch_size is False
@@ -32,7 +33,7 @@ def test_build_strategy_uses_configured_strategy():
     user_strategy = OneBackendStrategy(backend=Mock(name="user_backend"))
     config.strategy = user_strategy
 
-    strategy = _build_strategy()
+    strategy = _build_strategy(torch.nn.Identity())
 
     assert isinstance(strategy, OneBackendStrategy)
     assert strategy._enable_find_max_batch_size is False
@@ -41,8 +42,8 @@ def test_build_strategy_uses_configured_strategy():
 def test_build_strategy_clones_per_call_so_state_is_isolated():
     config.strategy = OneBackendStrategy(backend=Mock(name="user_backend"))
 
-    first = _build_strategy()
-    second = _build_strategy()
+    first = _build_strategy(torch.nn.Identity())
+    second = _build_strategy(torch.nn.Identity())
 
     assert first is not config.strategy
     assert second is not config.strategy
@@ -52,7 +53,7 @@ def test_build_strategy_clones_per_call_so_state_is_isolated():
 def test_build_strategy_disables_find_max_batch_size_for_max_throughput():
     config.strategy = MaxThroughputStrategy(backends=[Mock(name="backend")])
 
-    strategy = _build_strategy()
+    strategy = _build_strategy(torch.nn.Identity())
 
     assert isinstance(strategy, MaxThroughputStrategy)
     assert strategy._enable_find_max_batch_size is False
@@ -62,6 +63,6 @@ def test_build_strategy_handles_strategy_without_find_max_batch_size_extension()
     """Custom strategies that don't subclass the find-max-batch-size extension still work."""
     config.strategy = DummyTuneStrategy()
 
-    strategy = _build_strategy()
+    strategy = _build_strategy(torch.nn.Identity())
 
     assert isinstance(strategy, DummyTuneStrategy)

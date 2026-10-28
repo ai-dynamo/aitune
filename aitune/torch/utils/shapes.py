@@ -4,7 +4,7 @@
 
 import logging
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch.utils._pytree import tree_map
@@ -243,7 +243,7 @@ def build_dynamic_shapes(
         result = locator.set_value(result, dims)
         has_dynamic_axes |= bool(dims)
 
-    return result if has_dynamic_axes else None
+    return cast(dict[str, Any], result) if has_dynamic_axes else None
 
 
 def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
@@ -272,6 +272,7 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
     else:
         args, kwargs = deepcopy(sample)
 
+    call_layout = graph_spec.forward_signature.capture_call_layout(args, kwargs)
     forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
     for locator, tensor_spec in input_spec.tensor_data:
         try:
@@ -301,7 +302,7 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
                 modified = True
         if modified:
             forward_inputs.arguments = locator.set_value(forward_inputs.arguments, tensor)
-    return forward_inputs.args, forward_inputs.kwargs
+    return call_layout.restore(forward_inputs.arguments)
 
 
 def _create_nested_structure(locator: Locator, root: Any = None, last: Any = None) -> Any:

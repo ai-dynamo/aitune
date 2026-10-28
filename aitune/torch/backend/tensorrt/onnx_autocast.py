@@ -10,7 +10,6 @@ from typing import Literal, get_args
 
 import modelopt
 import onnx
-from modelopt.onnx.autocast import convert_to_mixed_precision
 from packaging.version import Version
 
 from aitune.torch.backend.tensorrt.modelopt_calibration import prepare_calibration_data
@@ -111,6 +110,8 @@ class ONNXAutoCast:
 
             if calibration_data is not None:
                 autocast_kwargs["calibration_data"] = calibration_data
+
+            from modelopt.onnx.autocast import convert_to_mixed_precision
 
             converted_model = convert_to_mixed_precision(**autocast_kwargs)
 

@@ -77,7 +77,7 @@ def do_test_backend(backend, dtype, model, sample_data, tmp_path):
     # Test serialization and deployment
     state_dict = backend.to_dict()
     loaded_backend = TorchEagerBackend.from_dict(model, state_dict)
-    loaded_backend.deploy("cuda")
+    loaded_backend.deploy(torch.device("cuda"))
     loaded_output = loaded_backend.infer(*args, **kwargs)
     assert output.dtype == loaded_output.dtype
 
@@ -106,6 +106,19 @@ def test_torch_eager_backend_with_autocast(autocast_dtype, model, sample_data, t
     config = TorchEagerBackendConfig(autocast_enabled=True, autocast_dtype=autocast_dtype)
     backend = TorchEagerBackend(config=config)
     do_test_backend(backend, torch.float32, model, sample_data, tmp_path)
+
+
+@requires_cuda
+def test_activate_restores_module_offloaded_by_another_backend(model, sample_data, tmp_path):
+    backend = backend_build(TorchEagerBackend(), torch.float32, model, sample_data, tmp_path)
+    backend.deactivate()
+    model.to("cpu")  # deactivate() keeps the weights; this simulates offload() in another backend's _build()
+
+    backend.activate()
+
+    args, kwargs = sample_data[0]
+    assert next(model.parameters()).device.type == "cuda"
+    assert backend.infer(*args, **kwargs).device.type == "cuda"
 
 
 @requires_cuda
