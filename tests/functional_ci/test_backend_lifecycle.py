@@ -21,6 +21,7 @@ from tests.functional_ci.models import make_input, make_mlp
     "modes.aot-tune",
     "modes.aot-save-load",
     "topology.{backend}/single-gpu",
+    "topology.inspect/single-gpu",
     "strategies.one-backend/aot-tune",
 )
 @with_backends("save_load")
