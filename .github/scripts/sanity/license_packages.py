@@ -55,7 +55,8 @@ KNOWN_LICENSES = {
     "build": "MIT License",
     "sentencepiece": "Apache-2.0 license",
     "twine": "Apache-2.0 license",
-    "wrapt": "BSD-2-Clause license",  # https://github.com/GrahamDumpleton/wrapt/blob/develop/LICENSE
+    "wrapt": "BSD-2-Clause license",  # https://github.com/GrahamDumpleton/autowrapt/blob/develop/LICENSE
+    "autowrapt": "BSD-2-Clause license",  # https://github.com/GrahamDumpleton/wrapt/blob/develop/LICENSE
     "torch": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
 }
 

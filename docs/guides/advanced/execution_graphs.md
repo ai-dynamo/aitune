@@ -131,6 +131,11 @@ metadata = SampleMetadata.from_inputs(forward_inputs.arguments)
 
 Equivalent positional and keyword calls therefore produce the same parameter-keyed input representation.
 
+Binding inputs for metadata does not change how AITune calls the module. Recorded samples and backend dispatch
+preserve the original positional and keyword arguments, including for decorators that require keyword calls despite
+exposing a positional-or-keyword signature. Batching, export preparation, and dynamic-shape correctness checks
+restore the captured call layout after transforming the parameter-keyed inputs.
+
 Let's explore different input patterns:
 
 ```python

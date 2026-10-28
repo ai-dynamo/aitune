@@ -162,17 +162,16 @@ def libraries_logging(disabled: bool, exceptions: list[str] | None = None):
             original_levels[logger_name] = logger.level
             logger.setLevel(level)
 
-        # WARNING: colored is not installed, color will not be used
-        warnings.filterwarnings("ignore", message=".*'colored' module is not installed.*")
-
-        yield
+        with warnings.catch_warnings():
+            # WARNING: colored is not installed, color will not be used
+            warnings.filterwarnings("ignore", message=".*'colored' module is not installed.*")
+            yield
     finally:
         # Restore original levels
         for logger_name, original_level in original_levels.items():
             logging.getLogger(logger_name).setLevel(original_level)
 
         global_context.set(LIBRARY_LOGGING_KEY, root_level)
-        warnings.resetwarnings()
 
 
 def log(msg: str, *args, sink: Callable = logging.info, depth: int = 0):

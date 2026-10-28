@@ -48,7 +48,6 @@ clean-test: ## remove test and coverage artifacts
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
-	rm -fr .pytype/
 	rm -fr .coverage*
 	rm -f *-report.xml
 
@@ -74,9 +73,9 @@ docs-serve: docs ## serve Fern docs locally
 	fern docs dev
 
 
-lint: ## check style with pre-commit and pytype
+lint: ## check style with pre-commit and pyrefly
 	pre-commit run --all-files
-	pytype aitune tests -j auto
+	pyrefly check --error-stale-baseline
 	$(MAKE) validate-functional
 
 validate-functional: ## validate PEP-723 / [tool.aitune] metadata for functional tests and examples
@@ -103,7 +102,6 @@ TYPE ?= script
 TID ?= 0
 run-functional-test: ## run a functional test in the container, arguments: TEST=tests_path, TYPE=script|project, TID=test_number
 	docker run --rm --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
-		-u $(shell id -u):$(shell id -g) \
 		-e HF_TOKEN \
 		-v $(PWD):/opt/ai-tune/ \
 		-w /opt/ai-tune/ \
@@ -131,8 +129,8 @@ install: clean ## install the package to the active Python's site-packages
 
 install-dev: clean-build clean-pyc clean-test
 	$(PIP_INSTALL) --upgrade pip
-	$(PIP_INSTALL) -e --group dev .
+	$(PIP_INSTALL) --group dev -e .
 
 uv-locks-update:
-	uv lock
-	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock); done
+	uv lock --upgrade
+	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock  --upgrade); done

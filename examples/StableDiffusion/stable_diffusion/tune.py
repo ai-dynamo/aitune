@@ -7,7 +7,7 @@ import os
 
 from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 
-from aitune.torch import MaxThroughputStrategy, inspect, save, tune, wrap
+from aitune.torch import inspect, resolve_strategy, save, tune, wrap
 from stable_diffusion.cmd_args import parse_args
 from stable_diffusion.model import get_pipeline
 
@@ -48,7 +48,7 @@ def tune_model(model_name, prompt, sizes, steps, tuned_model_path, batch_sizes=N
 
     # Tune the recorded image batches without searching for larger batches.
     if strategy is None:
-        strategy = MaxThroughputStrategy.for_aot().enable_find_max_batch_size(False)
+        strategy = resolve_strategy().enable_find_max_batch_size(False)
 
     # Wrap all modules with AITune Module
     modules = modules_info.get_modules(min_execution_ratio=0.05)

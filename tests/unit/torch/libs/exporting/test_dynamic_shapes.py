@@ -192,3 +192,17 @@ def test_prepare_export_sample_preserves_keyword_call_layout():
 
     assert args == ()
     assert kwargs["x"].shape == (2, 4)
+
+
+def test_prepare_export_sample_expands_keyword_sequence_axis():
+    """Keep keyword inputs when expanding a size-one non-batch dynamic axis."""
+    first = torch.zeros(2, 1)
+    sample = ((), {"x": first})
+    graph_spec = make_graph_spec(_single_input, sample, first, batch_size=2)
+    update_input_spec(graph_spec, ((), {"x": torch.zeros(2, 6)}), batch_size=2)
+
+    args, kwargs = prepare_export_sample(sample, graph_spec)
+
+    assert args == ()
+    assert kwargs["x"].shape == (2, 2)
+    assert first.shape == (2, 1)

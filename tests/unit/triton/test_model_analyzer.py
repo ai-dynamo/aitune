@@ -250,6 +250,36 @@ def test_publish_uses_representative_backend_inputs(tmp_path):
     assert config["perf_analyzer_flags"]["input-data"] == [str(input_data_path.resolve())]
 
 
+@pytest.mark.parametrize("batched", [False, True])
+@pytest.mark.parametrize("with_samples", [False, True])
+def test_analyzer_uses_triton_request_shape_for_scalar_inputs(tmp_path, batched, with_samples):
+    source = tmp_path / "source.onnx"
+    source.write_bytes(b"ONNX graph")
+    minimum = (1,) if batched else ()
+    scalar = BoundedTensorSpec(
+        name="scalar",
+        dtype=DType.FLOAT32,
+        min_shape=minimum,
+        max_shape=(8,) if batched else (),
+        batch_axis=0 if batched else None,
+    )
+    artifact = DeploymentArtifact(
+        model=ModelFiles(format="onnx", path=source),
+        runtime=RuntimeConfig(name="onnxruntime", options={"execution_provider": "cuda"}),
+        inputs=(scalar,),
+        outputs=(scalar,),
+        sample_inputs=(TensorSample(name="scalar", shape=minimum, values=(7.0,)),) if with_samples else (),
+    )
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", model_name="scalar")
+
+    config = yaml.safe_load((model / "model_analyzer/config.yaml").read_text())
+    assert config["perf_analyzer_flags"]["shape"] == ["scalar:1"]
+    if with_samples:
+        input_data = json.loads((model / "model_analyzer/input-data.json").read_text())
+        assert input_data == {"data": [{"scalar": {"content": [7.0], "shape": [1]}}]}
+
+
 def test_publish_encodes_fp16_representative_inputs_as_binary(tmp_path):
     values = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0)
     artifact = replace(

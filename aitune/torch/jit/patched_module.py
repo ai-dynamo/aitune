@@ -173,9 +173,9 @@ class PatchedModule:
             coordinator.verify_equal(current.fq_name, "JIT module order")
             recording = cast(RecordingModule, current._wrapper)
             backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
-            strategy = _build_strategy()
             try:
                 with coordinator.raise_if_any_rank_fails(f"JIT tuning for {current.fq_name}"):
+                    strategy = _build_strategy(current.__wrapped__)
                     with report_module_tune(
                         module_name=current.__wrapped__.__class__.__name__,
                         num_parameters=count_parameters(current.__wrapped__),
@@ -782,17 +782,17 @@ def _to_hist(entry: str):
     PatchedModule.history.append(entry)
 
 
-def _build_strategy() -> TuneStrategy:
+def _build_strategy(module: torch.nn.Module) -> TuneStrategy:
     """Build the per-module tune strategy.
 
-    Resolves the strategy via ``config.resolve_strategy()`` and clones it so each module gets
+    Resolves the strategy and backends for ``module`` and clones it so each module gets
     a fresh instance — strategies hold per-tune state (``backend_results`` etc.) that must
     not leak across modules.
 
     Find-max-batch-size profiling is disabled because in JIT we cannot run the original
     module separately; the strategy must work from the recorded samples alone.
     """
-    strategy = config.resolve_strategy().clone()
+    strategy = config.resolve_strategy(module).clone()
 
     if isinstance(strategy, FindMaxBatchSizeMixin):
         strategy.enable_find_max_batch_size(False)

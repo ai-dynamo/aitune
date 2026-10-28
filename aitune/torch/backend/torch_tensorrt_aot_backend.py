@@ -5,7 +5,7 @@
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Self, cast
 
 import torch
 import torch.nn as nn
@@ -45,12 +45,19 @@ except (ImportError, RuntimeError, OSError):
             use_explicit_typing: Whether to use explicit typing. Defaults to True.
             workspace_size: TensorRT workspace size. Defaults to 0.
             use_distributed_mode_trace: Enable distributed tracing. Defaults to False.
+            min_block_size: Minimum number of operators in a TensorRT block. Defaults to 5.
+            disable_tf32: Whether to disable TF32 in TensorRT layers. Defaults to False.
+            require_full_compilation: Whether to require one TensorRT engine for the whole graph.
+                Defaults to False.
         """
 
         enabled_precisions: set[torch.dtype] | None = None
         use_explicit_typing: bool = True
         workspace_size: int = 0
         use_distributed_mode_trace: bool = False
+        min_block_size: int = 5
+        disable_tf32: bool = False
+        require_full_compilation: bool = False
 
 
 logger = getLogger(__name__)
@@ -81,9 +88,7 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
         pickle_protocol: Pickle protocol for saved compiled artifacts. Defaults to 5.
     """
 
-    compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
-        default_factory=TorchTensorRTConfig
-    )
+    compile_config: TorchTensorRTConfig = field(default_factory=TorchTensorRTConfig)
     pickle_protocol: int = 5
 
     def describe(self) -> str:
@@ -122,7 +127,7 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
         return cls(**data)
 
 
-class TorchTensorRTAotBackend(Backend):
+class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
     """Backend that compiles model using TensorRT."""
 
     _build_mode = BuildMode.AHEAD_OF_TIME
@@ -146,12 +151,9 @@ class TorchTensorRTAotBackend(Backend):
         Args:
             config: Configuration for TensorRT compilation
         """
-        super().__init__()
         assert_cuda_is_available()
         assert_torch_tensorrt()
-
-        # initialize variables
-        self._config = config or TorchTensorRTAotBackendConfig()
+        super().__init__(config or TorchTensorRTAotBackendConfig())
 
         # build variables
         self._opt_module = None
@@ -186,7 +188,7 @@ class TorchTensorRTAotBackend(Backend):
         graph_spec: GraphSpec,
         samples: SampleStore,
         cache_dir: Path,
-    ) -> Backend:
+    ) -> Self:
         """Build the model with TensorRT.
 
         Exports the module via ``torch.export.export`` with shared ``Dim`` instances
@@ -203,11 +205,11 @@ class TorchTensorRTAotBackend(Backend):
         logger.info("Start compiling torch module with Torch-TensorRT using torch_tensorrt.dynamo.compile.")
 
         model = module.eval()
-        move_module_to_device(model, self._device)
+        move_module_to_device(model, self.device)
         self._graph_spec = graph_spec
 
         # Set the device for the TensorRT backend compilation
-        self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self._device))
+        self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self.device))
 
         with self._track_build_step(TorchTensorRTAotBuildStep.TORCH_EXPORT):
             # ``use_auto=False`` creates finite ranges required by TensorRT optimization profiles.
@@ -219,7 +221,7 @@ class TorchTensorRTAotBackend(Backend):
                 model,
                 samples[0],
                 graph_spec,
-                device=self._device,
+                device=self.device,
             )
             exported = export_result.exported_program
 
@@ -276,7 +278,7 @@ class TorchTensorRTAotBackend(Backend):
         exported_model_artifact = cast(ArtifactPath, self._exported_model_artifact)
         with torch_tensorrt_errors(torch_tensorrt):
             loaded = torch_tensorrt.load(exported_model_artifact.path.as_posix())
-            self._opt_module = loaded.module().to(self._device)
+            self._opt_module = loaded.module().to(self.device)
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run the flat Torch-TensorRT module, then restore outputs and input changes."""

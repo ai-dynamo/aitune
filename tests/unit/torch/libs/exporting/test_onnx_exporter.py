@@ -64,6 +64,29 @@ def test_dynamo_export_preserves_nested_dynamic_shapes(tmp_path):
     )
 
 
+def test_dynamo_export_sorts_program_before_saving(mocker, tmp_path):
+    """Keep the ONNX graph in dependency order before writing the artifact."""
+    model = torch.nn.Identity().eval()
+    x = torch.ones(2)
+    sample = ((x,), {})
+    graph_spec = make_graph_spec(model.forward, sample, model(x))
+    output_path = tmp_path / "sorted.onnx"
+    export = mocker.patch("torch.onnx.export")
+    sort = mocker.patch("aitune.torch.libs.exporting.onnx_exporter.TopologicalSortPass")
+    mocker.patch("onnx.checker.check_model")
+    operations = mocker.Mock()
+    operations.attach_mock(sort.return_value, "sort")
+    operations.attach_mock(export.return_value.save, "save")
+
+    ONNXExporter(output_path, use_dynamo=True).export(model, sample, graph_spec)
+
+    assert operations.mock_calls == [
+        mocker.call.sort(export.return_value.model),
+        mocker.call.save(output_path, external_data=True),
+    ]
+    assert "f" not in export.call_args.kwargs
+
+
 def test_trace_export_uses_explicit_dynamic_axis_names(tmp_path):
     class Add(torch.nn.Module):
         def forward(self, x, y):

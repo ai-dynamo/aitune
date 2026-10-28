@@ -27,7 +27,6 @@ def get_model(model_name: str = "nvidia/parakeet-rnnt-1.1b"):
 
     # Note: Allowing nemo object to be un/serialized (torch.load)
     torch.serialization.add_safe_globals([
-        # pytype: disable=module-attr
         nemo.core.neural_types.neural_type.NeuralType,
         nemo.core.neural_types.elements.MelSpectrogramType,
         nemo.core.neural_types.axes.AxisType,
@@ -36,7 +35,6 @@ def get_model(model_name: str = "nvidia/parakeet-rnnt-1.1b"):
         nemo.core.neural_types.elements.SpectrogramType,
         nemo.core.neural_types.elements.IntType,
         nemo.core.neural_types.elements.AcousticEncodedRepresentation,
-        # pytype: enable=module-attr
     ])
 
     asr_model = nemo.collections.asr.models.EncDecRNNTBPEModel.from_pretrained(model_name=model_name)
