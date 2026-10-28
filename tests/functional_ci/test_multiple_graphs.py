@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import TorchTensorRTJitBackend
+from aitune.torch.backend import Backend, TorchTensorRTJitBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
@@ -33,6 +33,13 @@ class LayoutMLP(nn.Module):
 
 def _layouts(x: torch.Tensor) -> tuple[tuple[torch.Tensor, ...], ...]:
     return (x,), (x.unsqueeze(1).repeat(1, 3, 1),), (x, x * 0.5)
+
+
+def _assert_backends(module: TunedModule, expected: type[Backend], prototype: Backend | None = None) -> None:
+    backends = list(module.backends.values())
+    assert [type(selected) for selected in backends] == [expected] * 3
+    assert len({id(selected) for selected in backends}) == 3
+    assert all(selected is not prototype for selected in backends)
 
 
 class SharedLayouts(nn.Module):
@@ -59,7 +66,7 @@ def test_multiple_graphs_aot(case: BackendCase, device: torch.device, tmp_path):
 
     encoder = cast(ait.Module, model.encoder)
     assert len(encoder.graph_specs) == 3
-    assert [type(selected) for selected in cast(TunedModule, encoder.module).backends.values()] == [type(backend)] * 3
+    _assert_backends(cast(TunedModule, encoder.module), type(backend), backend)
     assert_matches_eager(model, reference, device, case.tolerance, batch_sizes=(2,))
 
     checkpoint = tmp_path / "layouts.ait"
@@ -67,9 +74,7 @@ def test_multiple_graphs_aot(case: BackendCase, device: torch.device, tmp_path):
     encoder.deactivate()
     restored = ait.load(SharedLayouts(device, seed=1), checkpoint)
     restored_encoder = cast(ait.Module, restored.encoder)
-    assert [type(selected) for selected in cast(TunedModule, restored_encoder.module).backends.values()] == [
-        type(backend)
-    ] * 3
+    _assert_backends(cast(TunedModule, restored_encoder.module), type(backend))
     assert_matches_eager(restored, reference, device, case.tolerance, batch_sizes=(2,))
 
 
@@ -96,9 +101,7 @@ def test_multiple_graphs_jit(case: BackendCase, device: torch.device):
         (head,) = PatchedModule.heads
         assert head._name.split(" ")[0] == "LayoutMLP"
         assert head._state == ModuleState.TUNED
-        assert [type(selected) for selected in cast(TunedModule, head._wrapper).backends.values()] == [
-            type(backend)
-        ] * 3
+        _assert_backends(cast(TunedModule, head._wrapper), type(backend), backend)
         assert_matches_eager(
             lambda value: tuple(model(*args) for args in _layouts(value)),
             lambda value: tuple(reference(*args) for args in _layouts(value)),
@@ -119,6 +122,6 @@ def test_multiple_graphs_unrecorded_layout(case: BackendCase, device: torch.devi
     value = make_input(device)
     ait.tune(model, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=device)
     encoder = cast(ait.Module, model.encoder)
-    assert [type(selected) for selected in cast(TunedModule, encoder.module).backends.values()] == [type(backend)] * 3
+    _assert_backends(cast(TunedModule, encoder.module), type(backend), backend)
     with torch.no_grad(), pytest.raises(RuntimeError, match="No backend found"):
         model.encoder(value[:, None, None, :])
