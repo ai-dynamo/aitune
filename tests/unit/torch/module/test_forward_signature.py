@@ -3,6 +3,7 @@
 
 import functools
 import inspect
+from typing import Any, cast
 
 import pytest
 import wrapt
@@ -98,7 +99,7 @@ def _explicit_signature_forward():
     def wrapper(*args, **kwargs):
         return _forward(*args, **kwargs)
 
-    wrapper.__signature__ = inspect.signature(_forward)
+    cast(Any, wrapper).__signature__ = inspect.signature(_forward)
     return wrapper
 
 

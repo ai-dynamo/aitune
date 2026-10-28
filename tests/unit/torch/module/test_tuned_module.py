@@ -142,7 +142,7 @@ def test_serialization():
     backend2 = TorchInductorJitBackend()
     backend1._orig_module = Mock(spec=torch.nn.Module)
     backend2._orig_module = Mock(spec=torch.nn.Module)
-    backends = OrderedDict({graph1: backend1, graph2: backend2})
+    backends: OrderedDict[SampleMetadata, Backend] = OrderedDict({graph1: backend1, graph2: backend2})
 
     module = TunedModule(
         backends=backends,
