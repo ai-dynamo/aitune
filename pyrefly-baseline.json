@@ -3315,14 +3315,14 @@
       "column": 25,
       "path": "tests/unit/torch/inspecting/test_wrapping.py",
       "name": "bad-specialization",
-      "concise_description": "`list[Linear | ReLU]` is not assignable to upper bound `((...) -> Any) | aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module` of type variable `ModuleOrPipelineT`",
+      "concise_description": "`list[Linear | ReLU]` is not assignable to upper bound `((...) -> Any) | aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module` of type variable `T`",
       "severity": "error"
     },
     {
       "column": 25,
       "path": "tests/unit/torch/inspecting/test_wrapping.py",
       "name": "bad-specialization",
-      "concise_description": "`dict[str, Linear | ReLU]` is not assignable to upper bound `((...) -> Any) | aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module` of type variable `ModuleOrPipelineT`",
+      "concise_description": "`dict[str, Linear | ReLU]` is not assignable to upper bound `((...) -> Any) | aitune.torch.module.wrapper_module.Module | torch.nn.modules.module.Module` of type variable `T`",
       "severity": "error"
     },
     {

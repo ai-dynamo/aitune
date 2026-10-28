@@ -3,11 +3,10 @@
 """AITune wrapper module."""
 
 from collections import OrderedDict
-from collections.abc import Callable
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 import torch
 import wrapt
@@ -550,6 +549,3 @@ def get_object_name(obj: Any) -> str:
 def sanitize_model_name(model_name: str | None) -> str | None:
     """Sanitize model name to be used as a module name."""
     return model_name.replace("/", "_") if model_name else None
-
-
-ModuleOrPipelineT = TypeVar("ModuleOrPipelineT", bound=torch.nn.Module | Module | Callable[..., Any])

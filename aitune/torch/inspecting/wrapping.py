@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Inspecting and patching modules."""
 
+from collections.abc import Callable
 from logging import getLogger
-from typing import cast
+from typing import Any, TypeVar, cast
 
 import torch
 
 from aitune.torch.inspecting.module_info import ModuleInfo
-from aitune.torch.module.wrapper_module import Module, ModuleOrPipelineT, StrategyList, StrategyMap
+from aitune.torch.module.wrapper_module import Module, StrategyList, StrategyMap
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.resolver import StrategyOption
 from aitune.utils.logging import setup_logging
@@ -18,12 +19,15 @@ logger = getLogger(__name__)
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 
+T = TypeVar("T", bound=torch.nn.Module | Module | Callable[..., Any])
+
+
 def wrap(
-    obj: ModuleOrPipelineT,
+    obj: T,
     modules: list[ModuleInfo],
     strategy: StrategyOption | None = None,
     strategies: StrategyList | StrategyMap | None = None,
-) -> ModuleOrPipelineT | Module:
+) -> T | Module:
     """Wrap provided modules with inspection logic.
 
     Args:

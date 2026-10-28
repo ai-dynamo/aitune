@@ -6,7 +6,7 @@ import shutil
 from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
-from typing import cast
+from typing import Any, TypeVar, cast
 
 import torch
 
@@ -19,7 +19,7 @@ from aitune.torch.config import AITuneMode, aitune_cache_dir
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
 from aitune.torch.distributed import coordinator, distributed_cache_dir
 from aitune.torch.module.tensor_spec import InfoLevel
-from aitune.torch.module.wrapper_module import Module, ModuleOrPipelineT, ModuleState
+from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import report_tune_run
 from aitune.torch.utils.cuda_utils import synchronize as cuda_synchronize
@@ -28,7 +28,6 @@ from aitune.utils.monitoring import annotate
 from aitune.utils.timer import Timer
 
 logger = getLogger(__name__)
-
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
@@ -127,7 +126,7 @@ def tune(
 
 
 def save(
-    module: ModuleOrPipelineT,
+    module: torch.nn.Module | Module | Callable[..., Any],
     path: str | Path,
     storage: Storage | None = None,
 ) -> None:
@@ -165,13 +164,16 @@ def save(
     checkpoint.save(module, path)
 
 
+T = TypeVar("T", bound=torch.nn.Module | Module | Callable[..., Any])
+
+
 def load(
-    module: ModuleOrPipelineT,
+    module: T,
     path: str | Path,
     storage: Storage | None = None,
     device_map: dict[str, torch.device] | None = None,
     disable_external_logging: bool = True,
-) -> ModuleOrPipelineT | Module:
+) -> T | Module:
     """Load the tuned module from a file.
 
     Args:
@@ -196,7 +198,7 @@ def load(
 
         logger.info("✅ Checkpoint loaded from: %s in %.2f seconds", path, timer.elapsed)
 
-        return cast(ModuleOrPipelineT | Module, loaded)
+        return cast(T | Module, loaded)
 
 
 def _reject_already_tuned_modules() -> None:
