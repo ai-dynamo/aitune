@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Self, cast
 
 import nvtx
 import onnx
@@ -122,7 +122,7 @@ class ONNXRuntimeBackendConfig(BackendConfig):
         return cls(**data)
 
 
-class ONNXRuntimeBackend(Backend):
+class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
     """Backend that runs Torch or existing ONNX models with ONNX Runtime.
 
     Uses the source path and shapes directly for ``OnnxModule``. Torch modules
@@ -161,8 +161,7 @@ class ONNXRuntimeBackend(Backend):
         Args:
             config: Configuration for ONNX export and runtime.
         """
-        super().__init__()
-        self._config = config or ONNXRuntimeBackendConfig()
+        super().__init__(config or ONNXRuntimeBackendConfig())
         self._onnx_model_artifact: ArtifactPath | None = None
         self._onnx_data_artifact: ArtifactPath | None = None
         self._session: onnxruntime.InferenceSession | None = None
@@ -188,7 +187,7 @@ class ONNXRuntimeBackend(Backend):
         except (OSError, RuntimeError, ValueError) as error:
             raise RuntimeError(f"ONNX artifact is not available: {error}") from error
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Use an existing ONNX file or export Torch, then load the session."""
         self._graph_spec = graph_spec
 
@@ -228,7 +227,7 @@ class ONNXRuntimeBackend(Backend):
     def _export_onnx(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> None:
         """Export a Torch module and preserve its output structure."""
         self._output_object = self._get_output_object(module=module, sample=samples[0])
-        module = module.eval().to(self._device)
+        module = module.eval().to(self.device)
         self._onnx_model_artifact = ArtifactPath(cache_dir, "model_raw.onnx")
         onnx_exporter = ONNXExporter(
             output_path=self._onnx_model_artifact.path,
@@ -249,7 +248,7 @@ class ONNXRuntimeBackend(Backend):
           ("CUDAExecutionProvider", {"device_id": ...})]``
         """
         ep = self._config.execution_provider or ONNXExecutionProvider.CUDA
-        cuda_ep = ("CUDAExecutionProvider", {"device_id": self._device.index})
+        cuda_ep = ("CUDAExecutionProvider", {"device_id": self.device.index})
         if ep == ONNXExecutionProvider.TENSORRT:
             return ["TensorrtExecutionProvider", cuda_ep]
         return [cuda_ep]
@@ -262,7 +261,7 @@ class ONNXRuntimeBackend(Backend):
         self._session = onnxruntime.InferenceSession(str(model_artifact.path), providers=providers)
         if self._samples is not None:
             try:
-                self._warmup(self._samples.iter_samples(self._device))
+                self._warmup(self._samples.iter_samples(self.device))
             except Exception:
                 self._deactivate()
                 raise
@@ -377,7 +376,7 @@ class ONNXRuntimeBackend(Backend):
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference through the shared ONNX Runtime I/O binding executor."""
         inputs = self._prepare_inputs(args, kwargs)
-        return self._prepare_outputs(run_onnx(self._session, inputs, self._device))
+        return self._prepare_outputs(run_onnx(self._session, inputs, self.device))
 
     def _get_output_object(self, module: nn.Module, sample: Sample) -> Any:
         """Get the output object from the module and sample.
@@ -392,7 +391,7 @@ class ONNXRuntimeBackend(Backend):
         Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
         the output object.
         """
-        module.to(self._device)
+        module.to(self.device)
         args, kwargs = sample
         with torch.no_grad():
             output_object = module(*args, **kwargs)

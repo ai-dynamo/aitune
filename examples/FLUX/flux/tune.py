@@ -138,7 +138,7 @@ def tune_model(
     transformer_strategy = _transformer_strategy(sizes=sizes, multi_gpu=multi_gpu, quantization=quantization)
     # Match the single-image workload used by this example's inference and serving commands.
     transformer_strategy.enable_find_max_batch_size(False)
-    default_strategy = ait.MaxThroughputStrategy.for_aot().enable_find_max_batch_size(False)
+    default_strategy = ait.resolve_strategy().enable_find_max_batch_size(False)
 
     # Leave all modules except the transformer unquantized.
     modules = [m for m in modules_info.get_modules() if m.name != "transformer"]

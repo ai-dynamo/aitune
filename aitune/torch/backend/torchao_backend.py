@@ -3,13 +3,12 @@
 """Torchao backend."""
 
 import copy
-import gc
 import json
 from collections.abc import Callable
 from dataclasses import MISSING, dataclass, fields
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Literal, get_args
+from typing import Any, Literal, Self, get_args
 
 import torch
 import torch.nn as nn
@@ -40,6 +39,7 @@ from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, B
 from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
@@ -197,7 +197,7 @@ class TorchAOBackendConfig(BackendConfig):
         return self._QUANTIZATION_CONFIGS[quantization]
 
 
-class TorchAOBackend(Backend):
+class TorchAOBackend(Backend[TorchAOBackendConfig]):
     """Backend that does torch quantization.
 
     If you would like to use customize quantization, you can pass in a quantization config.
@@ -224,9 +224,7 @@ class TorchAOBackend(Backend):
         Args:
             config: The configuration to use.
         """
-        super().__init__()
-        # initialize variables
-        self._config = config or TorchAOBackendConfig(quantization=DEFAULT_QUANTIZATION)
+        super().__init__(config or TorchAOBackendConfig(quantization=DEFAULT_QUANTIZATION))
 
         # build variables
         self._quant_module = None
@@ -244,7 +242,7 @@ class TorchAOBackend(Backend):
         """Returns the description of the backend."""
         return f"{self.__class__.__name__}({self._config.describe()})"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Builds the model with torchao quantization and torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
 
@@ -279,7 +277,7 @@ class TorchAOBackend(Backend):
         self._activate()
         self._samples = None
         self._data = None
-        gc.collect()
+        gc_collect()
 
     def to_dict(self):
         """Returns the state_dict of the backend."""
@@ -329,7 +327,9 @@ class TorchAOBackend(Backend):
         model = copy.deepcopy(self._orig_module)
         move_module_to_device(self._orig_module, "cpu")
 
-        quantize_(model, config=self._config.quantization_config, device=self._device, filter_fn=self._config.filter_fn)
+        quantization_config = self._config.quantization_config
+        assert quantization_config is not None, "quantization_config is set in TorchAOBackendConfig.__post_init__"
+        quantize_(model, config=quantization_config, device=self.device, filter_fn=self._config.filter_fn)
         self._quant_module = torch.compile(
             model=model,
             fullgraph=self._config.fullgraph,
@@ -343,7 +343,7 @@ class TorchAOBackend(Backend):
     def _iter_samples(self):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""
         if self._samples is not None:
-            return self._samples.iter_samples(self._device)
+            return self._samples.iter_samples(self.device)
         return iter(self._data)
 
     def _check_hardware_compatibility(self, module: nn.Module) -> None:

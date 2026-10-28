@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 import pytest
 import torch
@@ -20,11 +19,11 @@ from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyTorchModel
 from tests.toy_models.torch_models import ToyTorchConditionalModel
-from tests.utilities.helpers import make_graph_spec, requires_cuda, update_input_spec
+from tests.utilities.helpers import make_graph_spec, make_sample_store, requires_cuda, update_input_spec
 
 
 @dataclass
@@ -57,12 +56,13 @@ def model(torch_device) -> SimpleModel:
 
 
 @pytest.fixture
-def sample_data(torch_device) -> list[Sample]:
-    return [
+def sample_data(torch_device, tmp_path) -> SampleStore:
+    samples = [
         ((torch.randn(1, 10, device=torch_device),), {}),
         ((torch.randn(4, 10, device=torch_device),), {}),
         ((torch.randn(2, 10, device=torch_device),), {}),
     ]
+    return make_sample_store(samples, tmp_path)
 
 
 @pytest.fixture
@@ -238,7 +238,7 @@ def test_mock_build(
     backend: TorchTensorRTAotBackend,
     model: SimpleModel,
     graph_spec: GraphSpec,
-    sample_data: list[Sample],
+    sample_data: SampleStore,
     torch_device: torch.device,
     tmp_path: Path,
 ):
@@ -249,7 +249,6 @@ def test_mock_build(
 
     assert active_backend is backend
 
-    active_backend = cast(TorchTensorRTAotBackend, active_backend)
     assert active_backend._device == torch_device
     assert active_backend.is_active
 
@@ -318,7 +317,9 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     sentinel_exported = mocker.Mock(name="ExportedProgram")
     export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
 
-    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    backend.build(
+        model, graph_spec, make_sample_store(sample_data, tmp_path), device=torch.device("cpu"), cache_dir=tmp_path
+    )
 
     dynamic_shapes = export_mock.call_args.kwargs["dynamic_shapes"]
     dim = dynamic_shapes["x"][0]
@@ -357,7 +358,9 @@ def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
     mocker.patch("torch.export.export", return_value=mocker.Mock())
     backend = TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
 
-    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    backend.build(
+        model, graph_spec, make_sample_store(sample_data, tmp_path), device=torch.device("cpu"), cache_dir=tmp_path
+    )
 
     move_module.assert_called_once_with(model, torch.device("cpu"))
 
@@ -367,7 +370,7 @@ def test_mock_infer(
     mocker,
     model: SimpleModel,
     graph_spec: GraphSpec,
-    sample_data: list[Sample],
+    sample_data: SampleStore,
     backend: TorchTensorRTAotBackend,
     torch_device: torch.device,
     tmp_path: Path,
@@ -398,8 +401,6 @@ def test_mock_infer(
 
     args, kwargs = sample_data[0]
 
-    backend = cast(TorchTensorRTAotBackend, backend)
-
     output = backend.infer(*args, **kwargs)
     assert output.shape == (1, 2)
 
@@ -410,7 +411,7 @@ def test_mock_infer(
 def test_build_with_custom_precisions(
     model: SimpleModel,
     graph_spec: GraphSpec,
-    sample_data: list[Sample],
+    sample_data: SampleStore,
     mocker,
     mock_torch_tensorrt,
     torch_device: torch.device,
@@ -435,7 +436,7 @@ def test_full_run_simple_model(
     backend: TorchTensorRTAotBackend,
     model: SimpleModel,
     graph_spec: GraphSpec,
-    sample_data: list[Sample],
+    sample_data: SampleStore,
     torch_device: torch.device,
     tmp_path: Path,
 ):
@@ -446,7 +447,6 @@ def test_full_run_simple_model(
 
     args, kwargs = sample_data[0]
 
-    backend = cast(TorchTensorRTAotBackend, backend)
     assert backend._opt_module is not None
 
     output = backend.infer(*args, **kwargs)
@@ -460,10 +460,11 @@ def test_full_run_toy_model_linear(torch_device: torch.device, tmp_path: Path):
     graph_spec = model.graph_spec(batch_sizes=[2], device=torch_device)
 
     backend = TorchTensorRTAotBackend()
-    backend = backend.build(model, graph_spec, samples, device=torch_device, cache_dir=tmp_path)
+    backend = backend.build(
+        model, graph_spec, make_sample_store(samples, tmp_path), device=torch_device, cache_dir=tmp_path
+    )
     args, kwargs = samples[0]
 
-    backend = cast(TorchTensorRTAotBackend, backend)
     assert backend._opt_module is not None
 
     output = backend.infer(*args, **kwargs)
@@ -479,7 +480,9 @@ def test_conditional_model(torch_device, tmp_path: Path):
     graph_spec = model.graph_spec(batch_sizes=[2], device=torch_device, kwargs={"apply_relu": True})
 
     backend = TorchTensorRTAotBackend()
-    backend = backend.build(model, graph_spec, samples, device=torch_device, cache_dir=tmp_path)
+    backend = backend.build(
+        model, graph_spec, make_sample_store(samples, tmp_path), device=torch_device, cache_dir=tmp_path
+    )
 
     assert backend._opt_module is not None
 
@@ -494,7 +497,9 @@ def test_serialization(torch_device, tmp_path):
     graph_spec = model.graph_spec(batch_sizes=[2], device=torch_device)
 
     backend = TorchTensorRTAotBackend()
-    backend = backend.build(model, graph_spec, samples, device=torch_device, cache_dir=tmp_path)
+    backend = backend.build(
+        model, graph_spec, make_sample_store(samples, tmp_path), device=torch_device, cache_dir=tmp_path
+    )
 
     state_dict = backend.to_dict()
 

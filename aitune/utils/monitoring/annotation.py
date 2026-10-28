@@ -2,8 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Annotation wrapper for NVTX and hardware metrics collection - one entry point for both."""
 
+from collections.abc import Callable
+from typing import ParamSpec, TypeVar
+
 from aitune.utils.monitoring.hardware_metrics_annotation import collect_hardware_metrics
 from aitune.utils.monitoring.nvtx_annotation import annotate_with_nvtx
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class annotate:  # noqa: N801
@@ -48,7 +54,7 @@ class annotate:  # noqa: N801
         self._nvtx_annotation.__exit__(exc_type, exc_value, traceback)
         return False
 
-    def __call__(self, func):
+    def __call__(self, func: Callable[P, R]) -> Callable[P, R]:
         """Wraps the function as a decorator."""
         if self.name is None:
             self.name = func.__name__

@@ -34,7 +34,9 @@ def parse_power_metrics(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(index=pd.MultiIndex.from_frame(df[["module_name", "backend"]].drop_duplicates()))
     cols = power_cols + ["module_name", "backend"]
     result = df[cols].groupby(["module_name", "backend"]).agg(["mean", "max"]).div(1000).round(2)
-    result.columns = ["Power [W]\n" + l2 for _, l2 in result.columns]
+    result.columns = [
+        l1.replace("_power_usage_milliwatts", "").title() + "\nPower [W] " + l2 for l1, l2 in result.columns
+    ]
     return result
 
 

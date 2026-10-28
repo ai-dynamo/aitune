@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Inplace model registry."""
 
-import gc
 from collections import OrderedDict
 from typing import TYPE_CHECKING
+
+from aitune.torch.utils.memory import gc_collect
 
 if TYPE_CHECKING:
     from aitune.torch.module.wrapper_module import Module
@@ -28,8 +29,10 @@ class ModuleRegistry:
 
     def clear(self) -> None:
         """Removes already registered modules."""
+        old_registry = self._registry
         self._registry = OrderedDict()
-        gc.collect()
+        old_registry.clear()
+        gc_collect()
 
     @property
     def modules(self) -> dict[str, "Module"]:

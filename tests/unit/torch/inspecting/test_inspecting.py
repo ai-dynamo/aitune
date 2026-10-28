@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import itertools
+from types import SimpleNamespace
+
 import onnx
 import pytest
 import torch
@@ -349,7 +352,7 @@ def test_inspect_with_invalid_input():
     """Test inspecting with invalid input."""
     # When inspecting with invalid input
     with pytest.raises(TypeError):
-        inspect(None, torch.randn(10, 10))  # pytype: disable=wrong-arg-types
+        inspect(None, torch.randn(10, 10))
 
 
 def test_inspect_with_multiple_forward_calls(simple_model, sample_dataset):
@@ -537,8 +540,13 @@ def test_get_modules_rejects_invalid_min_execution_ratio(min_execution_ratio: fl
         modules_info.get_modules(min_execution_ratio=min_execution_ratio)
 
 
-def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset):
+def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset, mocker):
     """Test getting executed modules with a limit."""
+    # Make every module call take one fake time unit so ordering by total time is deterministic
+    mocker.patch(
+        "aitune.torch.inspecting.module_inspector.time",
+        SimpleNamespace(perf_counter=itertools.count().__next__),
+    )
     # When inspecting custom object with various attributes
     modules_info = inspect(custom_object, sample_dataset, number_of_iterations=TEST_NUMBER_OF_ITERATIONS)
 

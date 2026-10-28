@@ -110,7 +110,7 @@ def testing_multi_profile_with_samples():
     module(data2.repeat(8, 1, 1, 1))
 
     try:
-        module(data1.repeat(4, 1, 1, 1))
+        module(data1.repeat(9, 1, 1, 1))
     except RuntimeError:
         pass  # expected exception when passing sample with shape that is not in any profile
     else:
@@ -119,7 +119,7 @@ def testing_multi_profile_with_samples():
     # still runs after error
     module(data2.repeat(2, 1, 1, 1))
 
-    # Check the public artifact against the four profiles selected during tuning.
+    # Check the public artifact against the four sampled profiles and the dynamic-shape fallback.
     artifact = module.artifact()
     assert isinstance(artifact, DeploymentArtifact)
     assert artifact.model.format == "tensorrt_plan"
@@ -142,16 +142,23 @@ def testing_multi_profile_with_samples():
         assert spec.batch_axis == 0
     assert artifact.max_batch_size is None  # These profiles do not support batch size one.
     profiles = artifact.model.metadata["optimization_profiles"]
-    assert artifact.model.metadata["optimization_profile_count"] == len(profiles) == 4
-    assert {profile[input_name]["min_shape"] for profile in profiles} == {
+    assert artifact.model.metadata["optimization_profile_count"] == len(profiles) == 5
+    sampled_profiles = profiles[:-1]
+    fallback_profile = profiles[-1][input_name]
+    assert {profile[input_name]["min_shape"] for profile in sampled_profiles} == {
         (8, 3, 448, 448),
         (2, 3, 448, 448),
         (8, 3, 224, 224),
         (2, 3, 224, 224),
     }
-    for profile in profiles:
+    for profile in sampled_profiles:
         bounds = profile[input_name]
         assert bounds["min_shape"] == bounds["opt_shape"] == bounds["max_shape"]
+    assert fallback_profile == {
+        "min_shape": (2, 3, 224, 224),
+        "opt_shape": (8, 3, 448, 448),
+        "max_shape": (8, 3, 448, 448),
+    }
 
     with TemporaryDirectory(prefix="aitune-tensorrt-artifact-") as directory:
         root = Path(directory)

@@ -4,7 +4,7 @@
 
 import logging
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch.utils._pytree import tree_map
@@ -243,7 +243,7 @@ def build_dynamic_shapes(
         result = locator.set_value(result, dims)
         has_dynamic_axes |= bool(dims)
 
-    return result if has_dynamic_axes else None
+    return cast(dict[str, Any], result) if has_dynamic_axes else None
 
 
 def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
