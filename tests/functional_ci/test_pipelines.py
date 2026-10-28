@@ -31,9 +31,8 @@ COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
 TORCH_VERSION = Version(Version(torch.__version__).base_version)
 
 
-# Subclasses `AssertionError` so that the `torch-tensorrt-aot` xfail, which expects any `AssertionError`, still matches.
-class ClipTextEncoderNotTunedError(AssertionError):
-    """Raised when tuning leaves the CLIP text encoder without a backend."""
+class ComponentNotTunedError(Exception):
+    """Raised when tuning leaves pipeline components without a backend."""
 
 
 def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor:
@@ -61,7 +60,7 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
         "torch-tensorrt-aot": pytest.mark.xfail(
             strict=True,
             reason=("torch_tensorrt/dynamo/conversion/_TRTInterpreter.py, line 703, in run assert cuda_engine"),
-            raises=AssertionError,  # expected one selected backend, found 0",
+            raises=ComponentNotTunedError,
         ),
         # Torch-TRT cannot convert the CLIP text encoder: it rejects the int64 position ids passed to `aten.embedding`
         # and falls back to PyTorch for the whole encoder. On 2.10-2.12 that fallback crashes, so the encoder is not
@@ -70,7 +69,7 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
             TORCH_VERSION in SpecifierSet(">=2.10,<2.13"),
             strict=True,
             reason="Torch-TRT 2.10-2.12 crashes in its PyTorch fallback for the CLIP text encoder (`_frozen_param0`)",
-            raises=ClipTextEncoderNotTunedError,
+            raises=ComponentNotTunedError,
         ),
     },
 )
@@ -94,8 +93,9 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
     ait.wrap(pipeline, modules, strategy=pinned_strategy(backend))
     ait.tune(run, [PROMPT], batch_sizes=[1], device=device)
 
-    if not getattr(_components(pipeline)["text_encoder"].module, "backends", None):
-        raise ClipTextEncoderNotTunedError("no backend was selected for the CLIP text encoder")
+    untuned = [name for name, module in _components(pipeline).items() if not getattr(module.module, "backends", None)]
+    if untuned:
+        raise ComponentNotTunedError(f"not tuned: {', '.join(untuned)}")
     for module in _components(pipeline).values():
         assert selected_backend(module, type(backend)).key() == backend.key()
         assert len(module.graph_specs) == 1
@@ -122,7 +122,7 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
             TORCH_VERSION in SpecifierSet(">=2.10,<2.13"),
             strict=True,
             reason="Torch-TRT 2.10-2.12 crashes in its PyTorch fallback for the CLIP text encoder (`_frozen_param0`)",
-            raises=ClipTextEncoderNotTunedError,
+            raises=ComponentNotTunedError,
         )
     },
 )
@@ -148,10 +148,9 @@ def test_pipeline_jit(case: BackendCase, device: torch.device):
         "ToyFluxTransformer",
         "ToyDecoder",
     }
-    (clip,) = (head for head in heads if head._name.split(" ")[0] == "ToyClipTextEncoder")
-    if clip._state != ModuleState.TUNED:
-        raise ClipTextEncoderNotTunedError(f"the CLIP text encoder head was not tuned; its state is {clip._state}")
-    assert all(head._state == ModuleState.TUNED for head in heads)
+    untuned = [head._name.split(" ")[0] for head in heads if head._state != ModuleState.TUNED]
+    if untuned:
+        raise ComponentNotTunedError(f"not tuned: {', '.join(untuned)}")
     assert all(
         type(selected) is type(backend)
         for head in heads
