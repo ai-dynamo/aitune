@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Self, cast
 
 import torch
 import torch.nn as nn
@@ -69,27 +69,6 @@ class TensorRTBuildStep(BackendBuildStep):
     MODELOPT_TORCH_QUANTIZATION = "ModelOpt Torch quantization"
     MODELOPT_ONNX_QUANTIZATION = "ModelOpt ONNX quantization"
     ONNX_AUTOCAST = "ONNX autocast"
-
-
-class TensorRTRunner:
-    """TensorRT runner for model acceleration.
-
-    This class provides functionality to run TensorRT engines from PyTorch models.
-    """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize the TensorRT runner.
-
-        Args:
-            *args: Additional arguments
-            **kwargs: Additional keyword arguments
-        """
-        super().__init__(*args, **kwargs)
-        self._context = None
-        self._io_tensors = None
-        self._input_names = None
-        self._output_names = None
-        self._engine_info = None
 
 
 class TensorRTProfileMode(Enum):
@@ -211,7 +190,7 @@ class TensorRTBackendConfig(BackendConfig):
         return state_dict
 
 
-class TensorRTBackend(Backend, TensorRTRunner):
+class TensorRTBackend(Backend[TensorRTBackendConfig]):
     """TensorRT backend for model acceleration.
 
     This class builds and runs TensorRT engines from PyTorch models or existing OnnxModule graphs.
@@ -245,9 +224,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         Args:
             config: Configuration for TensorRT backend
         """
-        super().__init__()
-
-        self._config = config or TensorRTBackendConfig()
+        super().__init__(config or TensorRTBackendConfig())
 
         if self._config.profiles == TensorRTProfileMode.SAMPLES_USED and global_config.max_num_samples_stored <= 1:
             raise ValueError(
@@ -349,7 +326,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         optimization_profiles_dir.mkdir(parents=True, exist_ok=True)
         return optimization_profiles_dir / "model_optimization_profiles.json"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Build the TensorRT model.
 
         This method will export the module to ONNX and build a TensorRT engine from it using Polygraphy.
@@ -368,7 +345,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         self._graph_spec = graph_spec
         self._samples = samples
 
-        cuda_set_device(self._device)
+        cuda_set_device(self.device)
         if isinstance(module, OnnxModule):
             module.deactivate()
             if isinstance(self._config.quantization_config, TorchQuantizationConfig):
@@ -376,12 +353,15 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     "Torch quantization requires a Torch module; use ONNX quantization for OnnxModule."
                 )
 
-        if isinstance(self._config.quantization_config, TorchQuantizationConfig):
-            engine_path = self._build_modelopt_torch(module, graph_spec, samples, cache_dir)
-        elif isinstance(self._config.quantization_config, ONNXQuantizationConfig):
-            engine_path = self._build_modelopt_onnx(module, graph_spec, samples, cache_dir)
-        elif isinstance(self._config.quantization_config, ONNXAutoCastConfig):
-            engine_path = self._build_modelopt_onnx_autocast(module, graph_spec, samples, cache_dir)
+        quantization_config = self._config.quantization_config
+        if isinstance(quantization_config, TorchQuantizationConfig):
+            engine_path = self._build_modelopt_torch(module, graph_spec, samples, cache_dir, quantization_config)
+        elif isinstance(quantization_config, ONNXQuantizationConfig):
+            engine_path = self._build_modelopt_onnx(module, graph_spec, samples, cache_dir, quantization_config)
+        elif isinstance(quantization_config, ONNXAutoCastConfig):
+            engine_path = self._build_modelopt_onnx_autocast(
+                module, graph_spec, samples, cache_dir, quantization_config
+            )
         else:
             engine_path = self._build_standard(module, graph_spec, samples, cache_dir)
         self._engine_artifact = ArtifactPath.from_existing(engine_path, root=cache_dir)
@@ -399,7 +379,12 @@ class TensorRTBackend(Backend, TensorRTRunner):
         return self
 
     def _build_modelopt_torch(
-        self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
+        self,
+        module: nn.Module,
+        graph_spec: GraphSpec,
+        samples: Sequence[Sample],
+        cache_dir: Path,
+        quantization_config: TorchQuantizationConfig,
     ) -> Path:
         """Build the TensorRT model  ModelOpt torch quantization.
 
@@ -411,6 +396,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             graph_spec (GraphSpec): The graph spec of the model.
             samples: Recorded samples for the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
+            quantization_config (TorchQuantizationConfig): The quantization configuration.
 
         """
         try:
@@ -420,7 +406,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 module = torch_quantizer.quantize(
                     module=module,
                     sample=samples[0],
-                    config=self._config.quantization_config,
+                    config=quantization_config,
                 )
 
             onnx_path_quantized = self._export_onnx(module, graph_spec, samples[0], cache_dir, suffix="ptq")
@@ -457,7 +443,12 @@ class TensorRTBackend(Backend, TensorRTRunner):
             raise e
 
     def _build_modelopt_onnx(
-        self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
+        self,
+        module: nn.Module,
+        graph_spec: GraphSpec,
+        samples: Sequence[Sample],
+        cache_dir: Path,
+        quantization_config: ONNXQuantizationConfig,
     ) -> Path:
         """Build the TensorRT model ModelOpt ONNX quantization.
 
@@ -469,6 +460,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             graph_spec (GraphSpec): The graph spec of the model.
             samples: Recorded samples for the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
+            quantization_config (ONNXQuantizationConfig): The quantization configuration.
         """
         try:
             onnx_path = self._export_onnx(module, graph_spec, samples[0], cache_dir)
@@ -487,7 +479,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 onnx_path_quantized = onnx_quantizer.quantize(
                     input_onnx_path=onnx_path,
                     output_path=onnx_path_quantized,
-                    config=self._config.quantization_config,
+                    config=quantization_config,
                     samples=samples,
                     graph_spec=graph_spec,
                 )
@@ -522,7 +514,12 @@ class TensorRTBackend(Backend, TensorRTRunner):
             raise e
 
     def _build_modelopt_onnx_autocast(
-        self, module: nn.Module, graph_spec: GraphSpec, samples: Sequence[Sample], cache_dir: Path
+        self,
+        module: nn.Module,
+        graph_spec: GraphSpec,
+        samples: Sequence[Sample],
+        cache_dir: Path,
+        quantization_config: ONNXAutoCastConfig,
     ) -> Path:
         """Build the TensorRT model.
 
@@ -534,6 +531,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
             graph_spec (GraphSpec): The graph spec of the model.
             samples: Recorded samples for the model.
             cache_dir (Path): The cache directory to store the TensorRT model.
+            quantization_config (ONNXAutoCastConfig): The quantization configuration.
         """
         try:
             onnx_path = self._export_onnx(module, graph_spec, samples[0], cache_dir)
@@ -551,7 +549,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                 onnx_path_autocasted = onnx_autocast.autocast(
                     input_onnx_path=onnx_path,
                     output_path=onnx_path_autocasted,
-                    config=self._config.quantization_config,
+                    config=quantization_config,
                     samples=samples,
                     graph_spec=graph_spec,
                 )
@@ -714,7 +712,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         engine_artifact = cast(ArtifactPath, self._engine_artifact)
         optimization_profiles_artifact = cast(ArtifactPath, self._trt_optimization_profiles_artifact)
 
-        cuda_set_device(self._device)
+        cuda_set_device(self.device)
 
         self._trt_runtime = TensorRTRuntime()
         engine_bytes = self._trt_runtime.load_engine(engine_path=engine_artifact.path)
@@ -1164,7 +1162,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
 
         # if user provided profiles, return them
         if isinstance(self._config.profiles, list):
-            return self._get_user_profiles(graph_spec)
+            return self._get_user_profiles(graph_spec, self._config.profiles)
 
         if self._config.profiles == TensorRTProfileMode.SINGLE:
             # this will create a single profile from the graph spec
@@ -1191,15 +1189,15 @@ class TensorRTBackend(Backend, TensorRTRunner):
             result.extend(self._get_profiles_from_shapes(graph_spec))
         return result
 
-    def _get_user_profiles(self, graph_spec: GraphSpec) -> list[Profile]:
+    def _get_user_profiles(self, graph_spec: GraphSpec, user_profiles: list[TensorRTProfile]) -> list[Profile]:
         """Resolve public profile paths to graph tensor names and validate the bindings."""
         bindings = {
             format_tensor_name(locator.path, "input"): GraphSpec.tensor_name(locator, spec, "input")
             for locator, spec in graph_spec.input_spec.tensor_data
         }
         input_names = set(bindings)
-        for profile in self._config.profiles:
-            profile_names = set(profile.profile)
+        for profile in user_profiles:
+            profile_names = cast(set[str], set(profile.profile))
             missing_names = input_names - profile_names
             unknown_names = profile_names - input_names
             if missing_names or unknown_names:
@@ -1208,7 +1206,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
                     f"{sorted(input_names)} (missing: {sorted(missing_names)}, unknown: {sorted(unknown_names)})."
                 )
         profiles = []
-        for user_config in self._config.profiles:
+        for user_config in user_profiles:
             resolved = Profile()
             for name, (minimum, optimal, maximum) in user_config.profile.items():
                 resolved.add(bindings[name], minimum, optimal, maximum)
@@ -1290,7 +1288,7 @@ class TensorRTBackend(Backend, TensorRTRunner):
         }
 
     @classmethod
-    def from_dict(cls, module: torch.nn.Module, state_dict: dict):
+    def from_dict(cls, module: torch.nn.Module | None, state_dict: dict):
         """Creates a backend from a state_dict."""
         backend = cls()
         backend._engine_artifact = state_dict[cls.STATE_ENGINE_PATH]

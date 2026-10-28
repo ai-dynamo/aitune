@@ -475,15 +475,16 @@ def test_prepare_export_sample_batch_already_at_2_unchanged():
 
 
 def test_prepare_export_sample_keyword_input_dim_axis_expanded():
-    """A dim* axis passed by keyword is expanded in the normalized call."""
+    """A dim* axis passed by keyword is expanded without changing its call layout."""
     kw1 = {"mask": torch.zeros(2, 1)}
     kw2 = {"mask": torch.zeros(2, 6)}
     gs = make_graph_spec(_mask_input, ((), kw1), batch_size=2)
     update_input_spec(gs, ((), kw2), batch_size=2)
 
-    out_args, _ = prepare_export_sample(((), kw1), gs)
+    out_args, out_kwargs = prepare_export_sample(((), kw1), gs)
 
-    assert out_args[0].shape[1] == 2, "size-1 dim* axis passed by keyword must be expanded"
+    assert out_args == ()
+    assert out_kwargs["mask"].shape[1] == 2, "size-1 dim* axis passed by keyword must be expanded"
 
 
 # ---------------------------------------------------------------------------

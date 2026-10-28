@@ -20,16 +20,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from aitune.torch.backend import (
-    Backend,
-    TensorRTBackend,
-    TensorRTBackendConfig,
-    TorchInductorAotBackend,
-    TorchInductorJitBackend,
-    TorchTensorRTAotBackend,
-    TorchTensorRTAotBackendConfig,
-)
-from aitune.torch.backend.torch_tensorrt_aot_backend import TorchTensorRTConfig
+from aitune.torch.backend import Backend
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
@@ -102,7 +93,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
 
     def __init__(
         self,
-        backends: list[Backend] | None = None,
+        backends: list[Backend],
         profiling_config: ProfilingConfig | None = None,
         **kwargs: Any,
     ):
@@ -147,38 +138,6 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             "performance_validation_mode": self._performance_validation_mode.value,
             "profiling_config": self._profiling_config_to_json_dict(),
         }
-
-    def _default_aot_backends(self, distributed: bool = False) -> list[Backend]:
-        """Compare supported export and compiler alternatives for AOT; performance varies by model."""
-        backends: list[Backend] = []
-        if not distributed:
-            backends = [TensorRTBackend(), TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False))]
-        return [
-            *backends,
-            TorchInductorAotBackend(),
-            TorchTensorRTAotBackend(
-                config=TorchTensorRTAotBackendConfig(
-                    compile_config=TorchTensorRTConfig(use_distributed_mode_trace=distributed),
-                ),
-            ),
-            TorchInductorJitBackend(),
-        ]
-
-    def _default_jit_backends(self, distributed: bool = False) -> list[Backend]:
-        """Compare supported export and compiler alternatives for JIT; performance varies by model."""
-        backends: list[Backend] = []
-        if not distributed:
-            backends = [TensorRTBackend(), TensorRTBackend(config=TensorRTBackendConfig(use_dynamo=False))]
-        return [
-            *backends,
-            TorchInductorAotBackend(),
-            TorchTensorRTAotBackend(
-                config=TorchTensorRTAotBackendConfig(
-                    compile_config=TorchTensorRTConfig(use_distributed_mode_trace=distributed),
-                ),
-            ),
-            TorchInductorJitBackend(),
-        ]
 
     @abstractmethod
     def _measure(
@@ -306,9 +265,10 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             error_log.write_text("".join(traceback.format_exception(e)))
 
         outcome, gathered_results = coordinator.collect_results(result, local_error)
+        if backend.is_active:
+            backend.deactivate()
+
         if not outcome.succeeded:
-            if backend.is_active:
-                backend.deactivate()
             log(
                 "⚠️ %s baseline failed (log: %s), performance check skipped",
                 module_type,
@@ -384,7 +344,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         batching: bool,
         max_batch_size: int,
     ) -> _TuneCandidate | None:
-        """Builds, validates, and profiles each backend; returns the best candidate."""
+        """Builds, validates, and profiles each backend; returns the best candidate but inactive."""
         best: _TuneCandidate | None = None
 
         for backend in self._backends:
@@ -399,9 +359,10 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                 samples,
                 self._get_profiling_config(batching, max_batch_size),
             )
+            if built.is_active:
+                built.deactivate()
+
             if result is None:
-                if built.is_active:
-                    built.deactivate()
                 log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
                 continue
 
@@ -426,8 +387,6 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                     sink=self._sink,
                 )
                 if best is None or self._is_better(result, best.result):
-                    if best is not None and best.backend.is_active:
-                        best.backend.deactivate()
                     log(
                         "🎯 new best %s for %s is %s, speedup=%s, batch size: %s",
                         self._metric_label,
@@ -439,14 +398,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                         sink=self._sink,
                     )
                     best = _TuneCandidate(backend=built, result=result)
-                else:
-                    if built.is_active:
-                        built.deactivate()
             except Exception:
-                if built.is_active:
-                    built.deactivate()
                 log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
-
         return best
 
     def _record_perf_result(self, backend: Backend, result: BackendProfilingResult) -> BackendPerfResult | None:

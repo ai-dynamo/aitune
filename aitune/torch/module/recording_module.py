@@ -81,7 +81,8 @@ class RecordingModule:
         dynamic_shapes = {}
         if self._dynamic_shapes:
             dynamic_shapes = self._resolve_and_validate_dynamic_shapes(inputs_metadata)
-        sample_args, sample_kwargs = self._copy_inputs(forward_inputs.args, forward_inputs.kwargs)
+        # Binding is for metadata only: decorators may reject positional replay of valid keyword calls.
+        sample_args, sample_kwargs = self._copy_inputs(args, kwargs)
         snapshot_inputs = self._forward_signature.normalize(sample_args, sample_kwargs)
         contract_capture = None
         if inputs_metadata not in self._graph_specs:

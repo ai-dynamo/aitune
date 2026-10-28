@@ -5,13 +5,13 @@
 import logging
 import os
 import sys
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from typing import Any
 
 
 @contextmanager
-def torch_tensorrt_warnings(torch_tensorrt_module: Any) -> Iterator[None]:
+def torch_tensorrt_warnings(torch_tensorrt_module: Any) -> Generator[None, None, None]:
     """Limit Python and native Torch-TensorRT logs to warnings and errors."""
     python_logger = logging.getLogger("torch_tensorrt")
     original_level = python_logger.level
@@ -25,7 +25,7 @@ def torch_tensorrt_warnings(torch_tensorrt_module: Any) -> Iterator[None]:
 
 
 @contextmanager
-def torch_tensorrt_errors(torch_tensorrt_module: Any) -> Iterator[None]:
+def torch_tensorrt_errors(torch_tensorrt_module: Any) -> Generator[None, None, None]:
     """Hide very large Torch-TensorRT logs while saving or loading an artifact."""
     logger_names = ("torch_tensorrt", "torch._library.fake_class_registry")
     original_levels = {name: logging.getLogger(name).level for name in logger_names}

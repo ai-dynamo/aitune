@@ -6,7 +6,7 @@ title: "Stable Diffusion Pipeline Tuning"
 
 This example demonstrates how to use NVIDIA AITune to tune the Stable Diffusion text-to-image model from Hugging Face's diffusers library.
 
-It uses `MaxThroughputStrategy` with the default AOT backend candidates. Maximum-batch-size discovery is disabled
+It uses `resolve_strategy()` with the default dynamic backend candidates. Maximum-batch-size discovery is disabled
 for all wrapped modules so tuning uses the recorded image batches.
 
 ## Environment Setup

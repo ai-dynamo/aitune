@@ -117,9 +117,16 @@ def test_snapshot_config_jit_mode_strategy_resolves_default_when_unset(mocker):
     # when
     result = snapshot_config(AITuneMode.JIT)
 
-    # then — snapshot reflects the resolved default (MaxThroughputStrategy), not the sentinel
-    assert result["strategy"]["name"] == "MaxThroughputStrategy"
-    assert "backends" in result["strategy"]["config"]
+    # then — snapshot reflects the dynamic default rather than the unset sentinel
+    assert result["strategy"] == {
+        "name": "DynamicTuneStrategy",
+        "config": {
+            "objective": "throughput",
+            "compilation": "any",
+            "constraints": [],
+            "backends": "resolved for each module",
+        },
+    }
 
 
 def test_snapshot_config_jit_mode_describes_strategy(mocker):
@@ -141,7 +148,7 @@ def test_snapshot_config_jit_mode_describes_strategy(mocker):
 
 def test_snapshot_config_invalid_mode_raises():
     with pytest.raises(ValueError, match="Invalid tuning mode"):
-        snapshot_config("UNKNOWN")  # pytype: disable=wrong-arg-types
+        snapshot_config("UNKNOWN")
 
 
 # ---------------------------------------------------------------------------

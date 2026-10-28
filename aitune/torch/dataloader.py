@@ -196,6 +196,11 @@ def samples_generator(
 class InputConfig:
     """Configuration for an input tensor.
 
+    Floating-point and complex dtypes sample uniformly between ``min_value``
+    and ``max_value``, defaulting to an upper bound of 1. Integer and boolean
+    dtypes require an explicit integer ``max_value`` and sample discrete values
+    in ``[min_value, max_value)``. Set ``max_value=2`` to sample both boolean values.
+
     Example basic usage:
 
     >>> InputConfig(min_input=(3, 24, 24), max_input=(3, 48, 48), kwarg_name="input")
@@ -212,12 +217,16 @@ class InputConfig:
     dtype: torch.dtype = torch.float32
     kwarg_name: str | None = None
     min_value: int | float = 0
-    max_value: int | float = 1
+    max_value: int | float | None = None
 
     def __post_init__(self):
-        """Post-initialization hook."""
+        """Resolve shape and continuous sampling defaults; require discrete upper bounds."""
         if self.max_input is None:
             self.max_input = self.min_input
+        if self.max_value is None:
+            if not (self.dtype.is_floating_point or self.dtype.is_complex):
+                raise ValueError("max_value must be specified for integer and boolean dtypes")
+            self.max_value = 1
 
 
 class DynamicShapeDataset(list, torch.utils.data.Dataset):
@@ -314,14 +323,19 @@ class MinMaxRandomDataset(DynamicShapeDataset):
         min_x, max_x = cfg.min_input, cfg.max_input
         max_shape = np.array(max_x) + 1
         shapes = np.random.randint(min_x, max_shape).tolist()
-        tensor = torch.empty(shapes, dtype=cfg.dtype).uniform_(cfg.min_value, cfg.max_value)
-        return tensor
+        return self._sample_tensor(cfg, shapes)
 
     def _get_min_tensor(self, cfg: InputConfig):
-        return torch.empty(cfg.min_input, dtype=cfg.dtype).uniform_(cfg.min_value, cfg.max_value)
+        return self._sample_tensor(cfg, cfg.min_input)
 
     def _get_max_tensor(self, cfg: InputConfig):
-        return torch.empty(cfg.max_input, dtype=cfg.dtype).uniform_(cfg.min_value, cfg.max_value)
+        return self._sample_tensor(cfg, cfg.max_input)
+
+    def _sample_tensor(self, cfg: InputConfig, shape: Sequence[int]) -> torch.Tensor:
+        tensor = torch.empty(shape, dtype=cfg.dtype)
+        if tensor.is_floating_point() or tensor.is_complex():
+            return tensor.uniform_(cfg.min_value, cfg.max_value)
+        return tensor.random_(cfg.min_value, cfg.max_value)
 
 
 class SingleBatchDatasetWrapper(torch.utils.data.Dataset):
@@ -406,7 +420,9 @@ def default_data_collator(batch: list) -> tuple | list | dict:
     # checking for Sample (args, kwargs)
     if isinstance(first, (list, tuple)):
         if len(first) == 2 and isinstance(first[1], Mapping):
-            return _list_data_collator([[tensor] for tensor in first[0]]), _map_data_collator([first[1]])
+            args = _list_data_collator([sample[0] for sample in batch])
+            kwargs = _map_data_collator([sample[1] for sample in batch])
+            return args, kwargs
 
     if isinstance(first, torch.Tensor):
         return _list_data_collator([[tensor] for tensor in batch])
@@ -459,6 +475,15 @@ def _list_data_collator(features: list[list]) -> list:
     return batch
 
 
+def _label_dtype(label: object) -> torch.dtype:
+    """Return the batch dtype for a label without reading tensor values from the GPU."""
+    if isinstance(label, torch.Tensor):
+        is_integer = not (label.is_floating_point() or label.is_complex() or label.is_quantized)
+    else:
+        is_integer = isinstance(label, int)
+    return torch.long if is_integer else torch.float
+
+
 def _map_data_collator(features: list) -> dict:
     """Transformers default data collector copied from source.
 
@@ -475,9 +500,7 @@ def _map_data_collator(features: list) -> dict:
     # Ensure that tensor is created with the correct type
     # (it should be automatically the case, but let's make sure of it.)
     if "label" in first and first["label"] is not None:
-        label = first["label"].item() if isinstance(first["label"], torch.Tensor) else first["label"]
-        dtype = torch.long if isinstance(label, int) else torch.float
-        batch["labels"] = torch.tensor([f["label"] for f in features], dtype=dtype)
+        batch["labels"] = torch.tensor([f["label"] for f in features], dtype=_label_dtype(first["label"]))
     elif "label_ids" in first and first["label_ids"] is not None:
         if isinstance(first["label_ids"], torch.Tensor):
             batch["labels"] = torch.stack([f["label_ids"] for f in features])

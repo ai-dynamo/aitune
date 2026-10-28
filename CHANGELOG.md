@@ -11,6 +11,9 @@ title: "Changelog"
 - feat: expose portable deployment artifacts for ONNX Runtime, TensorRT, and TorchInductor AOT models, including required additional files and representative inputs
 - feat: publish tuned artifacts or existing ONNX, TensorRT, and PT2 files as Triton model repositories with backend-specific configurations
 - feat: generate Triton Model Analyzer configurations and representative Perf Analyzer input data during artifact publication
+- feat: resolve default AOT and JIT strategies per module using source format, execution topology, and compilation mode
+- feat: add tuning objectives and composable constraints through `resolve_strategy`, initially supporting maximum latency
+- breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
 
 ## 0.6.0
 

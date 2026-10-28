@@ -161,25 +161,25 @@ def _transform_artifact_paths(value: Any, transform: Callable[[ArtifactPath], Ar
 class CopyBackendArtifactsTask(SaveTask):
     """Task to copy backend artifacts."""
 
-    def save(self, target_path: Path, state_dict: dict) -> None:
+    def save(self, path: Path, state_dict: dict) -> None:
         """Copy backend artifacts to the specified path.
 
         Each backend and each distinct artifact root receives its own numbered
         directory. Paths relative to an artifact root are preserved.
 
         Args:
-            target_path: The path where the backend artifacts should be copied.
+            path: The path where the backend artifacts should be copied.
             state_dict: The state dictionary to traverse.
         """
         counter = count(1)
 
         for backend_data in _iter_backend_data_dicts(state_dict):
-            backend_dir = target_path / str(next(counter))
+            backend_dir = path / str(next(counter))
             backend_dir.mkdir()
             artifact_root_dirs: dict[Path, Path] = {}
             copy_artifact = partial(
                 self._copy_artifact,
-                target_path=target_path,
+                target_path=path,
                 backend_dir=backend_dir,
                 artifact_root_dirs=artifact_root_dirs,
             )

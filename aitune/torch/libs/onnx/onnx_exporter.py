@@ -11,6 +11,7 @@ from typing import Any
 import onnx
 import torch
 import torch.nn as nn
+from onnx_ir.passes.common import TopologicalSortPass
 
 from aitune.torch.dynamic_shapes import DynamicDim
 from aitune.torch.module.graph_spec import GraphSpec
@@ -127,9 +128,8 @@ class ONNXExporter:
         if _ONNX_FALLBACK_SUPPORTED:
             export_kwargs["fallback"] = False
 
-        torch.onnx.export(
+        onnx_program = torch.onnx.export(
             module,
-            f=onnx_path.as_posix(),
             args=args,
             kwargs=kwargs,
             dynamo=True,
@@ -140,6 +140,10 @@ class ONNXExporter:
             verbose=verbose,
             **export_kwargs,
         )
+        assert onnx_program is not None
+        # onnxscript 0.5.x optimizer can emit unbind's Split after its consumers; re-sort before saving.
+        TopologicalSortPass()(onnx_program.model)
+        onnx_program.save(onnx_path, external_data=True)
         logger.info("ONNX model exported successfully: %s", onnx_path)
 
     def _export_trace(

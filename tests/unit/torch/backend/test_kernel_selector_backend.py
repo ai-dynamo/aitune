@@ -519,6 +519,8 @@ def test_checkpoint_restores_inactive_jit_runtime_without_optimizer(tmp_path, mo
     torch.testing.assert_close(output, torch.tensor([10.0, 11.0]))
     assert restored.state is BackendState.DEPLOYED
     assert restored._config is None
+    assert restored._runtime is not None
+    assert isinstance(restored._delegate_backend, _RecordingJitDelegate)
     assert restored._runtime.module is restored_module
     assert restored._delegate_backend.deploy_calls == 1
     assert restored._runtime.is_active
