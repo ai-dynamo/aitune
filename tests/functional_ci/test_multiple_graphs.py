@@ -40,7 +40,7 @@ class SharedLayouts(nn.Module):
 
     def __init__(self, device: torch.device, seed: int = 0):
         super().__init__()
-        self.encoder = LayoutMLP(device, seed)
+        self.encoder: nn.Module | ait.Module = LayoutMLP(device, seed)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
         return tuple(self.encoder(*args) for args in _layouts(x))
@@ -53,19 +53,23 @@ def test_multiple_graphs_aot(case: BackendCase, device: torch.device, tmp_path):
     backend = case.factory()
     reference = SharedLayouts(device)
     model = SharedLayouts(device)
-    model.encoder = ait.Module(model.encoder, "encoder", strategy=pinned_strategy(backend))
+    model.encoder = ait.Module(cast(nn.Module, model.encoder), "encoder", strategy=pinned_strategy(backend))
     value = make_input(device)
     ait.tune(model, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=device)
 
-    assert len(model.encoder.graph_specs) == 3
-    assert [type(selected) for selected in model.encoder.module.backends.values()] == [type(backend)] * 3
+    encoder = cast(ait.Module, model.encoder)
+    assert len(encoder.graph_specs) == 3
+    assert [type(selected) for selected in cast(TunedModule, encoder.module).backends.values()] == [type(backend)] * 3
     assert_matches_eager(model, reference, device, case.tolerance, batch_sizes=(2,))
 
     checkpoint = tmp_path / "layouts.ait"
     ait.save(model, checkpoint)
-    model.encoder.deactivate()
+    encoder.deactivate()
     restored = ait.load(SharedLayouts(device, seed=1), checkpoint)
-    assert [type(selected) for selected in restored.encoder.module.backends.values()] == [type(backend)] * 3
+    restored_encoder = cast(ait.Module, restored.encoder)
+    assert [type(selected) for selected in cast(TunedModule, restored_encoder.module).backends.values()] == [
+        type(backend)
+    ] * 3
     assert_matches_eager(restored, reference, device, case.tolerance, batch_sizes=(2,))
 
 
@@ -106,9 +110,10 @@ def test_multiple_graphs_unrecorded_layout(case: BackendCase, device: torch.devi
     """Existing multigraph backends reject an unrecorded rank rather than running eager."""
     backend = case.factory()
     model = SharedLayouts(device)
-    model.encoder = ait.Module(model.encoder, "encoder", strategy=pinned_strategy(backend))
+    model.encoder = ait.Module(cast(nn.Module, model.encoder), "encoder", strategy=pinned_strategy(backend))
     value = make_input(device)
     ait.tune(model, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=device)
-    assert [type(selected) for selected in model.encoder.module.backends.values()] == [type(backend)] * 3
+    encoder = cast(ait.Module, model.encoder)
+    assert [type(selected) for selected in cast(TunedModule, encoder.module).backends.values()] == [type(backend)] * 3
     with torch.no_grad(), pytest.raises(RuntimeError, match="No backend found"):
         model.encoder(value[:, None, None, :])
