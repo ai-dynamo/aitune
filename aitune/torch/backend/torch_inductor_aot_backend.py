@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Self, cast
 
 import nvtx
 import torch
@@ -54,7 +54,7 @@ class TorchInductorAotBackendConfig(BackendConfig):
     inductor_configs: dict[str, Any] | None = None
 
 
-class TorchInductorAotBackend(Backend):
+class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
     """Backend that compiles models using AOT Inductor (``torch._inductor.aoti_compile_and_package``).
 
     Requires PyTorch >= 2.6.
@@ -90,8 +90,7 @@ class TorchInductorAotBackend(Backend):
         Args:
             config: Configuration for AOT Inductor compilation.
         """
-        super().__init__()
-        self._config = config or TorchInductorAotBackendConfig()
+        super().__init__(config or TorchInductorAotBackendConfig())
         self._compiled_model_artifact: ArtifactPath | None = None
         self._runner = None
         self._graph_spec: GraphSpec | None = None
@@ -114,14 +113,15 @@ class TorchInductorAotBackend(Backend):
         except (OSError, RuntimeError, ValueError) as error:
             raise RuntimeError(f"PT2 artifact is not available for deployment: {error}") from error
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Export and compile the model with AOT Inductor, then load the runner."""
         self._graph_spec = graph_spec
         self._samples = samples
         module = module.eval()
-        move_module_to_device(module, self._device)
+        move_module_to_device(module, self.device)
+
         with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
-            export_result = TorchExporter().export(module, samples[0], graph_spec, device=self._device)
+            export_result = TorchExporter().export(module, samples[0], graph_spec, device=self.device)
             exported = export_result.exported_program
 
         # FIXME: This extra forward pass can mutate model state. Replace it with the shared export contract once the
@@ -176,7 +176,7 @@ class TorchInductorAotBackend(Backend):
         """Load the compiled model from disk."""
         compiled_model_artifact = cast(ArtifactPath, self._compiled_model_artifact)
         logger.debug("Loading compiled AOT Inductor runner from %s.", compiled_model_artifact)
-        device_index = self._device.index if self._device.index is not None else 0
+        device_index = self.device.index or 0
         self._runner = torch._inductor.aoti_load_package(str(compiled_model_artifact.path), device_index=device_index)
 
     def _create_artifact(self) -> DeploymentArtifact:

@@ -287,7 +287,7 @@ def test_torch_inductor_backend_with_mode_and_options():
 
 def test_torch_inductor_config_rejects_invalid_mode():
     with pytest.raises(ValueError, match="Invalid mode"):
-        TorchInductorJitBackendConfig(mode="invalid")  # pytype: disable=wrong-arg-types
+        TorchInductorJitBackendConfig(mode="invalid")
 
 
 @requires_cuda

@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch Inductor JIT backend."""
 
-import gc
 from collections.abc import Sequence
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Any, get_args
+from typing import Any, Self, get_args
 
 import torch
 import torch.nn as nn
@@ -17,6 +16,7 @@ from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.task.stateful_validation import preserve_buffers
+from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
 
 logger = getLogger(__name__)
@@ -92,7 +92,7 @@ class TorchInductorJitBackendConfig(BackendConfig):
             raise ValueError(f"Invalid mode: {self.mode!r}. Supported values: {get_args(TorchCompileMode)}")
 
 
-class TorchInductorJitBackend(Backend):
+class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
     """Backend that does torch compilation with Inductor."""
 
     _build_mode = BuildMode.JUST_IN_TIME
@@ -117,10 +117,7 @@ class TorchInductorJitBackend(Backend):
         Args:
             config: Configuration for torch compile with inductor backend
         """
-        super().__init__()
-
-        # initialize variables
-        self._config = config or TorchInductorJitBackendConfig()
+        super().__init__(config or TorchInductorJitBackendConfig())
 
         # build variables
         self._compiled_module = None
@@ -155,7 +152,7 @@ class TorchInductorJitBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device.type),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -170,10 +167,10 @@ class TorchInductorJitBackend(Backend):
 
         return None
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Builds the model with torch.compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
-        move_module_to_device(module, self._device)
+        move_module_to_device(module, self.device)
         self._orig_module = module
         if self._config.autocast_enabled:
             self._required_casting_dtype = self._get_required_casting_dtype(module, samples)
@@ -184,7 +181,7 @@ class TorchInductorJitBackend(Backend):
 
     def _compile(self):
         logger.info("Start compiling torch module.")
-        move_module_to_device(self._orig_module, self._device)
+        move_module_to_device(self._orig_module, self.device)
 
         self._compiled_module = torch.compile(
             self._orig_module,
@@ -221,7 +218,7 @@ class TorchInductorJitBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device.type),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -269,12 +266,12 @@ class TorchInductorJitBackend(Backend):
         self._activate()
         self._samples = None
         self._data = None
-        gc.collect()
+        gc_collect()
 
     def _iter_samples(self):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""
         if self._samples is not None:
-            return self._samples.iter_samples(self._device)
+            return self._samples.iter_samples(self.device)
         if self._data is not None:
             return iter(self._data)
         raise RuntimeError("Backend has no warmup data. Please call build() first.")

@@ -9,6 +9,7 @@ from pathlib import Path
 import onnx
 import torch
 import torch.nn as nn
+from onnx_ir.passes.common import TopologicalSortPass
 
 from aitune.torch.dynamic_shapes import DynamicDim
 from aitune.torch.libs.exporting.dynamic_shapes import build_dynamic_shapes, log_dynamic_shapes
@@ -74,11 +75,10 @@ class ONNXExporter:
         """Export the prepared adapter with the Dynamo-based ONNX exporter."""
         dynamic_shapes = build_dynamic_shapes(graph_spec)
         log_dynamic_shapes(dynamic_shapes)
-        torch.onnx.export(
+        onnx_program = torch.onnx.export(
             preparation.adapter,
             args=preparation.flat_inputs,
             kwargs=None,
-            f=self.output_path.as_posix(),
             dynamo=True,
             opset_version=self.opset_version,
             input_names=self._input_names(graph_spec),
@@ -86,6 +86,10 @@ class ONNXExporter:
             dynamic_shapes=dynamic_shapes,
             verbose=verbose,
         )
+        assert onnx_program is not None
+        # onnxscript 0.5.x optimizer can emit unbind's Split after its consumers; re-sort before saving.
+        TopologicalSortPass()(onnx_program.model)
+        onnx_program.save(self.output_path, external_data=True)
 
     def _export_trace(
         self,

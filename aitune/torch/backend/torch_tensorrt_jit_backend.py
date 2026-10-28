@@ -2,11 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch compile backend."""
 
-import gc
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 import torch
 import torch.nn as nn
@@ -21,6 +20,7 @@ from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.stateful_validation import preserve_buffers
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
+from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
 
 try:
@@ -37,11 +37,18 @@ except (ImportError, RuntimeError, OSError):
             enabled_precisions: Enabled TensorRT precisions. Defaults to None.
             use_explicit_typing: Whether to use explicit typing. Defaults to True.
             workspace_size: TensorRT workspace size. Defaults to 0.
+            min_block_size: Minimum number of operators in a TensorRT block. Defaults to 5.
+            disable_tf32: Whether to disable TF32 in TensorRT layers. Defaults to False.
+            require_full_compilation: Whether to require one TensorRT engine for the whole graph.
+                Defaults to False.
         """
 
         enabled_precisions: set[torch.dtype] | None = None
         use_explicit_typing: bool = True
         workspace_size: int = 0
+        min_block_size: int = 5
+        disable_tf32: bool = False
+        require_full_compilation: bool = False
 
 
 logger = getLogger(__name__)
@@ -67,9 +74,7 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         autocast_dtype: Autocast dtype to use when autocast is enabled. Defaults to None.
     """
 
-    compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
-        default_factory=TorchTensorRTConfig
-    )
+    compile_config: TorchTensorRTConfig = field(default_factory=TorchTensorRTConfig)
     fullgraph: bool = False
     dynamic: bool | None = None
     autocast_enabled: bool = False
@@ -114,7 +119,7 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         return cls(**data)
 
 
-class TorchTensorRTJitBackend(Backend):
+class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
     """Torch TensorRT thought torch.compile(backend="torch_tensorrt").
 
     Backend does not use intermediate formats, and compiled model is not stored.
@@ -144,12 +149,9 @@ class TorchTensorRTJitBackend(Backend):
         Args:
             config: Configuration for torch compile with torch_tensorrt
         """
-        super().__init__()
         assert_cuda_is_available()
         assert_torch_tensorrt()
-
-        # initialize variables
-        self._config = config or TorchTensorRTJitBackendConfig()
+        super().__init__(config or TorchTensorRTJitBackendConfig())
 
         # build variables
         self._compiled_module = None
@@ -182,7 +184,7 @@ class TorchTensorRTJitBackend(Backend):
         settings["timing_cache_path"] = resolved_path.as_posix()
         return settings
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Build the model with Torch compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
         module = module.eval()
@@ -207,11 +209,11 @@ class TorchTensorRTJitBackend(Backend):
         logger.info("Start compiling torch module with torch.compile(backend='torch_tensorrt').")
         torch._dynamo.reset()
 
-        move_module_to_device(self._orig_module, self._device)
+        move_module_to_device(self._orig_module, self.device)
 
         compile_options = self._compile_settings()
-        if self._device.type == "cuda":
-            compile_options["device"] = get_cuda_device(self._device)
+        if self.device.type == "cuda":
+            compile_options["device"] = get_cuda_device(self.device)
         else:
             compile_options.pop("device", None)
 
@@ -233,7 +235,7 @@ class TorchTensorRTJitBackend(Backend):
         """Run inference with autocast enabled."""
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device.type),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -275,12 +277,12 @@ class TorchTensorRTJitBackend(Backend):
         self._activate()
         self._samples = None
         self._data = None
-        gc.collect()
+        gc_collect()
 
     def _iter_samples(self):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""
         if self._samples is not None:
-            return self._samples.iter_samples(self._device)
+            return self._samples.iter_samples(self.device)
         if self._data is not None:
             return iter(self._data)
         raise RuntimeError("Backend has no warmup data. Please call build() first.")

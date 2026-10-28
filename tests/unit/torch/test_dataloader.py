@@ -12,6 +12,7 @@ from aitune.torch.dataloader import (
     DatasetLike,
     InputConfig,
     MinMaxRandomDataset,
+    _map_data_collator,
     ensure_enough_samples,
     samples_generator,
 )
@@ -61,6 +62,43 @@ def test_simple_sequence_tensors():
     assert len(kwargs) == 0
     assert len(args) == 1
     assert args[0].shape == (4, 3, 24, 24)
+
+
+@pytest.mark.parametrize("sample_type", [tuple, list])
+@pytest.mark.parametrize("num_args", [0, 1, 2])
+def test_mixed_call_samples_preserve_every_batch_row(sample_type, num_args):
+    dataset = [
+        sample_type((
+            [torch.tensor([index + offset * 10]) for offset in range(num_args)],
+            {"input": torch.tensor([index + 100]), "prompt": f"sample-{index}"},
+        ))
+        for index in range(4)
+    ]
+
+    samples = simulate_tuning_loop(dataset, batch_sizes=[2])
+
+    assert len(samples) == 2
+    for batch_index, (batch_size, args, kwargs) in enumerate(samples):
+        indices = torch.tensor([[batch_index * 2], [batch_index * 2 + 1]])
+        assert batch_size == 2
+        assert len(args) == num_args
+        for offset, arg in enumerate(args):
+            torch.testing.assert_close(arg, indices + offset * 10)
+        torch.testing.assert_close(kwargs["input"], indices + 100)
+        assert kwargs["prompt"] == [f"sample-{index}" for index in indices.flatten().tolist()]
+
+
+def test_mixed_call_samples_with_no_keyword_arguments():
+    dataset = [([torch.tensor([index])], {}) for index in range(4)]
+
+    samples = simulate_tuning_loop(dataset, batch_sizes=[4])
+
+    assert len(samples) == 1
+    batch_size, args, kwargs = samples[0]
+    assert batch_size == 4
+    assert len(args) == 1
+    torch.testing.assert_close(args[0], torch.arange(4).reshape(4, 1))
+    assert kwargs == {}
 
 
 def test_simple_sequence_strings():
@@ -453,3 +491,20 @@ def test_ensure_enough_samples_empty_dataset():
     assert len(dataset) == 0
 
     assert dataset == []
+
+
+@pytest.mark.parametrize(
+    ("label", "expected_dtype"),
+    [
+        (1, torch.long),
+        (1.5, torch.float),
+        (torch.tensor(1), torch.long),
+        (torch.tensor(True), torch.long),
+        (torch.tensor(1.5), torch.float),
+    ],
+)
+def test_map_data_collator_label_dtype(label, expected_dtype):
+    batch = _map_data_collator([{"label": label, "x": torch.ones(2)}, {"label": label, "x": torch.ones(2)}])
+
+    assert batch["labels"].dtype == expected_dtype
+    assert batch["labels"].shape == (2,)

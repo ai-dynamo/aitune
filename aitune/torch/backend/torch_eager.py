@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import torch
 import torch.nn as nn
@@ -32,7 +32,7 @@ class TorchEagerBackendConfig(BackendConfig):
     autocast_dtype: torch.dtype | None = None
 
 
-class TorchEagerBackend(Backend):
+class TorchEagerBackend(Backend[TorchEagerBackendConfig]):
     """Backend that runs the model in eager mode with/without autocast.
 
     Note: inference is done with torch.no_grad() context. The torch.inference_mode() context must not be used
@@ -52,8 +52,7 @@ class TorchEagerBackend(Backend):
 
     def __init__(self, config: TorchEagerBackendConfig | None = None):
         """Initializes backend."""
-        super().__init__()
-        self._config = config or TorchEagerBackendConfig()
+        super().__init__(config or TorchEagerBackendConfig())
         self._orig_module = None
         self._graph_spec = None
         self._required_casting_dtype = None
@@ -81,7 +80,7 @@ class TorchEagerBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -96,9 +95,9 @@ class TorchEagerBackend(Backend):
 
         return None
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Builds the model."""
-        move_module_to_device(module, self._device)
+        move_module_to_device(module, self.device)
 
         self._orig_module = module
         self._graph_spec = graph_spec
@@ -116,6 +115,8 @@ class TorchEagerBackend(Backend):
 
     def _activate(self):
         """Activates runner."""
+        move_module_to_device(self._orig_module, self.device)
+
         if self._config.autocast_enabled:
             self._infer = self._infer_with_autocast
 
@@ -131,7 +132,7 @@ class TorchEagerBackend(Backend):
         """
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -162,7 +163,7 @@ class TorchEagerBackend(Backend):
 
     def _deploy(self):
         """Deploys the backend."""
-        move_module_to_device(self._orig_module, self._device)
+        move_module_to_device(self._orig_module, self.device)
         if self._config.autocast_enabled:
             self._infer = self._infer_with_autocast
 

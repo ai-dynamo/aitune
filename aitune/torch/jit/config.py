@@ -8,11 +8,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
+import torch.nn as nn
 
 from aitune.torch.utils.device import get_device
 from aitune.utils.env_vars import AITUNE_JIT_CACHE_DIR as _AITUNE_JIT_CACHE_DIR
 
 if TYPE_CHECKING:
+    from aitune.torch.tune_strategy.resolver import StrategyOption
     from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 
 
@@ -22,6 +24,13 @@ class JITMode(enum.Enum):
     INSPECT = "inspect"  # inspect mode, only for inspection of model execution
     TUNE_EAGER = "tune_eager"  # tune mode, eager tuning after defined number of samples / inference calls
     TUNE_DEFERRED = "tune_deferred"  # tune mode, deferred tuning enabled by an explicit marker call
+
+
+def _default_strategy_resolver() -> "StrategyOption":
+    """Return the default strategy."""
+    from aitune.torch.tune_strategy.resolver import resolve_strategy
+
+    return resolve_strategy()
 
 
 @dataclass
@@ -45,29 +54,26 @@ class Config:
     patch_exclude: tuple[str, ...] = ()
 
     cache_dir: Path = field(default_factory=lambda: _AITUNE_JIT_CACHE_DIR)
-    strategy: "TuneStrategy | None" = None  # explicit override; when None, `resolve_strategy()` builds the default
+    strategy: "StrategyOption" = field(default_factory=_default_strategy_resolver)
 
     def __post_init__(self):
         """Post init."""
         if self.device is not None:
             self.device = get_device(self.device)
 
-    def resolve_strategy(self) -> "TuneStrategy":
+    def resolve_strategy(self, module: nn.Module) -> "TuneStrategy":
         """Return the tune strategy to use for JIT tuning.
 
-        When ``strategy`` is set explicitly it is returned as-is. Otherwise the default is a
-        ``MaxThroughputStrategy``. Ordinary modules profile TensorRT (with and without dynamo)
-        and TorchInductor JIT. Distributed modules profile TorchInductor AOT and TorchInductor JIT.
-        Candidates are resolved when the module is available.
+        When ``strategy`` is set explicitly it is returned as-is. Otherwise the dynamic
+        resolver selects JIT backends from the module's execution properties and builds a
+        ``MaxThroughputStrategy``.
 
-        Strategy and backend modules are imported lazily to keep the JIT config a thin data
-        layer that doesn't pull runtime modules at import time.
+        Args:
+            module: Module that will be tuned.
         """
-        if self.strategy is not None:
-            return self.strategy
-        from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputStrategy
+        from aitune.torch.tune_strategy.resolver import materialize_strategy
 
-        return MaxThroughputStrategy.for_jit()
+        return materialize_strategy(self.strategy, module)
 
     def reset_to_defaults(self) -> None:
         """Reset all options to their default values (e.g. for test isolation)."""

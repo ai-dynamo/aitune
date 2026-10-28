@@ -77,6 +77,27 @@ def test_parse_power_metrics_no_columns():
     assert len(result.columns) == 0
 
 
+def test_get_metrics_summary_preserves_power_device_labels():
+    """Each device's mean and maximum power remain separately identifiable."""
+    df = pd.DataFrame({
+        "module_name": ["module", "module"],
+        "backend": ["backend", "backend"],
+        "cuda:0_power_usage_milliwatts": [100_000, 200_000],
+        "cuda:1_power_usage_milliwatts": [200_000, 400_000],
+    })
+    result = parse_metrics.get_metrics_summary(df)
+    expected = pd.DataFrame(
+        {
+            "Cuda:0\nPower [W] mean": [150.0],
+            "Cuda:0\nPower [W] max": [200.0],
+            "Cuda:1\nPower [W] mean": [300.0],
+            "Cuda:1\nPower [W] max": [400.0],
+        },
+        index=pd.MultiIndex.from_tuples([("module", "backend")], names=["Module", "Backend"]),
+    )
+    pd.testing.assert_frame_equal(result, expected)
+
+
 def test_get_metrics_summary_combines_all():
     """Test get_metrics_summary concatenates memory, utilization, and power summaries."""
     df = pd.DataFrame({

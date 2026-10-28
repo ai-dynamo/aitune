@@ -217,7 +217,12 @@ def test_recording_normalizes_equivalent_call_layouts(tmp_path):
     assert len(recording.graph_specs) == 1
     samples = recording.samples_for_graph_spec(recording.graph_specs[0])
     assert len(samples) == 4
-    assert all(len(args) == 2 and kwargs == {} for args, kwargs in samples)
+    assert [(len(args), tuple(kwargs)) for args, kwargs in samples] == [
+        (2, ()),
+        (1, ("y",)),
+        (0, ("x", "y")),
+        (0, ("y", "x")),
+    ]
     for args, kwargs in samples:
         torch.testing.assert_close(recording._module(*args, **kwargs), x + y)
 

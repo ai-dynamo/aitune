@@ -24,7 +24,9 @@ This approach offers several advantages:
 
 ## Existing ONNX models
 
-Use `OnnxModule` to wrap an existing ONNX file. Only `ONNXRuntimeBackend` and `TensorRTBackend` support tuning it; configure an explicit backend list. See [ONNX Model Tuning](onnx_tuning.md) for a complete example.
+Use `OnnxModule` to wrap an existing ONNX file. Dynamic strategy resolution automatically limits candidates to
+backends that accept ONNX input, currently `ONNXRuntimeBackend` and `TensorRTBackend`. See
+[ONNX Model Tuning](onnx_tuning.md) for a complete example and explicit-backend configuration.
 
 ## Quick Start
 

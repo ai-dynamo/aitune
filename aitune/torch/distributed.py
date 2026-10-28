@@ -4,7 +4,7 @@
 
 import errno
 import os
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -151,7 +151,7 @@ class DistributedCoordinator:
         self,
         operation: str,
         error_type: type[Exception] = RuntimeError,
-    ) -> Iterator[None]:
+    ) -> Generator[None, None, None]:
         """Raise collectively after a rank fails within the managed operation."""
         local_error: Exception | None = None
         try:

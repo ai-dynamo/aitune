@@ -91,6 +91,19 @@ def test_artifact_uses_supplied_matching_config(tmp_path):
     assert parsed.max_batch_size == 8
 
 
+def test_artifact_uses_supplied_default_model_filename(tmp_path):
+    artifact = _plan(tmp_path / "source.plan")
+    config = TensorRTModelConfig.from_artifact(artifact, name="encoder")
+    config.default_model_filename = "encoder.plan"
+
+    model = aitriton.publish(artifact, path=tmp_path / "repository", config=config)
+
+    parsed = text_format.Parse((model / "config.pbtxt").read_text(), model_config_pb2.ModelConfig())
+    assert parsed.default_model_filename == "encoder.plan"
+    assert (model / "1" / "encoder.plan").read_bytes() == b"TensorRT plan"
+    assert not (model / "1" / "model.plan").exists()
+
+
 def test_artifact_config_can_use_full_tensor_shapes_without_triton_batching(tmp_path):
     artifact = _plan(tmp_path / "source.plan")
     config = TensorRTModelConfig(

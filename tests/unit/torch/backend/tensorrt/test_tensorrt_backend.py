@@ -3,7 +3,6 @@
 """Unit tests for TensorRTBackend."""
 
 from pathlib import Path
-from typing import cast
 
 import pytest
 import torch
@@ -24,7 +23,13 @@ from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models.torch_models import ToyTorchModel
-from tests.utilities.helpers import make_graph_spec, make_recorded_graph_spec, requires_cuda, update_input_spec
+from tests.utilities.helpers import (
+    make_graph_spec,
+    make_recorded_graph_spec,
+    make_sample_store,
+    requires_cuda,
+    update_input_spec,
+)
 
 # Constants for testing
 IN_FEATURES = 32
@@ -210,8 +215,7 @@ def test_tensorrt_backend_build(mock_tensorrt_components, tmp_path):
     graph_spec = model.graph_spec(device=device)
 
     # Build model
-    backend = backend.build(model, graph_spec, samples, device=device, cache_dir=tmp_path)
-    backend = cast(TensorRTBackend, backend)
+    backend = backend.build(model, graph_spec, make_sample_store(samples, tmp_path), device=device, cache_dir=tmp_path)
 
     # Verify interactions
     mock_exporter_instance.export.assert_called_once()
@@ -253,7 +257,7 @@ def test_tensorrt_artifact_after_deactivation_exposes_the_final_engine_interface
     ).build(
         model,
         graph_spec,
-        model.samples(device="cuda"),
+        model.sample_store(tmp_path, device="cuda"),
         device=torch.device("cuda"),
         cache_dir=tmp_path,
     )
@@ -408,7 +412,7 @@ def test_artifact_metadata_failure_does_not_fail_tensorrt_build(mock_tensorrt_co
     backend.build(
         model,
         model.graph_spec(device="cuda"),
-        model.samples(device="cuda"),
+        model.sample_store(tmp_path, device="cuda"),
         device=torch.device("cuda"),
         cache_dir=tmp_path,
     )
@@ -509,8 +513,7 @@ def test_tensorrt_backend_infer(tmp_path):
         reference_outputs = [model(tensor) for tensor in inputs]
 
     # Build model with TensorRT
-    backend = backend.build(model, graph_spec, samples, device=device, cache_dir=tmp_path)
-    backend = cast(TensorRTBackend, backend)
+    backend = backend.build(model, graph_spec, make_sample_store(samples, tmp_path), device=device, cache_dir=tmp_path)
     # Note: build() already calls activate() internally
 
     # Verify backend is properly initialized with actual TensorRT components
@@ -706,7 +709,9 @@ def test_backend_inference_returns_copy_of_tensors(tmp_path):
     graph_spec = make_recorded_graph_spec(model, (args, kwargs))
 
     backend = TensorRTBackend()
-    backend = backend.build(model, graph_spec, [(args, kwargs)], device=device, cache_dir=tmp_path)
+    backend = backend.build(
+        model, graph_spec, make_sample_store([(args, kwargs)], tmp_path), device=device, cache_dir=tmp_path
+    )
 
     output1 = backend.infer(x)
     output2 = backend.infer(x + 1)  # this call should not alter the previous result
@@ -736,7 +741,9 @@ def test_backend_handle_args_kwargs(tmp_path, use_dynamo):
 
     config = TensorRTBackendConfig(use_dynamo=use_dynamo)
     backend = TensorRTBackend(config=config)
-    backend = backend.build(model, graph_spec, [(args, kwargs)], device=device, cache_dir=tmp_path)
+    backend = backend.build(
+        model, graph_spec, make_sample_store([(args, kwargs)], tmp_path), device=device, cache_dir=tmp_path
+    )
 
     res_x, res_y = backend.infer(x, y=y)
     backend.deactivate()
@@ -758,8 +765,7 @@ def test_tensorrt_backend_deactivate(tmp_path):
     graph_spec = model.graph_spec(device=device)
 
     # Build model
-    backend = backend.build(model, graph_spec, samples, device=device, cache_dir=tmp_path)
-    backend = cast(TensorRTBackend, backend)
+    backend = backend.build(model, graph_spec, make_sample_store(samples, tmp_path), device=device, cache_dir=tmp_path)
     # Note: build() already calls activate() internally
 
     # Verify components are set up
@@ -798,7 +804,7 @@ def test_tensorrt_backend_integration(tmp_path):
     graph_spec = model.graph_spec(device=device)
 
     # Build model
-    backend = backend.build(model, graph_spec, samples, device=device, cache_dir=tmp_path)
+    backend = backend.build(model, graph_spec, make_sample_store(samples, tmp_path), device=device, cache_dir=tmp_path)
 
     # Verify backend is properly initialized
     assert backend is not None
@@ -979,7 +985,7 @@ def test_serialization(tmp_path):
     graph_spec = model.graph_spec(device=device)
 
     # Build model
-    backend = backend.build(model, graph_spec, samples, device=device, cache_dir=tmp_path)
+    backend = backend.build(model, graph_spec, make_sample_store(samples, tmp_path), device=device, cache_dir=tmp_path)
 
     # Get reference output
     reference_output = backend.infer(inputs[0])
@@ -1566,21 +1572,21 @@ def test_onnx_autocast_config_rejects_invalid_precision():
     from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
 
     with pytest.raises(ValueError, match="Unsupported autocast precision"):
-        ONNXAutoCastConfig(precision="invalid")  # pytype: disable=wrong-arg-types
+        ONNXAutoCastConfig(precision="invalid")
 
 
 def test_onnx_quantization_config_rejects_invalid_precision():
     from aitune.torch.backend.tensorrt.onnx_quantization import ONNXQuantizationConfig
 
     with pytest.raises(ValueError, match="Unsupported precision"):
-        ONNXQuantizationConfig(precision="invalid")  # pytype: disable=wrong-arg-types
+        ONNXQuantizationConfig(precision="invalid")
 
 
 def test_torch_quantization_config_rejects_invalid_config():
     from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationConfig
 
     with pytest.raises(ValueError, match="Unsupported quantization_config"):
-        TorchQuantizationConfig(quantization_config="invalid")  # pytype: disable=wrong-arg-types
+        TorchQuantizationConfig(quantization_config="invalid")
 
 
 def test_tensorrt_config_onnx_autocast_round_trip():

@@ -195,8 +195,8 @@ def _make_flat(n_gpus: int) -> pd.DataFrame:
         cols.append(f"Cuda:{i}\nMem [GB]")
     for i in range(n_gpus):
         cols += [f"Cuda:{i}\nUtil% mean", f"Cuda:{i}\nUtil% max"]
-    for _ in range(n_gpus):
-        cols += ["Power [W]\nmean", "Power [W]\nmax"]
+    for i in range(n_gpus):
+        cols += [f"Cuda:{i}\nPower [W] mean", f"Cuda:{i}\nPower [W] max"]
 
     row = list(range(len(cols)))
     return pd.DataFrame([row], columns=cols)
@@ -251,6 +251,17 @@ def test_split_each_gpu_appears_in_exactly_one_split():
         mem_col = f"Cuda:{gpu_idx}\nMem [GB]"
         found = sum(1 for s in splits if mem_col in list(s.columns))
         assert found == 1, f"{mem_col} should appear in exactly one split"
+
+
+def test_split_each_gpu_power_appears_in_exactly_one_split():
+    flat = _make_flat(4)
+    splits = setup._split_for_logging(flat, n_index_cols=2)
+    for gpu_idx in range(4):
+        for aggregation in ("mean", "max"):
+            power_col = f"Cuda:{gpu_idx}\nPower [W] {aggregation}"
+            matching_splits = [split for split in splits if power_col in split.columns]
+            assert len(matching_splits) == 1, f"{power_col} should appear in exactly one split"
+            pd.testing.assert_series_equal(matching_splits[0][power_col], flat[power_col])
 
 
 def test_split_each_chunk_has_at_most_six_metric_cols():
