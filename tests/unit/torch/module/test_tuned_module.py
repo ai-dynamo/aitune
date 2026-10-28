@@ -94,12 +94,15 @@ def test_equivalent_call_layouts_use_same_backend(check_graph):
     )
 
     module(1, 2)
+    backend.infer.assert_called_with(1, 2)
     module(1, y=2)
+    backend.infer.assert_called_with(1, y=2)
     module(x=1, y=2)
+    backend.infer.assert_called_with(x=1, y=2)
     module(y=2, x=1)
+    backend.infer.assert_called_with(y=2, x=1)
 
     assert backend.infer.call_count == 4
-    backend.infer.assert_called_with(1, 2)
 
 
 def test_deactivate():

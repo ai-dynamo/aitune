@@ -272,6 +272,7 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
     else:
         args, kwargs = deepcopy(sample)
 
+    call_layout = graph_spec.forward_signature.capture_call_layout(args, kwargs)
     forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
     for locator, tensor_spec in input_spec.tensor_data:
         try:
@@ -301,7 +302,7 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
                 modified = True
         if modified:
             forward_inputs.arguments = locator.set_value(forward_inputs.arguments, tensor)
-    return forward_inputs.args, forward_inputs.kwargs
+    return call_layout.restore(forward_inputs.arguments)
 
 
 def _create_nested_structure(locator: Locator, root: Any = None, last: Any = None) -> Any:
