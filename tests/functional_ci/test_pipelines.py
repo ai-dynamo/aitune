@@ -30,18 +30,6 @@ class ComponentNotTunedError(Exception):
     """Raised when tuning leaves pipeline components without a backend."""
 
 
-# Torch-TRT rejects the int64 position ids that the CLIP text encoder passes to `aten.embedding`. On Torch-TRT 2.9,
-# it also fails to convert the VAE decoder: `native_group_norm` accesses the data pointer of a FakeTensor.
-TORCH_TRT_JIT_NOT_CONVERTED = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Torch-TRT cannot convert the CLIP text encoder (int64 position ids in `aten.embedding`); "
-        "Torch-TRT 2.9 also cannot convert the VAE decoder (`native_group_norm` on a FakeTensor)"
-    ),
-    raises=ComponentNotTunedError,
-)
-
-
 def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor:
     """Generate deterministic toy images."""
     return pipeline(prompt, generator=torch.Generator(device=pipeline.device).manual_seed(0))
@@ -69,7 +57,13 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
             reason=("torch_tensorrt/dynamo/conversion/_TRTInterpreter.py, line 703, in run assert cuda_engine"),
             raises=ComponentNotTunedError,
         ),
-        "torch-tensorrt-jit": TORCH_TRT_JIT_NOT_CONVERTED,
+        # Torch-TRT rejects the int64 position ids that the CLIP text encoder passes to `aten.embedding`. Torch-TRT 2.9
+        # also fails on the VAE decoder: its `native_group_norm` converter reads FakeTensor data (fixed in 2.10).
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            strict=True,
+            reason="Torch-TRT cannot convert the CLIP text encoder (int64 position ids in `aten.embedding`)",
+            raises=ComponentNotTunedError,
+        ),
     },
 )
 def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
@@ -115,7 +109,15 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
 @pytest.mark.matrix("models.pipelines", "modes.jit-tune_eager")
 @with_backends(
     "jit",
-    marks={"torch-tensorrt-jit": TORCH_TRT_JIT_NOT_CONVERTED},
+    marks={
+        # Torch-TRT rejects the int64 position ids that the CLIP text encoder passes to `aten.embedding`. Torch-TRT 2.9
+        # also fails on the VAE decoder: its `native_group_norm` converter reads FakeTensor data (fixed in 2.10).
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            strict=True,
+            reason="Torch-TRT cannot convert the CLIP text encoder (int64 position ids in `aten.embedding`)",
+            raises=ComponentNotTunedError,
+        ),
+    },
 )
 def test_pipeline_jit(case: BackendCase, device: torch.device):
     """Tune the pipeline's four JIT heads from two prompt batch sizes."""
