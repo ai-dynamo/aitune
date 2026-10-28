@@ -8,8 +8,6 @@ from typing import cast
 
 import pytest
 import torch
-from packaging.specifiers import SpecifierSet
-from packaging.version import Version
 from torch import nn
 
 import aitune.torch as ait
@@ -27,12 +25,21 @@ from tests.functional_ci.lifecycle import Tolerance, pinned_strategy, selected_b
 PROMPT = "A futuristic cityscape with neon lights and flying cars"
 COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
 
-# NGC builds are pre-releases (2.10.0a0+...), which sort below 2.10; `base_version` strips that.
-TORCH_VERSION = Version(Version(torch.__version__).base_version)
-
 
 class ComponentNotTunedError(Exception):
     """Raised when tuning leaves pipeline components without a backend."""
+
+
+# Torch-TRT rejects the int64 position ids that the CLIP text encoder passes to `aten.embedding`. On Torch-TRT 2.9,
+# it also fails to convert the VAE decoder: `native_group_norm` accesses the data pointer of a FakeTensor.
+TORCH_TRT_JIT_NOT_CONVERTED = pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Torch-TRT cannot convert the CLIP text encoder (int64 position ids in `aten.embedding`); "
+        "Torch-TRT 2.9 also cannot convert the VAE decoder (`native_group_norm` on a FakeTensor)"
+    ),
+    raises=ComponentNotTunedError,
+)
 
 
 def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor:
@@ -62,15 +69,7 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
             reason=("torch_tensorrt/dynamo/conversion/_TRTInterpreter.py, line 703, in run assert cuda_engine"),
             raises=ComponentNotTunedError,
         ),
-        # Torch-TRT cannot convert the CLIP text encoder: it rejects the int64 position ids passed to `aten.embedding`
-        # and falls back to PyTorch for the whole encoder. On 2.10-2.12 that fallback crashes, so the encoder is not
-        # tuned. On 2.8, 2.9, 2.13, and 2.14 the fallback works and the test passes, with CLIP running in PyTorch.
-        "torch-tensorrt-jit": pytest.mark.xfail(
-            TORCH_VERSION in SpecifierSet(">=2.10,<2.13"),
-            strict=True,
-            reason="Torch-TRT 2.10-2.12 crashes in its PyTorch fallback for the CLIP text encoder (`_frozen_param0`)",
-            raises=ComponentNotTunedError,
-        ),
+        "torch-tensorrt-jit": TORCH_TRT_JIT_NOT_CONVERTED,
     },
 )
 def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
@@ -116,15 +115,7 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
 @pytest.mark.matrix("models.pipelines", "modes.jit-tune_eager")
 @with_backends(
     "jit",
-    marks={
-        # Same Torch-TRT crash as in `test_pipeline_lifecycle`; the comment there explains it.
-        "torch-tensorrt-jit": pytest.mark.xfail(
-            TORCH_VERSION in SpecifierSet(">=2.10,<2.13"),
-            strict=True,
-            reason="Torch-TRT 2.10-2.12 crashes in its PyTorch fallback for the CLIP text encoder (`_frozen_param0`)",
-            raises=ComponentNotTunedError,
-        )
-    },
+    marks={"torch-tensorrt-jit": TORCH_TRT_JIT_NOT_CONVERTED},
 )
 def test_pipeline_jit(case: BackendCase, device: torch.device):
     """Tune the pipeline's four JIT heads from two prompt batch sizes."""
