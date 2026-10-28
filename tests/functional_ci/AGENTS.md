@@ -95,15 +95,14 @@ Before selecting tags for a test, read the actual `Tag` names and each backend's
 
 | Tag | Meaning | Tests |
 | --- | --- | --- |
-| `base` | Every backend; use-case tests | `test_graph_break_aot_tunning`, `test_graph_break_jit_tunning` |
-| `save_load` | Tune, `ait.save`, `ait.load` into other weights, same output | `test_backend_lifecycle`, `test_pipeline_lifecycle` |
+| `save_load` | Tune, `ait.save`, `ait.load` into other weights, same output | `test_backend_lifecycle`, `test_pipeline_lifecycle`, `test_multiple_graphs_aot` |
 | `export` | `module.artifact()` runs in its native runtime | `test_exported_artifact` |
 | `dynamic_batch` | Batch range from recorded sizes or a user `BatchDim` | `test_recorded_batch_range`, `test_explicit_batch_dim` |
 | `dynamic_non_batch` | User `DynamicDim` on non-batch (spatial) dims | `test_explicit_spatial_dims` |
-| `structured_io` | Nested dict and list inputs, non-tensor args, nested outputs | `test_structured_io` |
-| `multigraph` | One wrapped module tunes one graph per input layout | `test_partial_wrap_multigraph` |
+| `structured_io` | Nested dict input, non-tensor args, nested outputs | `test_structured_io` |
+| `multigraph` | One wrapped module tunes one graph per input layout | `test_partial_wrap_multigraph`, `test_multiple_graphs_unrecorded_layout`; `test_multiple_graphs_aot` also covers all `save_load` backends |
 | `onnx_input` | Tune an existing ONNX file (inline or external data) | `test_existing_onnx` |
-| `jit` | JIT tuning (`jit_config`, `prepare_for_jit_tuning`) | `test_jit_tuning`, `test_pipeline_jit` |
+| `jit` | JIT tuning (`jit_config`, `prepare_for_jit_tuning`) | `test_jit_tuning`, `test_pipeline_jit`, `test_multiple_graphs_jit` |
 
 To add a tag, add the name to `Tag`, add it to the backends that pass, and use it in `with_backends`.
 
