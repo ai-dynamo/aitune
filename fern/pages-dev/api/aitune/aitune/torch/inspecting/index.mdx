@@ -8,27 +8,234 @@ Module for inspecting PyTorch models and tracking their execution.
 
 ## Submodules
 
-- **[`aitune.torch.inspecting.inspecting`](/aitune/aitune/torch/inspecting/inspecting)**
-- **[`aitune.torch.inspecting.module_info`](/aitune/aitune/torch/inspecting/module_info)**
-- **[`aitune.torch.inspecting.module_inspector`](/aitune/aitune/torch/inspecting/module_inspector)**
-- **[`aitune.torch.inspecting.wrapping`](/aitune/aitune/torch/inspecting/wrapping)**
+- **[`aitune.torch.inspecting.inspecting`](./inspecting.mdx)**
+- **[`aitune.torch.inspecting.module_info`](./module_info.mdx)**
+- **[`aitune.torch.inspecting.module_inspector`](./module_inspector.mdx)**
+- **[`aitune.torch.inspecting.wrapping`](./wrapping.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-torch-inspecting-__all__)
+| Name | Description |
+|------|-------------|
+| [`InspectedModulesInfo`](#aitune-torch-inspecting-module_info-InspectedModulesInfo) | Information about inspected modules. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`inspect`](#aitune-torch-inspecting-inspecting-inspect) | Inspect provided callable object searching for nn.Module members executed as part of forward pass. |
+| [`wrap`](#aitune-torch-inspecting-wrapping-wrap) | Wrap provided modules with inspection logic. |
 
 ### API
 
-<Anchor id="aitune-torch-inspecting-__all__">
+<Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.inspecting.__all__ = ['inspect', 'wrap', 'InspectedModulesInfo']
+class aitune.torch.inspecting.InspectedModulesInfo(
+    total_execution_time: float,
+    number_of_batches: int
+)
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+Information about inspected modules.
+
+
+<ParamField path="_modules" type="dict[str, ModuleInfo] = &#123;&#125;">
+</ParamField>
+<Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo-add_module">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.InspectedModulesInfo.add_module(
+    module: aitune.torch.inspecting.module_info.ModuleInfo
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Add a module to the specification.
+
+**Parameters:**
+
+<ParamField path="module" type="ModuleInfo">
+[`ModuleInfo`](#aitune-torch-inspecting-module_info-ModuleInfo) — ModuleInfo object.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.InspectedModulesInfo.describe() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describe the inspected modules specification.
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo-get_modules">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.InspectedModulesInfo.get_modules(
+    min_execution_ratio: float | None = None,
+    limit: int | None = None
+) -> list[aitune.torch.inspecting.module_info.ModuleInfo]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the list of modules.
+
+**Parameters:**
+
+<ParamField path="min_execution_ratio" type="float | None" default="None">
+Minimum execution ratio to include a module.
+</ParamField>
+
+<ParamField path="limit" type="int | None" default="None">
+Maximum number of modules to return.
+</ParamField>
+
+**Returns:** `list[` [`ModuleInfo`](#aitune-torch-inspecting-module_info-ModuleInfo) `]`
+
+List of ModuleInfo objects in discovery order by default. When filtering by execution ratio or limiting the
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-inspecting-inspect">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"../dataloader.mdx#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"../dataloader.mdx#aitune-torch-dataloader-DataLoaderFactory","aitune.torch.inspecting.module_info.InspectedModulesInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-InspectedModulesInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspect(
+    obj: collections.abc.Callable | torch.nn.Module,
+    dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
+    inference_function: collections.abc.Callable | None = None,
+    number_of_iterations: int = DEFAULT_INSPECT_ITERATIONS,
+    warmup_iterations: int = DEFAULT_WARMUP_ITERATIONS,
+    min_depth: int = 0,
+    max_depth: int = 5
+) -> aitune.torch.inspecting.module_info.InspectedModulesInfo
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect provided callable object searching for nn.Module members executed as part of forward pass.
+
+Returns:
+    InspectedModulesInfo object.
+
+**Parameters:**
+
+<ParamField path="obj" type="Callable | torch.nn.Module">
+Callable object to inspect.
+</ParamField>
+
+<ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
+[`DatasetLike`](../dataloader.mdx#aitune-torch-dataloader-DatasetLike) `|` [`DataLoaderFactory`](../dataloader.mdx#aitune-torch-dataloader-DataLoaderFactory) `| torch.Tensor` — List of tuples with batch size and input.
+</ParamField>
+
+<ParamField path="inference_function" type="Callable | None" default="None">
+Custom inference function to use for inspection, obj is used by default.
+</ParamField>
+
+<ParamField path="number_of_iterations" type="int" default="DEFAULT_INSPECT_ITERATIONS">
+Number of iterations to run for inference.
+</ParamField>
+
+<ParamField path="warmup_iterations" type="int" default="DEFAULT_WARMUP_ITERATIONS">
+Number of iterations to run for warmup.
+</ParamField>
+
+<ParamField path="min_depth" type="int" default="0">
+Minimum depth of the modules to inspect, if root level modules is not working, try to increase this value
+</ParamField>
+
+<ParamField path="max_depth" type="int" default="5">
+Maximum depth of the modules to inspect
+</ParamField>
+
+<Note>
+
+In distributed execution, rank zero's module order and timings are applied to every rank so subsequent
+execution-based filtering selects modules consistently.
+
+</Note>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-wrapping-wrap">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.module.wrapper_module.StrategyList":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.wrap(
+    obj: object,
+    modules: list[aitune.torch.inspecting.module_info.ModuleInfo],
+    strategy: aitune.torch.tune_strategy.resolver.StrategyOption | None = None,
+    strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None = None
+) -> object
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wrap provided modules with inspection logic.
+
+**Parameters:**
+
+<ParamField path="obj" type="object">
+Callable object to wrap.
+</ParamField>
+
+<ParamField path="modules" type="list[ModuleInfo]">
+`list[` [`ModuleInfo`](./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo) `]` — Dictionary of module names and their corresponding ModuleInfo objects.
+</ParamField>
+
+<ParamField path="strategy" type="StrategyOption | None" default="None">
+[`StrategyOption`](../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption) `| None` — Strategy to use for patching.
+</ParamField>
+
+<ParamField path="strategies" type="StrategyList | StrategyMap | None" default="None">
+[`StrategyList`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList) `|` [`StrategyMap`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap) `| None` — Strategies to use for patching.
+</ParamField>
+
+**Returns:** `object`
+
+Wrapped callable object.
+
+
+</Indent>

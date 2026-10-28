@@ -21,7 +21,7 @@ Annotation for collecting hardware metrics.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.utils.monitoring.hardware_metrics_annotation.collect_hardware_metrics(
+class aitune.utils.monitoring.collect_hardware_metrics(
     name: str | None = None
 )
 ```
@@ -39,7 +39,7 @@ Decorator/context manager for collecting hardware metrics.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.hardware_metrics_annotation.collect_hardware_metrics.__call__(
+aitune.utils.monitoring.collect_hardware_metrics.__call__(
     func
 )
 ```
@@ -58,7 +58,7 @@ Wraps the function as a decorator.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.hardware_metrics_annotation.collect_hardware_metrics.__enter__()
+aitune.utils.monitoring.collect_hardware_metrics.__enter__()
 ```
 
 </CodeBlock>
@@ -75,7 +75,7 @@ Enters the context manager.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.hardware_metrics_annotation.collect_hardware_metrics.__exit__(
+aitune.utils.monitoring.collect_hardware_metrics.__exit__(
     exc_type,
     exc_value,
     traceback

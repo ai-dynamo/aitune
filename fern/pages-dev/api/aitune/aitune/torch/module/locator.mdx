@@ -58,9 +58,11 @@ found within a nested structure.
 
 
 <ParamField path="_ignored_types" type="set[type] = set()">
+Class-level set of types that should not be traversed nor returned by find_leaves.
 </ParamField>
 
 <ParamField path="_user_types" type="dict[type, bool] = dict[type, bool]()">
+Class-level dict of registered user-defined types that should be traversed like dataclasses.
 </ParamField>
 
 <ParamField path="depth" type="int">

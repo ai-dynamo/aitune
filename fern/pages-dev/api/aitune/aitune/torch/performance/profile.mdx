@@ -12,7 +12,7 @@ Performance profile generation.
 
 | Name | Description |
 |------|-------------|
-| [`PerformanceProfile`](#aitune-torch-performance-profile-PerformanceProfile) | In-memory performance profile produced by :func:`profile`. |
+| [`PerformanceProfile`](#aitune-torch-performance-profile-PerformanceProfile) | In-memory performance profile produced by `profile`. |
 
 ### Functions
 
@@ -35,7 +35,7 @@ Performance profile generation.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.performance.profile.PerformanceProfile(
+class aitune.torch.PerformanceProfile(
     data: dict[str, typing.Any],
     trace_file: pathlib.Path | None = None
 )
@@ -48,7 +48,7 @@ class aitune.torch.performance.profile.PerformanceProfile(
 
 <Badge>Dataclass</Badge>
 
-In-memory performance profile produced by :func:`profile`.
+In-memory performance profile produced by `profile`.
 
 
 <ParamField path="data" type="dict[str, Any]">
@@ -61,7 +61,7 @@ In-memory performance profile produced by :func:`profile`.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.performance.profile.PerformanceProfile.markdown(
+aitune.torch.PerformanceProfile.markdown(
     options: typing.Any | None = None
 ) -> str
 ```
@@ -229,7 +229,7 @@ Number of measured iterations.
 Optional file path for exporting a PyTorch Profiler Chrome trace.
 </ParamField>
 
-**Returns:** `PerformanceProfile`
+**Returns:** [`PerformanceProfile`](#aitune-torch-performance-profile-PerformanceProfile)
 
 PerformanceProfile with structured data and optional trace file path.
 

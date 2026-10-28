@@ -18,10 +18,10 @@ Profiling configuration.
 
 <Anchor id="aitune-torch-task-profiling-config-ProfilingConfig">
 
-<CodeBlock links={{"aitune.torch.task.profiling.measuring_strategy.MeasuringStrategy":"/aitune/aitune/torch/task/profiling/measuring_strategy#aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy","aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy":"/aitune/aitune/torch/task/profiling/measuring_stop_strategy#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy","aitune.torch.task.profiling.profiling_stop_strategy.ProfilingStopStrategy":"/aitune/aitune/torch/task/profiling/profiling_stop_strategy#aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.measuring_strategy.MeasuringStrategy":"./measuring_strategy.mdx#aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy","aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy":"./measuring_stop_strategy.mdx#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy","aitune.torch.task.profiling.profiling_stop_strategy.ProfilingStopStrategy":"./profiling_stop_strategy.mdx#aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.task.profiling.config.ProfilingConfig(
+class aitune.torch.task.ProfilingConfig(
     batch_sizes: list[int] | collections.abc.Generator[int, None, None],
     batching: bool = True,
     measuring_strategy: aitune.torch.task.profiling.measuring_strategy.MeasuringStrategy | None = None,
@@ -43,25 +43,30 @@ Note: all profiling configuration strategies are deepcopied before use.
 
 
 <ParamField path="batch_sizes" type="list[int] | Generator[int, None, None]">
+List of batch sizes to profile.
 </ParamField>
 
 <ParamField path="batching" type="bool = True">
+Whether profiling should batch samples together.
 </ParamField>
 
 <ParamField path="measurement_stop_strategy" type="MeasuringStopStrategy | None = None">
+Strategy to stop collecting measurements.
 </ParamField>
 
 <ParamField path="measuring_strategy" type="MeasuringStrategy | None = None">
+Strategy to measure the model.
 </ParamField>
 
 <ParamField path="profiling_stop_strategy" type="ProfilingStopStrategy | None = None">
+Strategy to stop profiling.
 </ParamField>
 <Anchor id="aitune-torch-task-profiling-config-ProfilingConfig-__post_init__">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.config.ProfilingConfig.__post_init__()
+aitune.torch.task.ProfilingConfig.__post_init__()
 ```
 
 </CodeBlock>

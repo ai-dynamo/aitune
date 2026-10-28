@@ -19,6 +19,7 @@ NVIDIA ModelOpt ONNX quantization module for TensorRT backend.
 
 | Name | Description |
 |------|-------------|
+| [`_get_modelopt_fp4_exporter`](#aitune-torch-backend-tensorrt-onnx_quantization-_get_modelopt_fp4_exporter) | - |
 | [`_validate_calibration_method`](#aitune-torch-backend-tensorrt-onnx_quantization-_validate_calibration_method) | Validate that calibration_method is a supported value. |
 | [`_validate_precision`](#aitune-torch-backend-tensorrt-onnx_quantization-_validate_precision) | Validate that precision is a supported value. |
 
@@ -30,8 +31,6 @@ NVIDIA ModelOpt ONNX quantization module for TensorRT backend.
 
 [`logger`](#aitune-torch-backend-tensorrt-onnx_quantization-logger)
 
-[`modelopt_fp4_exporter`](#aitune-torch-backend-tensorrt-onnx_quantization-modelopt_fp4_exporter)
-
 ### API
 
 <Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig">
@@ -39,7 +38,7 @@ NVIDIA ModelOpt ONNX quantization module for TensorRT backend.
 <CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_quantization.QuantizationPrecision":"#aitune-torch-backend-tensorrt-onnx_quantization-QuantizationPrecision","aitune.torch.backend.tensorrt.onnx_quantization.CalibrationMethod":"#aitune-torch-backend-tensorrt-onnx_quantization-CalibrationMethod"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig(
+class aitune.torch.backend.ONNXQuantizationConfig(
     precision: aitune.torch.backend.tensorrt.onnx_quantization.QuantizationPrecision,
     calibration_method: aitune.torch.backend.tensorrt.onnx_quantization.CalibrationMethod | None = None,
     use_model_opt_post_processing: bool = False
@@ -58,11 +57,11 @@ Configuration for ONNX quantization.
 **Parameters:**
 
 <ParamField path="precision" type="QuantizationPrecision">
-Quantization precision ("int8", "fp8", "int4")
+[`QuantizationPrecision`](#aitune-torch-backend-tensorrt-onnx_quantization-QuantizationPrecision) — Quantization precision ("int8", "fp8", "int4")
 </ParamField>
 
 <ParamField path="calibration_method" type="CalibrationMethod | None" default="None">
-Calibration method to use ("max", "entropy", "awq_clip", "awq_lite", "awq_full", "rtn_dq")
+[`CalibrationMethod`](#aitune-torch-backend-tensorrt-onnx_quantization-CalibrationMethod) `| None` — Calibration method to use ("max", "entropy", "awq_clip", "awq_lite", "awq_full", "rtn_dq")
 </ParamField>
 
 <ParamField path="use_model_opt_post_processing" type="bool" default="False">
@@ -83,7 +82,7 @@ Whether to apply ModelOpt post-processing to the quantized model
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig.__post_init__()
+aitune.torch.backend.ONNXQuantizationConfig.__post_init__()
 ```
 
 </CodeBlock>
@@ -100,7 +99,7 @@ Validate precision and calibration_method after initialization.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig.from_dict(
+aitune.torch.backend.ONNXQuantizationConfig.from_dict(
     state_dict: dict
 )
 ```
@@ -141,6 +140,37 @@ The quantizer can be used in two ways:
 1. Standalone for quantizing existing ONNX models
 2. Integrated with TensorRTBackend for end-to-end quantization
 
+Example:
+    # Standalone usage
+    quantizer = ONNXQuantizer()
+    quantized_path = quantizer.quantize(
+        onnx_path="model.onnx",
+        name="my_model",
+        precision="int8",
+        calibration_method="max"
+    )
+
+    # Integrated usage (automatic when using TensorRTBackend)
+    config = TensorRTBackendConfig(
+        quantization_type="onnx",
+        precision="int8",
+        onnx_quantization_calibration_method="awq_lite"
+    )
+    backend = TensorRTBackend(config=config)
+
+Supported quantization modes:
+    - int8: 8-bit integer quantization
+    - fp8: 8-bit floating point quantization
+    - int4: 4-bit integer quantization (with AWQ support)
+
+Supported calibration methods:
+    - max: Max calibration (default, INT8/FP8 only)
+    - entropy: Entropy-based calibration (INT8/FP8 only)
+    - awq_lite: Activation-aware Weight Quantization (INT4 only)
+    - awq_clip: Activation-aware Weight Quantization (INT4 only)
+    - awq_full: Activation-aware Weight Quantization (INT4 only)
+    - rtn_dq: RTN-DQ calibration (INT4 only)
+
 
 <Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizer-apply_model_opt_post_processing">
 
@@ -171,7 +201,7 @@ Path to the ONNX model file
 </Indent>
 <Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizer-quantize">
 
-<CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig":"#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig","aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig":"#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig","aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizer.quantize(
@@ -201,16 +231,16 @@ Path to the output ONNX model
 </ParamField>
 
 <ParamField path="config" type="ONNXQuantizationConfig">
-ONNXQuantizationConfig
+[`ONNXQuantizationConfig`](#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig) — ONNXQuantizationConfig
 </ParamField>
 
 <ParamField path="samples" type="Sequence[Sample] | None" default="None">
-Optional calibration dataset for quantization.
+`Sequence[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `] | None` — Optional calibration dataset for quantization.
 If None, random data will be used for calibration
 </ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec | None" default="None">
-Graph specification containing input names mapping
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) `| None` — Graph specification containing input names mapping
 </ParamField>
 
 **Returns:** `Path`
@@ -225,6 +255,22 @@ Path to the quantized ONNX file
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-_get_modelopt_fp4_exporter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.tensorrt.onnx_quantization._get_modelopt_fp4_exporter()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
 </Indent>
 
 <Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-_validate_calibration_method">
@@ -297,18 +343,6 @@ aitune.torch.backend.tensorrt.onnx_quantization.QuantizationPrecision = Literal[
 
 ```python
 aitune.torch.backend.tensorrt.onnx_quantization.logger = logging.getLogger(__name__)
-```
-
-</CodeBlock>
-</Anchor>
-
-
-<Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-modelopt_fp4_exporter">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.tensorrt.onnx_quantization.modelopt_fp4_exporter = fp4qdq_to_2dq
 ```
 
 </CodeBlock>

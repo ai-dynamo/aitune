@@ -10,10 +10,10 @@ Out-of-space errors used to fail silently during JIT tuning: the broad
 ``except Exception`` in the tune loop caught ``OSError(ENOSPC)`` and fell back
 to eager mode without surfacing the cause. This module provides:
 
-* :class:`DiskSpaceError` — a clear, typed error carrying path + free-bytes context.
-* :func:`check_disk_space` — pre-flight warning when the cache device is low.
-* :func:`raise_if_out_of_space` — translator that turns caught ``OSError(ENOSPC)``
-  into :class:`DiskSpaceError` at the call site that swallowed it.
+* `DiskSpaceError` — a clear, typed error carrying path + free-bytes context.
+* `check_disk_space` — pre-flight warning when the cache device is low.
+* `raise_if_out_of_space` — translator that turns caught ``OSError(ENOSPC)``
+  into `DiskSpaceError` at the call site that swallowed it.
 
 ## Module Contents
 
@@ -31,7 +31,7 @@ to eager mode without surfacing the cause. This module provides:
 | [`_format_bytes`](#aitune-utils-disk_space-_format_bytes) | Render a byte count using the largest binary unit that keeps it &gt;= 1. |
 | [`_nearest_existing`](#aitune-utils-disk_space-_nearest_existing) | - |
 | [`check_disk_space`](#aitune-utils-disk_space-check_disk_space) | Inspect free space for the filesystem that hosts ``path``. |
-| [`raise_if_out_of_space`](#aitune-utils-disk_space-raise_if_out_of_space) | Re-raise ``exc`` as :class:`DiskSpaceError` when it represents ENOSPC. |
+| [`raise_if_out_of_space`](#aitune-utils-disk_space-raise_if_out_of_space) | Re-raise ``exc`` as `DiskSpaceError` when it represents ENOSPC. |
 
 ### Data
 
@@ -64,7 +64,7 @@ class aitune.utils.disk_space.DiskSpaceError(
 
 Raised when the AITune cache device has run out of (or very little) space.
 
-Inherits from :class:`OSError` so call sites that already handle I/O errors
+Inherits from `OSError` so call sites that already handle I/O errors
 continue to catch it. The string form embeds the target path and, when
 known, the remaining free bytes — so a log line or traceback alone tells
 the operator exactly which device is full.
@@ -175,7 +175,7 @@ aitune.utils.disk_space.raise_if_out_of_space(
 
 <Indent>
 
-Re-raise ``exc`` as :class:`DiskSpaceError` when it represents ENOSPC.
+Re-raise ``exc`` as `DiskSpaceError` when it represents ENOSPC.
 
 Use inside ``except`` blocks that otherwise suppress or swallow exceptions,
 so out-of-space failures stop propagating silently::

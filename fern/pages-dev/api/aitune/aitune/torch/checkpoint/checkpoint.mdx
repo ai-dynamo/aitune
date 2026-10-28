@@ -38,7 +38,7 @@ This class defines the interface for saving and loading tuned modules.
 
 <Anchor id="aitune-torch-checkpoint-checkpoint-Checkpoint-load">
 
-<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.checkpoint.Checkpoint.load(
@@ -60,7 +60,7 @@ Load a module from a checkpoint.
 **Parameters:**
 
 <ParamField path="module" type="Module">
-The base module to load into.
+[`Module`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module) — The base module to load into.
 </ParamField>
 
 <ParamField path="path" type="str | Path">
@@ -71,7 +71,7 @@ The path from where the module should be loaded.
 The device map to load module to.
 </ParamField>
 
-**Returns:** `Module | WrapperModule`
+**Returns:** [`Module`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module) `| WrapperModule`
 
 The loaded module, which may be either the original module type or a wrapped module.
 
@@ -83,7 +83,7 @@ The loaded module, which may be either the original module type or a wrapped mod
 </Indent>
 <Anchor id="aitune-torch-checkpoint-checkpoint-Checkpoint-save">
 
-<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.checkpoint.Checkpoint.save(
@@ -104,7 +104,7 @@ Save a module to a checkpoint.
 **Parameters:**
 
 <ParamField path="module" type="Module | WrapperModule">
-The module to save. Can be a regular torch module or a wrapped module.
+[`Module`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module) `| WrapperModule` — The module to save. Can be a regular torch module or a wrapped module.
 </ParamField>
 
 <ParamField path="path" type="str | Path">

@@ -148,7 +148,7 @@ Patch torch.nn.Module to track execution.
 </Indent>
 <Anchor id="aitune-torch-jit-patcher-Patcher-patched_modules_under">
 
-<CodeBlock links={{"aitune.torch.jit.patched_module.PatchedModule":"/aitune/aitune/torch/jit/patched_module#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.jit.inspect_module.InspectModule":"/aitune/aitune/torch/jit/inspect_module#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.jit.patched_module.PatchedModule":"./patched_module.mdx#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.jit.inspect_module.InspectModule":"./inspect_module.mdx#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.jit.patcher.Patcher.patched_modules_under(
@@ -174,7 +174,7 @@ at backend boundaries must operate on root.modules() instead of only observed ch
 </Indent>
 <Anchor id="aitune-torch-jit-patcher-Patcher-unpatch_module">
 
-<CodeBlock links={{"aitune.torch.jit.patched_module.PatchedModule":"/aitune/aitune/torch/jit/patched_module#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.jit.inspect_module.InspectModule":"/aitune/aitune/torch/jit/inspect_module#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.jit.patched_module.PatchedModule":"./patched_module.mdx#aitune-torch-jit-patched_module-PatchedModule","aitune.torch.jit.inspect_module.InspectModule":"./inspect_module.mdx#aitune-torch-jit-inspect_module-InspectModule"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.jit.patcher.Patcher.unpatch_module(
@@ -194,7 +194,7 @@ Unpatch a module.
 **Parameters:**
 
 <ParamField path="module" type="PatchedModule | InspectModule">
-The module to unpatch.
+[`PatchedModule`](./patched_module.mdx#aitune-torch-jit-patched_module-PatchedModule) `|` [`InspectModule`](./inspect_module.mdx#aitune-torch-jit-inspect_module-InspectModule) — The module to unpatch.
 </ParamField>
 
 
@@ -251,7 +251,7 @@ Reset the JIT patcher.
 <CodeBlock links={{"aitune.torch.jit.patcher.T":"#aitune-torch-jit-patcher-T"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.jit.patcher.patch_for_jit_tuning(
+aitune.torch.patch_for_jit_tuning(
     func: collections.abc.Callable[..., aitune.torch.jit.patcher.T]
 ) -> collections.abc.Callable[..., aitune.torch.jit.patcher.T]
 ```
@@ -263,13 +263,21 @@ aitune.torch.jit.patcher.patch_for_jit_tuning(
 
 Wrapper that patches torch before function execution and unpatch_torch after.
 
+**Example**
+
+&gt;&gt;&gt; @patch_for_jit_tuning
+... def my_function():
+...     # torch is patched during this function execution
+...     model = torch.nn.Linear(10, 5)
+...     return model
+
 **Parameters:**
 
 <ParamField path="func" type="Callable[..., T]">
-The function to wrap with patching.
+`Callable[...,` [`T`](#aitune-torch-jit-patcher-T) `]` — The function to wrap with patching.
 </ParamField>
 
-**Returns:** `Callable[..., T]`
+**Returns:** `Callable[...,` [`T`](#aitune-torch-jit-patcher-T) `]`
 
 Wrapped function that automatically patches/unpatches torch.
 
@@ -293,6 +301,12 @@ Context manager which prepares model for tuning.
 
 This context manager automatically intercepts creating torch modules and prepares them for tuning.
 The inference can happen outside of the context manager.
+
+Example:
+    &gt;&gt;&gt; with prepare_for_jit_tuning():
+    ...     # torch is patched during this block
+    ...     model = torch.nn.Linear(10, 5)
+    ...     # torch is automatically unpatched when exiting the block
 
 
 </Indent>

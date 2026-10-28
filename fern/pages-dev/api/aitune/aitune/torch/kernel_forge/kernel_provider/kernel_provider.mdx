@@ -38,7 +38,7 @@ Kernel provider interface.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider()
+class aitune.torch.kernel_forge.kernel_provider.KernelProvider()
 ```
 
 </CodeBlock>
@@ -76,7 +76,7 @@ Name of the ``torch.nn.functional`` function replaced by this provider.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider.__call__(
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.__call__(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -96,7 +96,7 @@ Run inference using this provider.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider.__init_subclass__(
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.__init_subclass__(
     kwargs: typing.Any = {}
 ) -> None
 ```
@@ -115,7 +115,7 @@ Register each provider class for state-dict deserialization.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider.__repr__() -> str
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.__repr__() -> str
 ```
 
 </CodeBlock>
@@ -132,7 +132,7 @@ Return a human-readable kernel provider description.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProviderType":"#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProviderType"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider._from_dict(
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._from_dict(
     state_dict: dict[str, typing.Any]
 ) -> aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProviderType
 ```
@@ -153,7 +153,7 @@ Restore provider-specific inference state.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider._infer(
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -175,7 +175,7 @@ Run provider-specific inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider._load_runtime_dependencies() -> None
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._load_runtime_dependencies() -> None
 ```
 
 </CodeBlock>
@@ -185,7 +185,7 @@ aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider._load_r
 
 Load and cache dependencies before runtime execution and graph capture.
 
-:class:`KernelProviderRuntime` calls this hook before a delegate backend executes
+`KernelProviderRuntime` calls this hook before a delegate backend executes
 the module. Providers with lazily imported dependencies should override this
 method and cache them here. Otherwise, their first import may occur inside a
 ``torch.compile`` or ``torch.export`` graph capture, where Dynamo cannot trace
@@ -195,10 +195,10 @@ method and cache them here. Otherwise, their first import may occur inside a
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-_prepare">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider._prepare(
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._prepare(
     samples: list[aitune.torch.module.sample_store.Sample]
 ) -> bool
 ```
@@ -219,7 +219,7 @@ Validate samples and populate the state required for inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider._to_dict() -> dict[str, typing.Any]
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._to_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -238,7 +238,7 @@ Serialize provider-specific inference state.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProviderType":"#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProviderType"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider.from_dict(
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.from_dict(
     state_dict: dict[str, typing.Any]
 ) -> aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProviderType
 ```
@@ -256,10 +256,10 @@ Restore a provider that is ready for inference.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-prepare">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider.prepare(
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.prepare(
     samples: list[aitune.torch.module.sample_store.Sample]
 ) -> bool
 ```
@@ -274,7 +274,7 @@ Prepare this provider for inference using representative samples.
 **Parameters:**
 
 <ParamField path="samples" type="list[Sample]">
-Representative calls of :attr:`supported_function`.
+`list[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — Representative calls of `supported_function`.
 </ParamField>
 
 **Returns:** `bool`
@@ -288,7 +288,7 @@ True when every sample is supported, otherwise False.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider.to_dict() -> dict[str, typing.Any]
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.to_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -307,7 +307,7 @@ Serialize the state required to restore this provider.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProviderState
+class aitune.torch.kernel_forge.kernel_provider.KernelProviderState
 ```
 
 </CodeBlock>
@@ -332,7 +332,7 @@ Kernel provider lifecycle state.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider":"#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_provider.kernel_provider_from_dict(
+aitune.torch.kernel_forge.kernel_provider.kernel_provider_from_dict(
     state_dict: dict[str, typing.Any]
 ) -> aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider
 ```

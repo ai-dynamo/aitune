@@ -18,10 +18,10 @@ Runtime activation of a selected kernel optimization plan.
 
 <Anchor id="aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"/aitune/aitune/torch/kernel_forge/kernel_optimization_plan#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"./kernel_optimization_plan.mdx#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime(
+class aitune.torch.kernel_forge.KernelProviderRuntime(
     module: torch.nn.Module,
     plan: aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan
 )
@@ -52,7 +52,7 @@ Whether runtime hooks are currently installed.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime._create_post_hook()
+aitune.torch.kernel_forge.KernelProviderRuntime._create_post_hook()
 ```
 
 </CodeBlock>
@@ -69,7 +69,7 @@ Create a hook that restores functions after each module forward.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime._create_pre_hook()
+aitune.torch.kernel_forge.KernelProviderRuntime._create_pre_hook()
 ```
 
 </CodeBlock>
@@ -83,10 +83,10 @@ Create a hook that installs providers before each module forward.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_provider_runtime-KernelProviderRuntime-_create_provider_function">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"./kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime._create_provider_function(
+aitune.torch.kernel_forge.KernelProviderRuntime._create_provider_function(
     provider: aitune.torch.kernel_forge.kernel_provider.KernelProvider
 ) -> collections.abc.Callable
 ```
@@ -107,7 +107,7 @@ Expose a callable provider as a regular Python function.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime.activate() -> None
+aitune.torch.kernel_forge.KernelProviderRuntime.activate() -> None
 ```
 
 </CodeBlock>
@@ -124,7 +124,7 @@ Activate the selected providers idempotently.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime.applied() -> collections.abc.Generator[None, None, None]
+aitune.torch.kernel_forge.KernelProviderRuntime.applied() -> collections.abc.Generator[None, None, None]
 ```
 
 </CodeBlock>
@@ -141,7 +141,7 @@ Temporarily activate the plan for inference while preserving prior runtime state
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider_runtime.KernelProviderRuntime.deactivate() -> None
+aitune.torch.kernel_forge.KernelProviderRuntime.deactivate() -> None
 ```
 
 </CodeBlock>

@@ -305,7 +305,7 @@ Gather one local exception into a single collective operation outcome.
 aitune.torch.distributed.DistributedCoordinator.raise_if_any_rank_fails(
     operation: str,
     error_type: type[Exception] = RuntimeError
-) -> collections.abc.Iterator[None]
+) -> collections.abc.Generator[None, None, None]
 ```
 
 </CodeBlock>
@@ -494,6 +494,13 @@ aitune.torch.distributed.resolve_tuning_device(
 <Indent>
 
 Resolve a tuning device without moving a module or changing CUDA state.
+
+**Resolution order**
+
+1. Existing device of a distributed module.
+2. Explicitly requested device.
+3. Existing CUDA device of an ordinary module.
+4. Rank-local CUDA device.
 
 **Raises:**
 

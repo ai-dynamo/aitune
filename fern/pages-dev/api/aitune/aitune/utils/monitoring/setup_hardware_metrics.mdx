@@ -128,7 +128,7 @@ Enable collection at runtime, overriding the env var.
 </Indent>
 <Anchor id="aitune-utils-monitoring-setup_hardware_metrics-HardwareMetricsSession-get_collector">
 
-<CodeBlock links={{"aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector":"/aitune/aitune/utils/monitoring/hardware_metrics/collector#aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector":"./hardware_metrics/collector.mdx#aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.utils.monitoring.setup_hardware_metrics.HardwareMetricsSession.get_collector() -> aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector
@@ -222,7 +222,7 @@ most 6 metric columns.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.setup_hardware_metrics.disable_hardware_metrics() -> None
+aitune.utils.monitoring.disable_hardware_metrics() -> None
 ```
 
 </CodeBlock>
@@ -245,7 +245,7 @@ call starts a fresh collection session.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.setup_hardware_metrics.dump_metrics(
+aitune.utils.monitoring.dump_metrics(
     metrics: pandas.DataFrame
 )
 ```
@@ -271,7 +271,7 @@ The metrics to dump.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.setup_hardware_metrics.enable_hardware_metrics() -> None
+aitune.utils.monitoring.enable_hardware_metrics() -> None
 ```
 
 </CodeBlock>
@@ -289,7 +289,7 @@ The collector and receiver subprocess are started lazily on the first use.
 
 <Anchor id="aitune-utils-monitoring-setup_hardware_metrics-get_default_collector">
 
-<CodeBlock links={{"aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector":"/aitune/aitune/utils/monitoring/hardware_metrics/collector#aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector":"./hardware_metrics/collector.mdx#aitune-utils-monitoring-hardware_metrics-collector-NoOpHardwareMetricsCollector"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.utils.monitoring.setup_hardware_metrics.get_default_collector() -> aitune.utils.monitoring.hardware_metrics.collector.NoOpHardwareMetricsCollector
@@ -310,7 +310,7 @@ Get the default hardware metrics collector.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.setup_hardware_metrics.get_hardware_metrics() -> pandas.DataFrame | None
+aitune.utils.monitoring.get_hardware_metrics() -> pandas.DataFrame | None
 ```
 
 </CodeBlock>
@@ -328,7 +328,7 @@ Get metrics from the receiver.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.setup_hardware_metrics.snapshot(
+aitune.utils.monitoring.snapshot(
     path: pathlib.Path,
     reset_metrics: bool = True
 ) -> None

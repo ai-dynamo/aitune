@@ -70,6 +70,7 @@ Non-batchable inputs should be handled by the user on module level.
 
 | Name | Description |
 |------|-------------|
+| [`_label_dtype`](#aitune-torch-dataloader-_label_dtype) | Return the batch dtype for a label without reading tensor values from the GPU. |
 | [`_list_data_collator`](#aitune-torch-dataloader-_list_data_collator) | Default data collator that simply concatenates the inputs. |
 | [`_make_dataloader_factory`](#aitune-torch-dataloader-_make_dataloader_factory) | Create a DataLoaderFactory from dataset or if DataLoaderFactory is given return it. |
 | [`_map_data_collator`](#aitune-torch-dataloader-_map_data_collator) | Transformers default data collector copied from source. |
@@ -88,7 +89,7 @@ Non-batchable inputs should be handled by the user on module level.
 <CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"#aitune-torch-dataloader-DatasetLike"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.dataloader.DataLoaderFactory(
+class aitune.torch.DataLoaderFactory(
     dataset: aitune.torch.dataloader.DatasetLike,
     collate_fn: collections.abc.Callable | None = None,
     num_workers: int = 0
@@ -122,7 +123,7 @@ create_dataloader method.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.dataloader.DataLoaderFactory.create_dataloader(
+aitune.torch.DataLoaderFactory.create_dataloader(
     batch_size: int
 ) -> torch.utils.data.DataLoader
 ```
@@ -225,7 +226,7 @@ class aitune.torch.dataloader.InputConfig(
     dtype: torch.dtype = torch.float32,
     kwarg_name: str | None = None,
     min_value: int | float = 0,
-    max_value: int | float = 1
+    max_value: int | float | None = None
 )
 ```
 
@@ -237,6 +238,11 @@ class aitune.torch.dataloader.InputConfig(
 <Badge>Dataclass</Badge>
 
 Configuration for an input tensor.
+
+Floating-point and complex dtypes sample uniformly between ``min_value``
+and ``max_value``, defaulting to an upper bound of 1. Integer and boolean
+dtypes require an explicit integer ``max_value`` and sample discrete values
+in ``[min_value, max_value)``. Set ``max_value=2`` to sample both boolean values.
 
 Example basic usage:
 
@@ -258,7 +264,7 @@ InputConfig(min_input=(3, 24, 24), max_input=(3, 24, 24), dtype=torch.float32, k
 <ParamField path="max_input" type="Size | None = None">
 </ParamField>
 
-<ParamField path="max_value" type="int | float = 1">
+<ParamField path="max_value" type="int | float | None = None">
 </ParamField>
 
 <ParamField path="min_input" type="Size">
@@ -279,7 +285,7 @@ aitune.torch.dataloader.InputConfig.__post_init__()
 
 <Indent>
 
-Post-initialization hook.
+Resolve shape and continuous sampling defaults; require discrete upper bounds.
 
 
 </Indent>
@@ -439,6 +445,24 @@ aitune.torch.dataloader.MinMaxRandomDataset._get_min_tensor(
 aitune.torch.dataloader.MinMaxRandomDataset._get_tensor(
     cfg: aitune.torch.dataloader.InputConfig
 )
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-_sample_tensor">
+
+<CodeBlock links={{"aitune.torch.dataloader.InputConfig":"#aitune-torch-dataloader-InputConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader.MinMaxRandomDataset._sample_tensor(
+    cfg: aitune.torch.dataloader.InputConfig,
+    shape: collections.abc.Sequence[int]
+) -> torch.Tensor
 ```
 
 </CodeBlock>
@@ -612,6 +636,26 @@ Returns larger dataset so that we can create batch of different sample shapes.
 </Indent>
 </Indent>
 
+<Anchor id="aitune-torch-dataloader-_label_dtype">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.dataloader._label_dtype(
+    label: object
+) -> torch.dtype
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the batch dtype for a label without reading tensor values from the GPU.
+
+
+</Indent>
+
 <Anchor id="aitune-torch-dataloader-_list_data_collator">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -751,14 +795,14 @@ NOTE: This function trims the dataset to the given number of samples.
 **Parameters:**
 
 <ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
-The dataset to make iterable.
+[`DatasetLike`](#aitune-torch-dataloader-DatasetLike) `|` [`DataLoaderFactory`](#aitune-torch-dataloader-DataLoaderFactory) `| torch.Tensor` — The dataset to make iterable.
 </ParamField>
 
 <ParamField path="number_of_samples" type="int">
 The number of samples to ensure.
 </ParamField>
 
-**Returns:** `DatasetLike | DataLoaderFactory`
+**Returns:** [`DatasetLike`](#aitune-torch-dataloader-DatasetLike) `|` [`DataLoaderFactory`](#aitune-torch-dataloader-DataLoaderFactory)
 
 The dataset with enough samples.
 
@@ -802,7 +846,7 @@ NOTE: for each batch size we will iterate over all samples in the dataset.
 **Parameters:**
 
 <ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
-The dataset to generate samples from. It can be DataLoaderFactory or any dataset/iterable and even torch.Tensor.
+[`DatasetLike`](#aitune-torch-dataloader-DatasetLike) `|` [`DataLoaderFactory`](#aitune-torch-dataloader-DataLoaderFactory) `| torch.Tensor` — The dataset to generate samples from. It can be DataLoaderFactory or any dataset/iterable and even torch.Tensor.
 Tensor will be treated as a single sample dataset.
 </ParamField>
 
@@ -811,7 +855,8 @@ The batch sizes to generate samples with.
 </ParamField>
 
 <ParamField path="max_num_batches_per_batch_size" type="int | None" default="None">
-The maximum number of batches to use for tuning per batch size.
+The maximum number of batches per batch size. ``None`` uses all batches;
+zero yields no batches.
 </ParamField>
 
 **Returns:** `None`

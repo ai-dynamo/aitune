@@ -17,6 +17,7 @@ Module Info for inspected modules.
 | [`ListOfModulesInfo`](#aitune-torch-inspecting-module_info-ListOfModulesInfo) | Information about a list of PyTorch modules. |
 | [`ModuleInfo`](#aitune-torch-inspecting-module_info-ModuleInfo) | Information about a PyTorch module. |
 | [`ObjectOfModulesInfo`](#aitune-torch-inspecting-module_info-ObjectOfModulesInfo) | Information about a custom object containing PyTorch modules. |
+| [`OnnxModuleInfo`](#aitune-torch-inspecting-module_info-OnnxModuleInfo) | Execution information for an ONNX module, with its declared graph metadata. |
 
 ### API
 
@@ -65,7 +66,7 @@ Set the wrapped module in a dict under name as key.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.inspecting.module_info.InspectedModulesInfo(
+class aitune.torch.inspecting.InspectedModulesInfo(
     total_execution_time: float,
     number_of_batches: int
 )
@@ -86,7 +87,7 @@ Information about inspected modules.
 <CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.inspecting.module_info.InspectedModulesInfo.add_module(
+aitune.torch.inspecting.InspectedModulesInfo.add_module(
     module: aitune.torch.inspecting.module_info.ModuleInfo
 )
 ```
@@ -101,7 +102,7 @@ Add a module to the specification.
 **Parameters:**
 
 <ParamField path="module" type="ModuleInfo">
-ModuleInfo object.
+[`ModuleInfo`](#aitune-torch-inspecting-module_info-ModuleInfo) — ModuleInfo object.
 </ParamField>
 
 
@@ -111,7 +112,7 @@ ModuleInfo object.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.inspecting.module_info.InspectedModulesInfo.describe() -> None
+aitune.torch.inspecting.InspectedModulesInfo.describe() -> None
 ```
 
 </CodeBlock>
@@ -128,7 +129,7 @@ Describe the inspected modules specification.
 <CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.inspecting.module_info.InspectedModulesInfo.get_modules(
+aitune.torch.inspecting.InspectedModulesInfo.get_modules(
     min_execution_ratio: float | None = None,
     limit: int | None = None
 ) -> list[aitune.torch.inspecting.module_info.ModuleInfo]
@@ -151,7 +152,7 @@ Minimum execution ratio to include a module.
 Maximum number of modules to return.
 </ParamField>
 
-**Returns:** `list[ModuleInfo]`
+**Returns:** `list[` [`ModuleInfo`](#aitune-torch-inspecting-module_info-ModuleInfo) `]`
 
 List of ModuleInfo objects in discovery order by default. When filtering by execution ratio or limiting the
 
@@ -337,4 +338,43 @@ Set the wrapped module.
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_info-OnnxModuleInfo">
+
+<CodeBlock links={{"aitune.torch.module.onnx_module.OnnxModule":"../module/onnx_module.mdx#aitune-torch-module-onnx_module-OnnxModule","aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.inspecting.module_info.OnnxModuleInfo(
+    module: aitune.torch.module.onnx_module.OnnxModule,
+    name: str = '',
+    parent: typing.Optional[aitune.torch.inspecting.module_info.ModuleInfo] = None,
+    forward_called: bool = False,
+    execution_count: int = 0,
+    total_execution_time: float = 0.0,
+    input_types: list[dict[str, typing.Any]] = list(),
+    output_types: list[dict[str, typing.Any]] = list(),
+    object_path: str | None = None,
+    depth: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [ModuleInfo](#aitune-torch-inspecting-module_info-ModuleInfo)
+
+Execution information for an ONNX module, with its declared graph metadata.
+
+
+<ParamField path="module" type="OnnxModule">
+</ParamField>
+
+<ParamField path="onnx_graph" type="ONNXModelInfo">
+Read the source graph's opsets, operators, and declared I/O.
+</ParamField>
 </Indent>

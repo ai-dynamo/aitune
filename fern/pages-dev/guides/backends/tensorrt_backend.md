@@ -6,6 +6,12 @@ title: "TensorRT Backend Guide"
 
 The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT engine. It offers the best performance for production deployments on NVIDIA GPUs and seamlessly integrates [TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer) for advanced quantization workflows.
 
+## Existing ONNX models
+
+`TensorRTBackend` accepts an existing ONNX file through `OnnxModule` and builds an engine without PyTorch export. Export settings such as `use_dynamo` and `opset_version` do not apply to this path.
+
+Only `TensorRTBackend` and `ONNXRuntimeBackend` support tuning `OnnxModule`. Configure an explicit backend list, as shown in [ONNX Model Tuning](../onnx_tuning.md).
+
 ## Overview
 
 The TensorRT backend:
@@ -56,6 +62,38 @@ config = TensorRTBackendConfig(
 backend = TensorRTBackend(config)
 ```
 
+## Export a Tuned Artifact
+
+After tuning, retrieve the same `DeploymentArtifact` contract used by the ONNX backend:
+
+```python
+artifact = model.artifact()
+artifact.model.export_files("deployment/model.plan")
+
+print(artifact.model.format)  # tensorrt_plan
+print(artifact.runtime.name)  # tensorrt
+profiles = artifact.model.metadata["optimization_profiles"]
+print(artifact.model.metadata["optimization_profile_count"])
+print(artifact.runtime.options)
+```
+
+Each optimization profile is a dictionary keyed by executable input name, in engine input order.
+Each input contains `min_shape`, `opt_shape`, and `max_shape` tuples. These exact ranges are
+preserved alongside the overall input bounds; multiple profiles can leave gaps within those bounds.
+Runtime options preserve `use_cuda_graphs`, `max_cuda_graphs`, and `cuda_graph_cache_policy` as plain values
+for deployment adapters to interpret.
+
+The exported file is the TensorRT plan. The profile metadata is embedded in the deployment record;
+AITune's profile sidecar remains part of its checkpoint, and is not needed to execute the exported plan.
+`model.artifact()` constructs and validates the deployment record when called. The backend retains
+the finalized tensor names and profile metadata after deactivation, so generation does not require
+reloading the engine. The method also works after restoring and deploying a checkpoint.
+
+Output bounds come from the shapes recorded while tuning. `model.artifact()` therefore validates each
+custom TensorRT input profile against the recorded input bounds. It rejects a profile that extends an
+input beyond those bounds because sound output bounds cannot be inferred in general. Include the profile
+boundary shapes in the tuning samples when the engine must also be exported as a deployment artifact.
+
 ## Configuration Options
 
 ### TensorRTBackendConfig
@@ -69,7 +107,7 @@ class TensorRTBackendConfig(BackendConfig):
     optimization_level: int | None = None
     compatibility_level: int | None = None
     timing_cache: Path | None = None
-    profiles: ProfileMode | list[TensorRTProfile] = ProfileMode.SINGLE
+    profiles: TensorRTProfileMode | list[TensorRTProfile] = TensorRTProfileMode.SINGLE
     device: str = "cuda"
     quantization_config: ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None = None
     enable_tf32: bool = True
@@ -187,16 +225,16 @@ config = TensorRTBackendConfig(
 Optimization profiles for dynamic shapes.
 
 ```python
-from aitune.torch.backend.tensorrt import ProfileMode, TensorRTProfile
+from aitune.torch.backend.tensorrt import TensorRTProfile, TensorRTProfileMode
 
 # Single profile (default)
 config = TensorRTBackendConfig(
-    profiles=ProfileMode.SINGLE,
+    profiles=TensorRTProfileMode.SINGLE,
 )
 
 # Multiple profiles from samples
 config = TensorRTBackendConfig(
-    profiles=ProfileMode.SAMPLES_USED,
+    profiles=TensorRTProfileMode.SAMPLES_USED,
 )
 
 # Custom profiles
@@ -221,6 +259,8 @@ config = TensorRTBackendConfig(
 ```
 
 ### quantization_config
+
+For `OnnxModule`, use `ONNXAutoCastConfig` or `ONNXQuantizationConfig`. `TorchQuantizationConfig` requires a PyTorch module and raises an error for `OnnxModule`.
 
 TensorRT backend supports multiple quantization methods through TensorRT Model Optimizer integration. Use `ONNXAutoCastConfig` for FP16/BF16 mixed precision, `ONNXQuantizationConfig` for ONNX INT8/FP8/INT4 quantization, and `TorchQuantizationConfig` for ModelOpt PyTorch quantization presets.
 
@@ -356,7 +396,7 @@ Automatically generates a single profile from recorded samples:
 
 ```python
 config = TensorRTBackendConfig(
-    profiles=ProfileMode.SINGLE,
+    profiles=TensorRTProfileMode.SINGLE,
 )
 ```
 
@@ -366,11 +406,15 @@ config = TensorRTBackendConfig(
 
 #### SAMPLES_USED
 
-Generates one profile per unique input shape:
+Generates one exact profile per unique recorded input shape. For dynamic inputs, a wide fallback follows the exact
+profiles and covers the observed range. If find-max-batch-size is enabled, it also covers the discovered batch bound.
+
+When the module defines explicit dynamic shapes, those definitions take precedence and produce one graph-derived
+profile instead of sample profiles.
 
 ```python
 config = TensorRTBackendConfig(
-    profiles=ProfileMode.SAMPLES_USED,
+    profiles=TensorRTProfileMode.SAMPLES_USED,
 )
 ```
 

@@ -15,6 +15,12 @@ ONNX Model Info module for extracting information from ONNX models.
 | [`ONNXModelInfo`](#aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo) | Helper class to load ONNX model and provide access to its information. |
 | [`ONNXPrecision`](#aitune-torch-libs-onnx-onnx_model_info-ONNXPrecision) | Post-export quantization precision for the ONNX model. |
 
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_normalize_domain`](#aitune-torch-libs-onnx-onnx_model_info-_normalize_domain) | Use the empty string for both spellings of the standard ONNX domain. |
+
 ### Data
 
 [`ONNX_DTYPE_TO_PRECISION`](#aitune-torch-libs-onnx-onnx_model_info-ONNX_DTYPE_TO_PRECISION)
@@ -46,7 +52,10 @@ information, and then deletes the loaded model to free resources.
 All extracted information is accessible as properties.
 
 
-<ParamField path="_doc_string">
+<ParamField path="_doc_string" type="= model.doc_string">
+</ParamField>
+
+<ParamField path="_input_dtypes" type="= self._get_tensor_dtypes(model.graph.input)">
 </ParamField>
 
 <ParamField path="_input_names">
@@ -55,20 +64,42 @@ All extracted information is accessible as properties.
 <ParamField path="_input_shapes" type="= self._get_tensor_shapes(model.graph.input)">
 </ParamField>
 
-<ParamField path="_model_version">
+<ParamField path="_model_version" type="= model.model_version">
+</ParamField>
+
+<ParamField path="_operators" type="= self._get_operators(model.graph)">
+</ParamField>
+
+<ParamField path="_opset_version" type="= self._opsets.get('')">
+</ParamField>
+
+<ParamField path="_opsets" type="= &#123;&#125;">
+</ParamField>
+
+<ParamField path="_output_dtypes" type="= self._get_tensor_dtypes(model.graph.output)">
 </ParamField>
 
 <ParamField path="_output_names">
 </ParamField>
 
-<ParamField path="_producer_name">
+<ParamField path="_output_shapes" type="= self._get_tensor_shapes(model.graph.output)">
 </ParamField>
 
-<ParamField path="_producer_version">
+<ParamField path="_precision" type="= self._get_precision(model)">
+</ParamField>
+
+<ParamField path="_producer_name" type="= model.producer_name">
+</ParamField>
+
+<ParamField path="_producer_version" type="= model.producer_version">
 </ParamField>
 
 <ParamField path="doc_string" type="str">
 Documentation string of the model.
+</ParamField>
+
+<ParamField path="input_dtypes" type="dict[str, str]">
+Declared ONNX input tensor data types, keyed by tensor name.
 </ParamField>
 
 <ParamField path="input_names" type="list[str]">
@@ -87,15 +118,31 @@ Path to the ONNX model file.
 Version of the model.
 </ParamField>
 
-<ParamField path="opset_version" type="int">
+<ParamField path="operators" type="frozenset[str]">
+Operator types used by graph nodes, qualified with their domain when nonstandard.
+</ParamField>
+
+<ParamField path="opset_version" type="int | None">
 OpSet version of the model.
+</ParamField>
+
+<ParamField path="opsets" type="dict[str, int]">
+Imported opset versions keyed by ONNX domain; the standard domain is ``""``.
+</ParamField>
+
+<ParamField path="output_dtypes" type="dict[str, str]">
+Declared ONNX output tensor data types, keyed by tensor name.
 </ParamField>
 
 <ParamField path="output_names" type="list[str]">
 List of output tensor names.
 </ParamField>
 
-<ParamField path="precision" type="ONNXPrecision">
+<ParamField path="output_shapes" type="dict[str, list[int | str | None]]">
+Declared output shapes, keyed by tensor name.
+</ParamField>
+
+<ParamField path="precision" type="ONNXPrecision | None">
 Precision of the model.
 </ParamField>
 
@@ -106,6 +153,65 @@ Name of the producer/framework that created the model.
 <ParamField path="producer_version" type="str">
 Version of the producer/framework that created the model.
 </ParamField>
+<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo-_get_operators">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._get_operators(
+    graph: onnx.GraphProto
+) -> frozenset[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Collect operator types from a graph and any nested control-flow graphs.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo-_get_precision">
+
+<CodeBlock links={{"aitune.torch.libs.onnx.onnx_model_info.ONNXPrecision":"#aitune-torch-libs-onnx-onnx_model_info-ONNXPrecision"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._get_precision(
+    model: onnx.ModelProto
+) -> aitune.torch.libs.onnx.onnx_model_info.ONNXPrecision | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo-_get_tensor_dtypes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._get_tensor_dtypes(
+    value_info_list
+) -> dict[str, str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Extract declared tensor element types where available.
+
+
+</Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo-_get_tensor_shapes">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -124,23 +230,6 @@ aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._get_tensor_shapes(
 <Badge>staticmethod</Badge>
 
 Extract shapes from ONNX graph ValueInfoProto list (e.g. model.graph.input).
-
-
-</Indent>
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo-_precision">
-
-<CodeBlock links={{"aitune.torch.libs.onnx.onnx_model_info.ONNXPrecision":"#aitune-torch-libs-onnx-onnx_model_info-ONNXPrecision"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._precision(
-    model: onnx.ModelProto
-) -> aitune.torch.libs.onnx.onnx_model_info.ONNXPrecision | None
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
 
 
 </Indent>
@@ -194,6 +283,26 @@ Runtime CUDA Execution Provider without TensorRT.
 
 <ParamField path="INT8" type="= 'int8'">
 </ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-onnx-onnx_model_info-_normalize_domain">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.onnx_model_info._normalize_domain(
+    domain: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Use the empty string for both spellings of the standard ONNX domain.
+
 
 </Indent>
 

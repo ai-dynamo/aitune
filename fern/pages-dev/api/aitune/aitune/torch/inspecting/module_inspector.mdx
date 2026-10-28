@@ -61,7 +61,7 @@ Environment variables that could be used:
 
 <Anchor id="aitune-torch-inspecting-module_inspector-InspectContext">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.inspecting.module_inspector.InspectContext(
@@ -114,7 +114,7 @@ Get the inspect context, with optional changes.
 </Indent>
 <Anchor id="aitune-torch-inspecting-module_inspector-InspectContext-create_module_info">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.inspecting.module_inspector.InspectContext.create_module_info(
@@ -133,7 +133,7 @@ Get the ModuleInfo based on current context and provided object type.
 </Indent>
 <Anchor id="aitune-torch-inspecting-module_inspector-InspectContext-next">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.inspecting.module_inspector.InspectContext.next(
@@ -246,7 +246,7 @@ The dictionary to inspect
 </ParamField>
 
 <ParamField path="context" type="InspectContext">
-The context of the inspection
+[`InspectContext`](#aitune-torch-inspecting-module_inspector-InspectContext) — The context of the inspection
 </ParamField>
 
 
@@ -276,7 +276,7 @@ The list to inspect
 </ParamField>
 
 <ParamField path="context" type="InspectContext">
-The context of the inspection
+[`InspectContext`](#aitune-torch-inspecting-module_inspector-InspectContext) — The context of the inspection
 </ParamField>
 
 
@@ -311,7 +311,7 @@ The members of the object to inspect
 </ParamField>
 
 <ParamField path="context" type="InspectContext">
-The context of the inspection
+[`InspectContext`](#aitune-torch-inspecting-module_inspector-InspectContext) — The context of the inspection
 </ParamField>
 
 
@@ -341,7 +341,7 @@ The PyTorch module to inspect
 </ParamField>
 
 <ParamField path="context" type="InspectContext">
-The context of the inspection
+[`InspectContext`](#aitune-torch-inspecting-module_inspector-InspectContext) — The context of the inspection
 </ParamField>
 
 
@@ -371,14 +371,14 @@ The object to inspect
 </ParamField>
 
 <ParamField path="context" type="InspectContext">
-The context of the inspection
+[`InspectContext`](#aitune-torch-inspecting-module_inspector-InspectContext) — The context of the inspection
 </ParamField>
 
 
 </Indent>
 <Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_register_module">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext","aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext","aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.inspecting.module_inspector.ModuleInspector._register_module(
@@ -405,7 +405,7 @@ The parent module info if any
 </ParamField>
 
 <ParamField path="context" type="InspectContext">
-The context of the inspection
+[`InspectContext`](#aitune-torch-inspecting-module_inspector-InspectContext) — The context of the inspection
 </ParamField>
 
 
@@ -477,7 +477,7 @@ The module whose forward method to wrap
 </Indent>
 <Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-get_modules">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.inspecting.module_inspector.ModuleInspector.get_modules() -> list[aitune.torch.inspecting.module_info.ModuleInfo]
@@ -490,7 +490,7 @@ aitune.torch.inspecting.module_inspector.ModuleInspector.get_modules() -> list[a
 
 Get list of top-level executed modules or their first executed children.
 
-**Returns:** `list[ModuleInfo]`
+**Returns:** `list[` [`ModuleInfo`](./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo) `]`
 
 List of modules that were executed at the top level or their first executed children
 

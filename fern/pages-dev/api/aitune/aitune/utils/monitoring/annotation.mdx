@@ -14,6 +14,12 @@ Annotation wrapper for NVTX and hardware metrics collection - one entry point fo
 |------|-------------|
 | [`annotate`](#aitune-utils-monitoring-annotation-annotate) | Annotation wrapper for NVTX and hardware metrics collection - one entry point for both. |
 
+### Data
+
+[`P`](#aitune-utils-monitoring-annotation-P)
+
+[`R`](#aitune-utils-monitoring-annotation-R)
+
 ### API
 
 <Anchor id="aitune-utils-monitoring-annotation-annotate">
@@ -21,7 +27,7 @@ Annotation wrapper for NVTX and hardware metrics collection - one entry point fo
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.utils.monitoring.annotation.annotate(
+class aitune.utils.monitoring.annotate(
     name: str | None = None,
     color: str | int | None = None
 )
@@ -50,12 +56,12 @@ A color associated with the annotated code range.
 
 <Anchor id="aitune-utils-monitoring-annotation-annotate-__call__">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.utils.monitoring.annotation.P":"#aitune-utils-monitoring-annotation-P","aitune.utils.monitoring.annotation.R":"#aitune-utils-monitoring-annotation-R"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.annotation.annotate.__call__(
-    func
-)
+aitune.utils.monitoring.annotate.__call__(
+    func: collections.abc.Callable[aitune.utils.monitoring.annotation.P, aitune.utils.monitoring.annotation.R]
+) -> collections.abc.Callable[aitune.utils.monitoring.annotation.P, aitune.utils.monitoring.annotation.R]
 ```
 
 </CodeBlock>
@@ -72,7 +78,7 @@ Wraps the function as a decorator.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.annotation.annotate.__enter__()
+aitune.utils.monitoring.annotate.__enter__()
 ```
 
 </CodeBlock>
@@ -89,7 +95,7 @@ Enters the context manager.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.annotation.annotate.__exit__(
+aitune.utils.monitoring.annotate.__exit__(
     exc_type,
     exc_value,
     traceback
@@ -110,7 +116,7 @@ Exits the context manager.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.annotation.annotate._post_init()
+aitune.utils.monitoring.annotate._post_init()
 ```
 
 </CodeBlock>
@@ -123,3 +129,27 @@ Post-initialization.
 
 </Indent>
 </Indent>
+
+<Anchor id="aitune-utils-monitoring-annotation-P">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotation.P = ParamSpec('P')
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-utils-monitoring-annotation-R">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotation.R = TypeVar('R')
+```
+
+</CodeBlock>
+</Anchor>
+

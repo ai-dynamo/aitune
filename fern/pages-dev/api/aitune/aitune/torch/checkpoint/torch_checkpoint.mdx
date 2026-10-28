@@ -18,7 +18,7 @@ Torch checkpoint module.
 
 <Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint">
 
-<CodeBlock links={{"aitune.torch.checkpoint.storage.Storage":"/aitune/aitune/torch/checkpoint/storage#aitune-torch-checkpoint-storage-Storage"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.checkpoint.storage.Storage":"./storage.mdx#aitune-torch-checkpoint-storage-Storage"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint(
@@ -31,7 +31,7 @@ class aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint(
 
 <Indent>
 
-**Bases:** [Checkpoint](/aitune/aitune/torch/checkpoint/checkpoint#aitune-torch-checkpoint-checkpoint-Checkpoint)
+**Bases:** [Checkpoint](./checkpoint.mdx#aitune-torch-checkpoint-checkpoint-Checkpoint)
 
 Class for storing tuned module using torch module's state serialization.
 
@@ -40,12 +40,12 @@ It uses torch `state_dict` and `load_state_dict` to save and load the module sta
 
 <Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-get_pipeline_modules">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.get_pipeline_modules(
     pipeline: typing.Any
-) -> dict[str, torch.nn.Module]
+) -> dict[str, torch.nn.Module | aitune.torch.module.wrapper_module.Module]
 ```
 
 </CodeBlock>
@@ -63,15 +63,16 @@ Get the modules from the pipeline.
 The pipeline object to extract modules from.
 </ParamField>
 
-**Returns:** `dict[str, torch.nn.Module]`
+**Returns:** `dict[str, torch.nn.Module | WrapperModule]`
 
-A dictionary mapping attribute names to Module objects.
+A dictionary mapping dotted module paths to modules. The walk does not descend into
+WrapperModule instances.
 
 
 </Indent>
 <Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-load">
 
-<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.load(
@@ -117,14 +118,14 @@ The loaded module, which may be either the original module type or a wrapped mod
 
 **Raises:**
 
-- `ValueError`: If a module in the state_dict is not found in the pipeline or
-        if a matched attribute is not a torch.nn.Module or WrapperModule.
+- `ValueError`: If a module in the state_dict is not found in the pipeline, including keys that point to an
+attribute that is not a torch.nn.Module or WrapperModule.
 
 
 </Indent>
 <Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-load_state_dict_for_module">
 
-<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.load_state_dict_for_module(
@@ -183,6 +184,13 @@ torch.nn.Module: The module with tuned components loaded from the state dictiona
 If the top-level module was tuned, returns the new wrapper module.
 Otherwise, returns the original module with tuned submodules replaced.
 
+<Note>
+
+This method modifies the module in-place by replacing submodules with their
+tuned versions. Original torch modules that were not tuned are preserved.
+
+</Note>
+
 
 </Indent>
 <Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-load_state_dict_for_pipeline">
@@ -230,8 +238,8 @@ The pipeline with loaded modules.
 
 **Raises:**
 
-- `ValueError`: If a module in the state_dict is not found in the pipeline or
-        if a matched attribute is not a torch.nn.Module or WrapperModule.
+- `ValueError`: If a module in the state_dict is not found in the pipeline, including keys that point to an
+attribute that is not a torch.nn.Module or WrapperModule.
 
 
 </Indent>

@@ -22,7 +22,7 @@ Torch eager backend.
 <CodeBlock links={{"aitune.torch.backend.torch_eager.TorchEagerBackendConfig":"#aitune-torch-backend-torch_eager-TorchEagerBackendConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torch_eager.TorchEagerBackend(
+class aitune.torch.backend.TorchEagerBackend(
     config: aitune.torch.backend.torch_eager.TorchEagerBackendConfig | None = None
 )
 ```
@@ -32,7 +32,7 @@ class aitune.torch.backend.torch_eager.TorchEagerBackend(
 
 <Indent>
 
-**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+**Bases:** [Backend[TorchEagerBackendConfig]](./backend.mdx#aitune-torch-backend-backend-Backend)
 
 Backend that runs the model in eager mode with/without autocast.
 
@@ -59,9 +59,6 @@ and required code changes from the user.
 <ParamField path="_build_mode" type="= BuildMode.JUST_IN_TIME">
 </ParamField>
 
-<ParamField path="_config" type="= config or TorchEagerBackendConfig()">
-</ParamField>
-
 <ParamField path="_execution_modes">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_activate">
@@ -69,7 +66,7 @@ and required code changes from the user.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend._activate()
+aitune.torch.backend.TorchEagerBackend._activate()
 ```
 
 </CodeBlock>
@@ -83,15 +80,15 @@ Activates runner.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend._build(
+aitune.torch.backend.TorchEagerBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
-) -> aitune.torch.backend.backend.Backend
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -108,7 +105,7 @@ Builds the model.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend._deactivate()
+aitune.torch.backend.TorchEagerBackend._deactivate()
 ```
 
 </CodeBlock>
@@ -125,7 +122,7 @@ Deactivates runner.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend._deploy()
+aitune.torch.backend.TorchEagerBackend._deploy()
 ```
 
 </CodeBlock>
@@ -139,10 +136,10 @@ Deploys the backend.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_eager-TorchEagerBackend-_get_required_casting_dtype">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend._get_required_casting_dtype(
+aitune.torch.backend.TorchEagerBackend._get_required_casting_dtype(
     module: torch.nn.Module,
     samples: collections.abc.Sequence[aitune.torch.module.sample_store.Sample]
 ) -> torch.dtype | None
@@ -165,7 +162,7 @@ The module to get the dtype from.
 </ParamField>
 
 <ParamField path="samples" type="Sequence[Sample]">
-Recorded samples for the model.
+`Sequence[` [`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — Recorded samples for the model.
 </ParamField>
 
 **Returns:** `torch.dtype | None`
@@ -179,7 +176,7 @@ torch.dtype: The required casting dtype. Returns None if no casting is required.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend._infer(
+aitune.torch.backend.TorchEagerBackend._infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -215,7 +212,7 @@ The result of the inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend._infer_with_autocast(
+aitune.torch.backend.TorchEagerBackend._infer_with_autocast(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -249,7 +246,7 @@ The result of the inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend.describe() -> str
+aitune.torch.backend.TorchEagerBackend.describe() -> str
 ```
 
 </CodeBlock>
@@ -266,7 +263,7 @@ Returns the description of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend.from_dict(
+aitune.torch.backend.TorchEagerBackend.from_dict(
     module: torch.nn.Module | None,
     state_dict: dict
 )
@@ -288,7 +285,7 @@ Creates a backend from a state_dict.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend.key() -> str
+aitune.torch.backend.TorchEagerBackend.key() -> str
 ```
 
 </CodeBlock>
@@ -305,7 +302,7 @@ Returns the key of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_eager.TorchEagerBackend.to_dict()
+aitune.torch.backend.TorchEagerBackend.to_dict()
 ```
 
 </CodeBlock>
@@ -324,7 +321,7 @@ Returns the state_dict of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torch_eager.TorchEagerBackendConfig(
+class aitune.torch.backend.TorchEagerBackendConfig(
     autocast_enabled: bool = False,
     autocast_dtype: torch.dtype | None = None
 )
@@ -337,7 +334,7 @@ class aitune.torch.backend.torch_eager.TorchEagerBackendConfig(
 
 <Badge>Dataclass</Badge>
 
-**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+**Bases:** [BackendConfig](./backend.mdx#aitune-torch-backend-backend-BackendConfig)
 
 Configuration for torch eager backend.
 

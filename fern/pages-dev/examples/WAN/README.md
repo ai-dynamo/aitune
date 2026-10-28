@@ -67,8 +67,8 @@ uv run torchrun --standalone --nproc-per-node=4 \
 ```
 
 The application initializes NCCL before loading the pipeline. Diffusers applies a context-parallel plan to the WAN
-transformer. AITune detects the distributed module and compares the AOT and JIT variants of Torch-TensorRT and
-TorchInductor using the worst-rank performance result. Each rank saves a distinct checkpoint such as
+transformer. AITune detects the distributed module and resolves its default compatible candidates, currently
+TorchInductor AOT and JIT, using the worst-rank performance result. Each rank saves a distinct checkpoint such as
 `wan2.1-t2v-1.3b.rank-0-of-4.ait`.
 
 Tuning uses latent pipeline output. This keeps the representative denoising workload while avoiding repeated VAE

@@ -49,7 +49,7 @@ FlashAttention-4 kernel provider.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider()
+class aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider()
 ```
 
 </CodeBlock>
@@ -57,7 +57,7 @@ class aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashA
 
 <Indent>
 
-**Bases:** [KernelProvider](/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
+**Bases:** [KernelProvider](./kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
 
 Run FlashAttention-4 with a sample-derived argument and layout plan.
 
@@ -85,7 +85,7 @@ Name of the function replaced by this provider.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider":"#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._from_dict(
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._from_dict(
     state_dict: dict[str, typing.Any]
 ) -> aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider
 ```
@@ -106,7 +106,7 @@ Restore the selected inference plan.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._infer(
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -126,7 +126,7 @@ Run the selected FlashAttention-4 inference plan.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._load_runtime_dependencies() -> None
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._load_runtime_dependencies() -> None
 ```
 
 </CodeBlock>
@@ -140,10 +140,10 @@ Load FlashAttention-4 dependencies before graph capture.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_prepare">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._prepare(
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._prepare(
     samples: list[aitune.torch.module.sample_store.Sample]
 ) -> bool
 ```
@@ -162,7 +162,7 @@ Select one inference plan for all representative samples.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider._to_dict() -> dict[str, typing.Any]
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._to_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -367,7 +367,7 @@ Return how q/k/v are passed in the representative sample.
 
 <Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-_sample_replacement_plan">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider._sample_replacement_plan(

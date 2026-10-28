@@ -21,7 +21,7 @@ Utilities for validating and benchmarking kernel providers.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_utils.KernelUtils()
+class aitune.torch.kernel_forge.KernelUtils()
 ```
 
 </CodeBlock>
@@ -34,10 +34,10 @@ Kernel utilities.
 
 <Anchor id="aitune-torch-kernel_forge-kernel_utils-KernelUtils-_call_function">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_utils.KernelUtils._call_function(
+aitune.torch.kernel_forge.KernelUtils._call_function(
     function: collections.abc.Callable,
     sample: aitune.torch.module.sample_store.Sample
 ) -> typing.Any
@@ -56,10 +56,10 @@ Call a function with copied sample inputs.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_utils-KernelUtils-_validate_other_data">
 
-<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"../module/sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_utils.KernelUtils._validate_other_data(
+aitune.torch.kernel_forge.KernelUtils._validate_other_data(
     real_metadata: aitune.torch.module.sample_metadata.SampleMetadata,
     new_metadata: aitune.torch.module.sample_metadata.SampleMetadata
 ) -> list[str]
@@ -76,10 +76,10 @@ Validate other data in the real and new metadata.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_utils-KernelUtils-_validate_tensors">
 
-<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"../module/sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_utils.KernelUtils._validate_tensors(
+aitune.torch.kernel_forge.KernelUtils._validate_tensors(
     real_output: typing.Any,
     new_output: typing.Any,
     real_metadata: aitune.torch.module.sample_metadata.SampleMetadata,
@@ -102,10 +102,10 @@ Validate tensors in the real and new metadata.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_utils-KernelUtils-benchmark_function">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_utils.KernelUtils.benchmark_function(
+aitune.torch.kernel_forge.KernelUtils.benchmark_function(
     function: collections.abc.Callable,
     samples: list[aitune.torch.module.sample_store.Sample],
     return_mode: typing.Literal['min', 'max', 'mean', 'median', 'all'] = 'mean',
@@ -131,7 +131,7 @@ the function to benchmark
 </ParamField>
 
 <ParamField path="samples" type="list[Sample]">
-the samples to use for benchmarking
+`list[` [`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — the samples to use for benchmarking
 </ParamField>
 
 <ParamField path="return_mode" type="Literal['min', 'max', 'mean', 'median', 'all']" default="'mean'">
@@ -154,10 +154,10 @@ A float value of the benchmark result.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_utils-KernelUtils-validate_function">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_utils.KernelUtils.validate_function(
+aitune.torch.kernel_forge.KernelUtils.validate_function(
     real_function: collections.abc.Callable,
     new_function: collections.abc.Callable,
     samples: list[aitune.torch.module.sample_store.Sample],
@@ -188,7 +188,7 @@ the new function to validate
 </ParamField>
 
 <ParamField path="samples" type="list[Sample]">
-the samples to use for validation
+`list[` [`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — the samples to use for validation
 </ParamField>
 
 <ParamField path="atol" type="float" default="10.0">

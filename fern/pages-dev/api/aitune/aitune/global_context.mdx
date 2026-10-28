@@ -45,6 +45,16 @@ Global context holding key value pairs.
 
 Creates only one instance (singleton) and can be used as a context manager to push and pop context.
 
+Example:
+    &gt;&gt;&gt; global_context.set("bs", 1)
+    &gt;&gt;&gt; with global_context:
+    ...     global_context.set("bs", 2)
+    ...     with global_context:
+    ...         global_context.set("bs", 3)
+    ...         assert global_context.get("bs") == 3
+    ...     assert global_context.get("bs") == 2
+    &gt;&gt;&gt; assert global_context.get("bs") == 1
+
 
 <ParamField path="_current_data">
 Return the current context.

@@ -4,30 +4,47 @@ slug: aitune/aitune/records
 title: aitune.records
 ---
 
-Frontend-neutral values shared by tuning frontends and publishers.
+Portable deployment records for tuning frontends and runtime adapters.
 
 The package deliberately depends only on the Python standard library. Frontends
 map native values into these records, and publishers consume them without either
 side importing the other.
 
-``TensorSpec`` is the static interface declared by an executable. Tuning adds
-concrete bounds and batch interpretation in ``TunedTensorSpec``; only tuned
-specifications are stored on an ``Artifact``.
+``DeploymentArtifact`` composes model files, bounded tensor specifications, and
+runtime settings. Adapters dispatch on ``model.format`` and ``runtime.name``;
+custom formats and runtimes use the same records without subclassing.
 
     &gt;&gt;&gt; from pathlib import Path
-    &gt;&gt;&gt; input_ids = TensorSpec("input_ids", DType.INT64, ("batch", "sequence"))
-    &gt;&gt;&gt; attention_mask = TensorSpec("attention_mask", DType.BOOL, ("batch", "sequence"))
-    &gt;&gt;&gt; output_spec = TensorSpec("embedding", DType.FLOAT32, ("batch", "sequence", 768))
     &gt;&gt;&gt; inputs = (
-    ...     TunedTensorSpec.from_spec(input_ids, min_shape=(1, 8), max_shape=(8, 512), batch_axis=0),
-    ...     TunedTensorSpec.from_spec(attention_mask, min_shape=(1, 8), max_shape=(8, 512), batch_axis=0),
+    ...     BoundedTensorSpec(
+    ...         name="input_ids",
+    ...         dtype=DType.INT64,
+    ...         min_shape=(1, 8),
+    ...         max_shape=(8, 512),
+    ...         batch_axis=0,
+    ...     ),
+    ...     BoundedTensorSpec(
+    ...         name="attention_mask",
+    ...         dtype=DType.BOOL,
+    ...         min_shape=(1, 8),
+    ...         max_shape=(8, 512),
+    ...         batch_axis=0,
+    ...     ),
     ... )
-    &gt;&gt;&gt; outputs = (TunedTensorSpec.from_spec(output_spec, min_shape=(1, 8, 768), max_shape=(8, 512, 768), batch_axis=0),)
-    &gt;&gt;&gt; artifact = ONNXArtifact(
-    ...     path=Path("encoder.onnx"),
-    ...     fingerprint="0" * 64,
+    &gt;&gt;&gt; outputs = (
+    ...     BoundedTensorSpec(
+    ...         name="embedding",
+    ...         dtype=DType.FLOAT32,
+    ...         min_shape=(1, 8, 768),
+    ...         max_shape=(8, 512, 768),
+    ...         batch_axis=0,
+    ...     ),
+    ... )
+    &gt;&gt;&gt; artifact = DeploymentArtifact(
+    ...     model=ModelFiles(format="onnx", path=Path("encoder.onnx")),
     ...     inputs=inputs,
     ...     outputs=outputs,
+    ...     runtime=RuntimeConfig(name="onnxruntime", options=&#123;"execution_provider": "cuda"&#125;),
     ... )
     &gt;&gt;&gt; artifact.input_names
     ('input_ids', 'attention_mask')
@@ -36,26 +53,519 @@ specifications are stored on an ``Artifact``.
 
 ## Submodules
 
-- **[`aitune.records.artifact`](/aitune/aitune/records/artifact)**
-- **[`aitune.records.dtypes`](/aitune/aitune/records/dtypes)**
-- **[`aitune.records.shapes`](/aitune/aitune/records/shapes)**
+- **[`aitune.records.artifact`](./artifact.mdx)**
+- **[`aitune.records.dtypes`](./dtypes.mdx)**
+- **[`aitune.records.shapes`](./shapes.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-records-__all__)
+| Name | Description |
+|------|-------------|
+| [`BoundedTensorSpec`](#aitune-records-shapes-BoundedTensorSpec) | Describe one tensor over the shape range established by tuning. |
+| [`DType`](#aitune-records-dtypes-DType) | Tensor element types supported by the first adapters. |
+| [`DeploymentArtifact`](#aitune-records-artifact-DeploymentArtifact) | Describe one tuned model for built-in or user-defined deployment adapters. |
+| [`ModelFiles`](#aitune-records-artifact-ModelFiles) | Describe the files and format properties of one executable model. |
+| [`RuntimeConfig`](#aitune-records-artifact-RuntimeConfig) | Preserve runtime choices independently of a deployment platform. |
+| [`TensorSample`](#aitune-records-artifact-TensorSample) | Portable values for one representative input tensor. |
 
 ### API
 
-<Anchor id="aitune-records-__all__">
+<Anchor id="aitune-records-shapes-BoundedTensorSpec">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.records.dtypes.DType":"./dtypes.mdx#aitune-records-dtypes-DType"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.records.__all__ = ['Artifact', 'ArtifactIntegrityError', 'DType', 'ONNXArtifact', 'TensorRTPlanArt...
+class aitune.records.BoundedTensorSpec(
+    name: str,
+    dtype: aitune.records.dtypes.DType,
+    min_shape: tuple[int, ...],
+    max_shape: tuple[int, ...],
+    batch_axis: int | None = 0
+)
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Describe one tensor over the shape range established by tuning.
+
+Minimum and maximum shapes record the concrete domain AITune validated for
+the artifact. An axis is fixed when both bounds are equal and dynamic when
+they differ. The first axis is treated as the logical batch axis by default;
+``batch_axis=None`` explicitly describes an unbatched tensor.
+
+**Parameters:**
+
+<ParamField path="name" type="str">
+Tensor name used by the executable.
+</ParamField>
+
+<ParamField path="dtype" type="DType">
+[`DType`](./dtypes.mdx#aitune-records-dtypes-DType) — Tensor element type.
+</ParamField>
+
+<ParamField path="min_shape" type="tuple[int, ...]">
+Smallest accepted tensor shape.
+</ParamField>
+
+<ParamField path="max_shape" type="tuple[int, ...]">
+Largest accepted tensor shape.
+</ParamField>
+
+<ParamField path="batch_axis" type="int | None" default="0">
+Logical batch-axis index, or ``None`` for an unbatched tensor.
+</ParamField>
+
+
+<ParamField path="batch_axis" type="int | None = 0">
+</ParamField>
+
+<ParamField path="dtype" type="DType">
+</ParamField>
+
+<ParamField path="max_batch_size" type="int | None">
+Return the largest batch size AITune selected, if known.
+</ParamField>
+
+<ParamField path="max_shape" type="tuple[int, ...]">
+</ParamField>
+
+<ParamField path="min_batch_size" type="int | None">
+Return the smallest batch size AITune selected, if known.
+</ParamField>
+
+<ParamField path="min_shape" type="tuple[int, ...]">
+</ParamField>
+
+<ParamField path="name" type="str">
+</ParamField>
+<Anchor id="aitune-records-shapes-BoundedTensorSpec-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.BoundedTensorSpec.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate the tensor declaration and its concrete bounds.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-records-dtypes-DType">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.DType
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Tensor element types supported by the first adapters.
+
+Frontends and publishers convert their native dtypes at the records boundary.
+
+<ParamField path="BOOL" type="= 'bool'">
+</ParamField>
+
+<ParamField path="FLOAT16" type="= 'float16'">
+</ParamField>
+
+<ParamField path="FLOAT32" type="= 'float32'">
+</ParamField>
+
+<ParamField path="FLOAT64" type="= 'float64'">
+</ParamField>
+
+<ParamField path="INT16" type="= 'int16'">
+</ParamField>
+
+<ParamField path="INT32" type="= 'int32'">
+</ParamField>
+
+<ParamField path="INT64" type="= 'int64'">
+</ParamField>
+
+<ParamField path="INT8" type="= 'int8'">
+</ParamField>
+
+<ParamField path="UINT8" type="= 'uint8'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-records-artifact-DeploymentArtifact">
+
+<CodeBlock links={{"aitune.records.artifact.ModelFiles":"#aitune-records-artifact-ModelFiles","aitune.records.shapes.BoundedTensorSpec":"./shapes.mdx#aitune-records-shapes-BoundedTensorSpec","aitune.records.artifact.RuntimeConfig":"#aitune-records-artifact-RuntimeConfig","aitune.records.artifact.TensorSample":"#aitune-records-artifact-TensorSample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.DeploymentArtifact(
+    model: aitune.records.artifact.ModelFiles,
+    inputs: tuple[aitune.records.shapes.BoundedTensorSpec, ...],
+    outputs: tuple[aitune.records.shapes.BoundedTensorSpec, ...],
+    runtime: aitune.records.artifact.RuntimeConfig,
+    sample_inputs: tuple[aitune.records.artifact.TensorSample, ...] = ()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Describe one tuned model for built-in or user-defined deployment adapters.
+
+This record composes model files, a tensor interface, and runtime settings.
+It neither loads the model nor defines deployment-platform configuration.
+
+**Parameters:**
+
+<ParamField path="model" type="ModelFiles">
+[`ModelFiles`](#aitune-records-artifact-ModelFiles) — Model format, files, and format-specific metadata.
+</ParamField>
+
+<ParamField path="inputs" type="tuple[BoundedTensorSpec, ...]">
+`tuple[` [`BoundedTensorSpec`](./shapes.mdx#aitune-records-shapes-BoundedTensorSpec) `, ...]` — Input tensor specifications in executable order.
+</ParamField>
+
+<ParamField path="outputs" type="tuple[BoundedTensorSpec, ...]">
+`tuple[` [`BoundedTensorSpec`](./shapes.mdx#aitune-records-shapes-BoundedTensorSpec) `, ...]` — Output tensor specifications in executable order.
+</ParamField>
+
+<ParamField path="runtime" type="RuntimeConfig">
+[`RuntimeConfig`](#aitune-records-artifact-RuntimeConfig) — Runtime identifier and options selected during tuning.
+</ParamField>
+
+<ParamField path="sample_inputs" type="tuple[TensorSample, ...]" default="()">
+`tuple[` [`TensorSample`](#aitune-records-artifact-TensorSample) `, ...]` — Representative input values in executable order, when retained.
+</ParamField>
+
+
+<ParamField path="input_names" type="tuple[str, ...]">
+Return input names in executable order.
+</ParamField>
+
+<ParamField path="inputs" type="tuple[BoundedTensorSpec, ...]">
+</ParamField>
+
+<ParamField path="max_batch_size" type="int | None">
+Return the largest batch size supported by every tensor, if known.
+
+Every input and output must have a known batch axis and support batch
+size one. Differing maximums are intersected by using the smallest one.
+</ParamField>
+
+<ParamField path="model" type="ModelFiles">
+</ParamField>
+
+<ParamField path="output_names" type="tuple[str, ...]">
+Return output names in executable order.
+</ParamField>
+
+<ParamField path="outputs" type="tuple[BoundedTensorSpec, ...]">
+</ParamField>
+
+<ParamField path="runtime" type="RuntimeConfig">
+</ParamField>
+
+<ParamField path="sample_inputs" type="tuple[TensorSample, ...] = ()">
+</ParamField>
+<Anchor id="aitune-records-artifact-DeploymentArtifact-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.DeploymentArtifact.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require unique names within each side of the tensor interface.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-records-artifact-ModelFiles">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.ModelFiles(
+    format: str,
+    path: pathlib.Path,
+    additional_files: tuple[pathlib.Path, ...] = (),
+    metadata: collections.abc.Mapping[str, typing.Any] = dict()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Describe the files and format properties of one executable model.
+
+**Parameters:**
+
+<ParamField path="format" type="str">
+Format identifier, such as ``onnx``, ``tensorrt_plan``, or ``pt2``.
+Custom formats do not require registration with AITune.
+</ParamField>
+
+<ParamField path="path" type="Path">
+Main model file opened by the runtime.
+</ParamField>
+
+<ParamField path="additional_files" type="tuple[Path, ...]" default="()">
+Required file paths relative to ``path.parent``.
+</ParamField>
+
+<ParamField path="metadata" type="Mapping[str, Any]" default="dict()">
+Format-specific properties, such as a plan's profile count.
+Producers and consumers of the format define these keys.
+</ParamField>
+
+
+<ParamField path="additional_files" type="tuple[Path, ...] = ()">
+</ParamField>
+
+<ParamField path="files" type="tuple[Path, ...]">
+Return all source paths, with the main file first.
+</ParamField>
+
+<ParamField path="format" type="str">
+</ParamField>
+
+<ParamField path="metadata" type="Mapping[str, Any] = field(default_factory=dict)">
+</ParamField>
+
+<ParamField path="path" type="Path">
+</ParamField>
+<Anchor id="aitune-records-artifact-ModelFiles-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.ModelFiles.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate the format identifier and relative file layout.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-ModelFiles-export_files">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.ModelFiles.export_files(
+    path: str | os.PathLike[str]
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Copy the main file and its additional files to the destination.
+
+Copies directly to the destination, overwriting existing files. A copy
+failure may leave an incomplete export. The caller is responsible for
+keeping sources unchanged during copying and for staging and publishing
+the complete artifact.
+
+**Parameters:**
+
+<ParamField path="path" type="str | os.PathLike[str]">
+Destination main file. Additional files retain their relative
+paths beside it. Missing parent directories are created.
+</ParamField>
+
+**Returns:** `Path`
+
+The destination main file path.
+
+**Raises:**
+
+- `ValueError`: If export targets collide with each other or with model source files.
+- `OSError`: If directory creation or copying fails.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-records-artifact-RuntimeConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.RuntimeConfig(
+    name: str,
+    options: collections.abc.Mapping[str, typing.Any] = dict()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Preserve runtime choices independently of a deployment platform.
+
+**Parameters:**
+
+<ParamField path="name" type="str">
+Runtime identifier, such as ``onnxruntime`` or a user-defined name.
+</ParamField>
+
+<ParamField path="options" type="Mapping[str, Any]" default="dict()">
+Runtime settings selected during tuning. For ``onnxruntime``,
+``execution_provider`` is ``cuda`` or ``tensorrt``. Custom runtimes
+define their own option names and values; adapters interpret them.
+</ParamField>
+
+
+<ParamField path="name" type="str">
+</ParamField>
+
+<ParamField path="options" type="Mapping[str, Any] = field(default_factory=dict)">
+</ParamField>
+<Anchor id="aitune-records-artifact-RuntimeConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.RuntimeConfig.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require a runtime identifier that adapters can dispatch on.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-records-artifact-TensorSample">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.TensorSample(
+    name: str,
+    shape: tuple[int, ...],
+    values: tuple[bool | int | float, ...]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Portable values for one representative input tensor.
+
+
+<ParamField path="name" type="str">
+</ParamField>
+
+<ParamField path="shape" type="tuple[int, ...]">
+</ParamField>
+
+<ParamField path="values" type="tuple[bool | int | float, ...]">
+</ParamField>
+<Anchor id="aitune-records-artifact-TensorSample-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.TensorSample.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require the flattened values to match the recorded shape.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-TensorSample-from_dict">
+
+<CodeBlock links={{"aitune.records.artifact.TensorSample":"#aitune-records-artifact-TensorSample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.TensorSample.from_dict(
+    data: collections.abc.Mapping[str, typing.Any]
+) -> aitune.records.artifact.TensorSample
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore representative tensor values from checkpoint state.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-TensorSample-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.TensorSample.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return checkpoint-safe primitive values.
+
+
+</Indent>
+</Indent>

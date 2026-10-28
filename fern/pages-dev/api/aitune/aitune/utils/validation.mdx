@@ -45,15 +45,15 @@ Validate that value is within the provided inclusive range.
 **Parameters:**
 
 <ParamField path="value" type="Number">
-Numeric value to validate.
+[`Number`](#aitune-utils-validation-Number) — Numeric value to validate.
 </ParamField>
 
 <ParamField path="min_value" type="Number">
-Inclusive lower bound.
+[`Number`](#aitune-utils-validation-Number) — Inclusive lower bound.
 </ParamField>
 
 <ParamField path="max_value" type="Number">
-Inclusive upper bound.
+[`Number`](#aitune-utils-validation-Number) — Inclusive upper bound.
 </ParamField>
 
 <ParamField path="name" type="str | None" default="None">
@@ -88,7 +88,7 @@ Validate that value is greater than or equal to 0.
 **Parameters:**
 
 <ParamField path="value" type="Number">
-Numeric value to validate.
+[`Number`](#aitune-utils-validation-Number) — Numeric value to validate.
 </ParamField>
 
 <ParamField path="name" type="str | None" default="None">
@@ -97,7 +97,7 @@ Name of the value being validated.
 
 **Raises:**
 
-- `ValueError`: If value is less than 0.
+- `ValueError`: If value is not greater than or equal to 0, including NaN.
 
 
 </Indent>
@@ -123,7 +123,7 @@ Validate that value is greater than 0.
 **Parameters:**
 
 <ParamField path="value" type="Number">
-Numeric value to validate.
+[`Number`](#aitune-utils-validation-Number) — Numeric value to validate.
 </ParamField>
 
 <ParamField path="name" type="str | None" default="None">
@@ -132,7 +132,7 @@ Name of the value being validated.
 
 **Raises:**
 
-- `ValueError`: If value is less than or equal to 0.
+- `ValueError`: If value is not greater than 0, including NaN.
 
 
 </Indent>

@@ -280,8 +280,8 @@ class aitune.torch.performance.attribution_hooks._RegionTarget(
 One module to instrument with a record_function annotation during capture.
 
 ``annotation_prefix`` distinguishes the kind of region: AOT-managed modules
-use :data:`AOT_MODULE_REGION_PREFIX`, top-level untuned modules use
-:data:`UNTUNED_MODULE_REGION_PREFIX`. The full annotation name is
+use `AOT_MODULE_REGION_PREFIX`, top-level untuned modules use
+`UNTUNED_MODULE_REGION_PREFIX`. The full annotation name is
 ``f"&#123;annotation_prefix&#125;&#123;path&#125;"``.
 
 
@@ -369,7 +369,7 @@ are statically nested (one's underlying module is a descendant of another's
 subtree), they may emit overlapping spans on different modules during
 measurement. Whether that overlap actually happens depends on what the
 profiled workload calls — only the wrappers that fire in a given run can
-overlap. Event-time suppression in :meth:`_RuntimeProfile._classify_region_events`
+overlap. Event-time suppression in `_RuntimeProfile._classify_region_events`
 handles the dynamic case correctly: a nested AOT event observed as a
 descendant of another AOT event in the same profiled run is skipped from
 aggregation; events fired independently (e.g. the inner wrapper invoked
@@ -427,7 +427,7 @@ For other objects (pipeline-like), it starts from direct ``vars(obj)`` attribute
 that are ``nn.Module`` instances. Plain Python ``list`` / ``dict`` attributes are
 not entered; ``nn.ModuleList`` / ``nn.ModuleDict`` are entered transparently
 because they're never invoked as modules themselves (their ``forward`` raises),
-so their children are what get attributed (see :func:`_is_transparent_container`).
+so their children are what get attributed (see `_is_transparent_container`).
 
 From each starting point, discovery walks the subtree to find the topmost
 untuned modules:
@@ -583,7 +583,7 @@ aitune.torch.performance.attribution_hooks._user_defined_method_names(
 
 Return method names visible on ``type(module)`` (including ancestors) beyond what ``nn.Module`` provides.
 
-Walks the full MRO via :func:`dir`, which is intentional — many framework
+Walks the full MRO via `dir`, which is intentional — many framework
 entry points like HF Transformers' ``GenerationMixin.generate`` are defined
 on mixins rather than on the concrete model subclass. Filters out:
 
@@ -592,7 +592,7 @@ on mixins rather than on the concrete model subclass. Filters out:
 - the ``forward`` method (already hook-covered)
 - non-function descriptors (properties, classmethods, staticmethods, slot wrappers)
 
-Uses :func:`inspect.getattr_static` so accessing a property descriptor does not
+Uses `inspect.getattr_static` so accessing a property descriptor does not
 fire its underlying ``fget``.
 
 

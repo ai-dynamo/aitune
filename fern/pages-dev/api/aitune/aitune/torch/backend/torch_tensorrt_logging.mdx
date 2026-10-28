@@ -24,7 +24,7 @@ Logging helpers shared by the Torch-TensorRT backends.
 ```python
 aitune.torch.backend.torch_tensorrt_logging.torch_tensorrt_errors(
     torch_tensorrt_module: typing.Any
-) -> collections.abc.Iterator[None]
+) -> collections.abc.Generator[None, None, None]
 ```
 
 </CodeBlock>
@@ -44,7 +44,7 @@ Hide very large Torch-TensorRT logs while saving or loading an artifact.
 ```python
 aitune.torch.backend.torch_tensorrt_logging.torch_tensorrt_warnings(
     torch_tensorrt_module: typing.Any
-) -> collections.abc.Iterator[None]
+) -> collections.abc.Generator[None, None, None]
 ```
 
 </CodeBlock>

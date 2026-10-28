@@ -8,6 +8,14 @@ Module for enabling JIT tuning.
 
 If you import this module, all torch models will be tuned automatically.
 
+Example:
+    &gt;&gt;&gt; import aitune.torch.jit.enable
+    &gt;&gt;&gt; import torch
+    &gt;&gt;&gt; model = torch.nn.Linear(10, 5)
+    &gt;&gt;&gt; x = model.forward(torch.randn(10))
+    &gt;&gt;&gt; x = model.forward(torch.randn(10))
+    &gt;&gt;&gt; # model is tuned
+
 ## Module Contents
 
 ### Functions

@@ -8,29 +8,1074 @@ Kernel provider protocol and built-in implementations.
 
 ## Submodules
 
-- **[`aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider`](/aitune/aitune/torch/kernel_forge/kernel_provider/diffusers_attention_provider)**
-- **[`aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider`](/aitune/aitune/torch/kernel_forge/kernel_provider/flash_attention4_provider)**
-- **[`aitune.torch.kernel_forge.kernel_provider.kernel_generator`](/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_generator)**
-- **[`aitune.torch.kernel_forge.kernel_provider.kernel_provider`](/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider)**
-- **[`aitune.torch.kernel_forge.kernel_provider.sage_attention_provider`](/aitune/aitune/torch/kernel_forge/kernel_provider/sage_attention_provider)**
-- **[`aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider`](/aitune/aitune/torch/kernel_forge/kernel_provider/torch_sdpa_provider)**
+- **[`aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider`](./diffusers_attention_provider.mdx)**
+- **[`aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider`](./flash_attention4_provider.mdx)**
+- **[`aitune.torch.kernel_forge.kernel_provider.kernel_generator`](./kernel_generator.mdx)**
+- **[`aitune.torch.kernel_forge.kernel_provider.kernel_provider`](./kernel_provider.mdx)**
+- **[`aitune.torch.kernel_forge.kernel_provider.sage_attention_provider`](./sage_attention_provider.mdx)**
+- **[`aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider`](./torch_sdpa_provider.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-torch-kernel_forge-kernel_provider-__all__)
+| Name | Description |
+|------|-------------|
+| [`DiffusersAttentionBackend`](#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionBackend) | Diffusers attention backends compatible with SDPA replacement. |
+| [`DiffusersAttentionKernelProvider`](#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider) | Run SDPA with a selected Diffusers attention dispatcher backend. |
+| [`FlashAttention4KernelProvider`](#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider) | Run FlashAttention-4 with a sample-derived argument and layout plan. |
+| [`KernelGenerationResult`](#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult) | Result of generating one provider for one PyTorch function. |
+| [`KernelGenerator`](#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator) | Asynchronously generate kernel providers for supported functions. |
+| [`KernelProvider`](#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider) | Kernel provider interface. |
+| [`KernelProviderState`](#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProviderState) | Kernel provider lifecycle state. |
+| [`SageAttentionKernelProvider`](#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider) | Run SageAttention with a sample-derived argument and layout plan. |
+| [`TorchSDPAKernelProvider`](#aitune-torch-kernel_forge-kernel_provider-torch_sdpa_provider-TorchSDPAKernelProvider) | Run PyTorch SDPA under a selected backend context. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`kernel_provider_from_dict`](#aitune-torch-kernel_forge-kernel_provider-kernel_provider-kernel_provider_from_dict) | Restore the concrete provider identified by its serialized class name. |
 
 ### API
 
-<Anchor id="aitune-torch-kernel_forge-kernel_provider-__all__">
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionBackend">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.__all__ = ['DiffusersAttentionBackend', 'DiffusersAttentionKernelProvider', 'FlashAttentio...
+class aitune.torch.kernel_forge.kernel_provider.DiffusersAttentionBackend
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Diffusers attention backends compatible with SDPA replacement.
+
+<ParamField path="FLASH" type="= 'flash'">
+</ParamField>
+
+<ParamField path="FLASH_3" type="= '_flash_3'">
+</ParamField>
+
+<ParamField path="FLASH_3_HUB" type="= '_flash_3_hub'">
+</ParamField>
+
+<ParamField path="FLASH_4_HUB" type="= 'flash_4_hub'">
+</ParamField>
+
+<ParamField path="FLASH_HUB" type="= 'flash_hub'">
+</ParamField>
+
+<ParamField path="FLEX" type="= 'flex'">
+</ParamField>
+
+<ParamField path="SAGE" type="= 'sage'">
+</ParamField>
+
+<ParamField path="SAGE_HUB" type="= 'sage_hub'">
+</ParamField>
+
+<ParamField path="SAGE_QK_INT8_PV_FP16_CUDA" type="= '_sage_qk_int8_pv_fp16_cuda'">
+</ParamField>
+
+<ParamField path="SAGE_QK_INT8_PV_FP16_TRITON" type="= '_sage_qk_int8_pv_fp16_triton'">
+</ParamField>
+
+<ParamField path="SAGE_QK_INT8_PV_FP8_CUDA" type="= '_sage_qk_int8_pv_fp8_cuda'">
+</ParamField>
+
+<ParamField path="SAGE_QK_INT8_PV_FP8_CUDA_SM90" type="= '_sage_qk_int8_pv_fp8_cuda_sm90'">
+</ParamField>
+
+<ParamField path="XFORMERS" type="= 'xformers'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionBackend":"#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionBackend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.DiffusersAttentionKernelProvider(
+    backend: aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionBackend
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [KernelProvider](./kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
+
+Run SDPA with a selected Diffusers attention dispatcher backend.
+
+
+<ParamField path="_backend" type="Callable[..., Tensor]">
+Load the Diffusers dispatcher bound to the selected backend lazily.
+</ParamField>
+
+<ParamField path="name" type="str">
+Human-readable provider name.
+</ParamField>
+
+<ParamField path="supported_function" type="str">
+Name of the function replaced by this provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider":"#aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.DiffusersAttentionKernelProvider._from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.diffusers_attention_provider.DiffusersAttentionKernelProvider
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore the selected Diffusers attention backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.DiffusersAttentionKernelProvider._infer(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attn_mask: torch.Tensor | None = None,
+    dropout_p: float = 0.0,
+    is_causal: bool = False,
+    scale: float | None = None,
+    enable_gqa: bool = False
+) -> torch.Tensor
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run SDPA through the selected Diffusers attention backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_load_runtime_dependencies">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.DiffusersAttentionKernelProvider._load_runtime_dependencies() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load Diffusers attention dependencies before graph capture.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.DiffusersAttentionKernelProvider._prepare(
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare the provider without running inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-diffusers_attention_provider-DiffusersAttentionKernelProvider-_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.DiffusersAttentionKernelProvider._to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize the selected Diffusers attention backend.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [KernelProvider](./kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
+
+Run FlashAttention-4 with a sample-derived argument and layout plan.
+
+
+<ParamField path="_backend" type="Callable[..., Any]">
+Load and validate the FlashAttention-4 runtime function lazily.
+</ParamField>
+
+<ParamField path="_version" type="str">
+Resolve the FlashAttention-4 version once.
+</ParamField>
+
+<ParamField path="flash_kwargs" type="dict[str, Any] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="name" type="str">
+Human-readable provider name.
+</ParamField>
+
+<ParamField path="supported_function" type="str">
+Name of the function replaced by this provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider":"#aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.flash_attention4_provider.FlashAttention4KernelProvider
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore the selected inference plan.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run the selected FlashAttention-4 inference plan.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_load_runtime_dependencies">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._load_runtime_dependencies() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load FlashAttention-4 dependencies before graph capture.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._prepare(
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select one inference plan for all representative samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-flash_attention4_provider-FlashAttention4KernelProvider-_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.FlashAttention4KernelProvider._to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize the selected inference plan.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider":"./kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult(
+    function: str,
+    provider: aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider | None,
+    description: str,
+    error: str | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Result of generating one provider for one PyTorch function.
+
+A successful result contains a serializable provider. A controlled
+generation failure contains an error message instead. Unexpected failures
+may still be raised by the corresponding ``Future``.
+
+
+<ParamField path="description" type="str">
+</ParamField>
+
+<ParamField path="error" type="str | None = None">
+</ParamField>
+
+<ParamField path="function" type="str">
+</ParamField>
+
+<ParamField path="provider" type="KernelProvider | None">
+</ParamField>
+
+<ParamField path="succeeded" type="bool">
+Whether generation produced a usable provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require exactly one success or controlled-failure outcome.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.KernelGenerator()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Asynchronously generate kernel providers for supported functions.
+
+
+<ParamField path="name" type="str">
+Kernel generator name.
+
+Note: this name can be used to generate a unique identifier. If your generator has configuration options,
+override this method to return a unique identifier for a specific configuration.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelGenerator.__repr__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Return a human-readable kernel generator description.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelGenerator.prepare(
+    function: str,
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Prepare generation and return whether all samples are supported.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-submit">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult":"#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelGenerator.submit(
+    function: str,
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> concurrent.futures.Future[aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Start one generation task without waiting for it to finish.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-supports_functions">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelGenerator.supports_functions() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+List the PyTorch function names supported by the generator.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.KernelProvider()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Kernel provider interface.
+
+Allows preparing a kernel given list of samples and doing inference with the it.
+
+At the beginning it is in INIT state, after preparing it is in READY state. Once prepared for inference
+it can be serialized and restored with ``to_dict`` and ``from_dict`` respectively.
+
+Each provider supports a single function (from torch.nn.functional).
+
+
+<ParamField path="name" type="str">
+Kernel provider name.
+
+Note: this name can be used to generate a unique identifier. If your provider has configuration options,
+override this method to return a unique identifier for a specific configuration.
+</ParamField>
+
+<ParamField path="state" type="= KernelProviderState.INIT">
+</ParamField>
+
+<ParamField path="supported_function" type="str">
+Name of the ``torch.nn.functional`` function replaced by this provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-__call__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.__call__(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run inference using this provider.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-__init_subclass__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.__init_subclass__(
+    kwargs: typing.Any = {}
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Register each provider class for state-dict deserialization.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.__repr__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return a human-readable kernel provider description.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-_from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProviderType":"#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProviderType"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProviderType
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge> <Badge>abstract</Badge>
+
+Restore provider-specific inference state.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Run provider-specific inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-_load_runtime_dependencies">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._load_runtime_dependencies() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load and cache dependencies before runtime execution and graph capture.
+
+`KernelProviderRuntime` calls this hook before a delegate backend executes
+the module. Providers with lazily imported dependencies should override this
+method and cache them here. Otherwise, their first import may occur inside a
+``torch.compile`` or ``torch.export`` graph capture, where Dynamo cannot trace
+``importlib`` and fails on the skipped ``_gcd_import`` function.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-_prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._prepare(
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Validate samples and populate the state required for inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider._to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Serialize provider-specific inference state.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProviderType":"#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProviderType"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProviderType
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore a provider that is ready for inference.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.prepare(
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare this provider for inference using representative samples.
+
+**Parameters:**
+
+<ParamField path="samples" type="list[Sample]">
+`list[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — Representative calls of `supported_function`.
+</ParamField>
+
+**Returns:** `bool`
+
+True when every sample is supported, otherwise False.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.KernelProvider.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize the state required to restore this provider.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProviderState">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.KernelProviderState
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Kernel provider lifecycle state.
+
+<ParamField path="INIT" type="= 'init'">
+</ParamField>
+
+<ParamField path="READY" type="= 'ready'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.SageAttentionKernelProvider()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [KernelProvider](./kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
+
+Run SageAttention with a sample-derived argument and layout plan.
+
+
+<ParamField path="_backend" type="Callable[..., Any]">
+Load and validate the SageAttention runtime function lazily.
+</ParamField>
+
+<ParamField path="_version" type="str">
+Resolve the SageAttention version once.
+</ParamField>
+
+<ParamField path="name" type="str">
+Human-readable provider name.
+</ParamField>
+
+<ParamField path="supported_function" type="str">
+Name of the function replaced by this provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider":"#aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.SageAttentionKernelProvider._from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.sage_attention_provider.SageAttentionKernelProvider
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore the selected inference plan.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.SageAttentionKernelProvider._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run the selected SageAttention inference plan.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_load_runtime_dependencies">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.SageAttentionKernelProvider._load_runtime_dependencies() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load SageAttention dependencies before graph capture.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.SageAttentionKernelProvider._prepare(
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select one inference plan for all representative samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-sage_attention_provider-SageAttentionKernelProvider-_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.SageAttentionKernelProvider._to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize the selected inference plan.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-torch_sdpa_provider-TorchSDPAKernelProvider">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider(
+    backend: torch.nn.attention.SDPBackend = SDPBackend.FLASH_ATTENTION
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [KernelProvider](./kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
+
+Run PyTorch SDPA under a selected backend context.
+
+
+<ParamField path="name" type="str">
+Human-readable provider name.
+</ParamField>
+
+<ParamField path="supported_function" type="str">
+Name of the function replaced by this provider.
+</ParamField>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-torch_sdpa_provider-TorchSDPAKernelProvider-_from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKernelProvider":"#aitune-torch-kernel_forge-kernel_provider-torch_sdpa_provider-TorchSDPAKernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider._from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKernelProvider
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore the selected backend configuration.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-torch_sdpa_provider-TorchSDPAKernelProvider-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run SDPA under the configured backend context.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-torch_sdpa_provider-TorchSDPAKernelProvider-_prepare">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider._prepare(
+    samples: list[aitune.torch.module.sample_store.Sample]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check whether the selected PyTorch SDPA backend supports every sample.
+
+
+</Indent>
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-torch_sdpa_provider-TorchSDPAKernelProvider-_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider._to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize the selected backend configuration.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_provider-kernel_provider_from_dict">
+
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider":"#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.kernel_forge.kernel_provider.kernel_provider_from_dict(
+    state_dict: dict[str, typing.Any]
+) -> aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Restore the concrete provider identified by its serialized class name.
+
+
+</Indent>

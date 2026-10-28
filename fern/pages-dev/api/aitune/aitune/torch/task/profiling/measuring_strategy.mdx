@@ -22,7 +22,7 @@ Measuring strategies for profiling.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.task.profiling.measuring_strategy.MeasuringStrategy()
+class aitune.torch.task.MeasuringStrategy()
 ```
 
 </CodeBlock>
@@ -37,10 +37,10 @@ Strategy how do the measurement and create a ProfilingResultEvent(s).
 
 <Anchor id="aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy-do_measurement">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.measuring_strategy.MeasuringStrategy.do_measurement(
+aitune.torch.task.MeasuringStrategy.do_measurement(
     batch_size: int,
     model: collections.abc.Callable,
     sample: tuple[list, dict],
@@ -75,7 +75,7 @@ Sample to measure.
 Additional keyword arguments.
 </ParamField>
 
-**Returns:** `list[ProfilingResultEvent]`
+**Returns:** `list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]`
 
 List of ProfilingResultEvent(s).
 
@@ -88,7 +88,7 @@ List of ProfilingResultEvent(s).
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.task.profiling.measuring_strategy.ModelExecutionTimeMeasuringStrategy()
+class aitune.torch.task.ModelExecutionTimeMeasuringStrategy()
 ```
 
 </CodeBlock>
@@ -105,10 +105,10 @@ Strategy to measure execution time.
 </ParamField>
 <Anchor id="aitune-torch-task-profiling-measuring_strategy-ModelExecutionTimeMeasuringStrategy-do_measurement">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.measuring_strategy.ModelExecutionTimeMeasuringStrategy.do_measurement(
+aitune.torch.task.ModelExecutionTimeMeasuringStrategy.do_measurement(
     batch_size: int,
     model: collections.abc.Callable,
     sample: tuple[list, dict],

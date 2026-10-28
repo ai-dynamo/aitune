@@ -8,29 +8,66 @@ Performance profiling for PyTorch workloads.
 
 ## Submodules
 
-- **[`aitune.torch.performance.attribution_hooks`](/aitune/aitune/torch/performance/attribution_hooks)**
-- **[`aitune.torch.performance.context`](/aitune/aitune/torch/performance/context)**
-- **[`aitune.torch.performance.markdown`](/aitune/aitune/torch/performance/markdown)**
-- **[`aitune.torch.performance.profile`](/aitune/aitune/torch/performance/profile)**
-- **[`aitune.torch.performance.runtime_profile`](/aitune/aitune/torch/performance/runtime_profile)**
-- **[`aitune.torch.performance.utils`](/aitune/aitune/torch/performance/utils)**
+- **[`aitune.torch.performance.attribution_hooks`](./attribution_hooks.mdx)**
+- **[`aitune.torch.performance.context`](./context.mdx)**
+- **[`aitune.torch.performance.markdown`](./markdown.mdx)**
+- **[`aitune.torch.performance.profile`](./profile.mdx)**
+- **[`aitune.torch.performance.runtime_profile`](./runtime_profile.mdx)**
+- **[`aitune.torch.performance.utils`](./utils.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-torch-performance-__all__)
+| Name | Description |
+|------|-------------|
+| [`PerformanceProfile`](#aitune-torch-performance-profile-PerformanceProfile) | In-memory performance profile produced by `profile`. |
 
 ### API
 
-<Anchor id="aitune-torch-performance-__all__">
+<Anchor id="aitune-torch-performance-profile-PerformanceProfile">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.performance.__all__ = ['PerformanceProfile', 'profile']
+class aitune.torch.PerformanceProfile(
+    data: dict[str, typing.Any],
+    trace_file: pathlib.Path | None = None
+)
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+In-memory performance profile produced by `profile`.
+
+
+<ParamField path="data" type="dict[str, Any]">
+</ParamField>
+
+<ParamField path="trace_file" type="Path | None = None">
+</ParamField>
+<Anchor id="aitune-torch-performance-profile-PerformanceProfile-markdown">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.PerformanceProfile.markdown(
+    options: typing.Any | None = None
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Render a Markdown view over the profile data.
+
+
+</Indent>
+</Indent>

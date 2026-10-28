@@ -49,7 +49,7 @@ This class provides functionality to autocast ONNX models using NVIDIA ModelOpt.
 
 <Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCast-autocast">
 
-<CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig":"#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig","aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig":"#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig","aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCast.autocast(
@@ -79,16 +79,16 @@ Path to the output ONNX model
 </ParamField>
 
 <ParamField path="config" type="ONNXAutoCastConfig">
-ONNXAutoCastConfig
+[`ONNXAutoCastConfig`](#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig) — ONNXAutoCastConfig
 </ParamField>
 
 <ParamField path="samples" type="Sequence[Sample] | None" default="None">
-Optional calibration dataset for quantization.
+`Sequence[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `] | None` — Optional calibration dataset for quantization.
 If None, random data will be used for calibration
 </ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec | None" default="None">
-Graph specification containing input names mapping
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) `| None` — Graph specification containing input names mapping
 </ParamField>
 
 **Returns:** `Path`
@@ -109,7 +109,7 @@ Path to the autocasted ONNX file
 <CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_autocast.MixedPrecision":"#aitune-torch-backend-tensorrt-onnx_autocast-MixedPrecision"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig(
+class aitune.torch.backend.ONNXAutoCastConfig(
     precision: aitune.torch.backend.tensorrt.onnx_autocast.MixedPrecision = 'fp16',
     keep_io_types: bool = True
 )
@@ -127,7 +127,7 @@ Configuration for mixed precision quantization.
 **Parameters:**
 
 <ParamField path="precision" type="MixedPrecision" default="'fp16'">
-Mixed precision quantization precision ("fp16", "bf16")
+[`MixedPrecision`](#aitune-torch-backend-tensorrt-onnx_autocast-MixedPrecision) — Mixed precision quantization precision ("fp16", "bf16")
 </ParamField>
 
 
@@ -141,7 +141,7 @@ Mixed precision quantization precision ("fp16", "bf16")
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig.__post_init__()
+aitune.torch.backend.ONNXAutoCastConfig.__post_init__()
 ```
 
 </CodeBlock>
@@ -158,7 +158,7 @@ Validate precision after initialization.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig.from_dict(
+aitune.torch.backend.ONNXAutoCastConfig.from_dict(
     state_dict: dict
 )
 ```

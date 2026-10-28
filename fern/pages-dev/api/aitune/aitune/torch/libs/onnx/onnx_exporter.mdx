@@ -46,7 +46,7 @@ Class for exporting PyTorch modules to ONNX format.
 
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_create_dynamic_axes">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._create_dynamic_axes(
@@ -67,14 +67,14 @@ Returns:
 **Parameters:**
 
 <ParamField path="graph_spec" type="GraphSpec">
-Input graph spec
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Input graph spec
 </ParamField>
 
 
 </Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_create_dynamic_shapes">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._create_dynamic_shapes(
@@ -98,11 +98,11 @@ Delegates to ``aitune.torch.utils.shapes.build_dynamic_shapes``.
 **Parameters:**
 
 <ParamField path="sample" type="Sample">
-Normalized args and kwargs used for export.
+[`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Normalized args and kwargs used for export.
 </ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec">
-Input graph spec.
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Input graph spec.
 </ParamField>
 
 <ParamField path="use_auto" type="bool" default="True">
@@ -121,7 +121,7 @@ Dynamic shapes matching the normalized forward input structure, or ``None``
 </Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_export_dynamo">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._export_dynamo(
@@ -144,7 +144,7 @@ Export the module to ONNX using torch.dynamo.
 </Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-_export_trace">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter._export_trace(
@@ -167,7 +167,7 @@ Export the module to ONNX using torch.onnx.trace.
 </Indent>
 <Anchor id="aitune-torch-libs-onnx-onnx_exporter-ONNXExporter-export">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.libs.onnx.onnx_exporter.ONNXExporter.export(
@@ -192,11 +192,11 @@ PyTorch module to export
 </ParamField>
 
 <ParamField path="sample" type="Sample">
-Example input for the model
+[`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Example input for the model
 </ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec">
-GraphSpec object
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — GraphSpec object
 </ParamField>
 
 <ParamField path="verbose" type="bool" default="False">

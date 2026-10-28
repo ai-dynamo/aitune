@@ -57,7 +57,7 @@ will not be accepted.
 
 To sign off on a commit, you simply use the `--signoff` (or `-s`) option when committing your changes:
 ```
-$ git commit -s -m "Add cool feature.
+$ git commit -s -m "Add cool feature."
 ```
 
 This will append the following to your commit message:
@@ -104,12 +104,14 @@ Ready to contribute? Here's how to set up the `NVIDIA AITune` for local developm
 $ git clone git@github.com:your_name_here/aitune.git
 ```
 
-3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development:
+3. Create a virtual environment with Python 3.11 or newer, then install your local copy and development tools:
 
 ```shell
-$ mkvirtualenv aitune
 $ cd aitune/
+$ python3 -m venv .venv
+$ source .venv/bin/activate
 $ make install-dev
+$ pre-commit install
 ```
 
 4. Create a branch for local development:
@@ -120,13 +122,21 @@ $ git checkout -b name-of-your-bugfix-or-feature
 
 Now you can make your changes locally.
 
-5. When you're done making changes, check that your changes pass linters and the
-   tests, including testing other Python versions with tox:
+5. When you're done making changes, check that your changes pass the linters and
+   tests:
 
 ```shell
-$ make lint  # will run i.a. flake8 and pytype linters
-$ make test  # will run a test with on your current virtualenv
-$ make test-fw  # will run a framework test inside framework container
+$ make lint  # pre-commit, pyrefly, and functional-test metadata validation
+$ make test  # unit tests and doctests in the active virtual environment
+```
+
+Functional tests under `tests/functional/` run separately and require an NVIDIA
+GPU, Docker, and the NVIDIA Container Toolkit. Build the test image, then select
+a functional test with the current Makefile targets:
+
+```shell
+$ make build-functional-image
+$ make run-functional-test TEST=tests/functional/pytorch/002_aitune_torch_wrap_module_resnet_test.py
 ```
 
 6. Commit your changes and push your branch to GitHub:
@@ -168,5 +178,4 @@ By contributing, you agree that your contribution is licensed under the
 [Apache 2.0 License](https://github.com/ai-dynamo/aitune/blob/main/LICENSE). All participation is
 also governed by the
 [Code of Conduct](https://github.com/ai-dynamo/aitune/blob/main/CODE_OF_CONDUCT.md).
-
 

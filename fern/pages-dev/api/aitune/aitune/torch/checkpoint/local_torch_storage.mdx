@@ -21,7 +21,7 @@ Local torch storage class which saves torch checkpoint on local disk.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.checkpoint.local_torch_storage.LocalTorchStorage(
+class aitune.torch.LocalTorchStorage(
     base_folder: str | pathlib.Path = 'checkpoints',
     compress_checkpoint: bool = True,
     overwrite_checkpoint_on_tune: bool = True,
@@ -35,7 +35,7 @@ class aitune.torch.checkpoint.local_torch_storage.LocalTorchStorage(
 
 <Indent>
 
-**Bases:** [Storage](/aitune/aitune/torch/checkpoint/storage#aitune-torch-checkpoint-storage-Storage)
+**Bases:** [Storage](./storage.mdx#aitune-torch-checkpoint-storage-Storage)
 
 Implementation of storage that saves/loads from host machine.
 
@@ -47,7 +47,7 @@ Implementation of storage that saves/loads from host machine.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.checkpoint.local_torch_storage.LocalTorchStorage._get_target_folder_path(
+aitune.torch.LocalTorchStorage._get_target_folder_path(
     path: str | pathlib.Path
 ) -> pathlib.Path
 ```

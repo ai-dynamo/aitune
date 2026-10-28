@@ -25,7 +25,7 @@ TensorRT Profile for specifying optimization profiles.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile()
+class aitune.torch.backend.TensorRTProfile()
 ```
 
 </CodeBlock>
@@ -50,7 +50,7 @@ Get the underlying Polygraphy Profile.
 <CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.__eq__(
+aitune.torch.backend.TensorRTProfile.__eq__(
     other: aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile
 ) -> bool
 ```
@@ -69,7 +69,7 @@ Check if two TensorRTProfiles are equal.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.__hash__() -> int
+aitune.torch.backend.TensorRTProfile.__hash__() -> int
 ```
 
 </CodeBlock>
@@ -86,7 +86,7 @@ Hash the TensorRTProfile.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.__repr__() -> str
+aitune.torch.backend.TensorRTProfile.__repr__() -> str
 ```
 
 </CodeBlock>
@@ -107,7 +107,7 @@ Official string representation
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.__str__() -> str
+aitune.torch.backend.TensorRTProfile.__str__() -> str
 ```
 
 </CodeBlock>
@@ -125,10 +125,10 @@ String representation
 </Indent>
 <Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-add_input_shape">
 
-<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardInputPath":"/aitune/aitune/torch/module/forward_signature#aitune-torch-module-forward_signature-ForwardInputPath","aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardInputPath":"../../module/forward_signature.mdx#aitune-torch-module-forward_signature-ForwardInputPath","aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.add_input_shape(
+aitune.torch.backend.TensorRTProfile.add_input_shape(
     path: aitune.torch.module.forward_signature.ForwardInputPath,
     min_shape: tuple[int, ...],
     opt_shape: tuple[int, ...],
@@ -146,7 +146,7 @@ Add a shape binding to the profile.
 **Parameters:**
 
 <ParamField path="path" type="ForwardInputPath">
-Forward parameter path identifying the input tensor
+[`ForwardInputPath`](../../module/forward_signature.mdx#aitune-torch-module-forward_signature-ForwardInputPath) — Forward parameter path identifying the input tensor
 </ParamField>
 
 <ParamField path="min_shape" type="tuple[int, ...]">
@@ -161,7 +161,7 @@ The shape for which TensorRT will tune the engine
 The maximum shape the profile will support
 </ParamField>
 
-**Returns:** `TensorRTProfile`
+**Returns:** [`TensorRTProfile`](#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile)
 
 The profile object for chaining
 
@@ -172,7 +172,7 @@ The profile object for chaining
 <CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.from_dict(
+aitune.torch.backend.TensorRTProfile.from_dict(
     data: dict
 ) -> aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile
 ```
@@ -193,7 +193,7 @@ Create TensorRTProfile from dictionary.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.profile_to_dict(
+aitune.torch.backend.TensorRTProfile.profile_to_dict(
     profile: polygraphy.backend.trt.Profile
 ) -> dict
 ```
@@ -214,7 +214,7 @@ Convert Polygraphy Profile to dictionary.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.to_dict() -> dict
+aitune.torch.backend.TensorRTProfile.to_dict() -> dict
 ```
 
 </CodeBlock>

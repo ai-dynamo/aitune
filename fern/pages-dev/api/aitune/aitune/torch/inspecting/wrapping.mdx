@@ -24,13 +24,13 @@ Inspecting and patching modules.
 
 <Anchor id="aitune-torch-inspecting-wrapping-wrap">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.wrapper_module.StrategyList":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"/aitune/aitune/torch/module/wrapper_module#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.module.wrapper_module.StrategyList":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.inspecting.wrapping.wrap(
+aitune.torch.wrap(
     obj: object,
     modules: list[aitune.torch.inspecting.module_info.ModuleInfo],
-    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None,
+    strategy: aitune.torch.tune_strategy.resolver.StrategyOption | None = None,
     strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None = None
 ) -> object
 ```
@@ -49,15 +49,15 @@ Callable object to wrap.
 </ParamField>
 
 <ParamField path="modules" type="list[ModuleInfo]">
-Dictionary of module names and their corresponding ModuleInfo objects.
+`list[` [`ModuleInfo`](./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo) `]` — Dictionary of module names and their corresponding ModuleInfo objects.
 </ParamField>
 
-<ParamField path="strategy" type="TuneStrategy | None" default="None">
-Strategy to use for patching.
+<ParamField path="strategy" type="StrategyOption | None" default="None">
+[`StrategyOption`](../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption) `| None` — Strategy to use for patching.
 </ParamField>
 
 <ParamField path="strategies" type="StrategyList | StrategyMap | None" default="None">
-Strategies to use for patching.
+[`StrategyList`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList) `|` [`StrategyMap`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap) `| None` — Strategies to use for patching.
 </ParamField>
 
 **Returns:** `object`

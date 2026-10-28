@@ -26,7 +26,7 @@ Torch Inductor JIT backend.
 <CodeBlock links={{"aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackendConfig":"#aitune-torch-backend-torch_inductor_jit_backend-TorchInductorJitBackendConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend(
+class aitune.torch.backend.TorchInductorJitBackend(
     config: aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackendConfig | None = None
 )
 ```
@@ -36,7 +36,7 @@ class aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend(
 
 <Indent>
 
-**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+**Bases:** [Backend[TorchInductorJitBackendConfig]](./backend.mdx#aitune-torch-backend-backend-Backend)
 
 Backend that does torch compilation with Inductor.
 
@@ -71,9 +71,6 @@ Backend that does torch compilation with Inductor.
 <ParamField path="_compile_dynamic" type="= self._config.dynamic">
 </ParamField>
 
-<ParamField path="_config" type="= config or TorchInductorJitBackendConfig()">
-</ParamField>
-
 <ParamField path="_execution_modes">
 </ParamField>
 
@@ -87,7 +84,7 @@ Backend that does torch compilation with Inductor.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._activate()
+aitune.torch.backend.TorchInductorJitBackend._activate()
 ```
 
 </CodeBlock>
@@ -101,15 +98,15 @@ Activates backend.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_inductor_jit_backend-TorchInductorJitBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._build(
+aitune.torch.backend.TorchInductorJitBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
-) -> aitune.torch.backend.backend.Backend
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -126,7 +123,7 @@ Builds the model with torch.compile.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._compile()
+aitune.torch.backend.TorchInductorJitBackend._compile()
 ```
 
 </CodeBlock>
@@ -141,7 +138,7 @@ aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._compile
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._deactivate()
+aitune.torch.backend.TorchInductorJitBackend._deactivate()
 ```
 
 </CodeBlock>
@@ -158,7 +155,7 @@ Deactivates backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._deploy()
+aitune.torch.backend.TorchInductorJitBackend._deploy()
 ```
 
 </CodeBlock>
@@ -172,10 +169,10 @@ Deploys the backend.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_inductor_jit_backend-TorchInductorJitBackend-_get_required_casting_dtype">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._get_required_casting_dtype(
+aitune.torch.backend.TorchInductorJitBackend._get_required_casting_dtype(
     module: torch.nn.Module,
     samples: collections.abc.Sequence[aitune.torch.module.sample_store.Sample]
 ) -> torch.dtype | None
@@ -198,7 +195,7 @@ The module to get the dtype from.
 </ParamField>
 
 <ParamField path="samples" type="Sequence[Sample]">
-Sample inputs to run through the module.
+`Sequence[` [`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — Sample inputs to run through the module.
 </ParamField>
 
 **Returns:** `torch.dtype | None`
@@ -212,7 +209,7 @@ torch.dtype: The required casting dtype. Returns None if no casting is required.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._infer(
+aitune.torch.backend.TorchInductorJitBackend._infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -246,7 +243,7 @@ The result of the inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._infer_no_autocast(
+aitune.torch.backend.TorchInductorJitBackend._infer_no_autocast(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -280,7 +277,7 @@ The result of the inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._infer_with_autocast(
+aitune.torch.backend.TorchInductorJitBackend._infer_with_autocast(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -314,7 +311,7 @@ The result of the inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._iter_samples()
+aitune.torch.backend.TorchInductorJitBackend._iter_samples()
 ```
 
 </CodeBlock>
@@ -331,7 +328,7 @@ Iterate persisted samples, with support for legacy inline checkpoint data.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend._select_infer_impl()
+aitune.torch.backend.TorchInductorJitBackend._select_infer_impl()
 ```
 
 </CodeBlock>
@@ -348,7 +345,7 @@ Select the inference implementation based on configuration.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend.describe() -> str
+aitune.torch.backend.TorchInductorJitBackend.describe() -> str
 ```
 
 </CodeBlock>
@@ -365,7 +362,7 @@ Returns the description of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend.from_dict(
+aitune.torch.backend.TorchInductorJitBackend.from_dict(
     module: torch.nn.Module | None,
     state_dict: dict
 )
@@ -387,7 +384,7 @@ Creates a backend from a state_dict.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend.key() -> str
+aitune.torch.backend.TorchInductorJitBackend.key() -> str
 ```
 
 </CodeBlock>
@@ -404,7 +401,7 @@ Returns the key of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackend.to_dict()
+aitune.torch.backend.TorchInductorJitBackend.to_dict()
 ```
 
 </CodeBlock>
@@ -420,10 +417,10 @@ Returns the state_dict of the backend.
 
 <Anchor id="aitune-torch-backend-torch_inductor_jit_backend-TorchInductorJitBackendConfig">
 
-<CodeBlock links={{"aitune.torch.libs.torch_compile.TorchCompileMode":"/aitune/aitune/torch/libs/torch_compile#aitune-torch-libs-torch_compile-TorchCompileMode"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.libs.torch_compile.TorchCompileMode":"../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackendConfig(
+class aitune.torch.backend.TorchInductorJitBackendConfig(
     fullgraph: bool = False,
     dynamic: bool | None = None,
     mode: aitune.torch.libs.torch_compile.TorchCompileMode | None = None,
@@ -440,7 +437,7 @@ class aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackendCon
 
 <Badge>Dataclass</Badge>
 
-**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+**Bases:** [BackendConfig](./backend.mdx#aitune-torch-backend-backend-BackendConfig)
 
 Configuration for torch.compile with inductor backend.
 
@@ -464,7 +461,7 @@ dynamic kernel upon recompile.
 </ParamField>
 
 <ParamField path="mode" type="TorchCompileMode or None" default="None">
-Can be either "default", "reduce-overhead", "max-autotune"
+[`TorchCompileMode`](../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode) `or None` — Can be either "default", "reduce-overhead", "max-autotune"
 or "max-autotune-no-cudagraphs".
 
 - "default" is the default mode, which is a good balance between performance and overhead
@@ -526,7 +523,7 @@ inference is done with torch.no_grad() context. The torch.inference_mode() conte
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_jit_backend.TorchInductorJitBackendConfig.__post_init__()
+aitune.torch.backend.TorchInductorJitBackendConfig.__post_init__()
 ```
 
 </CodeBlock>

@@ -6,30 +6,840 @@ title: aitune.torch.task.profiling
 
 ## Submodules
 
-- **[`aitune.torch.task.profiling.config`](/aitune/aitune/torch/task/profiling/config)**
-- **[`aitune.torch.task.profiling.events`](/aitune/aitune/torch/task/profiling/events)**
-- **[`aitune.torch.task.profiling.measuring_stop_strategy`](/aitune/aitune/torch/task/profiling/measuring_stop_strategy)**
-- **[`aitune.torch.task.profiling.measuring_strategy`](/aitune/aitune/torch/task/profiling/measuring_strategy)**
-- **[`aitune.torch.task.profiling.metrics`](/aitune/aitune/torch/task/profiling/metrics)**
-- **[`aitune.torch.task.profiling.profiling`](/aitune/aitune/torch/task/profiling/profiling)**
-- **[`aitune.torch.task.profiling.profiling_stop_strategy`](/aitune/aitune/torch/task/profiling/profiling_stop_strategy)**
+- **[`aitune.torch.task.profiling.config`](./config.mdx)**
+- **[`aitune.torch.task.profiling.events`](./events.mdx)**
+- **[`aitune.torch.task.profiling.measuring_stop_strategy`](./measuring_stop_strategy.mdx)**
+- **[`aitune.torch.task.profiling.measuring_strategy`](./measuring_strategy.mdx)**
+- **[`aitune.torch.task.profiling.metrics`](./metrics.mdx)**
+- **[`aitune.torch.task.profiling.profiling`](./profiling.mdx)**
+- **[`aitune.torch.task.profiling.profiling_stop_strategy`](./profiling_stop_strategy.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-torch-task-profiling-__all__)
+| Name | Description |
+|------|-------------|
+| [`AllSamplesProfilingStopStrategy`](#aitune-torch-task-profiling-profiling_stop_strategy-AllSamplesProfilingStopStrategy) | Strategy to do not stop profiling until all samples are processed. |
+| [`MeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy) | Strategy when to stop collecting measurements for given batch size. |
+| [`MeasuringStrategy`](#aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy) | Strategy how do the measurement and create a ProfilingResultEvent(s). |
+| [`ModelExecutionTimeMeasuringStrategy`](#aitune-torch-task-profiling-measuring_strategy-ModelExecutionTimeMeasuringStrategy) | Strategy to measure execution time. |
+| [`NumStepsMeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy) | Strategy to stop collecting measurements after a given number of steps. |
+| [`ProfilingConfig`](#aitune-torch-task-profiling-config-ProfilingConfig) | Configuration for profiling. |
+| [`ProfilingResultEvent`](#aitune-torch-task-profiling-events-ProfilingResultEvent) | Profiling result event. |
+| [`ProfilingResults`](#aitune-torch-task-profiling-profiling-ProfilingResults) | Profiling results. |
+| [`ProfilingStatus`](#aitune-torch-task-profiling-profiling-ProfilingStatus) | Profiling status. |
+| [`ProfilingStopStrategy`](#aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy) | Strategy when to stop profiling. |
+| [`StableWindowMeasuringStopStrategy`](#aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy) | Strategy to stop collecting measurements after a stable sliding window has been collected. |
+| [`ThroughputSaturatedProfilingStopStrategy`](#aitune-torch-task-profiling-profiling_stop_strategy-ThroughputSaturatedProfilingStopStrategy) | Strategy to stop profiling when throughput is saturated. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`get_throughput`](#aitune-torch-task-profiling-metrics-get_throughput) | Get throughput from profiling results. |
+| [`is_throughput_saturated`](#aitune-torch-task-profiling-metrics-is_throughput_saturated) | Validate if throughput saturated between consecutive samples. |
+| [`profile`](#aitune-torch-task-profiling-profiling-profile) | Profile a callable with given dataset. |
 
 ### API
 
-<Anchor id="aitune-torch-task-profiling-__all__">
+<Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-AllSamplesProfilingStopStrategy">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.__all__ = ['ProfilingStopStrategy', 'AllSamplesProfilingStopStrategy', 'ThroughputSaturate...
+class aitune.torch.task.profiling.AllSamplesProfilingStopStrategy()
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [ProfilingStopStrategy](#aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy)
+
+Strategy to do not stop profiling until all samples are processed.
+
+
+<Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-AllSamplesProfilingStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.AllSamplesProfilingStopStrategy.should_stop(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the profiling should be stopped.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.MeasuringStopStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Strategy when to stop collecting measurements for given batch size.
+
+
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy-get_events">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.MeasuringStopStrategy.get_events(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Get events to use for measuring stop strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.MeasuringStopStrategy.should_stop(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Check if the measurement should be stopped.
+
+**Parameters:**
+
+<ParamField path="results" type="list[ProfilingResultEvent]">
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — List of profiling results events for a one measurement.
+</ParamField>
+
+**Returns:** `bool`
+
+True if the measurement should be stopped, False otherwise.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.MeasuringStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Strategy how do the measurement and create a ProfilingResultEvent(s).
+
+
+<Anchor id="aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy-do_measurement">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.MeasuringStrategy.do_measurement(
+    batch_size: int,
+    model: collections.abc.Callable,
+    sample: tuple[list, dict],
+    kwargs = {}
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Do the measurement and create a ProfilingResultEvent(s).
+
+**Parameters:**
+
+<ParamField path="batch_size" type="int">
+Batch size of the measurement.
+</ParamField>
+
+<ParamField path="model" type="Callable">
+Model to measure.
+</ParamField>
+
+<ParamField path="sample" type="tuple[list, dict]">
+Sample to measure.
+</ParamField>
+
+<ParamField path="**kwargs" default="&#123;&#125;">
+Additional keyword arguments.
+</ParamField>
+
+**Returns:** `list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]`
+
+List of ProfilingResultEvent(s).
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-measuring_strategy-ModelExecutionTimeMeasuringStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.ModelExecutionTimeMeasuringStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [MeasuringStrategy](#aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy)
+
+Strategy to measure execution time.
+
+
+<ParamField path="counter" type="int = 0">
+</ParamField>
+<Anchor id="aitune-torch-task-profiling-measuring_strategy-ModelExecutionTimeMeasuringStrategy-do_measurement">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.ModelExecutionTimeMeasuringStrategy.do_measurement(
+    batch_size: int,
+    model: collections.abc.Callable,
+    sample: tuple[list, dict],
+    measurement_kwargs = {}
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Do the measurement and create a ProfilingResultEvent(s) for the model.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.NumStepsMeasuringStopStrategy(
+    num_steps: int = 20,
+    warmup_samples: int = 10
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [MeasuringStopStrategy](#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy)
+
+Strategy to stop collecting measurements after a given number of steps.
+
+
+<ParamField path="_min_samples_seen" type="= self.warmup_samples + self.num_steps">
+</ParamField>
+
+<ParamField path="_samples_seen" type="= 0">
+</ParamField>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy-get_events">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.NumStepsMeasuringStopStrategy.get_events(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get final measured events after should_stop() has returned True.
+
+
+</Indent>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-NumStepsMeasuringStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.NumStepsMeasuringStopStrategy.should_stop(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the measurement should be stopped.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-config-ProfilingConfig">
+
+<CodeBlock links={{"aitune.torch.task.profiling.measuring_strategy.MeasuringStrategy":"./measuring_strategy.mdx#aitune-torch-task-profiling-measuring_strategy-MeasuringStrategy","aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy":"./measuring_stop_strategy.mdx#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy","aitune.torch.task.profiling.profiling_stop_strategy.ProfilingStopStrategy":"./profiling_stop_strategy.mdx#aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.ProfilingConfig(
+    batch_sizes: list[int] | collections.abc.Generator[int, None, None],
+    batching: bool = True,
+    measuring_strategy: aitune.torch.task.profiling.measuring_strategy.MeasuringStrategy | None = None,
+    measurement_stop_strategy: aitune.torch.task.profiling.measuring_stop_strategy.MeasuringStopStrategy | None = None,
+    profiling_stop_strategy: aitune.torch.task.profiling.profiling_stop_strategy.ProfilingStopStrategy | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configuration for profiling.
+
+Note: all profiling configuration strategies are deepcopied before use.
+
+
+<ParamField path="batch_sizes" type="list[int] | Generator[int, None, None]">
+List of batch sizes to profile.
+</ParamField>
+
+<ParamField path="batching" type="bool = True">
+Whether profiling should batch samples together.
+</ParamField>
+
+<ParamField path="measurement_stop_strategy" type="MeasuringStopStrategy | None = None">
+Strategy to stop collecting measurements.
+</ParamField>
+
+<ParamField path="measuring_strategy" type="MeasuringStrategy | None = None">
+Strategy to measure the model.
+</ParamField>
+
+<ParamField path="profiling_stop_strategy" type="ProfilingStopStrategy | None = None">
+Strategy to stop profiling.
+</ParamField>
+<Anchor id="aitune-torch-task-profiling-config-ProfilingConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.ProfilingConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post-init.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-events-ProfilingResultEvent">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.ProfilingResultEvent(
+    timestamp: float,
+    model_name: str,
+    backend_details: str,
+    batch_size: int,
+    phase: str,
+    measurement_id: int = 0,
+    execution_time: float = 0.0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Profiling result event.
+
+
+<ParamField path="backend_details" type="str">
+Details of the backend.
+</ParamField>
+
+<ParamField path="batch_size" type="int">
+Batch size of the measurement.
+</ParamField>
+
+<ParamField path="execution_time" type="float = 0.0">
+Execution time of the measurement.
+</ParamField>
+
+<ParamField path="measurement_id" type="int = 0">
+Unique identifier for the measurement.
+</ParamField>
+
+<ParamField path="model_name" type="str">
+</ParamField>
+
+<ParamField path="phase" type="str">
+Phase of the measurement.
+</ParamField>
+
+<ParamField path="timestamp" type="float">
+Timestamp of the measurement.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling-ProfilingResults">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.ProfilingResults(
+    entries: list[aitune.torch.task.profiling.events.ProfilingResultEvent] = list()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Profiling results.
+
+
+<ParamField path="entries" type="list[ProfilingResultEvent] = field(default_factory=list)">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling-ProfilingStatus">
+
+<CodeBlock links={{"aitune.torch.task.profiling.profiling.ProfilingResults":"#aitune-torch-task-profiling-profiling-ProfilingResults"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.ProfilingStatus(
+    status: aitune.torch.task.profiling.profiling.ProfilingStatus.Status,
+    error: typing.Any | None = None,
+    results: aitune.torch.task.profiling.profiling.ProfilingResults | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Profiling status.
+
+
+<ParamField path="error" type="Any | None = None">
+</ParamField>
+
+<ParamField path="results" type="ProfilingResults | None = None">
+</ParamField>
+
+<ParamField path="status" type="Status">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.ProfilingStopStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Strategy when to stop profiling.
+
+
+<Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.ProfilingStopStrategy.should_stop(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Check if the profiling should be stopped.
+
+**Parameters:**
+
+<ParamField path="results" type="list[ProfilingResultEvent]">
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — List of profiling results.
+</ParamField>
+
+**Returns:** `bool`
+
+True if the profiling should be stopped, False otherwise.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.StableWindowMeasuringStopStrategy(
+    window_size: int = 20,
+    max_cv_ratio: float = 0.1,
+    warmup_samples: int = 10,
+    max_samples: int = 100
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [MeasuringStopStrategy](#aitune-torch-task-profiling-measuring_stop_strategy-MeasuringStopStrategy)
+
+Strategy to stop collecting measurements after a stable sliding window has been collected.
+
+
+<ParamField path="_max_samples_seen" type="= self.max_samples + self.warmup_samples">
+</ParamField>
+
+<ParamField path="_min_samples_seen" type="= self.window_size + self.warmup_samples">
+</ParamField>
+
+<ParamField path="_samples_seen" type="= 0">
+</ParamField>
+
+<ParamField path="_window" type="list[ProfilingResultEvent] = []">
+</ParamField>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy-get_events">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.StableWindowMeasuringStopStrategy.get_events(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get events to use for measuring stop strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-task-profiling-measuring_stop_strategy-StableWindowMeasuringStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.StableWindowMeasuringStopStrategy.should_stop(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the measurement should be stopped.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ThroughputSaturatedProfilingStopStrategy">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.task.profiling.ThroughputSaturatedProfilingStopStrategy(
+    min_throughput_gain_ratio: float = 0.05,
+    throughput_backoff_limit: int = 2,
+    _best_results: list[aitune.torch.task.profiling.events.ProfilingResultEvent] = list(),
+    _backoff_counter: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [ProfilingStopStrategy](#aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy)
+
+Strategy to stop profiling when throughput is saturated.
+
+Additionally, backoff policy is introduced, allowing for few more measurements after saturation is detected.
+This is useful to avoid stopping profiling too early, when the model is still not fully optimized.
+
+**Parameters:**
+
+<ParamField path="min_throughput_gain_ratio" type="float" default="0.05">
+Minimum relative throughput gain required to continue profiling.
+</ParamField>
+
+<ParamField path="throughput_backoff_limit" type="int" default="2">
+Number of measurements after saturation is detected to continue profiling.
+0 means no backoff.
+</ParamField>
+
+
+<ParamField path="_backoff_counter" type="int = 0">
+</ParamField>
+
+<ParamField path="_best_results" type="list[ProfilingResultEvent] = field(default_factory=list)">
+</ParamField>
+
+<ParamField path="min_throughput_gain_ratio" type="float = 0.05">
+</ParamField>
+
+<ParamField path="throughput_backoff_limit" type="int = 2">
+</ParamField>
+<Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ThroughputSaturatedProfilingStopStrategy-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.ThroughputSaturatedProfilingStopStrategy.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate ratio configuration.
+
+
+</Indent>
+<Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ThroughputSaturatedProfilingStopStrategy-should_stop">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.ThroughputSaturatedProfilingStopStrategy.should_stop(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if the profiling should be stopped.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-metrics-get_throughput">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.get_throughput(
+    results: list[aitune.torch.task.profiling.events.ProfilingResultEvent],
+    batch_size: int | None = None
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get throughput from profiling results.
+
+**Parameters:**
+
+<ParamField path="results" type="list[ProfilingResultEvent]">
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — List of profiling results.
+</ParamField>
+
+<ParamField path="batch_size" type="int | None" default="None">
+Batch size to use for throughput calculation. If not provided, it will be inferred from the results.
+</ParamField>
+
+**Returns:** `float`
+
+Throughput in samples per second.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-metrics-is_throughput_saturated">
+
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profiling.is_throughput_saturated(
+    profiling_result: list[aitune.torch.task.profiling.events.ProfilingResultEvent],
+    min_throughput_gain_ratio: float,
+    prev_results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate if throughput saturated between consecutive samples.
+
+**Parameters:**
+
+<ParamField path="profiling_result" type="list[ProfilingResultEvent]">
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — Current profiling results.
+</ParamField>
+
+<ParamField path="min_throughput_gain_ratio" type="float">
+Minimum relative throughput gain required to continue profiling.
+</ParamField>
+
+<ParamField path="prev_results" type="list[ProfilingResultEvent]">
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — Previous profiling results or previous throughput.
+</ParamField>
+
+**Returns:** `bool`
+
+True when throughput saturated between consecutive samples.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-task-profiling-profiling-profile">
+
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"../../dataloader.mdx#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"../../dataloader.mdx#aitune-torch-dataloader-DataLoaderFactory","aitune.torch.task.profiling.config.ProfilingConfig":"./config.mdx#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.task.profiling.profiling.ProfilingStatus":"#aitune-torch-task-profiling-profiling-ProfilingStatus"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.task.profile(
+    func: collections.abc.Callable,
+    dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
+    profiling_config: aitune.torch.task.profiling.config.ProfilingConfig,
+    model_name: str | None = None,
+    backend_details: str | None = None
+) -> aitune.torch.task.profiling.profiling.ProfilingStatus
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profile a callable with given dataset.
+
+**Parameters:**
+
+<ParamField path="func" type="Callable">
+Function to profile.
+</ParamField>
+
+<ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
+[`DatasetLike`](../../dataloader.mdx#aitune-torch-dataloader-DatasetLike) `|` [`DataLoaderFactory`](../../dataloader.mdx#aitune-torch-dataloader-DataLoaderFactory) `| torch.Tensor` — Dataset to profile.
+</ParamField>
+
+<ParamField path="profiling_config" type="ProfilingConfig">
+[`ProfilingConfig`](./config.mdx#aitune-torch-task-profiling-config-ProfilingConfig) — Configuration for profiling.
+</ParamField>
+
+<ParamField path="model_name" type="str | None" default="None">
+Name of the model, optional.
+</ParamField>
+
+<ParamField path="backend_details" type="str | None" default="None">
+Detailed information of the backend, optional.
+</ParamField>
+
+**Returns:** [`ProfilingStatus`](#aitune-torch-task-profiling-profiling-ProfilingStatus)
+
+Status of the profiling.
+
+
+</Indent>

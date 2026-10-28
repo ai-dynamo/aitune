@@ -4,7 +4,7 @@ slug: aitune/aitune/records/artifact
 title: aitune.records.artifact
 ---
 
-Durable references to tuned files that publishers can consume.
+Portable deployment descriptions shared by tuning frontends and runtime adapters.
 
 ## Module Contents
 
@@ -12,27 +12,24 @@ Durable references to tuned files that publishers can consume.
 
 | Name | Description |
 |------|-------------|
-| [`Artifact`](#aitune-records-artifact-Artifact) | Reference a finalized tuning result and its tensor interface. |
-| [`ArtifactIntegrityError`](#aitune-records-artifact-ArtifactIntegrityError) | Raised when an artifact file is unavailable or differs from its recorded bytes. |
-| [`ONNXArtifact`](#aitune-records-artifact-ONNXArtifact) | An ONNX model finalized as a tuning result for ONNX Runtime. |
-| [`TensorRTPlanArtifact`](#aitune-records-artifact-TensorRTPlanArtifact) | A serialized TensorRT plan produced by tuning. |
-
-### Data
-
-[`_HASH_CHUNK_SIZE`](#aitune-records-artifact-_HASH_CHUNK_SIZE)
+| [`DeploymentArtifact`](#aitune-records-artifact-DeploymentArtifact) | Describe one tuned model for built-in or user-defined deployment adapters. |
+| [`ModelFiles`](#aitune-records-artifact-ModelFiles) | Describe the files and format properties of one executable model. |
+| [`RuntimeConfig`](#aitune-records-artifact-RuntimeConfig) | Preserve runtime choices independently of a deployment platform. |
+| [`TensorSample`](#aitune-records-artifact-TensorSample) | Portable values for one representative input tensor. |
 
 ### API
 
-<Anchor id="aitune-records-artifact-Artifact">
+<Anchor id="aitune-records-artifact-DeploymentArtifact">
 
-<CodeBlock links={{"aitune.records.shapes.TunedTensorSpec":"/aitune/aitune/records/shapes#aitune-records-shapes-TunedTensorSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.records.artifact.ModelFiles":"#aitune-records-artifact-ModelFiles","aitune.records.shapes.BoundedTensorSpec":"./shapes.mdx#aitune-records-shapes-BoundedTensorSpec","aitune.records.artifact.RuntimeConfig":"#aitune-records-artifact-RuntimeConfig","aitune.records.artifact.TensorSample":"#aitune-records-artifact-TensorSample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.records.artifact.Artifact(
-    inputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
-    outputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
-    path: pathlib.Path,
-    fingerprint: str
+class aitune.records.DeploymentArtifact(
+    model: aitune.records.artifact.ModelFiles,
+    inputs: tuple[aitune.records.shapes.BoundedTensorSpec, ...],
+    outputs: tuple[aitune.records.shapes.BoundedTensorSpec, ...],
+    runtime: aitune.records.artifact.RuntimeConfig,
+    sample_inputs: tuple[aitune.records.artifact.TensorSample, ...] = ()
 )
 ```
 
@@ -43,39 +40,39 @@ class aitune.records.artifact.Artifact(
 
 <Badge>Dataclass</Badge>
 
-Reference a finalized tuning result and its tensor interface.
+Describe one tuned model for built-in or user-defined deployment adapters.
 
-An artifact exists only after tuning has established concrete tensor bounds.
-The record neither owns nor serializes its cache file. The AITune Package
-design will define source provenance and persistence.
+This record composes model files, a tensor interface, and runtime settings.
+It neither loads the model nor defines deployment-platform configuration.
 
 **Parameters:**
 
-<ParamField path="inputs" type="tuple[TunedTensorSpec, ...]">
-Ordered tuned input specifications.
+<ParamField path="model" type="ModelFiles">
+[`ModelFiles`](#aitune-records-artifact-ModelFiles) — Model format, files, and format-specific metadata.
 </ParamField>
 
-<ParamField path="outputs" type="tuple[TunedTensorSpec, ...]">
-Ordered tuned output specifications.
+<ParamField path="inputs" type="tuple[BoundedTensorSpec, ...]">
+`tuple[` [`BoundedTensorSpec`](./shapes.mdx#aitune-records-shapes-BoundedTensorSpec) `, ...]` — Input tensor specifications in executable order.
 </ParamField>
 
-<ParamField path="path" type="Path">
-Tuned file in the AITune cache.
+<ParamField path="outputs" type="tuple[BoundedTensorSpec, ...]">
+`tuple[` [`BoundedTensorSpec`](./shapes.mdx#aitune-records-shapes-BoundedTensorSpec) `, ...]` — Output tensor specifications in executable order.
 </ParamField>
 
-<ParamField path="fingerprint" type="str">
-Lowercase SHA-256 digest of the file at build time.
+<ParamField path="runtime" type="RuntimeConfig">
+[`RuntimeConfig`](#aitune-records-artifact-RuntimeConfig) — Runtime identifier and options selected during tuning.
 </ParamField>
 
-
-<ParamField path="fingerprint" type="str">
+<ParamField path="sample_inputs" type="tuple[TensorSample, ...]" default="()">
+`tuple[` [`TensorSample`](#aitune-records-artifact-TensorSample) `, ...]` — Representative input values in executable order, when retained.
 </ParamField>
+
 
 <ParamField path="input_names" type="tuple[str, ...]">
 Return input names in executable order.
 </ParamField>
 
-<ParamField path="inputs" type="tuple[TunedTensorSpec, ...]">
+<ParamField path="inputs" type="tuple[BoundedTensorSpec, ...]">
 </ParamField>
 
 <ParamField path="max_batch_size" type="int | None">
@@ -85,21 +82,104 @@ Every input and output must have a known batch axis and support batch
 size one. Differing maximums are intersected by using the smallest one.
 </ParamField>
 
+<ParamField path="model" type="ModelFiles">
+</ParamField>
+
 <ParamField path="output_names" type="tuple[str, ...]">
 Return output names in executable order.
 </ParamField>
 
-<ParamField path="outputs" type="tuple[TunedTensorSpec, ...]">
+<ParamField path="outputs" type="tuple[BoundedTensorSpec, ...]">
+</ParamField>
+
+<ParamField path="runtime" type="RuntimeConfig">
+</ParamField>
+
+<ParamField path="sample_inputs" type="tuple[TensorSample, ...] = ()">
+</ParamField>
+<Anchor id="aitune-records-artifact-DeploymentArtifact-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.DeploymentArtifact.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require unique names within each side of the tensor interface.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-records-artifact-ModelFiles">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.records.ModelFiles(
+    format: str,
+    path: pathlib.Path,
+    additional_files: tuple[pathlib.Path, ...] = (),
+    metadata: collections.abc.Mapping[str, typing.Any] = dict()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Describe the files and format properties of one executable model.
+
+**Parameters:**
+
+<ParamField path="format" type="str">
+Format identifier, such as ``onnx``, ``tensorrt_plan``, or ``pt2``.
+Custom formats do not require registration with AITune.
+</ParamField>
+
+<ParamField path="path" type="Path">
+Main model file opened by the runtime.
+</ParamField>
+
+<ParamField path="additional_files" type="tuple[Path, ...]" default="()">
+Required file paths relative to ``path.parent``.
+</ParamField>
+
+<ParamField path="metadata" type="Mapping[str, Any]" default="dict()">
+Format-specific properties, such as a plan's profile count.
+Producers and consumers of the format define these keys.
+</ParamField>
+
+
+<ParamField path="additional_files" type="tuple[Path, ...] = ()">
+</ParamField>
+
+<ParamField path="files" type="tuple[Path, ...]">
+Return all source paths, with the main file first.
+</ParamField>
+
+<ParamField path="format" type="str">
+</ParamField>
+
+<ParamField path="metadata" type="Mapping[str, Any] = field(default_factory=dict)">
 </ParamField>
 
 <ParamField path="path" type="Path">
 </ParamField>
-<Anchor id="aitune-records-artifact-Artifact-__post_init__">
+<Anchor id="aitune-records-artifact-ModelFiles-__post_init__">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.records.artifact.Artifact.__post_init__() -> None
+aitune.records.ModelFiles.__post_init__() -> None
 ```
 
 </CodeBlock>
@@ -107,88 +187,16 @@ aitune.records.artifact.Artifact.__post_init__() -> None
 
 <Indent>
 
-Validate invariants that the field types cannot express.
+Validate the format identifier and relative file layout.
 
 
 </Indent>
-<Anchor id="aitune-records-artifact-Artifact-_compare_fingerprint">
+<Anchor id="aitune-records-artifact-ModelFiles-export_files">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.records.artifact.Artifact._compare_fingerprint(
-    actual: str
-) -> None
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Raise unless ``actual`` is the recorded artifact fingerprint.
-
-
-</Indent>
-<Anchor id="aitune-records-artifact-Artifact-_fingerprint_file">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.records.artifact.Artifact._fingerprint_file() -> str
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Return the SHA-256 digest of the current artifact file.
-
-
-</Indent>
-<Anchor id="aitune-records-artifact-Artifact-_read_chunks">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.records.artifact.Artifact._read_chunks() -> collections.abc.Iterator[bytes]
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Yield source bytes while translating read failures.
-
-
-</Indent>
-<Anchor id="aitune-records-artifact-Artifact-_unreadable">
-
-<CodeBlock links={{"aitune.records.artifact.ArtifactIntegrityError":"#aitune-records-artifact-ArtifactIntegrityError"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.records.artifact.Artifact._unreadable(
-    error: OSError
-) -> aitune.records.artifact.ArtifactIntegrityError
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Describe why the referenced cache file cannot be read.
-
-
-</Indent>
-<Anchor id="aitune-records-artifact-Artifact-export_file">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.records.artifact.Artifact.export_file(
+aitune.records.ModelFiles.export_files(
     path: str | os.PathLike[str]
 ) -> pathlib.Path
 ```
@@ -198,77 +206,41 @@ aitune.records.artifact.Artifact.export_file(
 
 <Indent>
 
-Copy verified artifact bytes to ``path``.
+Copy the main file and its additional files to the destination.
+
+Copies directly to the destination, overwriting existing files. A copy
+failure may leave an incomplete export. The caller is responsible for
+keeping sources unchanged during copying and for staging and publishing
+the complete artifact.
 
 **Parameters:**
 
 <ParamField path="path" type="str | os.PathLike[str]">
-Destination file. Missing parent directories are created.
+Destination main file. Additional files retain their relative
+paths beside it. Missing parent directories are created.
 </ParamField>
 
 **Returns:** `Path`
 
-The destination path.
+The destination main file path.
 
 **Raises:**
 
-- `ArtifactIntegrityError`: If the source cannot be read or changed since build.
+- `ValueError`: If export targets collide with each other or with model source files.
+- `OSError`: If directory creation or copying fails.
 
 
 </Indent>
-<Anchor id="aitune-records-artifact-Artifact-verify">
+</Indent>
+
+<Anchor id="aitune-records-artifact-RuntimeConfig">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.records.artifact.Artifact.verify() -> None
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Verify that the file is readable and matches its recorded hash.
-
-**Raises:**
-
-- `ArtifactIntegrityError`: If the file cannot be read or its contents changed.
-
-
-</Indent>
-</Indent>
-
-<Anchor id="aitune-records-artifact-ArtifactIntegrityError">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-class aitune.records.artifact.ArtifactIntegrityError()
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-**Bases:** `RuntimeError`
-
-Raised when an artifact file is unavailable or differs from its recorded bytes.
-
-
-</Indent>
-
-<Anchor id="aitune-records-artifact-ONNXArtifact">
-
-<CodeBlock links={{"aitune.records.shapes.TunedTensorSpec":"/aitune/aitune/records/shapes#aitune-records-shapes-TunedTensorSpec"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-class aitune.records.artifact.ONNXArtifact(
-    inputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
-    outputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
-    path: pathlib.Path,
-    fingerprint: str
+class aitune.records.RuntimeConfig(
+    name: str,
+    options: collections.abc.Mapping[str, typing.Any] = dict()
 )
 ```
 
@@ -279,23 +251,54 @@ class aitune.records.artifact.ONNXArtifact(
 
 <Badge>Dataclass</Badge>
 
-**Bases:** [Artifact](#aitune-records-artifact-Artifact)
+Preserve runtime choices independently of a deployment platform.
 
-An ONNX model finalized as a tuning result for ONNX Runtime.
+**Parameters:**
+
+<ParamField path="name" type="str">
+Runtime identifier, such as ``onnxruntime`` or a user-defined name.
+</ParamField>
+
+<ParamField path="options" type="Mapping[str, Any]" default="dict()">
+Runtime settings selected during tuning. For ``onnxruntime``,
+``execution_provider`` is ``cuda`` or ``tensorrt``. Custom runtimes
+define their own option names and values; adapters interpret them.
+</ParamField>
+
+
+<ParamField path="name" type="str">
+</ParamField>
+
+<ParamField path="options" type="Mapping[str, Any] = field(default_factory=dict)">
+</ParamField>
+<Anchor id="aitune-records-artifact-RuntimeConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.RuntimeConfig.__post_init__() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require a runtime identifier that adapters can dispatch on.
 
 
 </Indent>
+</Indent>
 
-<Anchor id="aitune-records-artifact-TensorRTPlanArtifact">
+<Anchor id="aitune-records-artifact-TensorSample">
 
-<CodeBlock links={{"aitune.records.shapes.TunedTensorSpec":"/aitune/aitune/records/shapes#aitune-records-shapes-TunedTensorSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.records.artifact.TensorRTPlanArtifact(
-    inputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
-    outputs: tuple[aitune.records.shapes.TunedTensorSpec, ...],
-    path: pathlib.Path,
-    fingerprint: str
+class aitune.records.TensorSample(
+    name: str,
+    shape: tuple[int, ...],
+    values: tuple[bool | int | float, ...]
 )
 ```
 
@@ -306,21 +309,70 @@ class aitune.records.artifact.TensorRTPlanArtifact(
 
 <Badge>Dataclass</Badge>
 
-**Bases:** [Artifact](#aitune-records-artifact-Artifact)
-
-A serialized TensorRT plan produced by tuning.
+Portable values for one representative input tensor.
 
 
-</Indent>
+<ParamField path="name" type="str">
+</ParamField>
 
-<Anchor id="aitune-records-artifact-_HASH_CHUNK_SIZE">
+<ParamField path="shape" type="tuple[int, ...]">
+</ParamField>
+
+<ParamField path="values" type="tuple[bool | int | float, ...]">
+</ParamField>
+<Anchor id="aitune-records-artifact-TensorSample-__post_init__">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.records.artifact._HASH_CHUNK_SIZE = 1024 * 1024
+aitune.records.TensorSample.__post_init__() -> None
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+Require the flattened values to match the recorded shape.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-TensorSample-from_dict">
+
+<CodeBlock links={{"aitune.records.artifact.TensorSample":"#aitune-records-artifact-TensorSample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.TensorSample.from_dict(
+    data: collections.abc.Mapping[str, typing.Any]
+) -> aitune.records.artifact.TensorSample
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Restore representative tensor values from checkpoint state.
+
+
+</Indent>
+<Anchor id="aitune-records-artifact-TensorSample-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.records.TensorSample.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return checkpoint-safe primitive values.
+
+
+</Indent>
+</Indent>

@@ -23,7 +23,7 @@ Profiling stop strategies for profiling.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.task.profiling.profiling_stop_strategy.AllSamplesProfilingStopStrategy()
+class aitune.torch.task.profiling.AllSamplesProfilingStopStrategy()
 ```
 
 </CodeBlock>
@@ -40,10 +40,10 @@ Strategy to do not stop profiling until all samples are processed.
 
 <Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-AllSamplesProfilingStopStrategy-should_stop">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.profiling_stop_strategy.AllSamplesProfilingStopStrategy.should_stop(
+aitune.torch.task.profiling.AllSamplesProfilingStopStrategy.should_stop(
     results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
 ) -> bool
 ```
@@ -64,7 +64,7 @@ Check if the profiling should be stopped.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.task.profiling.profiling_stop_strategy.ProfilingStopStrategy()
+class aitune.torch.task.profiling.ProfilingStopStrategy()
 ```
 
 </CodeBlock>
@@ -79,10 +79,10 @@ Strategy when to stop profiling.
 
 <Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ProfilingStopStrategy-should_stop">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.profiling_stop_strategy.ProfilingStopStrategy.should_stop(
+aitune.torch.task.profiling.ProfilingStopStrategy.should_stop(
     results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
 ) -> bool
 ```
@@ -99,7 +99,7 @@ Check if the profiling should be stopped.
 **Parameters:**
 
 <ParamField path="results" type="list[ProfilingResultEvent]">
-List of profiling results.
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — List of profiling results.
 </ParamField>
 
 **Returns:** `bool`
@@ -112,10 +112,10 @@ True if the profiling should be stopped, False otherwise.
 
 <Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ThroughputSaturatedProfilingStopStrategy">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.task.profiling.profiling_stop_strategy.ThroughputSaturatedProfilingStopStrategy(
+class aitune.torch.task.profiling.ThroughputSaturatedProfilingStopStrategy(
     min_throughput_gain_ratio: float = 0.05,
     throughput_backoff_limit: int = 2,
     _best_results: list[aitune.torch.task.profiling.events.ProfilingResultEvent] = list(),
@@ -165,7 +165,7 @@ Number of measurements after saturation is detected to continue profiling.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.profiling_stop_strategy.ThroughputSaturatedProfilingStopStrategy.__post_init__()
+aitune.torch.task.profiling.ThroughputSaturatedProfilingStopStrategy.__post_init__()
 ```
 
 </CodeBlock>
@@ -179,10 +179,10 @@ Validate ratio configuration.
 </Indent>
 <Anchor id="aitune-torch-task-profiling-profiling_stop_strategy-ThroughputSaturatedProfilingStopStrategy-should_stop">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.profiling_stop_strategy.ThroughputSaturatedProfilingStopStrategy.should_stop(
+aitune.torch.task.profiling.ThroughputSaturatedProfilingStopStrategy.should_stop(
     results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
 ) -> bool
 ```

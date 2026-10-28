@@ -22,7 +22,7 @@ Metrics for profiling.
 
 <Anchor id="aitune-torch-task-profiling-metrics-get_batch_size">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.profiling.metrics.get_batch_size(
@@ -40,7 +40,7 @@ Get batch size from profiling results.
 **Parameters:**
 
 <ParamField path="results" type="list[ProfilingResultEvent]">
-List of profiling results.
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — List of profiling results.
 </ParamField>
 
 **Returns:** `int`
@@ -52,7 +52,7 @@ Batch size.
 
 <Anchor id="aitune-torch-task-profiling-metrics-get_latency">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.profiling.metrics.get_latency(
@@ -70,7 +70,7 @@ Get mean latency from profiling results.
 **Parameters:**
 
 <ParamField path="results" type="list[ProfilingResultEvent]">
-List of profiling results.
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — List of profiling results.
 </ParamField>
 
 **Returns:** `float`
@@ -82,7 +82,7 @@ Mean latency in milliseconds.
 
 <Anchor id="aitune-torch-task-profiling-metrics-get_mean_executions_per_second">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.profiling.metrics.get_mean_executions_per_second(
@@ -100,7 +100,7 @@ Get execution time per second from profiling results.
 **Parameters:**
 
 <ParamField path="results" type="list[ProfilingResultEvent]">
-List of profiling results.
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — List of profiling results.
 </ParamField>
 
 **Returns:** `float`
@@ -112,10 +112,10 @@ Executions per second based on mean execution time.
 
 <Anchor id="aitune-torch-task-profiling-metrics-get_throughput">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.metrics.get_throughput(
+aitune.torch.task.profiling.get_throughput(
     results: list[aitune.torch.task.profiling.events.ProfilingResultEvent],
     batch_size: int | None = None
 ) -> float
@@ -131,7 +131,7 @@ Get throughput from profiling results.
 **Parameters:**
 
 <ParamField path="results" type="list[ProfilingResultEvent]">
-List of profiling results.
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — List of profiling results.
 </ParamField>
 
 <ParamField path="batch_size" type="int | None" default="None">
@@ -147,10 +147,10 @@ Throughput in samples per second.
 
 <Anchor id="aitune-torch-task-profiling-metrics-is_throughput_saturated">
 
-<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"/aitune/aitune/torch/task/profiling/events#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.metrics.is_throughput_saturated(
+aitune.torch.task.profiling.is_throughput_saturated(
     profiling_result: list[aitune.torch.task.profiling.events.ProfilingResultEvent],
     min_throughput_gain_ratio: float,
     prev_results: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
@@ -167,7 +167,7 @@ Validate if throughput saturated between consecutive samples.
 **Parameters:**
 
 <ParamField path="profiling_result" type="list[ProfilingResultEvent]">
-Current profiling results.
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — Current profiling results.
 </ParamField>
 
 <ParamField path="min_throughput_gain_ratio" type="float">
@@ -175,7 +175,7 @@ Minimum relative throughput gain required to continue profiling.
 </ParamField>
 
 <ParamField path="prev_results" type="list[ProfilingResultEvent]">
-Previous profiling results or previous throughput.
+`list[` [`ProfilingResultEvent`](./events.mdx#aitune-torch-task-profiling-events-ProfilingResultEvent) `]` — Previous profiling results or previous throughput.
 </ParamField>
 
 **Returns:** `bool`

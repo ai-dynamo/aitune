@@ -19,15 +19,22 @@ Backend interface.
 | [`BuildMode`](#aitune-torch-backend-backend-BuildMode) | Timing used by a backend to build the tuned module. |
 | [`DummyBackend`](#aitune-torch-backend-backend-DummyBackend) | Dummy backend for testing purposes. |
 | [`ExecutionMode`](#aitune-torch-backend-backend-ExecutionMode) | Execution topologies supported by a backend. |
+| [`ModuleFormat`](#aitune-torch-backend-backend-ModuleFormat) | Source module formats supported by a backend. |
+
+### Data
+
+[`ConfigType`](#aitune-torch-backend-backend-ConfigType)
 
 ### API
 
 <Anchor id="aitune-torch-backend-backend-Backend">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.ConfigType":"#aitune-torch-backend-backend-ConfigType"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.backend.Backend()
+class aitune.torch.backend.Backend(
+    config: aitune.torch.backend.backend.ConfigType = None
+)
 ```
 
 </CodeBlock>
@@ -36,6 +43,8 @@ class aitune.torch.backend.backend.Backend()
 <Indent>
 
 <Badge>Abstract</Badge>
+
+**Bases:** `Generic[ConfigType]`
 
 Backend interface for tuning a module.
 
@@ -46,7 +55,10 @@ Backend interface for tuning a module.
 <ParamField path="_build_results" type="= []">
 </ParamField>
 
-<ParamField path="_config" type="BackendConfig | None = None">
+<ParamField path="_config" type="ConfigType = config">
+</ParamField>
+
+<ParamField path="_device" type="device | None = None">
 </ParamField>
 
 <ParamField path="_devices" type="list[str] = ['cpu', 'cuda']">
@@ -57,6 +69,9 @@ Backend interface for tuning a module.
 
 <ParamField path="_logger" type="Logger">
 Get a logger specific to this backend implementation.
+</ParamField>
+
+<ParamField path="_supported_modules" type="frozenset[ModuleFormat] = frozenset(&#123;ModuleFormat.TORCH&#125;)">
 </ParamField>
 
 <ParamField path="build_mode" type="BuildMode">
@@ -82,7 +97,7 @@ Name of a backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.__init_subclass__(
+aitune.torch.backend.Backend.__init_subclass__(
     kwargs = {}
 ) -> None
 ```
@@ -101,7 +116,7 @@ Require each backend subclass to declare its execution and build modes.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._activate()
+aitune.torch.backend.Backend._activate()
 ```
 
 </CodeBlock>
@@ -122,7 +137,7 @@ After activating, the backend should be ready to do inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._assert_device(
+aitune.torch.backend.Backend._assert_device(
     device: torch.device
 )
 ```
@@ -147,7 +162,7 @@ The device to assert.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._assert_execution_mode(
+aitune.torch.backend.Backend._assert_execution_mode(
     module: torch.nn.Module
 ) -> None
 ```
@@ -161,17 +176,36 @@ Reject the module execution mode when the backend does not support it.
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-backend-Backend-_build">
+<Anchor id="aitune-torch-backend-backend-Backend-_assert_supported_modules">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._build(
+aitune.torch.backend.Backend._assert_supported_modules(
+    module: torch.nn.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reject source module formats that the backend does not support.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-_build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.Backend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
-) -> aitune.torch.backend.backend.Backend
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -196,11 +230,11 @@ The name of the backend.
 </ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec">
-The graph specification of the backend.
+[`GraphSpec`](../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — The graph specification of the backend.
 </ParamField>
 
 <ParamField path="samples" type="SampleStore">
-Recorded samples used to build the backend.
+[`SampleStore`](../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore) — Recorded samples used to build the backend.
 </ParamField>
 
 <ParamField path="cache_dir" type="Path">
@@ -214,7 +248,7 @@ The cache directory to store the backend artifacts.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._clean_memory()
+aitune.torch.backend.Backend._clean_memory()
 ```
 
 </CodeBlock>
@@ -231,7 +265,7 @@ Clean up memory.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._deactivate()
+aitune.torch.backend.Backend._deactivate()
 ```
 
 </CodeBlock>
@@ -252,7 +286,7 @@ After deactivating, the backend cannot be used to do inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._deploy()
+aitune.torch.backend.Backend._deploy()
 ```
 
 </CodeBlock>
@@ -264,7 +298,7 @@ aitune.torch.backend.backend.Backend._deploy()
 
 Deploys the backend.
 
-After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
+After deploying, the backend is ready to do inference. Deactivation permanently releases it.
 
 
 </Indent>
@@ -273,7 +307,7 @@ After deploying, the backend is ready to do inference. Backend cannot be deactiv
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._infer(
+aitune.torch.backend.Backend._infer(
     args = (),
     kwargs = {}
 )
@@ -309,7 +343,7 @@ The result of the inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._save_config(
+aitune.torch.backend.Backend._save_config(
     cache_dir: pathlib.Path
 ) -> None
 ```
@@ -328,7 +362,7 @@ Store backend configuration metadata when configuration is available.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._set_device(
+aitune.torch.backend.Backend._set_device(
     device: torch.device | None
 )
 ```
@@ -353,7 +387,7 @@ The device to set the backend on.
 <CodeBlock links={{"aitune.torch.backend.backend.BackendBuildStep":"#aitune-torch-backend-backend-BackendBuildStep"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend._track_build_step(
+aitune.torch.backend.Backend._track_build_step(
     step: aitune.torch.backend.backend.BackendBuildStep
 ) -> collections.abc.Generator[dict[str, typing.Any], None, None]
 ```
@@ -372,7 +406,7 @@ Record a build step result.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.activate()
+aitune.torch.backend.Backend.activate()
 ```
 
 </CodeBlock>
@@ -386,19 +420,44 @@ After activating, the backend should be ready to do inference.
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-backend-Backend-build">
+<Anchor id="aitune-torch-backend-backend-Backend-artifact">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.build(
+aitune.torch.backend.Backend.artifact() -> aitune.records.DeploymentArtifact
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the deployable artifact produced by this backend.
+
+**Returns:** [`DeploymentArtifact`](../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact)
+
+The backend's finalized artifact.
+
+**Raises:**
+
+- `RuntimeError`: If this backend does not produce an independently deployable artifact.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-backend-Backend-build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.Backend.build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     samples: aitune.torch.module.sample_store.SampleStore,
     device: torch.device,
     cache_dir: pathlib.Path,
     log_file: pathlib.Path | None = None
-) -> aitune.torch.backend.backend.Backend
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -417,7 +476,7 @@ After building, the backend should be activated.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.deactivate()
+aitune.torch.backend.Backend.deactivate()
 ```
 
 </CodeBlock>
@@ -428,6 +487,7 @@ aitune.torch.backend.backend.Backend.deactivate()
 Deactivates backend.
 
 After deactivating, the backend cannot be used to do inference.
+Deployed backends are permanently released; load a new instance to use them again.
 
 
 </Indent>
@@ -436,7 +496,7 @@ After deactivating, the backend cannot be used to do inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.deploy(
+aitune.torch.backend.Backend.deploy(
     device: torch.device | None
 )
 ```
@@ -448,7 +508,7 @@ aitune.torch.backend.backend.Backend.deploy(
 
 Deploys the backend.
 
-After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
+After deploying, the backend is ready to do inference. Deactivation permanently releases it.
 
 **Parameters:**
 
@@ -463,7 +523,7 @@ The device to deploy the backend on.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.describe() -> str
+aitune.torch.backend.Backend.describe() -> str
 ```
 
 </CodeBlock>
@@ -482,10 +542,10 @@ Returns the description of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.from_dict(
+aitune.torch.backend.Backend.from_dict(
     module: torch.nn.Module | None,
     state_dict: dict
-)
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -498,7 +558,7 @@ aitune.torch.backend.backend.Backend.from_dict(
 Creates a backend from a module and state_dict.
 
 Artifact values have already been relocated by the checkpoint loader and
-are provided as ready-to-use :class:`aitune.torch.backend.ArtifactPath`
+are provided as ready-to-use `aitune.torch.backend.ArtifactPath`
 objects. Implementations should use them directly without reconstructing
 or rebasing their paths.
 
@@ -509,7 +569,7 @@ or rebasing their paths.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.infer(
+aitune.torch.backend.Backend.infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -543,7 +603,7 @@ The result of the inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.key() -> str
+aitune.torch.backend.Backend.key() -> str
 ```
 
 </CodeBlock>
@@ -562,7 +622,7 @@ Returns the key of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.backend.Backend.to_dict()
+aitune.torch.backend.Backend.to_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -575,8 +635,8 @@ aitune.torch.backend.backend.Backend.to_dict()
 Returns the state_dict of the backend.
 
 Files or directories required to restore the backend must be represented by
-:class:`aitune.torch.backend.ArtifactPath`. A checkpoint copies only values
-explicitly marked with ``ArtifactPath``; ordinary :class:`pathlib.Path`
+`aitune.torch.backend.ArtifactPath`. A checkpoint copies only values
+explicitly marked with ``ArtifactPath``; ordinary `pathlib.Path`
 values are serialized without copying their targets.
 
 
@@ -788,7 +848,8 @@ stateDiagram
     checkpoint_loaded --> deployed: When backend is deployed from checkpoint
     checkpoint_loaded --> active: When backend is activated from checkpoint
     active --> deployed: When backend is deployed after being active
-    deployed --> [*]
+    deployed --> released: When backend is deactivated
+    released --> [*]
 ```
 
 </CodeBlock>
@@ -798,6 +859,31 @@ Note:
 that in order to deploy/recompile jit backends.
 - After loading a checkpoint you can still do activation when grokking with the code but bare in mind that jit
 backends do recompilation.
+
+**This abstract class has public interface methods which manage state of the backend**
+
+build(): Builds backend, changes state to ACTIVE
+activate(): Activates backend, changes state to ACTIVE
+deactivate(): Deactivates backend, changes state to INACTIVE or RELEASED
+deploy(): Deploys backend, changes state to DEPLOYED
+
+**Each method calls corresponding private method which should not change state differently - with one exception**
+
+_build should set state to ACTIVE after building the backend. This is to ensure that rest of the system
+can use the backend in ACTIVE state and prevents unnecessary recompilation of jit backends.
+
+**Each backend implementation should implement public methods**
+
+to_dict(): Returns the state_dict of the backend
+from_dict(): Creates a backend from a state_dict
+
+**and private ones**
+
+_build(): Builds backend, changes state to ACTIVE
+_activate(): Activates backend, changes state to ACTIVE
+_deactivate(): Deactivates backend, changes state to INACTIVE
+_deploy(): Deploys backend, changes state to DEPLOYED
+_infer(): Runs inference with the given arguments
 
 Every backend must explicitly declare its supported execution modes and build mode.
 
@@ -816,6 +902,9 @@ Every backend must explicitly declare its supported execution modes and build mo
 <ParamField path="INIT" type="= 'init'">
 </ParamField>
 
+<ParamField path="RELEASED" type="= 'released'">
+</ParamField>
+
 </Indent>
 
 <Anchor id="aitune-torch-backend-backend-BuildMode">
@@ -823,7 +912,7 @@ Every backend must explicitly declare its supported execution modes and build mo
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.backend.BuildMode
+class aitune.torch.backend.BuildMode
 ```
 
 </CodeBlock>
@@ -888,7 +977,7 @@ Activate the backend.
 </Indent>
 <Anchor id="aitune-torch-backend-backend-DummyBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.backend.DummyBackend._build(
@@ -896,7 +985,7 @@ aitune.torch.backend.backend.DummyBackend._build(
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
-) -> aitune.torch.backend.backend.Backend
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -1062,7 +1151,7 @@ Returns the state_dict of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.backend.ExecutionMode
+class aitune.torch.backend.ExecutionMode
 ```
 
 </CodeBlock>
@@ -1081,3 +1170,40 @@ Execution topologies supported by a backend.
 </ParamField>
 
 </Indent>
+
+<Anchor id="aitune-torch-backend-backend-ModuleFormat">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.ModuleFormat
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Source module formats supported by a backend.
+
+<ParamField path="ONNX" type="= 'onnx'">
+</ParamField>
+
+<ParamField path="TORCH" type="= 'torch'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-backend-ConfigType">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.backend.ConfigType = TypeVar('ConfigType', bound=(BackendConfig | None))
+```
+
+</CodeBlock>
+</Anchor>
+

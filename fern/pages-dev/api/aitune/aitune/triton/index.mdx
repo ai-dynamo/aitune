@@ -1,0 +1,862 @@
+---
+layout: overview
+slug: aitune/aitune/triton
+title: aitune.triton
+---
+
+Generate Triton model repositories from artifacts and existing model files.
+
+## Subpackages
+
+- **[`aitune.triton.config`](./config/index.mdx)**
+
+## Submodules
+
+- **[`aitune.triton.model_analyzer`](./model_analyzer.mdx)**
+- **[`aitune.triton.model_repository`](./model_repository.mdx)**
+
+## Package Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`DynamicBatcher`](#aitune-triton-config-options-DynamicBatcher) | Dynamic batching with preferred sizes, priorities, and queue policies. |
+| [`ExecutionAccelerator`](#aitune-triton-config-options-ExecutionAccelerator) | ONNX Runtime execution accelerator and backend-specific string parameters. |
+| [`InstanceGroup`](#aitune-triton-config-options-InstanceGroup) | Model instance count, device placement, profiles, and rate limiting. |
+| [`ModelAnalyzerConfig`](#aitune-triton-model_analyzer-ModelAnalyzerConfig) | User options for the Model Analyzer config generated during publication. |
+| [`ModelWarmup`](#aitune-triton-config-options-ModelWarmup) | Named warmup sample with protobuf-shaped input data specifications. |
+| [`ONNXRuntimeModelConfig`](#aitune-triton-config-onnx_runtime-ONNXRuntimeModelConfig) | Triton configuration specialized for ONNX Runtime artifacts. |
+| [`QueuePolicy`](#aitune-triton-config-options-QueuePolicy) | Request timeout and queue capacity policy; times are in microseconds. |
+| [`SequenceBatcher`](#aitune-triton-config-options-SequenceBatcher) | Sequence scheduling using Triton protobuf fields for controls and state. |
+| [`TensorRTModelConfig`](#aitune-triton-config-tensorrt-TensorRTModelConfig) | Triton configuration specialized for serialized TensorRT plans. |
+| [`TorchAOTIModelConfig`](#aitune-triton-config-torch_aoti-TorchAOTIModelConfig) | Triton configuration specialized for AOTInductor PT2 packages. |
+| [`TritonDataType`](#aitune-triton-config-common-TritonDataType) | Tensor element types supported by AITune artifacts and Triton. |
+| [`TritonTensorConfig`](#aitune-triton-config-common-TritonTensorConfig) | One input or output in a Triton model configuration. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`publish`](#aitune-triton-model_repository-publish) | Publish a tuned artifact or an existing model file to a Triton repository. |
+
+### Data
+
+[`PublicationError`](#aitune-triton-model_repository-PublicationError)
+
+### API
+
+<Anchor id="aitune-triton-config-options-DynamicBatcher">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.DynamicBatcher()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Dynamic batching with preferred sizes, priorities, and queue policies.
+
+
+<ParamField path="default_priority_level" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="default_queue_policy" type="QueuePolicy | None = None">
+</ParamField>
+
+<ParamField path="max_queue_delay_microseconds" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="preferred_batch_size" type="tuple[PositiveInt, ...] = ()">
+</ParamField>
+
+<ParamField path="preserve_ordering" type="bool = False">
+</ParamField>
+
+<ParamField path="priority_levels" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="priority_queue_policy" type="dict[int, QueuePolicy] = Field(default_factory=dict)">
+</ParamField>
+<Anchor id="aitune-triton-config-options-DynamicBatcher-_validate_priorities">
+
+<CodeBlock links={{"aitune.triton.config.options.DynamicBatcher":"#aitune-triton-config-options-DynamicBatcher"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.DynamicBatcher._validate_priorities() -> aitune.triton.config.options.DynamicBatcher
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require configured priority levels and defaults to agree.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-ExecutionAccelerator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.ExecutionAccelerator()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+ONNX Runtime execution accelerator and backend-specific string parameters.
+
+
+<ParamField path="name" type="str = Field(min_length=1)">
+</ParamField>
+
+<ParamField path="parameters" type="dict[str, str] = Field(default_factory=dict)">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-InstanceGroup">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.InstanceGroup()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Model instance count, device placement, profiles, and rate limiting.
+
+
+<ParamField path="count" type="PositiveInt = 1">
+</ParamField>
+
+<ParamField path="gpus" type="tuple[NonNegativeInt, ...] = ()">
+</ParamField>
+
+<ParamField path="host_policy" type="str | None = None">
+</ParamField>
+
+<ParamField path="kind" type="Literal['KIND_AUTO', 'KIND_CPU', 'KIND_GPU', 'KIND_MODEL'] = 'KIND_AUTO'">
+</ParamField>
+
+<ParamField path="name" type="str | None = None">
+</ParamField>
+
+<ParamField path="passive" type="bool = False">
+</ParamField>
+
+<ParamField path="profile" type="tuple[str, ...] = ()">
+</ParamField>
+
+<ParamField path="rate_limiter" type="dict[str, Any] | None = None">
+</ParamField>
+
+<ParamField path="secondary_devices" type="tuple[dict[str, Any], ...] = ()">
+</ParamField>
+<Anchor id="aitune-triton-config-options-InstanceGroup-_validate_devices">
+
+<CodeBlock links={{"aitune.triton.config.options.InstanceGroup":"#aitune-triton-config-options-InstanceGroup"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.InstanceGroup._validate_devices() -> aitune.triton.config.options.InstanceGroup
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reject GPU identifiers on CPU or model-managed instances.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-model_analyzer-ModelAnalyzerConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.ModelAnalyzerConfig()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `BaseModel`
+
+User options for the Model Analyzer config generated during publication.
+
+
+<ParamField path="latency_budget_ms" type="int | None = Field(default=None, ge=1, strict=True)">
+</ParamField>
+
+<ParamField path="latency_percentile" type="Literal[90, 95, 99] = Field(default=95)">
+</ParamField>
+
+<ParamField path="model_config">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-ModelWarmup">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.ModelWarmup()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Named warmup sample with protobuf-shaped input data specifications.
+
+Each input specifies ``data_type``, ``dims``, and one of ``zero_data``,
+``random_data``, or ``input_data_file``. Files live under the model's warmup directory.
+
+
+<ParamField path="batch_size" type="PositiveInt = 1">
+</ParamField>
+
+<ParamField path="count" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="inputs" type="dict[str, dict[str, Any]] = Field(min_length=1)">
+</ParamField>
+
+<ParamField path="name" type="str = Field(min_length=1)">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-triton-config-onnx_runtime-ONNXRuntimeModelConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.ONNXRuntimeModelConfig()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [BaseModelConfig](./config/common.mdx#aitune-triton-config-common-BaseModelConfig)
+
+Triton configuration specialized for ONNX Runtime artifacts.
+
+
+<ParamField path="cpu_execution_accelerators" type="tuple[ExecutionAccelerator, ...] = ()">
+</ParamField>
+
+<ParamField path="execution_provider" type="Literal['cuda', 'tensorrt']">
+</ParamField>
+
+<ParamField path="gpu_execution_accelerators" type="tuple[ExecutionAccelerator, ...] = ()">
+</ParamField>
+
+<ParamField path="platform" type="Literal['onnxruntime_onnx'] = 'onnxruntime_onnx'">
+</ParamField>
+<Anchor id="aitune-triton-config-onnx_runtime-ONNXRuntimeModelConfig-_artifact_options">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.ONNXRuntimeModelConfig._artifact_options(
+    artifact: aitune.records.DeploymentArtifact
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Read the execution provider selected for ONNX Runtime.
+
+
+</Indent>
+<Anchor id="aitune-triton-config-onnx_runtime-ONNXRuntimeModelConfig-to_protobuf">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.ONNXRuntimeModelConfig.to_protobuf() -> tritonclient.grpc.model_config_pb2.ModelConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Preserve ONNX Runtime TensorRT provider selection.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-QueuePolicy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.QueuePolicy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Request timeout and queue capacity policy; times are in microseconds.
+
+
+<ParamField path="allow_timeout_override" type="bool = False">
+</ParamField>
+
+<ParamField path="default_timeout_microseconds" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="max_queue_size" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="timeout_action" type="Literal['REJECT', 'DELAY'] = 'REJECT'">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-SequenceBatcher">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.SequenceBatcher()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Sequence scheduling using Triton protobuf fields for controls and state.
+
+``direct`` and ``oldest`` select mutually exclusive strategies. Nested mappings
+use the ModelSequenceBatching schema and are checked when the model config is built.
+
+
+<ParamField path="control_input" type="tuple[dict[str, Any], ...] = ()">
+</ParamField>
+
+<ParamField path="direct" type="dict[str, Any] | None = None">
+</ParamField>
+
+<ParamField path="iterative_sequence" type="bool = False">
+</ParamField>
+
+<ParamField path="max_sequence_idle_microseconds" type="NonNegativeInt | None = None">
+</ParamField>
+
+<ParamField path="oldest" type="dict[str, Any] | None = None">
+</ParamField>
+
+<ParamField path="state" type="tuple[dict[str, Any], ...] = ()">
+</ParamField>
+<Anchor id="aitune-triton-config-options-SequenceBatcher-_validate_strategy">
+
+<CodeBlock links={{"aitune.triton.config.options.SequenceBatcher":"#aitune-triton-config-options-SequenceBatcher"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.SequenceBatcher._validate_strategy() -> aitune.triton.config.options.SequenceBatcher
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Allow at most one sequence scheduler strategy.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-config-tensorrt-TensorRTModelConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.TensorRTModelConfig()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [BaseModelConfig](./config/common.mdx#aitune-triton-config-common-BaseModelConfig)
+
+Triton configuration specialized for serialized TensorRT plans.
+
+
+<ParamField path="cuda_graphs" type="bool = False">
+</ParamField>
+
+<ParamField path="eager_batching" type="bool | None = None">
+</ParamField>
+
+<ParamField path="gather_kernel_buffer_threshold" type="NonNegativeInt | None = None">
+</ParamField>
+
+<ParamField path="optimization_profile_indices" type="tuple[StrictInt, ...]">
+</ParamField>
+
+<ParamField path="platform" type="Literal['tensorrt_plan'] = 'tensorrt_plan'">
+</ParamField>
+<Anchor id="aitune-triton-config-tensorrt-TensorRTModelConfig-_artifact_options">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.TensorRTModelConfig._artifact_options(
+    artifact: aitune.records.DeploymentArtifact
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Read plan profile metadata and TensorRT runtime settings.
+
+
+</Indent>
+<Anchor id="aitune-triton-config-tensorrt-TensorRTModelConfig-_validate_profiles">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.TensorRTModelConfig._validate_profiles(
+    indices: tuple[int, ...]
+) -> tuple[int, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Accept a non-empty set of distinct non-negative profile indices.
+
+
+</Indent>
+<Anchor id="aitune-triton-config-tensorrt-TensorRTModelConfig-to_protobuf">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.TensorRTModelConfig.to_protobuf() -> tritonclient.grpc.model_config_pb2.ModelConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Add TensorRT optimization-profile selection to the common config.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-config-torch_aoti-TorchAOTIModelConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.TorchAOTIModelConfig()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [BaseModelConfig](./config/common.mdx#aitune-triton-config-common-BaseModelConfig)
+
+Triton configuration specialized for AOTInductor PT2 packages.
+
+
+<ParamField path="platform" type="Literal['torch_aoti'] = 'torch_aoti'">
+</ParamField>
+
+<ParamField path="structured_call" type="bool">
+</ParamField>
+<Anchor id="aitune-triton-config-torch_aoti-TorchAOTIModelConfig-_artifact_options">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.TorchAOTIModelConfig._artifact_options(
+    artifact: aitune.records.DeploymentArtifact
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Read the PT2 package's call structure.
+
+
+</Indent>
+<Anchor id="aitune-triton-config-torch_aoti-TorchAOTIModelConfig-_supports_artifact_batching">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.TorchAOTIModelConfig._supports_artifact_batching(
+    artifact: aitune.records.DeploymentArtifact
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Structured PT2 calls cannot use Triton's implicit batch dimension.
+
+
+</Indent>
+<Anchor id="aitune-triton-config-torch_aoti-TorchAOTIModelConfig-_validate_structured_batching">
+
+<CodeBlock links={{"aitune.triton.config.torch_aoti.TorchAOTIModelConfig":"#aitune-triton-config-torch_aoti-TorchAOTIModelConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.TorchAOTIModelConfig._validate_structured_batching() -> aitune.triton.config.torch_aoti.TorchAOTIModelConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reject batching that cannot preserve a structured PT2 call.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-config-common-TritonDataType">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.TritonDataType
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Tensor element types supported by AITune artifacts and Triton.
+
+<ParamField path="BFLOAT16" type="= 'TYPE_BF16'">
+</ParamField>
+
+<ParamField path="BOOL" type="= 'TYPE_BOOL'">
+</ParamField>
+
+<ParamField path="FLOAT16" type="= 'TYPE_FP16'">
+</ParamField>
+
+<ParamField path="FLOAT32" type="= 'TYPE_FP32'">
+</ParamField>
+
+<ParamField path="FLOAT64" type="= 'TYPE_FP64'">
+</ParamField>
+
+<ParamField path="INT16" type="= 'TYPE_INT16'">
+</ParamField>
+
+<ParamField path="INT32" type="= 'TYPE_INT32'">
+</ParamField>
+
+<ParamField path="INT64" type="= 'TYPE_INT64'">
+</ParamField>
+
+<ParamField path="INT8" type="= 'TYPE_INT8'">
+</ParamField>
+
+<ParamField path="STRING" type="= 'TYPE_STRING'">
+</ParamField>
+
+<ParamField path="UINT16" type="= 'TYPE_UINT16'">
+</ParamField>
+
+<ParamField path="UINT32" type="= 'TYPE_UINT32'">
+</ParamField>
+
+<ParamField path="UINT64" type="= 'TYPE_UINT64'">
+</ParamField>
+
+<ParamField path="UINT8" type="= 'TYPE_UINT8'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-triton-config-common-TritonTensorConfig">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.TritonTensorConfig()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `BaseModel`
+
+One input or output in a Triton model configuration.
+
+
+<ParamField path="allow_ragged_batch" type="bool = False">
+</ParamField>
+
+<ParamField path="data_type" type="TritonDataType">
+</ParamField>
+
+<ParamField path="dims" type="tuple[int, ...]">
+</ParamField>
+
+<ParamField path="format" type="Literal['FORMAT_NONE', 'FORMAT_NHWC', 'FORMAT_NCHW'] = 'FORMAT_NONE'">
+</ParamField>
+
+<ParamField path="is_non_linear_format_io" type="bool = False">
+</ParamField>
+
+<ParamField path="is_shape_tensor" type="bool = False">
+</ParamField>
+
+<ParamField path="label_filename" type="str | None = None">
+</ParamField>
+
+<ParamField path="model_config" type="= ConfigDict(frozen=True, extra='forbid')">
+</ParamField>
+
+<ParamField path="name" type="str = Field(min_length=1)">
+</ParamField>
+
+<ParamField path="optional" type="bool = False">
+</ParamField>
+
+<ParamField path="reshape" type="tuple[int, ...] | None = None">
+</ParamField>
+<Anchor id="aitune-triton-config-common-TritonTensorConfig-_validate_dims">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.TritonTensorConfig._validate_dims(
+    dims: tuple[int, ...]
+) -> tuple[int, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Allow concrete positive dimensions and Triton's dynamic marker.
+
+
+</Indent>
+<Anchor id="aitune-triton-config-common-TritonTensorConfig-_validate_reshape">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.TritonTensorConfig._validate_reshape(
+    dims: tuple[int, ...] | None
+) -> tuple[int, ...] | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Allow scalar reshapes and one inferred dimension.
+
+
+</Indent>
+<Anchor id="aitune-triton-config-common-TritonTensorConfig-to_config_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.TritonTensorConfig.to_config_dict(
+    output: bool
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serialize only settings appropriate to an input or output tensor.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-publish">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact","aitune.triton.model_analyzer.ModelAnalyzerConfig":"./model_analyzer.mdx#aitune-triton-model_analyzer-ModelAnalyzerConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.publish(
+    model: aitune.records.DeploymentArtifact | str | os.PathLike[str],
+    path: str | os.PathLike[str],
+    model_name: str | None = None,
+    model_version: int = 1,
+    model_analyzer: aitune.triton.model_analyzer.ModelAnalyzerConfig | None = None,
+    config: aitune.triton.config.TensorRTModelConfig | aitune.triton.config.ONNXRuntimeModelConfig | aitune.triton.config.TorchAOTIModelConfig | None = None,
+    additional_files: collections.abc.Sequence[str | os.PathLike[str]] = (),
+    resources: collections.abc.Mapping[str, str | os.PathLike[str]] | None = None
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Publish a tuned artifact or an existing model file to a Triton repository.
+
+The operation never replaces an existing model. Files are written directly
+into the new model directory, so a failure can leave an incomplete directory.
+For artifacts, a Model Analyzer config is generated under
+``model_analyzer/config.yaml`` with input shapes derived from the artifact.
+Without an explicit config, the Triton batch limit and scheduler are derived
+from the artifact's tensor bounds and runtime call structure.
+Existing model files require an explicit backend-specific ``config`` and
+are copied without compilation or tuning. Callers must keep generation
+separate from updates to a live Triton repository.
+
+Supported model format/runtime pairs are ``onnx``/``onnxruntime``,
+``tensorrt_plan``/``tensorrt``, and ``pt2``/``aotinductor``. ONNX provider
+selection comes from ``runtime.options["execution_provider"]``. TensorRT uses
+``model.metadata["optimization_profile_count"]`` and the optional runtime
+setting ``use_cuda_graphs``. PT2 uses ``model.metadata["structured_call"]``.
+
+**Parameters:**
+
+<ParamField path="model" type="DeploymentArtifact | str | os.PathLike[str]">
+[`DeploymentArtifact`](../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact) `| str | os.PathLike[str]` — Deployment artifact or path to an existing model file.
+</ParamField>
+
+<ParamField path="path" type="str | os.PathLike[str]">
+Triton model repository root.
+</ParamField>
+
+<ParamField path="model_name" type="str | None" default="None">
+New model directory name for an artifact; defaults to ``config.name`` when config is supplied.
+</ParamField>
+
+<ParamField path="model_version" type="int" default="1">
+Positive Triton model version.
+</ParamField>
+
+<ParamField path="model_analyzer" type="ModelAnalyzerConfig | None" default="None">
+[`ModelAnalyzerConfig`](./model_analyzer.mdx#aitune-triton-model_analyzer-ModelAnalyzerConfig) `| None` — Optional Model Analyzer options. Omission uses the default options for artifacts.
+</ParamField>
+
+<ParamField path="config" type="TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig | None" default="None">
+[`TensorRTModelConfig`](./config/tensorrt.mdx#aitune-triton-config-tensorrt-TensorRTModelConfig) `|` [`ONNXRuntimeModelConfig`](./config/onnx_runtime.mdx#aitune-triton-config-onnx_runtime-ONNXRuntimeModelConfig) `|` [`TorchAOTIModelConfig`](./config/torch_aoti.mdx#aitune-triton-config-torch_aoti-TorchAOTIModelConfig) `| None` — Complete backend-specific configuration. For an artifact, it is derived when omitted. A supplied
+config must match the artifact runtime and model name; the caller owns its other values. An existing
+model file requires it.
+</ParamField>
+
+<ParamField path="additional_files" type="Sequence[str | os.PathLike[str]]" default="()">
+ONNX external-data paths relative to the source file's directory.
+</ParamField>
+
+<ParamField path="resources" type="Mapping[str, str | os.PathLike[str]] | None" default="None">
+Model-relative auxiliary destination paths mapped to local files.
+</ParamField>
+
+**Returns:** `Path`
+
+Path to the generated model directory.
+
+**Raises:**
+
+- `AITuneUserInputError`: If publication arguments are invalid.
+- `AITunePublicationError`: If the artifact cannot be represented or publication fails.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-PublicationError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository.PublicationError = AITunePublicationError
+```
+
+</CodeBlock>
+</Anchor>
+

@@ -18,10 +18,10 @@ Simple tune strategy.
 
 <Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.tune_strategy.one_backend_strategy.OneBackendStrategy(
+class aitune.torch.OneBackendStrategy(
     backend: aitune.torch.backend.backend.Backend,
     kwargs = {}
 )
@@ -32,7 +32,7 @@ class aitune.torch.tune_strategy.one_backend_strategy.OneBackendStrategy(
 
 <Indent>
 
-**Bases:** [PerformanceValidationMixin](/aitune/aitune/torch/tune_strategy/mixin/performance_validation_mixin#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin), [FindMaxBatchSizeMixin](/aitune/aitune/torch/tune_strategy/mixin/find_max_batch_size_mixin#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin)
+**Bases:** [PerformanceValidationMixin](./mixin/performance_validation_mixin.mdx#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin), [FindMaxBatchSizeMixin](./mixin/find_max_batch_size_mixin.mdx#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin)
 
 Strategy which uses just one provided backend.
 
@@ -42,7 +42,7 @@ Strategy which uses just one provided backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.one_backend_strategy.OneBackendStrategy._describe_parts()
+aitune.torch.OneBackendStrategy._describe_parts()
 ```
 
 </CodeBlock>
@@ -56,10 +56,10 @@ Describes the tuning.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy-_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.one_backend_strategy.OneBackendStrategy._tune(
+aitune.torch.OneBackendStrategy._tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
@@ -83,7 +83,7 @@ Tune a torch module with the provided graph specification and samples.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.one_backend_strategy.OneBackendStrategy.to_json_dict() -> dict[str, typing.Any]
+aitune.torch.OneBackendStrategy.to_json_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>

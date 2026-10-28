@@ -21,7 +21,7 @@ Checkpoint artifact path representation.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.checkpoint.artifact.ArtifactPath(
+class aitune.torch.backend.ArtifactPath(
     root: str | pathlib.Path,
     relative_path: str | pathlib.Path
 )
@@ -38,7 +38,7 @@ Identify a checkpoint artifact relative to its owning directory.
 
 ``root`` is the directory whose structure should be preserved and
 ``relative_path`` locates the artifact within it. The effective filesystem
-location is available through :attr:`path`.
+location is available through `path`.
 
 
 <ParamField path="path" type="Path">
@@ -55,7 +55,7 @@ Return the effective filesystem path of the artifact.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.checkpoint.artifact.ArtifactPath.__str__() -> str
+aitune.torch.backend.ArtifactPath.__str__() -> str
 ```
 
 </CodeBlock>
@@ -72,7 +72,7 @@ Return the effective filesystem path for display.
 <CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.checkpoint.artifact.ArtifactPath.from_existing(
+aitune.torch.backend.ArtifactPath.from_existing(
     path: str | pathlib.Path,
     root: str | pathlib.Path
 ) -> aitune.torch.checkpoint.artifact.ArtifactPath

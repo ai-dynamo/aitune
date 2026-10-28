@@ -1,0 +1,171 @@
+---
+layout: overview
+slug: aitune/aitune/torch/artifact
+title: aitune.torch.artifact
+---
+
+Translate Torch graph metadata into deployment-neutral artifact records.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_batch_axis`](#aitune-torch-artifact-_batch_axis) | Return the single directly representable logical batch axis, if known. |
+| [`artifact_input_sample`](#aitune-torch-artifact-artifact_input_sample) | Capture one recorded Torch call as portable deployment input values. |
+| [`bounded_tensor_specs`](#aitune-torch-artifact-bounded_tensor_specs) | Create ordered bounded tensor specs from a recorded Torch graph. |
+
+### Data
+
+[`TensorKind`](#aitune-torch-artifact-TensorKind)
+
+[`_TORCH_DTYPE_TO_RECORD`](#aitune-torch-artifact-_TORCH_DTYPE_TO_RECORD)
+
+### API
+
+<Anchor id="aitune-torch-artifact-_batch_axis">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"./module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.locator.Locator":"./module/locator.mdx#aitune-torch-module-locator-Locator","aitune.torch.module.tensor_spec.TensorSpec":"./module/tensor_spec.mdx#aitune-torch-module-tensor_spec-TensorSpec","aitune.torch.artifact.TensorKind":"#aitune-torch-artifact-TensorKind"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.artifact._batch_axis(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    locator: aitune.torch.module.locator.Locator,
+    tensor_spec: aitune.torch.module.tensor_spec.TensorSpec,
+    kind: aitune.torch.artifact.TensorKind
+) -> int | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the single directly representable logical batch axis, if known.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-artifact-artifact_input_sample">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"./module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.Sample":"./module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.artifact.artifact_input_sample(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    sample: aitune.torch.module.sample_store.Sample,
+    recorded_names: collections.abc.Sequence[str] | None = None,
+    metadata_indices: collections.abc.Sequence[int] | None = None,
+    artifact_names: collections.abc.Sequence[str] | None = None
+) -> tuple[aitune.records.TensorSample, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Capture one recorded Torch call as portable deployment input values.
+
+A recorded sample follows the module's Python call signature, while an exported
+executable can expose a different input order or different names. This function
+uses ``GraphSpec`` locators to read the original tensors, reorders them to match
+the executable, and stores their shape and flattened values in ``TensorSample``
+records. The result contains no Torch objects, so it can be kept in a deployment
+artifact and later converted to input formats such as Perf Analyzer JSON.
+
+By default, the result uses the input order and original tensor names stored in
+``GraphSpec``. A backend whose executable selects or reorders named inputs can
+provide ``recorded_names``. Positional formats such as PT2 instead provide
+``metadata_indices`` and use ``artifact_names`` for their final public names.
+The two explicit selection methods are mutually exclusive.
+
+**Parameters:**
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](./module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Recorded graph metadata containing tensor names and locators.
+</ParamField>
+
+<ParamField path="sample" type="Sample">
+[`Sample`](./module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Original module call represented as ``(args, kwargs)``.
+</ParamField>
+
+<ParamField path="recorded_names" type="Sequence[str] | None" default="None">
+Recorded graph input names in executable order.
+</ParamField>
+
+<ParamField path="metadata_indices" type="Sequence[int] | None" default="None">
+Graph input positions in executable order.
+</ParamField>
+
+<ParamField path="artifact_names" type="Sequence[str] | None" default="None">
+Final executable names for the selected inputs. Recorded
+names are used when this is omitted.
+</ParamField>
+
+**Returns:** `tuple[` [`TensorSample`](../records/artifact.mdx#aitune-records-artifact-TensorSample) `, ...]`
+
+Portable input samples in executable order.
+
+**Raises:**
+
+- `ValueError`: If selection is ambiguous, an input cannot be found, names and
+selected inputs have different lengths, or a selected value is not a
+tensor.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-artifact-bounded_tensor_specs">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"./module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.artifact.TensorKind":"#aitune-torch-artifact-TensorKind","aitune.records.BoundedTensorSpec":"../records/shapes.mdx#aitune-records-shapes-BoundedTensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.artifact.bounded_tensor_specs(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    kind: aitune.torch.artifact.TensorKind,
+    recorded_names: collections.abc.Sequence[str] | None = None,
+    metadata_indices: collections.abc.Sequence[int] | None = None,
+    artifact_names: collections.abc.Sequence[str] | None = None
+) -> tuple[aitune.records.BoundedTensorSpec, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create ordered bounded tensor specs from a recorded Torch graph.
+
+Backends whose executable retains exporter names select tensors with
+``recorded_names``. Backends with a positional ABI can instead select metadata by
+index and provide their finalized ``artifact_names``. Selection methods are
+mutually exclusive so an adapter cannot accidentally combine two orderings.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-artifact-TensorKind">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.artifact.TensorKind = Literal['input', 'output']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-artifact-_TORCH_DTYPE_TO_RECORD">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.artifact._TORCH_DTYPE_TO_RECORD = {torch.bool: DType.BOOL, torch.uint8: DType.UINT8, torch.int8: DType.INT8, torch...
+```
+
+</CodeBlock>
+</Anchor>
+

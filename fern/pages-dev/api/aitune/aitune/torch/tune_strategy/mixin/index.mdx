@@ -10,25 +10,365 @@ Mixins should augment strategy configuration or tune lifecycle hooks instead of 
 
 ## Submodules
 
-- **[`aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin`](/aitune/aitune/torch/tune_strategy/mixin/find_max_batch_size_mixin)**
-- **[`aitune.torch.tune_strategy.mixin.performance_validation_mixin`](/aitune/aitune/torch/tune_strategy/mixin/performance_validation_mixin)**
+- **[`aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin`](./find_max_batch_size_mixin.mdx)**
+- **[`aitune.torch.tune_strategy.mixin.performance_validation_mixin`](./performance_validation_mixin.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-torch-tune_strategy-mixin-__all__)
+| Name | Description |
+|------|-------------|
+| [`FindMaxBatchSizeMixin`](#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin) | TuneStrategy mixin that finds max batch size. |
+| [`PerformanceValidationMixin`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin) | TuneStrategy mixin that validates each backend against a TorchEager throughput baseline. |
+| [`PerformanceValidationMixinResult`](#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixinResult) | Throughput and speedup result for a single backend. |
 
 ### API
 
-<Anchor id="aitune-torch-tune_strategy-mixin-__all__">
+<Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.mixin.__all__ = ['FindMaxBatchSizeMixin', 'PerformanceValidationMixin', 'PerformanceValidationMi...
+class aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin(
+    args = (),
+    kwargs = {}
+)
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+**Bases:** [TuneStrategy](../tune_strategy.mdx#aitune-torch-tune_strategy-tune_strategy-TuneStrategy)
+
+TuneStrategy mixin that finds max batch size.
+
+Note:
+    Find-max-batch-size is enabled by default and uses TorchEagerBackend as the neutral profiling backend.
+
+
+<ParamField path="_find_max_batch_size_backend_class" type="type[Backend] = TorchEagerBackend">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin-_pre_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin._pre_tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Extends tune method to find max batch size.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin-enable_find_max_batch_size">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin":"#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin.enable_find_max_batch_size(
+    enable: bool = True
+) -> aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enables or disables find max batch size.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin-find_max_batch_size">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin.find_max_batch_size(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Finds max batch size for the module.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin-set_find_max_batch_size_default_backend_class">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin":"#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin.set_find_max_batch_size_default_backend_class(
+    default_backend_class: type[aitune.torch.backend.backend.Backend]
+) -> aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Sets default backend class for find max batch size.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.mixin.PerformanceValidationMixin(
+    args = (),
+    min_speedup_threshold_percent: float = 1.0,
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [TuneStrategy](../tune_strategy.mdx#aitune-torch-tune_strategy-tune_strategy-TuneStrategy)
+
+TuneStrategy mixin that validates each backend against a TorchEager throughput baseline.
+
+Unless performance validation is disabled, profiles TorchEager during _pre_tune with the strategy profiling
+config narrowed to the resolved batch size (from graph_spec.get_max_batch_size()) to establish a baseline.
+For every candidate backend, profiles with the same task-local profiling config and appends a
+PerformanceValidationMixinResult. In enabled mode, backends with speedup below the configured threshold
+are rejected. Diagnostic mode records the same results without affecting backend selection.
+
+Note:
+    min_speedup_threshold_percent defaults to 1.0, requiring a measurable 1% speedup in enabled mode.
+    Performance validation is enabled by default.
+
+
+<ParamField path="_baseline_backend" type="Backend | None = None">
+</ParamField>
+
+<ParamField path="_baseline_throughput" type="float | None = None">
+</ParamField>
+
+<ParamField path="_performance_validation_mode" type="= PerformanceValidationMode.ENABLED">
+</ParamField>
+
+<ParamField path="_resolved_batch_size" type="int | None = None">
+</ParamField>
+
+<ParamField path="perf_validation_results" type="list[PerformanceValidationMixinResult] = []">
+</ParamField>
+
+<ParamField path="performance_validation_mode" type="PerformanceValidationMode">
+Return the configured performance validation mode.
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_build_validate_and_check_perf">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.PerformanceValidationMixin._build_validate_and_check_perf(
+    backend: aitune.torch.backend.backend.Backend,
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path,
+    raise_on_failure: bool = False
+) -> aitune.torch.backend.backend.Backend | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build, correctness-validate, then profile and check throughput against baseline.
+
+Returns the built backend, or None when correctness fails
+(raise_on_failure=False) or performance check rejects it
+(speedup below threshold).
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_log_baseline_selected">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.PerformanceValidationMixin._log_baseline_selected(
+    backend: aitune.torch.backend.backend.Backend
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Emit an explicit message when the TorchEager baseline is the selected backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_post_tune">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.PerformanceValidationMixin._post_tune(
+    backend: aitune.torch.backend.backend.Backend | None,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Emits a speedup line after tuning completes.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_pre_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.PerformanceValidationMixin._pre_tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Runs pre-tune setup and profiles TorchEager when performance validation is enabled.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-_profiling_config_for_batch_size">
+
+<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"../../task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.PerformanceValidationMixin._profiling_config_for_batch_size(
+    batch_size: int,
+    batching: bool | None = None
+) -> aitune.torch.task.profiling.ProfilingConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the strategy profiling config narrowed to one validation batch size.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin-enable_performance_validation">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.performance_validation.PerformanceValidationMode":"../performance_validation.mdx#aitune-torch-tune_strategy-performance_validation-PerformanceValidationMode","aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin":"#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.mixin.PerformanceValidationMixin.enable_performance_validation(
+    mode: aitune.torch.tune_strategy.performance_validation.PerformanceValidationMode | str | bool = PerformanceValidationMode.E...
+) -> aitune.torch.tune_strategy.mixin.performance_validation_mixin.PerformanceValidationMixin
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set how eager-baseline performance data affects backend selection.
+
+**Parameters:**
+
+<ParamField path="mode" type="PerformanceValidationMode | str | bool" default="PerformanceValidationMode.ENABLED">
+[`PerformanceValidationMode`](../performance_validation.mdx#aitune-torch-tune_strategy-performance_validation-PerformanceValidationMode) `| str | bool` — ``ENABLED`` applies the eager comparison as a selection gate, ``DIAGNOSTIC`` records the
+comparison without affecting selection, and ``DISABLED`` skips eager-baseline profiling.
+For compatibility, ``True`` maps to ``ENABLED`` and ``False`` maps to ``DISABLED``.
+</ParamField>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixinResult">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.mixin.PerformanceValidationMixinResult(
+    backend_description: str,
+    throughput: float,
+    baseline_throughput: float,
+    speedup: float,
+    passed: bool
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Throughput and speedup result for a single backend.
+
+
+<ParamField path="backend_description" type="str">
+</ParamField>
+
+<ParamField path="baseline_throughput" type="float">
+</ParamField>
+
+<ParamField path="passed" type="bool">
+</ParamField>
+
+<ParamField path="speedup" type="float">
+</ParamField>
+
+<ParamField path="throughput" type="float">
+</ParamField>
+</Indent>

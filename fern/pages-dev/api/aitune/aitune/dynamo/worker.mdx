@@ -13,8 +13,8 @@ Serve AITune-tuned models as NVIDIA Dynamo endpoints.
 | Name | Description |
 |------|-------------|
 | [`DynamoWorker`](#aitune-dynamo-worker-DynamoWorker) | Base class for custom AITune Dynamo workers. |
-| [`DynamoWorkerConfig`](#aitune-dynamo-worker-DynamoWorkerConfig) | Configuration for the high-level :func:`dynamo_worker` entrypoint. |
-| [`_HighLevelDynamoWorker`](#aitune-dynamo-worker-_HighLevelDynamoWorker) | Adapt a callable and :class:`DynamoWorkerConfig` to the worker API. |
+| [`DynamoWorkerConfig`](#aitune-dynamo-worker-DynamoWorkerConfig) | Configure how an application-provided callable is exposed through Dynamo. |
+| [`_HighLevelDynamoWorker`](#aitune-dynamo-worker-_HighLevelDynamoWorker) | Adapt a callable and `DynamoWorkerConfig` to the worker API. |
 
 ### Functions
 
@@ -33,7 +33,7 @@ Serve AITune-tuned models as NVIDIA Dynamo endpoints.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.dynamo.worker.DynamoWorker()
+class aitune.dynamo.DynamoWorker()
 ```
 
 </CodeBlock>
@@ -43,9 +43,18 @@ class aitune.dynamo.worker.DynamoWorker()
 
 Base class for custom AITune Dynamo workers.
 
-Override :meth:`setup` and :meth:`serve`, then call :meth:`run`. An initialized
+Override `setup` and `serve`, then call `run`. An initialized
 multi-rank process group starts one endpoint on rank zero while every rank
 executes each request.
+
+Example:
+    &gt;&gt;&gt; import aitune.dynamo as dyn
+    &gt;&gt;&gt; class MyWorker(dyn.DynamoWorker):
+    ...     def setup(self):
+    ...         pass
+    ...     async def serve(self, request):
+    ...         yield request
+    &gt;&gt;&gt; # MyWorker().run()  # blocks until SIGTERM/SIGINT
 
 
 <ParamField path="_collective" type="bool = False">
@@ -64,7 +73,7 @@ executes each request.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.dynamo.worker.DynamoWorker.on_ready(
+aitune.dynamo.DynamoWorker.on_ready(
     runtime: typing.Any,
     endpoint: typing.Any
 ) -> None
@@ -86,7 +95,7 @@ Run optional registration work after the endpoint is available.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.dynamo.worker.DynamoWorker.run(
+aitune.dynamo.DynamoWorker.run(
     enable_nats: bool = False
 ) -> None
 ```
@@ -111,7 +120,7 @@ Enable NATS JetStream for KV cache events.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.dynamo.worker.DynamoWorker.serve(
+aitune.dynamo.DynamoWorker.serve(
     request: typing.Any
 ) -> collections.abc.AsyncGenerator[typing.Any, None]
 ```
@@ -132,7 +141,7 @@ Handle one request and yield response chunks.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.dynamo.worker.DynamoWorker.setup() -> None
+aitune.dynamo.DynamoWorker.setup() -> None
 ```
 
 </CodeBlock>
@@ -149,7 +158,7 @@ Initialize the model once before serving starts.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.dynamo.worker.DynamoWorker.warmup() -> None
+aitune.dynamo.DynamoWorker.warmup() -> None
 ```
 
 </CodeBlock>
@@ -165,10 +174,10 @@ Run optional model warmup after every rank completes setup.
 
 <Anchor id="aitune-dynamo-worker-DynamoWorkerConfig">
 
-<CodeBlock links={{"aitune.dynamo.protocol.Modality":"/aitune/aitune/dynamo/protocol#aitune-dynamo-protocol-Modality"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.dynamo.protocol.Modality":"./protocol.mdx#aitune-dynamo-protocol-Modality"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.dynamo.worker.DynamoWorkerConfig(
+class aitune.dynamo.DynamoWorkerConfig(
     type: aitune.dynamo.protocol.Modality,
     model_path: str,
     mapping: collections.abc.Callable | None = None,
@@ -187,16 +196,20 @@ class aitune.dynamo.worker.DynamoWorkerConfig(
 
 <Badge>Dataclass</Badge>
 
-Configuration for the high-level :func:`dynamo_worker` entrypoint.
+Configure how an application-provided callable is exposed through Dynamo.
+
+The application creates and loads the callable passed to `dynamo_worker`.
+This configuration only describes its Dynamo endpoint and registration.
 
 **Parameters:**
 
 <ParamField path="type" type="Modality">
-Modality type. One of ``"image"``, ``"video"``, ``"audio"``, ``"embedding"``.
+[`Modality`](./protocol.mdx#aitune-dynamo-protocol-Modality) — Modality type. One of ``"image"``, ``"video"``, ``"audio"``, ``"embedding"``.
 </ParamField>
 
 <ParamField path="model_path" type="str">
-Hugging Face model ID or local path passed to ``register_model``.
+Registration reference passed unchanged to Dynamo's
+``register_model``. It is not used to create or load the callable.
 </ParamField>
 
 <ParamField path="mapping" type="Callable | None" default="None">
@@ -222,7 +235,8 @@ Enable NATS JetStream for KV cache events.
 </ParamField>
 
 <ParamField path="model_name" type="str | None" default="None">
-Name advertised to the Dynamo frontend. Defaults to ``model_path``.
+Optional public name advertised to clients. Defaults to the
+``model_path`` registration reference.
 </ParamField>
 
 
@@ -271,7 +285,7 @@ class aitune.dynamo.worker._HighLevelDynamoWorker(
 
 **Bases:** [DynamoWorker](#aitune-dynamo-worker-DynamoWorker)
 
-Adapt a callable and :class:`DynamoWorkerConfig` to the worker API.
+Adapt a callable and `DynamoWorkerConfig` to the worker API.
 
 
 <ParamField path="component" type="= config.component">
@@ -366,7 +380,7 @@ Run the configured warmup callback after setup succeeds on every rank.
 <CodeBlock links={{"aitune.dynamo.worker.DynamoWorkerConfig":"#aitune-dynamo-worker-DynamoWorkerConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.dynamo.worker.dynamo_worker(
+aitune.dynamo.dynamo_worker(
     model_or_fn: torch.nn.Module | collections.abc.Callable,
     config: aitune.dynamo.worker.DynamoWorkerConfig,
     setup: collections.abc.Callable[[], None] | None = None,
@@ -381,6 +395,15 @@ aitune.dynamo.worker.dynamo_worker(
 
 Serve a tuned model through a local or collective Dynamo worker.
 
+**Example**
+
+&gt;&gt;&gt; import aitune.dynamo as dyn
+&gt;&gt;&gt; import numpy as np
+&gt;&gt;&gt; def embed(request):
+...     return np.zeros((1, 768))
+&gt;&gt;&gt; config = dyn.DynamoWorkerConfig(type="embedding", model_path="org/model")
+&gt;&gt;&gt; # dyn.dynamo_worker(embed, config)  # blocks until shutdown
+
 **Parameters:**
 
 <ParamField path="model_or_fn" type="nn.Module | Callable">
@@ -388,7 +411,7 @@ A callable, or a ``torch.nn.Module`` with ``config.mapping``.
 </ParamField>
 
 <ParamField path="config" type="DynamoWorkerConfig">
-Modality, endpoint, request mapping, and execution configuration.
+[`DynamoWorkerConfig`](#aitune-dynamo-worker-DynamoWorkerConfig) — Modality, endpoint, request mapping, and execution configuration.
 </ParamField>
 
 <ParamField path="setup" type="Callable[[], None] | None" default="None">

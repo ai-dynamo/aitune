@@ -150,12 +150,19 @@ Depth of the output. Auxiliary variable for recursive calls.
 - `CorrectnessCheckError`: If any output contains NaN or infinity values
 - `ValueError`: If output does not contain tensors or scalars
 
+<Note>
+
+Numpy arrays are converted to torch tensors.
+Objects raise an error.
+
+</Note>
+
 
 </Indent>
 
 <Anchor id="aitune-torch-task-correctness-_check_output_tensor_shapes">
 
-<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"../module/sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.correctness._check_output_tensor_shapes(
@@ -176,7 +183,7 @@ Check if the output tensor shapes are the same as the original output tensor sha
 
 <Anchor id="aitune-torch-task-correctness-_check_post_input_metadata">
 
-<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"/aitune/aitune/torch/module/sample_metadata#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"../module/sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.correctness._check_post_input_metadata(
@@ -201,11 +208,11 @@ Tensor contents are not compared when their location and shape remain unchanged.
 **Parameters:**
 
 <ParamField path="expected" type="SampleMetadata">
-Input metadata recorded after eager execution.
+[`SampleMetadata`](../module/sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata) — Input metadata recorded after eager execution.
 </ParamField>
 
 <ParamField path="actual" type="SampleMetadata">
-Input metadata captured after backend execution.
+[`SampleMetadata`](../module/sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata) — Input metadata captured after backend execution.
 </ParamField>
 
 <ParamField path="name" type="str">
@@ -221,7 +228,7 @@ Qualified backend name included in correctness errors.
 
 <Anchor id="aitune-torch-task-correctness-_dynamic_shape_boundary_samples">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.correctness._dynamic_shape_boundary_samples(
@@ -245,7 +252,7 @@ numerically invalid and can produce NaN or Inf outputs.
 
 <Anchor id="aitune-torch-task-correctness-_resize_sample_to_shape">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.correctness._resize_sample_to_shape(
@@ -294,7 +301,7 @@ numerically invalid and can produce NaN or Inf outputs.
 
 <Anchor id="aitune-torch-task-correctness-check_dynamic_shape_boundary_inference">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.correctness.check_dynamic_shape_boundary_inference(
@@ -319,7 +326,7 @@ Sample inputs used as a template for min and max shape checks.
 </ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec">
-Recorded graph metadata used to construct and validate boundary inputs.
+[`GraphSpec`](../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Recorded graph metadata used to construct and validate boundary inputs.
 </ParamField>
 
 <ParamField path="infer" type="Callable[..., Any]">
@@ -344,7 +351,7 @@ None.
 
 <Anchor id="aitune-torch-task-correctness-check_inference_output_correctness">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.correctness.check_inference_output_correctness(
@@ -369,7 +376,7 @@ Recorded samples to run through inference.
 </ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec">
-Recorded output metadata and pre/post-call input contract.
+[`GraphSpec`](../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Recorded output metadata and pre/post-call input contract.
 </ParamField>
 
 <ParamField path="infer" type="Callable[..., Any]">

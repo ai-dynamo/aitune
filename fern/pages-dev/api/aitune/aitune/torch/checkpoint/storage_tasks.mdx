@@ -66,7 +66,7 @@ Task to copy backend artifacts.
 
 <Anchor id="aitune-torch-checkpoint-storage_tasks-CopyBackendArtifactsTask-_copy_artifact">
 
-<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"./artifact.mdx#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.storage_tasks.CopyBackendArtifactsTask._copy_artifact(
@@ -96,7 +96,7 @@ path is appended unchanged, preserving its original directory structure.
 **Parameters:**
 
 <ParamField path="artifact" type="ArtifactPath">
-Artifact to copy, including its owning root and relative path.
+[`ArtifactPath`](./artifact.mdx#aitune-torch-checkpoint-artifact-ArtifactPath) — Artifact to copy, including its owning root and relative path.
 </ParamField>
 
 <ParamField path="target_path" type="Path">
@@ -112,7 +112,7 @@ Mapping from resolved artifact roots to their numbered
 directories within ``backend_dir``.
 </ParamField>
 
-**Returns:** `ArtifactPath`
+**Returns:** [`ArtifactPath`](./artifact.mdx#aitune-torch-checkpoint-artifact-ArtifactPath)
 
 An artifact pointing to the copied checkpoint entry. Its root is ``.``
 
@@ -128,7 +128,7 @@ An artifact pointing to the copied checkpoint entry. Its root is ``.``
 
 ```python
 aitune.torch.checkpoint.storage_tasks.CopyBackendArtifactsTask.save(
-    target_path: pathlib.Path,
+    path: pathlib.Path,
     state_dict: dict
 ) -> None
 ```
@@ -145,7 +145,7 @@ directory. Paths relative to an artifact root are preserved.
 
 **Parameters:**
 
-<ParamField path="target_path" type="Path">
+<ParamField path="path" type="Path">
 The path where the backend artifacts should be copied.
 </ParamField>
 
@@ -272,7 +272,7 @@ class aitune.torch.checkpoint.storage_tasks.RelocateBackendArtifactsTask()
 
 Rebase saved backend artifact paths onto the extracted checkpoint.
 
-New checkpoints identify artifacts with :class:`ArtifactPath`. Checkpoints
+New checkpoints identify artifacts with `ArtifactPath`. Checkpoints
 created before ``ArtifactPath`` used direct, checkpoint-relative ``Path``
 values in backend state dictionaries; those values still load, but the format
 is deprecated and a warning is emitted.
@@ -280,7 +280,7 @@ is deprecated and a warning is emitted.
 
 <Anchor id="aitune-torch-checkpoint-storage_tasks-RelocateBackendArtifactsTask-_relocate_artifact">
 
-<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"./artifact.mdx#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.storage_tasks.RelocateBackendArtifactsTask._relocate_artifact(
@@ -306,14 +306,14 @@ checkpoint directory while preserving the checkpoint-relative path.
 **Parameters:**
 
 <ParamField path="artifact" type="ArtifactPath">
-Artifact path restored from the checkpoint state dictionary.
+[`ArtifactPath`](./artifact.mdx#aitune-torch-checkpoint-artifact-ArtifactPath) — Artifact path restored from the checkpoint state dictionary.
 </ParamField>
 
 <ParamField path="checkpoint_root" type="Path">
 Resolved root directory of the extracted checkpoint.
 </ParamField>
 
-**Returns:** `ArtifactPath`
+**Returns:** [`ArtifactPath`](./artifact.mdx#aitune-torch-checkpoint-artifact-ArtifactPath)
 
 An artifact rebased onto ``checkpoint_root``.
 
@@ -872,7 +872,7 @@ Yield backend state dictionaries that may contain checkpoint artifacts.
 
 <Anchor id="aitune-torch-checkpoint-storage_tasks-_transform_artifact_paths">
 
-<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"./artifact.mdx#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.storage_tasks._transform_artifact_paths(

@@ -23,18 +23,16 @@ Shared Torch Export functionality for ahead-of-time backends.
 
 ### Data
 
-[`__all__`](#aitune-torch-libs-torch-torch_exporter-__all__)
-
 [`logger`](#aitune-torch-libs-torch-torch_exporter-logger)
 
 ### API
 
 <Anchor id="aitune-torch-libs-torch-torch_exporter-TorchExportResult">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.libs.torch.torch_exporter.TorchExportResult(
+class aitune.torch.libs.torch.TorchExportResult(
     exported_program: torch.export.ExportedProgram,
     sample: aitune.torch.module.sample_store.Sample,
     dynamic_shapes: dict[str, typing.Any] | None
@@ -66,7 +64,7 @@ Result of exporting a module and the exact inputs used for capture.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.libs.torch.torch_exporter.TorchExporter(
+class aitune.torch.libs.torch.TorchExporter(
     use_auto: bool = True,
     strict: bool = True,
     fallback_to_dynamic_hints: bool = False
@@ -99,14 +97,14 @@ Retry constraint violations with bounded
 
 <Anchor id="aitune-torch-libs-torch-torch_exporter-TorchExporter-export">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.libs.torch.torch_exporter.TorchExportResult":"#aitune-torch-libs-torch-torch_exporter-TorchExportResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.libs.torch.torch_exporter.TorchExportResult":"#aitune-torch-libs-torch-torch_exporter-TorchExportResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.libs.torch.torch_exporter.TorchExporter.export(
+aitune.torch.libs.torch.TorchExporter.export(
     module: torch.nn.Module,
     sample: aitune.torch.module.sample_store.Sample,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
-    device: torch.device | str | None = None
+    device: torch.device | str
 ) -> aitune.torch.libs.torch.torch_exporter.TorchExportResult
 ```
 
@@ -124,18 +122,18 @@ Module to export.
 </ParamField>
 
 <ParamField path="sample" type="Sample">
-Representative positional and keyword inputs.
+[`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Representative positional and keyword inputs.
 </ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec">
-Recorded input and output metadata.
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Recorded input and output metadata.
 </ParamField>
 
-<ParamField path="device" type="torch.device | str | None" default="None">
-Optional destination for every tensor leaf in the prepared sample.
+<ParamField path="device" type="torch.device | str">
+Destination for every tensor leaf in the prepared sample.
 </ParamField>
 
-**Returns:** `TorchExportResult`
+**Returns:** [`TorchExportResult`](#aitune-torch-libs-torch-torch_exporter-TorchExportResult)
 
 The exported program and the exact sample and constraints used for capture.
 
@@ -162,18 +160,6 @@ Relax explicit dimensions, returning the original structure when nothing changes
 
 
 </Indent>
-
-<Anchor id="aitune-torch-libs-torch-torch_exporter-__all__">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.libs.torch.torch_exporter.__all__ = ['TorchExporter', 'TorchExportResult']
-```
-
-</CodeBlock>
-</Anchor>
-
 
 <Anchor id="aitune-torch-libs-torch-torch_exporter-logger">
 

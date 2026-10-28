@@ -13,6 +13,7 @@ AITune exceptions.
 | Name | Description |
 |------|-------------|
 | [`AITuneError`](#aitune-exceptions-AITuneError) | Base exception for AITune exceptions. |
+| [`AITunePublicationError`](#aitune-exceptions-AITunePublicationError) | Raised when an artifact cannot be published. |
 | [`AITuneUserInputError`](#aitune-exceptions-AITuneUserInputError) | AITuneUserInputError exception. |
 
 ### API
@@ -40,7 +41,7 @@ class aitune.exceptions.AITuneError(
 Base exception for AITune exceptions.
 
 
-<ParamField path="log_path" type="Path">
+<ParamField path="log_path" type="Path | None">
 Get the log file path.
 </ParamField>
 
@@ -68,6 +69,26 @@ Error message of exception
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-exceptions-AITunePublicationError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.exceptions.AITunePublicationError()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [AITuneError](#aitune-exceptions-AITuneError)
+
+Raised when an artifact cannot be published.
+
+
 </Indent>
 
 <Anchor id="aitune-exceptions-AITuneUserInputError">

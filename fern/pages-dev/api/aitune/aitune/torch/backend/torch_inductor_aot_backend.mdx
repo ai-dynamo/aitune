@@ -27,7 +27,7 @@ Torch Inductor AOT backend.
 <CodeBlock links={{"aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackendConfig":"#aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackendConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend(
+class aitune.torch.backend.TorchInductorAotBackend(
     config: aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackendConfig | None = None
 )
 ```
@@ -37,7 +37,7 @@ class aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend(
 
 <Indent>
 
-**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+**Bases:** [Backend[TorchInductorAotBackendConfig]](./backend.mdx#aitune-torch-backend-backend-Backend)
 
 Backend that compiles models using AOT Inductor (``torch._inductor.aoti_compile_and_package``).
 
@@ -63,6 +63,15 @@ Workflow::
 <ParamField path="STATE_DEVICE" type="= 'device'">
 </ParamField>
 
+<ParamField path="STATE_GRAPH_SPEC" type="= 'graph_spec'">
+</ParamField>
+
+<ParamField path="STATE_PT2_CALL_CONTRACT" type="= 'pt2_call_contract'">
+</ParamField>
+
+<ParamField path="STATE_SAMPLES" type="= 'samples'">
+</ParamField>
+
 <ParamField path="STATE_TYPE" type="= 'type'">
 </ParamField>
 
@@ -72,17 +81,26 @@ Workflow::
 <ParamField path="_compiled_model_artifact" type="ArtifactPath | None = None">
 </ParamField>
 
-<ParamField path="_config" type="= config or TorchInductorAotBackendConfig()">
+<ParamField path="_execution_modes">
 </ParamField>
 
-<ParamField path="_execution_modes">
+<ParamField path="_graph_spec" type="GraphSpec | None = None">
+</ParamField>
+
+<ParamField path="_pt2_call_contract" type="PT2CallContract | None = None">
+</ParamField>
+
+<ParamField path="_pt2_call_contract_error" type="str | None = None">
+</ParamField>
+
+<ParamField path="_samples" type="Sequence[Sample] | None = None">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_activate">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend._activate()
+aitune.torch.backend.TorchInductorAotBackend._activate()
 ```
 
 </CodeBlock>
@@ -94,17 +112,37 @@ Load the compiled model from disk.
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_build">
+<Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_artifact_sample_inputs">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend._build(
+aitune.torch.backend.TorchInductorAotBackend._artifact_sample_inputs(
+    contract: aitune.torch.utils.pt2_artifact.PT2CallContract,
+    input_names: tuple[str, ...]
+) -> tuple[aitune.records.TensorSample, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Derive portable values from the checkpointed sample and PT2 input order.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TorchInductorAotBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
-) -> aitune.torch.backend.backend.Backend
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -116,12 +154,49 @@ Export and compile the model with AOT Inductor, then load the runner.
 
 
 </Indent>
+<Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_capture_call_contract">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TorchInductorAotBackend._capture_call_contract(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Capture PT2 tensor ordering without changing backend build success.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_create_artifact">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TorchInductorAotBackend._create_artifact() -> aitune.records.DeploymentArtifact
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describe the compiled package using its captured tensor ordering.
+
+
+</Indent>
 <Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_deactivate">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend._deactivate()
+aitune.torch.backend.TorchInductorAotBackend._deactivate()
 ```
 
 </CodeBlock>
@@ -138,7 +213,7 @@ Deactivate backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend._deploy()
+aitune.torch.backend.TorchInductorAotBackend._deploy()
 ```
 
 </CodeBlock>
@@ -155,7 +230,7 @@ Deploy backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend._infer(
+aitune.torch.backend.TorchInductorAotBackend._infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -184,12 +259,29 @@ The result of the inference.
 
 
 </Indent>
+<Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-artifact">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TorchInductorAotBackend.artifact() -> aitune.records.DeploymentArtifact
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create the deployment record on request, including after deactivation.
+
+
+</Indent>
 <Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-describe">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend.describe() -> str
+aitune.torch.backend.TorchInductorAotBackend.describe() -> str
 ```
 
 </CodeBlock>
@@ -206,7 +298,7 @@ Returns the description of the backend.
 <CodeBlock links={{"aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend":"#aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend.from_dict(
+aitune.torch.backend.TorchInductorAotBackend.from_dict(
     module: torch.nn.Module | None,
     state_dict: dict
 ) -> aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend
@@ -228,7 +320,7 @@ Creates a backend from a state_dict.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend.key() -> str
+aitune.torch.backend.TorchInductorAotBackend.key() -> str
 ```
 
 </CodeBlock>
@@ -245,7 +337,7 @@ Returns the key of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackend.to_dict() -> dict
+aitune.torch.backend.TorchInductorAotBackend.to_dict() -> dict
 ```
 
 </CodeBlock>
@@ -264,7 +356,7 @@ Returns the state_dict of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackendConfig(
+class aitune.torch.backend.TorchInductorAotBackendConfig(
     inductor_configs: dict[str, typing.Any] | None = None
 )
 ```
@@ -276,7 +368,7 @@ class aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBackendCon
 
 <Badge>Dataclass</Badge>
 
-**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+**Bases:** [BackendConfig](./backend.mdx#aitune-torch-backend-backend-BackendConfig)
 
 Configuration for TorchInductorAotBackend.
 
@@ -307,7 +399,7 @@ class aitune.torch.backend.torch_inductor_aot_backend.TorchInductorAotBuildStep(
 
 <Indent>
 
-**Bases:** [BackendBuildStep](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendBuildStep)
+**Bases:** [BackendBuildStep](./backend.mdx#aitune-torch-backend-backend-BackendBuildStep)
 
 Identifiers for discrete sub-steps of a TorchInductorAot backend build.
 

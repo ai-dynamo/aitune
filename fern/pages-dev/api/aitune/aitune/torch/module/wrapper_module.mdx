@@ -24,8 +24,6 @@ AITune wrapper module.
 
 ### Data
 
-[`DEFAULT_STRATEGY`](#aitune-torch-module-wrapper_module-DEFAULT_STRATEGY)
-
 [`StrategyList`](#aitune-torch-module-wrapper_module-StrategyList)
 
 [`StrategyMap`](#aitune-torch-module-wrapper_module-StrategyMap)
@@ -36,13 +34,13 @@ AITune wrapper module.
 
 <Anchor id="aitune-torch-module-wrapper_module-Module">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.wrapper_module.StrategyList":"#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"#aitune-torch-module-wrapper_module-StrategyMap","aitune.torch.dynamic_shapes.DynamicShapes":"/aitune/aitune/torch/dynamic_shapes#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.module.wrapper_module.StrategyList":"#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"#aitune-torch-module-wrapper_module-StrategyMap","aitune.torch.dynamic_shapes.DynamicShapes":"../dynamic_shapes.mdx#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.module.wrapper_module.Module(
+class aitune.torch.Module(
     module: torch.nn.Module,
     name: str | None = None,
-    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None,
+    strategy: aitune.torch.tune_strategy.resolver.StrategyOption | None = None,
     strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None = None,
     dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes | None = None
 )
@@ -68,6 +66,10 @@ You can go from passthrough and recording with `enablePassthrough` and `enableRe
 You can go from tuned to passthrough/recording only if the force flag is True - then the module will be reset.
 
 This wrapper can be used in place of a torch module, and will behave identically to the original module.
+
+Example:
+    &gt;&gt;&gt; model = torch.nn.Linear(10, 10)
+    &gt;&gt;&gt; model = Module(model, "name")
 
 
 <ParamField path="DYNAMIC_SHAPES_KEY" type="= 'dynamic_shapes'">
@@ -107,7 +109,7 @@ This wrapper can be used in place of a torch module, and will behave identically
 Get the module cache directory.
 </ParamField>
 
-<ParamField path="device" type="device">
+<ParamField path="device" type="device | None">
 Get the device of the module.
 </ParamField>
 
@@ -131,7 +133,7 @@ Get the state of the module.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module.__getitem__(
+aitune.torch.Module.__getitem__(
     key: typing.Any
 ) -> typing.Any
 ```
@@ -163,7 +165,7 @@ The result of accessing the wrapped module with the given key.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._activate_wrapper()
+aitune.torch.Module._activate_wrapper()
 ```
 
 </CodeBlock>
@@ -175,10 +177,10 @@ aitune.torch.module.wrapper_module.Module._activate_wrapper()
 </Indent>
 <Anchor id="aitune-torch-module-wrapper_module-Module-_create_graph_cache_dir">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"./graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._create_graph_cache_dir(
+aitune.torch.Module._create_graph_cache_dir(
     graph_spec: aitune.torch.module.graph_spec.GraphSpec
 ) -> pathlib.Path
 ```
@@ -197,7 +199,7 @@ Create a cache directory for the graph.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._deactivate_wrapper()
+aitune.torch.Module._deactivate_wrapper()
 ```
 
 </CodeBlock>
@@ -212,7 +214,7 @@ aitune.torch.module.wrapper_module.Module._deactivate_wrapper()
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._deploy_wrapper(
+aitune.torch.Module._deploy_wrapper(
     device: torch.device | None
 )
 ```
@@ -229,7 +231,7 @@ aitune.torch.module.wrapper_module.Module._deploy_wrapper(
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._forward(
+aitune.torch.Module._forward(
     wrapped,
     instance,
     args,
@@ -270,15 +272,21 @@ The keyword arguments to pass to the module.
 
 The result of the call.
 
+<Note>
+
+Method signature contains wrapped, instance - this is required by wrapt.decorator.
+
+</Note>
+
 
 </Indent>
 <Anchor id="aitune-torch-module-wrapper_module-Module-_get_strategies_for_graph_specs">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.module.graph_spec.GraphSpec":"./graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"../tune_strategy/tune_strategy.mdx#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._get_strategies_for_graph_specs(
-    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None,
+aitune.torch.Module._get_strategies_for_graph_specs(
+    strategy: aitune.torch.tune_strategy.resolver.StrategyOption | None,
     graph_specs: list[aitune.torch.module.graph_spec.GraphSpec],
     dry_run: bool
 ) -> list[aitune.torch.tune_strategy.tune_strategy.TuneStrategy]
@@ -301,7 +309,7 @@ The function checks if there is sufficient strategies (list/dict).
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._handle_backend_added_hooks()
+aitune.torch.Module._handle_backend_added_hooks()
 ```
 
 </CodeBlock>
@@ -322,7 +330,7 @@ they should be added to the existing ones but before the original hooks so that 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._module_cache_dir() -> pathlib.Path
+aitune.torch.Module._module_cache_dir() -> pathlib.Path
 ```
 
 </CodeBlock>
@@ -339,7 +347,7 @@ Return the cache directory identified by the configured module name.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._proxy_forward()
+aitune.torch.Module._proxy_forward()
 ```
 
 </CodeBlock>
@@ -358,7 +366,7 @@ We need to re-enable hooks, so that they will be called before and after proxied
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._reset()
+aitune.torch.Module._reset()
 ```
 
 </CodeBlock>
@@ -375,7 +383,7 @@ Resets the module to initial state.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._restore_original_forward()
+aitune.torch.Module._restore_original_forward()
 ```
 
 </CodeBlock>
@@ -391,11 +399,11 @@ We need to disable hooks, otherwise they will be called twice.
 </Indent>
 <Anchor id="aitune-torch-module-wrapper_module-Module-_setup_strategies">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy","aitune.torch.module.wrapper_module.StrategyList":"#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.module.wrapper_module.StrategyList":"#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module._setup_strategies(
-    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None,
+aitune.torch.Module._setup_strategies(
+    strategy: aitune.torch.tune_strategy.resolver.StrategyOption | None,
     strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None
 )
 ```
@@ -414,7 +422,7 @@ Sets up strategy or strategy_map or strategy_list depending on input args.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module.activate()
+aitune.torch.Module.activate()
 ```
 
 </CodeBlock>
@@ -426,12 +434,37 @@ Activates the module backends.
 
 
 </Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-artifact">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.Module.artifact() -> aitune.records.DeploymentArtifact
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the artifact produced by this tuned module.
+
+**Returns:** [`DeploymentArtifact`](../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact)
+
+The module's deployable artifact.
+
+**Raises:**
+
+- `RuntimeError`: If the module has not been tuned or cannot map to one artifact.
+
+
+</Indent>
 <Anchor id="aitune-torch-module-wrapper_module-Module-deactivate">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module.deactivate()
+aitune.torch.Module.deactivate()
 ```
 
 </CodeBlock>
@@ -448,7 +481,7 @@ Deactivates the module backends.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module.enable_passthrough(
+aitune.torch.Module.enable_passthrough(
     force: bool = False
 )
 ```
@@ -473,7 +506,7 @@ if True, force the module to be in the passthrough mode.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module.enable_recording(
+aitune.torch.Module.enable_recording(
     force: bool = False
 )
 ```
@@ -498,7 +531,7 @@ if True, force the module to be in the recording mode.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module.from_dict(
+aitune.torch.Module.from_dict(
     module: torch.nn.Module,
     state_dict: dict,
     device: torch.device | None = None
@@ -521,7 +554,7 @@ Create a wrapper module from a state dictionary.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module.is_state_dict_valid(
+aitune.torch.Module.is_state_dict_valid(
     state_dict: dict
 )
 ```
@@ -542,7 +575,7 @@ Check if the state dictionary has a wrapper module.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module.to_dict(
+aitune.torch.Module.to_dict(
     args = (),
     destination = None,
     prefix = '',
@@ -565,12 +598,12 @@ convention i.e. state_dict.
 </Indent>
 <Anchor id="aitune-torch-module-wrapper_module-Module-tune">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.Module.tune(
+aitune.torch.Module.tune(
     device: str | torch.device | None = None,
-    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None,
+    strategy: aitune.torch.tune_strategy.resolver.StrategyOption | None = None,
     dry_run: bool = False
 )
 ```
@@ -588,13 +621,19 @@ Tunes the module.
 the device to use for tuning
 </ParamField>
 
-<ParamField path="strategy" type="TuneStrategy | None" default="None">
-the tuning strategy to use
+<ParamField path="strategy" type="StrategyOption | None" default="None">
+[`StrategyOption`](../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption) `| None` — the tuning strategy to use
 </ParamField>
 
 <ParamField path="dry_run" type="bool" default="False">
 if True, only dry run the tuning
 </ParamField>
+
+<Note>
+
+if module has already defined strategy/strategies those will take precedence over the provided one.
+
+</Note>
 
 
 </Indent>
@@ -671,24 +710,12 @@ Sanitize model name to be used as a module name.
 
 </Indent>
 
-<Anchor id="aitune-torch-module-wrapper_module-DEFAULT_STRATEGY">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.module.wrapper_module.DEFAULT_STRATEGY = MaxThroughputStrategy.for_aot()
-```
-
-</CodeBlock>
-</Anchor>
-
-
 <Anchor id="aitune-torch-module-wrapper_module-StrategyList">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.StrategyList = list[TuneStrategy]
+aitune.torch.module.wrapper_module.StrategyList = list[StrategyOption]
 ```
 
 </CodeBlock>
@@ -700,7 +727,7 @@ aitune.torch.module.wrapper_module.StrategyList = list[TuneStrategy]
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.module.wrapper_module.StrategyMap = dict[SampleMetadata, TuneStrategy]
+aitune.torch.module.wrapper_module.StrategyMap = dict[SampleMetadata, StrategyOption]
 ```
 
 </CodeBlock>

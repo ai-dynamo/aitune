@@ -6,6 +6,8 @@ title: "Backends"
 
 NVIDIA AITune supports multiple tuning backends, each with different characteristics and use cases. The backends align with a common interface for the build and inference process.
 
+For existing ONNX models wrapped in `OnnxModule`, only `ONNXRuntimeBackend` and `TensorRTBackend` are supported tuning targets. Both reuse the source ONNX file. See [ONNX Model Tuning](../guides/onnx_tuning.md) for the explicit backend configuration.
+
 ## TensorRT Backend
 
 The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT engine. It offers the best performance for production deployments. The backend integrates [TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer) in a seamless flow.
@@ -88,7 +90,7 @@ backend = TorchInductorAotBackend()
 
 ## ONNXRuntime Backend
 
-The ONNXRuntime backend exports the selected module to ONNX and runs inference through ONNX Runtime with CUDA or TensorRT execution providers.
+The ONNXRuntime backend exports PyTorch modules to ONNX or uses an existing `OnnxModule` graph directly. It runs inference through ONNX Runtime with CUDA or TensorRT execution providers.
 
 ```python
 from aitune.torch.backend import ONNXRuntimeBackend, ONNXRuntimeBackendConfig, ONNXExecutionProvider

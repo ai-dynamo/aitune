@@ -1,0 +1,312 @@
+---
+layout: overview
+slug: aitune/aitune/triton/config/options
+title: aitune.triton.config.options
+---
+
+Reusable Triton scheduling, placement, and warmup settings.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`DynamicBatcher`](#aitune-triton-config-options-DynamicBatcher) | Dynamic batching with preferred sizes, priorities, and queue policies. |
+| [`ExecutionAccelerator`](#aitune-triton-config-options-ExecutionAccelerator) | ONNX Runtime execution accelerator and backend-specific string parameters. |
+| [`InstanceGroup`](#aitune-triton-config-options-InstanceGroup) | Model instance count, device placement, profiles, and rate limiting. |
+| [`ModelWarmup`](#aitune-triton-config-options-ModelWarmup) | Named warmup sample with protobuf-shaped input data specifications. |
+| [`QueuePolicy`](#aitune-triton-config-options-QueuePolicy) | Request timeout and queue capacity policy; times are in microseconds. |
+| [`SequenceBatcher`](#aitune-triton-config-options-SequenceBatcher) | Sequence scheduling using Triton protobuf fields for controls and state. |
+| [`_Options`](#aitune-triton-config-options-_Options) | Reject misspelled settings and retain an immutable configuration interface. |
+
+### API
+
+<Anchor id="aitune-triton-config-options-DynamicBatcher">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.DynamicBatcher()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Dynamic batching with preferred sizes, priorities, and queue policies.
+
+
+<ParamField path="default_priority_level" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="default_queue_policy" type="QueuePolicy | None = None">
+</ParamField>
+
+<ParamField path="max_queue_delay_microseconds" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="preferred_batch_size" type="tuple[PositiveInt, ...] = ()">
+</ParamField>
+
+<ParamField path="preserve_ordering" type="bool = False">
+</ParamField>
+
+<ParamField path="priority_levels" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="priority_queue_policy" type="dict[int, QueuePolicy] = Field(default_factory=dict)">
+</ParamField>
+<Anchor id="aitune-triton-config-options-DynamicBatcher-_validate_priorities">
+
+<CodeBlock links={{"aitune.triton.config.options.DynamicBatcher":"#aitune-triton-config-options-DynamicBatcher"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.DynamicBatcher._validate_priorities() -> aitune.triton.config.options.DynamicBatcher
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require configured priority levels and defaults to agree.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-ExecutionAccelerator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.ExecutionAccelerator()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+ONNX Runtime execution accelerator and backend-specific string parameters.
+
+
+<ParamField path="name" type="str = Field(min_length=1)">
+</ParamField>
+
+<ParamField path="parameters" type="dict[str, str] = Field(default_factory=dict)">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-InstanceGroup">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.InstanceGroup()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Model instance count, device placement, profiles, and rate limiting.
+
+
+<ParamField path="count" type="PositiveInt = 1">
+</ParamField>
+
+<ParamField path="gpus" type="tuple[NonNegativeInt, ...] = ()">
+</ParamField>
+
+<ParamField path="host_policy" type="str | None = None">
+</ParamField>
+
+<ParamField path="kind" type="Literal['KIND_AUTO', 'KIND_CPU', 'KIND_GPU', 'KIND_MODEL'] = 'KIND_AUTO'">
+</ParamField>
+
+<ParamField path="name" type="str | None = None">
+</ParamField>
+
+<ParamField path="passive" type="bool = False">
+</ParamField>
+
+<ParamField path="profile" type="tuple[str, ...] = ()">
+</ParamField>
+
+<ParamField path="rate_limiter" type="dict[str, Any] | None = None">
+</ParamField>
+
+<ParamField path="secondary_devices" type="tuple[dict[str, Any], ...] = ()">
+</ParamField>
+<Anchor id="aitune-triton-config-options-InstanceGroup-_validate_devices">
+
+<CodeBlock links={{"aitune.triton.config.options.InstanceGroup":"#aitune-triton-config-options-InstanceGroup"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.InstanceGroup._validate_devices() -> aitune.triton.config.options.InstanceGroup
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reject GPU identifiers on CPU or model-managed instances.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-ModelWarmup">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.ModelWarmup()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Named warmup sample with protobuf-shaped input data specifications.
+
+Each input specifies ``data_type``, ``dims``, and one of ``zero_data``,
+``random_data``, or ``input_data_file``. Files live under the model's warmup directory.
+
+
+<ParamField path="batch_size" type="PositiveInt = 1">
+</ParamField>
+
+<ParamField path="count" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="inputs" type="dict[str, dict[str, Any]] = Field(min_length=1)">
+</ParamField>
+
+<ParamField path="name" type="str = Field(min_length=1)">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-QueuePolicy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.QueuePolicy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Request timeout and queue capacity policy; times are in microseconds.
+
+
+<ParamField path="allow_timeout_override" type="bool = False">
+</ParamField>
+
+<ParamField path="default_timeout_microseconds" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="max_queue_size" type="NonNegativeInt = 0">
+</ParamField>
+
+<ParamField path="timeout_action" type="Literal['REJECT', 'DELAY'] = 'REJECT'">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-SequenceBatcher">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.SequenceBatcher()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [_Options](#aitune-triton-config-options-_Options)
+
+Sequence scheduling using Triton protobuf fields for controls and state.
+
+``direct`` and ``oldest`` select mutually exclusive strategies. Nested mappings
+use the ModelSequenceBatching schema and are checked when the model config is built.
+
+
+<ParamField path="control_input" type="tuple[dict[str, Any], ...] = ()">
+</ParamField>
+
+<ParamField path="direct" type="dict[str, Any] | None = None">
+</ParamField>
+
+<ParamField path="iterative_sequence" type="bool = False">
+</ParamField>
+
+<ParamField path="max_sequence_idle_microseconds" type="NonNegativeInt | None = None">
+</ParamField>
+
+<ParamField path="oldest" type="dict[str, Any] | None = None">
+</ParamField>
+
+<ParamField path="state" type="tuple[dict[str, Any], ...] = ()">
+</ParamField>
+<Anchor id="aitune-triton-config-options-SequenceBatcher-_validate_strategy">
+
+<CodeBlock links={{"aitune.triton.config.options.SequenceBatcher":"#aitune-triton-config-options-SequenceBatcher"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.SequenceBatcher._validate_strategy() -> aitune.triton.config.options.SequenceBatcher
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Allow at most one sequence scheduler strategy.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-triton-config-options-_Options">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.triton.config.options._Options()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `BaseModel`
+
+Reject misspelled settings and retain an immutable configuration interface.
+
+
+<ParamField path="model_config" type="= ConfigDict(frozen=True, extra='forbid')">
+</ParamField>
+</Indent>

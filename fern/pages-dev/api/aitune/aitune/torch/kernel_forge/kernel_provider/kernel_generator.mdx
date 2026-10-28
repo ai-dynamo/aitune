@@ -19,10 +19,10 @@ Contracts for asynchronous kernel generation.
 
 <Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider":"./kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult(
+class aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult(
     function: str,
     provider: aitune.torch.kernel_forge.kernel_provider.kernel_provider.KernelProvider | None,
     description: str,
@@ -64,7 +64,7 @@ Whether generation produced a usable provider.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult.__post_init__() -> None
+aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult.__post_init__() -> None
 ```
 
 </CodeBlock>
@@ -83,7 +83,7 @@ Require exactly one success or controlled-failure outcome.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator()
+class aitune.torch.kernel_forge.kernel_provider.KernelGenerator()
 ```
 
 </CodeBlock>
@@ -107,7 +107,7 @@ override this method to return a unique identifier for a specific configuration.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator.__repr__() -> str
+aitune.torch.kernel_forge.kernel_provider.KernelGenerator.__repr__() -> str
 ```
 
 </CodeBlock>
@@ -123,10 +123,10 @@ Return a human-readable kernel generator description.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-prepare">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator.prepare(
+aitune.torch.kernel_forge.kernel_provider.KernelGenerator.prepare(
     function: str,
     samples: list[aitune.torch.module.sample_store.Sample]
 ) -> bool
@@ -145,10 +145,10 @@ Prepare generation and return whether all samples are supported.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator-submit">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult":"#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult":"#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator.submit(
+aitune.torch.kernel_forge.kernel_provider.KernelGenerator.submit(
     function: str,
     samples: list[aitune.torch.module.sample_store.Sample]
 ) -> concurrent.futures.Future[aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerationResult]
@@ -170,7 +170,7 @@ Start one generation task without waiting for it to finish.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.kernel_generator.KernelGenerator.supports_functions() -> list[str]
+aitune.torch.kernel_forge.kernel_provider.KernelGenerator.supports_functions() -> list[str]
 ```
 
 </CodeBlock>

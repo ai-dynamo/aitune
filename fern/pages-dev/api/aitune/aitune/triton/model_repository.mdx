@@ -1,0 +1,406 @@
+---
+layout: overview
+slug: aitune/aitune/triton/model_repository
+title: aitune.triton.model_repository
+---
+
+Generate Triton model repositories from artifacts and existing model files.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_additional_file_paths`](#aitune-triton-model_repository-_additional_file_paths) | Validate the relative file layout of an externally supplied model. |
+| [`_artifact_layout`](#aitune-triton-model_repository-_artifact_layout) | Return Triton's file name and multi-file behavior. |
+| [`_create_model_directories`](#aitune-triton-model_repository-_create_model_directories) | Create a new Triton model entry without replacing an existing one. |
+| [`_model_config`](#aitune-triton-model_repository-_model_config) | Derive or validate the Triton configuration for an artifact. |
+| [`_publish_deployment_artifact`](#aitune-triton-model_repository-_publish_deployment_artifact) | Publish an artifact and generate its Model Analyzer configuration. |
+| [`_publish_existing_model`](#aitune-triton-model_repository-_publish_existing_model) | Publish an existing file using its explicit Triton configuration. |
+| [`_resource_files`](#aitune-triton-model_repository-_resource_files) | Validate auxiliary file destinations and require files referenced by config. |
+| [`_validate_artifact_files`](#aitune-triton-model_repository-_validate_artifact_files) | Reject additional files when Triton's format has no defined layout. |
+| [`_validate_target`](#aitune-triton-model_repository-_validate_target) | Return a validated repository model name before writing files. |
+| [`_validate_version_policy`](#aitune-triton-model_repository-_validate_version_policy) | Require a specific version policy to serve the version being published. |
+| [`publish`](#aitune-triton-model_repository-publish) | Publish a tuned artifact or an existing model file to a Triton repository. |
+
+### Data
+
+[`PublicationError`](#aitune-triton-model_repository-PublicationError)
+
+[`_CONFIG_FILE_NAME`](#aitune-triton-model_repository-_CONFIG_FILE_NAME)
+
+[`_MODEL_CONFIGS`](#aitune-triton-model_repository-_MODEL_CONFIGS)
+
+[`_ONNX_DIRECTORY_ENTRY`](#aitune-triton-model_repository-_ONNX_DIRECTORY_ENTRY)
+
+[`logger`](#aitune-triton-model_repository-logger)
+
+### API
+
+<Anchor id="aitune-triton-model_repository-_additional_file_paths">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._additional_file_paths(
+    source: pathlib.Path,
+    additional_files: collections.abc.Sequence[str | os.PathLike[str]]
+) -> tuple[pathlib.Path, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate the relative file layout of an externally supplied model.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-_artifact_layout">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._artifact_layout(
+    artifact: aitune.records.DeploymentArtifact
+) -> tuple[str, bool]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return Triton's file name and multi-file behavior.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-_create_model_directories">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._create_model_directories(
+    repository: pathlib.Path,
+    model_name: str,
+    model_version: int
+) -> tuple[pathlib.Path, pathlib.Path]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create a new Triton model entry without replacing an existing one.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-_model_config">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact","aitune.triton.config.BaseModelConfig":"./config/common.mdx#aitune-triton-config-common-BaseModelConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._model_config(
+    artifact: aitune.records.DeploymentArtifact,
+    model_name: str,
+    config: aitune.triton.config.TensorRTModelConfig | aitune.triton.config.ONNXRuntimeModelConfig | aitune.triton.config.TorchAOTIModelConfig | None
+) -> aitune.triton.config.BaseModelConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Derive or validate the Triton configuration for an artifact.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-_publish_deployment_artifact">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact","aitune.triton.model_analyzer.ModelAnalyzerConfig":"./model_analyzer.mdx#aitune-triton-model_analyzer-ModelAnalyzerConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._publish_deployment_artifact(
+    artifact: aitune.records.DeploymentArtifact,
+    path: str | os.PathLike[str],
+    model_name: str | None,
+    model_version: int,
+    model_analyzer: aitune.triton.model_analyzer.ModelAnalyzerConfig | None,
+    config: aitune.triton.config.TensorRTModelConfig | aitune.triton.config.ONNXRuntimeModelConfig | aitune.triton.config.TorchAOTIModelConfig | None
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Publish an artifact and generate its Model Analyzer configuration.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-_publish_existing_model">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._publish_existing_model(
+    model: str | os.PathLike[str],
+    path: str | os.PathLike[str],
+    model_version: int,
+    config: aitune.triton.config.TensorRTModelConfig | aitune.triton.config.ONNXRuntimeModelConfig | aitune.triton.config.TorchAOTIModelConfig,
+    additional_files: collections.abc.Sequence[str | os.PathLike[str]],
+    resources: collections.abc.Mapping[str, str | os.PathLike[str]] | None
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Publish an existing file using its explicit Triton configuration.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-_resource_files">
+
+<CodeBlock links={{"aitune.triton.config.BaseModelConfig":"./config/common.mdx#aitune-triton-config-common-BaseModelConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._resource_files(
+    config: aitune.triton.config.BaseModelConfig,
+    resources: collections.abc.Mapping[str, str | os.PathLike[str]]
+) -> dict[pathlib.Path, pathlib.Path]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate auxiliary file destinations and require files referenced by config.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-_validate_artifact_files">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._validate_artifact_files(
+    artifact: aitune.records.DeploymentArtifact,
+    multi_file: bool
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Reject additional files when Triton's format has no defined layout.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-_validate_target">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._validate_target(
+    model_name: str | None,
+    model_version: int
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return a validated repository model name before writing files.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-_validate_version_policy">
+
+<CodeBlock links={{"aitune.triton.config.BaseModelConfig":"./config/common.mdx#aitune-triton-config-common-BaseModelConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._validate_version_policy(
+    config: aitune.triton.config.BaseModelConfig,
+    model_version: int
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Require a specific version policy to serve the version being published.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-publish">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact","aitune.triton.model_analyzer.ModelAnalyzerConfig":"./model_analyzer.mdx#aitune-triton-model_analyzer-ModelAnalyzerConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.publish(
+    model: aitune.records.DeploymentArtifact | str | os.PathLike[str],
+    path: str | os.PathLike[str],
+    model_name: str | None = None,
+    model_version: int = 1,
+    model_analyzer: aitune.triton.model_analyzer.ModelAnalyzerConfig | None = None,
+    config: aitune.triton.config.TensorRTModelConfig | aitune.triton.config.ONNXRuntimeModelConfig | aitune.triton.config.TorchAOTIModelConfig | None = None,
+    additional_files: collections.abc.Sequence[str | os.PathLike[str]] = (),
+    resources: collections.abc.Mapping[str, str | os.PathLike[str]] | None = None
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Publish a tuned artifact or an existing model file to a Triton repository.
+
+The operation never replaces an existing model. Files are written directly
+into the new model directory, so a failure can leave an incomplete directory.
+For artifacts, a Model Analyzer config is generated under
+``model_analyzer/config.yaml`` with input shapes derived from the artifact.
+Without an explicit config, the Triton batch limit and scheduler are derived
+from the artifact's tensor bounds and runtime call structure.
+Existing model files require an explicit backend-specific ``config`` and
+are copied without compilation or tuning. Callers must keep generation
+separate from updates to a live Triton repository.
+
+Supported model format/runtime pairs are ``onnx``/``onnxruntime``,
+``tensorrt_plan``/``tensorrt``, and ``pt2``/``aotinductor``. ONNX provider
+selection comes from ``runtime.options["execution_provider"]``. TensorRT uses
+``model.metadata["optimization_profile_count"]`` and the optional runtime
+setting ``use_cuda_graphs``. PT2 uses ``model.metadata["structured_call"]``.
+
+**Parameters:**
+
+<ParamField path="model" type="DeploymentArtifact | str | os.PathLike[str]">
+[`DeploymentArtifact`](../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact) `| str | os.PathLike[str]` — Deployment artifact or path to an existing model file.
+</ParamField>
+
+<ParamField path="path" type="str | os.PathLike[str]">
+Triton model repository root.
+</ParamField>
+
+<ParamField path="model_name" type="str | None" default="None">
+New model directory name for an artifact; defaults to ``config.name`` when config is supplied.
+</ParamField>
+
+<ParamField path="model_version" type="int" default="1">
+Positive Triton model version.
+</ParamField>
+
+<ParamField path="model_analyzer" type="ModelAnalyzerConfig | None" default="None">
+[`ModelAnalyzerConfig`](./model_analyzer.mdx#aitune-triton-model_analyzer-ModelAnalyzerConfig) `| None` — Optional Model Analyzer options. Omission uses the default options for artifacts.
+</ParamField>
+
+<ParamField path="config" type="TensorRTModelConfig | ONNXRuntimeModelConfig | TorchAOTIModelConfig | None" default="None">
+[`TensorRTModelConfig`](./config/tensorrt.mdx#aitune-triton-config-tensorrt-TensorRTModelConfig) `|` [`ONNXRuntimeModelConfig`](./config/onnx_runtime.mdx#aitune-triton-config-onnx_runtime-ONNXRuntimeModelConfig) `|` [`TorchAOTIModelConfig`](./config/torch_aoti.mdx#aitune-triton-config-torch_aoti-TorchAOTIModelConfig) `| None` — Complete backend-specific configuration. For an artifact, it is derived when omitted. A supplied
+config must match the artifact runtime and model name; the caller owns its other values. An existing
+model file requires it.
+</ParamField>
+
+<ParamField path="additional_files" type="Sequence[str | os.PathLike[str]]" default="()">
+ONNX external-data paths relative to the source file's directory.
+</ParamField>
+
+<ParamField path="resources" type="Mapping[str, str | os.PathLike[str]] | None" default="None">
+Model-relative auxiliary destination paths mapped to local files.
+</ParamField>
+
+**Returns:** `Path`
+
+Path to the generated model directory.
+
+**Raises:**
+
+- `AITuneUserInputError`: If publication arguments are invalid.
+- `AITunePublicationError`: If the artifact cannot be represented or publication fails.
+
+
+</Indent>
+
+<Anchor id="aitune-triton-model_repository-PublicationError">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository.PublicationError = AITunePublicationError
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-triton-model_repository-_CONFIG_FILE_NAME">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._CONFIG_FILE_NAME = 'config.pbtxt'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-triton-model_repository-_MODEL_CONFIGS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._MODEL_CONFIGS: dict[str, type[BaseModelConfig]] = {'tensorrt': TensorRTModelConfig, 'onnxruntime': ONNXRuntimeModelConfig, 'aotind...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-triton-model_repository-_ONNX_DIRECTORY_ENTRY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository._ONNX_DIRECTORY_ENTRY = 'model.onnx'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-triton-model_repository-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.triton.model_repository.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

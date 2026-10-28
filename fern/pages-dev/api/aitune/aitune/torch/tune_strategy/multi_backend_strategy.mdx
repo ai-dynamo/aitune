@@ -4,7 +4,7 @@ slug: aitune/aitune/torch/tune_strategy/multi_backend_strategy
 title: aitune.torch.tune_strategy.multi_backend_strategy
 ---
 
-Share backend selection because strategies can be reused across different module types.
+Base class for strategies that evaluate multiple explicit backends.
 
 ## Module Contents
 
@@ -12,18 +12,17 @@ Share backend selection because strategies can be reused across different module
 
 | Name | Description |
 |------|-------------|
-| [`MultiBackendStrategy`](#aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy) | Keep candidate lists in strategies and select them once the module is known. |
+| [`MultiBackendStrategy`](#aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy) | Run a selection algorithm over backends supplied by the caller. |
 
 ### API
 
 <Anchor id="aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy(
-    backends: list[aitune.torch.backend.backend.Backend] | None = None,
-    workflow: typing.Literal['aot', 'jit'] = 'aot',
+    backends: list[aitune.torch.backend.Backend],
     kwargs = {}
 )
 ```
@@ -33,155 +32,9 @@ class aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy(
 
 <Indent>
 
-**Bases:** [FindMaxBatchSizeMixin](/aitune/aitune/torch/tune_strategy/mixin/find_max_batch_size_mixin#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin)
+**Bases:** [FindMaxBatchSizeMixin](./mixin/find_max_batch_size_mixin.mdx#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin)
 
-Keep candidate lists in strategies and select them once the module is known.
-
-Rebuild defaults when switching between ordinary and distributed modules, so a
-reused strategy does not keep incompatible backends. Explicit lists always win,
-including an empty list. Each strategy must define both workflows explicitly.
+Run a selection algorithm over backends supplied by the caller.
 
 
-<ParamField path="_backends" type="list[Backend]">
-Return explicit candidates or the defaults for the current module.
-</ParamField>
-
-<ParamField path="_resolved_backends" type="list[Backend] | None = None">
-</ParamField>
-<Anchor id="aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy-_configure_for_module">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy._configure_for_module(
-    module: torch.nn.Module
-) -> None
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Select distributed defaults without replacing user-supplied candidates.
-
-
-</Indent>
-<Anchor id="aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy-_default_aot_backends">
-
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy._default_aot_backends(
-    distributed: bool = False
-) -> list[aitune.torch.backend.backend.Backend]
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-<Badge>abstract</Badge>
-
-Return AOT candidates that support the module's execution requirements.
-
-
-</Indent>
-<Anchor id="aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy-_default_jit_backends">
-
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy._default_jit_backends(
-    distributed: bool = False
-) -> list[aitune.torch.backend.backend.Backend]
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-<Badge>abstract</Badge>
-
-Return JIT candidates that support the module's execution requirements.
-
-
-</Indent>
-<Anchor id="aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy-_resolve_default_backends">
-
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy._resolve_default_backends() -> list[aitune.torch.backend.backend.Backend]
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Build only the candidates for the selected workflow and module type.
-
-
-</Indent>
-<Anchor id="aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy-for_aot">
-
-<CodeBlock links={{"aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy":"#aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy.for_aot(
-    kwargs = {}
-) -> aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-<Badge>classmethod</Badge>
-
-Create a strategy using AOT candidates and its default batch-size policy.
-
-Match the regular constructor so existing AOT behavior stays unchanged.
-
-**Parameters:**
-
-<ParamField path="kwargs" default="&#123;&#125;">
-Strategy constructor arguments, including explicit backend overrides.
-</ParamField>
-
-
-</Indent>
-<Anchor id="aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy-for_jit">
-
-<CodeBlock links={{"aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy":"#aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy.for_jit(
-    kwargs = {}
-) -> aitune.torch.tune_strategy.multi_backend_strategy.MultiBackendStrategy
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-<Badge>classmethod</Badge>
-
-Create a strategy using JIT candidates and no maximum-batch-size discovery.
-
-Use the batches already recorded to limit tuning work during inference.
-
-**Parameters:**
-
-<ParamField path="kwargs" default="&#123;&#125;">
-Strategy constructor arguments, including explicit backend overrides.
-</ParamField>
-
-
-</Indent>
 </Indent>

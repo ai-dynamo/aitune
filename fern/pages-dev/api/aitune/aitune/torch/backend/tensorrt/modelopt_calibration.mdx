@@ -28,7 +28,7 @@ NVIDIA ModelOpt Calibration module for quantization and autocast.
 
 <Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-_collect_per_sample_dicts">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.tensorrt.modelopt_calibration._collect_per_sample_dicts(
@@ -114,7 +114,7 @@ Return a rank for this sample (larger = larger shape). Used to pick max-shape re
 
 <Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-_sample_to_input_dict">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.tensorrt.modelopt_calibration._sample_to_input_dict(
@@ -159,7 +159,7 @@ can be concatenated along axis=0.
 
 <Anchor id="aitune-torch-backend-tensorrt-modelopt_calibration-prepare_calibration_data">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.tensorrt.modelopt_calibration.prepare_calibration_data(
@@ -187,11 +187,11 @@ for ONNX input names and locators into normalized forward arguments.
 **Parameters:**
 
 <ParamField path="data" type="Sequence[Sample]">
-List of 1..N Sample objects (args, kwargs); each can have any batch size.
+`Sequence[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — List of 1..N Sample objects (args, kwargs); each can have any batch size.
 </ParamField>
 
 <ParamField path="graph_spec" type="GraphSpec">
-Graph specification whose input_spec defines ONNX input names
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Graph specification whose input_spec defines ONNX input names
 and locators into normalized forward arguments.
 </ParamField>
 

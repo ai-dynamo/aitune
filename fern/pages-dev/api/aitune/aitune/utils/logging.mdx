@@ -314,7 +314,7 @@ Tuple of (handler, original_stream) if successful, None otherwise
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.logging.control_output(
+aitune.utils.control_output(
     log_file: str | pathlib.Path | None = None
 )
 ```
@@ -325,6 +325,23 @@ aitune.utils.logging.control_output(
 <Indent>
 
 Silences or redirects stdout, stderr, and logs within the invoked context.
+
+**Behavior matrix based on CONSOLE_OUTPUT_ENABLE environment variable and log_file**
+
+CONSOLE_OUTPUT_ENABLE=False, log_file=None       → Complete suppression (to /dev/null)
+CONSOLE_OUTPUT_ENABLE=False, log_file="file.log" → Redirect to file only, no console
+CONSOLE_OUTPUT_ENABLE=True, log_file=None      → Normal console output
+CONSOLE_OUTPUT_ENABLE=True, log_file="file.log"→ Tee mode: console AND file
+
+**Example usage**
+
+# Suppress all output
+with control_output():
+    print("Not shown anywhere")
+
+# Redirect output to file only
+with control_output(log_file="output.log"):
+    print("Goes to file, not console")
 
 **Parameters:**
 
@@ -433,6 +450,19 @@ This function provides consistent and comprehensive exception logging
 across the AITune codebase, including exception type, message, and
 full traceback information.
 
+**Example**
+
+try:
+    # Some operation that might fail
+    risky_operation()
+except Exception as e:
+    log_exception_details(
+        logger=logger,
+        exception=e,
+        message="Failed to perform risky operation",
+        reraise_as=RuntimeError(f"Operation failed: &#123;e&#125;")
+    )
+
 **Parameters:**
 
 <ParamField path="logger" type="logging.Logger">
@@ -471,7 +501,7 @@ Optional exception to raise instead of the original (default: None)
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.logging.log_to_file(
+aitune.utils.log_to_file(
     log_file: str | pathlib.Path | None,
     message: str,
     exception: Exception | None = None
@@ -493,7 +523,7 @@ Append a message and optional exception details to a log file.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.logging.set_module_level(
+aitune.utils.set_module_level(
     module_name: str,
     level: int | str
 )
@@ -524,7 +554,7 @@ Logging level (e.g., 'DEBUG', 'INFO', 'WARNING')
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.logging.setup_logging(
+aitune.utils.setup_logging(
     level: int | str | None = None,
     format_string: str = '%(asctime)s - %(name)s - %...,
     log_file: str | pathlib.Path | None = None,

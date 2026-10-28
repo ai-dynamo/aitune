@@ -15,6 +15,12 @@ Configuration for JIT module.
 | [`Config`](#aitune-torch-jit-config-Config) | Configuration for JIT module. |
 | [`JITMode`](#aitune-torch-jit-config-JITMode) | Mode for JIT execution. |
 
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_default_strategy_resolver`](#aitune-torch-jit-config-_default_strategy_resolver) | Return the default strategy. |
+
 ### Data
 
 [`config`](#aitune-torch-jit-config-config)
@@ -23,7 +29,7 @@ Configuration for JIT module.
 
 <Anchor id="aitune-torch-jit-config-Config">
 
-<CodeBlock links={{"aitune.torch.jit.config.JITMode":"#aitune-torch-jit-config-JITMode","aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.jit.config.JITMode":"#aitune-torch-jit-config-JITMode","aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.jit.config.Config(
@@ -39,7 +45,7 @@ class aitune.torch.jit.config.Config(
     skip_modules: list[str] = list(),
     patch_exclude: tuple[str, ...] = (),
     cache_dir: pathlib.Path = (lambda: _AITUNE_JIT_CACHE_...,
-    strategy: aitune.torch.tune_strategy.tune_strategy.TuneStrategy | None = None
+    strategy: aitune.torch.tune_strategy.resolver.StrategyOption = _default_strategy_resolver()
 )
 ```
 
@@ -89,7 +95,7 @@ Configuration for JIT module.
 <ParamField path="skip_modules" type="list[str] = field(default_factory=list)">
 </ParamField>
 
-<ParamField path="strategy" type="TuneStrategy | None = None">
+<ParamField path="strategy" type="StrategyOption = field(default_factory=_default_strategy_resolver)">
 </ParamField>
 <Anchor id="aitune-torch-jit-config-Config-__post_init__">
 
@@ -127,10 +133,12 @@ Reset all options to their default values (e.g. for test isolation).
 </Indent>
 <Anchor id="aitune-torch-jit-config-Config-resolve_strategy">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"../tune_strategy/tune_strategy.mdx#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.jit.config.Config.resolve_strategy() -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
+aitune.torch.jit.config.Config.resolve_strategy(
+    module: torch.nn.Module
+) -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
 ```
 
 </CodeBlock>
@@ -140,13 +148,15 @@ aitune.torch.jit.config.Config.resolve_strategy() -> aitune.torch.tune_strategy.
 
 Return the tune strategy to use for JIT tuning.
 
-When ``strategy`` is set explicitly it is returned as-is. Otherwise the default is a
-``MaxThroughputStrategy``. Ordinary modules profile TensorRT (with and without dynamo)
-and TorchInductor JIT. Distributed modules profile TorchInductor AOT and TorchInductor JIT.
-Candidates are resolved when the module is available.
+When ``strategy`` is set explicitly it is returned as-is. Otherwise the dynamic
+resolver selects JIT backends from the module's execution properties and builds a
+``MaxThroughputStrategy``.
 
-Strategy and backend modules are imported lazily to keep the JIT config a thin data
-layer that doesn't pull runtime modules at import time.
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+Module that will be tuned.
+</ParamField>
 
 
 </Indent>
@@ -177,6 +187,24 @@ Mode for JIT execution.
 
 <ParamField path="TUNE_EAGER" type="= 'tune_eager'">
 </ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-jit-config-_default_strategy_resolver">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.jit.config._default_strategy_resolver() -> aitune.torch.tune_strategy.resolver.StrategyOption
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the default strategy.
+
 
 </Indent>
 

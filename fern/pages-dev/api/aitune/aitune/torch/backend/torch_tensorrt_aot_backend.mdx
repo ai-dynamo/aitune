@@ -36,7 +36,7 @@ TorchTensorRT backend with AOT compilation and intermediate model save.
 <CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend(
+class aitune.torch.backend.TorchTensorRTAotBackend(
     config: aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig | None = None
 )
 ```
@@ -46,7 +46,7 @@ class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend(
 
 <Indent>
 
-**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+**Bases:** [Backend[TorchTensorRTAotBackendConfig]](./backend.mdx#aitune-torch-backend-backend-Backend)
 
 Backend that compiles model using TensorRT.
 
@@ -63,9 +63,6 @@ Backend that compiles model using TensorRT.
 <ParamField path="_build_mode" type="= BuildMode.AHEAD_OF_TIME">
 </ParamField>
 
-<ParamField path="_config" type="= config or TorchTensorRTAotBackendConfig()">
-</ParamField>
-
 <ParamField path="_devices" type="list[str] = ['cuda']">
 </ParamField>
 
@@ -79,7 +76,7 @@ Backend that compiles model using TensorRT.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._activate()
+aitune.torch.backend.TorchTensorRTAotBackend._activate()
 ```
 
 </CodeBlock>
@@ -93,15 +90,15 @@ Load compiled module.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._build(
+aitune.torch.backend.TorchTensorRTAotBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
-) -> aitune.torch.backend.backend.Backend
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -129,7 +126,7 @@ revert to ``torch_tensorrt.compile(...)`` once that lands upstream.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._compile_settings() -> dict[str, typing.Any]
+aitune.torch.backend.TorchTensorRTAotBackend._compile_settings() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -143,10 +140,10 @@ Copy compile settings and isolate the timing cache by rank.
 </Indent>
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_create_exported_model_artifact">
 
-<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"../checkpoint/artifact.mdx#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._create_exported_model_artifact(
+aitune.torch.backend.TorchTensorRTAotBackend._create_exported_model_artifact(
     cache_dir: pathlib.Path
 ) -> aitune.torch.checkpoint.artifact.ArtifactPath
 ```
@@ -167,7 +164,7 @@ In order to avoid name clashes we create a unique path for each model and graph 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._deactivate()
+aitune.torch.backend.TorchTensorRTAotBackend._deactivate()
 ```
 
 </CodeBlock>
@@ -184,7 +181,7 @@ Deactivate backend and cleanup.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._deploy()
+aitune.torch.backend.TorchTensorRTAotBackend._deploy()
 ```
 
 </CodeBlock>
@@ -201,7 +198,7 @@ Deploys the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend._infer(
+aitune.torch.backend.TorchTensorRTAotBackend._infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -235,7 +232,7 @@ Model outputs
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend.describe() -> str
+aitune.torch.backend.TorchTensorRTAotBackend.describe() -> str
 ```
 
 </CodeBlock>
@@ -252,7 +249,7 @@ Returns the description of the backend.
 <CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend.from_dict(
+aitune.torch.backend.TorchTensorRTAotBackend.from_dict(
     module: torch.nn.Module | None,
     state_dict: dict
 ) -> aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend
@@ -274,7 +271,7 @@ Creates a backend from a state_dict.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend.key() -> str
+aitune.torch.backend.TorchTensorRTAotBackend.key() -> str
 ```
 
 </CodeBlock>
@@ -291,7 +288,7 @@ Returns the key of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackend.to_dict() -> dict
+aitune.torch.backend.TorchTensorRTAotBackend.to_dict() -> dict
 ```
 
 </CodeBlock>
@@ -310,7 +307,7 @@ Returns the state_dict of the backend.
 <CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig(
+class aitune.torch.backend.TorchTensorRTAotBackendConfig(
     compile_config: aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig = TorchTensorRTConfig(),
     pickle_protocol: int = 5
 )
@@ -323,7 +320,7 @@ class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendCon
 
 <Badge>Dataclass</Badge>
 
-**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+**Bases:** [BackendConfig](./backend.mdx#aitune-torch-backend-backend-BackendConfig)
 
 Configuration for TorchTensorRTAotBackend.
 
@@ -331,16 +328,18 @@ See torch_tensorrt/dynamo/_settings.py CompilationSettings for compile_config(To
 
 
 <ParamField path="compile_config" type="TorchTensorRTConfig = field(default_factory=TorchTensorRTConfig)">
+Torch-TensorRT compilation settings. Defaults to TorchTensorRTConfig().
 </ParamField>
 
 <ParamField path="pickle_protocol" type="int = 5">
+Pickle protocol for saved compiled artifacts. Defaults to 5.
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig-describe">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig.describe() -> str
+aitune.torch.backend.TorchTensorRTAotBackendConfig.describe() -> str
 ```
 
 </CodeBlock>
@@ -357,7 +356,7 @@ Describe the backend configuration. Display only changed fields.
 <CodeBlock links={{"aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig":"#aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackendConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig.from_dict(
+aitune.torch.backend.TorchTensorRTAotBackendConfig.from_dict(
     data: dict
 ) -> aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig
 ```
@@ -381,7 +380,7 @@ reconstructed into a ``TorchTensorRTConfig`` instance automatically.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig.to_dict()
+aitune.torch.backend.TorchTensorRTAotBackendConfig.to_dict()
 ```
 
 </CodeBlock>
@@ -408,7 +407,7 @@ class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBuildStep(
 
 <Indent>
 
-**Bases:** [BackendBuildStep](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendBuildStep)
+**Bases:** [BackendBuildStep](./backend.mdx#aitune-torch-backend-backend-BackendBuildStep)
 
 Identifiers for discrete sub-steps of a TorchTensorRTAot backend build.
 
@@ -432,7 +431,10 @@ class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig(
     enabled_precisions: set[torch.dtype] | None = None,
     use_explicit_typing: bool = True,
     workspace_size: int = 0,
-    use_distributed_mode_trace: bool = False
+    use_distributed_mode_trace: bool = False,
+    min_block_size: int = 5,
+    disable_tf32: bool = False,
+    require_full_compilation: bool = False
 )
 ```
 
@@ -446,16 +448,33 @@ class aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig(
 Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 
 
+<ParamField path="disable_tf32" type="bool = False">
+Whether to disable TF32 in TensorRT layers. Defaults to False.
+</ParamField>
+
 <ParamField path="enabled_precisions" type="set[dtype] | None = None">
+Enabled TensorRT precisions. Defaults to None.
+</ParamField>
+
+<ParamField path="min_block_size" type="int = 5">
+Minimum number of operators in a TensorRT block. Defaults to 5.
+</ParamField>
+
+<ParamField path="require_full_compilation" type="bool = False">
+Whether to require one TensorRT engine for the whole graph.
+Defaults to False.
 </ParamField>
 
 <ParamField path="use_distributed_mode_trace" type="bool = False">
+Enable distributed tracing. Defaults to False.
 </ParamField>
 
 <ParamField path="use_explicit_typing" type="bool = True">
+Whether to use explicit typing. Defaults to True.
 </ParamField>
 
 <ParamField path="workspace_size" type="int = 0">
+TensorRT workspace size. Defaults to 0.
 </ParamField>
 </Indent>
 
@@ -481,7 +500,7 @@ Check if a value is a primitive type (int, float, str, bool).
 
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-_save_compiled_model">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.torch_tensorrt_aot_backend._save_compiled_model(

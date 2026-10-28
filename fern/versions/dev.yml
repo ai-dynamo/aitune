@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 navigation:
   - section: Learn
     contents:
@@ -17,6 +20,8 @@ navigation:
     contents:
       - page: Ahead-of-time Tuning
         path: ../pages-dev/guides/aot_tuning.md
+      - page: ONNX Model Tuning
+        path: ../pages-dev/guides/onnx_tuning.md
       - page: Ahead-of-time Inspect
         path: ../pages-dev/guides/aot_inspect.md
       - page: Just-in-time Tuning
@@ -47,8 +52,16 @@ navigation:
             path: ../pages-dev/guides/backends/torch_inductor_aot_backend.md
       - page: Tune Strategies
         path: ../pages-dev/guides/tune_strategies/tune_strategies.md
-      - page: Deployment
-        path: ../pages-dev/guides/deployment/deployment.md
+      - section: Deployment
+        contents:
+          - page: Overview
+            path: ../pages-dev/guides/deployment/deployment.md
+          - page: Dynamo
+            path: ../pages-dev/guides/deployment/dynamo.md
+          - page: Triton
+            path: ../pages-dev/guides/deployment/triton.md
+          - page: Save and Load Checkpoints
+            path: ../pages-dev/guides/deployment/checkpoints.md
       - section: Advanced
         contents:
           - page: Tuning Workflow
@@ -67,29 +80,40 @@ navigation:
         contents:
           - page: Tuning Assistant
             path: ../pages-dev/guides/tuning-assistant.md
-  - section: Examples
+  - section: Model Recipes
     contents:
-      - page: Overview
+      - page: Recipe catalog
+        slug: overview
         path: ../pages-dev/examples/README.md
-      - page: E5Large
-        path: ../pages-dev/examples/E5Large/README.md
-      - page: ESM2
-        path: ../pages-dev/examples/ESM2/README.md
-      - page: FLUX
-        path: ../pages-dev/examples/FLUX/README.md
-      - page: JitTuning
-        path: ../pages-dev/examples/JitTuning/README.md
-      - page: LLM
-        path: ../pages-dev/examples/LLM/README.md
-      - page: ParakeetCTC
-        path: ../pages-dev/examples/ParakeetCTC/README.md
-      - page: ParakeetRNNT
-        path: ../pages-dev/examples/ParakeetRNNT/README.md
-      - page: ResNet
+      - page: ResNet-50
+        slug: res-net
         path: ../pages-dev/examples/ResNet/README.md
-      - page: StableDiffusion
+      - page: FLUX.1-dev
+        slug: flux
+        path: ../pages-dev/examples/FLUX/README.md
+      - page: Stable Diffusion 3 Medium
+        slug: stable-diffusion
         path: ../pages-dev/examples/StableDiffusion/README.md
-      - page: WAN
+      - page: Stable Diffusion XL (JIT example)
+        slug: jit-tuning
+        path: ../pages-dev/examples/JitTuning/README.md
+      - page: ESM-2 650M
+        slug: esm2
+        path: ../pages-dev/examples/ESM2/README.md
+      - page: Parakeet CTC 0.6B
+        slug: parakeet-ctc
+        path: ../pages-dev/examples/ParakeetCTC/README.md
+      - page: Parakeet RNNT 1.1B
+        slug: parakeet-rnnt
+        path: ../pages-dev/examples/ParakeetRNNT/README.md
+      - page: E5 Large V2
+        slug: e5-large
+        path: ../pages-dev/examples/E5Large/README.md
+      - page: Qwen3 0.6B
+        slug: llm
+        path: ../pages-dev/examples/LLM/README.md
+      - page: Wan 2.1 T2V 1.3B
+        slug: wan
         path: ../pages-dev/examples/WAN/README.md
   - section: API Reference
     contents:

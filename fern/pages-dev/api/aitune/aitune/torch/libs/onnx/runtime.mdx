@@ -1,0 +1,163 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/onnx/runtime
+title: aitune.torch.libs.onnx.runtime
+---
+
+Shared ONNX Runtime execution with Torch inputs.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_bind_inputs`](#aitune-torch-libs-onnx-runtime-_bind_inputs) | Bind contiguous CPU or CUDA tensors directly by their memory pointers. |
+| [`_bind_outputs`](#aitune-torch-libs-onnx-runtime-_bind_outputs) | Tell ORT to allocate all outputs on the requested device. |
+| [`_collect_outputs`](#aitune-torch-libs-onnx-runtime-_collect_outputs) | Collect CPU outputs as arrays or copy CUDA outputs directly to Torch. |
+| [`prepare_onnx_inputs`](#aitune-torch-libs-onnx-runtime-prepare_onnx_inputs) | Match positional and named inputs to the original ONNX graph names. |
+| [`run_onnx`](#aitune-torch-libs-onnx-runtime-run_onnx) | Bind tensors directly and return outputs on the requested device. |
+
+### Data
+
+[`_TORCH_DTYPE_TO_NUMPY`](#aitune-torch-libs-onnx-runtime-_TORCH_DTYPE_TO_NUMPY)
+
+[`logger`](#aitune-torch-libs-onnx-runtime-logger)
+
+### API
+
+<Anchor id="aitune-torch-libs-onnx-runtime-_bind_inputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.runtime._bind_inputs(
+    io_binding: onnxruntime.IOBinding,
+    inputs: dict[str, torch.Tensor]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Bind contiguous CPU or CUDA tensors directly by their memory pointers.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-onnx-runtime-_bind_outputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.runtime._bind_outputs(
+    io_binding: onnxruntime.IOBinding,
+    session: onnxruntime.InferenceSession,
+    device: torch.device
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tell ORT to allocate all outputs on the requested device.
+
+ORT owns the output buffers; shapes are resolved at inference time.
+Tensors are retrieved after inference via ``_collect_outputs``.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-onnx-runtime-_collect_outputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.runtime._collect_outputs(
+    io_binding: onnxruntime.IOBinding,
+    session: onnxruntime.InferenceSession,
+    device: torch.device
+) -> dict[str, torch.Tensor]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Collect CPU outputs as arrays or copy CUDA outputs directly to Torch.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-onnx-runtime-prepare_onnx_inputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.runtime.prepare_onnx_inputs(
+    session: onnxruntime.InferenceSession,
+    args: tuple,
+    kwargs: dict
+) -> dict[str, torch.Tensor]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Match positional and named inputs to the original ONNX graph names.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-onnx-runtime-run_onnx">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.runtime.run_onnx(
+    session: onnxruntime.InferenceSession,
+    inputs: dict[str, torch.Tensor],
+    device: torch.device
+) -> dict[str, torch.Tensor]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Bind tensors directly and return outputs on the requested device.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-onnx-runtime-_TORCH_DTYPE_TO_NUMPY">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.runtime._TORCH_DTYPE_TO_NUMPY: dict[dtype, type] = {torch.float16: np.float16, torch.float32: np.float32, torch.float64: np.float64...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-libs-onnx-runtime-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.onnx.runtime.logger = getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

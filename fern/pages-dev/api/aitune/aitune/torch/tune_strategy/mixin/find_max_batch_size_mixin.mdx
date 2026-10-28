@@ -23,7 +23,7 @@ Looks for best batch size for the module using Torch Eager backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin(
+class aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin(
     args = (),
     kwargs = {}
 )
@@ -34,19 +34,22 @@ class aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSiz
 
 <Indent>
 
-**Bases:** [TuneStrategy](/aitune/aitune/torch/tune_strategy/tune_strategy#aitune-torch-tune_strategy-tune_strategy-TuneStrategy)
+**Bases:** [TuneStrategy](../tune_strategy.mdx#aitune-torch-tune_strategy-tune_strategy-TuneStrategy)
 
 TuneStrategy mixin that finds max batch size.
+
+Note:
+    Find-max-batch-size is enabled by default and uses TorchEagerBackend as the neutral profiling backend.
 
 
 <ParamField path="_find_max_batch_size_backend_class" type="type[Backend] = TorchEagerBackend">
 </ParamField>
 <Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin-_pre_tune">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin._pre_tune(
+aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin._pre_tune(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
@@ -70,7 +73,7 @@ Extends tune method to find max batch size.
 <CodeBlock links={{"aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin":"#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin.enable_find_max_batch_size(
+aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin.enable_find_max_batch_size(
     enable: bool = True
 ) -> aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin
 ```
@@ -86,10 +89,10 @@ Enables or disables find max batch size.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin-find_max_batch_size">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin.find_max_batch_size(
+aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin.find_max_batch_size(
     module: torch.nn.Module,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
@@ -110,10 +113,10 @@ Finds max batch size for the module.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin-set_find_max_batch_size_default_backend_class">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin":"#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin":"#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin.set_find_max_batch_size_default_backend_class(
+aitune.torch.tune_strategy.mixin.FindMaxBatchSizeMixin.set_find_max_batch_size_default_backend_class(
     default_backend_class: type[aitune.torch.backend.backend.Backend]
 ) -> aitune.torch.tune_strategy.mixin.find_max_batch_size_mixin.FindMaxBatchSizeMixin
 ```

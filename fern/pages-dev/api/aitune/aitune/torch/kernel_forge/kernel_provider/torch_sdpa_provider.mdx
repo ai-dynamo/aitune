@@ -25,7 +25,7 @@ PyTorch SDPA kernel provider.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKernelProvider(
+class aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider(
     backend: torch.nn.attention.SDPBackend = SDPBackend.FLASH_ATTENTION
 )
 ```
@@ -35,7 +35,7 @@ class aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKer
 
 <Indent>
 
-**Bases:** [KernelProvider](/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
+**Bases:** [KernelProvider](./kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider)
 
 Run PyTorch SDPA under a selected backend context.
 
@@ -52,7 +52,7 @@ Name of the function replaced by this provider.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKernelProvider":"#aitune-torch-kernel_forge-kernel_provider-torch_sdpa_provider-TorchSDPAKernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKernelProvider._from_dict(
+aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider._from_dict(
     state_dict: dict[str, typing.Any]
 ) -> aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKernelProvider
 ```
@@ -73,7 +73,7 @@ Restore the selected backend configuration.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKernelProvider._infer(
+aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider._infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -90,10 +90,10 @@ Run SDPA under the configured backend context.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_provider-torch_sdpa_provider-TorchSDPAKernelProvider-_prepare">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKernelProvider._prepare(
+aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider._prepare(
     samples: list[aitune.torch.module.sample_store.Sample]
 ) -> bool
 ```
@@ -112,7 +112,7 @@ Check whether the selected PyTorch SDPA backend supports every sample.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_provider.torch_sdpa_provider.TorchSDPAKernelProvider._to_dict() -> dict[str, typing.Any]
+aitune.torch.kernel_forge.kernel_provider.TorchSDPAKernelProvider._to_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>

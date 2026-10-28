@@ -26,7 +26,7 @@ Disk-backed sequence of recorded module inputs.
 
 <Anchor id="aitune-torch-module-sample_store-SampleStore">
 
-<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"/aitune/aitune/torch/checkpoint/artifact#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.checkpoint.artifact.ArtifactPath":"../checkpoint/artifact.mdx#aitune-torch-checkpoint-artifact-ArtifactPath"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.module.sample_store.SampleStore(
@@ -51,6 +51,19 @@ file at a time.
 ``iter_samples(device=...)`` restores CUDA-recorded tensors on the requested
 device. CPU-recorded tensors remain on CPU. Tuning consumers share the completed
 sample files and receive newly loaded sample objects.
+
+Example:
+    Create a store, append positional and keyword inputs, and read them back:
+
+    &gt;&gt;&gt; import tempfile
+    &gt;&gt;&gt; with tempfile.TemporaryDirectory() as directory:
+    ...     store = SampleStore.create(Path(directory), "samples")
+    ...     store.append(((torch.tensor([1.0]),), &#123;"scale": 2.0&#125;))
+    ...     len(store)
+    ...     args, kwargs = store[0]
+    ...     args[0] * kwargs["scale"]
+    1
+    tensor([2.])
 
 
 <Anchor id="aitune-torch-module-sample_store-SampleStore-__getitem__">

@@ -35,7 +35,7 @@ class aitune.torch.tune_strategy.min_latency_strategy.MinLatencyProfilingResult(
 
 <Badge>Dataclass</Badge>
 
-**Bases:** [BackendProfilingResult](/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult)
+**Bases:** [BackendProfilingResult](./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult)
 
 Profiling result for min-latency selection.
 
@@ -56,7 +56,7 @@ Returns latency as the comparison metric.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.tune_strategy.min_latency_strategy.MinLatencyStrategy(
+class aitune.torch.MinLatencyStrategy(
     args = (),
     kwargs = {}
 )
@@ -67,7 +67,7 @@ class aitune.torch.tune_strategy.min_latency_strategy.MinLatencyStrategy(
 
 <Indent>
 
-**Bases:** [ProfilingTuneStrategy](/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy)
+**Bases:** [ProfilingTuneStrategy](./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy)
 
 Searches and selects the backend with minimum latency at batch size 1.
 
@@ -93,10 +93,10 @@ and the strategy raises if all user backends fail.
 </ParamField>
 <Anchor id="aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy-_get_profiling_config">
 
-<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"../task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.min_latency_strategy.MinLatencyStrategy._get_profiling_config(
+aitune.torch.MinLatencyStrategy._get_profiling_config(
     batching: bool,
     max_batch_size: int
 ) -> aitune.torch.task.profiling.ProfilingConfig
@@ -111,10 +111,10 @@ aitune.torch.tune_strategy.min_latency_strategy.MinLatencyStrategy._get_profilin
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy-_is_better">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.min_latency_strategy.MinLatencyStrategy._is_better(
+aitune.torch.MinLatencyStrategy._is_better(
     result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
     other: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
 ) -> bool
@@ -129,10 +129,10 @@ aitune.torch.tune_strategy.min_latency_strategy.MinLatencyStrategy._is_better(
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy-_measure">
 
-<CodeBlock links={{"aitune.torch.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"/aitune/aitune/torch/task/profiling/config#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.min_latency_strategy.MinLatencyProfilingResult":"#aitune-torch-tune_strategy-min_latency_strategy-MinLatencyProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"../task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.min_latency_strategy.MinLatencyProfilingResult":"#aitune-torch-tune_strategy-min_latency_strategy-MinLatencyProfilingResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.min_latency_strategy.MinLatencyStrategy._measure(
+aitune.torch.MinLatencyStrategy._measure(
     backend: aitune.torch.backend.Backend,
     name: str,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
@@ -152,10 +152,10 @@ Profiles the backend at batch size 1 and returns latency.
 </Indent>
 <Anchor id="aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy-_speedup">
 
-<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"/aitune/aitune/torch/tune_strategy/profiling_tune_strategy#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.min_latency_strategy.MinLatencyStrategy._speedup(
+aitune.torch.MinLatencyStrategy._speedup(
     result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
     baseline_result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
 ) -> float

@@ -8,37 +8,1265 @@ Torch tune strategy module.
 
 ## Subpackages
 
-- **[`aitune.torch.tune_strategy.mixin`](/aitune/aitune/torch/tune_strategy/mixin)**
+- **[`aitune.torch.tune_strategy.mixin`](./mixin/index.mdx)**
 
 ## Submodules
 
-- **[`aitune.torch.tune_strategy.first_wins_strategy`](/aitune/aitune/torch/tune_strategy/first_wins_strategy)**
-- **[`aitune.torch.tune_strategy.formatting`](/aitune/aitune/torch/tune_strategy/formatting)**
-- **[`aitune.torch.tune_strategy.latency_budget_strategy`](/aitune/aitune/torch/tune_strategy/latency_budget_strategy)**
-- **[`aitune.torch.tune_strategy.max_throughput_strategy`](/aitune/aitune/torch/tune_strategy/max_throughput_strategy)**
-- **[`aitune.torch.tune_strategy.min_latency_strategy`](/aitune/aitune/torch/tune_strategy/min_latency_strategy)**
-- **[`aitune.torch.tune_strategy.multi_backend_strategy`](/aitune/aitune/torch/tune_strategy/multi_backend_strategy)**
-- **[`aitune.torch.tune_strategy.one_backend_strategy`](/aitune/aitune/torch/tune_strategy/one_backend_strategy)**
-- **[`aitune.torch.tune_strategy.performance_validation`](/aitune/aitune/torch/tune_strategy/performance_validation)**
-- **[`aitune.torch.tune_strategy.profiling_tune_strategy`](/aitune/aitune/torch/tune_strategy/profiling_tune_strategy)**
-- **[`aitune.torch.tune_strategy.tune_strategy`](/aitune/aitune/torch/tune_strategy/tune_strategy)**
+- **[`aitune.torch.tune_strategy.first_wins_strategy`](./first_wins_strategy.mdx)**
+- **[`aitune.torch.tune_strategy.formatting`](./formatting.mdx)**
+- **[`aitune.torch.tune_strategy.latency_budget_strategy`](./latency_budget_strategy.mdx)**
+- **[`aitune.torch.tune_strategy.max_throughput_strategy`](./max_throughput_strategy.mdx)**
+- **[`aitune.torch.tune_strategy.min_latency_strategy`](./min_latency_strategy.mdx)**
+- **[`aitune.torch.tune_strategy.multi_backend_strategy`](./multi_backend_strategy.mdx)**
+- **[`aitune.torch.tune_strategy.one_backend_strategy`](./one_backend_strategy.mdx)**
+- **[`aitune.torch.tune_strategy.performance_validation`](./performance_validation.mdx)**
+- **[`aitune.torch.tune_strategy.profiling_tune_strategy`](./profiling_tune_strategy.mdx)**
+- **[`aitune.torch.tune_strategy.resolver`](./resolver.mdx)**
+- **[`aitune.torch.tune_strategy.tune_strategy`](./tune_strategy.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-torch-tune_strategy-__all__)
+| Name | Description |
+|------|-------------|
+| [`Constraint`](#aitune-torch-tune_strategy-resolver-Constraint) | Describe one requirement that a tuning candidate must satisfy. |
+| [`FirstWinsStrategy`](#aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy) | Try backends in order and stop at the first that passes the configured checks. |
+| [`LatencyBudgetStrategy`](#aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy) | Searches for max throughput while satisfying a latency budget. |
+| [`MaxThroughputStrategy`](#aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy) | Searches and selects the backend with max throughput. |
+| [`MinLatencyStrategy`](#aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy) | Searches and selects the backend with minimum latency at batch size 1. |
+| [`OneBackendStrategy`](#aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy) | Strategy which uses just one provided backend. |
+| [`PerformanceValidationMode`](#aitune-torch-tune_strategy-performance_validation-PerformanceValidationMode) | Controls eager-baseline profiling and its effect on backend selection. |
+| [`TuneStrategy`](#aitune-torch-tune_strategy-tune_strategy-TuneStrategy) | Base class for tune strategy. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`resolve_strategy`](#aitune-torch-tune_strategy-resolver-resolve_strategy) | Declare a strategy whose backends will be resolved for each tuned module. |
 
 ### API
 
-<Anchor id="aitune-torch-tune_strategy-__all__">
+<Anchor id="aitune-torch-tune_strategy-resolver-Constraint">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.tune_strategy.__all__ = ['FirstWinsStrategy', 'LatencyBudgetStrategy', 'MaxThroughputStrategy', 'MinLate...
+class aitune.torch.Constraint()
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+**Bases:** `BaseModel`
+
+Describe one requirement that a tuning candidate must satisfy.
+
+
+<ParamField path="metric" type="Objective">
+</ParamField>
+
+<ParamField path="model_config" type="= ConfigDict(frozen=True, extra='forbid')">
+</ParamField>
+
+<ParamField path="relation" type="Relation">
+</ParamField>
+
+<ParamField path="unit" type="Unit = 'ms'">
+</ParamField>
+
+<ParamField path="value" type="PositiveFloat">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-resolver-Constraint-_metric_and_unit_validation">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.Constraint._metric_and_unit_validation() -> typing.Self
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Only 'latency' metric with 'ms' unit is supported for now.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-resolver-Constraint-max_latency_ms">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.Constraint.max_latency_ms(
+    milliseconds: float
+) -> typing.Self
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Require latency to be no greater than ``milliseconds``.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.FirstWinsStrategy(
+    backends: list[aitune.torch.backend.Backend],
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [PerformanceValidationMixin](./mixin/performance_validation_mixin.mdx#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin), [MultiBackendStrategy](./multi_backend_strategy.mdx#aitune-torch-tune_strategy-multi_backend_strategy-MultiBackendStrategy)
+
+Try backends in order and stop at the first that passes the configured checks.
+
+Backend order is a fallback policy, not a measured performance ranking. The
+caller supplies candidates directly or obtains them from the dynamic resolver.
+
+
+<Anchor id="aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy-_describe_parts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.FirstWinsStrategy._describe_parts() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the parts of the description.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy-_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.FirstWinsStrategy._tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tune a torch module with the provided graph specification and samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-first_wins_strategy-FirstWinsStrategy-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.FirstWinsStrategy.to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns config dict for first wins strategy.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.LatencyBudgetStrategy(
+    latency_budget_ms: float,
+    args = (),
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [ProfilingTuneStrategy](./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy)
+
+Searches for max throughput while satisfying a latency budget.
+
+Each backend is profiled across the configured batch-size sweep. For each backend,
+the strategy keeps only batch sizes whose mean latency is less than or equal to
+``latency_budget_ms``, then uses the highest-throughput remaining batch size as
+that backend's score. The selected backend is the one with maximum throughput
+among all latency-compliant candidates.
+
+TorchEager is profiled as a performance-validation baseline when validation is enabled.
+If no user-provided backend satisfies the latency budget, the strategy raises.
+
+
+<ParamField path="_description">
+</ParamField>
+
+<ParamField path="_metric_label" type="= 'throughput'">
+</ParamField>
+
+<ParamField path="_metric_unit" type="= 'samples/s'">
+</ParamField>
+
+<ParamField path="_title" type="= 'Latency Budget Strategy'">
+</ParamField>
+
+<ParamField path="_value_fmt" type="= '.2f'">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_describe_parts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.LatencyBudgetStrategy._describe_parts() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_get_profiling_config">
+
+<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"../task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.LatencyBudgetStrategy._get_profiling_config(
+    batching: bool,
+    max_batch_size: int
+) -> aitune.torch.task.profiling.ProfilingConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_is_better">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.LatencyBudgetStrategy._is_better(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    other: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_measure">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"../task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult":"#aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.LatencyBudgetStrategy._measure(
+    backend: aitune.torch.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    profiling_cfg: aitune.torch.task.profiling.ProfilingConfig
+) -> aitune.torch.tune_strategy.latency_budget_strategy.LatencyBudgetProfilingResult
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profiles the backend and returns the max-throughput result within the latency budget.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_resolve_winner">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy._TuneCandidate":"./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-_TuneCandidate"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.LatencyBudgetStrategy._resolve_winner(
+    best: aitune.torch.tune_strategy.profiling_tune_strategy._TuneCandidate | None
+) -> aitune.torch.tune_strategy.profiling_tune_strategy._TuneCandidate
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-_speedup">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.LatencyBudgetStrategy._speedup(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    baseline_result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-latency_budget_strategy-LatencyBudgetStrategy-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.LatencyBudgetStrategy.to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns config dict for the strategy.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.MaxThroughputStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [ProfilingTuneStrategy](./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy)
+
+Searches and selects the backend with max throughput.
+
+TorchEager is profiled in _pre_tune as a throughput baseline unless performance validation is disabled
+(not injected into the backends list). In enabled mode, the strategy falls back to TorchEager when no
+user-provided backend beats it. In diagnostic or disabled mode, the best user-provided backend wins,
+and the strategy raises if all user backends fail.
+
+Callers either supply candidates explicitly or use ``resolve_strategy()`` to
+select and configure candidates for each module.
+
+
+<ParamField path="_description">
+</ParamField>
+
+<ParamField path="_metric_label" type="= 'throughput'">
+</ParamField>
+
+<ParamField path="_metric_unit" type="= 'samples/s'">
+</ParamField>
+
+<ParamField path="_title" type="= 'Max Throughput Strategy'">
+</ParamField>
+
+<ParamField path="_value_fmt" type="= '.2f'">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy-_is_better">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.MaxThroughputStrategy._is_better(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    other: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy-_measure">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"../task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputProfilingResult":"#aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.MaxThroughputStrategy._measure(
+    backend: aitune.torch.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    profiling_cfg: aitune.torch.task.profiling.ProfilingConfig
+) -> aitune.torch.tune_strategy.max_throughput_strategy.MaxThroughputProfilingResult
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profiles the backend and returns throughput with the selected batch size.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-max_throughput_strategy-MaxThroughputStrategy-_speedup">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.MaxThroughputStrategy._speedup(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    baseline_result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.MinLatencyStrategy(
+    args = (),
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [ProfilingTuneStrategy](./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-ProfilingTuneStrategy)
+
+Searches and selects the backend with minimum latency at batch size 1.
+
+TorchEager is profiled in _pre_tune as a latency baseline unless performance validation is disabled
+(not injected into the backends list). In enabled mode, the strategy falls back to TorchEager when no
+user-provided backend beats it. In diagnostic or disabled mode, the best user-provided backend wins,
+and the strategy raises if all user backends fail.
+
+
+<ParamField path="_description">
+</ParamField>
+
+<ParamField path="_metric_label" type="= 'latency'">
+</ParamField>
+
+<ParamField path="_metric_unit" type="= 'ms'">
+</ParamField>
+
+<ParamField path="_title" type="= 'Min Latency Strategy'">
+</ParamField>
+
+<ParamField path="_value_fmt" type="= '.3f'">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy-_get_profiling_config">
+
+<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"../task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.MinLatencyStrategy._get_profiling_config(
+    batching: bool,
+    max_batch_size: int
+) -> aitune.torch.task.profiling.ProfilingConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy-_is_better">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.MinLatencyStrategy._is_better(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    other: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy-_measure">
+
+<CodeBlock links={{"aitune.torch.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore","aitune.torch.task.profiling.ProfilingConfig":"../task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig","aitune.torch.tune_strategy.min_latency_strategy.MinLatencyProfilingResult":"#aitune-torch-tune_strategy-min_latency_strategy-MinLatencyProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.MinLatencyStrategy._measure(
+    backend: aitune.torch.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    profiling_cfg: aitune.torch.task.profiling.ProfilingConfig
+) -> aitune.torch.tune_strategy.min_latency_strategy.MinLatencyProfilingResult
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Profiles the backend at batch size 1 and returns latency.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-min_latency_strategy-MinLatencyStrategy-_speedup">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult":"./profiling_tune_strategy.mdx#aitune-torch-tune_strategy-profiling_tune_strategy-BackendProfilingResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.MinLatencyStrategy._speedup(
+    result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult,
+    baseline_result: aitune.torch.tune_strategy.profiling_tune_strategy.BackendProfilingResult
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.OneBackendStrategy(
+    backend: aitune.torch.backend.backend.Backend,
+    kwargs = {}
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [PerformanceValidationMixin](./mixin/performance_validation_mixin.mdx#aitune-torch-tune_strategy-mixin-performance_validation_mixin-PerformanceValidationMixin), [FindMaxBatchSizeMixin](./mixin/find_max_batch_size_mixin.mdx#aitune-torch-tune_strategy-mixin-find_max_batch_size_mixin-FindMaxBatchSizeMixin)
+
+Strategy which uses just one provided backend.
+
+
+<Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy-_describe_parts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.OneBackendStrategy._describe_parts()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describes the tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy-_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.OneBackendStrategy._tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tune a torch module with the provided graph specification and samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-one_backend_strategy-OneBackendStrategy-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.OneBackendStrategy.to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns config dict for one backend strategy.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-performance_validation-PerformanceValidationMode">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.PerformanceValidationMode
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Controls eager-baseline profiling and its effect on backend selection.
+
+<ParamField path="DIAGNOSTIC" type="= 'diagnostic'">
+</ParamField>
+
+<ParamField path="DISABLED" type="= 'disabled'">
+</ParamField>
+
+<ParamField path="ENABLED" type="= 'enabled'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy">
+
+<CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"../task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.TuneStrategy(
+    sink: collections.abc.Callable | None = None,
+    profiling_config: aitune.torch.task.profiling.ProfilingConfig | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Abstract</Badge>
+
+Base class for tune strategy.
+
+Note:
+    Correctness checking is enabled by default. If profiling_config is None, the strategy uses a default
+    ProfilingConfig.
+
+
+<ParamField path="_logger" type="Logger">
+Get a logger specific to this backend implementation.
+</ParamField>
+
+<ParamField path="_sink" type="= sink or self._logger.info">
+</ParamField>
+
+<ParamField path="profiling_config">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_build_and_validate_backend">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._build_and_validate_backend(
+    backend: aitune.torch.backend.backend.Backend,
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path,
+    raise_on_failure: bool = False
+) -> aitune.torch.backend.backend.Backend | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build and validate a backend with standardized error handling and logging.
+
+This method encapsulates the common workflow shared by all strategies:
+deep-copy the backend, build it, run correctness checks, and handle failures.
+
+**Parameters:**
+
+<ParamField path="backend" type="Backend">
+[`Backend`](../backend/backend.mdx#aitune-torch-backend-backend-Backend) — Backend to build (will be deep copied).
+</ParamField>
+
+<ParamField path="module" type="nn.Module">
+Module to tune.
+</ParamField>
+
+<ParamField path="name" type="str">
+Module name.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Graph specification.
+</ParamField>
+
+<ParamField path="samples" type="SampleStore">
+[`SampleStore`](../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore) — Recorded samples.
+</ParamField>
+
+<ParamField path="device" type="torch.device">
+Target device.
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+Cache directory for this module/graph.
+</ParamField>
+
+<ParamField path="raise_on_failure" type="bool" default="False">
+If True, re-raise the original exception instead of returning None.
+</ParamField>
+
+**Returns:** [`Backend`](../backend/backend.mdx#aitune-torch-backend-backend-Backend) `| None`
+
+The built and validated backend, or None on failure.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_check_correctness">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._check_correctness(
+    backend: aitune.torch.backend.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run correctness checks for a built backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_configure_for_module">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._configure_for_module(
+    module: torch.nn.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve any module-dependent defaults before reporting or tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_count_layers">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._count_layers(
+    module: torch.nn.Module
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_describe">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._describe(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path,
+    dry_run: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describes the tune strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_describe_parts">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._describe_parts() -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Returns the parts of the description.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_layers_precisions">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._layers_precisions(
+    module: torch.nn.Module
+) -> set
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Get the layers precisions of the module and return a set of unique precisions.
+
+**Returns:** `set`
+
+Set of unique precisions
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_log_file">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._log_file(
+    cache_dir: pathlib.Path,
+    filename: str
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_post_tune">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._post_tune(
+    backend: aitune.torch.backend.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post-tune hook. Override to add custom logic after tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_pre_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._pre_tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Pre-tune hook. Override to add custom logic before tuning.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_profiling_config_to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._profiling_config_to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns a JSON-serializable summary of the shared profiling config.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-_tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy._tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Tune a torch module with the provided graph specification and samples.
+
+Note: each tuning operation should do a deep copy of a backend as tuning could be called multiple times for the
+same module i.e. if there are different graph specs
+
+**Returns:** [`Backend`](../backend/backend.mdx#aitune-torch-backend-backend-Backend)
+
+The tuned and activated backend.
+
+**Raises:**
+
+- `RuntimeError`: if the backend fails any check.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-check_correctness">
+
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy.check_correctness(
+    backend: aitune.torch.backend.backend.Backend,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check outputs for NaN/inf.
+
+**Parameters:**
+
+<ParamField path="backend" type="Backend">
+[`Backend`](../backend/backend.mdx#aitune-torch-backend-backend-Backend) — The backend to check.
+</ParamField>
+
+<ParamField path="name" type="str">
+The name of the module.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — The graph spec of the module.
+</ParamField>
+
+<ParamField path="samples" type="SampleStore">
+[`SampleStore`](../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore) — Recorded samples to check.
+</ParamField>
+
+**Raises:**
+
+- `CorrectnessCheckError`: if the backend fails any check.
+
+<Note>
+
+This method is should be called by the _tune method to check the correctness of the backend.
+
+You can disable correctness check by calling `enable_correctness_check(False)`.
+
+</Note>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-clone">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy.clone() -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Clones the tune strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describes what strategy is doing.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-enable_correctness_check">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy.enable_correctness_check(
+    enable: bool = True
+) -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enable/disable correctness checking.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy.to_json_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>abstract</Badge>
+
+Returns a serializable dict describing this strategy's configuration.
+
+Each concrete strategy includes whichever settings are relevant
+(e.g. backend list, profiling parameters).  The dict must be
+JSON-serializable so it can be stored on tune-data events.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-tune">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy.tune(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+) -> aitune.torch.backend.backend.Backend
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Tune a torch module with the provided graph specification and samples.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy-tune_dry_run">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.TuneStrategy.tune_dry_run(
+    module: torch.nn.Module,
+    name: str,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    device: torch.device,
+    cache_dir: pathlib.Path
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Performs tune dry run.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-resolver-resolve_strategy">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.resolver.Objective":"#aitune-torch-tune_strategy-resolver-Objective","aitune.torch.tune_strategy.resolver.Compilation":"#aitune-torch-tune_strategy-resolver-Compilation","aitune.torch.tune_strategy.resolver.Constraint":"#aitune-torch-tune_strategy-resolver-Constraint","aitune.torch.tune_strategy.resolver.DynamicTuneStrategy":"#aitune-torch-tune_strategy-resolver-DynamicTuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.resolve_strategy(
+    objective: aitune.torch.tune_strategy.resolver.Objective = 'throughput',
+    compilation: aitune.torch.tune_strategy.resolver.Compilation = 'any',
+    constraints: collections.abc.Sequence[aitune.torch.tune_strategy.resolver.Constraint] = ()
+) -> aitune.torch.tune_strategy.resolver.DynamicTuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Declare a strategy whose backends will be resolved for each tuned module.
+
+**Parameters:**
+
+<ParamField path="objective" type="Objective" default="'throughput'">
+[`Objective`](#aitune-torch-tune_strategy-resolver-Objective) — Performance metric to optimize: throughput or latency.
+</ParamField>
+
+<ParamField path="compilation" type="Compilation" default="'any'">
+[`Compilation`](#aitune-torch-tune_strategy-resolver-Compilation) — Allow ahead-of-time, just-in-time, or any supported backend build mode.
+</ParamField>
+
+<ParamField path="constraints" type="Sequence[Constraint]" default="()">
+`Sequence[` [`Constraint`](#aitune-torch-tune_strategy-resolver-Constraint) `]` — Limits that candidates must satisfy while optimizing the objective.
+</ParamField>
+
+**Returns:** [`DynamicTuneStrategy`](#aitune-torch-tune_strategy-resolver-DynamicTuneStrategy)
+
+A dynamic strategy configuration suitable for AOT and JIT tuning.
+
+
+</Indent>

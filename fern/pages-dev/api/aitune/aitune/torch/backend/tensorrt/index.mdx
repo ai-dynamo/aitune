@@ -12,34 +12,1779 @@ export, TensorRT engine building, and runtime inference.
 
 ## Submodules
 
-- **[`aitune.torch.backend.tensorrt.cuda_graphs`](/aitune/aitune/torch/backend/tensorrt/cuda_graphs)**
-- **[`aitune.torch.backend.tensorrt.modelopt_calibration`](/aitune/aitune/torch/backend/tensorrt/modelopt_calibration)**
-- **[`aitune.torch.backend.tensorrt.onnx_autocast`](/aitune/aitune/torch/backend/tensorrt/onnx_autocast)**
-- **[`aitune.torch.backend.tensorrt.onnx_quantization`](/aitune/aitune/torch/backend/tensorrt/onnx_quantization)**
-- **[`aitune.torch.backend.tensorrt.tensorrt_backend`](/aitune/aitune/torch/backend/tensorrt/tensorrt_backend)**
-- **[`aitune.torch.backend.tensorrt.tensorrt_builder`](/aitune/aitune/torch/backend/tensorrt/tensorrt_builder)**
-- **[`aitune.torch.backend.tensorrt.tensorrt_engine_info`](/aitune/aitune/torch/backend/tensorrt/tensorrt_engine_info)**
-- **[`aitune.torch.backend.tensorrt.tensorrt_profile`](/aitune/aitune/torch/backend/tensorrt/tensorrt_profile)**
-- **[`aitune.torch.backend.tensorrt.tensorrt_runtime`](/aitune/aitune/torch/backend/tensorrt/tensorrt_runtime)**
-- **[`aitune.torch.backend.tensorrt.torch_output_allocator`](/aitune/aitune/torch/backend/tensorrt/torch_output_allocator)**
-- **[`aitune.torch.backend.tensorrt.torch_quantization`](/aitune/aitune/torch/backend/tensorrt/torch_quantization)**
+- **[`aitune.torch.backend.tensorrt.cuda_graphs`](./cuda_graphs.mdx)**
+- **[`aitune.torch.backend.tensorrt.modelopt_calibration`](./modelopt_calibration.mdx)**
+- **[`aitune.torch.backend.tensorrt.onnx_autocast`](./onnx_autocast.mdx)**
+- **[`aitune.torch.backend.tensorrt.onnx_quantization`](./onnx_quantization.mdx)**
+- **[`aitune.torch.backend.tensorrt.tensorrt_backend`](./tensorrt_backend.mdx)**
+- **[`aitune.torch.backend.tensorrt.tensorrt_builder`](./tensorrt_builder.mdx)**
+- **[`aitune.torch.backend.tensorrt.tensorrt_engine_info`](./tensorrt_engine_info.mdx)**
+- **[`aitune.torch.backend.tensorrt.tensorrt_profile`](./tensorrt_profile.mdx)**
+- **[`aitune.torch.backend.tensorrt.tensorrt_runtime`](./tensorrt_runtime.mdx)**
+- **[`aitune.torch.backend.tensorrt.torch_output_allocator`](./torch_output_allocator.mdx)**
+- **[`aitune.torch.backend.tensorrt.torch_quantization`](./torch_quantization.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-torch-backend-tensorrt-__all__)
+| Name | Description |
+|------|-------------|
+| [`ONNXAutoCastConfig`](#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig) | Configuration for mixed precision quantization. |
+| [`ONNXQuantizationConfig`](#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig) | Configuration for ONNX quantization. |
+| [`TensorRTBackend`](#aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend) | TensorRT backend for model acceleration. |
+| [`TensorRTBackendConfig`](#aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackendConfig) | Configuration for TensorRT backend. |
+| [`TensorRTProfile`](#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile) | Class for representing a TensorRT optimization profile. |
+| [`TensorRTProfileMode`](#aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTProfileMode) | Mode how TRT optimization profiles will be generated for TensorRT engine. |
+| [`TorchQuantizationConfig`](#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig) | Configuration for Torch quantization. |
 
 ### API
 
-<Anchor id="aitune-torch-backend-tensorrt-__all__">
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_autocast.MixedPrecision":"#aitune-torch-backend-tensorrt-onnx_autocast-MixedPrecision"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.__all__ = ['TensorRTBackend', 'TensorRTBackendConfig', 'TensorRTProfile', 'ProfileMode', '...
+class aitune.torch.backend.ONNXAutoCastConfig(
+    precision: aitune.torch.backend.tensorrt.onnx_autocast.MixedPrecision = 'fp16',
+    keep_io_types: bool = True
+)
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configuration for mixed precision quantization.
+
+**Parameters:**
+
+<ParamField path="precision" type="MixedPrecision" default="'fp16'">
+[`MixedPrecision`](#aitune-torch-backend-tensorrt-onnx_autocast-MixedPrecision) — Mixed precision quantization precision ("fp16", "bf16")
+</ParamField>
+
+
+<ParamField path="keep_io_types" type="bool = True">
+</ParamField>
+
+<ParamField path="precision" type="MixedPrecision = 'fp16'">
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.ONNXAutoCastConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate precision after initialization.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.ONNXAutoCastConfig.from_dict(
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Convert dict to MixedPrecisionConfig.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_quantization.QuantizationPrecision":"#aitune-torch-backend-tensorrt-onnx_quantization-QuantizationPrecision","aitune.torch.backend.tensorrt.onnx_quantization.CalibrationMethod":"#aitune-torch-backend-tensorrt-onnx_quantization-CalibrationMethod"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.ONNXQuantizationConfig(
+    precision: aitune.torch.backend.tensorrt.onnx_quantization.QuantizationPrecision,
+    calibration_method: aitune.torch.backend.tensorrt.onnx_quantization.CalibrationMethod | None = None,
+    use_model_opt_post_processing: bool = False
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configuration for ONNX quantization.
+
+**Parameters:**
+
+<ParamField path="precision" type="QuantizationPrecision">
+[`QuantizationPrecision`](#aitune-torch-backend-tensorrt-onnx_quantization-QuantizationPrecision) — Quantization precision ("int8", "fp8", "int4")
+</ParamField>
+
+<ParamField path="calibration_method" type="CalibrationMethod | None" default="None">
+[`CalibrationMethod`](#aitune-torch-backend-tensorrt-onnx_quantization-CalibrationMethod) `| None` — Calibration method to use ("max", "entropy", "awq_clip", "awq_lite", "awq_full", "rtn_dq")
+</ParamField>
+
+<ParamField path="use_model_opt_post_processing" type="bool" default="False">
+Whether to apply ModelOpt post-processing to the quantized model
+</ParamField>
+
+
+<ParamField path="calibration_method" type="CalibrationMethod | None = None">
+</ParamField>
+
+<ParamField path="precision" type="QuantizationPrecision">
+</ParamField>
+
+<ParamField path="use_model_opt_post_processing" type="bool = False">
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.ONNXQuantizationConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate precision and calibration_method after initialization.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.ONNXQuantizationConfig.from_dict(
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Convert dict to ONNXQuantizationConfig.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBackendConfig":"#aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.TensorRTBackend(
+    config: aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBackendConfig | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** [Backend[TensorRTBackendConfig]](../backend.mdx#aitune-torch-backend-backend-Backend)
+
+TensorRT backend for model acceleration.
+
+This class builds and runs TensorRT engines from PyTorch models or existing OnnxModule graphs.
+Torch models are exported to ONNX; OnnxModule uses its source path directly.
+
+
+<ParamField path="STATE_CONFIG" type="= 'config'">
+</ParamField>
+
+<ParamField path="STATE_DEVICE" type="= 'device'">
+</ParamField>
+
+<ParamField path="STATE_ENGINE_PATH" type="= 'engine_path'">
+</ParamField>
+
+<ParamField path="STATE_GRAPH_SPEC" type="= 'graph_spec'">
+</ParamField>
+
+<ParamField path="STATE_OUTPUT_OBJECT" type="= 'output_object'">
+</ParamField>
+
+<ParamField path="STATE_QUANTIZATION_CONFIG" type="= 'quantization_config'">
+</ParamField>
+
+<ParamField path="STATE_SAMPLES" type="= 'samples'">
+</ParamField>
+
+<ParamField path="STATE_TRT_OPTIMIZATION_PROFILES_PATH" type="= 'trt_optimization_profiles_path'">
+</ParamField>
+
+<ParamField path="STATE_TYPE" type="= 'type'">
+</ParamField>
+
+<ParamField path="STATE_USE_CUDA_GRAPHS" type="= 'use_cuda_graphs'">
+</ParamField>
+
+<ParamField path="_build_mode" type="= BuildMode.AHEAD_OF_TIME">
+</ParamField>
+
+<ParamField path="_cuda_graphs" type="= TensorRTCudaGraphCache()">
+</ParamField>
+
+<ParamField path="_devices" type="list[str] = ['cuda']">
+</ParamField>
+
+<ParamField path="_engine_artifact" type="ArtifactPath | None = None">
+</ParamField>
+
+<ParamField path="_execution_modes" type="= frozenset(&#123;ExecutionMode.SINGLE_GPU&#125;)">
+</ParamField>
+
+<ParamField path="_samples" type="Sequence[Sample] | None = None">
+</ParamField>
+
+<ParamField path="_supported_modules" type="= frozenset(&#123;ModuleFormat.TORCH, ModuleFormat.ONNX&#125;)">
+</ParamField>
+
+<ParamField path="_trt_optimization_profiles" type="list[Profile] = []">
+</ParamField>
+
+<ParamField path="_trt_optimization_profiles_artifact" type="ArtifactPath | None = None">
+</ParamField>
+
+<ParamField path="_use_cuda_graphs" type="bool">
+Use graphs only for fixed-shape profiles, until capture fails for this instance.
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_activate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._activate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Activate the TensorRT engine.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_artifact_profile_shapes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._artifact_profile_shapes(
+    name: str,
+    shape_range: typing.Any
+) -> dict[str, tuple[int, ...]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Validate and copy a Polygraphy shape range into portable metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_artifact_profiles">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._artifact_profiles() -> tuple[dict[str, dict[str, tuple[int, ...]]], ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Describe exact profile ranges as plain data in engine input order.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_artifact_sample_inputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._artifact_sample_inputs() -> tuple[aitune.records.TensorSample, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Derive portable values from the first recorded sample.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_build">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._build(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: aitune.torch.module.sample_store.SampleStore,
+    cache_dir: pathlib.Path
+) -> typing.Self
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the TensorRT model.
+
+This method will export the module to ONNX and build a TensorRT engine from it using Polygraphy.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The module to build the TensorRT model for.
+</ParamField>
+
+<ParamField path="name" type="str">
+The name of the model.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — The graph spec of the model.
+</ParamField>
+
+<ParamField path="samples" type="SampleStore">
+[`SampleStore`](../../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore) — Recorded samples for the model.
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+The cache directory to store the TensorRT model.
+</ParamField>
+
+**Returns:** `Self`
+
+The backend with built TensorRT model.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_build_modelopt_onnx">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig":"./onnx_quantization.mdx#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._build_modelopt_onnx(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: collections.abc.Sequence[aitune.torch.module.sample_store.Sample],
+    cache_dir: pathlib.Path,
+    quantization_config: aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the TensorRT model ModelOpt ONNX quantization.
+
+This method will export the module to ONNX, quantize the exported model using ModelOpt ONNX quantization and build a TensorRT engine from it using Polygraphy.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The module to build the TensorRT model for.
+</ParamField>
+
+<ParamField path="name" type="str">
+The name of the model.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — The graph spec of the model.
+</ParamField>
+
+<ParamField path="samples" type="Sequence[Sample]">
+`Sequence[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — Recorded samples for the model.
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+The cache directory to store the TensorRT model.
+</ParamField>
+
+<ParamField path="quantization_config" type="ONNXQuantizationConfig">
+[`ONNXQuantizationConfig`](./onnx_quantization.mdx#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig) — The quantization configuration.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_build_modelopt_onnx_autocast">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig":"./onnx_autocast.mdx#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._build_modelopt_onnx_autocast(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: collections.abc.Sequence[aitune.torch.module.sample_store.Sample],
+    cache_dir: pathlib.Path,
+    quantization_config: aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the TensorRT model.
+
+This method will export the module to ONNX and build a TensorRT engine from it using Polygraphy.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The module to build the TensorRT model for.
+</ParamField>
+
+<ParamField path="name" type="str">
+The name of the model.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — The graph spec of the model.
+</ParamField>
+
+<ParamField path="samples" type="Sequence[Sample]">
+`Sequence[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — Recorded samples for the model.
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+The cache directory to store the TensorRT model.
+</ParamField>
+
+<ParamField path="quantization_config" type="ONNXAutoCastConfig">
+[`ONNXAutoCastConfig`](./onnx_autocast.mdx#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig) — The quantization configuration.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_build_modelopt_torch">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig":"./torch_quantization.mdx#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._build_modelopt_torch(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: collections.abc.Sequence[aitune.torch.module.sample_store.Sample],
+    cache_dir: pathlib.Path,
+    quantization_config: aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the TensorRT model  ModelOpt torch quantization.
+
+This method will quantize module using ModelOpt torch quantization, export the quantized model to ONNX and build a TensorRT engine from it using Polygraphy.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The module to build the TensorRT model for.
+</ParamField>
+
+<ParamField path="name" type="str">
+The name of the model.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — The graph spec of the model.
+</ParamField>
+
+<ParamField path="samples" type="Sequence[Sample]">
+`Sequence[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — Recorded samples for the model.
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+The cache directory to store the TensorRT model.
+</ParamField>
+
+<ParamField path="quantization_config" type="TorchQuantizationConfig">
+[`TorchQuantizationConfig`](./torch_quantization.mdx#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig) — The quantization configuration.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_build_standard">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._build_standard(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: collections.abc.Sequence[aitune.torch.module.sample_store.Sample],
+    cache_dir: pathlib.Path
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the TensorRT model.
+
+This method will export the module to ONNX and build a TensorRT engine from it using Polygraphy.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The module to build the TensorRT model for.
+</ParamField>
+
+<ParamField path="name" type="str">
+The name of the model.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — The graph spec of the model.
+</ParamField>
+
+<ParamField path="samples" type="Sequence[Sample]">
+`Sequence[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — Recorded samples for the model.
+</ParamField>
+
+<ParamField path="cache_dir" type="Path">
+The cache directory to store the TensorRT model.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_create_artifact">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._create_artifact() -> aitune.records.DeploymentArtifact
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create an artifact from the saved engine interface and recorded bounds.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_create_output_allocator">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._create_output_allocator(
+    context
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Attach an independent output allocator to an execution context.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_deactivate">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._deactivate()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deactivate the TensorRT engine.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_deploy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._deploy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Deploys the backend.
+
+After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_execute_engine">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._execute_engine()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Execute TensorRT normally, propagating engine execution failures.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_export_onnx">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._export_onnx(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    sample: aitune.torch.module.sample_store.Sample,
+    cache_dir: pathlib.Path,
+    suffix: str = ''
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export Torch or copy an ONNX graph and its external weights into the backend cache.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_find_optimization_profile">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._find_optimization_profile(
+    inputs: dict[str, torch.Tensor]
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Find the first matching profile, including validation for a single profile.
+
+**Parameters:**
+
+<ParamField path="inputs" type="dict[str, torch.Tensor]">
+Dictionary mapping input names to tensors
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_get_output_object">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._get_output_object(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the output object from the module and sample.
+
+Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
+the output object.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+PyTorch module
+</ParamField>
+
+<ParamField path="sample" type="Sample">
+[`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Sample input to use for model inference.
+</ParamField>
+
+**Returns:** `Any`
+
+The output object from the module.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_get_profiles_from_shapes">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._get_profiles_from_shapes(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> list[polygraphy.backend.trt.Profile]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create TensorRT optimization profiles.
+
+**Returns:** `list[Profile]`
+
+List of Polygraphy Profile objects
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_get_shapes">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._get_shapes(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> tuple[dict[str, tuple[int, ...]], dict[str, tuple[int, ...]], dict[str, tuple[int, ...]]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get the shapes for the input tensors.
+
+**Parameters:**
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Input graph spec
+</ParamField>
+
+**Returns:** `tuple[dict[str, tuple[int, ...]], dict[str, tuple[int, ...]], dict[str, tuple[int, ...]]]`
+
+Tuple of dictionaries of minimum, optimal, and maximum input shapes
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_get_user_profiles">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"./tensorrt_profile.mdx#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._get_user_profiles(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    user_profiles: list[aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile]
+) -> list[polygraphy.backend.trt.Profile]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve public profile paths to graph tensor names and validate the bindings.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_infer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._infer(
+    args: typing.Any = (),
+    kwargs: typing.Any = {}
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Infer using the TensorRT engine.
+
+**Parameters:**
+
+<ParamField path="*args" type="Any" default="()">
+Input tensors
+</ParamField>
+
+<ParamField path="**kwargs" type="Any" default="&#123;&#125;">
+Named input tensors
+</ParamField>
+
+**Returns:** `Any`
+
+Model outputs
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_load_trt_optimization_profiles">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._load_trt_optimization_profiles(
+    trt_optimization_profiles_path: pathlib.Path
+) -> list[polygraphy.backend.trt.Profile]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Load the TensorRT optimization profiles from a file.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_prepare_inputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._prepare_inputs(
+    args,
+    kwargs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare input tensors from args and kwargs.
+
+**Parameters:**
+
+<ParamField path="args">
+Positional input tensors
+</ParamField>
+
+<ParamField path="kwargs">
+Named input tensors
+</ParamField>
+
+**Returns:**
+
+Dictionary mapping input names to tensors
+
+**Raises:**
+
+- `ValueError`: If inputs are missing or incorrect
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_prepare_onnx_model_path">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._prepare_onnx_model_path(
+    cache_dir: pathlib.Path,
+    suffix: str = ''
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare the ONNX model path.
+
+**Parameters:**
+
+<ParamField path="cache_dir" type="Path">
+The cache directory to store the ONNX model.
+</ParamField>
+
+<ParamField path="suffix" type="str" default="''">
+The suffix of the ONNX model.
+</ParamField>
+
+**Returns:** `Path`
+
+The ONNX model path
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_prepare_outputs_for_return">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._prepare_outputs_for_return() -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare the outputs for return.
+
+This method will prepare the outputs for return according to the original model's output structure.
+Tensors are retrieved from the output allocator with correct shapes.
+
+**Returns:** `Any`
+
+The outputs in the same format as the original model.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_prepare_trt_engine_path">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._prepare_trt_engine_path(
+    cache_dir: pathlib.Path
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare the TensorRT engine path.
+
+**Parameters:**
+
+<ParamField path="cache_dir" type="Path">
+The cache directory to store the TensorRT model.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_prepare_trt_optimization_profiles_path">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._prepare_trt_optimization_profiles_path(
+    cache_dir: pathlib.Path
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare the TensorRT optimization profiles path.
+
+**Parameters:**
+
+<ParamField path="cache_dir" type="Path">
+The cache directory to store the TensorRT optimization profiles.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_save_trt_optimization_profiles">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._save_trt_optimization_profiles(
+    optimization_profiles: list[polygraphy.backend.trt.Profile],
+    cache_dir: pathlib.Path
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Save the TensorRT optimization profiles to a file.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_set_input_tensors">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._set_input_tensors(
+    inputs
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set shapes and memory addresses for input tensors.
+
+**Parameters:**
+
+<ParamField path="inputs">
+Dictionary mapping input names to tensors
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_set_optimization_profiles">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._set_optimization_profiles(
+    inputs: dict[str, torch.Tensor]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select an ordinary context or the static profile's cached graph context.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_timing_cache_path">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._timing_cache_path() -> pathlib.Path | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return a timing cache path that is safe for this process.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_validate_artifact_profile_input_bounds">
+
+<CodeBlock links={{"aitune.records.BoundedTensorSpec":"../../../records/shapes.mdx#aitune-records-shapes-BoundedTensorSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._validate_artifact_profile_input_bounds(
+    inputs: tuple[aitune.records.BoundedTensorSpec, ...],
+    profiles: tuple[dict[str, dict[str, tuple[int, ...]]], ...]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Require TensorRT input profiles to stay within recorded input bounds.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-artifact">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend.artifact() -> aitune.records.DeploymentArtifact
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create the deployment record on request, including after deactivation.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-describe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend.describe() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the description of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend.from_dict(
+    module: torch.nn.Module | None,
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Creates a backend from a state_dict.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-get_profiles">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend.get_profiles(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    samples: collections.abc.Sequence[aitune.torch.module.sample_store.Sample]
+) -> list[polygraphy.backend.trt.Profile]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create profiles from samples or from graph_spec.
+
+If self._config.profiles is a list, return the user provided profiles.
+If self._config.profiles is TensorRTProfileMode.SINGLE, create a single profile from the graph spec.
+If self._config.profiles is TensorRTProfileMode.SAMPLES_USED, create exact profiles from samples and a wide fallback
+for the graph's shape range, including the discovered maximum batch size.
+Explicit module shape definitions always produce a single authoritative profile and cannot be combined with
+user-provided TensorRT profiles.
+
+**Parameters:**
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Input graph spec
+</ParamField>
+
+<ParamField path="samples" type="Sequence[Sample]">
+`Sequence[` [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]` — Recorded samples for the model.
+</ParamField>
+
+**Returns:** `list[Profile]`
+
+List of The Polygraphy Profile objects
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend.key() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the key of the backend.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend.to_dict()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Returns the state_dict of the backend.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackendConfig">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTProfileMode":"#aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTProfileMode","aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"./tensorrt_profile.mdx#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile","aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig":"./onnx_autocast.mdx#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig","aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig":"./onnx_quantization.mdx#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig","aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig":"./torch_quantization.mdx#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig","aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphCachePolicy":"./cuda_graphs.mdx#aitune-torch-backend-tensorrt-cuda_graphs-CudaGraphCachePolicy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.TensorRTBackendConfig(
+    use_dynamo: bool = True,
+    workspace_size: int | None = None,
+    opset_version: int | None = None,
+    optimization_level: int | None = None,
+    compatibility_level: int | None = None,
+    timing_cache: pathlib.Path | None = None,
+    profiles: aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTProfileMode | list[aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile] = TensorRTProfileMode.SINGLE,
+    device: str = 'cuda',
+    quantization_config: aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig | aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig | aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig | None = None,
+    enable_tf32: bool = True,
+    use_cuda_graphs: bool = True,
+    max_cuda_graphs: int = 8,
+    cuda_graph_cache_policy: aitune.torch.backend.tensorrt.cuda_graphs.CudaGraphCachePolicy = 'lfu'
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+**Bases:** [BackendConfig](../backend.mdx#aitune-torch-backend-backend-BackendConfig)
+
+Configuration for TensorRT backend.
+
+
+<ParamField path="compatibility_level" type="int | None = None">
+The compatibility level for the TensorRT engine.
+</ParamField>
+
+<ParamField path="cuda_graph_cache_policy" type="CudaGraphCachePolicy = 'lfu'">
+Aged LFU admission and eviction by default, or unconditional LRU admission.
+</ParamField>
+
+<ParamField path="device" type="str = 'cuda'">
+The device to use for the TensorRT engine.
+</ParamField>
+
+<ParamField path="enable_tf32" type="bool = True">
+Whether to enable TF32 hardware acceleration.
+</ParamField>
+
+<ParamField path="max_cuda_graphs" type="int = 8">
+Maximum cached CUDA graphs per backend.
+</ParamField>
+
+<ParamField path="opset_version" type="int | None = None">
+The ONNX opset version to use for export.
+</ParamField>
+
+<ParamField path="optimization_level" type="int | None = None">
+The optimization level for the TensorRT engine.
+</ParamField>
+
+<ParamField path="profiles" type="TensorRTProfileMode | list[TensorRTProfile] = TensorRTProfileMode.SINGLE">
+How TensorRT optimization profiles are generated.
+- SINGLE: auto-generate a single profile from the graph spec (default).
+- SAMPLES_USED: use exact sample profiles and a wide fallback for unrecorded shapes.
+- list[TensorRTProfile]: use user-provided profiles directly.
+</ParamField>
+
+<ParamField path="quantization_config" type="ONNXAutoCastConfig | ONNXQuantizationConfig | TorchQuantizationConfig | None = None">
+The quantization configuration for the TensorRT engine.
+</ParamField>
+
+<ParamField path="timing_cache" type="Path | None = None">
+The path to the timing cache for the TensorRT engine.
+</ParamField>
+
+<ParamField path="use_cuda_graphs" type="bool = True">
+Cache CUDA graphs for static profiles (enabled by default), falling back on capture failure.
+</ParamField>
+
+<ParamField path="use_dynamo" type="bool = True">
+Whether to use torch.dynamo for export.
+</ParamField>
+
+<ParamField path="workspace_size" type="int | None = None">
+The workspace size for the TensorRT engine.
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackendConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackendConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate the graph cache capacity and policy.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackendConfig-from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBackendConfig":"#aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackendConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackendConfig.from_dict(
+    data: dict
+) -> aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTBackendConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Initialise config from a plain dict (e.g. parsed from YAML).
+
+``profiles`` may be passed as a string (``TensorRTProfileMode`` value) or a
+list of profile dicts and will be reconstructed automatically.
+``quantization_config`` may be passed as a dict with a ``_type`` key
+(produced by ``to_dict()``) and will be reconstructed automatically.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackendConfig-profiles_from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTProfileMode":"#aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTProfileMode","aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"./tensorrt_profile.mdx#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackendConfig.profiles_from_dict(
+    data: str | list[dict]
+) -> aitune.torch.backend.tensorrt.tensorrt_backend.TensorRTProfileMode | list[aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Convert dict to list of TensorRTProfile.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackendConfig-quantization_config_from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig":"./onnx_autocast.mdx#aitune-torch-backend-tensorrt-onnx_autocast-ONNXAutoCastConfig","aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig":"./onnx_quantization.mdx#aitune-torch-backend-tensorrt-onnx_quantization-ONNXQuantizationConfig","aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig":"./torch_quantization.mdx#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackendConfig.quantization_config_from_dict(
+    data: dict
+) -> aitune.torch.backend.tensorrt.onnx_autocast.ONNXAutoCastConfig | aitune.torch.backend.tensorrt.onnx_quantization.ONNXQuantizationConfig | aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Reconstruct a quantization config from a dict produced by ``to_dict()``.
+
+The dict must contain a ``_type`` key with the class name.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackendConfig-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackendConfig.to_dict() -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert TensorRTBackendConfig to dictionary.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.TensorRTProfile()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Class for representing a TensorRT optimization profile.
+
+This class provides an interface for defining optimization profiles
+for TensorRT engines with dynamic shapes.
+
+
+<ParamField path="_profile" type="= Profile()">
+</ParamField>
+
+<ParamField path="profile" type="Profile">
+Get the underlying Polygraphy Profile.
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-__eq__">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTProfile.__eq__(
+    other: aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Check if two TensorRTProfiles are equal.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-__hash__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTProfile.__hash__() -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Hash the TensorRTProfile.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-__repr__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTProfile.__repr__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the official string representation of the profile.
+
+**Returns:** `str`
+
+Official string representation
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-__str__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTProfile.__str__() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return string representation of the profile.
+
+**Returns:** `str`
+
+String representation
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-add_input_shape">
+
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardInputPath":"../../module/forward_signature.mdx#aitune-torch-module-forward_signature-ForwardInputPath","aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTProfile.add_input_shape(
+    path: aitune.torch.module.forward_signature.ForwardInputPath,
+    min_shape: tuple[int, ...],
+    opt_shape: tuple[int, ...],
+    max_shape: tuple[int, ...]
+) -> aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Add a shape binding to the profile.
+
+**Parameters:**
+
+<ParamField path="path" type="ForwardInputPath">
+[`ForwardInputPath`](../../module/forward_signature.mdx#aitune-torch-module-forward_signature-ForwardInputPath) — Forward parameter path identifying the input tensor
+</ParamField>
+
+<ParamField path="min_shape" type="tuple[int, ...]">
+The minimum shape the profile will support
+</ParamField>
+
+<ParamField path="opt_shape" type="tuple[int, ...]">
+The shape for which TensorRT will tune the engine
+</ParamField>
+
+<ParamField path="max_shape" type="tuple[int, ...]">
+The maximum shape the profile will support
+</ParamField>
+
+**Returns:** [`TensorRTProfile`](#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile)
+
+The profile object for chaining
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-from_dict">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile":"#aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTProfile.from_dict(
+    data: dict
+) -> aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Create TensorRTProfile from dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-profile_to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTProfile.profile_to_dict(
+    profile: polygraphy.backend.trt.Profile
+) -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Convert Polygraphy Profile to dictionary.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_profile-TensorRTProfile-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTProfile.to_dict() -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Convert TensorRTProfile to dictionary.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTProfileMode">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.TensorRTProfileMode
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+Mode how TRT optimization profiles will be generated for TensorRT engine.
+
+<ParamField path="SAMPLES_USED" type="= 'samples_used'">
+</ParamField>
+
+<ParamField path="SINGLE" type="= 'single'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.torch_quantization.QuantizationConfig":"#aitune-torch-backend-tensorrt-torch_quantization-QuantizationConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.backend.TorchQuantizationConfig(
+    quantization_config: aitune.torch.backend.tensorrt.torch_quantization.QuantizationConfig = 'FP8_DEFAULT_CFG',
+    device: str = 'cuda'
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configuration for Torch quantization.
+
+**Parameters:**
+
+<ParamField path="quantization_config" type="QuantizationConfig" default="'FP8_DEFAULT_CFG'">
+[`QuantizationConfig`](#aitune-torch-backend-tensorrt-torch_quantization-QuantizationConfig) — ModelOpt quantization configuration name.
+</ParamField>
+
+<ParamField path="device" type="str" default="'cuda'">
+Target device for quantization (default: "cuda")
+</ParamField>
+
+<ParamField path="verbose">
+Enable verbose logging
+</ParamField>
+
+
+<ParamField path="device" type="str = 'cuda'">
+</ParamField>
+
+<ParamField path="quantization_config" type="QuantizationConfig = 'FP8_DEFAULT_CFG'">
+</ParamField>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig-__post_init__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TorchQuantizationConfig.__post_init__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Validate quantization_config after initialization.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig-from_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TorchQuantizationConfig.from_dict(
+    state_dict: dict
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Convert dict to TorchQuantizationConfig.
+
+
+</Indent>
+</Indent>

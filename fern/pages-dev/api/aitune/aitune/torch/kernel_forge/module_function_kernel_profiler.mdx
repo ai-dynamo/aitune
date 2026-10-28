@@ -43,7 +43,7 @@ Torch profiler for module function kernels.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler(
+class aitune.torch.ModuleFunctionKernelProfiler(
     function_names: set[str] | None = None
 )
 ```
@@ -66,7 +66,7 @@ observed for selected functional calls.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._collects_function_data(
+aitune.torch.ModuleFunctionKernelProfiler._collects_function_data(
     func_name: str
 ) -> bool
 ```
@@ -85,7 +85,7 @@ Return whether sample data should be collected for the function.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._initialize()
+aitune.torch.ModuleFunctionKernelProfiler._initialize()
 ```
 
 </CodeBlock>
@@ -102,7 +102,7 @@ Initialize the module function kernel profiler.
 <CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler._ProfilingItem":"#aitune-torch-kernel_forge-module_function_kernel_profiler-_ProfilingItem","aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._match_events_with_data(
+aitune.torch.ModuleFunctionKernelProfiler._match_events_with_data(
     function_events: list[torch.autograd.profiler.FunctionEvent],
     named_modules: list[tuple[str, torch.nn.Module]]
 ) -> tuple[list[aitune.torch.kernel_forge.module_function_kernel_profiler._ProfilingItem], dict[str, aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData]]
@@ -125,7 +125,7 @@ It uses profiler data, specifically kernels attribute TO filter function events.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._record_functional_calls(
+aitune.torch.ModuleFunctionKernelProfiler._record_functional_calls(
     module = F
 ) -> collections.abc.Generator[None, None, None]
 ```
@@ -150,7 +150,7 @@ The functional module to patch.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._record_module_forwards(
+aitune.torch.ModuleFunctionKernelProfiler._record_module_forwards(
     named_modules: collections.abc.Iterable[tuple[str, torch.nn.Module]]
 ) -> collections.abc.Generator[None, None, None]
 ```
@@ -178,7 +178,7 @@ The named modules to patch.
 <CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._rewrite_func_data(
+aitune.torch.ModuleFunctionKernelProfiler._rewrite_func_data(
     func_name: str
 ) -> aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData
 ```
@@ -194,10 +194,10 @@ Rewrite func data from dict[ExactSampleMetadata, int] to list[tuple[int, Sample]
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-_run_inference">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._run_inference(
+aitune.torch.ModuleFunctionKernelProfiler._run_inference(
     function: collections.abc.Callable,
     data: collections.abc.Sequence[aitune.torch.module.sample_store.Sample] | None
 ) -> None
@@ -219,7 +219,7 @@ Run one complete inference iteration.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler._should_patch(
+aitune.torch.ModuleFunctionKernelProfiler._should_patch(
     module,
     func_name: str,
     func: typing.Any
@@ -240,7 +240,7 @@ Check if a function should be patched.
 <CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler.describe_results(
+aitune.torch.ModuleFunctionKernelProfiler.describe_results(
     profiling_df: pandas.DataFrame,
     function_data: dict[str, aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData],
     top_k: int = 10
@@ -261,7 +261,7 @@ the profiling data to describe
 </ParamField>
 
 <ParamField path="function_data" type="dict[str, FunctionData]">
-the function data to describe
+`dict[str,` [`FunctionData`](#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData) `]` — the function data to describe
 </ParamField>
 
 <ParamField path="top_k" type="int" default="10">
@@ -279,7 +279,7 @@ A dataframe summarizing call counts, distinct samples, modules, kernel time, tim
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler.get_functions_to_patch(
+aitune.torch.ModuleFunctionKernelProfiler.get_functions_to_patch(
     module = F
 ) -> list[tuple[str, typing.Any]]
 ```
@@ -295,10 +295,10 @@ Return available functions to patch from a module.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler-profile">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler.profile(
+aitune.torch.ModuleFunctionKernelProfiler.profile(
     function: collections.abc.Callable,
     data: collections.abc.Sequence[aitune.torch.module.sample_store.Sample] | None = None,
     module: torch.nn.Module | None = None,
@@ -320,7 +320,7 @@ the function to run inference with
 </ParamField>
 
 <ParamField path="data" type="Sequence[Sample] | None" default="None">
-the data to use for profiling, if None the function will be called without arguments
+`Sequence[` [`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `] | None` — the data to use for profiling, if None the function will be called without arguments
 </ParamField>
 
 <ParamField path="module" type="nn.Module | None" default="None">

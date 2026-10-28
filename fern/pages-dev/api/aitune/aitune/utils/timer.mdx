@@ -33,7 +33,7 @@ Timer utilities for measuring and logging operation durations.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.utils.timer.Timer(
+class aitune.utils.Timer(
     name: str | None = None,
     sink: collections.abc.Callable | None = None,
     silent: bool = False,
@@ -51,6 +51,67 @@ Context manager for timing and logging operations.
 
 Supports nested timers with automatic depth tracking and indentation,
 checkpoints for intermediate timing, and programmatic access to elapsed time.
+
+Example:
+    # Basic usage with logging
+    with Timer("Model training"):
+        train_model()
+
+    # No name - logs won't include operation name
+    with Timer() as timer:
+        do_work()
+        print(f"Took &#123;timer.elapsed:.2f&#125;s")
+        # Logs: "⏱️ completed in 1.23s" (no name in message)
+
+    # With checkpoints
+    with Timer("Data pipeline") as timer:
+        load_data()
+        timer.checkpoint("Data loaded")
+        preprocess_data()
+        timer.checkpoint("Preprocessing done")
+
+    # Access elapsed time
+    with Timer("Inference") as timer:
+        result = model.predict(x)
+        print(f"Took &#123;timer.elapsed:.2f&#125;s")
+
+    # Silent mode - no logging, just timing
+    with Timer("Silent operation", silent=True) as timer:
+        do_work()
+        print(f"Operation took &#123;timer.elapsed:.3f&#125;s")
+
+    # Initial depth for custom indentation
+    with Timer("Nested operation", depth=2):
+        do_work()  # Will be indented 4 spaces (2 levels)
+
+    # Enable depth tracking for nested indentation
+    with Timer("Outer", track_depth=True):
+        with Timer("Inner", track_depth=True):
+            do_work()  # Inner will be indented relative to Outer
+
+    # Silent mode with explicit logging at specific points
+    with Timer("Processing", silent=True) as timer:
+        step1()
+        timer.log_elapsed("Step 1 completed")  # Explicitly log
+        step2()
+        timer.log_elapsed("Step 2 completed")  # Explicitly log
+
+    # Silent mode with indented logging
+    with Timer("Pipeline", silent=True) as timer:
+        load_data()
+        timer.log_elapsed("Data loaded", depth=0)
+        with_substeps()
+        timer.log_elapsed("Substep 1", depth=1)
+        timer.log_elapsed("Substep 2", depth=1)
+        finalize()
+        timer.log_elapsed("Pipeline complete", depth=0)
+
+    # Manual start/stop without context manager
+    timer = Timer("Manual operation")
+    timer.start()
+    do_work()
+    elapsed = timer.stop()
+    print(f"Work took &#123;elapsed:.2f&#125;s")
 
 
 <ParamField path="_depth" type="int = 0">
@@ -79,7 +140,7 @@ Get the elapsed time in seconds.
 <CodeBlock links={{"aitune.utils.timer.Timer":"#aitune-utils-timer-Timer"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.timer.Timer.__enter__() -> aitune.utils.timer.Timer
+aitune.utils.Timer.__enter__() -> aitune.utils.timer.Timer
 ```
 
 </CodeBlock>
@@ -96,7 +157,7 @@ Enter the context and start timing.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.timer.Timer.__exit__(
+aitune.utils.Timer.__exit__(
     exc_type,
     exc_val,
     exc_tb
@@ -117,7 +178,7 @@ Exit the context and log the elapsed time.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.timer.Timer._get_indent() -> str
+aitune.utils.Timer._get_indent() -> str
 ```
 
 </CodeBlock>
@@ -134,7 +195,7 @@ Get indentation string based on current depth plus initial depth.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.timer.Timer._log(
+aitune.utils.Timer._log(
     message: str,
     emoji: str = '⏱️',
     indent: str | None = None
@@ -169,7 +230,7 @@ Optional indent string (defaults to self._get_indent())
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.timer.Timer.checkpoint(
+aitune.utils.Timer.checkpoint(
     name: str
 ) -> float
 ```
@@ -198,7 +259,7 @@ Elapsed time since last checkpoint (or start if first checkpoint)
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.timer.Timer.log_elapsed(
+aitune.utils.Timer.log_elapsed(
     message: str | None = None,
     depth: int = 0
 ) -> float
@@ -238,7 +299,7 @@ Current elapsed time in seconds
 <CodeBlock links={{"aitune.utils.timer.Timer":"#aitune-utils-timer-Timer"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.timer.Timer.start(
+aitune.utils.Timer.start(
     log: bool = False
 ) -> aitune.utils.timer.Timer
 ```
@@ -253,13 +314,21 @@ Explicitly start the timer.
 This allows using the timer without a context manager.
 Can be called multiple times to restart timing.
 
+**Example**
+
+timer = Timer("operation")
+timer.start()
+do_work()
+elapsed = timer.stop()
+print(f"Took &#123;elapsed:.2f&#125;s")
+
 **Parameters:**
 
 <ParamField path="log" type="bool" default="False">
 If True, logs the start message.
 </ParamField>
 
-**Returns:** `Timer`
+**Returns:** [`Timer`](#aitune-utils-timer-Timer)
 
 Self for method chaining
 
@@ -270,7 +339,7 @@ Self for method chaining
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.timer.Timer.stop() -> float
+aitune.utils.Timer.stop() -> float
 ```
 
 </CodeBlock>
@@ -282,6 +351,14 @@ Explicitly stop the timer and return elapsed time.
 
 This allows using the timer without a context manager.
 Returns the elapsed time and optionally logs completion.
+
+**Example**
+
+timer = Timer("operation")
+timer.start()
+do_work()
+elapsed = timer.stop()
+print(f"Took &#123;elapsed:.2f&#125;s")
 
 **Returns:** `float`
 

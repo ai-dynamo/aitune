@@ -25,7 +25,7 @@ Annotation for NVTX.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx(
+class aitune.utils.monitoring.annotate_with_nvtx(
     name: str | None = None,
     color: str | int | None = None
 )
@@ -44,7 +44,7 @@ Decorator/context manager for nvtx annotations.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx.__call__(
+aitune.utils.monitoring.annotate_with_nvtx.__call__(
     func
 )
 ```
@@ -63,7 +63,7 @@ Wraps the function as a decorator.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx.__enter__()
+aitune.utils.monitoring.annotate_with_nvtx.__enter__()
 ```
 
 </CodeBlock>
@@ -80,7 +80,7 @@ Enters the context manager.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx.__exit__(
+aitune.utils.monitoring.annotate_with_nvtx.__exit__(
     exc_type,
     exc_value,
     traceback
@@ -101,7 +101,7 @@ Exits the context manager.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.nvtx_annotation.annotate_with_nvtx._post_init()
+aitune.utils.monitoring.annotate_with_nvtx._post_init()
 ```
 
 </CodeBlock>

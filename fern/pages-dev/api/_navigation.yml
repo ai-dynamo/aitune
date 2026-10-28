@@ -92,6 +92,14 @@
   slug: aitune/aitune/torch
   children:
     - type: section
+      title: artifact
+      slug: aitune/aitune/torch/artifact
+      children:
+        - type: page
+          title: artifact
+          slug: aitune/aitune/torch/artifact
+          pageId: aitune/aitune/torch/artifact.mdx
+    - type: section
       title: backend
       slug: aitune/aitune/torch/backend
       children:
@@ -623,6 +631,14 @@
                   title: onnx_model_info
                   slug: aitune/aitune/torch/libs/onnx/onnx_model_info
                   pageId: aitune/aitune/torch/libs/onnx/onnx_model_info.mdx
+            - type: section
+              title: runtime
+              slug: aitune/aitune/torch/libs/onnx/runtime
+              children:
+                - type: page
+                  title: runtime
+                  slug: aitune/aitune/torch/libs/onnx/runtime
+                  pageId: aitune/aitune/torch/libs/onnx/runtime.mdx
         - type: section
           title: torch
           slug: aitune/aitune/torch/libs/torch
@@ -679,6 +695,14 @@
               title: locator
               slug: aitune/aitune/torch/module/locator
               pageId: aitune/aitune/torch/module/locator.mdx
+        - type: section
+          title: onnx_module
+          slug: aitune/aitune/torch/module/onnx_module
+          children:
+            - type: page
+              title: onnx_module
+              slug: aitune/aitune/torch/module/onnx_module
+              pageId: aitune/aitune/torch/module/onnx_module.mdx
         - type: section
           title: passthrough_module
           slug: aitune/aitune/torch/module/passthrough_module
@@ -972,6 +996,14 @@
               slug: aitune/aitune/torch/tune_strategy/profiling_tune_strategy
               pageId: aitune/aitune/torch/tune_strategy/profiling_tune_strategy.mdx
         - type: section
+          title: resolver
+          slug: aitune/aitune/torch/tune_strategy/resolver
+          children:
+            - type: page
+              title: resolver
+              slug: aitune/aitune/torch/tune_strategy/resolver
+              pageId: aitune/aitune/torch/tune_strategy/resolver.mdx
+        - type: section
           title: tune_strategy
           slug: aitune/aitune/torch/tune_strategy/tune_strategy
           children:
@@ -987,6 +1019,70 @@
           title: tuning
           slug: aitune/aitune/torch/tuning
           pageId: aitune/aitune/torch/tuning.mdx
+- type: section
+  title: triton
+  slug: aitune/aitune/triton
+  children:
+    - type: section
+      title: config
+      slug: aitune/aitune/triton/config
+      children:
+        - type: section
+          title: common
+          slug: aitune/aitune/triton/config/common
+          children:
+            - type: page
+              title: common
+              slug: aitune/aitune/triton/config/common
+              pageId: aitune/aitune/triton/config/common.mdx
+        - type: section
+          title: onnx_runtime
+          slug: aitune/aitune/triton/config/onnx_runtime
+          children:
+            - type: page
+              title: onnx_runtime
+              slug: aitune/aitune/triton/config/onnx_runtime
+              pageId: aitune/aitune/triton/config/onnx_runtime.mdx
+        - type: section
+          title: options
+          slug: aitune/aitune/triton/config/options
+          children:
+            - type: page
+              title: options
+              slug: aitune/aitune/triton/config/options
+              pageId: aitune/aitune/triton/config/options.mdx
+        - type: section
+          title: tensorrt
+          slug: aitune/aitune/triton/config/tensorrt
+          children:
+            - type: page
+              title: tensorrt
+              slug: aitune/aitune/triton/config/tensorrt
+              pageId: aitune/aitune/triton/config/tensorrt.mdx
+        - type: section
+          title: torch_aoti
+          slug: aitune/aitune/triton/config/torch_aoti
+          children:
+            - type: page
+              title: torch_aoti
+              slug: aitune/aitune/triton/config/torch_aoti
+              pageId: aitune/aitune/triton/config/torch_aoti.mdx
+    - type: section
+      title: model_analyzer
+      slug: aitune/aitune/triton/model_analyzer
+      children:
+        - type: page
+          title: model_analyzer
+          slug: aitune/aitune/triton/model_analyzer
+          pageId: aitune/aitune/triton/model_analyzer.mdx
+    - type: section
+      title: model_repository
+      slug: aitune/aitune/triton/model_repository
+      children:
+        - type: page
+          title: model_repository
+          slug: aitune/aitune/triton/model_repository
+          pageId: aitune/aitune/triton/model_repository.mdx
 - type: section
   title: utils
   slug: aitune/aitune/utils

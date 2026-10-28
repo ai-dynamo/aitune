@@ -27,7 +27,7 @@ Profiling result events.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.task.profiling.events.ProfilingResultEvent(
+class aitune.torch.task.ProfilingResultEvent(
     timestamp: float,
     model_name: str,
     backend_details: str,
@@ -49,24 +49,30 @@ Profiling result event.
 
 
 <ParamField path="backend_details" type="str">
+Details of the backend.
 </ParamField>
 
 <ParamField path="batch_size" type="int">
+Batch size of the measurement.
 </ParamField>
 
 <ParamField path="execution_time" type="float = 0.0">
+Execution time of the measurement.
 </ParamField>
 
 <ParamField path="measurement_id" type="int = 0">
+Unique identifier for the measurement.
 </ParamField>
 
 <ParamField path="model_name" type="str">
 </ParamField>
 
 <ParamField path="phase" type="str">
+Phase of the measurement.
 </ParamField>
 
 <ParamField path="timestamp" type="float">
+Timestamp of the measurement.
 </ParamField>
 </Indent>
 
@@ -75,7 +81,7 @@ Profiling result event.
 <CodeBlock links={{"aitune.torch.task.profiling.events.ProfilingResultEvent":"#aitune-torch-task-profiling-events-ProfilingResultEvent"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.task.profiling.events.get_inference_events(
+aitune.torch.task.get_inference_events(
     events: list[aitune.torch.task.profiling.events.ProfilingResultEvent]
 ) -> list[aitune.torch.task.profiling.events.ProfilingResultEvent]
 ```

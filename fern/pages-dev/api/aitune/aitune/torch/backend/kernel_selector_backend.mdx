@@ -25,10 +25,10 @@ Composite backend selecting kernel providers before delegating execution.
 
 <Anchor id="aitune-torch-backend-kernel_selector_backend-KernelSelectorBackend">
 
-<CodeBlock links={{"aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig":"#aitune-torch-backend-kernel_selector_backend-KernelSelectorBackendConfig","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig":"#aitune-torch-backend-kernel_selector_backend-KernelSelectorBackendConfig","aitune.torch.backend.backend.Backend":"./backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend(
+class aitune.torch.backend.KernelSelectorBackend(
     config: aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig | None = None,
     delegate_backend: aitune.torch.backend.backend.Backend | None = None
 )
@@ -39,7 +39,7 @@ class aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend(
 
 <Indent>
 
-**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+**Bases:** [Backend[KernelSelectorBackendConfig | None]](./backend.mdx#aitune-torch-backend-backend-Backend)
 
 Select kernel providers and apply their plan while building a delegate backend.
 
@@ -66,9 +66,6 @@ while building its artifact, after which the live provider runtime is discarded.
 <ParamField path="_build_mode" type="= BuildMode.JUST_IN_TIME">
 </ParamField>
 
-<ParamField path="_config">
-</ParamField>
-
 <ParamField path="_delegate_backend">
 </ParamField>
 
@@ -85,7 +82,7 @@ while building its artifact, after which the live provider runtime is discarded.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._activate() -> None
+aitune.torch.backend.KernelSelectorBackend._activate() -> None
 ```
 
 </CodeBlock>
@@ -102,7 +99,7 @@ Activate the runtime and delegate.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._adopt_delegate_modes() -> None
+aitune.torch.backend.KernelSelectorBackend._adopt_delegate_modes() -> None
 ```
 
 </CodeBlock>
@@ -116,10 +113,10 @@ Expose the delegate's build and execution capabilities.
 </Indent>
 <Anchor id="aitune-torch-backend-kernel_selector_backend-KernelSelectorBackend-_backend_subclasses">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"./backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._backend_subclasses(
+aitune.torch.backend.KernelSelectorBackend._backend_subclasses(
     backend_class: type[aitune.torch.backend.backend.Backend]
 ) -> list[type[aitune.torch.backend.backend.Backend]]
 ```
@@ -137,15 +134,15 @@ Return all recursively defined backend subclasses.
 </Indent>
 <Anchor id="aitune-torch-backend-kernel_selector_backend-KernelSelectorBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._build(
+aitune.torch.backend.KernelSelectorBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
-) -> aitune.torch.backend.backend.Backend
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -159,10 +156,10 @@ Select providers and build the delegate while the plan is applied.
 </Indent>
 <Anchor id="aitune-torch-backend-kernel_selector_backend-KernelSelectorBackend-_create_optimizer">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer":"/aitune/aitune/torch/kernel_forge/kernel_optimizer#aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer":"../kernel_forge/kernel_optimizer.mdx#aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._create_optimizer() -> aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer
+aitune.torch.backend.KernelSelectorBackend._create_optimizer() -> aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer
 ```
 
 </CodeBlock>
@@ -179,7 +176,7 @@ Create the kernel optimizer from backend configuration.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._deactivate() -> None
+aitune.torch.backend.KernelSelectorBackend._deactivate() -> None
 ```
 
 </CodeBlock>
@@ -193,10 +190,10 @@ Deactivate the delegate and runtime.
 </Indent>
 <Anchor id="aitune-torch-backend-kernel_selector_backend-KernelSelectorBackend-_delegate_class_from_state">
 
-<CodeBlock links={{"aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.backend.Backend":"./backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._delegate_class_from_state(
+aitune.torch.backend.KernelSelectorBackend._delegate_class_from_state(
     state_dict: dict[str, typing.Any]
 ) -> type[aitune.torch.backend.backend.Backend]
 ```
@@ -217,7 +214,7 @@ Resolve a serialized delegate backend by its class name.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._deploy() -> None
+aitune.torch.backend.KernelSelectorBackend._deploy() -> None
 ```
 
 </CodeBlock>
@@ -234,7 +231,7 @@ Activate the runtime and deploy the restored delegate.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._infer(
+aitune.torch.backend.KernelSelectorBackend._infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -251,10 +248,10 @@ Run inference through the delegate backend.
 </Indent>
 <Anchor id="aitune-torch-backend-kernel_selector_backend-KernelSelectorBackend-_synchronize_plan">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"/aitune/aitune/torch/kernel_forge/kernel_optimization_plan#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"../kernel_forge/kernel_optimization_plan.mdx#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend._synchronize_plan(
+aitune.torch.backend.KernelSelectorBackend._synchronize_plan(
     plan: aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan
 ) -> aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan
 ```
@@ -274,12 +271,29 @@ The assumption here is that rank zero's plan is the winning plan.
 **Parameters:**
 
 <ParamField path="plan" type="KernelOptimizationPlan">
-The plan to synchronize.
+[`KernelOptimizationPlan`](../kernel_forge/kernel_optimization_plan.mdx#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan) — The plan to synchronize.
 </ParamField>
 
-**Returns:** `KernelOptimizationPlan`
+**Returns:** [`KernelOptimizationPlan`](../kernel_forge/kernel_optimization_plan.mdx#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan)
 
 The synchronized plan.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-kernel_selector_backend-KernelSelectorBackend-artifact">
+
+<CodeBlock links={{"aitune.records.DeploymentArtifact":"../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.KernelSelectorBackend.artifact() -> aitune.records.DeploymentArtifact
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the artifact produced by a publishable AOT delegate.
 
 
 </Indent>
@@ -288,7 +302,7 @@ The synchronized plan.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend.describe() -> str
+aitune.torch.backend.KernelSelectorBackend.describe() -> str
 ```
 
 </CodeBlock>
@@ -305,7 +319,7 @@ Describe selector and delegate configuration.
 <CodeBlock links={{"aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend":"#aitune-torch-backend-kernel_selector_backend-KernelSelectorBackend"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend.from_dict(
+aitune.torch.backend.KernelSelectorBackend.from_dict(
     module: torch.nn.Module | None,
     state_dict: dict
 ) -> aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend
@@ -327,7 +341,7 @@ Restore the selected plan and delegate without running optimization.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend.key() -> str
+aitune.torch.backend.KernelSelectorBackend.key() -> str
 ```
 
 </CodeBlock>
@@ -344,7 +358,7 @@ Return a cache key combining selector and delegate configuration.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackend.to_dict() -> dict[str, typing.Any]
+aitune.torch.backend.KernelSelectorBackend.to_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -360,10 +374,10 @@ Return state required to restore the selected plan and delegate.
 
 <Anchor id="aitune-torch-backend-kernel_selector_backend-KernelSelectorBackendConfig">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"../kernel_forge/kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig(
+class aitune.torch.backend.KernelSelectorBackendConfig(
     kernel_providers: aitune.torch.kernel_forge.kernel_provider.KernelProvider | list[aitune.torch.kernel_forge.kernel_provider.KernelProvider] | None = _default_kernel_providers(),
     kernel_generators: aitune.torch.kernel_forge.kernel_provider.KernelGenerator | list[aitune.torch.kernel_forge.kernel_provider.KernelGenerator] | None = None,
     provider_min_time_share_percent: float = 0.0,
@@ -379,7 +393,7 @@ class aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig(
 
 <Badge>Dataclass</Badge>
 
-**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+**Bases:** [BackendConfig](./backend.mdx#aitune-torch-backend-backend-BackendConfig)
 
 Configuration for kernel selection performed before delegate build.
 
@@ -390,12 +404,12 @@ it can serialize optimization plan instead of this configuration object.
 **Parameters:**
 
 <ParamField path="kernel_providers" type="KernelProvider | list[KernelProvider] | None" default="_default_kernel_providers()">
-Static providers considered during kernel optimization. Defaults to PyTorch Flash
+[`KernelProvider`](../kernel_forge/kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider) `| list[` [`KernelProvider`](../kernel_forge/kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider) `] | None` — Static providers considered during kernel optimization. Defaults to PyTorch Flash
 Attention, PyTorch cuDNN Attention, and FlashAttention-4 providers.
 </ParamField>
 
 <ParamField path="kernel_generators" type="KernelGenerator | list[KernelGenerator] | None" default="None">
-Asynchronous generators considered during kernel optimization.
+[`KernelGenerator`](../kernel_forge/kernel_provider/kernel_generator.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator) `| list[` [`KernelGenerator`](../kernel_forge/kernel_provider/kernel_generator.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerator) `] | None` — Asynchronous generators considered during kernel optimization.
 </ParamField>
 
 <ParamField path="provider_min_time_share_percent" type="float" default="0.0">
@@ -430,7 +444,7 @@ Maximum seconds to wait for submitted generators.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig.__post_init__() -> None
+aitune.torch.backend.KernelSelectorBackendConfig.__post_init__() -> None
 ```
 
 </CodeBlock>
@@ -447,7 +461,7 @@ Normalize kernel sources and validate threshold values.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig._normalize_generators(
+aitune.torch.backend.KernelSelectorBackendConfig._normalize_generators(
     generators: aitune.torch.kernel_forge.kernel_provider.KernelGenerator | list[aitune.torch.kernel_forge.kernel_provider.KernelGenerator] | None
 ) -> list[aitune.torch.kernel_forge.kernel_provider.KernelGenerator]
 ```
@@ -465,10 +479,10 @@ Normalize and validate asynchronous kernel generators.
 </Indent>
 <Anchor id="aitune-torch-backend-kernel_selector_backend-KernelSelectorBackendConfig-_normalize_providers">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"../kernel_forge/kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig._normalize_providers(
+aitune.torch.backend.KernelSelectorBackendConfig._normalize_providers(
     providers: aitune.torch.kernel_forge.kernel_provider.KernelProvider | list[aitune.torch.kernel_forge.kernel_provider.KernelProvider] | None
 ) -> list[aitune.torch.kernel_forge.kernel_provider.KernelProvider]
 ```
@@ -489,7 +503,7 @@ Normalize and validate static kernel providers.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig.describe() -> str
+aitune.torch.backend.KernelSelectorBackendConfig.describe() -> str
 ```
 
 </CodeBlock>
@@ -506,8 +520,8 @@ Return a human-readable selector configuration.
 <CodeBlock links={{"aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig":"#aitune-torch-backend-kernel_selector_backend-KernelSelectorBackendConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig.from_dict(
-    _data: dict
+aitune.torch.backend.KernelSelectorBackendConfig.from_dict(
+    data: dict
 ) -> aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig
 ```
 
@@ -527,7 +541,7 @@ Reject deserialization of one-way kernel source metadata.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig.to_dict() -> dict[str, typing.Any]
+aitune.torch.backend.KernelSelectorBackendConfig.to_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -537,11 +551,11 @@ aitune.torch.backend.kernel_selector_backend.KernelSelectorBackendConfig.to_dict
 
 Return one-way, JSON-serializable cache and diagnostic metadata.
 
-:meth:`KernelProvider.to_dict` is intentionally not used here. Provider
+`KernelProvider.to_dict` is intentionally not used here. Provider
 serialization captures prepared runtime state and requires the provider to
 be ready, whereas backend configuration is keyed and saved before providers
 are prepared i.e. before ``build`` is called. Selected ready providers are
-serialized separately in :class:`KernelOptimizationPlan` checkpoints.
+serialized separately in `KernelOptimizationPlan` checkpoints.
 
 
 </Indent>
@@ -549,7 +563,7 @@ serialized separately in :class:`KernelOptimizationPlan` checkpoints.
 
 <Anchor id="aitune-torch-backend-kernel_selector_backend-_default_kernel_providers">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"../kernel_forge/kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.kernel_selector_backend._default_kernel_providers() -> list[aitune.torch.kernel_forge.kernel_provider.KernelProvider]

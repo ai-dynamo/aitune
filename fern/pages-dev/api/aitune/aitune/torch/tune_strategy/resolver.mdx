@@ -1,0 +1,426 @@
+---
+layout: overview
+slug: aitune/aitune/torch/tune_strategy/resolver
+title: aitune.torch.tune_strategy.resolver
+---
+
+Create tune strategies whose backends are resolved for each module.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`Constraint`](#aitune-torch-tune_strategy-resolver-Constraint) | Describe one requirement that a tuning candidate must satisfy. |
+| [`DynamicTuneStrategy`](#aitune-torch-tune_strategy-resolver-DynamicTuneStrategy) | Describes rules that are used to select and configure an optimal tuning strategy for a given module at tune time. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_resolve_backends`](#aitune-torch-tune_strategy-resolver-_resolve_backends) | Create default candidates compatible with the module and requested compilation. |
+| [`materialize_strategy`](#aitune-torch-tune_strategy-resolver-materialize_strategy) | Resolve a dynamic strategy for ``module`` or preserve an explicit strategy. |
+| [`resolve_strategy`](#aitune-torch-tune_strategy-resolver-resolve_strategy) | Declare a strategy whose backends will be resolved for each tuned module. |
+
+### Data
+
+[`Compilation`](#aitune-torch-tune_strategy-resolver-Compilation)
+
+[`Objective`](#aitune-torch-tune_strategy-resolver-Objective)
+
+[`Relation`](#aitune-torch-tune_strategy-resolver-Relation)
+
+[`StrategyOption`](#aitune-torch-tune_strategy-resolver-StrategyOption)
+
+[`Unit`](#aitune-torch-tune_strategy-resolver-Unit)
+
+[`_COMPILATION_MODES`](#aitune-torch-tune_strategy-resolver-_COMPILATION_MODES)
+
+[`_OBJECTIVES`](#aitune-torch-tune_strategy-resolver-_OBJECTIVES)
+
+### API
+
+<Anchor id="aitune-torch-tune_strategy-resolver-Constraint">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.Constraint()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `BaseModel`
+
+Describe one requirement that a tuning candidate must satisfy.
+
+
+<ParamField path="metric" type="Objective">
+</ParamField>
+
+<ParamField path="model_config" type="= ConfigDict(frozen=True, extra='forbid')">
+</ParamField>
+
+<ParamField path="relation" type="Relation">
+</ParamField>
+
+<ParamField path="unit" type="Unit = 'ms'">
+</ParamField>
+
+<ParamField path="value" type="PositiveFloat">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-resolver-Constraint-_metric_and_unit_validation">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.Constraint._metric_and_unit_validation() -> typing.Self
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Only 'latency' metric with 'ms' unit is supported for now.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-resolver-Constraint-max_latency_ms">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.Constraint.max_latency_ms(
+    milliseconds: float
+) -> typing.Self
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Require latency to be no greater than ``milliseconds``.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-resolver-DynamicTuneStrategy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.tune_strategy.resolver.DynamicTuneStrategy()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `BaseModel`
+
+Describes rules that are used to select and configure an optimal tuning strategy for a given module at tune time.
+
+This class holds no backend instances or backend-specific state. Instead, it contains a declarative description of
+the desired optimization *objective* (such as "throughput" or "latency") and a set of *constraints*, all of which apply together.
+
+In this framework:
+  - The *objective* defines what we try to maximize or minimize (e.g., maximize throughput).
+  - The *constraint(s)* express requirements that must be met by any configuration the strategy chooses (such as "latency at_most N ms").
+    For now, only a single latency constraint is supported (e.g., "latency at_most N ms").
+  - Typically, this means we optimize for maximum throughput, but only among strategies/configurations that meet the given latency constraint.
+
+This class is *dynamic*: it does not directly reference any backends.
+When `materialize()` is called with a particular module, it creates a concrete `TuneStrategy` with appropriate backend objects
+and automatically selects the right strategy class (e.g., `LatencyBudgetStrategy` for a throughput-optimization subject to a latency constraint).
+
+The same DynamicTuneStrategy instance can be used for multiple modules, and a fresh concrete strategy is produced for each module.
+
+Example:
+    # Optimize for max throughput, but only if latency ≤ 40 ms for the current module
+    dts = DynamicTuneStrategy(
+        objective="throughput",
+        compilation="any",
+        constraints=[Constraint.max_latency_ms(40)]
+    )
+    strategy = dts.materialize(some_module)
+
+
+<ParamField path="_find_max_batch_size" type="bool | None = None">
+</ParamField>
+
+<ParamField path="compilation" type="Compilation = 'any'">
+</ParamField>
+
+<ParamField path="constraints" type="Sequence[Constraint] = Field(default_factory=list)">
+</ParamField>
+
+<ParamField path="objective" type="Objective">
+</ParamField>
+<Anchor id="aitune-torch-tune_strategy-resolver-DynamicTuneStrategy-_validate_constraints">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.DynamicTuneStrategy._validate_constraints(
+    v
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-resolver-DynamicTuneStrategy-clone">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.DynamicTuneStrategy.clone() -> typing.Self
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return an independent copy of this dynamic configuration.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-resolver-DynamicTuneStrategy-enable_find_max_batch_size">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.DynamicTuneStrategy.enable_find_max_batch_size(
+    enable: bool = True
+) -> typing.Self
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Configure maximum-batch-size discovery on the resolved strategy.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-resolver-DynamicTuneStrategy-materialize">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"./tune_strategy.mdx#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.DynamicTuneStrategy.materialize(
+    module: torch.nn.Module
+) -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create a concrete strategy with fresh backends for ``module``.
+
+
+</Indent>
+<Anchor id="aitune-torch-tune_strategy-resolver-DynamicTuneStrategy-to_json_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.DynamicTuneStrategy.to_json_dict() -> dict
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the unresolved configuration for reporting.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-resolver-_resolve_backends">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.resolver.Compilation":"#aitune-torch-tune_strategy-resolver-Compilation","aitune.torch.backend.Backend":"../backend/backend.mdx#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver._resolve_backends(
+    module: torch.nn.Module,
+    compilation: aitune.torch.tune_strategy.resolver.Compilation
+) -> list[aitune.torch.backend.Backend]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Create default candidates compatible with the module and requested compilation.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-resolver-materialize_strategy">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.resolver.StrategyOption":"#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.tune_strategy.tune_strategy.TuneStrategy":"./tune_strategy.mdx#aitune-torch-tune_strategy-tune_strategy-TuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.materialize_strategy(
+    strategy: aitune.torch.tune_strategy.resolver.StrategyOption,
+    module: torch.nn.Module
+) -> aitune.torch.tune_strategy.tune_strategy.TuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve a dynamic strategy for ``module`` or preserve an explicit strategy.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-resolver-resolve_strategy">
+
+<CodeBlock links={{"aitune.torch.tune_strategy.resolver.Objective":"#aitune-torch-tune_strategy-resolver-Objective","aitune.torch.tune_strategy.resolver.Compilation":"#aitune-torch-tune_strategy-resolver-Compilation","aitune.torch.tune_strategy.resolver.Constraint":"#aitune-torch-tune_strategy-resolver-Constraint","aitune.torch.tune_strategy.resolver.DynamicTuneStrategy":"#aitune-torch-tune_strategy-resolver-DynamicTuneStrategy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.resolve_strategy(
+    objective: aitune.torch.tune_strategy.resolver.Objective = 'throughput',
+    compilation: aitune.torch.tune_strategy.resolver.Compilation = 'any',
+    constraints: collections.abc.Sequence[aitune.torch.tune_strategy.resolver.Constraint] = ()
+) -> aitune.torch.tune_strategy.resolver.DynamicTuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Declare a strategy whose backends will be resolved for each tuned module.
+
+**Parameters:**
+
+<ParamField path="objective" type="Objective" default="'throughput'">
+[`Objective`](#aitune-torch-tune_strategy-resolver-Objective) — Performance metric to optimize: throughput or latency.
+</ParamField>
+
+<ParamField path="compilation" type="Compilation" default="'any'">
+[`Compilation`](#aitune-torch-tune_strategy-resolver-Compilation) — Allow ahead-of-time, just-in-time, or any supported backend build mode.
+</ParamField>
+
+<ParamField path="constraints" type="Sequence[Constraint]" default="()">
+`Sequence[` [`Constraint`](#aitune-torch-tune_strategy-resolver-Constraint) `]` — Limits that candidates must satisfy while optimizing the objective.
+</ParamField>
+
+**Returns:** [`DynamicTuneStrategy`](#aitune-torch-tune_strategy-resolver-DynamicTuneStrategy)
+
+A dynamic strategy configuration suitable for AOT and JIT tuning.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-tune_strategy-resolver-Compilation">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.Compilation = Literal['aot', 'jit', 'any']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-tune_strategy-resolver-Objective">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.Objective = Literal['throughput', 'latency']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-tune_strategy-resolver-Relation">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.Relation = Literal['at_most']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-tune_strategy-resolver-StrategyOption">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.StrategyOption = TuneStrategy | DynamicTuneStrategy
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-tune_strategy-resolver-Unit">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver.Unit = Literal['ms']
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-tune_strategy-resolver-_COMPILATION_MODES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver._COMPILATION_MODES = frozenset({'aot', 'jit', 'any'})
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-tune_strategy-resolver-_OBJECTIVES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tune_strategy.resolver._OBJECTIVES = frozenset({'throughput', 'latency'})
+```
+
+</CodeBlock>
+</Anchor>
+

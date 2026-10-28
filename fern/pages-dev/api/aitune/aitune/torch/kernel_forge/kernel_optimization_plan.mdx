@@ -22,10 +22,10 @@ Serializable plan of selected runtime kernel providers.
 
 <Anchor id="aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"./kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan(
+class aitune.torch.kernel_forge.KernelOptimizationPlan(
     providers: tuple[aitune.torch.kernel_forge.kernel_provider.KernelProvider, ...] = ()
 )
 ```
@@ -47,7 +47,7 @@ Selected kernel providers ready to install without optimization.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan.apply(
+aitune.torch.kernel_forge.KernelOptimizationPlan.apply(
     module: torch.nn.Module
 ) -> collections.abc.Generator[None, None, None]
 ```
@@ -76,7 +76,7 @@ Module whose functional calls should use the selected providers.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan.from_dict(
+aitune.torch.kernel_forge.KernelOptimizationPlan.from_dict(
     state_dict: dict[str, typing.Any]
 ) -> aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan
 ```
@@ -97,7 +97,7 @@ Restore a runtime plan without running kernel optimization.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan.to_dict() -> dict[str, typing.Any]
+aitune.torch.kernel_forge.KernelOptimizationPlan.to_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>

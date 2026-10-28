@@ -8,33 +8,455 @@ Monitoring module for AITune.
 
 ## Subpackages
 
-- **[`aitune.utils.monitoring.context`](/aitune/aitune/utils/monitoring/context)**
-- **[`aitune.utils.monitoring.hardware_metrics`](/aitune/aitune/utils/monitoring/hardware_metrics)**
+- **[`aitune.utils.monitoring.context`](./context/index.mdx)**
+- **[`aitune.utils.monitoring.hardware_metrics`](./hardware_metrics/index.mdx)**
 
 ## Submodules
 
-- **[`aitune.utils.monitoring.annotation`](/aitune/aitune/utils/monitoring/annotation)**
-- **[`aitune.utils.monitoring.hardware_metrics_annotation`](/aitune/aitune/utils/monitoring/hardware_metrics_annotation)**
-- **[`aitune.utils.monitoring.nvtx_annotation`](/aitune/aitune/utils/monitoring/nvtx_annotation)**
-- **[`aitune.utils.monitoring.parse_metrics`](/aitune/aitune/utils/monitoring/parse_metrics)**
-- **[`aitune.utils.monitoring.setup_hardware_metrics`](/aitune/aitune/utils/monitoring/setup_hardware_metrics)**
+- **[`aitune.utils.monitoring.annotation`](./annotation.mdx)**
+- **[`aitune.utils.monitoring.hardware_metrics_annotation`](./hardware_metrics_annotation.mdx)**
+- **[`aitune.utils.monitoring.nvtx_annotation`](./nvtx_annotation.mdx)**
+- **[`aitune.utils.monitoring.parse_metrics`](./parse_metrics.mdx)**
+- **[`aitune.utils.monitoring.setup_hardware_metrics`](./setup_hardware_metrics.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-utils-monitoring-__all__)
+| Name | Description |
+|------|-------------|
+| [`annotate`](#aitune-utils-monitoring-annotation-annotate) | Annotation wrapper for NVTX and hardware metrics collection - one entry point for both. |
+| [`annotate_with_nvtx`](#aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx) | Decorator/context manager for nvtx annotations. |
+| [`collect_hardware_metrics`](#aitune-utils-monitoring-hardware_metrics_annotation-collect_hardware_metrics) | Decorator/context manager for collecting hardware metrics. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`disable_hardware_metrics`](#aitune-utils-monitoring-setup_hardware_metrics-disable_hardware_metrics) | Disable hardware metrics collection at runtime. |
+| [`dump_metrics`](#aitune-utils-monitoring-setup_hardware_metrics-dump_metrics) | Logs metrics summary and dumps the metrics to a CSV file. |
+| [`enable_hardware_metrics`](#aitune-utils-monitoring-setup_hardware_metrics-enable_hardware_metrics) | Enable hardware metrics collection at runtime. |
+| [`get_hardware_metrics`](#aitune-utils-monitoring-setup_hardware_metrics-get_hardware_metrics) | Get metrics from the receiver. |
+| [`snapshot`](#aitune-utils-monitoring-setup_hardware_metrics-snapshot) | Dump currently collected hardware metrics to a CSV file. |
+| [`with_backend_context`](#aitune-utils-monitoring-context-backend_context-with_backend_context) | Class decorator that wraps all public methods with backend context. |
 
 ### API
 
-<Anchor id="aitune-utils-monitoring-__all__">
+<Anchor id="aitune-utils-monitoring-annotation-annotate">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.monitoring.__all__ = ['annotate', 'annotate_with_nvtx', 'collect_hardware_metrics', 'disable_hardware...
+class aitune.utils.monitoring.annotate(
+    name: str | None = None,
+    color: str | int | None = None
+)
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+Annotation wrapper for NVTX and hardware metrics collection - one entry point for both.
+
+This class wraps nvtx.annotate and collect_hardware_metrics to allow for future extensions.
+It can be used as a decorator or a context manager.
+
+**Parameters:**
+
+<ParamField path="name" type="str" default="None">
+A name associated with the annotated code range.
+</ParamField>
+
+<ParamField path="color" type="str or int" default="None">
+A color associated with the annotated code range.
+</ParamField>
+
+
+<Anchor id="aitune-utils-monitoring-annotation-annotate-__call__">
+
+<CodeBlock links={{"aitune.utils.monitoring.annotation.P":"#aitune-utils-monitoring-annotation-P","aitune.utils.monitoring.annotation.R":"#aitune-utils-monitoring-annotation-R"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotate.__call__(
+    func: collections.abc.Callable[aitune.utils.monitoring.annotation.P, aitune.utils.monitoring.annotation.R]
+) -> collections.abc.Callable[aitune.utils.monitoring.annotation.P, aitune.utils.monitoring.annotation.R]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wraps the function as a decorator.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-annotation-annotate-__enter__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotate.__enter__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enters the context manager.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-annotation-annotate-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotate.__exit__(
+    exc_type,
+    exc_value,
+    traceback
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Exits the context manager.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-annotation-annotate-_post_init">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotate._post_init()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post-initialization.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.annotate_with_nvtx(
+    name: str | None = None,
+    color: str | int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Decorator/context manager for nvtx annotations.
+
+
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx-__call__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotate_with_nvtx.__call__(
+    func
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wraps the function as a decorator.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx-__enter__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotate_with_nvtx.__enter__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enters the context manager.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotate_with_nvtx.__exit__(
+    exc_type,
+    exc_value,
+    traceback
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Exits the context manager.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-nvtx_annotation-annotate_with_nvtx-_post_init">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.annotate_with_nvtx._post_init()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Post-initialization.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics_annotation-collect_hardware_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.utils.monitoring.collect_hardware_metrics(
+    name: str | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Decorator/context manager for collecting hardware metrics.
+
+
+<Anchor id="aitune-utils-monitoring-hardware_metrics_annotation-collect_hardware_metrics-__call__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.collect_hardware_metrics.__call__(
+    func
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wraps the function as a decorator.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics_annotation-collect_hardware_metrics-__enter__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.collect_hardware_metrics.__enter__()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enters the context manager.
+
+
+</Indent>
+<Anchor id="aitune-utils-monitoring-hardware_metrics_annotation-collect_hardware_metrics-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.collect_hardware_metrics.__exit__(
+    exc_type,
+    exc_value,
+    traceback
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Exits the context manager.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-disable_hardware_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.disable_hardware_metrics() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Disable hardware metrics collection at runtime.
+
+Overrides the AITUNE_HARDWARE_METRICS environment variable.
+If collection was active, gracefully stops the receiver (dumping any
+accumulated metrics) and resets state so that a future enable_hardware_metrics()
+call starts a fresh collection session.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-dump_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.dump_metrics(
+    metrics: pandas.DataFrame
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Logs metrics summary and dumps the metrics to a CSV file.
+
+**Parameters:**
+
+<ParamField path="metrics" type="pd.DataFrame">
+The metrics to dump.
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-enable_hardware_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.enable_hardware_metrics() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enable hardware metrics collection at runtime.
+
+Overrides the AITUNE_HARDWARE_METRICS environment variable.
+The collector and receiver subprocess are started lazily on the first use.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-get_hardware_metrics">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.get_hardware_metrics() -> pandas.DataFrame | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get metrics from the receiver.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-setup_hardware_metrics-snapshot">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.snapshot(
+    path: pathlib.Path,
+    reset_metrics: bool = True
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Dump currently collected hardware metrics to a CSV file.
+
+**Parameters:**
+
+<ParamField path="path" type="Path">
+Path to write the CSV file.
+</ParamField>
+
+<ParamField path="reset_metrics" type="bool" default="True">
+If True, clears the accumulated metrics after writing.
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-monitoring-context-backend_context-with_backend_context">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.monitoring.with_backend_context(
+    cls
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Class decorator that wraps all public methods with backend context.
+
+
+</Indent>

@@ -8,6 +8,15 @@ Module for enabling JIT inspection.
 
 If you import this module, all torch models will be inspected automatically.
 
+Example:
+    &gt;&gt;&gt; import aitune.torch.jit.enable_inspection as inspection
+    &gt;&gt;&gt; import torch
+    &gt;&gt;&gt; model = torch.nn.Linear(10, 5)
+    &gt;&gt;&gt; x = model.forward(torch.randn(10))
+    &gt;&gt;&gt; x = model.forward(torch.randn(10))
+    &gt;&gt;&gt; # Save report to html file
+    &gt;&gt;&gt; inspection.save_report("linear_net.html", "Linear net")
+
 ## Module Contents
 
 ### Functions

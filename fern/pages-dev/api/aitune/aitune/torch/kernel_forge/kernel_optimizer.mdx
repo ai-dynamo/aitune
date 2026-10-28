@@ -31,10 +31,10 @@ Kernel optimizer based on module function kernel profiling.
 
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider","aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler":"/aitune/aitune/torch/kernel_forge/module_function_kernel_profiler#aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler","aitune.torch.kernel_forge.kernel_utils.KernelUtils":"/aitune/aitune/torch/kernel_forge/kernel_utils#aitune-torch-kernel_forge-kernel_utils-KernelUtils"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"./kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider","aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler":"./module_function_kernel_profiler.mdx#aitune-torch-kernel_forge-module_function_kernel_profiler-ModuleFunctionKernelProfiler","aitune.torch.kernel_forge.kernel_utils.KernelUtils":"./kernel_utils.mdx#aitune-torch-kernel_forge-kernel_utils-KernelUtils"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer(
+class aitune.torch.kernel_forge.KernelOptimizer(
     kernel_providers: aitune.torch.kernel_forge.kernel_provider.KernelProvider | list[aitune.torch.kernel_forge.kernel_provider.KernelProvider] | None = None,
     kernel_generators: aitune.torch.kernel_forge.kernel_provider.KernelGenerator | list[aitune.torch.kernel_forge.kernel_provider.KernelGenerator] | None = None,
     kernel_profiler_factory: collections.abc.Callable[..., aitune.torch.kernel_forge.module_function_kernel_profiler.ModuleFunctionKernelProfiler] = ModuleFunctionKernelProfiler,
@@ -61,10 +61,10 @@ benchmarks generated candidates, and returns the selected runtime plan.
 </ParamField>
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_evaluate_candidate">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_provider.KernelProvider":"./kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._evaluate_candidate(
+aitune.torch.kernel_forge.KernelOptimizer._evaluate_candidate(
     search: aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch,
     provider: aitune.torch.kernel_forge.kernel_provider.KernelProvider,
     description: str
@@ -82,10 +82,10 @@ Run the common correctness validation and benchmark for one candidate.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_evaluate_generation_result">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_optimizer._GenerationTask":"#aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask","aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_generator#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_optimizer._GenerationTask":"#aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask","aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult":"./kernel_provider/kernel_generator.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._evaluate_generation_result(
+aitune.torch.kernel_forge.KernelOptimizer._evaluate_generation_result(
     searches: dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch],
     task: aitune.torch.kernel_forge.kernel_optimizer._GenerationTask,
     result: aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult
@@ -106,7 +106,7 @@ Evaluate one completed generation result.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_optimizer._GenerationTask":"#aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._evaluate_generation_results(
+aitune.torch.kernel_forge.KernelOptimizer._evaluate_generation_results(
     searches: dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch],
     tasks: list[aitune.torch.kernel_forge.kernel_optimizer._GenerationTask]
 ) -> None
@@ -126,7 +126,7 @@ Evaluate generated candidates sequentially as their futures finish.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._evaluate_provider_candidates(
+aitune.torch.kernel_forge.KernelOptimizer._evaluate_provider_candidates(
     searches: dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch],
     provider_functions: list[str]
 ) -> None
@@ -146,7 +146,7 @@ Prepare and benchmark all provider candidates while generators run.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._generators_for_function(
+aitune.torch.kernel_forge.KernelOptimizer._generators_for_function(
     func_name: str
 ) -> list[aitune.torch.kernel_forge.kernel_provider.KernelGenerator]
 ```
@@ -165,7 +165,7 @@ Return dynamic generators supporting one function.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelSource":"#aitune-torch-kernel_forge-kernel_optimizer-KernelSource"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._kernel_sources() -> list[aitune.torch.kernel_forge.kernel_optimizer.KernelSource]
+aitune.torch.kernel_forge.KernelOptimizer._kernel_sources() -> list[aitune.torch.kernel_forge.kernel_optimizer.KernelSource]
 ```
 
 </CodeBlock>
@@ -182,7 +182,7 @@ Return all available static and dynamic kernel sources.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType":"#aitune-torch-kernel_forge-kernel_optimizer-KernelSourceType"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._kernel_sources_for_function(
+aitune.torch.kernel_forge.KernelOptimizer._kernel_sources_for_function(
     sources: list[aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType],
     func_name: str
 ) -> list[aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType]
@@ -204,7 +204,7 @@ Return sources supporting one function.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate":"#aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._log_kernel_candidates_results(
+aitune.torch.kernel_forge.KernelOptimizer._log_kernel_candidates_results(
     func_name: str,
     candidates: list[aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate],
     baseline_latency: float
@@ -225,7 +225,7 @@ Log candidate latencies and their improvement over the baseline.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._log_summary(
+aitune.torch.kernel_forge.KernelOptimizer._log_summary(
     summary_df: pandas.DataFrame,
     provider_function_names: list[str],
     generator_function_names: list[str]
@@ -243,10 +243,10 @@ Log profiler results with markers for the selected kernel sources.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_make_plan">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"/aitune/aitune/torch/kernel_forge/module_function_kernel_profiler#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData","aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"/aitune/aitune/torch/kernel_forge/kernel_optimization_plan#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"./module_function_kernel_profiler.mdx#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData","aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"./kernel_optimization_plan.mdx#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._make_plan(
+aitune.torch.kernel_forge.KernelOptimizer._make_plan(
     function_data: dict[str, aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData],
     profiled_functions: list[str],
     provider_functions: list[str],
@@ -269,7 +269,7 @@ outperforms the original PyTorch function.
 **Parameters:**
 
 <ParamField path="function_data" type="dict[str, FunctionData]">
-Collected input samples for each supported function.
+`dict[str,` [`FunctionData`](./module_function_kernel_profiler.mdx#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData) `]` — Collected input samples for each supported function.
 </ParamField>
 
 <ParamField path="profiled_functions" type="list[str]">
@@ -284,7 +284,7 @@ Profiled functions selected for static providers.
 Profiled functions selected for asynchronous generators.
 </ParamField>
 
-**Returns:** `KernelOptimizationPlan`
+**Returns:** [`KernelOptimizationPlan`](./kernel_optimization_plan.mdx#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan)
 
 A runtime plan containing the fastest providers that outperform their baselines.
 
@@ -292,10 +292,10 @@ A runtime plan containing the fastest providers that outperform their baselines.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_prepare_provider_samples">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"/aitune/aitune/torch/kernel_forge/module_function_kernel_profiler#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData","aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"./module_function_kernel_profiler.mdx#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData","aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._prepare_provider_samples(
+aitune.torch.kernel_forge.KernelOptimizer._prepare_provider_samples(
     function_data: aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData
 ) -> tuple[list[aitune.torch.module.sample_store.Sample], list[aitune.torch.module.sample_store.Sample]]
 ```
@@ -315,10 +315,10 @@ to a minimum while maintaining the same distribution.
 **Parameters:**
 
 <ParamField path="function_data" type="FunctionData">
-the function data to prepare the provider samples for
+[`FunctionData`](./module_function_kernel_profiler.mdx#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData) — the function data to prepare the provider samples for
 </ParamField>
 
-**Returns:** `tuple[list[Sample], list[Sample]]`
+**Returns:** `tuple[list[` [`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `], list[` [`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `]]`
 
 a tuple of unique validation samples and a GCD-reduced benchmark distribution
 
@@ -326,10 +326,10 @@ a tuple of unique validation samples and a GCD-reduced benchmark distribution
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_prepare_searches">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"/aitune/aitune/torch/kernel_forge/module_function_kernel_profiler#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData","aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData":"./module_function_kernel_profiler.mdx#aitune-torch-kernel_forge-module_function_kernel_profiler-FunctionData","aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._prepare_searches(
+aitune.torch.kernel_forge.KernelOptimizer._prepare_searches(
     function_data: dict[str, aitune.torch.kernel_forge.module_function_kernel_profiler.FunctionData],
     profiled_functions: list[str]
 ) -> dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch]
@@ -346,10 +346,10 @@ Prepare each selected function's samples exactly once.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-_providers_for_function">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"./kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._providers_for_function(
+aitune.torch.kernel_forge.KernelOptimizer._providers_for_function(
     func_name: str
 ) -> list[aitune.torch.kernel_forge.kernel_provider.KernelProvider]
 ```
@@ -368,7 +368,7 @@ Return static providers supporting one function.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate":"#aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._select_best_candidate(
+aitune.torch.kernel_forge.KernelOptimizer._select_best_candidate(
     func_name: str,
     search: aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch
 ) -> aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate | None
@@ -388,7 +388,7 @@ Select the fastest valid candidate when it beats the single baseline measurement
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType":"#aitune-torch-kernel_forge-kernel_optimizer-KernelSourceType"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._select_source_functions(
+aitune.torch.kernel_forge.KernelOptimizer._select_source_functions(
     summary_df: pandas.DataFrame,
     sources: list[aitune.torch.kernel_forge.kernel_optimizer.KernelSourceType],
     min_time_share_percent: float
@@ -409,7 +409,7 @@ Select functions supported by a source and meeting its time-share threshold.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch":"#aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch","aitune.torch.kernel_forge.kernel_optimizer._GenerationTask":"#aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._submit_generation_tasks(
+aitune.torch.kernel_forge.KernelOptimizer._submit_generation_tasks(
     searches: dict[str, aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch],
     generator_functions: list[str]
 ) -> list[aitune.torch.kernel_forge.kernel_optimizer._GenerationTask]
@@ -429,7 +429,7 @@ Submit all supported generator-function pairs before static work.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._supported_function_names() -> set[str]
+aitune.torch.kernel_forge.KernelOptimizer._supported_function_names() -> set[str]
 ```
 
 </CodeBlock>
@@ -446,7 +446,7 @@ Return function names supported by providers or generators.
 <CodeBlock links={{"aitune.torch.kernel_forge.kernel_optimizer.KernelSource":"#aitune-torch-kernel_forge-kernel_optimizer-KernelSource"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer._supported_functions(
+aitune.torch.kernel_forge.KernelOptimizer._supported_functions(
     source: aitune.torch.kernel_forge.kernel_optimizer.KernelSource
 ) -> list[str]
 ```
@@ -464,10 +464,10 @@ Return function names supported by a provider or generator.
 </Indent>
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-KernelOptimizer-make_plan">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"/aitune/aitune/torch/kernel_forge/kernel_optimization_plan#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_optimization_plan.KernelOptimizationPlan":"./kernel_optimization_plan.mdx#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.kernel_forge.kernel_optimizer.KernelOptimizer.make_plan(
+aitune.torch.kernel_forge.KernelOptimizer.make_plan(
     function: collections.abc.Callable,
     data: collections.abc.Sequence[aitune.torch.module.sample_store.Sample] | None = None,
     module: torch.nn.Module | None = None
@@ -488,7 +488,7 @@ the function to run inference with
 </ParamField>
 
 <ParamField path="data" type="Sequence[Sample] | None" default="None">
-the data to use for optimization, if None the function will be called without arguments
+`Sequence[` [`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) `] | None` — the data to use for optimization, if None the function will be called without arguments
 </ParamField>
 
 <ParamField path="module" type="nn.Module | None" default="None">
@@ -496,7 +496,7 @@ the module whose hierarchy should be optimized. If omitted and ``function`` is a
 ``function`` is used as the module.
 </ParamField>
 
-**Returns:** `KernelOptimizationPlan`
+**Returns:** [`KernelOptimizationPlan`](./kernel_optimization_plan.mdx#aitune-torch-kernel_forge-kernel_optimization_plan-KernelOptimizationPlan)
 
 A plan containing the selected runtime kernel providers.
 
@@ -510,7 +510,7 @@ A plan containing the selected runtime kernel providers.
 
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-_FunctionSearch">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate":"#aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate":"#aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.kernel_forge.kernel_optimizer._FunctionSearch(
@@ -546,7 +546,7 @@ Samples and accumulated candidates for one PyTorch function.
 
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-_GenerationTask">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_generator#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelGenerationResult":"./kernel_provider/kernel_generator.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_generator-KernelGenerationResult"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.kernel_forge.kernel_optimizer._GenerationTask(
@@ -578,7 +578,7 @@ One submitted generator task and its expected function.
 
 <Anchor id="aitune-torch-kernel_forge-kernel_optimizer-_KernelCandidate">
 
-<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"/aitune/aitune/torch/kernel_forge/kernel_provider/kernel_provider#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.kernel_forge.kernel_provider.KernelProvider":"./kernel_provider/kernel_provider.mdx#aitune-torch-kernel_forge-kernel_provider-kernel_provider-KernelProvider"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.kernel_forge.kernel_optimizer._KernelCandidate(

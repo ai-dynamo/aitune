@@ -25,7 +25,7 @@ Contains SampleMetadata which represents metadata of a function inputs (args and
 
 <Anchor id="aitune-torch-module-sample_metadata-SampleMetadata">
 
-<CodeBlock links={{"aitune.torch.module.locator.Locator":"/aitune/aitune/torch/module/locator#aitune-torch-module-locator-Locator","aitune.torch.module.tensor_spec.TensorSpec":"/aitune/aitune/torch/module/tensor_spec#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"./locator.mdx#aitune-torch-module-locator-Locator","aitune.torch.module.tensor_spec.TensorSpec":"./tensor_spec.mdx#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.module.sample_metadata.SampleMetadata(
@@ -53,6 +53,87 @@ several important purposes:
 - Dynamic Batching: Supports scaling tensors to different batch sizes based on learned patterns
   using `make_batch()`.
 
+Operating Modes:
+    The metadata can be created in two modes based on the `strict` flag:
+
+    - Non-strict mode (`strict=False`, default): Only tensors are tracked. Primitives and
+      other non-tensor data are ignored.
+    - Strict mode (`strict=True`): All data types are tracked, including primitives.
+
+Equality Rules:
+    For non-tensor data, metadata equality is strict - two samples are equal only if all parts
+    are equal:
+        sample(1) == sample(1)
+        sample(1) != sample(2)
+        sample(1, 1) != sample(1)
+
+    For PyTorch tensors, equality is determined by rank (number of dimensions):
+        # Same rank (equal metadata)
+        sample(tensor(1)) == sample(tensor(1))
+        sample(tensor(1)) == sample(tensor(2))
+        sample(tensor(1, 1)) == sample(tensor(1, 7))
+        sample(tensor(1, 4, 2)) == sample(tensor(2, 2, 4))
+
+        # Different rank (different metadata)
+        sample(tensor(1)) != sample(tensor(1, 1))
+        sample(tensor(1, 1)) != sample(tensor(1, 1, 1))
+
+    These rules ensure that samples differing in structure or tensor rank are treated as having
+    different metadata, supporting the creation of distinct multi-graph representations.
+
+Key Concepts:
+    - Dynamic Dimensions: Dimensions that vary across samples (e.g., sequence length in NLP).
+      Marked as 'dim0', 'dim1', etc.
+    - Batch Axes: Dimensions that scale proportionally with batch size. Marked as 'batch0',
+      'batch1', etc. with associated multipliers.
+
+Example - Basic Usage:
+    &gt;&gt;&gt; inputs = &#123;
+    ...     "t": torch.randn(2, 3),
+    ...     "values": (1, 2, 3, torch.randn(2, 2)),
+    ...     "other": "abc",
+    ... &#125;
+    &gt;&gt;&gt; # Non-strict mode: only tensors tracked
+    &gt;&gt;&gt; SampleMetadata.from_inputs(inputs, strict=False)
+    Tensors:
+    ╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+    │ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+    ╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+    │ t             │ t               │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+    ├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+    │ values[3]     │ ('values', 3)   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+    ╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+    &lt;BLANKLINE&gt;
+    &gt;&gt;&gt; # Strict mode: all data tracked
+    &gt;&gt;&gt; SampleMetadata.from_inputs(inputs, strict=True)
+    Tensors:
+    ╒═══════════════╤═════════════════╤═════════╤═════════════╤═════════════╤═══════════════╕
+    │ Access Path   │ Semantic Path   │ Shape   │ Min Shape   │ Max Shape   │ Dtype         │
+    ╞═══════════════╪═════════════════╪═════════╪═════════════╪═════════════╪═══════════════╡
+    │ t             │ t               │ [2, 3]  │ [2, 3]      │ [2, 3]      │ torch.float32 │
+    ├───────────────┼─────────────────┼─────────┼─────────────┼─────────────┼───────────────┤
+    │ values[3]     │ ('values', 3)   │ [2, 2]  │ [2, 2]      │ [2, 2]      │ torch.float32 │
+    ╘═══════════════╧═════════════════╧═════════╧═════════════╧═════════════╧═══════════════╛
+    Other:
+    ╒═══════════════╤═════════════════╤═════════╕
+    │ Access Path   │ Semantic Path   │ Value   │
+    ╞═══════════════╪═════════════════╪═════════╡
+    │ values[0]     │ ('values', 0)   │ 1       │
+    ├───────────────┼─────────────────┼─────────┤
+    │ values[1]     │ ('values', 1)   │ 2       │
+    ├───────────────┼─────────────────┼─────────┤
+    │ values[2]     │ ('values', 2)   │ 3       │
+    ├───────────────┼─────────────────┼─────────┤
+    │ other         │ other           │ abc     │
+    ╘═══════════════╧═════════════════╧═════════╛
+    &lt;BLANKLINE&gt;
+
+Example - Tensor Rank Equality:
+    &gt;&gt;&gt; s1 = SampleMetadata.from_inputs(&#123;"x": torch.randn(1, 2, 3)&#125;)
+    &gt;&gt;&gt; s2 = SampleMetadata.from_inputs(&#123;"x": torch.randn(2, 2, 3)&#125;)
+    &gt;&gt;&gt; s1 == s2  # Same rank, different shape
+    True
+
 Note:
 1. The __init__ method should not be used directly. instead:
     - for inputs - use SampleMetadata.from_inputs(bound_arguments)
@@ -63,6 +144,12 @@ Note:
     which is either "prefill" or "decode". This is deduced based on the cache_position tensor. It cannot be
     done otherwise because even though kv cache is lazily initialized, it can be cached on subsequent generate
     calls i.e. it can always have tensors irrespective of the phase.
+
+
+See Also:
+    - TensorSpec: Underlying representation of individual tensors
+    - Locator: Navigation mechanism for nested structures
+    - sample_metadata_walkthrough.ipynb: Comprehensive tutorial on using SampleMetadata
 
 
 <ParamField path="llm_phase" type="Literal['prefill', 'decode', '']">
@@ -77,7 +164,7 @@ Get list of other data.
 Return whether non-tensor leaves are included in this metadata.
 </ParamField>
 
-<ParamField path="tensor_data" type="tuple[tuple[Locator, TensorSpec]]">
+<ParamField path="tensor_data" type="tuple[tuple[Locator, TensorSpec], ...]">
 Get list of tensor data.
 </ParamField>
 
@@ -173,7 +260,7 @@ Compute an order-independent hash for non-tensor data.
 </Indent>
 <Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-describe">
 
-<CodeBlock links={{"aitune.torch.module.tensor_spec.InfoLevel":"/aitune/aitune/torch/module/tensor_spec#aitune-torch-module-tensor_spec-InfoLevel"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.tensor_spec.InfoLevel":"./tensor_spec.mdx#aitune-torch-module-tensor_spec-InfoLevel"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.module.sample_metadata.SampleMetadata.describe(
@@ -232,7 +319,7 @@ Create SampleMetadata from dictionary.
 Dictionary containing serialized metadata
 </ParamField>
 
-**Returns:** `SampleMetadata`
+**Returns:** [`SampleMetadata`](#aitune-torch-module-sample_metadata-SampleMetadata)
 
 A SampleMetadata instance
 
@@ -387,9 +474,8 @@ A dictionary representation safe for ``json.dumps``.
 
 ```python
 aitune.torch.module.sample_metadata.SampleMetadata.update_max_batch_size(
-    inputs: dict[str, typing.Any],
     max_batch_size: int
-)
+) -> None
 ```
 
 </CodeBlock>
@@ -397,7 +483,11 @@ aitune.torch.module.sample_metadata.SampleMetadata.update_max_batch_size(
 
 <Indent>
 
-Update input spec with max batch size information.
+Extend known batch-axis bounds without creating tensors.
+
+Batch-axis multipliers determine each dimension's maximum size. Existing
+bounds are preserved, and dimensions without a known batch relationship
+remain unchanged.
 
 
 </Indent>
@@ -444,7 +534,7 @@ Hash nested values, falling back safely for unsupported unhashable objects.
 
 <Anchor id="aitune-torch-module-sample_metadata-batch_tensor">
 
-<CodeBlock links={{"aitune.torch.module.tensor_spec.TensorSpec":"/aitune/aitune/torch/module/tensor_spec#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.tensor_spec.TensorSpec":"./tensor_spec.mdx#aitune-torch-module-tensor_spec-TensorSpec"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.module.sample_metadata.batch_tensor(
@@ -468,7 +558,7 @@ Tensor to batch
 </ParamField>
 
 <ParamField path="tensor_spec" type="TensorSpec">
-Metadata to batch tensor according to
+[`TensorSpec`](./tensor_spec.mdx#aitune-torch-module-tensor_spec-TensorSpec) — Metadata to batch tensor according to
 </ParamField>
 
 <ParamField path="batch_size" type="int">

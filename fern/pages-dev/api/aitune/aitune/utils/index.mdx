@@ -8,34 +8,527 @@ Utility modules for AITune.
 
 ## Subpackages
 
-- **[`aitune.utils.monitoring`](/aitune/aitune/utils/monitoring)**
+- **[`aitune.utils.monitoring`](./monitoring/index.mdx)**
 
 ## Submodules
 
-- **[`aitune.utils.disk_space`](/aitune/aitune/utils/disk_space)**
-- **[`aitune.utils.env_vars`](/aitune/aitune/utils/env_vars)**
-- **[`aitune.utils.hashing`](/aitune/aitune/utils/hashing)**
-- **[`aitune.utils.logging`](/aitune/aitune/utils/logging)**
-- **[`aitune.utils.serialization`](/aitune/aitune/utils/serialization)**
-- **[`aitune.utils.timer`](/aitune/aitune/utils/timer)**
-- **[`aitune.utils.validation`](/aitune/aitune/utils/validation)**
+- **[`aitune.utils.disk_space`](./disk_space.mdx)**
+- **[`aitune.utils.env_vars`](./env_vars.mdx)**
+- **[`aitune.utils.hashing`](./hashing.mdx)**
+- **[`aitune.utils.logging`](./logging.mdx)**
+- **[`aitune.utils.serialization`](./serialization.mdx)**
+- **[`aitune.utils.timer`](./timer.mdx)**
+- **[`aitune.utils.validation`](./validation.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-utils-__all__)
+| Name | Description |
+|------|-------------|
+| [`Timer`](#aitune-utils-timer-Timer) | Context manager for timing and logging operations. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`control_output`](#aitune-utils-logging-control_output) | Silences or redirects stdout, stderr, and logs within the invoked context. |
+| [`log_to_file`](#aitune-utils-logging-log_to_file) | Append a message and optional exception details to a log file. |
+| [`set_module_level`](#aitune-utils-logging-set_module_level) | Set logging level for a specific module. |
+| [`setup_logging`](#aitune-utils-logging-setup_logging) | Configure logging for the AITune package. |
 
 ### API
 
-<Anchor id="aitune-utils-__all__">
+<Anchor id="aitune-utils-timer-Timer">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.utils.__all__ = ['Timer', 'log_to_file', 'control_output', 'set_module_level', 'setup_logging']
+class aitune.utils.Timer(
+    name: str | None = None,
+    sink: collections.abc.Callable | None = None,
+    silent: bool = False,
+    depth: int = 0,
+    track_depth: bool = False
+)
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+Context manager for timing and logging operations.
+
+Supports nested timers with automatic depth tracking and indentation,
+checkpoints for intermediate timing, and programmatic access to elapsed time.
+
+Example:
+    # Basic usage with logging
+    with Timer("Model training"):
+        train_model()
+
+    # No name - logs won't include operation name
+    with Timer() as timer:
+        do_work()
+        print(f"Took &#123;timer.elapsed:.2f&#125;s")
+        # Logs: "⏱️ completed in 1.23s" (no name in message)
+
+    # With checkpoints
+    with Timer("Data pipeline") as timer:
+        load_data()
+        timer.checkpoint("Data loaded")
+        preprocess_data()
+        timer.checkpoint("Preprocessing done")
+
+    # Access elapsed time
+    with Timer("Inference") as timer:
+        result = model.predict(x)
+        print(f"Took &#123;timer.elapsed:.2f&#125;s")
+
+    # Silent mode - no logging, just timing
+    with Timer("Silent operation", silent=True) as timer:
+        do_work()
+        print(f"Operation took &#123;timer.elapsed:.3f&#125;s")
+
+    # Initial depth for custom indentation
+    with Timer("Nested operation", depth=2):
+        do_work()  # Will be indented 4 spaces (2 levels)
+
+    # Enable depth tracking for nested indentation
+    with Timer("Outer", track_depth=True):
+        with Timer("Inner", track_depth=True):
+            do_work()  # Inner will be indented relative to Outer
+
+    # Silent mode with explicit logging at specific points
+    with Timer("Processing", silent=True) as timer:
+        step1()
+        timer.log_elapsed("Step 1 completed")  # Explicitly log
+        step2()
+        timer.log_elapsed("Step 2 completed")  # Explicitly log
+
+    # Silent mode with indented logging
+    with Timer("Pipeline", silent=True) as timer:
+        load_data()
+        timer.log_elapsed("Data loaded", depth=0)
+        with_substeps()
+        timer.log_elapsed("Substep 1", depth=1)
+        timer.log_elapsed("Substep 2", depth=1)
+        finalize()
+        timer.log_elapsed("Pipeline complete", depth=0)
+
+    # Manual start/stop without context manager
+    timer = Timer("Manual operation")
+    timer.start()
+    do_work()
+    elapsed = timer.stop()
+    print(f"Work took &#123;elapsed:.2f&#125;s")
+
+
+<ParamField path="_depth" type="int = 0">
+</ParamField>
+
+<ParamField path="_depth_token" type="Token | None = None">
+</ParamField>
+
+<ParamField path="_end_time" type="float | None = None">
+</ParamField>
+
+<ParamField path="_last_checkpoint_time" type="float | None = None">
+</ParamField>
+
+<ParamField path="_start_time" type="float | None = None">
+</ParamField>
+
+<ParamField path="elapsed" type="float">
+Get the elapsed time in seconds.
+</ParamField>
+
+<ParamField path="sink" type="= sink or logger.info">
+</ParamField>
+<Anchor id="aitune-utils-timer-Timer-__enter__">
+
+<CodeBlock links={{"aitune.utils.timer.Timer":"#aitune-utils-timer-Timer"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.Timer.__enter__() -> aitune.utils.timer.Timer
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Enter the context and start timing.
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.Timer.__exit__(
+    exc_type,
+    exc_val,
+    exc_tb
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Exit the context and log the elapsed time.
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-_get_indent">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.Timer._get_indent() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Get indentation string based on current depth plus initial depth.
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-_log">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.Timer._log(
+    message: str,
+    emoji: str = '⏱️',
+    indent: str | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Helper to log a message, handling the case when name is None.
+
+**Parameters:**
+
+<ParamField path="message" type="str">
+The message to log (e.g., "started", "completed in 1.23s")
+</ParamField>
+
+<ParamField path="emoji" type="str" default="'⏱️'">
+The emoji/prefix for the message (default: "⏱️")
+</ParamField>
+
+<ParamField path="indent" type="str | None" default="None">
+Optional indent string (defaults to self._get_indent())
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-checkpoint">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.Timer.checkpoint(
+    name: str
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Log a checkpoint with intermediate timing.
+
+**Parameters:**
+
+<ParamField path="name" type="str">
+Name of the checkpoint
+</ParamField>
+
+**Returns:** `float`
+
+Elapsed time since last checkpoint (or start if first checkpoint)
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-log_elapsed">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.Timer.log_elapsed(
+    message: str | None = None,
+    depth: int = 0
+) -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Explicitly log the elapsed time, even in silent mode.
+
+This method allows you to log elapsed time at any point, regardless of
+the silent setting. Useful when you want silent timing but need to log
+at specific checkpoints.
+
+**Parameters:**
+
+<ParamField path="message" type="str | None" default="None">
+Optional message to include in the log. If not provided,
+    uses the timer name.
+</ParamField>
+
+<ParamField path="depth" type="int" default="0">
+Indentation level for the log message (default: 0).
+  Each level adds 2 spaces of indentation.
+</ParamField>
+
+**Returns:** `float`
+
+Current elapsed time in seconds
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-start">
+
+<CodeBlock links={{"aitune.utils.timer.Timer":"#aitune-utils-timer-Timer"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.Timer.start(
+    log: bool = False
+) -> aitune.utils.timer.Timer
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Explicitly start the timer.
+
+This allows using the timer without a context manager.
+Can be called multiple times to restart timing.
+
+**Example**
+
+timer = Timer("operation")
+timer.start()
+do_work()
+elapsed = timer.stop()
+print(f"Took &#123;elapsed:.2f&#125;s")
+
+**Parameters:**
+
+<ParamField path="log" type="bool" default="False">
+If True, logs the start message.
+</ParamField>
+
+**Returns:** [`Timer`](#aitune-utils-timer-Timer)
+
+Self for method chaining
+
+
+</Indent>
+<Anchor id="aitune-utils-timer-Timer-stop">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.Timer.stop() -> float
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Explicitly stop the timer and return elapsed time.
+
+This allows using the timer without a context manager.
+Returns the elapsed time and optionally logs completion.
+
+**Example**
+
+timer = Timer("operation")
+timer.start()
+do_work()
+elapsed = timer.stop()
+print(f"Took &#123;elapsed:.2f&#125;s")
+
+**Returns:** `float`
+
+Elapsed time in seconds
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-utils-logging-control_output">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.control_output(
+    log_file: str | pathlib.Path | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Silences or redirects stdout, stderr, and logs within the invoked context.
+
+**Behavior matrix based on CONSOLE_OUTPUT_ENABLE environment variable and log_file**
+
+CONSOLE_OUTPUT_ENABLE=False, log_file=None       → Complete suppression (to /dev/null)
+CONSOLE_OUTPUT_ENABLE=False, log_file="file.log" → Redirect to file only, no console
+CONSOLE_OUTPUT_ENABLE=True, log_file=None      → Normal console output
+CONSOLE_OUTPUT_ENABLE=True, log_file="file.log"→ Tee mode: console AND file
+
+**Example usage**
+
+# Suppress all output
+with control_output():
+    print("Not shown anywhere")
+
+# Redirect output to file only
+with control_output(log_file="output.log"):
+    print("Goes to file, not console")
+
+**Parameters:**
+
+<ParamField path="log_file" type="str | Path | None" default="None">
+Optional file path to log output to
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-log_to_file">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.log_to_file(
+    log_file: str | pathlib.Path | None,
+    message: str,
+    exception: Exception | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Append a message and optional exception details to a log file.
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-set_module_level">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.set_module_level(
+    module_name: str,
+    level: int | str
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Set logging level for a specific module.
+
+**Parameters:**
+
+<ParamField path="module_name" type="str">
+Name of the module (e.g., 'aitune.torch.backend')
+</ParamField>
+
+<ParamField path="level" type="int | str">
+Logging level (e.g., 'DEBUG', 'INFO', 'WARNING')
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-utils-logging-setup_logging">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.utils.setup_logging(
+    level: int | str | None = None,
+    format_string: str = '%(asctime)s - %(name)s - %...,
+    log_file: str | pathlib.Path | None = None,
+    capture_warnings: bool = True
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Configure logging for the AITune package.
+
+This function sets up the root logger with appropriate handlers and formatting.
+Call this at the start of your application to ensure all logs are displayed.
+
+Example usage:
+from aitune import setup_logging, set_module_level
+import logging
+
+# Configure with a log file and custom format
+setup_logging(
+    level=logging.DEBUG,
+    format_string="%(asctime)s - %(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s",
+    log_file="aitune.log",
+)
+
+# Set specific modules to different levels
+set_module_level("aitune.torch.backend.tensorrt", logging.DEBUG)  # Verbose TensorRT logs
+
+**Parameters:**
+
+<ParamField path="level" type="int | str | None" default="None">
+Logging level (default: None, uses current root logger level)
+</ParamField>
+
+<ParamField path="format_string" type="str" default="'%(asctime)s - %(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s'">
+Format for log messages
+</ParamField>
+
+<ParamField path="log_file" type="str | Path | None" default="None">
+Optional file path to write logs to
+</ParamField>
+
+<ParamField path="capture_warnings" type="bool" default="True">
+If True, warnings will be captured and displayed
+</ParamField>
+
+
+</Indent>

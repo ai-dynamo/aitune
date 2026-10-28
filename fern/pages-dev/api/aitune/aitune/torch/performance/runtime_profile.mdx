@@ -352,7 +352,7 @@ aitune.torch.performance.runtime_profile._RuntimeProfile._aot_event_is_nested(
 Return True if a strict CPU ancestor of ``event`` is another AOT-region event.
 
 Walks ``cpu_parent`` up to (but not past) the profiled-run marker. The first
-ancestor matching :data:`AOT_MODULE_REGION_PREFIX` means this event is
+ancestor matching `AOT_MODULE_REGION_PREFIX` means this event is
 already enclosed by another AOT region in this run and its time would be
 double-counted if aggregated independently.
 

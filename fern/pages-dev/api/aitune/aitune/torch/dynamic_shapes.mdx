@@ -28,8 +28,6 @@ Dynamic shape dimension definitions.
 
 [`ShapeDefinition`](#aitune-torch-dynamic_shapes-ShapeDefinition)
 
-[`__all__`](#aitune-torch-dynamic_shapes-__all__)
-
 ### API
 
 <Anchor id="aitune-torch-dynamic_shapes-BatchDim">
@@ -37,7 +35,7 @@ Dynamic shape dimension definitions.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.dynamic_shapes.BatchDim(
+class aitune.torch.BatchDim(
     name: str,
     min: int,
     max: int,
@@ -64,7 +62,7 @@ Dynamic dimension representing the module's logical batch size.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.dynamic_shapes.DynamicDim(
+class aitune.torch.DynamicDim(
     name: str,
     min: int,
     max: int,
@@ -98,7 +96,7 @@ Named dynamic dimension with inclusive bounds.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.dynamic_shapes.DynamicDim.__post_init__() -> None
+aitune.torch.DynamicDim.__post_init__() -> None
 ```
 
 </CodeBlock>
@@ -115,7 +113,7 @@ Validate the dimension name and bounds.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.dynamic_shapes.DynamicDim.to_dict() -> dict[str, typing.Any]
+aitune.torch.DynamicDim.to_dict() -> dict[str, typing.Any]
 ```
 
 </CodeBlock>
@@ -195,18 +193,6 @@ aitune.torch.dynamic_shapes.DynamicShapes = dict[ForwardInputPath, ShapeDefiniti
 
 ```python
 aitune.torch.dynamic_shapes.ShapeDefinition = tuple[int | DynamicDim, ...]
-```
-
-</CodeBlock>
-</Anchor>
-
-
-<Anchor id="aitune-torch-dynamic_shapes-__all__">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.dynamic_shapes.__all__ = ['BatchDim', 'DynamicDim']
 ```
 
 </CodeBlock>

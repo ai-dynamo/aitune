@@ -40,7 +40,7 @@ Torchao backend.
 <CodeBlock links={{"aitune.torch.backend.torchao_backend.TorchAOBackendConfig":"#aitune-torch-backend-torchao_backend-TorchAOBackendConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torchao_backend.TorchAOBackend(
+class aitune.torch.backend.TorchAOBackend(
     config: aitune.torch.backend.torchao_backend.TorchAOBackendConfig | None = None
 )
 ```
@@ -50,7 +50,7 @@ class aitune.torch.backend.torchao_backend.TorchAOBackend(
 
 <Indent>
 
-**Bases:** [Backend](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend)
+**Bases:** [Backend[TorchAOBackendConfig]](./backend.mdx#aitune-torch-backend-backend-Backend)
 
 Backend that does torch quantization.
 
@@ -84,9 +84,6 @@ If you would like to use customize quantization, you can pass in a quantization 
 <ParamField path="_compile_dynamic" type="= self._config.dynamic">
 </ParamField>
 
-<ParamField path="_config">
-</ParamField>
-
 <ParamField path="_execution_modes">
 </ParamField>
 
@@ -97,7 +94,7 @@ If you would like to use customize quantization, you can pass in a quantization 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._activate()
+aitune.torch.backend.TorchAOBackend._activate()
 ```
 
 </CodeBlock>
@@ -111,15 +108,15 @@ Activates backend.
 </Indent>
 <Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_build">
 
-<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"/aitune/aitune/torch/module/graph_spec#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-SampleStore","aitune.torch.backend.backend.Backend":"/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-Backend"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.module.sample_store.SampleStore":"../module/sample_store.mdx#aitune-torch-module-sample_store-SampleStore"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._build(
+aitune.torch.backend.TorchAOBackend._build(
     module: torch.nn.Module,
     graph_spec: aitune.torch.module.graph_spec.GraphSpec,
     samples: aitune.torch.module.sample_store.SampleStore,
     cache_dir: pathlib.Path
-) -> aitune.torch.backend.backend.Backend
+) -> typing.Self
 ```
 
 </CodeBlock>
@@ -136,7 +133,7 @@ Builds the model with torchao quantization and torch.compile.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._check_hardware_compatibility(
+aitune.torch.backend.TorchAOBackend._check_hardware_compatibility(
     module: torch.nn.Module
 ) -> None
 ```
@@ -165,7 +162,7 @@ The PyTorch module to validate.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._check_mxfp8dq_compatibility(
+aitune.torch.backend.TorchAOBackend._check_mxfp8dq_compatibility(
     module: torch.nn.Module
 ) -> None
 ```
@@ -202,7 +199,7 @@ or a weight's last dimension is not divisible by MXFP8DQ_BLOCK_SIZE_DIVISIBILITY
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._check_nvfp4dq_compatibility(
+aitune.torch.backend.TorchAOBackend._check_nvfp4dq_compatibility(
     module: torch.nn.Module
 ) -> None
 ```
@@ -238,7 +235,7 @@ or any weight's last two dimensions are not divisible by the block size.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._deactivate()
+aitune.torch.backend.TorchAOBackend._deactivate()
 ```
 
 </CodeBlock>
@@ -255,7 +252,7 @@ Deactivates backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._deploy()
+aitune.torch.backend.TorchAOBackend._deploy()
 ```
 
 </CodeBlock>
@@ -272,7 +269,7 @@ Deploys the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._do_torchao_quantization()
+aitune.torch.backend.TorchAOBackend._do_torchao_quantization()
 ```
 
 </CodeBlock>
@@ -289,7 +286,7 @@ Apply TorchAO quantization and warm up the compiled model.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._infer(
+aitune.torch.backend.TorchAOBackend._infer(
     args: typing.Any = (),
     kwargs: typing.Any = {}
 ) -> typing.Any
@@ -323,7 +320,7 @@ The result of the inference.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._iter_quantized_parameters(
+aitune.torch.backend.TorchAOBackend._iter_quantized_parameters(
     module: torch.nn.Module
 )
 ```
@@ -347,7 +344,7 @@ model-specific predicate.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend._iter_samples()
+aitune.torch.backend.TorchAOBackend._iter_samples()
 ```
 
 </CodeBlock>
@@ -364,7 +361,7 @@ Iterate persisted samples, with support for legacy inline checkpoint data.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend.describe() -> str
+aitune.torch.backend.TorchAOBackend.describe() -> str
 ```
 
 </CodeBlock>
@@ -381,7 +378,7 @@ Returns the description of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend.from_dict(
+aitune.torch.backend.TorchAOBackend.from_dict(
     module: torch.nn.Module | None,
     state_dict: dict
 )
@@ -403,7 +400,7 @@ Creates a backend from a state_dict.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend.key() -> str
+aitune.torch.backend.TorchAOBackend.key() -> str
 ```
 
 </CodeBlock>
@@ -420,7 +417,7 @@ Returns the key of the backend.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackend.to_dict()
+aitune.torch.backend.TorchAOBackend.to_dict()
 ```
 
 </CodeBlock>
@@ -436,10 +433,10 @@ Returns the state_dict of the backend.
 
 <Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig">
 
-<CodeBlock links={{"aitune.torch.libs.torch_compile.TorchCompileMode":"/aitune/aitune/torch/libs/torch_compile#aitune-torch-libs-torch_compile-TorchCompileMode","aitune.torch.backend.torchao_backend.QuantizationType":"#aitune-torch-backend-torchao_backend-QuantizationType"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.libs.torch_compile.TorchCompileMode":"../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode","aitune.torch.backend.torchao_backend.QuantizationType":"#aitune-torch-backend-torchao_backend-QuantizationType"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.torchao_backend.TorchAOBackendConfig(
+class aitune.torch.backend.TorchAOBackendConfig(
     fullgraph: bool = False,
     dynamic: bool | None = None,
     mode: aitune.torch.libs.torch_compile.TorchCompileMode | None = 'max-autotune',
@@ -456,7 +453,7 @@ class aitune.torch.backend.torchao_backend.TorchAOBackendConfig(
 
 <Badge>Dataclass</Badge>
 
-**Bases:** [BackendConfig](/aitune/aitune/torch/backend/backend#aitune-torch-backend-backend-BackendConfig)
+**Bases:** [BackendConfig](./backend.mdx#aitune-torch-backend-backend-BackendConfig)
 
 Configuration for TorchAOBackend.
 
@@ -472,12 +469,12 @@ graph specs with detected dynamic axes, without mutating this config.
 </ParamField>
 
 <ParamField path="mode" type="TorchCompileMode | None" default="'max-autotune'">
-Passed through to ``torch.compile(mode=...)``. Valid presets are ``"default"``,
+[`TorchCompileMode`](../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode) `| None` — Passed through to ``torch.compile(mode=...)``. Valid presets are ``"default"``,
 ``"reduce-overhead"``, ``"max-autotune"``, and ``"max-autotune-no-cudagraphs"``.
 </ParamField>
 
 <ParamField path="quantization" type="QuantizationType | None" default="None">
-Name of a built-in TorchAO quantization preset.
+[`QuantizationType`](#aitune-torch-backend-torchao_backend-QuantizationType) `| None` — Name of a built-in TorchAO quantization preset.
 </ParamField>
 
 <ParamField path="quantization_config" type="AOBaseConfig | None" default="None">
@@ -513,7 +510,7 @@ for modules that should be quantized. Compatibility preflight checks use the sam
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackendConfig.__post_init__()
+aitune.torch.backend.TorchAOBackendConfig.__post_init__()
 ```
 
 </CodeBlock>
@@ -530,7 +527,7 @@ Post init for TorchAOBackendConfig.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackendConfig._get_quantization_config(
+aitune.torch.backend.TorchAOBackendConfig._get_quantization_config(
     quantization
 )
 ```
@@ -547,7 +544,7 @@ aitune.torch.backend.torchao_backend.TorchAOBackendConfig._get_quantization_conf
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackendConfig.describe() -> str
+aitune.torch.backend.TorchAOBackendConfig.describe() -> str
 ```
 
 </CodeBlock>
@@ -564,7 +561,7 @@ Returns the description of the backend.
 <CodeBlock links={{"aitune.torch.backend.torchao_backend.TorchAOBackendConfig":"#aitune-torch-backend-torchao_backend-TorchAOBackendConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackendConfig.from_dict(
+aitune.torch.backend.TorchAOBackendConfig.from_dict(
     data: dict
 ) -> aitune.torch.backend.torchao_backend.TorchAOBackendConfig
 ```
@@ -592,7 +589,7 @@ Supports two forms:
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackendConfig.key() -> str
+aitune.torch.backend.TorchAOBackendConfig.key() -> str
 ```
 
 </CodeBlock>
@@ -609,7 +606,7 @@ Returns the key of the backend configuration.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.torchao_backend.TorchAOBackendConfig.to_dict()
+aitune.torch.backend.TorchAOBackendConfig.to_dict()
 ```
 
 </CodeBlock>

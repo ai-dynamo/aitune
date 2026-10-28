@@ -36,7 +36,7 @@ NVIDIA ModelOpt PyTorch quantization module for TensorRT backend.
 <CodeBlock links={{"aitune.torch.backend.tensorrt.torch_quantization.QuantizationConfig":"#aitune-torch-backend-tensorrt-torch_quantization-QuantizationConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig(
+class aitune.torch.backend.TorchQuantizationConfig(
     quantization_config: aitune.torch.backend.tensorrt.torch_quantization.QuantizationConfig = 'FP8_DEFAULT_CFG',
     device: str = 'cuda'
 )
@@ -54,7 +54,7 @@ Configuration for Torch quantization.
 **Parameters:**
 
 <ParamField path="quantization_config" type="QuantizationConfig" default="'FP8_DEFAULT_CFG'">
-ModelOpt quantization configuration name.
+[`QuantizationConfig`](#aitune-torch-backend-tensorrt-torch_quantization-QuantizationConfig) — ModelOpt quantization configuration name.
 </ParamField>
 
 <ParamField path="device" type="str" default="'cuda'">
@@ -76,7 +76,7 @@ Enable verbose logging
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig.__post_init__()
+aitune.torch.backend.TorchQuantizationConfig.__post_init__()
 ```
 
 </CodeBlock>
@@ -93,7 +93,7 @@ Validate quantization_config after initialization.
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig.from_dict(
+aitune.torch.backend.TorchQuantizationConfig.from_dict(
     state_dict: dict
 )
 ```
@@ -242,7 +242,7 @@ Quantization configuration dictionary
 </Indent>
 <Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer-_prepare_calibration_sample">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer._prepare_calibration_sample(
@@ -261,14 +261,14 @@ Move sample to target device and return as Sample tuple.
 **Parameters:**
 
 <ParamField path="sample" type="Sample">
-Example input sample
+[`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Example input sample
 </ParamField>
 
 <ParamField path="device" type="str">
 Target device for calibration
 </ParamField>
 
-**Returns:** `Sample`
+**Returns:** [`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample)
 
 List containing the sample converted to target device
 
@@ -276,7 +276,7 @@ List containing the sample converted to target device
 </Indent>
 <Anchor id="aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizer-quantize">
 
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"/aitune/aitune/torch/module/sample_store#aitune-torch-module-sample_store-Sample","aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig":"#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizationConfig":"#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.tensorrt.torch_quantization.TorchQuantizer.quantize(
@@ -303,11 +303,11 @@ PyTorch module to export
 </ParamField>
 
 <ParamField path="sample" type="Sample">
-Example input for the model
+[`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Example input for the model
 </ParamField>
 
 <ParamField path="config" type="TorchQuantizationConfig">
-TorchQuantizationConfig
+[`TorchQuantizationConfig`](#aitune-torch-backend-tensorrt-torch_quantization-TorchQuantizationConfig) — TorchQuantizationConfig
 </ParamField>
 
 **Returns:** `nn.Module`

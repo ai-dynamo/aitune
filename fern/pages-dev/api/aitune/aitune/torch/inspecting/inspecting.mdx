@@ -32,7 +32,7 @@ Inspecting and patching modules.
 
 <Anchor id="aitune-torch-inspecting-inspecting-_reset_total_execution_time">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_inspector.ModuleInspector":"/aitune/aitune/torch/inspecting/module_inspector#aitune-torch-inspecting-module_inspector-ModuleInspector"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.ModuleInspector":"./module_inspector.mdx#aitune-torch-inspecting-module_inspector-ModuleInspector"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.inspecting.inspecting._reset_total_execution_time(
@@ -74,7 +74,7 @@ Run one complete inference in lockstep across distributed ranks.
 
 <Anchor id="aitune-torch-inspecting-inspecting-_synchronize_inspection_result">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.inspecting.inspecting._synchronize_inspection_result(
@@ -95,7 +95,7 @@ Order local modules and apply timings using rank zero's inspection result.
 
 <Anchor id="aitune-torch-inspecting-inspecting-_warmup">
 
-<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DataLoaderFactory"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"../dataloader.mdx#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"../dataloader.mdx#aitune-torch-dataloader-DataLoaderFactory"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.inspecting.inspecting._warmup(
@@ -117,10 +117,10 @@ Warmup the model by running it on a few samples.
 
 <Anchor id="aitune-torch-inspecting-inspecting-inspect">
 
-<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"/aitune/aitune/torch/dataloader#aitune-torch-dataloader-DataLoaderFactory","aitune.torch.inspecting.module_info.InspectedModulesInfo":"/aitune/aitune/torch/inspecting/module_info#aitune-torch-inspecting-module_info-InspectedModulesInfo"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.dataloader.DatasetLike":"../dataloader.mdx#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"../dataloader.mdx#aitune-torch-dataloader-DataLoaderFactory","aitune.torch.inspecting.module_info.InspectedModulesInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-InspectedModulesInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.inspecting.inspecting.inspect(
+aitune.torch.inspect(
     obj: collections.abc.Callable | torch.nn.Module,
     dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
     inference_function: collections.abc.Callable | None = None,
@@ -148,7 +148,7 @@ Callable object to inspect.
 </ParamField>
 
 <ParamField path="dataset" type="DatasetLike | DataLoaderFactory | torch.Tensor">
-List of tuples with batch size and input.
+[`DatasetLike`](../dataloader.mdx#aitune-torch-dataloader-DatasetLike) `|` [`DataLoaderFactory`](../dataloader.mdx#aitune-torch-dataloader-DataLoaderFactory) `| torch.Tensor` — List of tuples with batch size and input.
 </ParamField>
 
 <ParamField path="inference_function" type="Callable | None" default="None">
@@ -170,6 +170,13 @@ Minimum depth of the modules to inspect, if root level modules is not working, t
 <ParamField path="max_depth" type="int" default="5">
 Maximum depth of the modules to inspect
 </ParamField>
+
+<Note>
+
+In distributed execution, rank zero's module order and timings are applied to every rank so subsequent
+execution-based filtering selects modules consistently.
+
+</Note>
 
 
 </Indent>

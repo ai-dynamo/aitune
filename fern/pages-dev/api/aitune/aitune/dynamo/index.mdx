@@ -8,27 +8,317 @@ AITune Dynamo integration — serve tuned models as Dynamo endpoints.
 
 ## Submodules
 
-- **[`aitune.dynamo.distributed`](/aitune/aitune/dynamo/distributed)**
-- **[`aitune.dynamo.protocol`](/aitune/aitune/dynamo/protocol)**
-- **[`aitune.dynamo.runtime`](/aitune/aitune/dynamo/runtime)**
-- **[`aitune.dynamo.worker`](/aitune/aitune/dynamo/worker)**
+- **[`aitune.dynamo.distributed`](./distributed.mdx)**
+- **[`aitune.dynamo.protocol`](./protocol.mdx)**
+- **[`aitune.dynamo.runtime`](./runtime.mdx)**
+- **[`aitune.dynamo.worker`](./worker.mdx)**
 
 ## Package Contents
 
-### Data
+### Classes
 
-[`__all__`](#aitune-dynamo-__all__)
+| Name | Description |
+|------|-------------|
+| [`DynamoWorker`](#aitune-dynamo-worker-DynamoWorker) | Base class for custom AITune Dynamo workers. |
+| [`DynamoWorkerConfig`](#aitune-dynamo-worker-DynamoWorkerConfig) | Configure how an application-provided callable is exposed through Dynamo. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`dynamo_worker`](#aitune-dynamo-worker-dynamo_worker) | Serve a tuned model through a local or collective Dynamo worker. |
 
 ### API
 
-<Anchor id="aitune-dynamo-__all__">
+<Anchor id="aitune-dynamo-worker-DynamoWorker">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.dynamo.__all__ = ['DynamoWorker', 'DynamoWorkerConfig', 'dynamo_worker']
+class aitune.dynamo.DynamoWorker()
 ```
 
 </CodeBlock>
 </Anchor>
 
+<Indent>
+
+Base class for custom AITune Dynamo workers.
+
+Override `setup` and `serve`, then call `run`. An initialized
+multi-rank process group starts one endpoint on rank zero while every rank
+executes each request.
+
+Example:
+    &gt;&gt;&gt; import aitune.dynamo as dyn
+    &gt;&gt;&gt; class MyWorker(dyn.DynamoWorker):
+    ...     def setup(self):
+    ...         pass
+    ...     async def serve(self, request):
+    ...         yield request
+    &gt;&gt;&gt; # MyWorker().run()  # blocks until SIGTERM/SIGINT
+
+
+<ParamField path="_collective" type="bool = False">
+</ParamField>
+
+<ParamField path="component" type="str = 'backend'">
+</ParamField>
+
+<ParamField path="endpoint_name" type="str = 'generate'">
+</ParamField>
+
+<ParamField path="namespace" type="str = 'aitune'">
+</ParamField>
+<Anchor id="aitune-dynamo-worker-DynamoWorker-on_ready">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.DynamoWorker.on_ready(
+    runtime: typing.Any,
+    endpoint: typing.Any
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>async</Badge>
+
+Run optional registration work after the endpoint is available.
+
+
+</Indent>
+<Anchor id="aitune-dynamo-worker-DynamoWorker-run">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.DynamoWorker.run(
+    enable_nats: bool = False
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Start serving and block until shutdown.
+
+**Parameters:**
+
+<ParamField path="enable_nats" type="bool" default="False">
+Enable NATS JetStream for KV cache events.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-dynamo-worker-DynamoWorker-serve">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.DynamoWorker.serve(
+    request: typing.Any
+) -> collections.abc.AsyncGenerator[typing.Any, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>async</Badge>
+
+Handle one request and yield response chunks.
+
+
+</Indent>
+<Anchor id="aitune-dynamo-worker-DynamoWorker-setup">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.DynamoWorker.setup() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Initialize the model once before serving starts.
+
+
+</Indent>
+<Anchor id="aitune-dynamo-worker-DynamoWorker-warmup">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.DynamoWorker.warmup() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run optional model warmup after every rank completes setup.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-dynamo-worker-DynamoWorkerConfig">
+
+<CodeBlock links={{"aitune.dynamo.protocol.Modality":"./protocol.mdx#aitune-dynamo-protocol-Modality"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.dynamo.DynamoWorkerConfig(
+    type: aitune.dynamo.protocol.Modality,
+    model_path: str,
+    mapping: collections.abc.Callable | None = None,
+    namespace: str = 'aitune',
+    component: str = 'backend',
+    endpoint: str = 'generate',
+    enable_nats: bool = False,
+    model_name: str | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Configure how an application-provided callable is exposed through Dynamo.
+
+The application creates and loads the callable passed to `dynamo_worker`.
+This configuration only describes its Dynamo endpoint and registration.
+
+**Parameters:**
+
+<ParamField path="type" type="Modality">
+[`Modality`](./protocol.mdx#aitune-dynamo-protocol-Modality) — Modality type. One of ``"image"``, ``"video"``, ``"audio"``, ``"embedding"``.
+</ParamField>
+
+<ParamField path="model_path" type="str">
+Registration reference passed unchanged to Dynamo's
+``register_model``. It is not used to create or load the callable.
+</ParamField>
+
+<ParamField path="mapping" type="Callable | None" default="None">
+Optional adapter ``fn(DynamoRequest) -&gt; dict``. The result is
+unpacked as keyword arguments when calling the model. Without a mapping,
+a plain callable receives the deserialized request object.
+</ParamField>
+
+<ParamField path="namespace" type="str" default="'aitune'">
+Dynamo service namespace.
+</ParamField>
+
+<ParamField path="component" type="str" default="'backend'">
+Component name within the namespace.
+</ParamField>
+
+<ParamField path="endpoint" type="str" default="'generate'">
+Endpoint name within the component.
+</ParamField>
+
+<ParamField path="enable_nats" type="bool" default="False">
+Enable NATS JetStream for KV cache events.
+</ParamField>
+
+<ParamField path="model_name" type="str | None" default="None">
+Optional public name advertised to clients. Defaults to the
+``model_path`` registration reference.
+</ParamField>
+
+
+<ParamField path="component" type="str = 'backend'">
+</ParamField>
+
+<ParamField path="enable_nats" type="bool = False">
+</ParamField>
+
+<ParamField path="endpoint" type="str = 'generate'">
+</ParamField>
+
+<ParamField path="mapping" type="Callable | None = None">
+</ParamField>
+
+<ParamField path="model_name" type="str | None = None">
+</ParamField>
+
+<ParamField path="model_path" type="str">
+</ParamField>
+
+<ParamField path="namespace" type="str = 'aitune'">
+</ParamField>
+
+<ParamField path="type" type="Modality">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-dynamo-worker-dynamo_worker">
+
+<CodeBlock links={{"aitune.dynamo.worker.DynamoWorkerConfig":"#aitune-dynamo-worker-DynamoWorkerConfig"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.dynamo.dynamo_worker(
+    model_or_fn: torch.nn.Module | collections.abc.Callable,
+    config: aitune.dynamo.worker.DynamoWorkerConfig,
+    setup: collections.abc.Callable[[], None] | None = None,
+    warmup: collections.abc.Callable[[], None] | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Serve a tuned model through a local or collective Dynamo worker.
+
+**Example**
+
+&gt;&gt;&gt; import aitune.dynamo as dyn
+&gt;&gt;&gt; import numpy as np
+&gt;&gt;&gt; def embed(request):
+...     return np.zeros((1, 768))
+&gt;&gt;&gt; config = dyn.DynamoWorkerConfig(type="embedding", model_path="org/model")
+&gt;&gt;&gt; # dyn.dynamo_worker(embed, config)  # blocks until shutdown
+
+**Parameters:**
+
+<ParamField path="model_or_fn" type="nn.Module | Callable">
+A callable, or a ``torch.nn.Module`` with ``config.mapping``.
+</ParamField>
+
+<ParamField path="config" type="DynamoWorkerConfig">
+[`DynamoWorkerConfig`](#aitune-dynamo-worker-DynamoWorkerConfig) — Modality, endpoint, request mapping, and execution configuration.
+</ParamField>
+
+<ParamField path="setup" type="Callable[[], None] | None" default="None">
+Optional rank-local model initialization. In collective execution,
+every rank must finish this callback before warmup begins.
+</ParamField>
+
+<ParamField path="warmup" type="Callable[[], None] | None" default="None">
+Optional model warmup run after setup succeeds on every rank.
+</ParamField>
+
+**Raises:**
+
+- `ValueError`: If the modality is unsupported or a module has no mapping.
+- `ImportError`: If the optional Dynamo dependencies are unavailable.
+
+
+</Indent>
