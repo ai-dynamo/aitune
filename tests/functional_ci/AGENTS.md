@@ -63,8 +63,8 @@ The backend id is the pytest parametrize id and the feature-matrix column.
 | `onnxruntime-cuda` | `ONNXRuntimeBackend` (CUDA EP) | `TENSORRT_FP32` | `save_load`, `export` (`onnx`), `dynamic_batch`, `dynamic_non_batch`, `onnx_input` |
 | `onnxruntime-tensorrt` | `ONNXRuntimeBackend` (TensorRT EP) | `TENSORRT_FP32` | `save_load`, `dynamic_batch`, `dynamic_non_batch` |
 | `torchao-int8wo` | `TorchAOBackend` (`int8wo`) | `rtol=atol=5e-2` | `save_load` |
-| `inductor-jit` | `TorchInductorJitBackend` | default | `jit` |
-| `torch-tensorrt-jit` | `TorchTensorRTJitBackend` | `TENSORRT_FP32` | `jit` |
+| `inductor-jit` | `TorchInductorJitBackend` | default | `save_load`, `jit` |
+| `torch-tensorrt-jit` | `TorchTensorRTJitBackend` | `TENSORRT_FP32` | `save_load`, `jit` |
 
 TensorRT-based configs run fp32 without TF32; `tensorrt` also runs without CUDA graphs. `tensorrt_backend(**overrides)` builds
 TensorRT variants; `test_precision.py` uses it for fp16, int8, fp8, nvfp4, and CUDA graphs.
