@@ -118,6 +118,7 @@ def test_export_retries_constraint_violations_with_bounded_dynamic_hints(mocker)
     ).export(model, sample, graph_spec, device="cpu")
 
     assert export.call_count == 2
+    assert result.dynamic_shapes is not None
     height = result.dynamic_shapes["x"][2]
     width = result.dynamic_shapes["x"][3]
     assert isinstance(height, torch.export.dynamic_shapes._DimHint)

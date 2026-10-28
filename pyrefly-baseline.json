@@ -4516,27 +4516,6 @@
       "severity": "error"
     },
     {
-      "column": 14,
-      "path": "tests/unit/torch/libs/torch/test_torch_exporter.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "tests/unit/torch/libs/torch/test_torch_exporter.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/unit/torch/module/test_forward_signature.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `FunctionType` has no attribute `__signature__`",
-      "severity": "error"
-    },
-    {
       "column": 42,
       "path": "tests/unit/torch/module/test_graph_bindings.py",
       "name": "missing-attribute",
@@ -4691,27 +4670,6 @@
       "severity": "error"
     },
     {
-      "column": 61,
-      "path": "tests/unit/torch/module/test_recording_module.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `other_data`",
-      "severity": "error"
-    },
-    {
-      "column": 61,
-      "path": "tests/unit/torch/module/test_recording_module.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `tensor_data`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "tests/unit/torch/module/test_recording_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `dict[str | tuple[str, str], tuple[BatchDim, DynamicDim]]` is not assignable to parameter `dynamic_shapes` with type `dict[ForwardInputPath, tuple[DynamicDim | int, ...]] | None` in function `aitune.torch.module.recording_module.RecordingModule.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 16,
       "path": "tests/unit/torch/module/test_sample_metadata.py",
       "name": "missing-attribute",
@@ -4730,83 +4688,6 @@
       "path": "tests/unit/torch/module/test_sample_store.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `None`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "tests/unit/torch/module/test_tuned_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `OrderedDict[SampleMetadata, TorchInductorJitBackend]` is not assignable to parameter `backends` with type `OrderedDict[SampleMetadata, Backend[Unknown]]` in function `aitune.torch.module.tuned_module.TunedModule.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 66,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `dict[str, tuple[BatchDim, int]]` is not assignable to parameter `dynamic_shapes` with type `dict[ForwardInputPath, tuple[DynamicDim | int, ...]] | None` in function `aitune.torch.module.wrapper_module.Module.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `DynamicTuneStrategy` has no attribute `tune`",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `DynamicTuneStrategy` has no attribute `tune`",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `DynamicTuneStrategy` has no attribute `tune`",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 5,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `DynamicTuneStrategy` has no attribute `tune`",
-      "severity": "error"
-    },
-    {
-      "column": 61,
-      "path": "tests/unit/torch/module/test_wrapper_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `dict[str, tuple[BatchDim, int]]` is not assignable to parameter `dynamic_shapes` with type `dict[ForwardInputPath, tuple[DynamicDim | int, ...]] | None` in function `aitune.torch.module.wrapper_module.Module.__init__`",
       "severity": "error"
     },
     {
@@ -5563,83 +5444,6 @@
       "path": "tests/unit/torch/utils/test_device.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `list[str]` is not assignable to parameter `device` with type `device | str` in function `aitune.torch.utils.device.get_device`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 30,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 30,
-      "path": "tests/unit/torch/utils/test_shapes.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
       "severity": "error"
     },
     {

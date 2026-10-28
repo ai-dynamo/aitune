@@ -17,7 +17,7 @@ from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBack
 from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
 from aitune.torch.distributed import resolve_tuning_device
-from aitune.torch.dynamic_shapes import BatchDim
+from aitune.torch.dynamic_shapes import BatchDim, DynamicShapes
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -197,7 +197,7 @@ def test_recording_with_update_wrapped_partial_forward():
 
 
 def test_recording_with_explicit_dynamic_shapes():
-    dynamic_shapes = {"x": (BatchDim("batch", min=1, opt=2, max=4), 5)}
+    dynamic_shapes: DynamicShapes = {"x": (BatchDim("batch", min=1, opt=2, max=4), 5)}
     module = Module(Identity(), TEST_MODULE_NAME, dynamic_shapes=dynamic_shapes)
 
     module(torch.ones(2, 5))
@@ -397,8 +397,8 @@ def test_tune_with_list_of_strategies(torch_device):
     module(2, b=2)
     module.tune(dry_run=False, device=torch_device)
 
-    module._self_strategy_list[0].tune.assert_called_once()
-    module._self_strategy_list[1].tune.assert_called_once()
+    strategy1.tune.assert_called_once()
+    strategy2.tune.assert_called_once()
     assert module.state == ModuleState.TUNED
 
     with pytest.raises(RuntimeError, match="Module is already tuned. Use force=True to reset tuned module."):
@@ -431,8 +431,8 @@ def test_tune_with_dict_of_strategies(torch_device):
     module(2)
     module.tune(dry_run=False, device=torch_device)
 
-    module._self_strategy_map[graph1].tune.assert_called_once()
-    module._self_strategy_map[graph2].tune.assert_called_once()
+    strategy1.tune.assert_called_once()
+    strategy2.tune.assert_called_once()
     assert module.state == ModuleState.TUNED
 
     with pytest.raises(RuntimeError, match="Module is already tuned. Use force=True to reset tuned module."):
@@ -495,7 +495,7 @@ def test_tune_with_torch_compile_backend_simulate_prefill_decode(module, torch_d
 def test_serialization(torch_device):
     """Test converting module to dictionary."""
     model = Identity()
-    dynamic_shapes = {"x": (BatchDim("batch", min=1, opt=2, max=4), 5)}
+    dynamic_shapes: DynamicShapes = {"x": (BatchDim("batch", min=1, opt=2, max=4), 5)}
     module = Module(model, TEST_MODULE_NAME, dynamic_shapes=dynamic_shapes)
 
     # Record samples and tune the module

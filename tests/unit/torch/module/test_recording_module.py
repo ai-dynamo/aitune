@@ -9,7 +9,7 @@ import torch
 
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch.config import AITuneConfig
-from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
+from aitune.torch.dynamic_shapes import BatchDim, DynamicDim, DynamicShapes
 from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.sample_store import SampleStore
 from tests.toy_models.torch_models import ToyTorchModel
@@ -178,6 +178,7 @@ def test_recording_tracks_input_metadata_before_and_after_call(tmp_path):
 
     graph_spec = recording.graph_specs[0]
     pre_other = {locator.path: value for locator, value in graph_spec.input_spec.other_data}
+    assert graph_spec.post_input_spec is not None
     post_other = {locator.path: value for locator, value in graph_spec.post_input_spec.other_data}
     post_tensors = {locator.path: spec for locator, spec in graph_spec.post_input_spec.tensor_data}
 
@@ -251,7 +252,7 @@ def test_recording_resolves_nested_shapes_and_shared_dimensions(tmp_path):
         def forward(self, input_ids, options, extra):
             return input_ids + options["mask"] + extra[:, : input_ids.shape[1]]
 
-    dynamic_shapes = {
+    dynamic_shapes: DynamicShapes = {
         "input_ids": (BatchDim("batch", min=1, opt=2, max=4), DynamicDim("sequence", min=2, opt=4, max=8)),
         ("options", "mask"): (
             BatchDim("batch", min=1, opt=2, max=4),

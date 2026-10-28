@@ -232,6 +232,7 @@ def test_build_dynamic_shapes_explicit_batch_dim_stays_a_named_shared_dim():
 
     result = build_dynamic_shapes(sample, graph_spec)
 
+    assert result is not None
     assert result["x"][0].__name__ == "batch"
     assert (result["x"][0].min, result["x"][0].max) == (1, 8)
     assert result["x"][0] is result["y"][0]
@@ -247,6 +248,7 @@ def test_build_dynamic_shapes_explicit_non_batch_dim_uses_dynamic_hint():
 
     result = build_dynamic_shapes(sample, graph_spec)
 
+    assert result is not None
     sequence = result["x"][1]
     assert isinstance(sequence, torch.export.dynamic_shapes._DimHint)
     assert (sequence.min, sequence.max) == (1, 16)
@@ -258,6 +260,7 @@ def test_build_dynamic_shapes_explicit_dims_use_named_dims_when_use_auto_false()
 
     result = build_dynamic_shapes(sample, graph_spec, use_auto=False)
 
+    assert result is not None
     assert result["x"][1].__name__ == "sequence"
     assert (result["x"][1].min, result["x"][1].max) == (1, 16)
     assert result["x"][1] is result["y"][1]
