@@ -55,6 +55,52 @@ Execution graphs are detected during the **Sample Gathering Phase** of tuning:
 
 For a complete overview of the tuning process, see [Tuning Workflow](tuning_workflow.md).
 
+## Mutable Inputs and the Forward Contract
+
+Modules may update inputs during inference, such as writing tensors into a cache and returning that same cache.
+Each `GraphSpec` stores a `ForwardContract` that describes the recorded output structure, input leaf changes,
+and outputs that are the same objects as inputs. Exporters use a flat tensor interface; backends use the contract
+to restore the structured output and apply recorded input changes.
+
+The supported restoration operations are:
+
+| Operation | Runtime behavior |
+| --- | --- |
+| Copy a changed tensor | Copy the backend result into the existing input tensor. A backend policy may instead replace the tensor inside a caller-owned mutable container. |
+| Replace a tensor leaf | Assign the backend result at the recorded input path. |
+| Replace a non-tensor leaf | Assign a copy of the value recorded during contract capture. This value is constant, not a runtime computation. |
+| Restore an output-to-input alias | Return the corresponding input tensor or container so the output shares its object identity. |
+
+Only leaves traversed by `Locator` participate in mutation capture. Integrations can register non-tensor
+mutation fields for otherwise tensor-only objects, such as the initialization fields of Transformers static
+cache layers. The contract does not describe deleted leaves, arbitrary Python side effects, or hidden module
+attributes and buffers. Exporters and backends handle module state separately. Object-identity aliases do not
+provide a general recipe for reconstructing arbitrary tensor storage views.
+
+### One Contract per Input Graph
+
+The first recorded call for an input graph establishes its mutation and alias rules. Later samples update
+observed input, output, and post-call input shapes without recapturing or checking those rules during recording.
+Calls grouped into the same graph must therefore have compatible mutation paths, mutation kinds, output
+structure, and output-to-input aliases. Recorded non-tensor replacement values must also remain applicable.
+
+Collecting more samples improves shape coverage, but does not create a separate contract for behavior controlled
+only by tensor contents or hidden state. Such behavior needs an explicit input distinction that graph detection
+can recognize, or a different model execution path.
+
+### What Stateful Validation Checks
+
+When correctness checking is enabled and a graph has recorded input mutations, tuning compares repeated backend
+calls with recorded eager execution. Each sample starts a new sequence that reuses its input state; the default
+sequence has three calls. The comparison checks tensor shapes, dtypes, layouts, devices, leaf types, object
+identity, and shared storage. Backend policies can allow replacement of input tensors while retaining checks
+on post-call aliases.
+
+These are structural checks. Tensor contents and non-tensor values are not compared with eager results, and
+passing validation covers only the sampled sequences. Separate output validity checks detect NaN/inf, but
+numerical equivalence and model accuracy require their own evaluation. Hidden Python attributes inside the
+module are outside the structural comparison.
+
 ## What This Guide Covers
 
 This guide explores the technical details of execution graphs through the lens of `SampleMetadata`, the core class responsible for:
