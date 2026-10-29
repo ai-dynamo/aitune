@@ -382,7 +382,7 @@ jobs:
       contents: read
       packages: read
     container:
-      image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.06-py3:latest
+      image: ${{ needs.wheel.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
