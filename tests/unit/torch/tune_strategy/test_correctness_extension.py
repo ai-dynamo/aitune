@@ -153,26 +153,55 @@ def test_correctness_loads_samples_on_backend_device(mocker, tmp_path):
 
 
 @pytest.mark.parametrize("enabled", [True, False])
-def test_check_correctness_includes_stateful_validation(mocker, tmp_path, enabled):
-    backend, _, strategy, samples, graph_spec = _mock_backend_validation_context(mocker, tmp_path)
+@pytest.mark.parametrize("reject", [True, False])
+def test_stateful_validation_checks_built_backend(mocker, tmp_path, enabled, reject):
+    backend, module, strategy, samples, graph_spec = _mock_backend_validation_context(mocker, tmp_path)
     backend.device = torch.device("cpu")
-    stateful_validation = mocker.Mock()
-    backend.stateful_validation = stateful_validation
-    mocker.patch("aitune.torch.tune_strategy.tune_strategy.check_inference_output_correctness")
-    mocker.patch("aitune.torch.tune_strategy.tune_strategy.check_dynamic_shape_boundary_inference")
+    graph_spec.forward_contract = mocker.Mock(input_mutations=(mocker.sentinel.mutation,))
+    session = mocker.patch("aitune.torch.tune_strategy.tune_strategy.StatefulValidation").return_value
+    mocker.patch("aitune.torch.tune_strategy.tune_strategy.move_module_to_device")
+    mocker.patch("aitune.torch.tune_strategy.tune_strategy.preserve_buffers", return_value=mocker.MagicMock())
+    ordinary_checks = mocker.patch.object(strategy, "check_correctness")
+    events = []
+
+    def build(*args, **kwargs):
+        events.append("build")
+        return backend
+
+    def validate(*args, **kwargs):
+        events.append("validate")
+        if reject:
+            raise ValueError("state check failed")
+
+    backend.build.side_effect = build
+    session.check.side_effect = validate
     strategy.enable_correctness_check(enabled)
 
-    strategy.check_correctness(backend, "module", graph_spec, samples)
+    result = strategy._build_and_validate_backend(
+        backend, module, "module", graph_spec, samples, backend.device, tmp_path
+    )
 
+    assert events == (["build", "validate"] if enabled else ["build"])
+    assert "stateful_validation" not in vars(backend)
     if enabled:
-        stateful_validation.check.assert_called_once_with(
+        session.record.assert_called_once()
+        session.check.assert_called_once_with(
             backend.infer,
             backend.device,
             name=f"module.{graph_spec.name}.mock_backend",
             tensor_mutation_policy=backend.tensor_mutation_policy,
         )
+        backend.validation_context.return_value.__exit__.assert_called_once()
     else:
-        stateful_validation.check.assert_not_called()
+        session.record.assert_not_called()
+        session.check.assert_not_called()
+    if enabled and reject:
+        assert result is None
+        ordinary_checks.assert_not_called()
+        assert strategy.backend_results[-1]["success"] is False
+    else:
+        assert result is backend
+        ordinary_checks.assert_called_once_with(backend, "module", graph_spec, samples)
 
 
 def test_correctness_requires_at_least_one_sample(tmp_path):

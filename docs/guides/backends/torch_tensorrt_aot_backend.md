@@ -103,6 +103,9 @@ dynamic-shape constraints. Torch-TensorRT prepares the example tensors for savin
 Here, `retrace=True` selects the Torch Export save path; it does not use `torch.jit.trace`
 or produce TorchScript. AITune reloads the persisted artifact before accepting the backend,
 including stateful validation when configured.
+The tuning strategy owns the validation session and checks the loaded backend after build.
+There is no separate stateful check before saving. Compilation or saving errors fail the
+candidate during build; a failed check after reload also rejects the candidate.
 Stateful validation checks input/output structure, tensor shapes, dtypes, devices, and aliases
 across repeated calls. It does not compare tensor contents or establish model accuracy;
 numerical quality requires a separate evaluation appropriate to the model and task.

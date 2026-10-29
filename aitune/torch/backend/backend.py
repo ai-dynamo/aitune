@@ -10,7 +10,7 @@ from collections.abc import Generator
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Self, TypeVar
+from typing import Any, ClassVar, Generic, Self, TypeVar
 
 import torch
 import torch.nn as nn
@@ -24,9 +24,6 @@ from aitune.torch.utils.memory import release_transient_memory
 from aitune.utils.hashing import hash_string
 from aitune.utils.monitoring import annotate, with_backend_context
 from aitune.utils.serialization import json_serialize
-
-if TYPE_CHECKING:
-    from aitune.torch.task.stateful_validation import StatefulValidation
 
 
 class BackendBuildStep(str, Enum):
@@ -227,8 +224,6 @@ class Backend(ABC, Generic[ConfigType]):
         self._device: torch.device | None = None
         self._config: ConfigType = config
         self._build_results = []
-        # Temporary checks used during build and validation, not saved in checkpoints.
-        self.stateful_validation: StatefulValidation | None = None
 
     @contextlib.contextmanager
     def _track_build_step(self, step: BackendBuildStep) -> Generator[dict[str, Any], None, None]:
