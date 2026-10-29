@@ -352,6 +352,32 @@ def test_profiler_relinquishes_ownership_after_external_change(mocker, monkeypat
     assert kernel_profiler_module._owns_teardown_cupti is False
 
 
+@pytest.mark.parametrize("initial_value", [None, "0", "1"])
+def test_teardown_owns_recreated_setting_and_next_priming_disables_teardown(mocker, monkeypatch, initial_value):
+    if initial_value is not None:
+        monkeypatch.setenv("TEARDOWN_CUPTI", initial_value)
+    session_values = []
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+    profile.side_effect = lambda **kwargs: session_values.append(os.environ["TEARDOWN_CUPTI"]) or profile.return_value
+    mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+
+    kernel_profiler_module.prime_cuda_profiler()
+    monkeypatch.delenv("TEARDOWN_CUPTI")
+    kernel_profiler_module.teardown_cuda_profiler()
+
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._last_teardown_cupti_value == "1"
+    assert kernel_profiler_module._owns_teardown_cupti is True
+    assert kernel_profiler_module._cuda_profiler_primed is False
+
+    kernel_profiler_module.prime_cuda_profiler()
+    kernel_profiler_module.teardown_cuda_profiler()
+
+    assert session_values == [initial_value or "0", "1", "0", "1"]
+    assert kernel_profiler_module._owns_teardown_cupti is True
+
+
 def test_profile_tears_down_cuda_profiler_when_profiling_fails(mocker):
     mocker.patch.object(kernel_profiler_module.torch.cuda, "is_available", return_value=True)
     mocker.patch.object(kernel_profiler_module.coordinator, "verify_equal")

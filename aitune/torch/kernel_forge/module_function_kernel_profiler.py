@@ -83,7 +83,7 @@ def teardown_cuda_profiler() -> None:
     Kineto reads the variable again from the asynchronous teardown thread. A later ``profile`` call primes the
     profiler again with teardown disabled for owned values.
     """
-    global _cuda_profiler_primed, _last_teardown_cupti_value  # noqa: PLW0603
+    global _cuda_profiler_primed, _owns_teardown_cupti, _last_teardown_cupti_value  # noqa: PLW0603
 
     if not _cuda_profiler_primed:
         return
@@ -102,6 +102,7 @@ def teardown_cuda_profiler() -> None:
 
     os.environ["TEARDOWN_CUPTI"] = "1"
     _last_teardown_cupti_value = "1"
+    _owns_teardown_cupti = True
     with profile(activities=[ProfilerActivity.CUDA]):
         torch.zeros(1, device="cuda").relu_()
     torch.cuda.synchronize()
