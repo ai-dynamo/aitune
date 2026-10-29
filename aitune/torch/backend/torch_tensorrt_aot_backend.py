@@ -392,27 +392,18 @@ def _save_compiled_model(
     dynamic_shapes: dict[str, Any] | None,
     pickle_protocol: int,
 ) -> None:
-    """Save a compiled graph and retry a known export error with retracing if every input is a tensor."""
+    """Save a compiled graph and retry a known export error with retracing."""
     try:
         with torch_tensorrt_errors(torch_tensorrt):
             program = _export_compiled_model(module)
             torch_tensorrt.save(program, path.as_posix(), pickle_protocol=pickle_protocol)
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
-    except SpecViolationError as error:
-        args, kwargs = sample
-        inputs = [*((f"args[{index}]", value) for index, value in enumerate(args)), *kwargs.items()]
-        non_tensor = [
-            f"{name}: {type(value).__name__}" for name, value in inputs if not isinstance(value, torch.Tensor)
-        ]
-        if non_tensor:
-            raise RuntimeError(
-                "Torch-TensorRT could not save the compiled graph, and its retrace fallback accepts only tensor "
-                f"inputs ({', '.join(non_tensor)}). See https://github.com/pytorch/TensorRT/issues/4941."
-            ) from error
+    except SpecViolationError:
         logger.warning(
             "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
             exc_info=True,
         )
+        args, kwargs = sample
         with torch_tensorrt_errors(torch_tensorrt):
             # Torch-TensorRT 2.8-2.10 `save(retrace=True)` ignores `dynamic_shapes`, so export here with them.
             program = torch.export.export(

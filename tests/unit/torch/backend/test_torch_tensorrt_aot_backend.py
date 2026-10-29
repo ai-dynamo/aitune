@@ -130,7 +130,7 @@ def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.save.side_effect = [SpecViolationError("direct save failed"), None]
     module = mocker.Mock(spec=nn.Module)
-    sample = ((torch.ones(1),), {"mask": torch.ones(1)})
+    sample = ((mocker.sentinel.input,), {"output_hidden_states": True})
     dynamic_shapes = {"x": {0: mocker.sentinel.batch}}
     mock_export = mocker.patch("torch.export.export")
 
@@ -145,22 +145,6 @@ def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path
         ),
         mocker.call(mock_export.return_value, (tmp_path / "model.pt").as_posix(), pickle_protocol=5),
     ]
-
-
-def test_save_compiled_model_does_not_retrace_non_tensor_inputs(mocker, tmp_path: Path):
-    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
-    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
-    mock_torch_tensorrt.save.side_effect = SpecViolationError("direct save failed")
-    sample = ((torch.ones(1), {"bias": torch.ones(1)}, 2.0, None), {})
-
-    with pytest.raises(RuntimeError, match=r"\(args\[1\]: dict, args\[2\]: float, args\[3\]: NoneType\)") as error:
-        _save_compiled_model(
-            mocker.Mock(spec=nn.Module), tmp_path / "model.pt", sample, dynamic_shapes=None, pickle_protocol=5
-        )
-
-    assert "pytorch/TensorRT/issues/4941" in str(error.value)
-    assert isinstance(error.value.__cause__, SpecViolationError)
-    mock_torch_tensorrt.save.assert_called_once()
 
 
 def test_save_compiled_model_does_not_retrace_after_oserror(mocker, tmp_path: Path):
