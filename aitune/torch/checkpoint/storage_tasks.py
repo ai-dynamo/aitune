@@ -525,7 +525,10 @@ class UnzipLoadTask(LoadTask):
 
         if not check_checkpoint_valid(path):
             with zipfile.ZipFile(zip_path, "r") as zip_fp:
-                zip_fp.extractall(path)
+                # Extract the SHA sums files last, so an interrupted extraction never
+                # leaves a folder that check_checkpoint_valid accepts.
+                members = sorted(zip_fp.namelist(), key=lambda name: name.endswith("_sums.txt"))
+                zip_fp.extractall(path, members)
 
         logger.info("✅ Checkpoint extracted")
 

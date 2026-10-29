@@ -717,6 +717,46 @@ def test_check_checkpoint_valid_replaced_archive(tmp_path):
     assert (test_dir / "weights.bin").read_bytes() == b"v2"
 
 
+def test_interrupted_extraction_is_not_valid(tmp_path, monkeypatch):
+    """An extraction that stops partway leaves a folder that the next load extracts again."""
+    test_dir = tmp_path / "test_checkpoint"
+    (test_dir / "1").mkdir(parents=True)
+    (test_dir / "weights.bin").write_bytes(b"weights")
+    (test_dir / "1" / "model.plan").write_bytes(b"engine")
+    ShaSumsSaveTask().save(test_dir, {})
+
+    # Store the sums file first, as ZipSaveTask can do with rglob order.
+    sums_file = get_sha_sums_path(test_dir)
+    _write_archive(
+        test_dir,
+        {
+            sums_file.name: sums_file.read_text(encoding="utf-8"),
+            "weights.bin": "weights",
+            "1/model.plan": "engine",
+        },
+    )
+    shutil.rmtree(test_dir)
+
+    extract_member = zipfile.ZipFile._extract_member
+
+    def fail_in_subfolder(self, member, *args, **kwargs):
+        name = member.filename if isinstance(member, zipfile.ZipInfo) else member
+        if name.startswith("1/"):
+            raise OSError("No space left on device")
+        return extract_member(self, member, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(zipfile.ZipFile, "_extract_member", fail_in_subfolder)
+        with pytest.raises(OSError, match="No space left on device"):
+            UnzipLoadTask().load(test_dir)
+
+    assert check_checkpoint_valid(test_dir) is False
+
+    UnzipLoadTask().load(test_dir)
+    ShaSumsLoadTask().load(test_dir)
+    assert (test_dir / "1" / "model.plan").read_bytes() == b"engine"
+
+
 @pytest.mark.parametrize("sha_type", ["256", "512"])
 def test_get_sha_sums_path(sha_type):
     """Test get_sha_sums_path function."""
