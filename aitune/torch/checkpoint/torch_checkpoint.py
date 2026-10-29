@@ -3,6 +3,7 @@
 """Torch checkpoint module."""
 
 from collections import OrderedDict
+from logging import getLogger
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,8 @@ from aitune.torch.checkpoint.checkpoint import Checkpoint
 from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.module.wrapper_module import Module as WrapperModule
 from aitune.torch.utils.device import get_device
+
+logger = getLogger(__name__)
 
 
 class TorchCheckpoint(Checkpoint):
@@ -193,6 +196,7 @@ class TorchCheckpoint(Checkpoint):
             tuned versions. Original torch modules that were not tuned are preserved.
         """
         top_module = None
+        checkpoint_module_path = module_name
 
         def replace_tuned_module(
             module: TorchModule,
@@ -219,6 +223,9 @@ class TorchCheckpoint(Checkpoint):
                 # This is a tuned module, replace with wrapper module
                 device = device_map.pop(module_name, None)
 
+                module_path = ".".join(part for part in (checkpoint_module_path, prefix.rstrip(".")) if part)
+                module_path = module_path or stored_object[WrapperModule.NAME_KEY]
+                logger.info("Loading module %s:", module_path)
                 wrapper_module = WrapperModule.from_dict(module, stored_object, device)
                 if parent_module is None:
                     # We replace top module
@@ -227,6 +234,8 @@ class TorchCheckpoint(Checkpoint):
                 else:
                     # We replace a child module with wrapper module
                     setattr(parent_module, module_name, wrapper_module)
+                for graph_index, backend in enumerate(wrapper_module.module.backends.values()):
+                    logger.info("  -> graph %s restored with %s", graph_index, backend.name)
                 # Remove state_dict key - we already handled it
                 del local_state_dict[prefix]
             else:
@@ -293,9 +302,11 @@ class TorchCheckpoint(Checkpoint):
                 module, module_state_dict, device_map, name
             )
 
-        # Replace the module on all its paths, so that aliases stay the same object.
-        for path, module in modules.items():
-            if id(module) in restored_modules:
+            # Install each restored module before loading the next one, including all aliases.
+            # This preserves completed replacements if a later module fails to load.
+            for path, alias_module in modules.items():
+                if alias_module is not module:
+                    continue
                 owner_path, _, attribute = path.rpartition(".")
                 owner = modules[owner_path] if owner_path else pipeline
                 setattr(owner, attribute, restored_modules[id(module)])

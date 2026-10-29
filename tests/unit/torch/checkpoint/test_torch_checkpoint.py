@@ -517,6 +517,42 @@ def test_aliased_nested_pipeline_wrapper_load_ignores_duplicate_keys(monkeypatch
     assert device_map == {}
 
 
+@pytest.mark.parametrize("first_path", ["decoder", "vae.decoder"])
+@pytest.mark.parametrize("fail_second_load", [False, True])
+def test_pipeline_replaces_module_and_aliases_before_loading_next(monkeypatch, first_path, fail_second_load):
+    pipeline = PipelineWithDecoderAlias()
+    pipeline.next_module = torch.nn.Linear(2, 2)
+    original_decoder = pipeline.decoder
+    original_next = pipeline.next_module
+    replacement = torch.nn.Linear(2, 2)
+    next_replacement = torch.nn.Linear(2, 2)
+
+    def load_module(module, state_dict, device_map, name):
+        if name == first_path:
+            assert module is original_decoder
+            return replacement
+        assert module is original_next
+        assert pipeline.decoder is replacement
+        assert pipeline.vae.decoder is replacement
+        if fail_second_load:
+            raise RuntimeError("Second module deployment failed")
+        return next_replacement
+
+    monkeypatch.setattr(TorchCheckpoint, "load_state_dict_for_module", staticmethod(load_module))
+    state_dict = {first_path: {}, "next_module": {}}
+
+    if fail_second_load:
+        with pytest.raises(RuntimeError, match="Second module deployment failed"):
+            TorchCheckpoint.load_state_dict_for_pipeline(pipeline, state_dict, {})
+        assert pipeline.next_module is original_next
+    else:
+        TorchCheckpoint.load_state_dict_for_pipeline(pipeline, state_dict, {})
+        assert pipeline.next_module is next_replacement
+
+    assert pipeline.decoder is replacement
+    assert pipeline.vae.decoder is replacement
+
+
 @requires_cuda
 def test_state_dict_from_pipeline_no_tuned_modules(pipeline_factory):
     """Test that ValueError is raised when trying to get state dict from a pipeline with no tuned modules."""
