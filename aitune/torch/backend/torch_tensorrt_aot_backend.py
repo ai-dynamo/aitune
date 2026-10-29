@@ -296,6 +296,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
     def _activate(self):
         """Load compiled module."""
+        assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
         exported_model_artifact = cast(ArtifactPath, self._exported_model_artifact)
         with torch_tensorrt_errors(torch_tensorrt):
             loaded = torch_tensorrt.load(exported_model_artifact.path.as_posix())
@@ -378,6 +379,7 @@ def _export_compiled_model(module: torch.fx.GraphModule) -> ExportedProgram:
 
     From Torch-TensorRT 2.11, that save uses the legacy exporter, but ``dynamo.export`` defaults to the new one.
     """
+    assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
     export = torch_tensorrt.dynamo.export
     legacy: dict[str, Any] = (
         {"use_legacy_exporter": True} if "use_legacy_exporter" in inspect.signature(export).parameters else {}
@@ -395,6 +397,7 @@ def _save_compiled_model(
     pickle_protocol: int,
 ) -> None:
     """Save a compiled graph and retry a known export error with retracing."""
+    assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
     try:
         with torch_tensorrt_errors(torch_tensorrt):
             program = _export_compiled_model(module)
