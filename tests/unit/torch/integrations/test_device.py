@@ -8,6 +8,8 @@ import pytest
 import torch
 
 from aitune.torch.integrations.device import get_tuned_execution_device, patch_device_property
+from aitune.torch.jit.config import JITMode, config
+from aitune.torch.jit.patcher import prepare_for_jit_tuning
 from aitune.torch.module.wrapper_module import Module, ModuleState
 from aitune.torch.tune_strategy.tune_strategy import DummyTuneStrategy
 
@@ -57,6 +59,55 @@ def test_get_tuned_execution_device_uses_buffers_without_parameters():
     _wrap(parent, "norm").to("meta")
 
     assert get_tuned_execution_device(parent) == EXECUTION_DEVICE
+
+
+class Autoencoder(torch.nn.Module):
+    """Calls its submodules from methods other than forward, like Diffusers autoencoders."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = torch.nn.Linear(2, 2)
+        self.decoder = torch.nn.Linear(2, 2)
+
+    @property
+    def device(self) -> torch.device:
+        return next(self.parameters()).device
+
+    def encode(self, x):
+        return self.encoder(x)
+
+    def decode(self, x):
+        return self.decoder(x)
+
+
+patch_device_property(Autoencoder)
+
+
+@pytest.fixture
+def jit_tuned_autoencoder(mocker, tmp_path) -> Autoencoder:
+    config.mode = JITMode.TUNE_EAGER
+    config.device = torch.device("cpu")
+    config.detect_graph_breaks = False
+    config.cache_dir = tmp_path / "jit-cache"
+    mocker.patch.object(config, "resolve_strategy", return_value=DummyTuneStrategy())
+
+    with prepare_for_jit_tuning():
+        return Autoencoder()
+
+
+def test_jit_tuned_owner_called_outside_parent_forward_reports_execution_device(jit_tuned_autoencoder):
+    jit_tuned_autoencoder.encode(torch.randn(1, 2))
+
+    assert jit_tuned_autoencoder.encoder.weight.device == torch.device("meta")
+    assert jit_tuned_autoencoder.device == torch.device("cpu")
+
+
+def test_jit_tuned_module_not_owning_first_parameter_is_ignored(jit_tuned_autoencoder):
+    jit_tuned_autoencoder.decode(torch.randn(1, 2))
+    jit_tuned_autoencoder.encoder.to("meta")
+
+    assert jit_tuned_autoencoder.decoder.weight.device == torch.device("meta")
+    assert jit_tuned_autoencoder.device == torch.device("meta")
 
 
 def _patched_model_class() -> type[Parent]:

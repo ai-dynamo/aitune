@@ -102,6 +102,8 @@ class PatchedModule:
     attempted_tuning: ClassVar[bool] = False
     deferred_tuning_enabled: ClassVar[bool] = False
     module_counter: ClassVar[int] = 0
+    # execution devices of tuned modules, whose original weights may be offloaded
+    tuned_devices: ClassVar[dict[torch.nn.Module, torch.device]] = {}
 
     def __init__(self, module: torch.nn.Module):
         """Initialize the patched module."""
@@ -209,6 +211,7 @@ class PatchedModule:
                         current._handle_backend_added_hooks()
                         current._update_state(ModuleState.TUNED)
                         current._patch_device_attribute(device)
+                        PatchedModule.tuned_devices[current.__wrapped__] = device
                         current._unpatch_hierarchy(include_self=False)
                         _to_hist(f"Model tuned: {str(current)}")
                         offload_after_tuning(
@@ -676,6 +679,7 @@ class PatchedModule:
         self._restore_original_forward()
         self.__wrapped__._forward_hooks = self._current_forward_hooks
         self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
+        PatchedModule.tuned_devices.pop(self.__wrapped__, None)
 
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 

@@ -7,6 +7,7 @@ import itertools
 import torch
 import torch.nn as nn
 
+from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.module.wrapper_module import Module, ModuleState
 
 
@@ -17,7 +18,7 @@ def get_tuned_execution_device(module: nn.Module) -> torch.device | None:
         module: Module whose first parameter or buffer determines its reported device.
 
     Returns:
-        The device of the nearest tuned AITune module containing that tensor, or None if there is none.
+        The device of the nearest AOT- or JIT-tuned module containing that tensor, or None if there is none.
 
     Examples:
         >>> get_tuned_execution_device(torch.nn.Linear(2, 2)) is None
@@ -31,13 +32,16 @@ def get_tuned_execution_device(module: nn.Module) -> torch.device | None:
         submodule = module.get_submodule(".".join(owner_path[:depth]))
         if isinstance(submodule, Module) and submodule.state == ModuleState.TUNED:
             return submodule.device
+        # JIT keeps the original module in place and records its device when tuned.
+        if submodule in PatchedModule.tuned_devices:
+            return PatchedModule.tuned_devices[submodule]
     return None
 
 
 def patch_device_property(cls: type) -> None:
     """Make the `device` property of a library base class report the execution device of tuned submodules.
 
-    Diffusers and Transformers report the device of a module's first parameter or buffer. After AOT tuning,
+    Diffusers and Transformers report the device of a module's first parameter or buffer. After tuning,
     parameters of tuned submodules are offloaded to meta, so their parents would report the meta device.
 
     Args:
