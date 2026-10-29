@@ -359,7 +359,8 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 def _restore_constant_inputs(program: ExportedProgram) -> None:
     """Declare non-tensor user inputs of ``program`` as constants in place, as ``torch.export`` does.
 
-    Torch-TensorRT declares every placeholder as a tensor input, so serializing e.g. a float or ``None`` kwarg fails.
+    Torch-TensorRT declares every placeholder as a tensor input, so serializing e.g. a float or ``None`` kwarg raises
+    ``KeyError``. Remove this workaround once https://github.com/pytorch/TensorRT/issues/4941 is fixed.
     """
     values = {
         node.name: node.meta["val"] for node in program.graph.nodes if node.op == "placeholder" and "val" in node.meta
@@ -371,11 +372,12 @@ def _restore_constant_inputs(program: ExportedProgram) -> None:
                 spec.arg = ConstantArgument(name=spec.arg.name, value=value)
 
 
-def _export_compiled_model(module: nn.Module) -> ExportedProgram:
+def _export_compiled_model(module: torch.fx.GraphModule) -> ExportedProgram:
     """Export a compiled graph as ``torch_tensorrt.save(retrace=False)`` does.
 
     From Torch-TensorRT 2.11, that save uses the legacy exporter, but ``dynamo.export`` defaults to the new one.
     """
+    assert torch_tensorrt is not None
     export = torch_tensorrt.dynamo.export
     legacy = {"use_legacy_exporter": True} if "use_legacy_exporter" in inspect.signature(export).parameters else {}
     program = export(module, **legacy)
@@ -384,7 +386,7 @@ def _export_compiled_model(module: nn.Module) -> ExportedProgram:
 
 
 def _save_compiled_model(
-    module: nn.Module,
+    module: torch.fx.GraphModule,
     path: Path,
     sample: Sample,
     dynamic_shapes: dict[str, Any] | None,
@@ -396,10 +398,17 @@ def _save_compiled_model(
             program = _export_compiled_model(module)
             torch_tensorrt.save(program, path.as_posix(), pickle_protocol=pickle_protocol)
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
-    except SpecViolationError:
+    except SpecViolationError as error:
         args, kwargs = sample
-        if not all(isinstance(value, torch.Tensor) for value in (*args, *kwargs.values())):
-            raise
+        inputs = [*((f"args[{index}]", value) for index, value in enumerate(args)), *kwargs.items()]
+        non_tensor = [
+            f"{name}: {type(value).__name__}" for name, value in inputs if not isinstance(value, torch.Tensor)
+        ]
+        if non_tensor:
+            raise RuntimeError(
+                "Torch-TensorRT could not save the compiled graph, and its retrace fallback accepts only tensor "
+                f"inputs ({', '.join(non_tensor)}). See https://github.com/pytorch/TensorRT/issues/4941."
+            ) from error
         logger.warning(
             "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
             exc_info=True,

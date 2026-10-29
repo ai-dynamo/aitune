@@ -153,11 +153,13 @@ def test_save_compiled_model_does_not_retrace_non_tensor_inputs(mocker, tmp_path
     mock_torch_tensorrt.save.side_effect = SpecViolationError("direct save failed")
     sample = ((torch.ones(1), {"bias": torch.ones(1)}, 2.0, None), {})
 
-    with pytest.raises(SpecViolationError, match="direct save failed"):
+    with pytest.raises(RuntimeError, match=r"\(args\[1\]: dict, args\[2\]: float, args\[3\]: NoneType\)") as error:
         _save_compiled_model(
             mocker.Mock(spec=nn.Module), tmp_path / "model.pt", sample, dynamic_shapes=None, pickle_protocol=5
         )
 
+    assert "pytorch/TensorRT/issues/4941" in str(error.value)
+    assert isinstance(error.value.__cause__, SpecViolationError)
     mock_torch_tensorrt.save.assert_called_once()
 
 
@@ -179,7 +181,7 @@ def test_restore_constant_inputs_makes_non_tensor_kwargs_serializable(tmp_path: 
             return x * scale if mask is None else x * scale * mask
 
     program = torch.export.export(ScaledModel(), (torch.ones(2),), {"scale": 2.0, "mask": None})
-    # Torch-TensorRT declares every placeholder as a tensor input.
+    # Torch-TensorRT declares every placeholder as a tensor input: https://github.com/pytorch/TensorRT/issues/4941
     for spec in program.graph_signature.input_specs:
         spec.arg = TensorArgument(name=spec.arg.name)
     with pytest.raises(KeyError, match="scale"):
