@@ -40,7 +40,7 @@ from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.memory import gc_collect
-from aitune.torch.utils.module import move_module_to_device
+from aitune.torch.utils.module import move_module_to_device, move_tensors_to_device
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
 
@@ -344,7 +344,9 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         """Iterate persisted samples, with support for legacy inline checkpoint data."""
         if self._samples is not None:
             return self._samples.iter_samples(self.device)
-        return iter(self._data)
+        if self._data is None:
+            raise RuntimeError("Backend has no warmup data. Please call build() first.")
+        return (move_tensors_to_device(sample, self.device) for sample in self._data)
 
     def _check_hardware_compatibility(self, module: nn.Module) -> None:
         """Check hardware and model constraints for the selected quantization format.

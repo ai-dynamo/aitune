@@ -63,6 +63,15 @@ def test_save_load_torch_task(tmp_path):
     assert state_dict["artifact"] == orig_state_dict["artifact"]
 
 
+def test_torch_load_task_maps_checkpoint_to_cpu(tmp_path, mocker):
+    TorchSaveTask().save(tmp_path, {})
+    torch_load = mocker.patch("aitune.torch.checkpoint.storage_tasks.torch.load", return_value={})
+
+    TorchLoadTask().load(tmp_path)
+
+    assert torch_load.call_args.kwargs["map_location"] == "cpu"
+
+
 def test_make_folder_task_overwrite(tmp_path):
     """Test MakeFolderTask with overwrite=True."""
     folder_path = tmp_path / "test_folder"

@@ -20,7 +20,7 @@ from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.memory import gc_collect
-from aitune.torch.utils.module import move_module_to_device
+from aitune.torch.utils.module import move_module_to_device, move_tensors_to_device
 
 try:
     import torch_tensorrt
@@ -279,7 +279,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
         if self._samples is not None:
             return self._samples.iter_samples(self.device)
         if self._data is not None:
-            return iter(self._data)
+            return (move_tensors_to_device(sample, self.device) for sample in self._data)
         raise RuntimeError("Backend has no warmup data. Please call build() first.")
 
     def to_dict(self):

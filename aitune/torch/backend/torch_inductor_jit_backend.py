@@ -16,7 +16,7 @@ from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.memory import gc_collect
-from aitune.torch.utils.module import move_module_to_device
+from aitune.torch.utils.module import move_module_to_device, move_tensors_to_device
 
 logger = getLogger(__name__)
 
@@ -268,7 +268,7 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
         if self._samples is not None:
             return self._samples.iter_samples(self.device)
         if self._data is not None:
-            return iter(self._data)
+            return (move_tensors_to_device(sample, self.device) for sample in self._data)
         raise RuntimeError("Backend has no warmup data. Please call build() first.")
 
     def to_dict(self):

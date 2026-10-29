@@ -149,6 +149,11 @@ def test_torch_inductor_loads_legacy_inline_samples(mocker, tmp_path):
     state[TorchInductorJitBackend.STATE_DATA] = inline_samples
 
     loaded_backend = TorchInductorJitBackend.from_dict(toy, state)
+    loaded_backend._device = torch.device("meta")
+    args, _ = next(loaded_backend._iter_samples())
+    assert args[0].device == loaded_backend.device
+    loaded_backend._device = torch.device("cpu")
+
     compile_mock.reset_mock()
     loaded_backend.activate()
 

@@ -546,7 +546,8 @@ def torch_load_with_custom_types(path: Path) -> dict:
     with torch.serialization.safe_globals(safe_globals):
         # unfortunately, we cannot use weights_only=True here because some backends store internal objects
         # until this is not fixed, we need weights_only=False
-        return torch.load(path, weights_only=False)
+        # Stage checkpoint tensors on the host to avoid duplicating model weights in GPU memory.
+        return torch.load(path, map_location="cpu", weights_only=False)
 
 
 def calculate_file_sha_hash(file_path: str | Path, sha_type: Literal["256", "512"] = "256") -> str:
