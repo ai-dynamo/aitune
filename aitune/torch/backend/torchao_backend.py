@@ -40,7 +40,7 @@ from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.memory import gc_collect
-from aitune.torch.utils.module import move_module_to_device
+from aitune.torch.utils.module import move_module_to_device, offload
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
 
@@ -210,7 +210,6 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
     STATE_TYPE = "type"
     STATE_CONFIG = "config"
     STATE_ORIG_MODULE = "orig_module"
-    STATE_DATA = "data"
     STATE_SAMPLES = "samples"
     STATE_DEVICE = "device"
     STATE_COMPILE_DYNAMIC = "compile_dynamic"
@@ -230,8 +229,6 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         self._quant_module = None
         self._orig_module = None
         self._samples: SampleStore | None = None
-        # Kept only for loading checkpoints written before samples became disk-backed.
-        self._data = None
         self._compile_dynamic = self._config.dynamic
 
     def key(self) -> str:
@@ -253,6 +250,7 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
 
     def _activate(self):
         """Activates backend."""
+        move_module_to_device(self._orig_module, self.device)
         self._do_torchao_quantization()
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
@@ -276,7 +274,6 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         """Deploys the backend."""
         self._activate()
         self._samples = None
-        self._data = None
         gc_collect()
 
     def to_dict(self):
@@ -304,9 +301,7 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         config = TorchAOBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend = cls(config=config)
-        samples_state = state_dict.get(cls.STATE_SAMPLES)
-        backend._samples = SampleStore.from_dict(samples_state) if samples_state is not None else None
-        backend._data = state_dict.get(cls.STATE_DATA)
+        backend._samples = SampleStore.from_dict(state_dict[cls.STATE_SAMPLES])
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module
@@ -319,13 +314,14 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         """Apply TorchAO quantization and warm up the compiled model."""
         if self._orig_module is None:
             raise RuntimeError("Backend has not been properly initialized. Please call build() first.")
-        if self._samples is None and self._data is None:
+        if self._samples is None:
             raise RuntimeError("Backend has no warmup data. Please call build() first.")
 
         self._check_hardware_compatibility(self._orig_module)
 
         model = copy.deepcopy(self._orig_module)
-        move_module_to_device(self._orig_module, "cpu")
+        # Release the original weights' CUDA allocations before quantizing the copy.
+        offload(self._orig_module, device="cpu")
 
         quantization_config = self._config.quantization_config
         assert quantization_config is not None, "quantization_config is set in TorchAOBackendConfig.__post_init__"
@@ -337,14 +333,8 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
             mode=self._config.mode,
         )
         with torch.no_grad():
-            for args, kwargs in self._iter_samples():
+            for args, kwargs in self._samples.iter_samples(self.device):
                 self._quant_module(*args, **kwargs)
-
-    def _iter_samples(self):
-        """Iterate persisted samples, with support for legacy inline checkpoint data."""
-        if self._samples is not None:
-            return self._samples.iter_samples(self.device)
-        return iter(self._data)
 
     def _check_hardware_compatibility(self, module: nn.Module) -> None:
         """Check hardware and model constraints for the selected quantization format.

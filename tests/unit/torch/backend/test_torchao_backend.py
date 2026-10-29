@@ -31,6 +31,16 @@ from tests.utilities.helpers import make_sample_store, requires_cuda
 INT8DQ_OUTPUT_SIZE = 8
 
 
+def test_torchao_rejects_legacy_inline_samples():
+    state = {
+        "type": "TorchAOBackend",
+        "config": TorchAOBackendConfig(quantization="int8wo").to_dict(),
+        "data": [((torch.randn(2),), {})],
+    }
+    with pytest.raises(KeyError, match="samples"):
+        TorchAOBackend.from_dict(nn.Linear(2, 2), state)
+
+
 class TorchAOInt8DQModel(ToyTorchModel):
     """Toy model with int8dq-compatible linear dimensions."""
 
@@ -200,6 +210,24 @@ def test_torchao_backend_build(quantization, dtype, model, sample_data, torch_de
 
 
 @requires_cuda
+def test_torchao_releases_source_memory_before_quantization(mocker, model, sample_data, torch_device, tmp_path):
+    import aitune.torch.backend.torchao_backend as backend_module
+    import aitune.torch.utils.module as module_utils
+
+    cleanup = mocker.spy(module_utils, "cleanup_memory")
+    quantize = backend_module.quantize_
+
+    def check_offload(quantized_model, **kwargs):
+        assert next(model.parameters()).device.type == "cpu"
+        assert cleanup.call_count > 0, "Source memory must be released before quantization allocates GPU memory"
+        return quantize(quantized_model, **kwargs)
+
+    mocker.patch.object(backend_module, "quantize_", side_effect=check_offload)
+    backend = TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo"))
+    do_test_backend(backend, torch.float32, model, sample_data, torch_device, tmp_path)
+
+
+@requires_cuda
 @pytest.mark.parametrize(
     "quantization_config",
     [int8_weight_only_per_group_config(group_size=16)],
@@ -274,12 +302,12 @@ def test_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
     assert compile_mock.call_args.kwargs["dynamic"] is True
 
 
-def test_activate_runs_compatibility_preflight(mocker):
+def test_activate_runs_compatibility_preflight(mocker, tmp_path):
     model = ToyTorchModel().eval()
     config = TorchAOBackendConfig(quantization="nvfp4dq")
     backend = TorchAOBackend(config=config)
     backend._orig_module = model
-    backend._data = []
+    backend._samples = model.sample_store(tmp_path, batch_sizes=[1])
     backend._device = torch.device("cpu")
     backend.state = BackendState.CHECKPOINT_LOADED
     quantize_mock = mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
