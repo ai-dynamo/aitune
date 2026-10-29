@@ -4,9 +4,9 @@
 title: "Tune FLUX on one or multiple GPUs"
 ---
 
-This example tunes the `black-forest-labs/FLUX.1-dev` Diffusers pipeline with NVIDIA AITune. It demonstrates the
-complete ahead-of-time workflow: inspect the pipeline, tune selected modules, save the result, load it into a fresh
-pipeline, and compare original and tuned image generation.
+This example tunes the `Freepik/flux.1-lite-8B` Diffusers pipeline, an 8B distillation of FLUX.1-dev that fits a 32 GB
+GPU in bf16, with NVIDIA AITune. It demonstrates the complete ahead-of-time workflow: inspect the pipeline, tune
+selected modules, save the result, load it into a fresh pipeline, and compare original and tuned image generation.
 
 ## What this example demonstrates
 
@@ -20,8 +20,8 @@ pipeline, and compare original and tuned image generation.
 
 ## Environment setup
 
-FLUX.1-dev is a gated model. Accept its Hugging Face license and make a Hugging Face token available in the
-environment before running the example.
+`Freepik/flux.1-lite-8B` is not gated, so no Hugging Face token is needed. This example pins revision
+`16b9373dd3d05bc5f125558f5e2b8470fbb873e8`. The model uses the FLUX.1-dev non-commercial license.
 
 The recommended environment is the NVIDIA PyTorch container used by the example tests. From the repository root:
 
@@ -44,7 +44,7 @@ pip install --extra-index-url https://pypi.nvidia.com .
 
 ```bash
 uv run tune \
-  --model-name black-forest-labs/FLUX.1-dev \
+  --model-name Freepik/flux.1-lite-8B \
   --prompt "A futuristic cityscape with neon lights"
 ```
 
@@ -118,13 +118,13 @@ keeps application logging unchanged and preserves per-rank diagnostics for inves
 
 ## Options
 
-- `--model-name`: Hugging Face model name or path (default: `black-forest-labs/FLUX.1-dev`).
+- `--model-name`: Hugging Face model name or path (default: `Freepik/flux.1-lite-8B`).
 - `--prompt`: Text prompt used for inspection, tuning, or inference.
 - `--sizes`: Space-separated `width,height` pairs (default: `1024,1024`).
 - `--steps`: Number of diffusion steps (default: `28`).
 - `--guidance-scale`: Guidance scale (default: `3.5`).
 - `--max-sequence-length`: Maximum text sequence length (default: `128`).
-- `--tuned-model-path`: Base checkpoint path (default: `flux-dev.ait`).
+- `--tuned-model-path`: Base checkpoint path (default: `flux-lite-8b.ait`).
 - `--context-parallel`: `ulysses` or `ring` (default: `ulysses`).
 - `--quantization`: Add TorchAO NVFP4 and FP8 transformer candidates.
 
@@ -157,5 +157,5 @@ Set `AITUNE_HARDWARE_METRICS=1` to collect GPU hardware metrics during tuning or
 AITUNE_HARDWARE_METRICS=1 uv run inference
 ```
 
-For model details, see the [FLUX.1-dev model page](https://huggingface.co/black-forest-labs/FLUX.1-dev). The multi-GPU
+For model details, see the [FLUX.1 Lite 8B model page](https://huggingface.co/Freepik/flux.1-lite-8B). The multi-GPU
 setup follows the [Diffusers context-parallel inference guide](https://huggingface.co/docs/diffusers/training/distributed_inference#context-parallelism).

@@ -17,8 +17,8 @@ If you want Dynamo to serve an exported ONNX, TensorRT, or PT2 model, follow
 ## Serve FLUX on one GPU
 
 This walkthrough uses the existing FLUX worker and client from the AITune repository. Run the commands in the
-[FLUX example environment](../../../examples/FLUX/README.md#environment-setup), with access to FLUX.1-dev and a GPU
-with enough memory for the pipeline.
+[FLUX example environment](../../../examples/FLUX/README.md#environment-setup) on a GPU with enough memory for the
+pipeline.
 
 ### 1. Prepare the tuned checkpoint
 
@@ -35,8 +35,8 @@ If you have not tuned the model yet:
 uv run tune
 ```
 
-With the default settings, this saves `checkpoints/flux-dev.ait`. In `config.yaml`, keep
-`Backend.tuned_model_path: "flux-dev.ait"` and the generation settings used for tuning. The worker constructs the
+With the default settings, this saves `checkpoints/flux-lite-8b.ait`. In `config.yaml`, keep
+`Backend.tuned_model_path: "flux-lite-8b.ait"` and the generation settings used for tuning. The worker constructs the
 pipeline and loads this checkpoint during startup. See [Save and load checkpoints](checkpoints.md) for custom paths.
 
 ### 2. Start the frontend

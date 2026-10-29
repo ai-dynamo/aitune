@@ -61,5 +61,4 @@ variants = [
     { arguments = { "context-parallel" = "ulysses", "quantization" = false }, additional_tags = ["gpu/4"], launcher = "torchrun", processes = 4 },
 ]
 additional_tags = ["gpu/sm/120"]
-use_gated_hf_token = true
 allow_failure = true

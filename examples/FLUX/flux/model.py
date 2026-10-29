@@ -7,7 +7,7 @@ import torch.distributed as dist
 from diffusers import ContextParallelConfig, FluxPipeline
 
 from flux.context_parallel import ContextParallelMode
-from flux.defaults import DEFAULT_MODEL_NAME
+from flux.defaults import DEFAULT_MODEL_NAME, DEFAULT_MODEL_REVISION
 
 MODEL_NAME = DEFAULT_MODEL_NAME
 
@@ -31,6 +31,8 @@ def get_pipeline(
     """
     pipeline = FluxPipeline.from_pretrained(
         model_name,
+        # Pin the audited commit; other models load their default branch.
+        revision=DEFAULT_MODEL_REVISION if model_name == DEFAULT_MODEL_NAME else None,
         torch_dtype=torch.bfloat16,
     ).to(device)
     if multi_gpu:

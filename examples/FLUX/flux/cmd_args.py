@@ -95,7 +95,7 @@ def parse_args():
     parser.add_argument(
         "--tuned-model-path",
         type=str,
-        default="flux-dev.ait",
+        default="flux-lite-8b.ait",
         help="Path to save the tuned model",
     )
     parser.add_argument(
