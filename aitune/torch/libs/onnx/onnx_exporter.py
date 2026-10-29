@@ -124,7 +124,7 @@ class ONNXExporter:
 
         log_dynamic_shapes(dynamic_shapes)
 
-        export_kwargs = {}
+        export_kwargs: dict[str, Any] = {}
         if _ONNX_FALLBACK_SUPPORTED:
             export_kwargs["fallback"] = False
 

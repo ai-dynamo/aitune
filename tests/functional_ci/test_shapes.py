@@ -4,7 +4,6 @@
 
 from collections.abc import Callable
 from dataclasses import replace
-from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +17,8 @@ from aitune.torch.libs.torch import torch_exporter
 from tests.functional_ci.backends import BACKENDS, BackendCase, with_backends
 from tests.functional_ci.lifecycle import TENSORRT_FP32, assert_matches_eager, pinned_strategy, selected_backend
 from tests.functional_ci.models import IN_FEATURES, make_image_model, make_input, make_mlp, seeded
+
+TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10))
 
 
 class StructuredModel(nn.Module):
@@ -43,6 +44,27 @@ class StructuredModel(nn.Module):
         return {"out": hidden, "stats": (hidden.sum(-1), hidden.amax(-1))}
 
 
+class NestedInputModel(nn.Module):
+    """Model with only tensor inputs, shaped like the Flux transformer inputs in legacy test 044."""
+
+    def __init__(self, mlp: nn.Module):
+        """Wrap the toy MLP."""
+        super().__init__()
+        self.mlp = mlp
+
+    def forward(
+        self,
+        x,
+        extras: dict[str, torch.Tensor],
+        residuals: list[torch.Tensor],
+        positions: torch.Tensor,
+        timestep: torch.Tensor,
+    ):
+        """Return the MLP output for the shifted input, scaled per row by `timestep`."""
+        hidden = x + extras["bias"] + residuals[0] - residuals[1] + positions
+        return self.mlp(hidden * timestep[:, None])
+
+
 @pytest.mark.matrix("models.dynamic-batch-recorded")
 @with_backends("dynamic_batch")
 def test_recorded_batch_range(case: BackendCase, device: torch.device):
@@ -60,9 +82,9 @@ def test_recorded_batch_range(case: BackendCase, device: torch.device):
 @pytest.mark.matrix("models.dynamic-batch-user")
 @with_backends("dynamic_batch")
 def test_explicit_batch_dim(case: BackendCase, device: torch.device):
-    """A user `BatchDim` widens the compiled range beyond the single recorded batch size."""
+    """A user `BatchDim` makes the batch dimension dynamic beyond the single recorded batch size."""
     backend = case.factory()
-    dynamic_shapes = {"input": (ait.BatchDim("batch", min=1, max=8, opt=4), IN_FEATURES)}
+    dynamic_shapes: DynamicShapes = {"input": (ait.BatchDim("batch", min=1, max=8, opt=4), IN_FEATURES)}
     tuned = ait.Module(make_mlp(device), "mlp", strategy=pinned_strategy(backend), dynamic_shapes=dynamic_shapes)
     ait.tune(tuned, list(make_input(device, batch_size=2).unbind(0)), batch_sizes=[2], device=device)
 
@@ -73,7 +95,18 @@ def test_explicit_batch_dim(case: BackendCase, device: torch.device):
 
 
 @pytest.mark.matrix("models.dynamic-non-batch")
-@with_backends("dynamic_non_batch")
+@with_backends(
+    "dynamic_non_batch",
+    marks={
+        # AITune's `_activate` reloads the artifact via `torch_tensorrt.load`, which wraps the loader assertion in ValueError.
+        "torch-tensorrt-aot": pytest.mark.xfail(
+            TORCH_2_8_TO_2_10,
+            reason="PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)",
+            raises=ValueError,
+            strict=True,
+        )
+    },
+)
 def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path):
     """Tune from one 24x24 sample with a user `BatchDim` and spatial `DynamicDim`, then run other batch and image sizes.
 
@@ -87,12 +120,7 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
     )
     generator = torch.Generator(device=device).manual_seed(1)
     samples = list(torch.randn(1, 3, 24, 24, device=device, generator=generator).unbind(0))
-    if case is BACKENDS["torch-tensorrt-aot"] and Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10)):
-        # AITune's `_activate` reloads the artifact via `torch_tensorrt.load`, which wraps the assertion in ValueError.
-        with pytest.raises(ValueError, match="valid Torchscript module or ExportedProgram"):
-            ait.tune(tuned, samples, batch_sizes=[1], device=device, ignore_failing_modules=False)
-        pytest.xfail("PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)")
-    ait.tune(tuned, samples, batch_sizes=[1], device=device)
+    ait.tune(tuned, samples, batch_sizes=[1], device=device, ignore_failing_modules=False)
 
     (graph_spec,) = tuned.graph_specs
     assert graph_spec.dynamic_shapes == dynamic_shapes
@@ -106,7 +134,7 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
         for value in values:
             case.tolerance.assert_close(tuned(value), reference(value))
 
-    ait.save(cast(nn.Module, tuned), tmp_path / "model.ait")
+    ait.save(tuned, tmp_path / "model.ait")
     tuned.deactivate()
     # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
     restored = ait.load(make_image_model(device, seed=1), tmp_path / "model.ait")
@@ -183,3 +211,35 @@ def test_structured_io(case: BackendCase, device: torch.device):
 
     selected_backend(tuned, type(backend))
     assert_matches_eager(pipeline(tuned), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
+
+
+@pytest.mark.matrix("models.nested-inputs/torch-tensorrt-aot")
+@pytest.mark.parametrize("batch_sizes", [[2], [2, 4]], ids=["static", "dynamic"])
+def test_nested_tensor_inputs(batch_sizes: list[int], device: torch.device):
+    """Torch-TensorRT AOT tunes nested tensor inputs passed as kwargs at static and dynamic batch, as in legacy 044.
+
+    The inputs are a dict, a list, an unbatched tensor, and a 1-D batched scalar. `test_structured_io` also passes
+    non-tensor arguments, which this backend cannot save yet, so it does not run on this backend.
+    """
+    case = BACKENDS["torch-tensorrt-aot"]
+    backend = case.factory()
+    bias = torch.linspace(-1, 1, IN_FEATURES, device=device)
+    residuals = [bias.flip(0), 0.5 * bias]
+    reference = NestedInputModel(make_mlp(device))
+    tuned = ait.Module(NestedInputModel(make_mlp(device)), "nested", strategy=pinned_strategy(backend))
+
+    def pipeline(model: Callable) -> Callable:
+        # `positions` keeps one shape at every batch size, like `img_ids` in 044; the other tensors are batched.
+        return lambda x: model(
+            x,
+            extras={"bias": bias.repeat(x.shape[0], 1)},
+            residuals=[residual.repeat(x.shape[0], 1) for residual in residuals],
+            positions=bias.flip(0),
+            timestep=torch.linspace(0.5, 1.5, x.shape[0], device=device),
+        )
+
+    ait.tune(pipeline(tuned), list(make_input(device, batch_size=8).unbind(0)), batch_sizes=batch_sizes, device=device)
+
+    selected_backend(tuned, type(backend))
+    check_sizes = range(batch_sizes[0], batch_sizes[-1] + 1)
+    assert_matches_eager(pipeline(tuned), pipeline(reference), device, case.tolerance, batch_sizes=check_sizes)

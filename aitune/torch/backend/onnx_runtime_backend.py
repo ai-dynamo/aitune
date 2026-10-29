@@ -122,7 +122,7 @@ class ONNXRuntimeBackendConfig(BackendConfig):
         return cls(**data)
 
 
-class ONNXRuntimeBackend(Backend):
+class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
     """Backend that runs Torch or existing ONNX models with ONNX Runtime.
 
     Uses the source path and shapes directly for ``OnnxModule``. Torch modules
@@ -161,8 +161,7 @@ class ONNXRuntimeBackend(Backend):
         Args:
             config: Configuration for ONNX export and runtime.
         """
-        super().__init__()
-        self._config = config or ONNXRuntimeBackendConfig()
+        super().__init__(config or ONNXRuntimeBackendConfig())
         self._onnx_model_artifact: ArtifactPath | None = None
         self._onnx_data_artifact: ArtifactPath | None = None
         self._session: onnxruntime.InferenceSession | None = None

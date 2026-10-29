@@ -135,7 +135,7 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
         return cls(**data)
 
 
-class TorchTensorRTAotBackend(Backend):
+class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
     """Backend that compiles model using TensorRT."""
 
     _build_mode = BuildMode.AHEAD_OF_TIME
@@ -158,12 +158,9 @@ class TorchTensorRTAotBackend(Backend):
         Args:
             config: Configuration for TensorRT compilation
         """
-        super().__init__()
         assert_cuda_is_available()
         assert_torch_tensorrt()
-
-        # initialize variables
-        self._config = config or TorchTensorRTAotBackendConfig()
+        super().__init__(config or TorchTensorRTAotBackendConfig())
 
         # build variables
         self._opt_module = None

@@ -39,17 +39,17 @@ class ToyTorchModel(torch.nn.Module):
             x = torch.relu(self.conv1(x))
         return x
 
-    def sample(self, device: str = "cpu"):
+    def sample(self, device: str | torch.device = "cpu"):
         input_shape = (INPUT_SIZE) if self.is_linear else (CHANNELS, FILTER_SIZE, FILTER_SIZE)
         input_tensor = torch.rand(input_shape, dtype=torch.float32, device=device)
         return input_tensor
 
-    def inputs(self, batch_sizes: list[int] | None = None, device: str = "cpu"):
+    def inputs(self, batch_sizes: list[int] | None = None, device: str | torch.device = "cpu"):
         if batch_sizes is None:
             batch_sizes = [2]
         return [self._input_tensor(batch_size, device) for batch_size in batch_sizes]
 
-    def samples(self, batch_sizes: list[int] | None = None, device: str = "cpu") -> list[Sample]:
+    def samples(self, batch_sizes: list[int] | None = None, device: str | torch.device = "cpu") -> list[Sample]:
         if batch_sizes is None:
             batch_sizes = [2]
         return [((self._input_tensor(batch_size, device),), {}) for batch_size in batch_sizes]
@@ -58,13 +58,13 @@ class ToyTorchModel(torch.nn.Module):
         self,
         cache_dir: Path,
         batch_sizes: list[int] | None = None,
-        device: str = "cpu",
+        device: str | torch.device = "cpu",
         relative_path: str | Path = "samples",
     ) -> SampleStore:
         """Store generated samples for tuning tests."""
         return SampleStore.from_samples(self.samples(batch_sizes=batch_sizes, device=device), cache_dir, relative_path)
 
-    def graph_spec(self, batch_sizes: list[int] | None = None, device: str = "cpu") -> GraphSpec:
+    def graph_spec(self, batch_sizes: list[int] | None = None, device: str | torch.device = "cpu") -> GraphSpec:
         graph_spec = None
         forward_signature = ForwardSignature.from_callable(self.forward)
         for sample in self.samples(batch_sizes=batch_sizes, device=device):
@@ -89,7 +89,7 @@ class ToyTorchModel(torch.nn.Module):
 
         return graph_spec
 
-    def _input_tensor(self, batch_size: int = 2, device: str = "cpu"):
+    def _input_tensor(self, batch_size: int = 2, device: str | torch.device = "cpu"):
         input_shape = (batch_size, INPUT_SIZE) if self.is_linear else (batch_size, CHANNELS, FILTER_SIZE, FILTER_SIZE)
         input_tensor = torch.rand(input_shape, dtype=torch.float32, device=device)
         return input_tensor
@@ -112,7 +112,7 @@ class ToyTorchConditionalModel(torch.nn.Module):
         return x
 
     def samples(
-        self, batch_sizes: list[int] | None = None, device: str = "cpu", kwargs: dict | None = None
+        self, batch_sizes: list[int] | None = None, device: str | torch.device = "cpu", kwargs: dict | None = None
     ) -> list[Sample]:
         if batch_sizes is None:
             batch_sizes = [2]
@@ -120,13 +120,13 @@ class ToyTorchConditionalModel(torch.nn.Module):
             kwargs = {}
         return [((self._input_tensor(batch_size, device),), kwargs) for batch_size in batch_sizes]
 
-    def inputs(self, batch_sizes: list[int] | None = None, device: str = "cpu"):
+    def inputs(self, batch_sizes: list[int] | None = None, device: str | torch.device = "cpu"):
         if batch_sizes is None:
             batch_sizes = [2]
         return [self._input_tensor(batch_size, device) for batch_size in batch_sizes]
 
     def graph_spec(
-        self, batch_sizes: list[int] | None = None, device: str = "cpu", kwargs: dict | None = None
+        self, batch_sizes: list[int] | None = None, device: str | torch.device = "cpu", kwargs: dict | None = None
     ) -> GraphSpec:
         graph_spec = None
         forward_signature = ForwardSignature.from_callable(self.forward)
@@ -152,7 +152,7 @@ class ToyTorchConditionalModel(torch.nn.Module):
 
         return graph_spec
 
-    def _input_tensor(self, batch_size: int = 2, device: str = "cpu"):
+    def _input_tensor(self, batch_size: int = 2, device: str | torch.device = "cpu"):
         input_shape = (batch_size, INPUT_SIZE)
         input_tensor = torch.rand(input_shape, dtype=torch.float32, device=device)
         return input_tensor
@@ -206,5 +206,5 @@ class ToyComplexPipeline:
         self.net.to(device)
         return self
 
-    def inputs(self, batch_sizes: list[int] | None = None, device: str = "cpu"):
+    def inputs(self, batch_sizes: list[int] | None = None, device: str | torch.device = "cpu"):
         return self.net.inputs(batch_sizes, device)
