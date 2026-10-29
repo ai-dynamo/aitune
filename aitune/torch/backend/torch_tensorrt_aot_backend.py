@@ -405,7 +405,7 @@ def _save_compiled_model(
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
     except SpecViolationError:
         logger.warning(
-            "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
+            "Direct Torch-TensorRT serialization failed; re-exporting the compiled graph with torch.export.",
             exc_info=True,
         )
         args, kwargs = sample
