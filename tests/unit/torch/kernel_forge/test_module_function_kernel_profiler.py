@@ -18,13 +18,16 @@ import aitune.torch.kernel_forge.module_function_kernel_profiler as kernel_profi
 from aitune.torch.kernel_forge.module_function_kernel_profiler import (
     FunctionData,
     ModuleFunctionKernelProfiler,
-    _nearest_parent_label,
-    _ProfilingItem,
-    _SummaryItem,
-    get_tensor_size,
     teardown_cuda_profiler,
 )
 from tests.utilities.helpers import requires_cuda
+
+
+@pytest.fixture(autouse=True)
+def reset_cuda_profiler_state(monkeypatch):
+    monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", False)
+    monkeypatch.setattr(kernel_profiler_module, "_owns_teardown_cupti", False)
+    monkeypatch.delenv("TEARDOWN_CUPTI", raising=False)
 
 
 class _MultipleLinearLayerModel(nn.Module):
@@ -192,9 +195,33 @@ def test_profile_coordinates_distributed_execution(mocker):
     ]
 
 
-def test_teardown_cuda_profiler_skips_when_not_primed(mocker, monkeypatch):
-    monkeypatch.delenv("TEARDOWN_CUPTI", raising=False)
-    monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", False)
+@pytest.mark.parametrize("value", [None, "0", "1"])
+def test_prime_cuda_profiler_respects_teardown_cupti_ownership(mocker, monkeypatch, value):
+    if value is not None:
+        monkeypatch.setenv("TEARDOWN_CUPTI", value)
+    session_values = []
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+    profile.return_value.__enter__.side_effect = lambda: session_values.append(os.environ["TEARDOWN_CUPTI"])
+    zeros = mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    synchronize = mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+
+    kernel_profiler_module.prime_cuda_profiler()
+
+    assert session_values == ["0" if value is None else value]
+    assert os.environ["TEARDOWN_CUPTI"] == session_values[0]
+    assert kernel_profiler_module._owns_teardown_cupti is (value is None)
+    assert kernel_profiler_module._cuda_profiler_primed is True
+    profile.assert_called_once_with(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA])
+    zeros.assert_called_once_with(1, device="cuda")
+    synchronize.assert_called_once_with()
+
+    if value is not None:
+        kernel_profiler_module.teardown_cuda_profiler()
+        assert os.environ["TEARDOWN_CUPTI"] == value
+        assert session_values == [value]
+
+
+def test_teardown_cuda_profiler_skips_when_not_primed(mocker):
     profile = mocker.patch.object(kernel_profiler_module, "profile")
 
     teardown_cuda_profiler()
@@ -203,9 +230,12 @@ def test_teardown_cuda_profiler_skips_when_not_primed(mocker, monkeypatch):
     assert "TEARDOWN_CUPTI" not in os.environ
 
 
-def test_teardown_cuda_profiler_sets_teardown_cupti_during_session(mocker, monkeypatch):
-    monkeypatch.delenv("TEARDOWN_CUPTI", raising=False)
+@pytest.mark.parametrize("owned", [False, True])
+def test_teardown_cuda_profiler_sets_teardown_cupti_during_session(mocker, monkeypatch, owned):
     monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", True)
+    monkeypatch.setattr(kernel_profiler_module, "_owns_teardown_cupti", owned)
+    if owned:
+        monkeypatch.setenv("TEARDOWN_CUPTI", "0")
     events: list[tuple] = []
 
     class _RecordingProfile:
@@ -253,6 +283,48 @@ def test_teardown_cuda_profiler_keeps_disabled_teardown_cupti(mocker, monkeypatc
     assert os.environ["TEARDOWN_CUPTI"] == "0"
     assert kernel_profiler_module._cuda_profiler_primed is True
     assert any("TEARDOWN_CUPTI=0" in record.message for record in caplog.records)
+
+
+def test_teardown_cuda_profiler_skips_session_for_user_enabled_teardown(mocker, monkeypatch, caplog):
+    monkeypatch.setenv("TEARDOWN_CUPTI", "1")
+    monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", True)
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+    zeros = mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    synchronize = mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+
+    with caplog.at_level(logging.WARNING, logger=kernel_profiler_module.__name__):
+        kernel_profiler_module.teardown_cuda_profiler()
+
+    profile.assert_not_called()
+    zeros.assert_not_called()
+    synchronize.assert_not_called()
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._cuda_profiler_primed is False
+    assert kernel_profiler_module._owns_teardown_cupti is False
+    assert not caplog.records
+
+
+def test_profile_repeated_calls_toggle_owned_teardown_cupti(mocker):
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "is_available", return_value=True)
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "empty_cache")
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+    mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+    profile.return_value.__enter__.return_value.profiler.function_events = []
+    session_values = []
+    profile.side_effect = lambda **kwargs: session_values.append(os.environ["TEARDOWN_CUPTI"]) or profile.return_value
+    profiler = ModuleFunctionKernelProfiler()
+
+    profiler.profile(nn.Identity(), warmup_iterations=0)
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._cuda_profiler_primed is False
+    profiler.profile(nn.Identity(), warmup_iterations=0)
+
+    # Each call primes and profiles with teardown disabled, then runs the throwaway teardown session.
+    assert session_values == ["0", "0", "1", "0", "0", "1"]
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._cuda_profiler_primed is False
+    assert kernel_profiler_module._owns_teardown_cupti is True
 
 
 def test_profile_tears_down_cuda_profiler_when_profiling_fails(mocker):

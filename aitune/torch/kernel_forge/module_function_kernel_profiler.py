@@ -31,6 +31,7 @@ MODULE_PREFIX = "ait_nn_module:"
 FUNCTIONAL_PREFIX = "ait_torch.nn.functional:"
 
 _cuda_profiler_primed = False
+_owns_teardown_cupti = False
 
 
 def prime_cuda_profiler() -> None:
@@ -42,10 +43,14 @@ def prime_cuda_profiler() -> None:
     inside the discarded capture. This process-level priming is separate from
     the per-session throwaway kernel used by ``profile``.
     """
-    global _cuda_profiler_primed  # noqa: PLW0603
+    global _cuda_profiler_primed, _owns_teardown_cupti  # noqa: PLW0603
 
     if _cuda_profiler_primed:
         return
+
+    if _owns_teardown_cupti or "TEARDOWN_CUPTI" not in os.environ:
+        os.environ["TEARDOWN_CUPTI"] = "0"
+        _owns_teardown_cupti = True
 
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]):
         torch.zeros(1, device="cuda").relu_()
@@ -59,23 +64,28 @@ def teardown_cuda_profiler() -> None:
 
     Kineto leaves CUPTI attached after a CUDA profiler session unless ``TEARDOWN_CUPTI=1`` when the session stops,
     which slows every later CUDA call in the process. The teardown finalizes CUPTI asynchronously on the next CUDA
-    API call, so a short CUDA session is followed by a synchronization. Any other ``TEARDOWN_CUPTI`` value is kept,
-    because PyTorch sets ``"0"`` where teardown is unsafe with CUDA graphs. The variable is not restored because
-    Kineto reads it again from the asynchronous teardown thread. A later ``profile`` call primes the profiler again.
+    API call, so a short CUDA session is followed by a synchronization. User-provided values are kept; ``"1"``
+    already tears down each session, while other values leave CUPTI attached. Owned values are not restored because
+    Kineto reads the variable again from the asynchronous teardown thread. A later ``profile`` call primes the
+    profiler again with teardown disabled for owned values.
     """
     global _cuda_profiler_primed  # noqa: PLW0603
 
     if not _cuda_profiler_primed:
         return
 
-    teardown_cupti = os.environ.setdefault("TEARDOWN_CUPTI", "1")
-    if teardown_cupti != "1":
-        logger.warning(
-            "TEARDOWN_CUPTI=%s keeps CUPTI attached after kernel profiling; later CUDA calls may be slower.",
-            teardown_cupti,
-        )
+    value = os.environ.get("TEARDOWN_CUPTI")
+    if not _owns_teardown_cupti and value is not None:
+        if value != "1":
+            logger.warning(
+                "TEARDOWN_CUPTI=%s keeps CUPTI attached after kernel profiling; later CUDA calls may be slower.",
+                value,
+            )
+            return
+        _cuda_profiler_primed = False
         return
 
+    os.environ["TEARDOWN_CUPTI"] = "1"
     with profile(activities=[ProfilerActivity.CUDA]):
         torch.zeros(1, device="cuda").relu_()
     torch.cuda.synchronize()
@@ -248,6 +258,7 @@ class ModuleFunctionKernelProfiler:
 
         summary: list[_SummaryItem] = []
         for function_name, time_spent_us in top_k_function_times.items():
+            function_name = cast(str, function_name)
             df_function = profiling_df.query("function_name == @function_name")
             data = function_data.get(function_name)
             if data is None:
@@ -282,7 +293,9 @@ class ModuleFunctionKernelProfiler:
 
     def _initialize(self):
         """Initialize the module function kernel profiler."""
-        self.module_stack = contextvars.ContextVar("current_module_stack", default=())
+        self.module_stack: contextvars.ContextVar[tuple[str, ...]] = contextvars.ContextVar(
+            "current_module_stack", default=()
+        )
         self.data_cache: dict[ExactSampleMetadata, Sample] = {}
         self.func_data_distribution: dict[str, dict[ExactSampleMetadata, int]] = defaultdict(lambda: defaultdict(int))
 

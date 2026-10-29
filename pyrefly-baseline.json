@@ -967,27 +967,6 @@
       "severity": "error"
     },
     {
-      "column": 38,
-      "path": "aitune/torch/kernel_forge/module_function_kernel_profiler.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Hashable` is not assignable to parameter `key` with type `str` in function `dict.get`",
-      "severity": "error"
-    },
-    {
-      "column": 35,
-      "path": "aitune/torch/kernel_forge/module_function_kernel_profiler.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Hashable` is not assignable to parameter `function_name` with type `str` in function `_SummaryItem.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 55,
-      "path": "aitune/torch/kernel_forge/module_function_kernel_profiler.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `tuple[Unknown]` is not assignable to parameter `value` with type `tuple[()]` in function `_contextvars.ContextVar.set`",
-      "severity": "error"
-    },
-    {
       "column": 91,
       "path": "aitune/torch/libs/onnx/onnx_exporter.py",
       "name": "unsupported-operation",
