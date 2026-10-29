@@ -56,7 +56,7 @@ def _assert_both_branches(model: nn.Module | Module, positive: torch.Tensor, tol
             tolerance.assert_close(model(branch_input), reference(branch_input))
 
 
-@pytest.mark.matrix("aot_tunning.models.graph-breaks")
+@pytest.mark.matrix("aot_tuning.models.graph-breaks")
 @with_backends(
     "base",
     marks={
@@ -97,7 +97,7 @@ def test_graph_break_aot_tunning(case: BackendCase, device: torch.device):
     _assert_both_branches(tuned, positive, case.tolerance)
 
 
-@pytest.mark.matrix("jit_tunning.models.graph-breaks")
+@pytest.mark.matrix("jit_tuning.models.graph-breaks")
 @with_backends(
     "base",
     marks={
