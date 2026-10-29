@@ -149,29 +149,18 @@ class TuneStrategy(ABC):
 
         self._logger.debug("Checking correctness for %s and graph spec %s", backend.describe(), graph_spec)
         correctness_device = getattr(backend, "device", None)
-        stateful_validation = getattr(backend, "stateful_validation", None)
-        context = backend.validation_context() if stateful_validation is not None else nullcontext()
-        with context:
-            # Check the recorded state contract before ordinary checks advance model buffers.
-            if stateful_validation is not None:
-                stateful_validation.check(
-                    backend.infer,
-                    correctness_device,
-                    name=f"{name}.{graph_spec.name}.{backend.describe()}",
-                    tensor_mutation_policy=backend.tensor_mutation_policy,
-                )
-            check_inference_output_correctness(
-                samples.iter_samples(correctness_device),
-                graph_spec,
-                infer=backend.infer,
-                name=f"{name}.{graph_spec.name}.{backend.describe()}",
-            )
-            check_dynamic_shape_boundary_inference(
-                next(samples.iter_samples(correctness_device)),
-                graph_spec,
-                infer=backend.infer,
-                name=f"{name}.{graph_spec.name}.{backend.describe()}",
-            )
+        check_inference_output_correctness(
+            samples.iter_samples(correctness_device),
+            graph_spec,
+            infer=backend.infer,
+            name=f"{name}.{graph_spec.name}.{backend.describe()}",
+        )
+        check_dynamic_shape_boundary_inference(
+            next(samples.iter_samples(correctness_device)),
+            graph_spec,
+            infer=backend.infer,
+            name=f"{name}.{graph_spec.name}.{backend.describe()}",
+        )
 
     def enable_correctness_check(self, enable: bool = True) -> "TuneStrategy":
         """Enable/disable correctness checking."""
@@ -244,7 +233,6 @@ class TuneStrategy(ABC):
                             move_module_to_device(module, device)
                             stateful_validation = StatefulValidation(Path(validation_dir), graph_spec)
                             stateful_validation.record(module, samples.iter_samples(device))
-                            built_backend.stateful_validation = stateful_validation
                         # Compilation and JIT warmup may execute the original module.
                         context = preserve_buffers(module) if stateful_validation is not None else nullcontext()
                         with context:
@@ -263,16 +251,24 @@ class TuneStrategy(ABC):
                 log("✅ backend built", depth=2, sink=self._sink)
                 try:
                     with control_output(log_file=log_file):
-                        built_backend.stateful_validation = stateful_validation
-                        self.check_correctness(built_backend, name, graph_spec, samples)
+                        context = (
+                            built_backend.validation_context() if stateful_validation is not None else nullcontext()
+                        )
+                        with context:
+                            # Validate the loaded backend before other checks advance its buffers.
+                            if stateful_validation is not None:
+                                stateful_validation.check(
+                                    built_backend.infer,
+                                    built_backend.device,
+                                    name=f"{name}.{graph_spec.name}.{built_backend.describe()}",
+                                    tensor_mutation_policy=built_backend.tensor_mutation_policy,
+                                )
+                            self.check_correctness(built_backend, name, graph_spec, samples)
                 except Exception as e:
                     local_error = e
                     failure_phase = "validation"
                 else:
                     log("✅ backend validated", depth=2, sink=self._sink)
-            finally:
-                # Validation results are temporary and must not enter checkpoints.
-                built_backend.stateful_validation = None
 
             self.backend_results.append({"backend": description, "success": local_error is None})
             if local_error is None:

@@ -264,16 +264,6 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
                     **self._compile_settings(),
                 )
 
-        if self.stateful_validation is not None:
-            self._opt_module = trt_model_compiled
-            try:
-                with self.validation_context():
-                    self.stateful_validation.check(
-                        self._infer, self._device, name="Torch-TensorRT before serialization"
-                    )
-            finally:
-                self._opt_module = None
-
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
             # The adapter takes *flat_inputs; the compiled GraphModule has one
