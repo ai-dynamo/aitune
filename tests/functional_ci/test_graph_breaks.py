@@ -56,15 +56,38 @@ def _assert_both_branches(model: nn.Module | Module, positive: torch.Tensor, tol
             tolerance.assert_close(model(branch_input), reference(branch_input))
 
 
-def _assert_export_fails(case: BackendCase, device: torch.device) -> None:
-    """Tuning re-raises the export error for the data-dependent branch."""
-    with pytest.raises(Exception, match="(?i)data-dependent"):
-        _tune(_wrap(case.factory(), device), make_input(device).abs(), ignore_failing_modules=False)
-
-
-@pytest.mark.matrix("models.graph-breaks")
-@with_backends("graph_breaks")
-def test_graph_break_aot(case: BackendCase, device: torch.device):
+@pytest.mark.matrix("aot_tunning.models.graph-breaks")
+@with_backends(
+    "base",
+    marks={
+        "inductor-aot": pytest.mark.xfail(
+            strict=True,
+            reason="torch._dynamo.exc.Unsupported: Data-dependent branching",
+            raises=AssertionError,
+        ),
+        "torch-tensorrt-aot": pytest.mark.xfail(
+            strict=True,
+            reason="torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode: Could not guard on data-dependent expression Eq(u0, 1) (unhinted: Eq(u0, 1)).  (Size-like symbols: none)",
+            raises=AssertionError,
+        ),
+        "tensorrt": pytest.mark.xfail(
+            strict=True,
+            reason="torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode: Could not guard on data-dependent expression Eq(u0, 1) (unhinted: Eq(u0, 1)).  (Size-like symbols: none)",
+            raises=AssertionError,
+        ),
+        "onnxruntime-cuda": pytest.mark.xfail(
+            strict=True,
+            reason="torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode: Could not guard on data-dependent expression Eq(u0, 1) (unhinted: Eq(u0, 1)).  (Size-like symbols: none)",
+            raises=AssertionError,
+        ),
+        "onnxruntime-tensorrt": pytest.mark.xfail(
+            strict=True,
+            reason="torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode: Could not guard on data-dependent expression Eq(u0, 1) (unhinted: Eq(u0, 1)).  (Size-like symbols: none)",
+            raises=AssertionError,
+        ),
+    },
+)
+def test_graph_break_aot_tunning(case: BackendCase, device: torch.device):
     """AOT backends without export compile around the branch."""
     backend = case.factory()
     tuned = _wrap(backend, device)
@@ -74,23 +97,38 @@ def test_graph_break_aot(case: BackendCase, device: torch.device):
     _assert_both_branches(tuned, positive, case.tolerance)
 
 
-@pytest.mark.matrix("models.graph-breaks")
-@with_backends("torch_export")
-def test_graph_break_torch_export(case: BackendCase, device: torch.device):
-    """`torch.export` rejects the data-dependent branch."""
-    _assert_export_fails(case, device)
-
-
-@pytest.mark.matrix("models.graph-breaks")
-@with_backends("onnx_export")
-def test_graph_break_onnx(case: BackendCase, device: torch.device):
-    """Dynamo ONNX export rejects the data-dependent branch."""
-    _assert_export_fails(case, device)
-
-
-@pytest.mark.matrix("models.graph-breaks")
-@with_backends("jit")
-def test_graph_break_jit(case: BackendCase, device: torch.device):
+@pytest.mark.matrix("jit_tunning.models.graph-breaks")
+@with_backends(
+    "base",
+    marks={
+        "inductor-aot": pytest.mark.xfail(
+            strict=True,
+            reason="torch._dynamo.exc.Unsupported: Data-dependent branching",
+            raises=AssertionError,
+        ),
+        "torch-tensorrt-aot": pytest.mark.xfail(
+            strict=True,
+            reason="torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode: Could not guard on data-dependent expression Eq(u0, 1) (unhinted: Eq(u0, 1)).  (Size-like symbols: none)",
+            raises=AssertionError,
+        ),
+        "tensorrt": pytest.mark.xfail(
+            strict=True,
+            reason="torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode: Could not guard on data-dependent expression Eq(u0, 1) (unhinted: Eq(u0, 1)).  (Size-like symbols: none)",
+            raises=AssertionError,
+        ),
+        "onnxruntime-cuda": pytest.mark.xfail(
+            strict=True,
+            reason="torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode: Could not guard on data-dependent expression Eq(u0, 1) (unhinted: Eq(u0, 1)).  (Size-like symbols: none)",
+            raises=AssertionError,
+        ),
+        "onnxruntime-tensorrt": pytest.mark.xfail(
+            strict=True,
+            reason="torch.fx.experimental.symbolic_shapes.GuardOnDataDependentSymNode: Could not guard on data-dependent expression Eq(u0, 1) (unhinted: Eq(u0, 1)).  (Size-like symbols: none)",
+            raises=AssertionError,
+        ),
+    },
+)
+def test_graph_break_jit_tunning(case: BackendCase, device: torch.device):
     """JIT backends compile the head around the branch."""
     backend = case.factory()
     if isinstance(backend, TorchTensorRTJitBackend):
