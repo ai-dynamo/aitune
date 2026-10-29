@@ -41,9 +41,11 @@ def patch_device_property(cls: type) -> None:
     parameters of tuned submodules are offloaded to meta, so their parents would report the meta device.
 
     Args:
-        cls: Class defining a `device` property.
+        cls: Class defining a `device` property. Classes without one are left unchanged.
     """
-    original: property = cls.__dict__["device"]
+    original = cls.__dict__.get("device")
+    if not isinstance(original, property):
+        return
 
     def device(self: nn.Module) -> torch.device:
         result = original.__get__(self)

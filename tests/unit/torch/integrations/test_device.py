@@ -79,6 +79,17 @@ def test_patch_device_property_reports_execution_device_of_offloaded_tuned_modul
     assert parent.device == EXECUTION_DEVICE
 
 
+def test_patch_device_property_skips_class_without_device_property():
+    class Model(Parent):
+        device = torch.device("cpu")
+
+    patch_device_property(Model)
+    patch_device_property(Parent)
+
+    assert Model.__dict__["device"] == torch.device("cpu")
+    assert "device" not in Parent.__dict__
+
+
 def test_patch_device_property_keeps_meta_without_tuned_owner():
     parent = _patched_model_class()().to("meta")
 
