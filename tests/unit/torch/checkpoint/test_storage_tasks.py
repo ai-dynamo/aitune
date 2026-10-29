@@ -4,6 +4,7 @@
 
 import logging
 import shutil
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -604,26 +605,40 @@ def test_check_checkpoint_valid_no_sha_sums_files(tmp_path):
     assert result is False
 
 
-def test_check_checkpoint_valid_only_aside_sha_sums(tmp_path):
-    """Test check_checkpoint_valid with only aside sha_sums file."""
+def _write_archive(path: Path, files: dict[str, str]) -> None:
+    with zipfile.ZipFile(path.with_name(path.name + AIT_EXTENSION), "w") as zip_fp:
+        for name, content in files.items():
+            zip_fp.writestr(name, content)
+
+
+def test_check_checkpoint_valid_no_archive(tmp_path):
+    """Test check_checkpoint_valid with a sha_sums file inside but no archive."""
     test_dir = tmp_path / "test_checkpoint"
     test_dir.mkdir()
+    get_sha_sums_path(test_dir).write_text("test_content")
 
-    # Create only the aside sha_sums file
-    aside_sha_sums_file = tmp_path / "sha256_sums.txt"
-    aside_sha_sums_file.write_text("test_content")
+    result = check_checkpoint_valid(test_dir)
+    assert result is False
+
+
+def test_check_checkpoint_valid_only_archived_sha_sums(tmp_path):
+    """Test check_checkpoint_valid with a sha_sums file only in the archive."""
+    test_dir = tmp_path / "test_checkpoint"
+    test_dir.mkdir()
+    _write_archive(test_dir, {get_sha_sums_path(test_dir).name: "test_content"})
 
     result = check_checkpoint_valid(test_dir)
     assert result is False
 
 
 def test_check_checkpoint_valid_only_inside_sha_sums(tmp_path):
-    """Test check_checkpoint_valid with only inside sha_sums file."""
+    """Test check_checkpoint_valid with a sha_sums file only inside the folder."""
     test_dir = tmp_path / "test_checkpoint"
     test_dir.mkdir()
+    _write_archive(test_dir, {"weights.bin": "weights"})
 
     # Create only the inside sha_sums file
-    inside_sha_sums_file = test_dir / "sha256_sums.txt"
+    inside_sha_sums_file = get_sha_sums_path(test_dir)
     inside_sha_sums_file.write_text("test_content")
 
     result = check_checkpoint_valid(test_dir)
@@ -636,12 +651,10 @@ def test_check_checkpoint_valid_matching_sha_sums_files(tmp_path, sha_type):
     test_dir = tmp_path / "test_checkpoint"
     test_dir.mkdir()
 
-    # Create both sha files with matching content
-    aside_sha_file = tmp_path / f"sha{sha_type}_sums.txt"
-    inside_sha_file = test_dir / f"sha{sha_type}_sums.txt"
+    inside_sha_file = get_sha_sums_path(test_dir, sha_type)
     test_content = "test_content"
 
-    aside_sha_file.write_text(test_content)
+    _write_archive(test_dir, {inside_sha_file.name: test_content})
     inside_sha_file.write_text(test_content)
 
     result = check_checkpoint_valid(test_dir)
@@ -654,15 +667,94 @@ def test_check_checkpoint_valid_different_sha_sums_files(tmp_path, sha_type):
     test_dir = tmp_path / "test_checkpoint"
     test_dir.mkdir()
 
-    # Create both sha files with different content
-    aside_sha_file = tmp_path / f"sha{sha_type}_sums.txt"
-    inside_sha_file = test_dir / f"sha{sha_type}_sums.txt"
+    inside_sha_file = get_sha_sums_path(test_dir, sha_type)
 
-    aside_sha_file.write_text("content1")
+    _write_archive(test_dir, {inside_sha_file.name: "content1"})
     inside_sha_file.write_text("content2")
 
     result = check_checkpoint_valid(test_dir)
     assert result is False
+
+
+@pytest.mark.parametrize("sha_type", ["256", "512"])
+def test_check_checkpoint_valid_after_compressed_save(tmp_path, monkeypatch, sha_type):
+    """A checkpoint written by ShaSumsSaveTask and ZipSaveTask is recognized as already extracted."""
+    test_dir = tmp_path / "test_checkpoint"
+    test_dir.mkdir()
+    (test_dir / "weights.bin").write_bytes(b"weights")
+
+    ShaSumsSaveTask(sha_type=sha_type).save(test_dir, {})
+    ZipSaveTask().save(test_dir, {})
+
+    assert check_checkpoint_valid(test_dir) is True
+
+    def fail_extractall(*args, **kwargs):
+        raise AssertionError("valid checkpoint should not be extracted again")
+
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", fail_extractall)
+    assert UnzipLoadTask().load(test_dir) == {}
+
+
+def test_check_checkpoint_valid_replaced_archive(tmp_path):
+    """Replacing only the archive makes the next load extract the new checkpoint."""
+    test_dir = tmp_path / "test_checkpoint"
+    test_dir.mkdir()
+    (test_dir / "weights.bin").write_bytes(b"v1")
+    ShaSumsSaveTask().save(test_dir, {})
+    ZipSaveTask().save(test_dir, {})
+
+    other_dir = tmp_path / "other" / "test_checkpoint"
+    other_dir.mkdir(parents=True)
+    (other_dir / "weights.bin").write_bytes(b"v2")
+    ShaSumsSaveTask().save(other_dir, {})
+    ZipSaveTask().save(other_dir, {})
+    shutil.copy(other_dir.with_name(other_dir.name + AIT_EXTENSION), test_dir.with_name(test_dir.name + AIT_EXTENSION))
+
+    assert check_checkpoint_valid(test_dir) is False
+
+    UnzipLoadTask().load(test_dir)
+    ShaSumsLoadTask().load(test_dir)
+    assert (test_dir / "weights.bin").read_bytes() == b"v2"
+
+
+def test_interrupted_extraction_is_not_valid(tmp_path, monkeypatch):
+    """An extraction that stops partway leaves a folder that the next load extracts again."""
+    test_dir = tmp_path / "test_checkpoint"
+    (test_dir / "1").mkdir(parents=True)
+    (test_dir / "weights.bin").write_bytes(b"weights")
+    (test_dir / "1" / "model.plan").write_bytes(b"engine")
+    ShaSumsSaveTask().save(test_dir, {})
+
+    # Store the sums file first, as ZipSaveTask can do with rglob order.
+    sums_file = get_sha_sums_path(test_dir)
+    _write_archive(
+        test_dir,
+        {
+            sums_file.name: sums_file.read_text(encoding="utf-8"),
+            "weights.bin": "weights",
+            "1/model.plan": "engine",
+        },
+    )
+    shutil.rmtree(test_dir)
+
+    extract_member = zipfile.ZipFile._extract_member  # pyrefly: ignore[missing-attribute]
+
+    def fail_in_subfolder(self, member, *args, **kwargs):
+        name = member.filename if isinstance(member, zipfile.ZipInfo) else member
+        if name.startswith("1/"):
+            raise OSError("No space left on device")
+        return extract_member(self, member, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(zipfile.ZipFile, "_extract_member", fail_in_subfolder)
+        with pytest.raises(OSError, match="No space left on device"):
+            UnzipLoadTask().load(test_dir)
+
+    assert check_checkpoint_valid(test_dir) is False
+
+    UnzipLoadTask().load(test_dir)
+    ShaSumsLoadTask().load(test_dir)
+    assert (test_dir / "1" / "model.plan").read_bytes() == b"engine"
 
 
 @pytest.mark.parametrize("sha_type", ["256", "512"])
