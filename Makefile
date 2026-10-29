@@ -59,7 +59,6 @@ clean-notebooks: ## remove Jupyter notebook output cells
 fern-setup: ## setup Fern docs
 	npm install -g fern-api
 	fern --version
-	fern login
 
 docs: ## generate and validate Fern docs
 	fern docs md generate
@@ -132,5 +131,5 @@ install-dev: clean-build clean-pyc clean-test
 	$(PIP_INSTALL) --group dev -e .
 
 uv-locks-update:
-	uv lock
-	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock); done
+	uv lock --upgrade
+	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock  --upgrade); done

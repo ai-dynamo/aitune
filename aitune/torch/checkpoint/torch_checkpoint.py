@@ -84,8 +84,8 @@ class TorchCheckpoint(Checkpoint):
             if the saved state contains tuning information.
 
         Raises:
-            ValueError: If a module in the state_dict is not found in the pipeline or
-                        if a matched attribute is not a torch.nn.Module or WrapperModule.
+            ValueError: If a module in the state_dict is not found in the pipeline, including keys that point to an
+                attribute that is not a torch.nn.Module or WrapperModule.
 
         """
         # Convert device_map to torch.device
@@ -112,13 +112,22 @@ class TorchCheckpoint(Checkpoint):
             pipeline: The pipeline object to extract modules from.
 
         Returns:
-            dict: A dictionary mapping attribute names to Module objects.
+            dict: A dictionary mapping dotted module paths to modules. The walk does not descend into
+                WrapperModule instances.
         """
-        modules = {}
+        modules: dict[str, torch.nn.Module | WrapperModule] = {}
+
+        def add_module(path: str, module: torch.nn.Module | WrapperModule) -> None:
+            modules[path] = module
+            if isinstance(module, WrapperModule):
+                return
+            for child_name, child in module._modules.items():
+                if child is not None:
+                    add_module(f"{path}.{child_name}", child)
 
         for name, attr in vars(pipeline).items():
             if isinstance(attr, (torch.nn.Module, WrapperModule)):
-                modules[name] = attr
+                add_module(name, attr)
 
         return modules
 
@@ -134,10 +143,12 @@ class TorchCheckpoint(Checkpoint):
         """
         state_dict = OrderedDict()
         pipeline_modules = TorchCheckpoint.get_pipeline_modules(pipeline)
+        saved_module_ids = set()
 
         for name, module in pipeline_modules.items():
-            if isinstance(module, WrapperModule):
+            if isinstance(module, WrapperModule) and id(module) not in saved_module_ids:
                 state_dict[name] = module.state_dict()
+                saved_module_ids.add(id(module))
         if not state_dict:
             raise ValueError("No tuned modules found in the pipeline")
         return state_dict
@@ -262,22 +273,32 @@ class TorchCheckpoint(Checkpoint):
             The pipeline with loaded modules.
 
         Raises:
-            ValueError: If a module in the state_dict is not found in the pipeline or
-                        if a matched attribute is not a torch.nn.Module or WrapperModule.
+            ValueError: If a module in the state_dict is not found in the pipeline, including keys that point to an
+                attribute that is not a torch.nn.Module or WrapperModule.
         """
+        modules = TorchCheckpoint.get_pipeline_modules(pipeline)
         matched_modules = set()
+        restored_modules = {}
         for name, module_state_dict in state_dict.items():
-            if hasattr(pipeline, name):
-                module = getattr(pipeline, name)
-                if isinstance(module, (torch.nn.Module, WrapperModule)):
-                    matched_modules.add(name)
-                    setattr(
-                        pipeline,
-                        name,
-                        TorchCheckpoint.load_state_dict_for_module(module, module_state_dict, device_map, name),
-                    )
-                else:
-                    raise ValueError(f"Module {name} is not a torch.nn.Module or WrapperModule")
+            module = modules.get(name)
+            if module is None:
+                # reported below as not found
+                continue
+            matched_modules.add(name)
+            if id(module) in restored_modules:
+                # Checkpoints can store one key for each alias of a module. Restore the module only once.
+                device_map.pop(name, None)
+                continue
+            restored_modules[id(module)] = TorchCheckpoint.load_state_dict_for_module(
+                module, module_state_dict, device_map, name
+            )
+
+        # Replace the module on all its paths, so that aliases stay the same object.
+        for path, module in modules.items():
+            if id(module) in restored_modules:
+                owner_path, _, attribute = path.rpartition(".")
+                owner = modules[owner_path] if owner_path else pipeline
+                setattr(owner, attribute, restored_modules[id(module)])
 
         unmatched_keys = set(state_dict.keys()).difference(matched_modules)
         if unmatched_keys:

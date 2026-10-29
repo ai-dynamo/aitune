@@ -53,3 +53,11 @@ jobs:
       pytorch_ci_image: ${{ needs.ci.outputs.pytorch_ci_image }}
     secrets:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  docs:
+    name: Publish dev docs
+    uses: ./.github/workflows/dispatch.docs.yml
+    secrets:
+      FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+    permissions:
+      contents: write

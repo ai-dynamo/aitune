@@ -59,6 +59,23 @@ def test_existing_onnx_model_copies_external_data(tmp_path):
     assert (model / "1/model.onnx/data/weights.bin").read_bytes() == b"weights"
 
 
+def test_existing_onnx_model_directory_with_custom_filename_holds_model_onnx(tmp_path):
+    source = tmp_path / "bert.onnx"
+    source.write_bytes(b"graph")
+    (tmp_path / "bert.onnx.data").write_bytes(b"weights")
+    (tmp_path / "model.onnx").write_bytes(b"other graph")
+    config = _config("onnx").model_copy(update={"default_model_filename": "bert.onnx"})
+
+    with pytest.raises(AITuneUserInputError, match="cannot overwrite model.onnx"):
+        publish(source, path=tmp_path / "rejected", config=config, additional_files=["model.onnx"])
+
+    model = publish(source, path=tmp_path / "repository", config=config, additional_files=["bert.onnx.data"])
+
+    # Triton's ONNX Runtime backend loads <default_model_filename>/model.onnx when the entry is a directory.
+    assert (model / "1/bert.onnx/model.onnx").read_bytes() == b"graph"
+    assert (model / "1/bert.onnx/bert.onnx.data").read_bytes() == b"weights"
+
+
 def test_existing_model_requires_config_and_never_replaces_model(tmp_path):
     source = tmp_path / "encoder.onnx"
     source.write_bytes(b"graph")

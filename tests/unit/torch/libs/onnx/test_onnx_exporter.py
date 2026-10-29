@@ -3,6 +3,7 @@
 """Unit tests for ONNXExporter."""
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import onnx
@@ -194,6 +195,25 @@ def test_export_dynamo_preserves_named_nested_dynamic_shapes(mock_torch_onnx, tm
     assert isinstance(dynamic_shapes, dict)
     assert isinstance(dynamic_shapes["cache"], list)
     assert dynamic_shapes["cache"][1] is None
+
+
+def test_export_dynamo_sorts_and_saves_program(mocker, mock_torch_onnx, tmp_path):
+    """Test sorting and saving the Dynamo export program."""
+    mock_topological_sort = mocker.patch("aitune.torch.libs.onnx.onnx_exporter.TopologicalSortPass")
+    output_path = tmp_path / "test_model.onnx"
+    exporter = ONNXExporter(output_path=output_path, use_dynamo=True)
+
+    model = ToyTorchModel().eval()
+    sample = model.samples(batch_sizes=[BATCH_SIZE], device="cpu")[0]
+    output = model(*sample[0], **sample[1])
+    graph_spec = make_graph_spec(model.forward, sample, output, strict=True)
+
+    exporter._export_dynamo(model, sample, graph_spec, output_path)
+
+    mock_export_program = mock_torch_onnx.export.return_value
+    mock_topological_sort.return_value.assert_called_once_with(mock_export_program.model)
+    mock_export_program.save.assert_called_once_with(output_path, external_data=True)
+    assert "f" not in mock_torch_onnx.export.call_args.kwargs
 
 
 def test_export_error_handling(mock_torch_onnx, tmp_path):
@@ -589,7 +609,7 @@ def test_does_onnx_export_work_with_nested_tensors(simple_module_and_args, torch
     assert dynamic_shapes["zw"]["w"][0] is torch.export.Dim.AUTO
 
     model_path = tmp_path / "nested_tensors.onnx"
-    export_kwargs = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
+    export_kwargs: dict[str, Any] = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
     ep = torch.onnx.export(
         module,
         args=(),
@@ -700,7 +720,7 @@ def test_does_onnx_export_work_with_nested_tensors_list(simple_module_and_args, 
     assert dynamic_shapes["zw"][1][0] is torch.export.Dim.AUTO
 
     model_path = tmp_path / "nested_tensors.onnx"
-    export_kwargs = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
+    export_kwargs: dict[str, Any] = {"fallback": False} if _ONNX_FALLBACK_SUPPORTED else {}
     ep = torch.onnx.export(
         module,
         args=(),
