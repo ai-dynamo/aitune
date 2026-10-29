@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 import torch
 
+from aitune.torch.config import config as aitune_config
 from aitune.torch.integrations.device import get_tuned_execution_device, patch_device_property
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
@@ -51,6 +52,13 @@ def test_get_tuned_execution_device_ignores_tuned_module_not_owning_first_parame
     _wrap(parent, "decoder").to("meta")
 
     assert get_tuned_execution_device(parent) is None
+
+
+def test_get_tuned_execution_device_returns_none_without_registered_tensors():
+    module = torch.nn.Module()
+    module.offset = torch.zeros(1, device="meta")
+
+    assert get_tuned_execution_device(module) is None
 
 
 def test_get_tuned_execution_device_uses_buffers_without_parameters():
@@ -147,25 +155,19 @@ def test_patch_device_property_keeps_meta_without_tuned_owner():
     assert parent.device == torch.device("meta")
 
 
+@pytest.mark.skipif(not aitune_config.enable_diffusers_integration, reason="Diffusers integration is disabled")
 def test_diffusers_model_mixin_device_is_patched():
     diffusers = pytest.importorskip("diffusers")
-
-    class Model(diffusers.ModelMixin, Parent):
-        pass
-
-    parent = Model()
+    parent = Parent()
     _wrap(parent, "encoder").to("meta")
 
-    assert parent.device == EXECUTION_DEVICE
+    assert diffusers.ModelMixin.device.fget(parent) == EXECUTION_DEVICE
 
 
+@pytest.mark.skipif(not aitune_config.enable_transformers_integration, reason="Transformers integration is disabled")
 def test_transformers_module_utils_mixin_device_is_patched():
     modeling_utils = pytest.importorskip("transformers.modeling_utils")
-
-    class Model(modeling_utils.ModuleUtilsMixin, Parent):
-        pass
-
-    parent = Model()
+    parent = Parent()
     _wrap(parent, "encoder").to("meta")
 
-    assert parent.device == EXECUTION_DEVICE
+    assert modeling_utils.ModuleUtilsMixin.device.fget(parent) == EXECUTION_DEVICE

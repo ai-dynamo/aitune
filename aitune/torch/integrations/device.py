@@ -24,7 +24,11 @@ def get_tuned_execution_device(module: nn.Module) -> torch.device | None:
         >>> get_tuned_execution_device(torch.nn.Linear(2, 2)) is None
         True
     """
-    tensor_name, _ = next(itertools.chain(module.named_parameters(), module.named_buffers()))
+    # Diffusers can report the device of a plain tensor attribute when there are no registered tensors.
+    first = next(itertools.chain(module.named_parameters(), module.named_buffers()), None)
+    if first is None:
+        return None
+    tensor_name, _ = first
     # e.g. "encoder.conv_in.weight" is owned by the submodule at ["encoder", "conv_in"]
     owner_path = tensor_name.split(".")[:-1]
     # get_submodule() returns wrappers, unlike named_modules(); check the nearest ancestor first.

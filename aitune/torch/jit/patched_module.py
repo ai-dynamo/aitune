@@ -751,6 +751,7 @@ class PatchedModule:
         PatchedModule.history.clear()
         PatchedModule.heads.clear()
         PatchedModule.stack.clear()
+        PatchedModule.tuned_devices.clear()
         PatchedModule.deferred_tuning_enabled = False
 
     @staticmethod
