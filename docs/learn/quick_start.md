@@ -11,7 +11,7 @@ NVIDIA AITune enables seamless tuning of models for deployment (for example, con
 NVIDIA AITune supports two modes:
 
 * Ahead-of-time tuning — provide a model or a pipeline, and a dataset/dataloader. You can either rely on `inspect` to detect promising modules to tune or manually select them.
-* Just-in-time tuning — set a special environment variable, run your script without changes, and AITune will, on the fly, detect modules and tune them one by one.
+* Just-in-time tuning — use automatic discovery without changing your script, or explicitly register final module instances that already exist.
 
 Ahead-of-time mode is more powerful and allows you to tweak more settings, whereas just-in-time works out of the box but offers less control over the tuning process. For a more detailed comparison, see the [Comparison between AOT and JIT tuning](#comparison-between-ahead-of-time-and-just-in-time-tuning) section.
 
@@ -111,7 +111,7 @@ ait.load(pipe, "tuned_pipe.ait")
 
 ## Just-in-time tuning
 
-In this mode, there is no need to modify the user's code. AITune records inference calls until `jit_config.min_samples` are collected, then tries to tune modules one by one starting from the top. If there is one of the following conditions:
+With automatic JIT activation, there is no need to modify the user's code. AITune records inference calls until `jit_config.min_samples` are collected, then tries to tune modules one by one starting from the top. If there is one of the following conditions:
 
 * a graph break is detected, i.e., torch.nn.Module contains conditional logic on inputs, meaning there is no guarantee of a static, correct graph of computations, or
 * there is an error during tuning
@@ -150,6 +150,34 @@ python my_script.py
 ```
 
 *Note*: The `import aitune.torch.jit.enable` must be a first import in your code. The alternative option is to use `export AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning` to avoid any source code modification.
+
+### Registering existing modules
+
+Explicit registration wraps existing module instances that you pass to AITune instead of discovering modules as their
+constructors run. The modules may have been loaded or prepared by another runtime, such as Flex Tensor, before AITune
+is imported. Load and prepare the model first, then register the final instances you want to tune:
+
+```python
+from diffusers import DiffusionPipeline
+
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5").to("cuda")
+
+from aitune.torch import register_for_jit_tuning
+
+# Pass an iterable containing the existing modules to wrap.
+registration = register_for_jit_tuning([pipe.unet])
+```
+
+For one module, pass `[model]`. For a collection such as the existing `ModuleList` in `model.blocks`, pass
+`register_for_jit_tuning(model.blocks)`. Explicit registration selects only the supplied modules and treats each one as
+an independent top-level JIT target. It otherwise follows the same eager or deferred runtime recording and tuning
+lifecycle. Supply the complete target set once per Python worker and keep its mode and prepared model tree fixed.
+Do not enable automatic constructor interception in that worker. The returned registration
+provides live inspection reports, state counts, and an `all_tuned` snapshot. See
+[Registering Existing Modules](../guides/jit_tuning.md#registering-existing-modules) for the complete contract.
+
+Flex Tensor manager discovery and replanning integration will follow a compatible public Flex Tensor release; this
+example uses the provider-independent instance registration API.
 
 ### Configuring just-in-time tuning
 

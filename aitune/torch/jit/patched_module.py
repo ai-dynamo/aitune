@@ -103,9 +103,12 @@ class PatchedModule:
     deferred_tuning_enabled: ClassVar[bool] = False
     module_counter: ClassVar[int] = 0
 
-    def __init__(self, module: torch.nn.Module):
+    def __init__(self, module: torch.nn.Module, *, explicit_head: bool = False):
         """Initialize the patched module."""
         self.__wrapped__ = module
+        self._explicit_head = explicit_head
+        self._class_before_device_patch: type[torch.nn.Module] | None = None
+        self._patched_device_class: type[torch.nn.Module] | None = None
         # proxy forward, hooks
         self._original_forward = module.forward
         self._current_forward_pre_hooks = module._forward_pre_hooks
@@ -129,6 +132,11 @@ class PatchedModule:
         }
         self._extra_state_info: str = ""  # for tracking purposes
         self._update_state(ModuleState.INIT)
+
+    @property
+    def explicit_head(self) -> bool:
+        """Whether this module was registered as an exact JIT target."""
+        return self._explicit_head
 
     @property
     def fq_name(self) -> str:
@@ -162,7 +170,6 @@ class PatchedModule:
             if module has already defined strategy/strategies those will take precedence over the provided one.
         """
         PatchedModule.attempted_tuning = True
-        self._set_original_forward_for_hierarchy()
         device = resolve_tuning_device(config.device, self.__wrapped__)
         if self._should_report_inspection():
             report_inspection_details(self.inspection_subtree_reports(), replace=False)
@@ -171,6 +178,8 @@ class PatchedModule:
         while todo:
             current = todo.pop()
             coordinator.verify_equal(current.fq_name, "JIT module order")
+            with coordinator.raise_if_any_rank_fails(f"JIT forward preparation for {current.fq_name}"):
+                current._set_original_forward_for_hierarchy()
             recording = cast(RecordingModule, current._wrapper)
             backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
             try:
@@ -205,34 +214,37 @@ class PatchedModule:
                             current._wrapper = PassthroughModule(current.__wrapped__, device=device)
                             current._extra_state_info = "dry-run tuning success"
 
-                        # Tuning succeeded, so restore the current forward and unpatch its descendants.
-                        current._handle_backend_added_hooks()
-                        current._update_state(ModuleState.TUNED)
-                        current._patch_device_attribute(device)
-                        current._unpatch_hierarchy(include_self=False)
-                        _to_hist(f"Model tuned: {str(current)}")
-                        offload_after_tuning(
-                            current.__wrapped__, backends.values(), device=global_config.device_after_tuning
-                        )
             except Exception as error:
                 current._log_tuning_exception(error)
                 # Out-of-space errors must halt the process — the cache disk is full
                 # and silently falling back to eager would mask the real cause.
                 raise_if_out_of_space(error, path=global_config.cache_dir)
                 # A failed backend may leave an ordinarily placed module on CPU.
-                move_module_to_device(current.__wrapped__, device)
-                current._unpatch()
-                current._update_state(ModuleState.EAGER)
+                with coordinator.raise_if_any_rank_fails(f"JIT eager fallback for {current.fq_name}"):
+                    move_module_to_device(current.__wrapped__, device)
+                    current._update_state(ModuleState.EAGER)
+                    current._unpatch()
+                    current._set_proxy_forward_for_hierarchy()
                 for child in current._children:
                     child._allowed_to_tune = not child._should_be_skipped()  # child modules are allowed to tune
                     if child._should_be_tuned():
                         todo.append(child)
 
-                if isinstance(error, GraphBreakException):
-                    current._extra_state_info = "graph break"
-                else:
-                    current._extra_state_info = "no better tuned version"
+                current._extra_state_info = (
+                    "graph break" if isinstance(error, GraphBreakException) else "no better tuned version"
+                )
                 _to_hist(f"Failed to tune module, unpatched: {str(current)}")
+            else:
+                # Restoration errors end this worker's attempt instead of becoming candidate failures.
+                with coordinator.raise_if_any_rank_fails(f"JIT finalization for {current.fq_name}"):
+                    current._handle_backend_added_hooks()
+                    current._update_state(ModuleState.TUNED)
+                    current._patch_device_attribute(device)
+                    current._unpatch_hierarchy(include_self=False)
+                    _to_hist(f"Model tuned: {str(current)}")
+                    offload_after_tuning(
+                        current.__wrapped__, backends.values(), device=global_config.device_after_tuning
+                    )
         coordinator.barrier()
 
     def inspection_report(self) -> ModuleInspectionReport:
@@ -342,14 +354,16 @@ class PatchedModule:
     def _forward_router(self, wrapped, instance, args, kwargs):
         """Route forward calls to the appropriate state-specific handler.
 
-        This method serves as a stable wrapper throughout the module's lifecycle.
-        This design is necessary for compatibility with models that internally cache references
-        to module.forward wrappers. Since the wrapper object itself never changes, cached
-        references remain valid across state transitions.
+        Cached references to module.forward keep using this router across state transitions.
+        Skipped, eager and detached children use the original forward.
         """
         forward_func = self._forward_routing.get(self._state)
         if forward_func is None:
-            raise ValueError(f"Module should not be called in the state: {self._state}")
+            return self._original_forward(*args, **kwargs)
+
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        Patcher._check_mode()
         return forward_func(wrapped, instance, args, kwargs)
 
     def _forward_init(self, wrapped, instance, args, kwargs):
@@ -360,13 +374,25 @@ class PatchedModule:
         """
         params = count_parameters(self.__wrapped__)
         if int(params) <= config.min_parameters:
+            if self._explicit_head:
+                self._parent = None
+                self._level = 0
+                self._call_count = 1
+                self._fq_name = self._get_fully_qualified_name()
+            self._update_state(ModuleState.SKIPPED)
             self._unpatch()
             return self._original_forward(*args, **kwargs)
 
         formatted_params = format_num_parameters(params)
         self._name += f" 📊{formatted_params}"
         self._call_count = 1
-        if PatchedModule.stack:
+        if self._explicit_head:
+            self._parent = None
+            self._level = 0
+            self._allowed_to_tune = True
+            PatchedModule.heads.append(self)
+            _to_hist(f"New explicit top module: {str(self)}")
+        elif PatchedModule.stack:
             parent = PatchedModule.stack[-1]
             if parent._level + 1 < config.max_depth_level:
                 parent._children.append(self)
@@ -375,6 +401,7 @@ class PatchedModule:
                 _to_hist(f"New child module: {str(self)}")
             else:
                 # too deep, skip the module
+                self._update_state(ModuleState.SKIPPED)
                 self._unpatch()
                 return self._original_forward(*args, **kwargs)
         else:
@@ -527,6 +554,8 @@ class PatchedModule:
             current = todo.pop()
             name = current._name
             counter = PatchedModule.patched_classes[name]
+            if current._class_before_device_patch is None:
+                current._class_before_device_patch = current.__wrapped__.__class__
             # create dynamically a subclass with device attribute overridden
             patched_class = type(
                 f"Patched_{name}_{counter}",
@@ -536,8 +565,16 @@ class PatchedModule:
             PatchedModule.patched_classes[name] += 1
             # replace class so that python dynamically invokes patched device attribute
             current.__wrapped__.__class__ = patched_class
+            current._patched_device_class = patched_class
             if current._parent:
                 todo.append(current._parent)
+
+    def _restore_device_attribute(self) -> None:
+        """Restore the class only when AITune still owns the active device patch."""
+        if self.__wrapped__.__class__ is self._patched_device_class and self._class_before_device_patch is not None:
+            self.__wrapped__.__class__ = self._class_before_device_patch
+        self._class_before_device_patch = None
+        self._patched_device_class = None
 
     def __repr__(self):
         """Representation of the module."""
@@ -559,17 +596,19 @@ class PatchedModule:
         The substitution is done with a wrapt.decorator so that the replaced function has the same docstring,
         signature and other attributes. This is crucial as some HF models perform self inspection for method arguments.
 
-        We re-enable hooks so that they are called before and after the proxied forward.
+        Re-enable hooks before installing the proxy so rejected hook assignments leave forward unchanged.
         """
         self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
-        self.__wrapped__.forward = wrapt.decorator(self._forward_router)(self._original_forward)
         self.__wrapped__._forward_hooks = self._current_forward_hooks
+        self.__wrapped__.forward = wrapt.decorator(self._forward_router)(self._original_forward)
 
     def _restore_original_forward(self):
-        """Restore the original forward and hooks.
+        """Temporarily restore the prepared forward while suspending its hooks.
 
         We need to disable hooks, otherwise they will be called twice.
         """
+        if self.__wrapped__.forward is self._original_forward:
+            return
         self._current_forward_pre_hooks = OrderedDict(self.__wrapped__._forward_pre_hooks)
         self._current_forward_hooks = OrderedDict(self.__wrapped__._forward_hooks)
         self.__wrapped__._forward_pre_hooks = OrderedDict()
@@ -588,8 +627,24 @@ class PatchedModule:
         if self.__wrapped__._forward_hooks:
             self._current_forward_hooks = self.__wrapped__._forward_hooks | self._current_forward_hooks
 
+    def _hierarchy_modules(self) -> list["PatchedModule"]:
+        """Return unique wrappers from the ownership tree and observed call hierarchy."""
+        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
+
+        todo = [self, *(cast(PatchedModule, module) for module in Patcher.patched_modules_under(self.__wrapped__))]
+        modules = []
+        seen = set()
+        while todo:
+            current = todo.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            modules.append(current)
+            todo.extend(current._children)
+        return modules
+
     def _set_original_forward_for_hierarchy(self):
-        """Set original forwards for all patched descendants in the module tree.
+        """Set original forwards for owned and observed patched descendants.
 
         The PatchedModule child hierarchy tracks modules observed during execution. It does
         not include registered submodules that were never called for the recorded samples
@@ -597,10 +652,14 @@ class PatchedModule:
         nn.Module ownership tree, and some of them deepcopy/export that tree, so restore
         every patched descendant before handing the module to a backend.
         """
-        from aitune.torch.jit.patcher import Patcher  # avoid circular deps
-
-        for current in Patcher.patched_modules_under(self.__wrapped__):
+        for current in self._hierarchy_modules():
             current._restore_original_forward()
+
+    def _set_proxy_forward_for_hierarchy(self):
+        """Resume active descendants after the parent's normal eager fallback."""
+        for current in self._hierarchy_modules():
+            if current._state in current._forward_routing:
+                current._proxy_forward()
 
     def _should_be_tuned(self) -> bool:
         """Check if the module should be tuned, dispatching based on the active JIT mode."""
@@ -668,31 +727,28 @@ class PatchedModule:
             _to_hist(f"No graph breaks in {module._name}. Checking took {duration:.2f}s")
 
     def _unpatch(self):
-        """Unpatch the module.
-
-        Removes it also from Patcher object registry.
-        """
-        self._allowed_to_tune = False
-        self._restore_original_forward()
-        self.__wrapped__._forward_hooks = self._current_forward_hooks
-        self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
-
+        """Restore normal forwarding for a skipped, eager or detached module."""
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 
+        self._allowed_to_tune = False
+        try:
+            self._restore_original_forward()
+            self._restore_device_attribute()
+        finally:
+            self.__wrapped__._forward_hooks = self._current_forward_hooks
+            self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
         Patcher.unpatch_module(self)
 
     def _unpatch_hierarchy(self, include_self=False):
-        """Unpatch the module and all its children."""
-        if include_self:
-            _to_hist(f"Unpatching module: {str(self)}")
-            self._unpatch()
-        to_unpatch = self._children[:]
-        while to_unpatch:
-            child = to_unpatch.pop()
-            child._update_state(ModuleState.DETACHED)
-            _to_hist(f"Unpatching child module: {str(child)}")
-            child._unpatch()
-            to_unpatch.extend(child._children)
+        """Unpatch owned and observed descendants, including uncalled owned modules."""
+        for current in self._hierarchy_modules():
+            if current is self:
+                if not include_self:
+                    continue
+            else:
+                current._update_state(ModuleState.DETACHED)
+            _to_hist(f"Unpatching module: {str(current)}")
+            current._unpatch()
 
     def _update_state(self, state: ModuleState):
         """Update the state of the module and its forward method.
@@ -740,14 +796,6 @@ class PatchedModule:
     def print_history(sink=print):
         """Prints history to the sink."""
         sink("\n".join(PatchedModule.history))
-
-    @staticmethod
-    def reset():
-        """Reset PatchedModule state."""
-        PatchedModule.history.clear()
-        PatchedModule.heads.clear()
-        PatchedModule.stack.clear()
-        PatchedModule.deferred_tuning_enabled = False
 
     @staticmethod
     def on_python_exit():

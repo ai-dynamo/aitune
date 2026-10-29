@@ -2,14 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 """Test the patcher functions."""
 
+import doctest
+from importlib import import_module
 from unittest.mock import Mock
 
+import pytest
 import torch
 
+from aitune.torch.backend import TorchEagerBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import PatchedModule
-from aitune.torch.jit.patcher import Patcher, jit_reset, patch_for_jit_tuning, prepare_for_jit_tuning
+from aitune.torch.jit.patcher import (
+    Patcher,
+    patch_for_jit_tuning,
+    prepare_for_jit_tuning,
+)
+from aitune.torch.tune_data.reporting import has_active_report
+from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 
 
 def _module_with_module_name(module_name: str) -> torch.nn.Module:
@@ -17,17 +27,16 @@ def _module_with_module_name(module_name: str) -> torch.nn.Module:
     return module_cls()
 
 
-def test_jit_reset():
-    """Test jit_reset function."""
-    Patcher.patch_torch()
-    torch.nn.Linear(10, 5)
-    assert len(Patcher._patched_modules) == 1
-    jit_reset()
-    assert len(Patcher._patched_modules) == 0
-    assert len(Patcher._intercepted_classes) == 0
-    torch.nn.Linear(10, 5)
-    assert len(Patcher._patched_modules) == 0
-    assert len(Patcher._intercepted_classes) == 0
+@pytest.mark.parametrize("module_name", ["enable", "disable", "enable_inspection"])
+def test_activation_module_doctest_in_fresh_worker(module_name, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jit_config.device = torch.device("cpu")
+    jit_config.strategy = OneBackendStrategy(TorchEagerBackend()).enable_performance_validation(False)
+    result = doctest.testmod(import_module(f"aitune.torch.jit.{module_name}"))
+    assert result.failed == 0
+    assert result.attempted > 0
+    if module_name == "enable_inspection":
+        assert (tmp_path / "linear_net.html").exists()
 
 
 def test_eager_jit_tunes_when_ready(mocker):
@@ -43,6 +52,64 @@ def test_eager_jit_tunes_when_ready(mocker):
     tune.assert_called_once_with()
 
 
+def test_activation_allows_configuring_deferred_mode_before_first_eligible_module(mocker):
+    jit_config.mode = JITMode.TUNE_EAGER
+    Patcher.patch_torch()
+    assert Patcher._mode is None
+    assert not has_active_report()
+
+    jit_config.mode = JITMode.TUNE_DEFERRED
+    jit_config.device = torch.device("cpu")
+    jit_config.batch_axis_required = False
+    tune = mocker.patch.object(PatchedModule, "tune")
+    module = torch.nn.Linear(2, 2)
+
+    assert Patcher._mode is JITMode.TUNE_DEFERRED
+    assert has_active_report()
+    module(torch.ones(1, 2))
+    tune.assert_not_called()
+
+    Patcher.enable_tune_deferred()
+    module(torch.ones(1, 2))
+    tune.assert_called_once_with()
+
+
+def test_excluded_constructors_do_not_start_reporting_or_bind_mode(mocker):
+    jit_config.mode = JITMode.TUNE_EAGER
+    jit_config.patch_exclude = ("unselected_package",)
+    start_report = mocker.spy(import_module("aitune.torch.jit.patcher"), "report_tune_run_start")
+    Patcher.patch_torch()
+
+    torch.nn.ModuleList()
+    torch.nn.ModuleDict()
+    torch.nn.Sequential()
+    _module_with_module_name("unselected_package.child")
+
+    assert Patcher._mode is None
+    assert Patcher._patched_modules == []
+    assert Patcher.intercepted_classes() == []
+    assert not has_active_report()
+    start_report.assert_not_called()
+
+    jit_config.mode = JITMode.TUNE_DEFERRED
+    torch.nn.Linear(2, 2)
+    assert Patcher._mode is JITMode.TUNE_DEFERRED
+    start_report.assert_called_once()
+
+
+def test_constructor_interception_rejects_mode_change_after_registering_module():
+    jit_config.mode = JITMode.TUNE_EAGER
+    Patcher.patch_torch()
+    registered = torch.nn.Linear(2, 2)
+
+    jit_config.mode = JITMode.TUNE_DEFERRED
+    with pytest.raises(RuntimeError, match=r"fresh worker"):
+        torch.nn.Linear(2, 2)
+
+    assert Patcher._mode is JITMode.TUNE_EAGER
+    assert [wrapper.__wrapped__ for wrapper in Patcher._patched_modules] == [registered]
+
+
 def test_prepare_for_tuning():
     """Test prepare_for_tuning context manager."""
     pre_module = torch.nn.Linear(10, 5)  # noqa: F841
@@ -52,6 +119,25 @@ def test_prepare_for_tuning():
     assert len(Patcher._patched_modules) == 1
     patched_module = Patcher._patched_modules[0]
     assert patched_module.__wrapped__ == module
+
+
+@pytest.mark.parametrize("already_active", [False, True])
+def test_nested_preparation_preserves_the_outer_constructor_interception(already_active):
+    original_init = torch.nn.Module.__init__
+    if already_active:
+        Patcher.patch_torch()
+
+    with prepare_for_jit_tuning():
+        before = torch.nn.Linear(2, 2)
+        with prepare_for_jit_tuning():
+            nested = torch.nn.Linear(2, 2)
+        after = torch.nn.Linear(2, 2)
+        assert Patcher._torch_patched
+
+    assert [wrapper.__wrapped__ for wrapper in Patcher._patched_modules] == [before, nested, after]
+    assert Patcher._torch_patched is already_active
+    if not already_active:
+        assert torch.nn.Module.__init__ is original_init
 
 
 def test_patch_decorator():

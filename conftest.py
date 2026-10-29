@@ -9,11 +9,25 @@ import pytest
 import torch
 
 from aitune.torch.jit.config import config as jit_config
-from aitune.torch.jit.patcher import jit_reset
 from aitune.torch.module_registry import MODULE_REGISTRY
-from aitune.torch.tune_data.reporting import _active_graph, _active_module, _active_report, _run_start_ts
+from aitune.torch.tune_data.reporting import (
+    _active_graph,
+    _active_module,
+    _active_report,
+    _run_start_ts,
+)
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
 from aitune.utils.logging import setup_logging
+
+pytest_plugins = ["tests.utilities.jit_process"]
+
+# These modules change process-wide JIT state as soon as they are imported, so
+# they cannot safely share pytest's doctest collection process.
+collect_ignore = [
+    "aitune/torch/jit/disable.py",
+    "aitune/torch/jit/enable.py",
+    "aitune/torch/jit/enable_inspection.py",
+]
 
 
 @pytest.fixture(autouse=True)
@@ -54,16 +68,14 @@ def torch_device():
 
 
 @pytest.fixture(autouse=True)
-def jit_cleanup(tmp_path):
-    """Reset patcher state and jit_config before and after each test."""
-    jit_reset()
+def jit_configuration(tmp_path):
+    """Isolate configuration and telemetry; JIT wrappers live in spawned test workers."""
     _reset_tuning_report_context()
     jit_config.reset_to_defaults()
     jit_config.cache_dir = tmp_path / "aitune_jit_cache"
     try:
         yield
     finally:
-        jit_reset()
         _reset_tuning_report_context()
         jit_config.reset_to_defaults()
 

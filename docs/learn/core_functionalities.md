@@ -43,6 +43,24 @@ import aitune.torch.jit.enable_inspection as inspection
 inspection.save_report("filename.html", "YOUR_MODEL_NAME")
 ```
 
+## Register existing modules for JIT tuning
+
+`register_for_jit_tuning` selects module instances that have already been constructed without enabling global
+constructor interception. Each selected module is an independent top-level JIT target:
+
+```python
+from aitune.torch import register_for_jit_tuning
+
+registration = register_for_jit_tuning(model.blocks)
+
+for report in registration.reports:
+    print(report.module_name, report.state)
+```
+
+Explicit registration and automatic constructor interception are alternative activation paths within a live JIT
+session and cannot overlap. See the
+[JIT tuning guide](../guides/jit_tuning.md#registering-existing-modules) for validation and lifecycle details.
+
 ## Tune
 
 The `tune` function is the core functionality that automatically tunes your PyTorch models and pipelines for optimal inference performance. It supports various backends and automatically selects the best performing configuration.
