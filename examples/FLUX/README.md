@@ -4,9 +4,10 @@
 title: "Tune FLUX on one or multiple GPUs"
 ---
 
-This example tunes the `Freepik/flux.1-lite-8B` Diffusers pipeline, an 8B distillation of FLUX.1-dev that fits a 32 GB
-GPU in bf16, with NVIDIA AITune. It demonstrates the complete ahead-of-time workflow: inspect the pipeline, tune
-selected modules, save the result, load it into a fresh pipeline, and compare original and tuned image generation.
+This example tunes the `Freepik/flux.1-lite-8B` Diffusers pipeline, an 8B distillation of FLUX.1-dev with about 26 GB
+of bf16 weights instead of about 33.5 GB, with NVIDIA AITune. It demonstrates the complete ahead-of-time workflow:
+inspect the pipeline, tune selected modules, save the result, load it into a fresh pipeline, and compare original and
+tuned image generation.
 
 ## What this example demonstrates
 
