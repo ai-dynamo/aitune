@@ -221,8 +221,8 @@ Get the length of the dataset.
 
 ```python
 class aitune.torch.dataloader.InputConfig(
-    min_input: torch.Size,
-    max_input: torch.Size | None = None,
+    min_input: tuple[int, ...],
+    max_input: tuple[int, ...] | None = None,
     dtype: torch.dtype = torch.float32,
     kwarg_name: str | None = None,
     min_value: int | float = 0,
@@ -261,13 +261,13 @@ InputConfig(min_input=(3, 24, 24), max_input=(3, 24, 24), dtype=torch.float32, k
 <ParamField path="kwarg_name" type="str | None = None">
 </ParamField>
 
-<ParamField path="max_input" type="Size | None = None">
+<ParamField path="max_input" type="tuple[int, ...] | None = None">
 </ParamField>
 
 <ParamField path="max_value" type="int | float | None = None">
 </ParamField>
 
-<ParamField path="min_input" type="Size">
+<ParamField path="min_input" type="tuple[int, ...]">
 </ParamField>
 
 <ParamField path="min_value" type="int | float = 0">

@@ -3415,16 +3415,16 @@ execution-based filtering selects modules consistently.
 
 <Anchor id="aitune-torch-tuning-load">
 
-<CodeBlock links={{"aitune.torch.checkpoint.storage.Storage":"./checkpoint/storage.mdx#aitune-torch-checkpoint-storage-Storage","aitune.torch.module.wrapper_module.Module":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tuning.T":"#aitune-torch-tuning-T","aitune.torch.checkpoint.storage.Storage":"./checkpoint/storage.mdx#aitune-torch-checkpoint-storage-Storage","aitune.torch.module.wrapper_module.Module":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.load(
-    module: torch.nn.Module,
+    module: aitune.torch.tuning.T,
     path: str | pathlib.Path,
     storage: aitune.torch.checkpoint.storage.Storage | None = None,
     device_map: dict[str, torch.device] | None = None,
     disable_external_logging: bool = True
-) -> torch.nn.Module | aitune.torch.module.wrapper_module.Module
+) -> aitune.torch.tuning.T | aitune.torch.module.wrapper_module.Module
 ```
 
 </CodeBlock>
@@ -3438,8 +3438,8 @@ If storage is not provided, a default storage will be used. Check save function 
 
 **Parameters:**
 
-<ParamField path="module" type="torch.nn.Module">
-The module to load.
+<ParamField path="module" type="T">
+[`T`](#aitune-torch-tuning-T) — The module or pipeline to load the checkpoint into.
 </ParamField>
 
 <ParamField path="path" type="str | Path">
@@ -3541,11 +3541,11 @@ A dynamic strategy configuration suitable for AOT and JIT tuning.
 
 <Anchor id="aitune-torch-tuning-save">
 
-<CodeBlock links={{"aitune.torch.checkpoint.storage.Storage":"./checkpoint/storage.mdx#aitune-torch-checkpoint-storage-Storage"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module","aitune.torch.checkpoint.storage.Storage":"./checkpoint/storage.mdx#aitune-torch-checkpoint-storage-Storage"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.save(
-    module: torch.nn.Module,
+    module: torch.nn.Module | aitune.torch.module.wrapper_module.Module | collections.abc.Callable[..., typing.Any],
     path: str | pathlib.Path,
     storage: aitune.torch.checkpoint.storage.Storage | None = None
 ) -> None
@@ -3583,8 +3583,8 @@ For example, if you want to save the module to the `ckpt` folder, you can do the
 
 **Parameters:**
 
-<ParamField path="module" type="torch.nn.Module">
-The module to save.
+<ParamField path="module" type="torch.nn.Module | Module | Callable[..., Any]">
+`torch.nn.Module |` [`Module`](./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module) `| Callable[..., Any]` — The module or pipeline to save.
 </ParamField>
 
 <ParamField path="path" type="str | Path">
@@ -3677,15 +3677,15 @@ to free VRAM during tuning.
 
 <Anchor id="aitune-torch-inspecting-wrapping-wrap">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./inspecting/module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.tune_strategy.resolver.StrategyOption":"./tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.module.wrapper_module.StrategyList":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.wrapping.T":"#aitune-torch-inspecting-wrapping-T","aitune.torch.inspecting.module_info.ModuleInfo":"./inspecting/module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.tune_strategy.resolver.StrategyOption":"./tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.module.wrapper_module.StrategyList":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap","aitune.torch.module.wrapper_module.Module":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.wrap(
-    obj: object,
+    obj: aitune.torch.inspecting.wrapping.T,
     modules: list[aitune.torch.inspecting.module_info.ModuleInfo],
     strategy: aitune.torch.tune_strategy.resolver.StrategyOption | None = None,
     strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None = None
-) -> object
+) -> aitune.torch.inspecting.wrapping.T | aitune.torch.module.wrapper_module.Module
 ```
 
 </CodeBlock>
@@ -3697,8 +3697,8 @@ Wrap provided modules with inspection logic.
 
 **Parameters:**
 
-<ParamField path="obj" type="object">
-Callable object to wrap.
+<ParamField path="obj" type="T">
+[`T`](#aitune-torch-inspecting-wrapping-T) — Callable object to wrap.
 </ParamField>
 
 <ParamField path="modules" type="list[ModuleInfo]">
@@ -3713,9 +3713,9 @@ Callable object to wrap.
 [`StrategyList`](./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList) `|` [`StrategyMap`](./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap) `| None` — Strategies to use for patching.
 </ParamField>
 
-**Returns:** `object`
+**Returns:** [`T`](#aitune-torch-inspecting-wrapping-T) `|` [`Module`](./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module)
 
-Wrapped callable object.
+A `Module` proxy if the root module is selected, otherwise `obj` with its submodules wrapped in place.
 
 
 </Indent>

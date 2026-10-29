@@ -18,21 +18,23 @@ Inspecting and patching modules.
 
 [`LOG_FORMAT`](#aitune-torch-inspecting-wrapping-LOG_FORMAT)
 
+[`T`](#aitune-torch-inspecting-wrapping-T)
+
 [`logger`](#aitune-torch-inspecting-wrapping-logger)
 
 ### API
 
 <Anchor id="aitune-torch-inspecting-wrapping-wrap">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.module.wrapper_module.StrategyList":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.wrapping.T":"#aitune-torch-inspecting-wrapping-T","aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.tune_strategy.resolver.StrategyOption":"../tune_strategy/resolver.mdx#aitune-torch-tune_strategy-resolver-StrategyOption","aitune.torch.module.wrapper_module.StrategyList":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList","aitune.torch.module.wrapper_module.StrategyMap":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap","aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.wrap(
-    obj: object,
+    obj: aitune.torch.inspecting.wrapping.T,
     modules: list[aitune.torch.inspecting.module_info.ModuleInfo],
     strategy: aitune.torch.tune_strategy.resolver.StrategyOption | None = None,
     strategies: aitune.torch.module.wrapper_module.StrategyList | aitune.torch.module.wrapper_module.StrategyMap | None = None
-) -> object
+) -> aitune.torch.inspecting.wrapping.T | aitune.torch.module.wrapper_module.Module
 ```
 
 </CodeBlock>
@@ -44,8 +46,8 @@ Wrap provided modules with inspection logic.
 
 **Parameters:**
 
-<ParamField path="obj" type="object">
-Callable object to wrap.
+<ParamField path="obj" type="T">
+[`T`](#aitune-torch-inspecting-wrapping-T) — Callable object to wrap.
 </ParamField>
 
 <ParamField path="modules" type="list[ModuleInfo]">
@@ -60,9 +62,9 @@ Callable object to wrap.
 [`StrategyList`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyList) `|` [`StrategyMap`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-StrategyMap) `| None` — Strategies to use for patching.
 </ParamField>
 
-**Returns:** `object`
+**Returns:** [`T`](#aitune-torch-inspecting-wrapping-T) `|` [`Module`](../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module)
 
-Wrapped callable object.
+A `Module` proxy if the root module is selected, otherwise `obj` with its submodules wrapped in place.
 
 
 </Indent>
@@ -73,6 +75,18 @@ Wrapped callable object.
 
 ```python
 aitune.torch.inspecting.wrapping.LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-inspecting-wrapping-T">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.wrapping.T = TypeVar('T', bound=(torch.nn.Module | Module | Callable[..., Any]))
 ```
 
 </CodeBlock>

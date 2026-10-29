@@ -27,6 +27,8 @@ Main tune function.
 
 [`LOG_FORMAT`](#aitune-torch-tuning-LOG_FORMAT)
 
+[`T`](#aitune-torch-tuning-T)
+
 [`logger`](#aitune-torch-tuning-logger)
 
 ### API
@@ -167,16 +169,16 @@ Persist a module-level tuning traceback in its rank-specific cache.
 
 <Anchor id="aitune-torch-tuning-load">
 
-<CodeBlock links={{"aitune.torch.checkpoint.storage.Storage":"./checkpoint/storage.mdx#aitune-torch-checkpoint-storage-Storage","aitune.torch.module.wrapper_module.Module":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.tuning.T":"#aitune-torch-tuning-T","aitune.torch.checkpoint.storage.Storage":"./checkpoint/storage.mdx#aitune-torch-checkpoint-storage-Storage","aitune.torch.module.wrapper_module.Module":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.load(
-    module: torch.nn.Module,
+    module: aitune.torch.tuning.T,
     path: str | pathlib.Path,
     storage: aitune.torch.checkpoint.storage.Storage | None = None,
     device_map: dict[str, torch.device] | None = None,
     disable_external_logging: bool = True
-) -> torch.nn.Module | aitune.torch.module.wrapper_module.Module
+) -> aitune.torch.tuning.T | aitune.torch.module.wrapper_module.Module
 ```
 
 </CodeBlock>
@@ -190,8 +192,8 @@ If storage is not provided, a default storage will be used. Check save function 
 
 **Parameters:**
 
-<ParamField path="module" type="torch.nn.Module">
-The module to load.
+<ParamField path="module" type="T">
+[`T`](#aitune-torch-tuning-T) — The module or pipeline to load the checkpoint into.
 </ParamField>
 
 <ParamField path="path" type="str | Path">
@@ -215,11 +217,11 @@ If True, libraries logging will be suppressed.
 
 <Anchor id="aitune-torch-tuning-save">
 
-<CodeBlock links={{"aitune.torch.checkpoint.storage.Storage":"./checkpoint/storage.mdx#aitune-torch-checkpoint-storage-Storage"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module","aitune.torch.checkpoint.storage.Storage":"./checkpoint/storage.mdx#aitune-torch-checkpoint-storage-Storage"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.save(
-    module: torch.nn.Module,
+    module: torch.nn.Module | aitune.torch.module.wrapper_module.Module | collections.abc.Callable[..., typing.Any],
     path: str | pathlib.Path,
     storage: aitune.torch.checkpoint.storage.Storage | None = None
 ) -> None
@@ -257,8 +259,8 @@ For example, if you want to save the module to the `ckpt` folder, you can do the
 
 **Parameters:**
 
-<ParamField path="module" type="torch.nn.Module">
-The module to save.
+<ParamField path="module" type="torch.nn.Module | Module | Callable[..., Any]">
+`torch.nn.Module |` [`Module`](./module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module) `| Callable[..., Any]` — The module or pipeline to save.
 </ParamField>
 
 <ParamField path="path" type="str | Path">
@@ -355,6 +357,18 @@ to free VRAM during tuning.
 
 ```python
 aitune.torch.tuning.LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-tuning-T">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.tuning.T = TypeVar('T', bound=(torch.nn.Module | Module | Callable[..., Any]))
 ```
 
 </CodeBlock>
