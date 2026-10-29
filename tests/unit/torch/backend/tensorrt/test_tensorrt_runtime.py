@@ -3,10 +3,24 @@
 """Unit tests for TensorRTRuntime."""
 
 import pytest
+from wrapt import lazy_import
 
 from aitune.torch.backend.tensorrt.tensorrt_runtime import (
     TensorRTRuntime,
 )
+
+
+@pytest.mark.parametrize("use_lazy_import", [False, True])
+def test_tensorrt_runtime_construction_does_not_print_attribute_errors(capfd, use_lazy_import):
+    """Compare direct and lazy TensorRT access without loading a model or engine."""
+    direct_trt = pytest.importorskip("tensorrt")
+    trt_module = lazy_import("tensorrt") if use_lazy_import else direct_trt
+    trt_logger = trt_module.Logger(trt_module.Logger.WARNING)
+    runtime = trt_module.Runtime(trt_logger)
+
+    assert runtime is not None
+    captured = capfd.readouterr()
+    assert "AttributeError:" not in captured.out + captured.err
 
 
 @pytest.fixture

@@ -12,10 +12,34 @@ from torch.nn import Module as TorchModule
 
 from aitune.torch.checkpoint.checkpoint import Checkpoint
 from aitune.torch.checkpoint.storage import Storage
+from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module.wrapper_module import Module as WrapperModule
 from aitune.torch.utils.device import get_device
 
 logger = getLogger(__name__)
+
+
+def _log_module_memory(module_path: str, stage: str) -> None:
+    """Report visible GPU memory at module boundaries without interrupting restoration."""
+    try:
+        for device_index in range(torch.cuda.device_count()):
+            device = torch.device("cuda", device_index)
+            free, total = torch.cuda.mem_get_info(device)
+            mib = 1024**2
+            logger.info(
+                "%s: %s; device=%s, GPU used=%.1f MiB, free=%.1f MiB, total=%.1f MiB, "
+                "PyTorch allocated=%.1f MiB, reserved=%.1f MiB",
+                module_path,
+                stage,
+                device,
+                (total - free) / mib,
+                free / mib,
+                total / mib,
+                torch.cuda.memory_allocated(device) / mib,
+                torch.cuda.memory_reserved(device) / mib,
+            )
+    except Exception as error:
+        logger.info("%s: %s; GPU memory unavailable: %s", module_path, stage, error)
 
 
 class TorchCheckpoint(Checkpoint):
@@ -56,9 +80,21 @@ class TorchCheckpoint(Checkpoint):
         """
         if isinstance(module_or_pipeline, TorchModule):
             state_dict = module_or_pipeline.state_dict()
+            module_states = {"": state_dict}
         else:
             state_dict = TorchCheckpoint.state_dict_from_pipeline(module_or_pipeline)
+            module_states = state_dict
         self._storage.save(path, state_dict)
+        for module_path, module_state in module_states.items():
+            for prefix, stored_object in module_state.items():
+                if not isinstance(stored_object, dict) or WrapperModule.TUNED_MODULE_KEY not in stored_object:
+                    continue
+                stored_path = ".".join(part for part in (module_path, prefix.rstrip(".")) if part)
+                stored_path = stored_path or stored_object[WrapperModule.NAME_KEY]
+                logger.info("📦 Saved module %s:", stored_path)
+                tuned_state = stored_object[WrapperModule.TUNED_MODULE_KEY]
+                for graph_index, (_, backend_state) in enumerate(tuned_state[TunedModule.BACKENDS_KEY]):
+                    logger.info("  ✅ graph %s stored with %s", graph_index, backend_state[TunedModule.TYPE_KEY])
 
     def load(
         self,
@@ -225,8 +261,10 @@ class TorchCheckpoint(Checkpoint):
 
                 module_path = ".".join(part for part in (checkpoint_module_path, prefix.rstrip(".")) if part)
                 module_path = module_path or stored_object[WrapperModule.NAME_KEY]
-                logger.info("Loading module %s:", module_path)
+                logger.info("📦 Loading module %s:", module_path)
+                _log_module_memory(module_path, "before restoration")
                 wrapper_module = WrapperModule.from_dict(module, stored_object, device)
+                _log_module_memory(module_path, "after restoration")
                 if parent_module is None:
                     # We replace top module
                     nonlocal top_module
@@ -235,7 +273,7 @@ class TorchCheckpoint(Checkpoint):
                     # We replace a child module with wrapper module
                     setattr(parent_module, module_name, wrapper_module)
                 for graph_index, backend in enumerate(wrapper_module.module.backends.values()):
-                    logger.info("  -> graph %s restored with %s", graph_index, backend.name)
+                    logger.info("  ✅ graph %s restored with %s", graph_index, backend.name)
                 # Remove state_dict key - we already handled it
                 del local_state_dict[prefix]
             else:

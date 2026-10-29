@@ -1290,12 +1290,6 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
 
         # Reconstruct config with quantization settings
         backend._config = TensorRTBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
-
         backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]
-        # Ensure CUDA graphs are disabled when loading from checkpoint
-        # CUDA graphs cannot be serialized and must be re-captured
-        if backend._config.use_cuda_graphs:
-            logger.info("CUDA graphs were enabled in saved state, but will be re-captured on first inference")
-            # CUDA graph state will be None initially, triggering re-capture
 
         return backend

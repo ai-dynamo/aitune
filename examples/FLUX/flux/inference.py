@@ -105,7 +105,8 @@ def do_inference(
 
     if is_rank_zero():
         logger.info("Loading tuned pipeline")
-    pipeline = ait.load(pipeline, tuned_model_path)
+
+    pipeline = ait.load(pipeline, tuned_model_path, disable_external_logging=False)
 
     if is_rank_zero():
         logger.info("Generating images on tuned pipeline")
