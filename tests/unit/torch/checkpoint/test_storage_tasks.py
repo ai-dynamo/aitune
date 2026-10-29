@@ -737,7 +737,7 @@ def test_interrupted_extraction_is_not_valid(tmp_path, monkeypatch):
     )
     shutil.rmtree(test_dir)
 
-    extract_member = zipfile.ZipFile._extract_member
+    extract_member = zipfile.ZipFile._extract_member  # pyrefly: ignore[missing-attribute]
 
     def fail_in_subfolder(self, member, *args, **kwargs):
         name = member.filename if isinstance(member, zipfile.ZipInfo) else member
