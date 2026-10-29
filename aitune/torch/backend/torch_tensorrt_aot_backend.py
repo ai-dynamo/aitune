@@ -379,7 +379,9 @@ def _export_compiled_model(module: torch.fx.GraphModule) -> ExportedProgram:
     """
     assert torch_tensorrt is not None
     export = torch_tensorrt.dynamo.export
-    legacy = {"use_legacy_exporter": True} if "use_legacy_exporter" in inspect.signature(export).parameters else {}
+    legacy: dict[str, Any] = (
+        {"use_legacy_exporter": True} if "use_legacy_exporter" in inspect.signature(export).parameters else {}
+    )
     program = export(module, **legacy)
     _restore_constant_inputs(program)
     return program
