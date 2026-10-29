@@ -296,6 +296,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
     def _activate(self):
         """Load compiled module."""
+        assert torch_tensorrt is not None
         exported_model_artifact = cast(ArtifactPath, self._exported_model_artifact)
         with torch_tensorrt_errors(torch_tensorrt):
             loaded = torch_tensorrt.load(exported_model_artifact.path.as_posix())
@@ -360,7 +361,8 @@ def _restore_constant_inputs(program: ExportedProgram) -> None:
     """Declare non-tensor user inputs of ``program`` as constants in place, as ``torch.export`` does.
 
     Torch-TensorRT declares every placeholder as a tensor input, so serializing e.g. a float or ``None`` kwarg raises
-    ``KeyError``. Remove this workaround once https://github.com/pytorch/TensorRT/issues/4941 is fixed.
+    ``KeyError``. Remove this workaround once the minimum supported Torch-TensorRT version includes the fix for
+    https://github.com/pytorch/TensorRT/issues/4941.
     """
     values = {
         node.name: node.meta["val"] for node in program.graph.nodes if node.op == "placeholder" and "val" in node.meta
@@ -395,6 +397,7 @@ def _save_compiled_model(
     pickle_protocol: int,
 ) -> None:
     """Save a compiled graph and retry a known export error with retracing."""
+    assert torch_tensorrt is not None
     try:
         with torch_tensorrt_errors(torch_tensorrt):
             program = _export_compiled_model(module)
@@ -407,7 +410,7 @@ def _save_compiled_model(
         )
         args, kwargs = sample
         with torch_tensorrt_errors(torch_tensorrt):
-            # Torch-TensorRT 2.8-2.10 `save(retrace=True)` ignores `dynamic_shapes`, so export here with them.
+            # Not `save(retrace=True)`: it rejects non-tensor inputs, and on 2.8-2.10 it ignores `dynamic_shapes`.
             program = torch.export.export(
                 module, tuple(args), kwargs or None, dynamic_shapes=dynamic_shapes, strict=False
             )

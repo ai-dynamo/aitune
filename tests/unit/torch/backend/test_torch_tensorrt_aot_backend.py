@@ -183,6 +183,30 @@ def test_restore_constant_inputs_makes_non_tensor_kwargs_serializable(tmp_path: 
     assert torch.equal(loaded(torch.ones(2), scale=2.0, mask=None), torch.full((2,), 2.0))
 
 
+def test_save_compiled_model_retraces_non_tensor_inputs(mocker, tmp_path: Path):
+    class StructuredModel(nn.Module):
+        def forward(
+            self, x: torch.Tensor, extras: dict[str, torch.Tensor], scale: float, mask: torch.Tensor | None
+        ) -> torch.Tensor:
+            output = (x + extras["bias"]) * scale
+            return output if mask is None else output * mask
+
+    batch = torch.export.Dim("batch", min=1, max=8)
+    dynamic_shapes = {"x": {0: batch}, "extras": {"bias": {0: batch}}, "scale": None, "mask": None}
+    sample = ((torch.ones(2, 4), {"bias": torch.ones(2, 4)}, 2.0, None), {})
+    module = torch.export.export(StructuredModel(), sample[0], dynamic_shapes=dynamic_shapes).module()
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.dynamo.export.side_effect = SpecViolationError("direct save failed")
+    mock_torch_tensorrt.save.side_effect = lambda program, path, **_: torch.export.save(program, path)
+
+    _save_compiled_model(module, tmp_path / "model.pt2", sample, dynamic_shapes=dynamic_shapes, pickle_protocol=5)
+
+    loaded = torch.export.load(tmp_path / "model.pt2").module()
+    output = loaded(torch.ones(3, 4), {"bias": torch.ones(3, 4)}, 2.0, None)
+    assert torch.equal(output, torch.full((3, 4), 4.0))
+
+
 @pytest.fixture
 def mock_torch_tensorrt(mocker, model: SimpleModel):
     mock_torch_tensorrt = mocker.Mock()
