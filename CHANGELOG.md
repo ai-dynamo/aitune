@@ -14,6 +14,7 @@ title: "Changelog"
 - feat: resolve default AOT and JIT strategies per module using source format, execution topology, and compilation mode
 - feat: add tuning objectives and composable constraints through `resolve_strategy`, initially supporting maximum latency
 - fix: reuse an already extracted checkpoint only when its SHA sums match the archive, and redo an interrupted extraction on the next load
+- fix: save Torch-TensorRT AOT models whose inputs include non-tensor values, and keep dynamic shapes when the save falls back to retracing
 - breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
 
 ## 0.6.0
