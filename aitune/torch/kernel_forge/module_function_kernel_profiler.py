@@ -32,6 +32,15 @@ FUNCTIONAL_PREFIX = "ait_torch.nn.functional:"
 
 _cuda_profiler_primed = False
 _owns_teardown_cupti = False
+_last_teardown_cupti_value: str | None = None
+
+
+def _check_teardown_cupti_ownership() -> None:
+    """Relinquish ownership if the caller or PyTorch changed our last value."""
+    global _owns_teardown_cupti  # noqa: PLW0603
+
+    if os.environ.get("TEARDOWN_CUPTI") != _last_teardown_cupti_value:
+        _owns_teardown_cupti = False
 
 
 def prime_cuda_profiler() -> None:
@@ -43,13 +52,16 @@ def prime_cuda_profiler() -> None:
     inside the discarded capture. This process-level priming is separate from
     the per-session throwaway kernel used by ``profile``.
     """
-    global _cuda_profiler_primed, _owns_teardown_cupti  # noqa: PLW0603
+    global _cuda_profiler_primed, _owns_teardown_cupti, _last_teardown_cupti_value  # noqa: PLW0603
+
+    _check_teardown_cupti_ownership()
 
     if _cuda_profiler_primed:
         return
 
     if _owns_teardown_cupti or "TEARDOWN_CUPTI" not in os.environ:
         os.environ["TEARDOWN_CUPTI"] = "0"
+        _last_teardown_cupti_value = "0"
         _owns_teardown_cupti = True
 
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]):
@@ -64,16 +76,19 @@ def teardown_cuda_profiler() -> None:
 
     Kineto leaves CUPTI attached after a CUDA profiler session unless ``TEARDOWN_CUPTI=1`` when the session stops,
     which slows every later CUDA call in the process. The teardown finalizes CUPTI asynchronously on the next CUDA
-    API call, so a short CUDA session is followed by a synchronization. User-provided values are kept; ``"1"``
+    API call, so a short CUDA session is followed by a synchronization. This synchronizes device work, but does not
+    join Kineto's detached teardown thread; consecutive sessions can still race with teardown. User-provided values
+    are kept, including changes made after an earlier call; ``"1"``
     already tears down each session, while other values leave CUPTI attached. Owned values are not restored because
     Kineto reads the variable again from the asynchronous teardown thread. A later ``profile`` call primes the
     profiler again with teardown disabled for owned values.
     """
-    global _cuda_profiler_primed  # noqa: PLW0603
+    global _cuda_profiler_primed, _last_teardown_cupti_value  # noqa: PLW0603
 
     if not _cuda_profiler_primed:
         return
 
+    _check_teardown_cupti_ownership()
     value = os.environ.get("TEARDOWN_CUPTI")
     if not _owns_teardown_cupti and value is not None:
         if value != "1":
@@ -86,6 +101,7 @@ def teardown_cuda_profiler() -> None:
         return
 
     os.environ["TEARDOWN_CUPTI"] = "1"
+    _last_teardown_cupti_value = "1"
     with profile(activities=[ProfilerActivity.CUDA]):
         torch.zeros(1, device="cuda").relu_()
     torch.cuda.synchronize()

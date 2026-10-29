@@ -15,6 +15,7 @@ import torch.nn.functional as F  # noqa: N812
 from torch.profiler import ProfilerActivity
 
 import aitune.torch.kernel_forge.module_function_kernel_profiler as kernel_profiler_module
+from aitune.torch.distributed import DistributedContext, DistributedCoordinator
 from aitune.torch.kernel_forge.module_function_kernel_profiler import (
     FunctionData,
     ModuleFunctionKernelProfiler,
@@ -27,6 +28,9 @@ from tests.utilities.helpers import requires_cuda
 def reset_cuda_profiler_state(monkeypatch):
     monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", False)
     monkeypatch.setattr(kernel_profiler_module, "_owns_teardown_cupti", False)
+    monkeypatch.setattr(kernel_profiler_module, "_last_teardown_cupti_value", None)
+    # Record the original value even when absent, so direct writes by the helpers are undone.
+    monkeypatch.setenv("TEARDOWN_CUPTI", "0")
     monkeypatch.delenv("TEARDOWN_CUPTI", raising=False)
 
 
@@ -236,6 +240,7 @@ def test_teardown_cuda_profiler_sets_teardown_cupti_during_session(mocker, monke
     monkeypatch.setattr(kernel_profiler_module, "_owns_teardown_cupti", owned)
     if owned:
         monkeypatch.setenv("TEARDOWN_CUPTI", "0")
+        monkeypatch.setattr(kernel_profiler_module, "_last_teardown_cupti_value", "0")
     events: list[tuple] = []
 
     class _RecordingProfile:
@@ -305,6 +310,8 @@ def test_teardown_cuda_profiler_skips_session_for_user_enabled_teardown(mocker, 
 
 
 def test_profile_repeated_calls_toggle_owned_teardown_cupti(mocker):
+    # Mocking CUDA availability must not make distributed context detection initialize CUDA.
+    mocker.patch.object(kernel_profiler_module, "coordinator", DistributedCoordinator(DistributedContext()))
     mocker.patch.object(kernel_profiler_module.torch.cuda, "is_available", return_value=True)
     mocker.patch.object(kernel_profiler_module.torch.cuda, "empty_cache")
     mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
@@ -314,17 +321,35 @@ def test_profile_repeated_calls_toggle_owned_teardown_cupti(mocker):
     session_values = []
     profile.side_effect = lambda **kwargs: session_values.append(os.environ["TEARDOWN_CUPTI"]) or profile.return_value
     profiler = ModuleFunctionKernelProfiler()
+    data = [((torch.ones(1),), {})]
 
-    profiler.profile(nn.Identity(), warmup_iterations=0)
+    profiler.profile(nn.Identity(), data, warmup_iterations=0)
     assert os.environ["TEARDOWN_CUPTI"] == "1"
     assert kernel_profiler_module._cuda_profiler_primed is False
-    profiler.profile(nn.Identity(), warmup_iterations=0)
+    profiler.profile(nn.Identity(), data, warmup_iterations=0)
 
     # Each call primes and profiles with teardown disabled, then runs the throwaway teardown session.
     assert session_values == ["0", "0", "1", "0", "0", "1"]
     assert os.environ["TEARDOWN_CUPTI"] == "1"
     assert kernel_profiler_module._cuda_profiler_primed is False
     assert kernel_profiler_module._owns_teardown_cupti is True
+
+
+@pytest.mark.parametrize(("value", "change_during_profiling"), [("0", False), ("1", True), ("external", True)])
+def test_profiler_relinquishes_ownership_after_external_change(mocker, monkeypatch, value, change_during_profiling):
+    mocker.patch.object(kernel_profiler_module, "profile")
+    mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+    kernel_profiler_module.prime_cuda_profiler()
+    if not change_during_profiling:
+        kernel_profiler_module.teardown_cuda_profiler()
+    monkeypatch.setenv("TEARDOWN_CUPTI", value)
+    if not change_during_profiling:
+        kernel_profiler_module.prime_cuda_profiler()
+    kernel_profiler_module.teardown_cuda_profiler()
+
+    assert os.environ["TEARDOWN_CUPTI"] == value
+    assert kernel_profiler_module._owns_teardown_cupti is False
 
 
 def test_profile_tears_down_cuda_profiler_when_profiling_fails(mocker):
@@ -522,6 +547,39 @@ def test_profile_module_function_kernels(function_names, expected_num_function_d
     assert args[1].shape == (dim, dim)
     assert args[2].shape == (dim,)
     assert kwargs == {}
+
+
+@requires_cuda
+@pytest.mark.parametrize("teardown_cupti", [None, "0"], ids=["owned", "caller-disabled"])
+@pytest.mark.parametrize("warmup_iterations", [0, 3])
+def test_profile_repeated_sessions_with_cuda_graphs(monkeypatch, teardown_cupti, warmup_iterations):
+    if teardown_cupti is not None:
+        monkeypatch.setenv("TEARDOWN_CUPTI", teardown_cupti)
+    profiler = ModuleFunctionKernelProfiler()
+    net = _MultipleLinearLayerModel().cuda().eval()
+    data = net.samples(batch_sizes=[2], device="cuda")
+    args, kwargs = data[0]
+    with torch.no_grad():
+        expected = net(*args, **kwargs)
+
+    # Keep native and Python profiler state across calls within this test.
+    for _ in range(10):
+        profiling_df, function_data = profiler.profile(net, data, warmup_iterations=warmup_iterations)
+        _assert_linear_kernel_attribution(profiling_df)
+        assert sum(count for count, _ in function_data["linear"]) == 6
+
+        stream = torch.cuda.Stream()
+        stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(stream), torch.no_grad():
+            for _ in range(3):
+                net(*args, **kwargs)
+        torch.cuda.current_stream().wait_stream(stream)
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph), torch.no_grad():
+            actual = net(*args, **kwargs)
+        graph.replay()
+        torch.cuda.synchronize()
+        torch.testing.assert_close(actual, expected)
 
 
 @requires_cuda
