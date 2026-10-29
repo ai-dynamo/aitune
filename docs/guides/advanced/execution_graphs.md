@@ -71,22 +71,24 @@ The supported restoration operations are:
 | Replace a non-tensor leaf | Assign a copy of the value recorded during contract capture. This value is constant, not a runtime computation. |
 | Restore an output-to-input alias | Return the corresponding input tensor or container so the output shares its object identity. |
 
-Only leaves traversed by `Locator` participate in mutation capture. Integrations can register non-tensor
-mutation fields for otherwise tensor-only objects, such as the initialization fields of Transformers static
+Only values reached by `Locator` are checked for changes. A leaf is a value inside the input structure that
+`Locator` does not inspect further, such as a tensor or a number. Integrations can register non-tensor
+fields to check in otherwise tensor-only objects, such as the initialization fields of Transformers static
 cache layers. The contract does not describe deleted leaves, arbitrary Python side effects, or hidden module
-attributes and buffers. Exporters and backends handle module state separately. Object-identity aliases do not
-provide a general recipe for reconstructing arbitrary tensor storage views.
+attributes and buffers. Exporters and backends handle module state separately. Restoring an alias means returning
+the same object. It does not support rebuilding every possible tensor view that shares memory with an input.
 
 ### One Contract per Input Graph
 
 The first recorded call for an input graph establishes its mutation and alias rules. Later samples update
-observed input, output, and post-call input shapes without recapturing or checking those rules during recording.
-Calls grouped into the same graph must therefore have compatible mutation paths, mutation kinds, output
-structure, and output-to-input aliases. Recorded non-tensor replacement values must also remain applicable.
+observed input shapes, output shapes, and input shapes after the call, without recording or checking those rules
+again. Calls grouped into the same graph must therefore agree on which input values change, how they change,
+the output structure, and which outputs are the same objects as inputs. Recorded non-tensor replacement values
+must also remain valid for later calls.
 
 Collecting more samples improves shape coverage, but does not create a separate contract for behavior controlled
-only by tensor contents or hidden state. Such behavior needs an explicit input distinction that graph detection
-can recognize, or a different model execution path.
+only by tensor contents or hidden state. To separate such behavior into different graphs, use inputs that graph
+detection can distinguish. Otherwise, execute that behavior through a different model path.
 
 ### What Stateful Validation Checks
 

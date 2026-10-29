@@ -68,17 +68,18 @@ class OutputInputAlias:
 class ForwardContract:
     """Recorded output structure and input changes for one graph.
 
-    Recording captures this contract on the first call for an input graph. Later
-    calls must have compatible mutation paths, kinds, and output-to-input aliases;
-    updating observed shapes does not recapture the contract.
+    Recording creates this contract on the first call for an input graph. Later
+    calls must agree on which inputs change, how they change, and which outputs
+    are the same objects as inputs. Updating observed shapes does not record a
+    new contract.
 
     Tensor changes are restored by copying into existing inputs or replacing
     tensor leaves. Backends may request replacement for copy mutations when the
     leaf belongs to a caller-owned mutable container. Non-tensor replacements
-    replay recorded constants. Output aliases restore object identity with input
-    tensors or containers, rather than reconstructing arbitrary storage views.
+    reuse recorded constants. Output aliases return the same input tensors or
+    containers. They do not rebuild arbitrary tensor views that share storage.
 
-    The contract covers leaves traversed by Locator, including explicitly
+    The contract covers values reached by Locator, including explicitly
     registered mutation fields. It does not describe leaf deletion, arbitrary
     Python side effects, or hidden module attributes and buffers; module state
     remains the responsibility of the exporter and backend.

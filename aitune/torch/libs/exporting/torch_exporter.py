@@ -3,7 +3,7 @@
 """Export modules through the flat tensor boundary with Torch Export."""
 
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
@@ -17,6 +17,10 @@ from aitune.torch.libs.exporting.dynamic_shapes import (
     log_dynamic_shapes,
 )
 from aitune.torch.libs.exporting.preparation import prepare_tensor_export
+from aitune.torch.libs.exporting.torch_export_compat import (
+    TorchExportContractError as TorchExportContractError,
+)
+from aitune.torch.libs.exporting.torch_export_compat import validate_exported_module
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
 
@@ -29,10 +33,6 @@ class TorchExportResult:
 
     exported_program: torch.export.ExportedProgram
     dynamic_shapes: TorchDynamicShapes | None
-
-
-class TorchExportContractError(RuntimeError):
-    """Raised when an exported program cannot preserve its execution contract."""
 
 
 class TorchExporter:
@@ -102,100 +102,10 @@ class TorchExporter:
                     logger.warning("Strict Torch Export failed; retrying with non-strict tracing: %s", error)
                     break
                 else:
-                    _preflight_unlift(exported_program)
+                    validate_exported_module(exported_program)
                     return TorchExportResult(exported_program=exported_program, dynamic_shapes=attempt_shapes)
 
         raise AssertionError("Torch Export tracing modes must not be empty")
-
-
-def _preflight_unlift(exported_program: torch.export.ExportedProgram) -> None:
-    """Exercise the unlift operation required by AOT backends and repair nested tensor constants."""
-    try:
-        exported_program.validate()
-    except Exception as error:
-        raise TorchExportContractError("Torch Export produced an invalid program.") from error
-    try:
-        exported_program.module(check_guards=False)
-        return
-    except AttributeError as error:
-        if not _rehome_lifted_tensor_constants(exported_program):
-            raise TorchExportContractError("Torch Export produced a program that cannot be unlifted.") from error
-
-    try:
-        exported_program.validate()
-        exported_program.module(check_guards=False)
-    except Exception as error:
-        raise TorchExportContractError(
-            "Torch Export produced a program whose lifted tensor constants cannot be restored on the root GraphModule."
-        ) from error
-
-
-def _rehome_lifted_tensor_constants(exported_program: torch.export.ExportedProgram) -> bool:
-    """Move nested lifted tensor constants to stable root attributes.
-
-    Some exported adapter graphs retain a constant target such as
-    ``module.self_attn.lifted_tensor_0`` after the corresponding nested module was
-    removed from the owning ``GraphModule``. ``ExportedProgram.module()`` then
-    fails while resolving the missing parent. Root targets do not depend on that
-    transient module hierarchy.
-    """
-    signature = exported_program.graph_signature
-    constants = exported_program.constants
-    replacements = {}
-    input_specs = []
-    changed = False
-
-    for input_spec in signature.input_specs:
-        target = input_spec.target
-        kind = getattr(input_spec.kind, "name", str(input_spec.kind))
-        if kind != "CONSTANT_TENSOR" or not isinstance(target, str) or "." not in target:
-            input_specs.append(input_spec)
-            continue
-
-        if target not in constants:
-            input_specs.append(input_spec)
-            continue
-
-        if _has_nested_parent(exported_program.graph_module, target):
-            input_specs.append(input_spec)
-            continue
-
-        root_target = replacements.get(target)
-        if root_target is None:
-            stem = "_aitune_lifted_tensor_" + target.replace(".", "_")
-            root_target = stem
-            suffix = 0
-            while hasattr(exported_program.graph_module, root_target) or root_target in constants:
-                suffix += 1
-                root_target = f"{stem}_{suffix}"
-            replacements[target] = root_target
-            value = constants[target]
-            setattr(exported_program.graph_module, root_target, value)
-            constants[root_target] = value
-            logger.warning("Re-homed lifted tensor constant %s to %s before AOT compilation.", target, root_target)
-
-        input_specs.append(replace(input_spec, target=root_target))
-        changed = True
-
-    if not changed:
-        return False
-
-    repaired_signature = type(signature)(input_specs, signature.output_specs)
-    exported_program._graph_signature = repaired_signature
-    for target in replacements:
-        if all(spec.target != target for spec in repaired_signature.input_specs):
-            constants.pop(target, None)
-    return True
-
-
-def _has_nested_parent(graph_module: nn.Module, target: str) -> bool:
-    """Return whether every parent component of an attribute target exists."""
-    parent = graph_module
-    for component in target.split(".")[:-1]:
-        if not hasattr(parent, component):
-            return False
-        parent = getattr(parent, component)
-    return True
 
 
 def _is_constraint_violation(error: Exception) -> bool:
