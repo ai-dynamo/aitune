@@ -34,8 +34,8 @@ to find configurations and commands you can adapt with your own compatible check
     </tr>
     <tr>
       <th scope="rowgroup" rowSpan="3">Image generation</th>
-      <td><a href="./FLUX/README.md">FLUX.1-dev</a></td>
-      <td><a href="https://huggingface.co/black-forest-labs/FLUX.1-dev">Hugging Face</a></td>
+      <td><a href="./FLUX/README.md">FLUX.2 [klein] 4B</a></td>
+      <td><a href="https://huggingface.co/black-forest-labs/FLUX.2-klein-4B">Hugging Face</a></td>
       <td>BF16, FP8 and NVFP4</td><td>-</td>
       <td>Runtime</td><td>Runtime</td><td>Dynamo</td>
     </tr>

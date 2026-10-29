@@ -4,7 +4,7 @@
 
 import torch
 import torch.distributed as dist
-from diffusers import ContextParallelConfig, FluxPipeline
+from diffusers import ContextParallelConfig, Flux2KleinPipeline
 
 from flux.context_parallel import ContextParallelMode
 from flux.defaults import DEFAULT_MODEL_NAME
@@ -29,7 +29,7 @@ def get_pipeline(
     Returns:
         The loaded FLUX pipeline.
     """
-    pipeline = FluxPipeline.from_pretrained(
+    pipeline = Flux2KleinPipeline.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
     ).to(device)

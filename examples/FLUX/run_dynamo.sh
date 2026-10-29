@@ -57,10 +57,10 @@ for i in {1..100}; do
 done
 
 for i in {1..5}; do
-  if curl -s http://localhost:8000/v1/models | grep -q '"black-forest-labs/FLUX.1-dev"'; then
+  if curl -s http://localhost:8000/v1/models | grep -q '"black-forest-labs/FLUX.2-klein-4B"'; then
     break
   fi
-  echo "Waiting for black-forest-labs/FLUX.1-dev to appear in /v1/models... (attempt $i)"
+  echo "Waiting for black-forest-labs/FLUX.2-klein-4B to appear in /v1/models... (attempt $i)"
   sleep 2
 done
 

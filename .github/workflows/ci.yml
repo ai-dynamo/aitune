@@ -371,3 +371,45 @@ jobs:
             functional-ci.test-report.xml
             functional-ci.matrix-updates.json
           if-no-files-found: ignore
+
+  flux-example:
+    name: FLUX example GPU
+    needs: wheel
+    if: ${{ !cancelled() && needs.wheel.result == 'success' }}
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.06-py3:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: dist
+          path: dist
+      - name: Run FLUX example
+        run: |
+          python3 -m pip install --force-reinstall --no-deps dist/*.whl
+          nvidia-smi
+          python3 tests/functional/scripts/execute.py examples/FLUX --kind project --test-number 0 --workflow legacy --verbose
+        env:
+          AITUNE_CONSOLE_OUTPUT: "1"
+      - if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: flux-example-results
+          path: |
+            artifacts/**
+            .cache/aitune/**/*.log
+            .cache/aitune.jit/**/*.log
+            hardware_metrics.csv
+            script_metadata.json
+            functional_test_requirements.txt
+          if-no-files-found: ignore
