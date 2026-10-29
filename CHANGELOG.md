@@ -14,6 +14,7 @@ title: "Changelog"
 - feat: resolve default AOT and JIT strategies per module using source format, execution topology, and compilation mode
 - feat: add tuning objectives and composable constraints through `resolve_strategy`, initially supporting maximum latency
 - feat: report the execution device of AOT- and JIT-tuned submodules through Diffusers and Transformers `device` properties
+- fix: reuse an already extracted checkpoint only when its SHA sums match the archive, and redo an interrupted extraction on the next load
 - breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
 
 ## 0.6.0
