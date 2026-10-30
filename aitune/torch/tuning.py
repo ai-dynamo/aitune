@@ -6,7 +6,7 @@ import shutil
 from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 import torch
 
@@ -198,7 +198,7 @@ def load(
 
         logger.info("✅ Checkpoint loaded from: %s in %.2f seconds", path, timer.elapsed)
 
-        return cast(T | Module, loaded)
+        return loaded
 
 
 def _reject_already_tuned_modules() -> None:

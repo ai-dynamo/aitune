@@ -4,7 +4,7 @@
 
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import torch
 from torch.nn import Module as TorchModule
@@ -13,6 +13,9 @@ from aitune.torch.checkpoint.checkpoint import Checkpoint
 from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.module.wrapper_module import Module as WrapperModule
 from aitune.torch.utils.device import get_device
+
+T = TypeVar("T")
+M = TypeVar("M", bound=TorchModule | WrapperModule)
 
 
 class TorchCheckpoint(Checkpoint):
@@ -59,10 +62,10 @@ class TorchCheckpoint(Checkpoint):
 
     def load(
         self,
-        module_or_pipeline: TorchModule | Any,
+        module_or_pipeline: T,
         path: str | Path,
         device_map: dict[str, str | torch.device] | None = None,
-    ) -> TorchModule | WrapperModule:
+    ) -> T | WrapperModule:
         """Load a module or pipeline from a saved state dictionary.
 
         This method handles both individual torch modules and pipelines containing modules.
@@ -89,20 +92,19 @@ class TorchCheckpoint(Checkpoint):
 
         """
         # Convert device_map to torch.device
-        device_map = {k: get_device(v) for k, v in (device_map or {}).items()}
+        devices = {k: get_device(v) for k, v in (device_map or {}).items()}
 
         state_dict = self._storage.load(path)
+        loaded: T | WrapperModule
         if isinstance(module_or_pipeline, TorchModule):
-            module_or_pipeline = TorchCheckpoint.load_state_dict_for_module(module_or_pipeline, state_dict, device_map)
+            loaded = TorchCheckpoint.load_state_dict_for_module(module_or_pipeline, state_dict, devices)
         else:
-            module_or_pipeline = TorchCheckpoint.load_state_dict_for_pipeline(
-                module_or_pipeline, state_dict, device_map
-            )
+            loaded = TorchCheckpoint.load_state_dict_for_pipeline(module_or_pipeline, state_dict, devices)
 
-        if device_map:
-            raise ValueError(f"Some modules in the device_map were not found: {list(device_map.keys())}")
+        if devices:
+            raise ValueError(f"Some modules in the device_map were not found: {list(devices.keys())}")
 
-        return module_or_pipeline
+        return loaded
 
     @staticmethod
     def get_pipeline_modules(pipeline: Any) -> dict[str, torch.nn.Module | WrapperModule]:
@@ -155,11 +157,11 @@ class TorchCheckpoint(Checkpoint):
 
     @staticmethod
     def load_state_dict_for_module(
-        module: TorchModule | WrapperModule,
+        module: M,
         state_dict: dict,
         device_map: dict[str, torch.device],
         module_name: str = "",
-    ) -> TorchModule | WrapperModule:
+    ) -> M | WrapperModule:
         """Load a state dictionary into a module.
 
         This method loads a state dictionary into a module, replacing regular torch modules
@@ -257,7 +259,7 @@ class TorchCheckpoint(Checkpoint):
         return final_module
 
     @staticmethod
-    def load_state_dict_for_pipeline(pipeline, state_dict, device_map: dict[str, torch.device]):
+    def load_state_dict_for_pipeline(pipeline: T, state_dict: dict, device_map: dict[str, torch.device]) -> T:
         """Load a state dictionary into a pipeline.
 
         This method loads the state dictionary into the pipeline by matching module names

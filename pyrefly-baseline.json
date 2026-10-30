@@ -694,20 +694,6 @@
       "severity": "error"
     },
     {
-      "column": 109,
-      "path": "aitune/torch/checkpoint/torch_checkpoint.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `dict[str, device | str]` is not assignable to parameter `device_map` with type `dict[str, device]` in function `TorchCheckpoint.load_state_dict_for_module`",
-      "severity": "error"
-    },
-    {
-      "column": 49,
-      "path": "aitune/torch/checkpoint/torch_checkpoint.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `dict[str, device | str]` is not assignable to parameter `device_map` with type `dict[str, device]` in function `TorchCheckpoint.load_state_dict_for_pipeline`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "aitune/torch/checkpoint/torch_checkpoint.py",
       "name": "bad-argument-type",
