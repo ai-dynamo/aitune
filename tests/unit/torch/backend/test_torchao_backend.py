@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 import torch
 import torch.nn as nn
-from torchao.quantization import Int8WeightOnlyConfig
+from torchao.quantization import Int8WeightOnlyConfig, quantize_
 from torchao.utils import is_sm_at_least_89
 
 try:
@@ -200,6 +200,22 @@ def test_torchao_backend_build(quantization, dtype, model, sample_data, torch_de
 
 
 @requires_cuda
+def test_torchao_releases_source_memory_before_quantization(mocker, model, sample_data, torch_device, tmp_path):
+    import aitune.torch.utils.module as module_utils
+
+    cleanup = mocker.spy(module_utils, "cleanup_memory")
+
+    def check_offload(quantized_model, **kwargs):
+        assert next(model.parameters()).device.type == "cpu"
+        assert cleanup.call_count > 0, "Source memory must be released before quantization allocates GPU memory"
+        return quantize_(quantized_model, **kwargs)
+
+    mocker.patch("aitune.torch.backend.torchao_backend.quantize_", side_effect=check_offload)
+    backend = TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo"))
+    do_test_backend(backend, torch.float32, model, sample_data, torch_device, tmp_path)
+
+
+@requires_cuda
 @pytest.mark.parametrize(
     "quantization_config",
     [int8_weight_only_per_group_config(group_size=16)],
@@ -230,7 +246,7 @@ def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
     original_key = backend.key()
     compile_mock = mocker.patch("aitune.torch.backend.torchao_backend.torch.compile", return_value=model)
     mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
-    move_module_mock = mocker.patch("aitune.torch.backend.torchao_backend.move_module_to_device")
+    offload_mock = mocker.patch("aitune.torch.backend.torchao_backend.offload")
 
     backend.build(
         model,
@@ -243,7 +259,7 @@ def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
     assert config.dynamic is None
     assert backend.key() == original_key
     assert compile_mock.call_args.kwargs["dynamic"] is True
-    move_module_mock.assert_called_once_with(model, "cpu")
+    offload_mock.assert_called_once_with(model, device="cpu")
 
 
 def test_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
