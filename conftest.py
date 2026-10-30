@@ -36,6 +36,8 @@ def aitune_cache_dir(mocker, tmp_path):
 
     cache_dir = tmp_path / "aitune_cache"
     mocker.patch.object(config_module, "_AITUNE_CACHE_DIR", cache_dir)
+    # Reset an explicitly configured cache dir so config.cache_dir resolves to the temporary one.
+    mocker.patch.object(config_module.config, "_cache_dir", None)
     return cache_dir
 
 

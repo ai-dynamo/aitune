@@ -15,7 +15,8 @@ from aitune.global_context import BATCH_SIZE_KEY, MODULE_CONTEXT_KEY, global_con
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
-from aitune.torch.config import AITuneMode, aitune_cache_dir
+from aitune.torch.config import AITuneMode
+from aitune.torch.config import config as global_config
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
 from aitune.torch.distributed import coordinator, distributed_cache_dir
 from aitune.torch.module.tensor_spec import InfoLevel
@@ -250,7 +251,7 @@ def _describe_module(module: Module):
 
 def _clear_cache():
     """Clear the cache."""
-    cache_dir = distributed_cache_dir(aitune_cache_dir())
+    cache_dir = distributed_cache_dir(global_config.cache_dir)
     if cache_dir.exists():
         shutil.rmtree(cache_dir)
         logger.info("🧹 Cleared cache directory: %s", cache_dir)
