@@ -342,11 +342,9 @@ class TorchCheckpoint(Checkpoint):
                 module, module_state_dict, device_map, name
             )
 
-            # Install each restored module before loading the next one, including all aliases.
-            # This preserves completed replacements if a later module fails to load.
-            for path, alias_module in modules.items():
-                if alias_module is not module:
-                    continue
+        # Replace the module on all its paths, so that aliases stay the same object.
+        for path, module in modules.items():
+            if id(module) in restored_modules:
                 owner_path, _, attribute = path.rpartition(".")
                 owner = modules[owner_path] if owner_path else pipeline
                 setattr(owner, attribute, restored_modules[id(module)])
