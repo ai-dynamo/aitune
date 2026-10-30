@@ -11,7 +11,7 @@ from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import (
     PRINT_HIERARCHY_HEADER,
 )
-from aitune.torch.jit.patcher import prepare_for_jit_tuning
+from aitune.torch.jit.patcher import jit_reset, prepare_for_jit_tuning
 from tests.utilities.helpers import TestSink, requires_cuda
 
 
@@ -29,6 +29,22 @@ class TestNet(torch.nn.Module):
         x = self.linear1(x)
         x = self.linear2(x)
         return x
+
+
+def test_jit_inspect_reset_restores_module_hooks():
+    config.mode = JITMode.INSPECT
+
+    with prepare_for_jit_tuning():
+        module = torch.nn.Linear(2, 2)
+
+    hooks_history = []
+    module.register_forward_pre_hook(lambda module, args: hooks_history.append("pre_hook"))
+    module.register_forward_hook(lambda module, args, output: hooks_history.append("forward_hook"))
+
+    jit_reset()
+
+    module(torch.randn(1, 2))
+    assert hooks_history == ["pre_hook", "forward_hook"]
 
 
 @requires_cuda

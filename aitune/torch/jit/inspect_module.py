@@ -199,6 +199,8 @@ class InspectModule:
         Removes it also from Patcher object registry.
         """
         self._restore_original_forward()
+        self.__wrapped__._forward_pre_hooks = self._original_forward_pre_hooks
+        self.__wrapped__._forward_hooks = self._original_forward_hooks
 
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 
