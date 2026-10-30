@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""JIT checkpoint metadata reuses supplied weights, while legacy checkpoints restore them."""
+"""JIT checkpoints reuse supplied weights, including when loading legacy checkpoints."""
 
 import pytest
 import torch
@@ -36,11 +36,14 @@ def make_model(value: float) -> nn.Module:
     return model.eval()
 
 
-def test_new_checkpoint_preserves_supplied_weights(backend, mocker, tmp_path):
+@pytest.mark.parametrize("legacy", [False, True], ids=["new", "legacy"])
+def test_checkpoint_preserves_supplied_weights(backend, legacy, mocker, tmp_path):
     state_dict = mocker.spy(backend._orig_module, "state_dict")
     state = backend.to_dict()
     state_dict.assert_not_called()
     assert backend.STATE_ORIG_MODULE not in state
+    if legacy:
+        state[backend.STATE_ORIG_MODULE] = backend._orig_module.state_dict()
     TorchSaveTask().save(tmp_path, state)
     state = TorchLoadTask().load(tmp_path)
 
@@ -60,20 +63,3 @@ def test_new_checkpoint_preserves_supplied_weights(backend, mocker, tmp_path):
     torch.testing.assert_close(restored._orig_module(value), expected)
     torch.testing.assert_close(supplied.scale, torch.tensor(2.0))
     assert restored.key() == backend.key()
-
-
-def test_legacy_checkpoint_restores_original_weights(backend, tmp_path):
-    state = backend.to_dict()
-    state[backend.STATE_ORIG_MODULE] = backend._orig_module.state_dict()
-    TorchSaveTask().save(tmp_path, state)
-    state = TorchLoadTask().load(tmp_path)
-
-    supplied = make_model(2.0)
-    value = torch.ones(1, 4)
-    expected = backend._orig_module(value)
-    assert not torch.equal(supplied(value), expected)
-    restored = type(backend).from_dict(supplied, state)
-
-    assert restored._orig_module is supplied
-    torch.testing.assert_close(supplied(value), expected)
-    torch.testing.assert_close(supplied.scale, backend._orig_module.scale)

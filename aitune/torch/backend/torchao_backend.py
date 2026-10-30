@@ -312,8 +312,6 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module
-        if cls.STATE_ORIG_MODULE in state_dict:
-            module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)
         backend.state = BackendState.CHECKPOINT_LOADED
 
         return backend

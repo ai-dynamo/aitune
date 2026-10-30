@@ -188,7 +188,5 @@ class TorchEagerBackend(Backend[TorchEagerBackendConfig]):
         backend._required_casting_dtype = state_dict[cls.STATE_OUTPUT_DTYPE]
         backend._set_device(state_dict[cls.STATE_DEVICE])
         backend._orig_module = module
-        if cls.STATE_ORIG_MODULE in state_dict:
-            module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend
