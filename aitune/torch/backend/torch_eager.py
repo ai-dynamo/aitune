@@ -169,7 +169,6 @@ class TorchEagerBackend(Backend[TorchEagerBackendConfig]):
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
-            self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
             self.STATE_OUTPUT_DTYPE: self._required_casting_dtype,
             self.STATE_DEVICE: self.device,
         }
@@ -189,6 +188,5 @@ class TorchEagerBackend(Backend[TorchEagerBackendConfig]):
         backend._required_casting_dtype = state_dict[cls.STATE_OUTPUT_DTYPE]
         backend._set_device(state_dict[cls.STATE_DEVICE])
         backend._orig_module = module
-        module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend
