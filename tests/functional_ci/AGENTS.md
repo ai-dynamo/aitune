@@ -52,7 +52,7 @@ their own strategies.
 | `backends.py` | `BACKENDS` table, `Tag` names, `with_backends()` |
 | `lifecycle.py` | `Tolerance`, `TENSORRT_FP32`, `pinned_strategy`, `run_lifecycle`, `assert_matches_eager`, `selected_backend` |
 | `models.py` | Seeded toys: `make_mlp`, `make_image_model`, `make_input`, `seeded` |
-| `flux.py` | Toy Flux pipeline (`ToyFluxPipeline`): CLIP/T5-like encoders, MMDiT, VAE decoder |
+| `flux.py` | Toy Flux pipeline (`ToyFluxPipeline`): Flux component names and call shape, small linear modules, one attention op |
 | `artifacts.py` | Runs exported artifacts (`pt2`, `tensorrt_plan`, `onnx`) in their native runtime, without AITune |
 | `conftest.py` | `device` fixture, cleanup after each test, `matrix` marker and JSON writer |
 | `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py` |
