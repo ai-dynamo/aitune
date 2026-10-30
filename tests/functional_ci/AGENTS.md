@@ -58,7 +58,7 @@ The backend id is the pytest parametrize id and the feature-matrix column.
 | --- | --- | --- | --- |
 | `torch-eager` | `TorchEagerBackend` | default | `save_load` |
 | `inductor-aot` | `TorchInductorAotBackend` | default | `save_load`, `export` (`pt2`), `dynamic_batch`, `dynamic_non_batch`, `structured_io`, `multigraph` |
-| `torch-tensorrt-aot` | `TorchTensorRTAotBackend` | `TENSORRT_FP32` | `save_load`, `dynamic_batch`, `dynamic_non_batch` |
+| `torch-tensorrt-aot` | `TorchTensorRTAotBackend` | `TENSORRT_FP32` | `save_load`, `dynamic_batch`, `dynamic_non_batch`, `structured_io` |
 | `tensorrt` | `TensorRTBackend` | `TENSORRT_FP32` | `save_load`, `export` (`tensorrt_plan`), `dynamic_batch`, `dynamic_non_batch`, `structured_io`, `multigraph`, `onnx_input` |
 | `onnxruntime-cuda` | `ONNXRuntimeBackend` (CUDA EP) | `TENSORRT_FP32` | `save_load`, `export` (`onnx`), `dynamic_batch`, `dynamic_non_batch`, `onnx_input` |
 | `onnxruntime-tensorrt` | `ONNXRuntimeBackend` (TensorRT EP) | `TENSORRT_FP32` | `save_load`, `dynamic_batch`, `dynamic_non_batch` |
@@ -84,7 +84,7 @@ in `tests/functional_ci/backends.py`. Treat that code as the source of truth if 
 | `export` | `module.artifact()` runs in its native runtime | `test_exported_artifact` |
 | `dynamic_batch` | Batch range from recorded sizes or a user `BatchDim` | `test_recorded_batch_range`, `test_explicit_batch_dim` |
 | `dynamic_non_batch` | User `DynamicDim` on non-batch (spatial) dims | `test_explicit_spatial_dims` |
-| `structured_io` | Nested dict input, non-tensor args, nested outputs | `test_structured_io` |
+| `structured_io` | Nested dict and list inputs, non-tensor args, nested outputs | `test_structured_io` |
 | `multigraph` | One wrapped module tunes one graph per input layout | `test_partial_wrap_multigraph` |
 | `onnx_input` | Tune an existing ONNX file (inline or external data) | `test_existing_onnx` |
 | `jit` | JIT tuning (`jit_config`, `prepare_for_jit_tuning`) | `test_jit_tuning`, `test_pipeline_jit` |
