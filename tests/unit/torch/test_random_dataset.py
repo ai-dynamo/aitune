@@ -133,3 +133,16 @@ def test_integer_random_inputs_reject_fractional_bounds(bounds):
     config = InputConfig((4,), dtype=torch.int64, min_value=bounds[0], max_value=bounds[1])
     with pytest.raises(TypeError):
         MinMaxRandomDataset(1, [config], include_min_max_shapes=False)
+
+
+@pytest.mark.parametrize("include_min_max_shapes", [False, True])
+def test_iterating_yields_all_samples(include_min_max_shapes):
+    dataset = MinMaxRandomDataset(
+        5, [InputConfig((4,), (8,), kwarg_name="input")], include_min_max_shapes=include_min_max_shapes
+    )
+
+    samples = list(dataset)
+
+    assert len(samples) == len(dataset) == 5
+    for index, sample in enumerate(samples):
+        assert sample is dataset[index]

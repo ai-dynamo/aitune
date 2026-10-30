@@ -52,6 +52,7 @@ Non-batchable inputs should be handled by the user on module level.
 
 """
 
+import copy
 import itertools
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -290,6 +291,8 @@ class MinMaxRandomDataset(DynamicShapeDataset):
         self.include_min_max_shapes = include_min_max_shapes
         self.is_dict = self._validate_names()
         self.samples = self._generate_samples()
+        # Fill the list storage too, otherwise iter() and list() see an empty dataset.
+        super().__init__(self.samples)
 
     def __len__(self):
         """Return the number of samples in the dataset."""
@@ -535,6 +538,7 @@ def ensure_enough_samples(
     """Ensures there is enough samples in the dataset to run the model for the given number of iterations.
 
     NOTE: This function trims the dataset to the given number of samples.
+    A DataLoaderFactory is returned as a shallow copy holding the trimmed dataset; the one passed in is not modified.
 
     Args:
         dataset: The dataset to make iterable.
@@ -568,5 +572,7 @@ def ensure_enough_samples(
         return limited_dataset
 
     if isinstance(dataset, DataLoaderFactory):
-        dataset.dataset = ensure_enough_samples(dataset.dataset, number_of_samples)
-        return dataset
+        # Work on a copy so the caller's factory keeps its original dataset, e.g. for a later tune().
+        factory = copy.copy(dataset)
+        factory.dataset = ensure_enough_samples(dataset.dataset, number_of_samples)
+        return factory
