@@ -246,7 +246,7 @@ def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
     original_key = backend.key()
     compile_mock = mocker.patch("aitune.torch.backend.torchao_backend.torch.compile", return_value=model)
     mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
-    move_module_mock = mocker.patch("aitune.torch.backend.torchao_backend.move_module_to_device")
+    offload_mock = mocker.patch("aitune.torch.backend.torchao_backend.offload")
 
     backend.build(
         model,
@@ -259,7 +259,7 @@ def test_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
     assert config.dynamic is None
     assert backend.key() == original_key
     assert compile_mock.call_args.kwargs["dynamic"] is True
-    move_module_mock.assert_called_once_with(model, "cpu")
+    offload_mock.assert_called_once_with(model, device="cpu")
 
 
 def test_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):

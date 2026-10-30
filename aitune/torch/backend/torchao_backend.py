@@ -253,6 +253,8 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
 
     def _activate(self):
         """Activates backend."""
+        if self._orig_module is None:
+            raise RuntimeError("Backend has not been properly initialized. Please call build() first.")
         move_module_to_device(self._orig_module, self.device)
         self._do_torchao_quantization()
 
