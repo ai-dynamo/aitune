@@ -4,14 +4,14 @@
 
 from functools import partial
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 import torch
 from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import KernelSelectorBackend
+from aitune.torch.backend import KernelSelectorBackend, TorchTensorRTJitBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
@@ -43,8 +43,8 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
     return components
 
 
-@pytest.mark.matrix("models.pipelines", "modes.aot-inspect-wrap", "modes.aot-save-load")
-@with_backends("save_load")
+@pytest.mark.matrix("aot_tuning.models.pipelines", "modes.aot-inspect-wrap", "modes.aot-save-load")
+@with_backends("base")
 def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
     """Inspect, tune, save, and restore the pipeline with each save/load backend."""
     backend = case.factory()
@@ -83,12 +83,15 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
     case.tolerance.assert_close(generate(restored, PROMPT), expected)
 
 
-@pytest.mark.matrix("models.pipelines", "modes.jit-tune_eager")
-@with_backends("jit")
+@pytest.mark.matrix("jit_tuning.models.pipelines", "modes.jit-tune_eager")
+@with_backends("base")
 def test_pipeline_jit(case: BackendCase, device: torch.device):
     """Tune the pipeline's four JIT heads from two prompt batch sizes."""
     expected = generate(ToyFluxPipeline(device), PROMPT)
     backend = case.factory()
+    if isinstance(backend, TorchTensorRTJitBackend):
+        # Raise instead of silently running the graph in PyTorch when TensorRT cannot build it.
+        cast(Any, backend._config.compile_config).pass_through_build_failures = True
     jit_config.mode = JITMode.TUNE_EAGER
     jit_config.device = device
     jit_config.min_samples = 2
