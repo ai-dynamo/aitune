@@ -131,7 +131,6 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
     STATE_TYPE = "type"
     STATE_CONFIG = "config"
     STATE_ORIG_MODULE = "orig_module"
-    STATE_DATA = "data"
     STATE_SAMPLES = "samples"
     STATE_DEVICE = "device"
     STATE_COMPILE_DYNAMIC = "compile_dynamic"
@@ -156,8 +155,6 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
         self._compiled_module = None
         self._orig_module = None
         self._samples: SampleStore | None = None
-        # Kept only for loading checkpoints written before samples became disk-backed.
-        self._data = None
         self._compile_dynamic = self._config.dynamic
         self._infer_impl = self._infer_no_autocast
 
@@ -201,6 +198,8 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
 
     def _compile(self):
         """Compile module with Torch compile."""
+        if self._samples is None:
+            raise RuntimeError("Backend has no warmup samples. Please call build() first.")
         logger.info("Start compiling torch module with torch.compile(backend='torch_tensorrt').")
         torch._dynamo.reset()
 
@@ -222,7 +221,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
             )
 
             self._select_infer_impl()
-            for args, kwargs in self._iter_samples():
+            for args, kwargs in self._samples.iter_samples(self.device):
                 self._infer_impl(*args, **kwargs)
         logger.info("Module has been compiled.")
 
@@ -270,17 +269,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
     def _deploy(self):
         """Deploys the backend."""
         self._activate()
-        self._samples = None
-        self._data = None
         gc_collect()
-
-    def _iter_samples(self):
-        """Iterate persisted samples, with support for legacy inline checkpoint data."""
-        if self._samples is not None:
-            return self._samples.iter_samples(self.device)
-        if self._data is not None:
-            return iter(self._data)
-        raise RuntimeError("Backend has no warmup data. Please call build() first.")
 
     def to_dict(self):
         """Returns the state_dict of the backend."""
@@ -307,9 +296,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
         config = TorchTensorRTJitBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend = cls(config=config)
-        samples_state = state_dict.get(cls.STATE_SAMPLES)
-        backend._samples = SampleStore.from_dict(samples_state) if samples_state is not None else None
-        backend._data = state_dict.get(cls.STATE_DATA)
+        backend._samples = SampleStore.from_dict(state_dict[cls.STATE_SAMPLES])
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module

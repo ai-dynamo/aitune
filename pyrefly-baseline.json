@@ -645,13 +645,6 @@
       "severity": "error"
     },
     {
-      "column": 20,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "no-matching-overload",
-      "concise_description": "No matching overload found for function `iter` called with arguments: (Unknown | None)",
-      "severity": "error"
-    },
-    {
       "column": 24,
       "path": "aitune/torch/checkpoint/local_torch_storage.py",
       "name": "bad-argument-type",
