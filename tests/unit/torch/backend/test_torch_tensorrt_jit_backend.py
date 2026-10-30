@@ -498,3 +498,33 @@ def test_torch_tensorrt_rejects_legacy_inline_samples():
     }
     with pytest.raises(KeyError, match="samples"):
         TorchTensorRTJitBackend.from_dict(torch.nn.Linear(2, 2), state)
+
+
+@requires_cuda
+def test_torch_tensorrt_jit_preserves_warmup_samples_after_deployment(mocker, tmp_path):
+    model = torch.nn.Linear(2, 2)
+    backend = TorchTensorRTJitBackend()
+    backend._orig_module = model
+    backend._device = torch.device("cuda")
+    backend._samples = SampleStore.from_samples([((torch.ones(1, 2),), {})], tmp_path, "warmup")
+    loaded_backend = TorchTensorRTJitBackend.from_dict(model, backend.to_dict())
+    # Exercise deployment and serialization without compiling a backend.
+    mocker.patch.object(loaded_backend, "_activate")
+    loaded_backend.deploy(torch.device("cuda"))
+
+    state = loaded_backend.to_dict()
+    assert state[TorchTensorRTJitBackend.STATE_SAMPLES] == backend.to_dict()[TorchTensorRTJitBackend.STATE_SAMPLES]
+
+    restored_backend = TorchTensorRTJitBackend.from_dict(model, state)
+
+    assert (
+        restored_backend.to_dict()[TorchTensorRTJitBackend.STATE_SAMPLES]
+        == state[TorchTensorRTJitBackend.STATE_SAMPLES]
+    )
+    assert restored_backend._samples is not None
+    restored_samples = list(restored_backend._samples.iter_samples(torch.device("cpu")))
+    assert len(restored_samples) == 1
+    args, kwargs = restored_samples[0]
+    assert len(args) == 1
+    torch.testing.assert_close(args[0], torch.ones(1, 2))
+    assert kwargs == {}

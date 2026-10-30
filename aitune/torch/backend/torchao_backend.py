@@ -272,7 +272,6 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
     def _deploy(self):
         """Deploys the backend."""
         self._activate()
-        self._samples = None
         gc_collect()
 
     def to_dict(self):
