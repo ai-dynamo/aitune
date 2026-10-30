@@ -463,6 +463,8 @@ def test_pipeline_load_rejects_non_module_attribute():
 
 
 class PipelineWithDecoderAlias:
+    next_module: torch.nn.Module
+
     def __init__(self):
         self.vae = Vae()
         self.decoder = self.vae.decoder

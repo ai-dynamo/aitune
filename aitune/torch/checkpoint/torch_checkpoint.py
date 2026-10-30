@@ -5,7 +5,7 @@
 from collections import OrderedDict
 from logging import getLogger
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch.nn import Module as TorchModule
@@ -272,7 +272,9 @@ class TorchCheckpoint(Checkpoint):
                 else:
                     # We replace a child module with wrapper module
                     setattr(parent_module, module_name, wrapper_module)
-                for graph_index, backend in enumerate(wrapper_module.module.backends.values()):
+                # from_dict() installs a TunedModule before returning the restored wrapper.
+                tuned_module = cast(TunedModule, wrapper_module.module)
+                for graph_index, backend in enumerate(tuned_module.backends.values()):
                     logger.info("  ✅ graph %s restored with %s", graph_index, backend.name)
                 # Remove state_dict key - we already handled it
                 del local_state_dict[prefix]
