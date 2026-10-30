@@ -43,7 +43,7 @@ def assert_tensorrt_provider_active(backend: ONNXRuntimeBackend) -> None:
 def selected_backend(module: Module, expected: type[Backend] | None = None) -> Backend:
     """Return the only backend selected for a single-graph module; check its type when `expected` is given."""
     backends: dict[Any, Backend] = getattr(module.module, "backends", {})
-    assert len(backends) == 1, f"expected one selected backend, found {len(backends)}"
+    assert len(backends) == 1, f"{module.name}: expected one selected backend, found {len(backends)}"
     (selected,) = backends.values()
     assert expected is None or type(selected) is expected, f"selected {type(selected)}, expected {expected}"
     if (
