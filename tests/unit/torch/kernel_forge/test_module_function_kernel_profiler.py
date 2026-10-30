@@ -3,6 +3,8 @@
 
 """Tests for module_function_kernel_profiler helpers."""
 
+import logging
+import os
 from unittest.mock import call
 
 import pandas as pd
@@ -10,16 +12,26 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
+from torch.profiler import ProfilerActivity
 
+import aitune.torch.kernel_forge.module_function_kernel_profiler as kernel_profiler_module
+from aitune.torch.distributed import DistributedContext, DistributedCoordinator
 from aitune.torch.kernel_forge.module_function_kernel_profiler import (
     FunctionData,
     ModuleFunctionKernelProfiler,
-    _nearest_parent_label,
-    _ProfilingItem,
-    _SummaryItem,
-    get_tensor_size,
+    teardown_cuda_profiler,
 )
 from tests.utilities.helpers import requires_cuda
+
+
+@pytest.fixture(autouse=True)
+def reset_cuda_profiler_state(monkeypatch):
+    monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", False)
+    monkeypatch.setattr(kernel_profiler_module, "_owns_teardown_cupti", False)
+    monkeypatch.setattr(kernel_profiler_module, "_last_teardown_cupti_value", None)
+    # Record the original value even when absent, so direct writes by the helpers are undone.
+    monkeypatch.setenv("TEARDOWN_CUPTI", "0")
+    monkeypatch.delenv("TEARDOWN_CUPTI", raising=False)
 
 
 class _MultipleLinearLayerModel(nn.Module):
@@ -172,7 +184,7 @@ def test_profile_coordinates_distributed_execution(mocker):
     coordinate_failures = mocker.patch(
         "aitune.torch.kernel_forge.module_function_kernel_profiler.coordinator.raise_if_any_rank_fails"
     )
-    profiler = ModuleFunctionKernelProfiler()
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler()
     module = nn.Identity().to("cuda")
     data = [((torch.randn(1, device="cuda"),), {})]
 
@@ -187,17 +199,215 @@ def test_profile_coordinates_distributed_execution(mocker):
     ]
 
 
+@pytest.mark.parametrize("value", [None, "0", "1"])
+def test_prime_cuda_profiler_respects_teardown_cupti_ownership(mocker, monkeypatch, value):
+    if value is not None:
+        monkeypatch.setenv("TEARDOWN_CUPTI", value)
+    session_values = []
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+    profile.return_value.__enter__.side_effect = lambda: session_values.append(os.environ["TEARDOWN_CUPTI"])
+    zeros = mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    synchronize = mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+
+    kernel_profiler_module.prime_cuda_profiler()
+
+    assert session_values == ["0" if value is None else value]
+    assert os.environ["TEARDOWN_CUPTI"] == session_values[0]
+    assert kernel_profiler_module._owns_teardown_cupti is (value is None)
+    assert kernel_profiler_module._cuda_profiler_primed is True
+    profile.assert_called_once_with(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA])
+    zeros.assert_called_once_with(1, device="cuda")
+    synchronize.assert_called_once_with()
+
+    if value is not None:
+        kernel_profiler_module.teardown_cuda_profiler()
+        assert os.environ["TEARDOWN_CUPTI"] == value
+        assert session_values == [value]
+
+
+def test_teardown_cuda_profiler_skips_when_not_primed(mocker):
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+
+    teardown_cuda_profiler()
+
+    profile.assert_not_called()
+    assert "TEARDOWN_CUPTI" not in os.environ
+
+
+@pytest.mark.parametrize("owned", [False, True])
+def test_teardown_cuda_profiler_sets_teardown_cupti_during_session(mocker, monkeypatch, owned):
+    monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", True)
+    monkeypatch.setattr(kernel_profiler_module, "_owns_teardown_cupti", owned)
+    if owned:
+        monkeypatch.setenv("TEARDOWN_CUPTI", "0")
+        monkeypatch.setattr(kernel_profiler_module, "_last_teardown_cupti_value", "0")
+    events: list[tuple] = []
+
+    class _RecordingProfile:
+        def __init__(self, activities):
+            events.append(("profile", activities))
+
+        def __enter__(self):
+            events.append(("enter", os.environ.get("TEARDOWN_CUPTI")))
+            return self
+
+        def __exit__(self, *exc_info):
+            events.append(("exit", os.environ.get("TEARDOWN_CUPTI")))
+
+    mocker.patch.object(kernel_profiler_module, "profile", _RecordingProfile)
+    zeros = mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    zeros.return_value.relu_.side_effect = lambda: events.append(("kernel",))
+    mocker.patch.object(
+        kernel_profiler_module.torch.cuda, "synchronize", side_effect=lambda: events.append(("synchronize",))
+    )
+
+    kernel_profiler_module.teardown_cuda_profiler()
+
+    assert events == [
+        ("profile", [ProfilerActivity.CUDA]),
+        ("enter", "1"),
+        ("kernel",),
+        ("exit", "1"),
+        ("synchronize",),
+    ]
+    zeros.assert_called_once_with(1, device="cuda")
+    # Kineto reads the variable again from its asynchronous teardown thread, so it must stay set.
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._cuda_profiler_primed is False
+
+
+def test_teardown_cuda_profiler_keeps_disabled_teardown_cupti(mocker, monkeypatch, caplog):
+    monkeypatch.setenv("TEARDOWN_CUPTI", "0")
+    monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", True)
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+
+    with caplog.at_level(logging.WARNING, logger=kernel_profiler_module.__name__):
+        kernel_profiler_module.teardown_cuda_profiler()
+
+    profile.assert_not_called()
+    assert os.environ["TEARDOWN_CUPTI"] == "0"
+    assert kernel_profiler_module._cuda_profiler_primed is True
+    assert any("TEARDOWN_CUPTI=0" in record.message for record in caplog.records)
+
+
+def test_teardown_cuda_profiler_skips_session_for_user_enabled_teardown(mocker, monkeypatch, caplog):
+    monkeypatch.setenv("TEARDOWN_CUPTI", "1")
+    monkeypatch.setattr(kernel_profiler_module, "_cuda_profiler_primed", True)
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+    zeros = mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    synchronize = mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+
+    with caplog.at_level(logging.WARNING, logger=kernel_profiler_module.__name__):
+        kernel_profiler_module.teardown_cuda_profiler()
+
+    profile.assert_not_called()
+    zeros.assert_not_called()
+    synchronize.assert_not_called()
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._cuda_profiler_primed is False
+    assert kernel_profiler_module._owns_teardown_cupti is False
+    assert not caplog.records
+
+
+def test_profile_repeated_calls_toggle_owned_teardown_cupti(mocker):
+    # Mocking CUDA availability must not make distributed context detection initialize CUDA.
+    mocker.patch.object(kernel_profiler_module, "coordinator", DistributedCoordinator(DistributedContext()))
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "is_available", return_value=True)
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "empty_cache")
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+    mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+    profile.return_value.__enter__.return_value.profiler.function_events = []
+    session_values = []
+    profile.side_effect = lambda **kwargs: session_values.append(os.environ["TEARDOWN_CUPTI"]) or profile.return_value
+    profiler = ModuleFunctionKernelProfiler()
+    data = [((torch.ones(1),), {})]
+
+    profiler.profile(nn.Identity(), data, warmup_iterations=0)
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._cuda_profiler_primed is False
+    profiler.profile(nn.Identity(), data, warmup_iterations=0)
+
+    # Each call primes and profiles with teardown disabled, then runs the throwaway teardown session.
+    assert session_values == ["0", "0", "1", "0", "0", "1"]
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._cuda_profiler_primed is False
+    assert kernel_profiler_module._owns_teardown_cupti is True
+
+
+@pytest.mark.parametrize(("value", "change_during_profiling"), [("0", False), ("1", True), ("external", True)])
+def test_profiler_relinquishes_ownership_after_external_change(mocker, monkeypatch, value, change_during_profiling):
+    mocker.patch.object(kernel_profiler_module, "profile")
+    mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+    kernel_profiler_module.prime_cuda_profiler()
+    if not change_during_profiling:
+        kernel_profiler_module.teardown_cuda_profiler()
+    monkeypatch.setenv("TEARDOWN_CUPTI", value)
+    if not change_during_profiling:
+        kernel_profiler_module.prime_cuda_profiler()
+    kernel_profiler_module.teardown_cuda_profiler()
+
+    assert os.environ["TEARDOWN_CUPTI"] == value
+    assert kernel_profiler_module._owns_teardown_cupti is False
+
+
+@pytest.mark.parametrize("initial_value", [None, "0", "1"])
+def test_teardown_owns_recreated_setting_and_next_priming_disables_teardown(mocker, monkeypatch, initial_value):
+    if initial_value is not None:
+        monkeypatch.setenv("TEARDOWN_CUPTI", initial_value)
+    session_values = []
+    profile = mocker.patch.object(kernel_profiler_module, "profile")
+    profile.side_effect = lambda **kwargs: session_values.append(os.environ["TEARDOWN_CUPTI"]) or profile.return_value
+    mocker.patch.object(kernel_profiler_module.torch, "zeros")
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "synchronize")
+
+    kernel_profiler_module.prime_cuda_profiler()
+    monkeypatch.delenv("TEARDOWN_CUPTI")
+    kernel_profiler_module.teardown_cuda_profiler()
+
+    assert os.environ["TEARDOWN_CUPTI"] == "1"
+    assert kernel_profiler_module._last_teardown_cupti_value == "1"
+    assert kernel_profiler_module._owns_teardown_cupti is True
+    assert kernel_profiler_module._cuda_profiler_primed is False
+
+    kernel_profiler_module.prime_cuda_profiler()
+    kernel_profiler_module.teardown_cuda_profiler()
+
+    assert session_values == [initial_value or "0", "1", "0", "1"]
+    assert kernel_profiler_module._owns_teardown_cupti is True
+
+
+def test_profile_tears_down_cuda_profiler_when_profiling_fails(mocker):
+    mocker.patch.object(kernel_profiler_module.torch.cuda, "is_available", return_value=True)
+    mocker.patch.object(kernel_profiler_module.coordinator, "verify_equal")
+    empty_cache = mocker.patch.object(kernel_profiler_module.torch.cuda, "empty_cache")
+    teardown = mocker.patch.object(kernel_profiler_module, "teardown_cuda_profiler")
+    profile_kernels = mocker.patch.object(
+        kernel_profiler_module.ModuleFunctionKernelProfiler,
+        "_profile_kernels",
+        side_effect=RuntimeError("profiling failed"),
+    )
+
+    with pytest.raises(RuntimeError, match="profiling failed"):
+        kernel_profiler_module.ModuleFunctionKernelProfiler().profile(nn.Identity(), warmup_iterations=0)
+
+    profile_kernels.assert_called_once()
+    teardown.assert_called_once_with()
+    empty_cache.assert_not_called()
+
+
 def test_nearest_parent_label_no_cpu_parent():
     """When the event has no cpu_parent chain, the helper returns None."""
     event = _FakeProfilerEvent(cpu_parent=None)
-    assert _nearest_parent_label(event, "ait_nn_module:") is None
+    assert kernel_profiler_module._nearest_parent_label(event, "ait_nn_module:") is None
 
 
 def test_nearest_parent_label_immediate_parent_matches():
     """The first cpu_parent with a matching prefix yields its label without the prefix."""
     parent = _FakeProfilerEvent(key="ait_nn_module:layer1", cpu_parent=None)
     event = _FakeProfilerEvent(cpu_parent=parent)
-    assert _nearest_parent_label(event, "ait_nn_module:") == "layer1"
+    assert kernel_profiler_module._nearest_parent_label(event, "ait_nn_module:") == "layer1"
 
 
 def test_nearest_parent_label_skips_non_matching_ancestors():
@@ -205,7 +415,7 @@ def test_nearest_parent_label_skips_non_matching_ancestors():
     root = _FakeProfilerEvent(key="ait_nn_module:deepest", cpu_parent=None)
     mid = _FakeProfilerEvent(key="other_op", cpu_parent=root)
     event = _FakeProfilerEvent(cpu_parent=mid)
-    assert _nearest_parent_label(event, "ait_nn_module:") == "deepest"
+    assert kernel_profiler_module._nearest_parent_label(event, "ait_nn_module:") == "deepest"
 
 
 def test_nearest_parent_label_prefers_closer_matching_parent():
@@ -213,14 +423,14 @@ def test_nearest_parent_label_prefers_closer_matching_parent():
     far = _FakeProfilerEvent(key="ait_nn_module:far", cpu_parent=None)
     near = _FakeProfilerEvent(key="ait_nn_module:near", cpu_parent=far)
     event = _FakeProfilerEvent(cpu_parent=near)
-    assert _nearest_parent_label(event, "ait_nn_module:") == "near"
+    assert kernel_profiler_module._nearest_parent_label(event, "ait_nn_module:") == "near"
 
 
 def test_nearest_parent_label_empty_suffix_when_key_equals_prefix():
     """removeprefix on a key that is exactly the prefix yields an empty string."""
     parent = _FakeProfilerEvent(key="pref:", cpu_parent=None)
     event = _FakeProfilerEvent(cpu_parent=parent)
-    assert _nearest_parent_label(event, "pref:") == ""
+    assert kernel_profiler_module._nearest_parent_label(event, "pref:") == ""
 
 
 def test_nearest_parent_label_missing_key_uses_empty_string():
@@ -235,7 +445,7 @@ def test_nearest_parent_label_missing_key_uses_empty_string():
     root = _FakeProfilerEvent(key="ait_nn_module:ok", cpu_parent=None)
     mid = NoKeyParent(cpu_parent=root)
     event = _FakeProfilerEvent(cpu_parent=mid)
-    assert _nearest_parent_label(event, "ait_nn_module:") == "ok"
+    assert kernel_profiler_module._nearest_parent_label(event, "ait_nn_module:") == "ok"
 
 
 def test_match_events_rewrites_function_data_once_per_function():
@@ -256,7 +466,7 @@ def test_match_events_rewrites_function_data_once_per_function():
 
 
 def test_describe_results_includes_time_spent_pct_for_described_functions():
-    profiler = ModuleFunctionKernelProfiler()
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler()
     profiling_df = pd.DataFrame([
         {"function_name": "linear", "module_name": "layer1", "kernel_us": 200.0},
         {"function_name": "linear", "module_name": "layer2", "kernel_us": 100.0},
@@ -276,7 +486,7 @@ def test_describe_results_includes_time_spent_pct_for_described_functions():
 
 
 def test_describe_results_uses_nan_sample_metrics_for_functions_without_collected_data():
-    profiler = ModuleFunctionKernelProfiler()
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler()
     profiling_df = pd.DataFrame([
         {"function_name": "linear", "module_name": "layer1", "kernel_us": 200.0},
         {"function_name": "relu", "module_name": "layer1", "kernel_us": 100.0},
@@ -292,7 +502,7 @@ def test_describe_results_uses_nan_sample_metrics_for_functions_without_collecte
 
 
 def test_describe_results_uses_zero_sample_metrics_for_empty_collected_data():
-    profiler = ModuleFunctionKernelProfiler()
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler()
     profiling_df = pd.DataFrame([
         {"function_name": "relu", "module_name": "layer1", "kernel_us": 100.0},
     ])
@@ -307,7 +517,7 @@ def test_describe_results_uses_zero_sample_metrics_for_empty_collected_data():
 
 @requires_cuda
 def test_profile_and_describe_return_schema_stable_empty_dataframes():
-    profiler = ModuleFunctionKernelProfiler()
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler()
     module = nn.Identity().to("cuda")
     data = [((torch.randn(1, device="cuda"),), {})]
 
@@ -315,9 +525,9 @@ def test_profile_and_describe_return_schema_stable_empty_dataframes():
     summary_df = profiler.describe_results(profiling_df, function_data)
 
     assert profiling_df.empty
-    assert tuple(profiling_df.columns) == tuple(_ProfilingItem.__annotations__)
+    assert tuple(profiling_df.columns) == tuple(kernel_profiler_module._ProfilingItem.__annotations__)
     assert summary_df.empty
-    assert tuple(summary_df.columns) == tuple(_SummaryItem.__annotations__)
+    assert tuple(summary_df.columns) == tuple(kernel_profiler_module._SummaryItem.__annotations__)
 
 
 @requires_cuda
@@ -333,7 +543,7 @@ def test_profile_and_describe_return_schema_stable_empty_dataframes():
 def test_profile_module_function_kernels(function_names, expected_num_function_data_samples):
     batch_size, dim = 2, 5
     # given
-    profiler = ModuleFunctionKernelProfiler(function_names=function_names)
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler(function_names=function_names)
     net = _MultipleLinearLayerModel().to("cuda")
     original_forward = net.forward
     x = net.samples(batch_sizes=[batch_size], device="cuda")
@@ -366,10 +576,43 @@ def test_profile_module_function_kernels(function_names, expected_num_function_d
 
 
 @requires_cuda
+@pytest.mark.parametrize("teardown_cupti", [None, "0"], ids=["owned", "caller-disabled"])
+@pytest.mark.parametrize("warmup_iterations", [0, 3])
+def test_profile_repeated_sessions_with_cuda_graphs(monkeypatch, teardown_cupti, warmup_iterations):
+    if teardown_cupti is not None:
+        monkeypatch.setenv("TEARDOWN_CUPTI", teardown_cupti)
+    profiler = ModuleFunctionKernelProfiler()
+    net = _MultipleLinearLayerModel().cuda().eval()
+    data = net.samples(batch_sizes=[2], device="cuda")
+    args, kwargs = data[0]
+    with torch.no_grad():
+        expected = net(*args, **kwargs)
+
+    # Keep native and Python profiler state across calls within this test.
+    for _ in range(10):
+        profiling_df, function_data = profiler.profile(net, data, warmup_iterations=warmup_iterations)
+        _assert_linear_kernel_attribution(profiling_df)
+        assert sum(count for count, _ in function_data["linear"]) == 6
+
+        stream = torch.cuda.Stream()
+        stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(stream), torch.no_grad():
+            for _ in range(3):
+                net(*args, **kwargs)
+        torch.cuda.current_stream().wait_stream(stream)
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph), torch.no_grad():
+            actual = net(*args, **kwargs)
+        graph.replay()
+        torch.cuda.synchronize()
+        torch.testing.assert_close(actual, expected)
+
+
+@requires_cuda
 def test_profile_module_function_kernels_multiple_samples():
     batch_size, dim = 2, 5
     # given
-    profiler = ModuleFunctionKernelProfiler()
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler()
     net = _MultipleLinearLayerModel().to("cuda")
     data = net.samples(batch_sizes=[batch_size, 2 * batch_size], device="cuda")
     function_calls = 0
@@ -401,7 +644,7 @@ def test_profile_module_function_kernels_multiple_samples():
 @requires_cuda
 def test_profile_module_function_kernels_without_data_calls_function_once():
     batch_size, dim = 2, 5
-    profiler = ModuleFunctionKernelProfiler()
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler()
     net = _MultipleLinearLayerModel().to("cuda")
     args, kwargs = net.samples(batch_sizes=[batch_size], device="cuda")[0]
     function_calls = 0
@@ -436,7 +679,7 @@ def test_profile_module_function_kernels_without_data_calls_function_once():
 def test_profile_and_describe():
     batch_size = 2
     # given
-    profiler = ModuleFunctionKernelProfiler()
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler()
     net = _MultipleLinearLayerModel().to("cuda")
     data = net.samples(batch_sizes=[batch_size, 2 * batch_size], device="cuda")
     # when
@@ -457,12 +700,12 @@ def test_get_tensor_size_uses_logical_tensor_payload():
     args = (args_storage[:1, :1],)
     kwargs = {"tensor": kwargs_storage[:2, :2]}
 
-    assert get_tensor_size(args, kwargs) == 4 + 4 * 2  # 1x1x4 + 2x2x2 bytes
+    assert kernel_profiler_module.get_tensor_size(args, kwargs) == 4 + 4 * 2  # 1x1x4 + 2x2x2 bytes
 
 
 @requires_cuda
 def test_nested_function_calls():
-    profiler = ModuleFunctionKernelProfiler()
+    profiler = kernel_profiler_module.ModuleFunctionKernelProfiler()
     net = _NestedFunctionCallsModel().to("cuda")
     data = net.samples()
     # when
