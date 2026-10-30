@@ -281,7 +281,6 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_OUTPUT_DTYPE: self._required_casting_dtype,
             self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
-            self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
         }
@@ -305,6 +304,7 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module
-        module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)
+        if cls.STATE_ORIG_MODULE in state_dict:
+            module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend

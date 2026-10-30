@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for model state storage functionality."""
 
+from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
 
@@ -9,6 +11,7 @@ import pytest
 import torch
 
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
+from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
@@ -66,6 +69,7 @@ def _tune_save_load_helper(model_factory, samples, output_dir, wrap_model_fn, ch
         AssertionError: If model predictions after load don't match expected results.
     """
     model = model_factory()
+    model_to_load = deepcopy(model)
     test_data = samples.repeat(10, 1)  # make a bs=10
     with torch.no_grad():
         expected = model(test_data)
@@ -74,13 +78,36 @@ def _tune_save_load_helper(model_factory, samples, output_dir, wrap_model_fn, ch
     tune(wrapped_model, samples, batch_sizes=[1, 2], dry_run=False, disable_external_logging=False)
     checkpoint.save(wrapped_model, output_dir)
 
-    # create a new model instance and load the tuned model
-    model = model_factory()
-    model_loaded = checkpoint.load(model, output_dir, device_map=device_map)
+    # JIT backends reuse the pretrained weights supplied by the caller.
+    model_loaded = checkpoint.load(model_to_load, output_dir, device_map=device_map)
 
     with torch.no_grad():
         preds = model_loaded(test_data)
     torch.testing.assert_close(preds, expected, rtol=1e-3, atol=1e-3)
+
+
+@pytest.mark.parametrize("as_pipeline", [False, True])
+def test_jit_checkpoint_round_trip_uses_supplied_weights(checkpoint, as_pipeline):
+    model = torch.nn.Linear(4, 4).eval()
+    supplied = deepcopy(model)
+    with torch.no_grad():
+        supplied.weight.add_(1)
+    value = torch.ones(2, 4)
+    expected = supplied(value)
+    assert not torch.equal(model(value), expected)
+
+    strategy = OneBackendStrategy(TorchEagerBackend())
+    strategy.enable_performance_validation(False)
+    strategy.enable_find_max_batch_size(False)
+    wrapped = Module(model, "preloaded", strategy=strategy)
+    tune(wrapped, list(value.unbind(0)), batch_sizes=[1, 2], device="cpu", ignore_failing_modules=False)
+    checkpoint.save(SimpleNamespace(model=wrapped) if as_pipeline else wrapped, "preloaded.ait")
+    wrapped.deactivate()
+
+    restored = checkpoint.load(SimpleNamespace(model=supplied) if as_pipeline else supplied, "preloaded.ait")
+    loaded = restored.model if as_pipeline else restored
+    with torch.no_grad():
+        torch.testing.assert_close(loaded(value), expected)
 
 
 @requires_cuda

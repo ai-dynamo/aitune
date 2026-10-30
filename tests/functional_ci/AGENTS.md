@@ -96,7 +96,7 @@ Before selecting tags for a test, read the actual `Tag` names and each backend's
 | Tag | Meaning | Tests |
 | --- | --- | --- |
 | `base` | Every backend; use-case tests | `test_graph_break_aot_tunning`, `test_graph_break_jit_tunning` |
-| `save_load` | Tune, `ait.save`, `ait.load` into other weights, same output | `test_backend_lifecycle`, `test_pipeline_lifecycle` |
+| `save_load` | Tune, `ait.save`, `ait.load`, same output; supply matching weights for JIT backends | `test_backend_lifecycle`, `test_pipeline_lifecycle` |
 | `export` | `module.artifact()` runs in its native runtime | `test_exported_artifact` |
 | `dynamic_batch` | Batch range from recorded sizes or a user `BatchDim` | `test_recorded_batch_range`, `test_explicit_batch_dim` |
 | `dynamic_non_batch` | User `DynamicDim` on non-batch (spatial) dims | `test_explicit_spatial_dims` |

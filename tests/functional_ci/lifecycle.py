@@ -12,6 +12,7 @@ from torch import nn
 
 import aitune.torch as ait
 from aitune.torch.backend import Backend, ONNXExecutionProvider, ONNXRuntimeBackend
+from aitune.torch.backend.backend import BuildMode
 from aitune.torch.module import Module
 from tests.functional_ci.models import make_input
 
@@ -105,8 +106,9 @@ def run_lifecycle(
 
     ait.save(tuned, checkpoint)
     tuned.deactivate()
-    # Other weights than the tuned model, so outputs match only if `ait.load` restores the checkpoint weights.
-    restored = ait.load(model_factory(seed=1), checkpoint)
+    # JIT backends reuse supplied weights; AOT backends restore their own artifacts.
+    seed = 0 if backend.build_mode == BuildMode.JUST_IN_TIME else 1
+    restored = ait.load(model_factory(seed=seed), checkpoint)
     assert isinstance(restored, Module)
     assert restored is not tuned
     selected_backend(restored, type(backend))

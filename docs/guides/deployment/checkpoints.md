@@ -10,6 +10,13 @@ APIs apply to an AITune Dynamo worker and to a Triton Python backend.
 A checkpoint contains tuned module state and backend artifacts. Keep the application's model construction code and
 dependencies available in the serving environment.
 
+For Torch eager, TorchInductor JIT, Torch-TensorRT JIT, and TorchAO, new checkpoints do not contain the original
+module weights. Load the same pretrained weights into the model or pipeline before calling `ait.load`.
+These backends reuse the supplied weights and restore their configuration; JIT compilation and TorchAO quantization
+run again during loading. A randomly initialized or differently weighted model will not reproduce the tuned outputs.
+AOT artifacts and the handling of untuned modules are unchanged. Older checkpoints that contain original module
+weights continue to restore those weights.
+
 ## Save after tuning
 
 Save the model or pipeline after tuning completes:
@@ -35,6 +42,7 @@ Construct the same model and load its tuned state. Replace `YourModel` with the 
 import aitune.torch as ait
 
 model = YourModel()
+# Load the original pretrained weights here if the checkpoint uses a JIT backend.
 model.eval()
 model.to("cuda")
 
