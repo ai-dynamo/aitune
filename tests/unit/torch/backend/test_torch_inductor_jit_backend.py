@@ -102,10 +102,9 @@ def test_torch_inductor_build_keeps_sample_store_without_retaining_data(mocker, 
     )
 
     assert isinstance(backend._samples, SampleStore)
-    assert backend._data is None
     state = backend.to_dict()
     assert state[TorchInductorJitBackend.STATE_SAMPLES] == backend._samples.to_dict()
-    assert TorchInductorJitBackend.STATE_DATA not in state
+    assert "data" not in state
 
 
 def test_torch_inductor_warmup_uses_autocast_inference(mocker, tmp_path):
@@ -130,7 +129,7 @@ def test_torch_inductor_warmup_uses_autocast_inference(mocker, tmp_path):
     infer_with_autocast.assert_called_once()
 
 
-def test_torch_inductor_loads_legacy_inline_samples(mocker, tmp_path):
+def test_torch_inductor_rejects_legacy_inline_samples(mocker, tmp_path):
     toy = ToyTorchModel().eval()
     graph_spec = toy.graph_spec(batch_sizes=[1])
     inline_samples = toy.samples(batch_sizes=[1])
@@ -146,13 +145,12 @@ def test_torch_inductor_loads_legacy_inline_samples(mocker, tmp_path):
     )
     state = backend.to_dict()
     state.pop(TorchInductorJitBackend.STATE_SAMPLES)
-    state[TorchInductorJitBackend.STATE_DATA] = inline_samples
+    state["data"] = inline_samples
 
-    loaded_backend = TorchInductorJitBackend.from_dict(toy, state)
     compile_mock.reset_mock()
-    loaded_backend.activate()
-
-    compile_mock.assert_called_once()
+    with pytest.raises(KeyError, match="samples"):
+        TorchInductorJitBackend.from_dict(toy, state)
+    compile_mock.assert_not_called()
 
 
 def test_torch_inductor_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
