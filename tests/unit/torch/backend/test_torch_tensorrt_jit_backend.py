@@ -19,16 +19,6 @@ from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import requires_cuda
 
 
-def test_torch_tensorrt_rejects_legacy_inline_samples():
-    state = {
-        "type": "TorchTensorRTJitBackend",
-        "config": TorchTensorRTJitBackendConfig().to_dict(),
-        "data": [((torch.randn(2),), {})],
-    }
-    with pytest.raises(KeyError, match="samples"):
-        TorchTensorRTJitBackend.from_dict(torch.nn.Linear(2, 2), state)
-
-
 def _mock_graph_spec():
     m = Mock(spec=GraphSpec)
     m.name = "test"
@@ -497,3 +487,14 @@ def test_tensorrt_jit_config_from_dict_round_trip():
     original = TorchTensorRTJitBackendConfig(fullgraph=True)
     restored = TorchTensorRTJitBackendConfig.from_dict(original.to_dict())
     assert restored.fullgraph == original.fullgraph
+
+
+@requires_cuda
+def test_torch_tensorrt_rejects_legacy_inline_samples():
+    state = {
+        "type": "TorchTensorRTJitBackend",
+        "config": TorchTensorRTJitBackendConfig().to_dict(),
+        "data": [((torch.randn(2),), {})],
+    }
+    with pytest.raises(KeyError, match="samples"):
+        TorchTensorRTJitBackend.from_dict(torch.nn.Linear(2, 2), state)
