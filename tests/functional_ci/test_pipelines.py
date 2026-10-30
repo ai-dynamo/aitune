@@ -44,9 +44,18 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
 
 
 @pytest.mark.matrix("aot_tuning.models.pipelines", "modes.aot-inspect-wrap", "modes.aot-save-load")
-@with_backends("base")
+@with_backends(
+    "base",
+    marks={
+        "torch-tensorrt-aot": pytest.mark.xfail(
+            strict=True,
+            reason="Torch-TensorRT cannot build the transformer attention: `assert cuda_engine` in _TRTInterpreter.run",
+            raises=AssertionError,
+        )
+    },
+)
 def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
-    """Inspect, tune, save, and restore the pipeline with each save/load backend."""
+    """Inspect, tune, save, and restore the pipeline with each backend."""
     backend = case.factory()
     pipeline = ToyFluxPipeline(device)
     expected = generate(pipeline, PROMPT)
