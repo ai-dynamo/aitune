@@ -3,22 +3,19 @@
 """Shell of a Flux pipeline for functional tests.
 
 Same component names and call shape as Flux: two text encoders, a transformer,
-and a VAE decoder. Each module is a small linear map, and the transformer has
-one attention op so kernel selection still has a provider.
+and a VAE decoder. Each module is a small linear map.
 """
 
 from collections.abc import Callable
 
 import torch
 from torch import nn
-from torch.nn import functional
 
 from tests.functional_ci.models import seeded
 
 DIM = 32
 TEXT_LEN = 8
 VOCAB = 128
-HEADS = 2
 LATENT_CHANNELS = 4
 
 
@@ -30,18 +27,6 @@ def tokenize(prompts: list[str]) -> torch.Tensor:
         if values:
             ids[row, : len(values)] = torch.tensor(values, dtype=torch.float32) / VOCAB
     return ids
-
-
-def _split_heads(value: torch.Tensor) -> torch.Tensor:
-    """Split the feature dimension into attention heads."""
-    batch, sequence, channels = value.shape
-    return value.reshape(batch, sequence, HEADS, channels // HEADS).transpose(1, 2)
-
-
-def _merge_heads(value: torch.Tensor) -> torch.Tensor:
-    """Merge attention heads into the feature dimension."""
-    batch, _, sequence, head_dim = value.shape
-    return value.transpose(1, 2).reshape(batch, sequence, HEADS * head_dim)
 
 
 class ToyClipTextEncoder(nn.Module):
@@ -68,12 +53,11 @@ class ToyT5Encoder(nn.Module):
 
 
 class ToyFluxTransformer(nn.Module):
-    """Attend jointly over text and image tokens."""
+    """Predict image-token velocity from text, pooled text, and timestep."""
 
     def __init__(self) -> None:
         super().__init__()
         self.image_in = nn.Linear(LATENT_CHANNELS, DIM)
-        self.qkv = nn.Linear(DIM, 3 * DIM)
         self.out = nn.Linear(DIM, LATENT_CHANNELS)
 
     def forward(
@@ -83,11 +67,8 @@ class ToyFluxTransformer(nn.Module):
         pooled_projections: torch.Tensor,
         timestep: torch.Tensor,
     ) -> tuple[torch.Tensor]:
-        image = self.image_in(hidden_states) + pooled_projections[:, None, :] + timestep[:, None, None]
-        tokens = torch.cat((encoder_hidden_states, image), dim=1)
-        query, key, value = (_split_heads(part) for part in self.qkv(tokens).chunk(3, dim=-1))
-        attended = _merge_heads(functional.scaled_dot_product_attention(query, key, value))
-        return (self.out(attended[:, encoder_hidden_states.shape[1] :]),)
+        context = encoder_hidden_states.mean(dim=1) + pooled_projections + timestep[:, None]
+        return (self.out(self.image_in(hidden_states) + context[:, None, :]),)
 
 
 class ToyDecoder(nn.Module):

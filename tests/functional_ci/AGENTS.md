@@ -52,7 +52,7 @@ their own strategies.
 | `backends.py` | `BACKENDS` table, `Tag` names, `with_backends()` |
 | `lifecycle.py` | `Tolerance`, `TENSORRT_FP32`, `pinned_strategy`, `run_lifecycle`, `assert_matches_eager`, `selected_backend` |
 | `models.py` | Seeded toys: `make_mlp`, `make_image_model`, `make_input`, `seeded` |
-| `flux.py` | Toy Flux pipeline (`ToyFluxPipeline`): Flux component names and call shape, small linear modules, one attention op |
+| `flux.py` | Toy Flux pipeline (`ToyFluxPipeline`): Flux component names and call shape, small linear modules |
 | `artifacts.py` | Runs exported artifacts (`pt2`, `tensorrt_plan`, `onnx`) in their native runtime, without AITune |
 | `conftest.py` | `device` fixture, cleanup after each test, `matrix` marker and JSON writer |
 | `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py`, `test_pipelines.py` |
@@ -153,7 +153,6 @@ Examples:
 @pytest.mark.matrix("modes.aot-export")                  # modes.aot-export/tensorrt, ...
 @pytest.mark.matrix("topology.{backend}/single-gpu")     # topology.inductor-aot/single-gpu, ...
 @pytest.mark.matrix("modes.jit-{mode.value}")            # modes.jit-tune_eager/inductor-jit, ...
-@pytest.mark.matrix("models.pipelines/kernel-selector")  # fixed cell, no backend param
 ```
 
 With `AITUNE_MATRIX_RESULTS=<path>`, the session writes:
