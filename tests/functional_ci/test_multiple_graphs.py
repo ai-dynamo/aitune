@@ -57,9 +57,10 @@ def _assert_backends(module: TunedModule, backend: Backend) -> None:
 
 @pytest.mark.matrix("aot_tuning.models.multiple-graphs")
 @with_backends("base")
-def test_multiple_graphs_aot_tunning(case: BackendCase, device: torch.device):
-    """AOT tuning makes one graph per signature of the shared child."""
+def test_multiple_graphs_aot_tunning(case: BackendCase, device: torch.device, tmp_path):
+    """AOT tuning makes one graph per signature of the shared child; all graphs survive save and load."""
     backend = case.factory()
+    reference = MultipleGraphsMLP(device)
     model = MultipleGraphsMLP(device)
     model.encoder = ait.Module(cast(nn.Module, model.encoder), "encoder", strategy=pinned_strategy(backend))
     value = make_input(device)
@@ -67,7 +68,14 @@ def test_multiple_graphs_aot_tunning(case: BackendCase, device: torch.device):
 
     assert len(model.encoder.graph_specs) == 3
     _assert_backends(cast(TunedModule, model.encoder.module), backend)
-    assert_matches_eager(model, MultipleGraphsMLP(device), device, case.tolerance, batch_sizes=(2,))
+    assert_matches_eager(model, reference, device, case.tolerance, batch_sizes=(2,))
+
+    checkpoint = tmp_path / "multiple_graphs.ait"
+    ait.save(model, checkpoint)
+    model.encoder.deactivate()
+    restored = ait.load(MultipleGraphsMLP(device, seed=1), checkpoint)
+    _assert_backends(cast(TunedModule, cast(ait.Module, restored.encoder).module), backend)
+    assert_matches_eager(restored, reference, device, case.tolerance, batch_sizes=(2,))
 
 
 @pytest.mark.matrix("jit_tuning.models.multiple-graphs")
