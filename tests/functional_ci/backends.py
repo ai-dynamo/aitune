@@ -29,9 +29,21 @@ from aitune.torch.backend import (
 )
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
 
-Capability = Literal[
-    "save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph", "onnx_input", "jit"
+Tag = Literal[
+    "base",
+    "save_load",
+    "export",
+    "dynamic_batch",
+    "dynamic_non_batch",
+    "structured_io",
+    "multigraph",
+    "onnx_input",
+    "jit",
+    "graph_breaks",
+    "torch_export",
+    "onnx_export",
 ]
+Capability = Tag
 
 
 @dataclass(frozen=True)
@@ -40,12 +52,12 @@ class BackendCase:
 
     factory: Callable[[], Backend]
     tolerance: Tolerance
-    capabilities: frozenset[str]
+    tags: frozenset[Tag]
     artifact_format: str | None = None
 
     def __post_init__(self):
-        """Keep the `export` capability and `artifact_format` in step."""
-        assert ("export" in self.capabilities) == (self.artifact_format is not None), "set both or neither"
+        """Keep the `export` tags and `artifact_format` in step."""
+        assert ("export" in self.tags) == (self.artifact_format is not None), "set both or neither"
 
 
 def _torch_tensorrt_config() -> TorchTensorRTConfig:
@@ -84,62 +96,128 @@ def _torchao_int8_weight_only() -> Backend:
     return TorchAOBackend(TorchAOBackendConfig(quantization="int8wo", mode="default"))
 
 
-def _capabilities(*capabilities: Capability) -> frozenset[str]:
-    """Build a capability set; the `Capability` parameter lets pytype reject a misspelled name."""
-    return frozenset(capabilities)
+def _tags(*tags: Tag) -> frozenset[Tag]:
+    """Build a tags set; the `Tag` parameter lets linters reject a misspelled name."""
+    return frozenset(tags)
 
 
 BACKENDS: dict[str, BackendCase] = {
-    "torch-eager": BackendCase(TorchEagerBackend, Tolerance(), _capabilities("save_load")),
+    "torch-eager": BackendCase(
+        TorchEagerBackend,
+        Tolerance(),
+        _tags(
+            "base",
+            "save_load",
+            "graph_breaks",
+        ),
+    ),
     "inductor-aot": BackendCase(
         TorchInductorAotBackend,
         Tolerance(),
-        _capabilities("save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph"),
+        _tags(
+            "base",
+            "save_load",
+            "export",
+            "dynamic_batch",
+            "dynamic_non_batch",
+            "structured_io",
+            "multigraph",
+            "torch_export",
+        ),
         artifact_format="pt2",
     ),
     "torch-tensorrt-aot": BackendCase(
-        _torch_tensorrt_aot, TENSORRT_FP32, _capabilities("save_load", "dynamic_batch", "dynamic_non_batch")
+        _torch_tensorrt_aot,
+        TENSORRT_FP32,
+        _tags(
+            "base",
+            "save_load",
+            "dynamic_batch",
+            "dynamic_non_batch",
+            "structured_io",
+            "torch_export",
+        ),
     ),
     "tensorrt": BackendCase(
         tensorrt_backend,
         TENSORRT_FP32,
-        _capabilities(
-            "save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph", "onnx_input"
+        _tags(
+            "base",
+            "save_load",
+            "export",
+            "dynamic_batch",
+            "dynamic_non_batch",
+            "structured_io",
+            "multigraph",
+            "onnx_input",
+            "onnx_export",
         ),
         artifact_format="tensorrt_plan",
     ),
     "onnxruntime-cuda": BackendCase(
         _onnx_runtime(ONNXExecutionProvider.CUDA),
         TENSORRT_FP32,
-        _capabilities("save_load", "export", "dynamic_batch", "dynamic_non_batch", "onnx_input"),
+        _tags(
+            "base",
+            "save_load",
+            "export",
+            "dynamic_batch",
+            "dynamic_non_batch",
+            "onnx_input",
+            "onnx_export",
+        ),
         artifact_format="onnx",
     ),
     "onnxruntime-tensorrt": BackendCase(
         _onnx_runtime(ONNXExecutionProvider.TENSORRT),
         TENSORRT_FP32,
-        _capabilities("save_load", "dynamic_batch", "dynamic_non_batch"),
+        _tags(
+            "base",
+            "save_load",
+            "dynamic_batch",
+            "dynamic_non_batch",
+            "onnx_export",
+        ),
     ),
     "torchao-int8wo": BackendCase(
-        _torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2), _capabilities("save_load")
+        _torchao_int8_weight_only,
+        Tolerance(rtol=5e-2, atol=5e-2),
+        _tags(
+            "base",
+            "save_load",
+            "graph_breaks",
+        ),
     ),
-    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("jit")),
-    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("jit")),
+    "inductor-jit": BackendCase(
+        TorchInductorJitBackend,
+        Tolerance(),
+        _tags(
+            "base",
+            "jit",
+        ),
+    ),
+    "torch-tensorrt-jit": BackendCase(
+        _torch_tensorrt_jit,
+        TENSORRT_FP32,
+        _tags(
+            "base",
+            "jit",
+        ),
+    ),
 }
 
 
-def with_backends(
-    *capabilities: Capability, marks: Mapping[str, pytest.MarkDecorator] | None = None
-) -> pytest.MarkDecorator:
-    """Parametrize `case` over backends with all `capabilities`; raise if none match.
+def with_backends(*tags: Tag, marks: Mapping[str, pytest.MarkDecorator] | None = None) -> pytest.MarkDecorator:
+    """Parametrize `case` over backends with all `tags`; raise if none match.
 
     `marks` maps a backend id to marks for that case only, e.g. a strict `pytest.mark.xfail` for a known failure.
     """
     marks = marks or {}
-    selected = {backend_id: case for backend_id, case in BACKENDS.items() if case.capabilities.issuperset(capabilities)}
+    selected = {backend_id: case for backend_id, case in BACKENDS.items() if case.tags.issuperset(tags)}
     if not selected:
-        raise ValueError(f"no backend in BACKENDS has all capabilities {capabilities}")
+        raise ValueError(f"no backend in BACKENDS has all tags {tags}")
     if unknown := marks.keys() - selected.keys():
-        raise ValueError(f"marks for backends without capabilities {capabilities}: {sorted(unknown)}")
+        raise ValueError(f"marks for backends without tags {tags}: {sorted(unknown)}")
     return pytest.mark.parametrize(
         "case",
         [pytest.param(case, marks=marks.get(backend_id, ()), id=backend_id) for backend_id, case in selected.items()],

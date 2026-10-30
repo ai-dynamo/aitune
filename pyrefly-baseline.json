@@ -561,27 +561,6 @@
       "severity": "error"
     },
     {
-      "column": 22,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `load`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `save`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `save`",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
