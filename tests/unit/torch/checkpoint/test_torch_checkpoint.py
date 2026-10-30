@@ -322,6 +322,7 @@ def test_tune_save_load_pipeline_with_invalid_device_map(pipeline_factory, sampl
 def test_tune_save_load_complex_pipeline(complex_pipeline_factory, sample, torch_device, checkpoint):
     """Test tuning, saving and loading a pipeline."""
     pipeline = complex_pipeline_factory()
+    pipeline_to_load = deepcopy(pipeline)
     test_data = sample.repeat(10, 1)  # make a bs=10
     with torch.no_grad():
         expected = pipeline(test_data)
@@ -338,8 +339,7 @@ def test_tune_save_load_complex_pipeline(complex_pipeline_factory, sample, torch
     checkpoint.save(pipeline.net.linear1, "linear1_test.ait")
     checkpoint.save(pipeline.net.linear2, "linear2_test.ait")
 
-    # create a new model instance and load the tuned model
-    pipeline = complex_pipeline_factory()
+    pipeline = pipeline_to_load
     pipeline.net.linear1 = checkpoint.load(pipeline.net.linear1, "linear1_test.ait", device_map={"": torch_device})
     pipeline.net.linear2 = checkpoint.load(pipeline.net.linear2, "linear2_test.ait", device_map={"": torch_device})
 
@@ -352,6 +352,7 @@ def test_tune_save_load_complex_pipeline(complex_pipeline_factory, sample, torch
 def test_tune_save_load_complex_pipeline_with_device_map(complex_pipeline_factory, sample, torch_device, checkpoint):
     """Test tuning, saving and loading a pipeline."""
     pipeline = complex_pipeline_factory()
+    pipeline_to_load = deepcopy(pipeline)
     test_data = sample.repeat(10, 1)  # make a bs=10
     with torch.no_grad():
         expected = pipeline(test_data)
@@ -368,8 +369,7 @@ def test_tune_save_load_complex_pipeline_with_device_map(complex_pipeline_factor
     checkpoint.save(pipeline.net.linear1, "linear1_test.ait")
     checkpoint.save(pipeline.net.linear2, "linear2_test.ait")
 
-    # create a new model instance and load the tuned model
-    pipeline = complex_pipeline_factory()
+    pipeline = pipeline_to_load
     pipeline.net.linear1 = checkpoint.load(pipeline.net.linear1, "linear1_test.ait", device_map={})
     pipeline.net.linear2 = checkpoint.load(pipeline.net.linear2, "linear2_test.ait", device_map={})
 
