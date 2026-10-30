@@ -518,12 +518,12 @@ class PatchedModule:
         """Patch the device attribute of the module and its parents.
 
         HF pipelines have `device` attribute which checks `next(module.parameters()).device`.
-        Since JIT tuning moves the original module to a cpu device, this attribute returns cpu device.
-        This causes misplacement issues where some modules are on cuda and other modules or tensors are moved according
-        to the device attribute to cpu. To fix this, the method patches dynamically device attribute but only at instance
-        (object) level i.e. does not touch class object. This has to be applied not only to the current module but to
-        its parents in case parents objects do not have it's own parameters but include child module which has been
-        tuned and move to a cpu device.
+        Since JIT tuning offloads the original module (to the meta device by default), this attribute returns the
+        offload device. This causes misplacement issues where some modules are on cuda and other modules or tensors are
+        moved according to the device attribute to the offload device. To fix this, the method patches dynamically
+        device attribute but only at instance (object) level i.e. does not touch class object. This has to be applied
+        not only to the current module but to its parents in case parents objects do not have it's own parameters but
+        include child module which has been tuned and offloaded.
         """
         todo = [self]
         while todo:
