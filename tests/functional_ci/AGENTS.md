@@ -55,7 +55,7 @@ their own strategies.
 | `flux.py` | Toy Flux pipeline (`ToyFluxPipeline`): CLIP/T5-like encoders, MMDiT, VAE decoder |
 | `artifacts.py` | Runs exported artifacts (`pt2`, `tensorrt_plan`, `onnx`) in their native runtime, without AITune |
 | `conftest.py` | `device` fixture, cleanup after each test, `matrix` marker and JSON writer |
-| `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py` |
+| `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py`, `test_multiple_graphs.py` |
 | other `test_*.py` | One file per feature area: lifecycle, shapes, topology, JIT, strategies, precision, ONNX input, pipelines, kernel selector |
 
 ## Backends
@@ -95,14 +95,15 @@ Before selecting tags for a test, read the actual `Tag` names and each backend's
 
 | Tag | Meaning | Tests |
 | --- | --- | --- |
-| `save_load` | Tune, `ait.save`, `ait.load` into other weights, same output | `test_backend_lifecycle`, `test_pipeline_lifecycle`, `test_multiple_graphs_aot` |
+| `base` | Every backend; use-case tests | `test_graph_break_aot_tunning`, `test_graph_break_jit_tunning`, `test_multiple_graphs_aot_tunning`, `test_multiple_graphs_jit_tunning` |
+| `save_load` | Tune, `ait.save`, `ait.load` into other weights, same output | `test_backend_lifecycle`, `test_pipeline_lifecycle` |
 | `export` | `module.artifact()` runs in its native runtime | `test_exported_artifact` |
 | `dynamic_batch` | Batch range from recorded sizes or a user `BatchDim` | `test_recorded_batch_range`, `test_explicit_batch_dim` |
 | `dynamic_non_batch` | User `DynamicDim` on non-batch (spatial) dims | `test_explicit_spatial_dims` |
-| `structured_io` | Nested dict input, non-tensor args, nested outputs | `test_structured_io` |
-| `multigraph` | One wrapped module tunes one graph per input layout | `test_partial_wrap_multigraph`, `test_multiple_graphs_unrecorded_layout`; `test_multiple_graphs_aot` also covers all `save_load` backends |
+| `structured_io` | Nested dict and list inputs, non-tensor args, nested outputs | `test_structured_io` |
+| `multigraph` | One wrapped module tunes one graph per input layout | `test_partial_wrap_multigraph` |
 | `onnx_input` | Tune an existing ONNX file (inline or external data) | `test_existing_onnx` |
-| `jit` | JIT tuning (`jit_config`, `prepare_for_jit_tuning`) | `test_jit_tuning`, `test_pipeline_jit`, `test_multiple_graphs_jit` |
+| `jit` | JIT tuning (`jit_config`, `prepare_for_jit_tuning`) | `test_jit_tuning`, `test_pipeline_jit` |
 
 To add a tag, add the name to `Tag`, add it to the backends that pass, and use it in `with_backends`.
 
@@ -138,8 +139,8 @@ formatting is checked.
 
 | Table | Row examples | Column |
 | --- | --- | --- |
-| `aot_tuning.models`, `jit_tuning.models` | `graph-breaks` | backend id |
-| `models` | `tensor-inputs`, `static-shapes`, `single-graph`, `dynamic-batch-recorded`, `dynamic-batch-user`, `dynamic-non-batch`, `non-tensor-inputs`, `nested-inputs`, `structured-outputs`, `multiple-graphs`, `pipelines` | backend id or `kernel-selector` |
+| `aot_tuning.models`, `jit_tuning.models` | `graph-breaks`, `multiple-graphs` | backend id |
+| `models` | `tensor-inputs`, `static-shapes`, `single-graph`, `dynamic-batch-recorded`, `dynamic-batch-user`, `dynamic-non-batch`, `non-tensor-inputs`, `nested-inputs`, `structured-outputs`, `pipelines` | backend id or `kernel-selector` |
 | `modes` | `aot-tune`, `aot-save-load`, `aot-inspect-wrap`, `aot-export`, `aot-existing-onnx`, `jit-tune_eager`, `jit-tune_deferred`, `jit-inspect` | backend id or `kernel-selector` |
 | `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run` | `aot-tune`, `jit-tune`, `selection-checked` |
 | `topology` | backend id or `kernel-selector` | `single-gpu` |

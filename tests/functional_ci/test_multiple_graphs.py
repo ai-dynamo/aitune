@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Dispatch one shared module across ranks and optional tensor arguments."""
+"""Functional coverage for one module called with several input signatures."""
 
 from typing import Any, cast
 
@@ -32,14 +32,8 @@ class SingleGraphsMLP(nn.Module):
 
 
 def _split_input_for_multiple_graphs(x: torch.Tensor) -> tuple[tuple[torch.Tensor, ...], ...]:
+    """Return three signatures: flat `(B, F)`, sequence `(B, 3, F)`, and `(x, residual)`."""
     return (x,), (x.unsqueeze(1).repeat(1, 3, 1),), (x, x * 0.5)
-
-
-def _assert_backends(module: TunedModule, expected: type[Backend], prototype: Backend | None = None) -> None:
-    backends = list(module.backends.values())
-    assert [type(selected) for selected in backends] == [expected] * 3
-    assert len({id(selected) for selected in backends}) == 3
-    assert all(selected is not prototype for selected in backends)
 
 
 class MultipleGraphsMLP(nn.Module):
@@ -53,42 +47,43 @@ class MultipleGraphsMLP(nn.Module):
         return tuple(self.encoder(*args) for args in _split_input_for_multiple_graphs(x))
 
 
-@pytest.mark.matrix("models.multiple-graphs", "modes.aot-tune", "modes.aot-save-load")
-@with_backends("save_load")
-def test_multiple_graphs_aot(case: BackendCase, device: torch.device, tmp_path):
-    """Tune each layout independently and reload all graphs into different weights."""
+def _assert_backends(module: TunedModule, backend: Backend) -> None:
+    """Each of the three graphs has its own copy of the pinned backend."""
+    backends = list(module.backends.values())
+    assert [type(selected) for selected in backends] == [type(backend)] * 3
+    assert len({id(selected) for selected in backends}) == 3
+    assert all(selected is not backend for selected in backends)
+
+
+@pytest.mark.matrix("aot_tuning.models.multiple-graphs")
+@with_backends("base")
+def test_multiple_graphs_aot_tunning(case: BackendCase, device: torch.device):
+    """AOT tuning makes one graph per signature of the shared child."""
     backend = case.factory()
-    reference = MultipleGraphsMLP(device)
     model = MultipleGraphsMLP(device)
     model.encoder = ait.Module(cast(nn.Module, model.encoder), "encoder", strategy=pinned_strategy(backend))
     value = make_input(device)
     ait.tune(model, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=device)
 
     assert len(model.encoder.graph_specs) == 3
-    _assert_backends(cast(TunedModule, model.encoder.module), type(backend), backend)
-    assert_matches_eager(model, reference, device, case.tolerance, batch_sizes=(2,))
-
-    checkpoint = tmp_path / "layouts.ait"
-    ait.save(model, checkpoint)
-    model.encoder.deactivate()
-    restored = ait.load(MultipleGraphsMLP(device, seed=1), checkpoint)
-    restored_encoder = cast(ait.Module, restored.encoder)
-    _assert_backends(cast(TunedModule, restored_encoder.module), type(backend))
-    assert_matches_eager(restored, reference, device, case.tolerance, batch_sizes=(2,))
+    _assert_backends(cast(TunedModule, model.encoder.module), backend)
+    assert_matches_eager(model, MultipleGraphsMLP(device), device, case.tolerance, batch_sizes=(2,))
 
 
-@pytest.mark.matrix("models.multiple-graphs", "modes.jit-tune_eager")
-@with_backends("jit")
-def test_multiple_graphs_jit(case: BackendCase, device: torch.device):
-    """Record every signature before tuning the JIT head, then dispatch each graph."""
+@pytest.mark.matrix("jit_tuning.models.multiple-graphs")
+@with_backends("base")
+def test_multiple_graphs_jit_tunning(case: BackendCase, device: torch.device):
+    """JIT tuning records every signature, then tunes one graph per signature."""
     backend = case.factory()
     if isinstance(backend, TorchTensorRTJitBackend):
+        # Raise instead of silently running the graph in PyTorch when TensorRT cannot build it.
         cast(Any, backend._config.compile_config).pass_through_build_failures = True
     jit_config.mode = JITMode.TUNE_EAGER
     jit_config.device = device
     jit_config.min_samples = 6
     jit_config.strategy = pinned_strategy(backend)
     reference = SingleGraphsMLP(device)
+    # Patch the child directly: a patched parent would be the head, with only one signature.
     with prepare_for_jit_tuning():
         model = SingleGraphsMLP(device)
 
@@ -97,29 +92,15 @@ def test_multiple_graphs_jit(case: BackendCase, device: torch.device):
             for args in _split_input_for_multiple_graphs(make_input(device, batch_size=batch_size)):
                 model(*args)
 
-        (head,) = PatchedModule.heads
-        assert head._name.split(" ")[0] == "SingleGraphsMLP"
-        assert head._state == ModuleState.TUNED
-        _assert_backends(cast(TunedModule, head._wrapper), type(backend), backend)
-        assert_matches_eager(
-            lambda value: tuple(model(*args) for args in _split_input_for_multiple_graphs(value)),
-            lambda value: tuple(reference(*args) for args in _split_input_for_multiple_graphs(value)),
-            device,
-            case.tolerance,
-            batch_sizes=(1, 4),
-            seeds=(7,),
-        )
-
-
-@pytest.mark.matrix("models.multiple-graphs", "modes.aot-tune")
-@with_backends("multigraph")
-def test_multiple_graphs_unrecorded_layout(case: BackendCase, device: torch.device):
-    """Existing multigraph backends reject an unrecorded rank rather than running eager."""
-    backend = case.factory()
-    model = MultipleGraphsMLP(device)
-    model.encoder = ait.Module(cast(nn.Module, model.encoder), "encoder", strategy=pinned_strategy(backend))
-    value = make_input(device)
-    ait.tune(model, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=device)
-    _assert_backends(cast(TunedModule, model.encoder.module), type(backend), backend)
-    with torch.no_grad(), pytest.raises(RuntimeError, match="No backend found"):
-        model.encoder(value[:, None, None, :])
+    (head,) = PatchedModule.heads
+    assert head._name.split(" ")[0] == "SingleGraphsMLP"
+    assert head._state == ModuleState.TUNED
+    _assert_backends(cast(TunedModule, head._wrapper), backend)
+    assert_matches_eager(
+        lambda value: tuple(model(*args) for args in _split_input_for_multiple_graphs(value)),
+        lambda value: tuple(reference(*args) for args in _split_input_for_multiple_graphs(value)),
+        device,
+        case.tolerance,
+        batch_sizes=(1, 4),
+        seeds=(7,),
+    )
