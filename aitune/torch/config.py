@@ -49,7 +49,8 @@ class AITuneConfig:
 
     def __init__(self) -> None:
         """Initialize AITuneConfig."""
-        self._cache_dir: Path = aitune_cache_dir()
+        # ``None`` resolves to ``aitune_cache_dir()`` when read, until a cache directory is set explicitly.
+        self._cache_dir: Path | None = None
         self._min_num_samples: int = DEFAULT_MIN_NUM_SAMPLES
         self.max_num_samples_stored: int | float = DEFAULT_MAX_NUM_SAMPLES_STORED
         self.device_after_tuning: str = DEFAULT_DEVICE_AFTER_TUNING
@@ -75,7 +76,7 @@ class AITuneConfig:
     @property
     def cache_dir(self) -> Path:
         """Get the cache directory."""
-        return self._cache_dir
+        return self._cache_dir or aitune_cache_dir()
 
     @cache_dir.setter
     def cache_dir(self, cache_dir: str | Path) -> None:
@@ -100,6 +101,7 @@ class AITuneConfig:
     def to_dict(self) -> dict[str, Any]:
         """Return all configuration attributes keyed by their public name."""
         result = {k.lstrip("_"): v for k, v in vars(self).items()}
+        result["cache_dir"] = self.cache_dir
         result["tuning_data_output_path"] = self.tuning_data_output_path
         return result
 

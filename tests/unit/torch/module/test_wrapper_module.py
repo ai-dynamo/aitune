@@ -309,6 +309,20 @@ def test_tune_resolves_unspecified_device_with_module_context(mocker):
     resolve_device.assert_called_once_with(None, wrapped_module)
 
 
+def test_tune_uses_configured_cache_dir(module, torch_device, tmp_path):
+    strategy = Mock()
+    configured_cache_dir = tmp_path / "configured_cache"
+    global_config.cache_dir = configured_cache_dir
+
+    module(1, a=1)
+    module.tune(strategy=strategy, dry_run=True, device=torch_device)
+
+    graph_cache_dir = configured_cache_dir / TEST_MODULE_NAME / module.graph_specs[0].name
+    assert module.cache_dir == configured_cache_dir / TEST_MODULE_NAME
+    assert strategy.tune_dry_run.call_args.args[5] == graph_cache_dir
+    assert graph_cache_dir.is_dir()
+
+
 def test_tune(module, torch_device, mocker):
     mock_backend = Mock()
     mock_backend.describe.return_value = "mock backend description"
