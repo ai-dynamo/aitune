@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 import torch
 import torch.nn as nn
-from torchao.quantization import Int8WeightOnlyConfig
+from torchao.quantization import Int8WeightOnlyConfig, quantize_
 from torchao.utils import is_sm_at_least_89
 
 try:
@@ -201,18 +201,16 @@ def test_torchao_backend_build(quantization, dtype, model, sample_data, torch_de
 
 @requires_cuda
 def test_torchao_releases_source_memory_before_quantization(mocker, model, sample_data, torch_device, tmp_path):
-    import aitune.torch.backend.torchao_backend as backend_module
     import aitune.torch.utils.module as module_utils
 
     cleanup = mocker.spy(module_utils, "cleanup_memory")
-    quantize = backend_module.quantize_
 
     def check_offload(quantized_model, **kwargs):
         assert next(model.parameters()).device.type == "cpu"
         assert cleanup.call_count > 0, "Source memory must be released before quantization allocates GPU memory"
-        return quantize(quantized_model, **kwargs)
+        return quantize_(quantized_model, **kwargs)
 
-    mocker.patch.object(backend_module, "quantize_", side_effect=check_offload)
+    mocker.patch("aitune.torch.backend.torchao_backend.quantize_", side_effect=check_offload)
     backend = TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo"))
     do_test_backend(backend, torch.float32, model, sample_data, torch_device, tmp_path)
 
