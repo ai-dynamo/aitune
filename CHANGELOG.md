@@ -16,6 +16,7 @@ title: "Changelog"
 - feat: report the execution device of AOT- and JIT-tuned submodules through Diffusers and Transformers `device` properties
 - fix: reuse an already extracted checkpoint only when its SHA sums match the archive, and redo an interrupted extraction on the next load
 - fix: save Torch-TensorRT AOT models whose inputs include non-tensor values
+- fix: `inspect()` accepts `MinMaxRandomDataset`, directly or through `DataLoaderFactory`, and no longer replaces the factory's dataset
 - breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
 
 ## 0.6.0
