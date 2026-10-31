@@ -146,3 +146,14 @@ def test_iterating_yields_all_samples(include_min_max_shapes):
     assert len(samples) == len(dataset) == 5
     for index, sample in enumerate(samples):
         assert sample is dataset[index]
+
+
+def test_assigned_sample_is_seen_by_indexing_and_iteration():
+    dataset = MinMaxRandomDataset(3, [InputConfig((4,), (8,), kwarg_name="input")])
+    replacement = {"input": torch.zeros(5)}
+
+    dataset[0] = replacement
+
+    assert dataset[0] is replacement
+    assert next(iter(dataset)) is replacement
+    assert dataset.samples[0] is replacement

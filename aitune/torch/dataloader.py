@@ -290,17 +290,13 @@ class MinMaxRandomDataset(DynamicShapeDataset):
         self.input_configs = input_configs
         self.include_min_max_shapes = include_min_max_shapes
         self.is_dict = self._validate_names()
-        self.samples = self._generate_samples()
-        # Fill the list storage too, otherwise iter() and list() see an empty dataset.
-        super().__init__(self.samples)
+        # The list storage is the only copy of the samples, so indexing, iteration and assignment agree.
+        super().__init__(self._generate_samples())
 
-    def __len__(self):
-        """Return the number of samples in the dataset."""
-        return self.num_samples
-
-    def __getitem__(self, index):
-        """Get a sample from the dataset."""
-        return self.samples[index]
+    @property
+    def samples(self):
+        """The generated samples, i.e. the dataset itself."""
+        return self
 
     def _validate_names(self):
         all_has_name = all(cfg.kwarg_name is not None for cfg in self.input_configs)
