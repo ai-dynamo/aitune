@@ -18,6 +18,8 @@ title: "Changelog"
 - fix: release original module storage and cached GPU allocations before restoring AOT backends during `aitune.load()`, reducing peak GPU memory usage
 - fix: retain disk-backed warmup samples after deployment for TorchInductor JIT, Torch-TensorRT JIT, and TorchAO so checkpoints saved after deployment can be restored without retaining sample tensors in memory
 - fix: save Torch-TensorRT AOT models whose inputs include non-tensor values
+- fix: `inspect()` accepts `MinMaxRandomDataset`, directly or through `DataLoaderFactory`, and no longer replaces the factory's dataset
+- fix: AOT tuning writes and clears module caches under `config.cache_dir` instead of always using `AITUNE_CACHE_DIR`
 - breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
 - breaking change: TorchInductor JIT, Torch-TensorRT JIT, and TorchAO checkpoints now require disk-backed warmup samples; legacy checkpoints with inline sample data are no longer supported
 
