@@ -13,6 +13,7 @@ from torch import nn
 
 import aitune.torch as ait
 from aitune.torch.backend import KernelSelectorBackend
+from aitune.torch.backend.backend import BuildMode
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
@@ -88,7 +89,8 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
     for module in _components(pipeline).values():
         module.deactivate()
 
-    restored = ait.load(ToyFluxPipeline(device, seed=1), checkpoint)
+    seed = 0 if backend.build_mode == BuildMode.JUST_IN_TIME else 1
+    restored = ait.load(ToyFluxPipeline(device, seed=seed), checkpoint)
     assert isinstance(restored, ToyFluxPipeline)
     assert restored is not pipeline
     for module in _components(restored).values():
