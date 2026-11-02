@@ -52,6 +52,8 @@ except (ImportError, RuntimeError, OSError):
             disable_tf32: Whether to disable TF32 in TensorRT layers. Defaults to False.
             require_full_compilation: Whether to require one TensorRT engine for the whole graph.
                 Defaults to False.
+            pass_through_build_failures: Whether to re-raise conversion failures instead of
+                falling back to PyTorch. Defaults to False.
         """
 
         enabled_precisions: set[torch.dtype] | None = None
@@ -61,6 +63,7 @@ except (ImportError, RuntimeError, OSError):
         min_block_size: int = 5
         disable_tf32: bool = False
         require_full_compilation: bool = False
+        pass_through_build_failures: bool = False
 
 
 logger = getLogger(__name__)

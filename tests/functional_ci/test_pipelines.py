@@ -8,7 +8,6 @@ from typing import cast
 
 import pytest
 import torch
-from packaging.version import Version
 from torch import nn
 
 import aitune.torch as ait
@@ -23,10 +22,12 @@ from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.flux import ToyFluxPipeline
 from tests.functional_ci.lifecycle import Tolerance, pinned_strategy, selected_backend
 
-TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10))
-
 PROMPT = "A futuristic cityscape with neon lights and flying cars"
 COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
+
+
+class ComponentNotTunedError(Exception):
+    """Raised when tuning leaves pipeline components without a backend."""
 
 
 def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor:
@@ -54,8 +55,15 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
         "torch-tensorrt-aot": pytest.mark.xfail(
             strict=True,
             reason=("torch_tensorrt/dynamo/conversion/_TRTInterpreter.py, line 703, in run assert cuda_engine"),
-            raises=AssertionError,  # expected one selected backend, found 0",
-        )
+            raises=ComponentNotTunedError,
+        ),
+        # Torch-TRT rejects the int64 position ids that the CLIP text encoder passes to `aten.embedding`. Torch-TRT 2.9
+        # also fails on the VAE decoder: its `native_group_norm` converter reads FakeTensor data (fixed in 2.10).
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            strict=True,
+            reason="Torch-TRT cannot convert the CLIP text encoder (int64 position ids in `aten.embedding`)",
+            raises=ComponentNotTunedError,
+        ),
     },
 )
 def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
@@ -78,6 +86,9 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
     ait.wrap(pipeline, modules, strategy=pinned_strategy(backend))
     ait.tune(run, [PROMPT], batch_sizes=[1], device=device)
 
+    untuned = [name for name, module in _components(pipeline).items() if not getattr(module.module, "backends", None)]
+    if untuned:
+        raise ComponentNotTunedError(f"not tuned: {', '.join(untuned)}")
     for module in _components(pipeline).values():
         assert selected_backend(module, type(backend)).key() == backend.key()
         assert len(module.graph_specs) == 1
@@ -100,16 +111,13 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
 @with_backends(
     "jit",
     marks={
-        # Torch-TRT 2.12+ falls back to the original graph: the test passes, but the CLIP head runs in PyTorch.
+        # Torch-TRT rejects the int64 position ids that the CLIP text encoder passes to `aten.embedding`. Torch-TRT 2.9
+        # also fails on the VAE decoder: its `native_group_norm` converter reads FakeTensor data (fixed in 2.10).
         "torch-tensorrt-jit": pytest.mark.xfail(
-            TORCH_2_8_TO_2_10,
             strict=True,
-            reason=(
-                "Torch-TRT < 2.12 rejects the int64 constant-folded CLIP position ids in `aten.embedding`, "
-                "then its fallback fails with `AttributeError: _frozen_param0`, so the CLIP head is not tuned"
-            ),
-            raises=AssertionError,
-        )
+            reason="Torch-TRT cannot convert the CLIP text encoder (int64 position ids in `aten.embedding`)",
+            raises=ComponentNotTunedError,
+        ),
     },
 )
 def test_pipeline_jit(case: BackendCase, device: torch.device):
@@ -134,7 +142,9 @@ def test_pipeline_jit(case: BackendCase, device: torch.device):
         "ToyFluxTransformer",
         "ToyDecoder",
     }
-    assert all(head._state == ModuleState.TUNED for head in heads)
+    untuned = [head._name.split(" ")[0] for head in heads if head._state != ModuleState.TUNED]
+    if untuned:
+        raise ComponentNotTunedError(f"not tuned: {', '.join(untuned)}")
     assert all(
         type(selected) is type(backend)
         for head in heads

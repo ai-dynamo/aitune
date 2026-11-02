@@ -39,6 +39,17 @@ def isolated_tuning_report(monkeypatch, tmp_path):
         module.deactivate()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def fp32_convolutions():
+    """Disable TF32 in cuDNN convolutions for the whole session."""
+    # On Torch 2.11 and 2.14, Inductor switches convolutions to channels_last, where cuDNN picks TF32 kernels; for the
+    # eager NCHW convolutions it picks fp32 kernels, although `allow_tf32` defaults to True. The outputs differ by
+    # about 5e-4 and fail the 1e-5 tolerance of the inductor cases.
+    # Set once and never reset: on Torch 2.8, Inductor imports `torch.testing._internal` while compiling, which blocks
+    # later changes to the cuDNN flags.
+    torch.backends.cudnn.allow_tf32 = False
+
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "matrix(*cells): feature-matrix cells that this test proves")
 
