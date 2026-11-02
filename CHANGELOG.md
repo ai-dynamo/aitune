@@ -5,7 +5,7 @@ title: "Changelog"
 ---
 # Changelog
 
-## 0.7.0 (unreleased)
+## 0.7.0
 
 - feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
 - feat: expose portable deployment artifacts for ONNX Runtime, TensorRT, and TorchInductor AOT models, including required additional files and representative inputs
@@ -14,14 +14,24 @@ title: "Changelog"
 - feat: resolve default AOT and JIT strategies per module using source format, execution topology, and compilation mode
 - feat: add tuning objectives and composable constraints through `resolve_strategy`, initially supporting maximum latency
 - feat: report the execution device of AOT- and JIT-tuned submodules through Diffusers and Transformers `device` properties
+- feat: extend Python support to 3.13 and 3.14 and add PyTorch 2.13 and 2.14 dependency extras
+- feat: expose ONNX graph metadata during module inspection and add a CUDA 13 ONNX Runtime installation extra
 - fix: reuse an already extracted checkpoint only when its SHA sums match the archive, and redo an interrupted extraction on the next load
 - fix: release original module storage and cached GPU allocations before restoring AOT backends during `aitune.load()`, reducing peak GPU memory usage
 - fix: retain disk-backed warmup samples after deployment for TorchInductor JIT, Torch-TensorRT JIT, and TorchAO so checkpoints saved after deployment can be restored without retaining sample tensors in memory
 - fix: save Torch-TensorRT AOT models whose inputs include non-tensor values
 - fix: `inspect()` accepts `MinMaxRandomDataset`, directly or through `DataLoaderFactory`, and no longer replaces the factory's dataset
 - fix: AOT tuning writes and clears module caches under `config.cache_dir` instead of always using `AITUNE_CACHE_DIR`
+- fix: restore forward pre-hooks and forward hooks when unpatching modules during JIT inspection
+- fix: save and restore tuned modules nested inside pipeline components
+- fix: topologically sort Dynamo-exported ONNX graphs before saving
+- fix: honor Triton model filenames, name multi-file ONNX graphs `model.onnx`, and preserve scalar request dimensions during profiling
+- fix: generate integer and boolean random inputs, collate every mixed-call sample, and honor a zero batch limit
+- fix: move Torch eager modules back to their execution device when activating the backend
 - breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
 - breaking change: TorchInductor JIT, Torch-TensorRT JIT, and TorchAO checkpoints now require disk-backed warmup samples; legacy checkpoints with inline sample data are no longer supported
+- breaking change: `InputConfig` requires an explicit `max_value` for integer and boolean random inputs; use `max_value=2` to sample both boolean values
+- breaking change: Python 3.10 is no longer supported; the supported range is Python 3.11 through 3.14
 
 ## 0.6.0
 
