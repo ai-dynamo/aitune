@@ -1,0 +1,88 @@
+---
+layout: overview
+slug: aitune/aitune/torch/integrations/device
+title: aitune.torch.integrations.device
+---
+
+Device reporting for modules containing tuned submodules.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`get_tuned_execution_device`](#aitune-torch-integrations-device-get_tuned_execution_device) | Return the execution device of the tuned submodule owning the first parameter or buffer of a module. |
+| [`patch_device_property`](#aitune-torch-integrations-device-patch_device_property) | Make the `device` property of a library base class report the execution device of tuned submodules. |
+
+### API
+
+<Anchor id="aitune-torch-integrations-device-get_tuned_execution_device">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.integrations.device.get_tuned_execution_device(
+    module: torch.nn.Module
+) -> torch.device | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the execution device of the tuned submodule owning the first parameter or buffer of a module.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+Module whose first parameter or buffer determines its reported device.
+</ParamField>
+
+**Returns:** `torch.device | None`
+
+The device of the nearest AOT- or JIT-tuned module containing that tensor, or None if there is none.
+
+**Examples:**
+
+<CodeBlock showLineNumbers={false}>
+
+```python
+>>> get_tuned_execution_device(torch.nn.Linear(2, 2)) is None
+True
+```
+
+</CodeBlock>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-integrations-device-patch_device_property">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.integrations.device.patch_device_property(
+    cls: type
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Make the `device` property of a library base class report the execution device of tuned submodules.
+
+Diffusers and Transformers report the device of a module's first parameter or buffer. After tuning,
+parameters of tuned submodules are offloaded to meta, so their parents would report the meta device.
+
+**Parameters:**
+
+<ParamField path="cls" type="type">
+Class defining a `device` property. Classes without one are left unchanged.
+</ParamField>
+
+
+</Indent>

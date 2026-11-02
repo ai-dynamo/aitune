@@ -400,6 +400,14 @@
       slug: aitune/aitune/torch/integrations
       children:
         - type: section
+          title: device
+          slug: aitune/aitune/torch/integrations/device
+          children:
+            - type: page
+              title: device
+              slug: aitune/aitune/torch/integrations/device
+              pageId: aitune/aitune/torch/integrations/device.mdx
+        - type: section
           title: diffusers
           slug: aitune/aitune/torch/integrations/diffusers
           children:

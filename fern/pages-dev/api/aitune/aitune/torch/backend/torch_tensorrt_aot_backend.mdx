@@ -21,7 +21,9 @@ TorchTensorRT backend with AOT compilation and intermediate model save.
 
 | Name | Description |
 |------|-------------|
+| [`_export_compiled_model`](#aitune-torch-backend-torch_tensorrt_aot_backend-_export_compiled_model) | Export a compiled graph as ``torch_tensorrt.save(retrace=False)`` does. |
 | [`_is_primitive`](#aitune-torch-backend-torch_tensorrt_aot_backend-_is_primitive) | Check if a value is a primitive type (int, float, str, bool). |
+| [`_restore_constant_inputs`](#aitune-torch-backend-torch_tensorrt_aot_backend-_restore_constant_inputs) | Declare non-tensor user inputs of ``program`` as constants in place, as ``torch.export`` does. |
 | [`_save_compiled_model`](#aitune-torch-backend-torch_tensorrt_aot_backend-_save_compiled_model) | Save a compiled graph and retry a known export error with retracing. |
 | [`assert_torch_tensorrt`](#aitune-torch-backend-torch_tensorrt_aot_backend-assert_torch_tensorrt) | Check if torch_tensorrt is installed. |
 
@@ -478,6 +480,28 @@ TensorRT workspace size. Defaults to 0.
 </ParamField>
 </Indent>
 
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-_export_compiled_model">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend._export_compiled_model(
+    module: torch.fx.GraphModule
+) -> torch.export.ExportedProgram
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export a compiled graph as ``torch_tensorrt.save(retrace=False)`` does.
+
+From Torch-TensorRT 2.11, that save uses the legacy exporter, but ``dynamo.export`` defaults to the new one.
+
+
+</Indent>
+
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-_is_primitive">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -498,13 +522,37 @@ Check if a value is a primitive type (int, float, str, bool).
 
 </Indent>
 
+<Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-_restore_constant_inputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.torch_tensorrt_aot_backend._restore_constant_inputs(
+    program: torch.export.ExportedProgram
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Declare non-tensor user inputs of ``program`` as constants in place, as ``torch.export`` does.
+
+Torch-TensorRT declares every placeholder as a tensor input, so serializing e.g. a float or ``None`` kwarg raises
+``KeyError``. Remove this workaround once the minimum supported Torch-TensorRT version includes the fix for
+https://github.com/pytorch/TensorRT/issues/4941.
+
+
+</Indent>
+
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-_save_compiled_model">
 
 <CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.torch_tensorrt_aot_backend._save_compiled_model(
-    module: torch.nn.Module,
+    module: torch.fx.GraphModule,
     path: pathlib.Path,
     sample: aitune.torch.module.sample_store.Sample,
     dynamic_shapes: dict[str, typing.Any] | None,
