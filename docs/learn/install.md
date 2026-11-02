@@ -9,7 +9,7 @@ title: "Install"
 Before installing NVIDIA AITune, make sure your system meets these requirements:
 
 * **Operating System**: Linux (Ubuntu 22.04+ recommended)
-* **Python**: Version `3.11` or newer
+* **Python**: Versions `3.11` through `3.14`
 * **PyTorch**: Version `2.8` or newer
 * **TensorRT**: Version `10.3` or higher (for TensorRT backend)
 * **NVIDIA GPU**: Required for GPU-accelerated tuning
@@ -33,6 +33,8 @@ If you need to pin AITune's dependencies (`torch`, `torch-tensorrt`, `torchao`) 
 | `torch210` | 2.10.x |
 | `torch211` | 2.11.x |
 | `torch212` | 2.12.x |
+| `torch213` | 2.13.x |
+| `torch214` | 2.14.x |
 
 ```bash
 pip install --extra-index-url https://pypi.nvidia.com "aitune[torch211]"

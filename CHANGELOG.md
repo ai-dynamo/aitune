@@ -5,7 +5,7 @@ title: "Changelog"
 ---
 # Changelog
 
-## 0.7.0 (unreleased)
+## 0.7.0
 
 - feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
 - feat: expose portable deployment artifacts for ONNX Runtime, TensorRT, and TorchInductor AOT models, including required additional files and representative inputs
