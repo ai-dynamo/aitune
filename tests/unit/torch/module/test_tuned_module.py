@@ -15,6 +15,7 @@ from aitune.torch.config import AITuneConfig
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.tuned_module import TunedModule
 
 
@@ -132,7 +133,7 @@ def test_artifact_rejects_multiple_compiled_graphs():
         module.artifact()
 
 
-def test_serialization():
+def test_serialization(tmp_path):
     """Test serialization and deserialization of TunedModule."""
     kwargs = {}
     signature = ForwardSignature.from_callable(lambda x: x)
@@ -142,6 +143,8 @@ def test_serialization():
     backend2 = TorchInductorJitBackend()
     backend1._orig_module = Mock(spec=torch.nn.Module)
     backend2._orig_module = Mock(spec=torch.nn.Module)
+    backend1._samples = SampleStore.from_samples([((1,), {})], tmp_path, "graph1")
+    backend2._samples = SampleStore.from_samples([((torch.randn(2),), {})], tmp_path, "graph2")
     backends = OrderedDict({graph1: backend1, graph2: backend2})
 
     module = TunedModule(
