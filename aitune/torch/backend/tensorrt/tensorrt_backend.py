@@ -687,7 +687,7 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
                 # Run inference with timing
                 logger.debug("Executing TensorRT inference")
                 # The inference stream must not read inputs before the caller's stream has written them.
-                self._cuda_stream.wait_stream(torch.cuda.current_stream(self._cuda_stream.device))
+                self._cuda_stream.wait_stream(torch.cuda.current_stream())
                 with torch.cuda.stream(self._cuda_stream):
                     self._start_time.record(stream=self._cuda_stream)
                     if self._use_cuda_graphs:
