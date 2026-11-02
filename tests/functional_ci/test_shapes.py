@@ -66,7 +66,7 @@ class NestedInputModel(nn.Module):
 
 
 @pytest.mark.matrix("aot_tuning.models.dynamic-batch-recorded")
-@with_backends("dynamic_batch")
+@with_backends("base")
 def test_recorded_batch_range(case: BackendCase, device: torch.device):
     """Batch bounds come from recorded batch sizes; seen and unseen in-range batch sizes match eager."""
     backend = case.factory()
@@ -80,7 +80,7 @@ def test_recorded_batch_range(case: BackendCase, device: torch.device):
 
 
 @pytest.mark.matrix("aot_tuning.models.dynamic-batch-user")
-@with_backends("dynamic_batch")
+@with_backends("base")
 def test_explicit_batch_dim(case: BackendCase, device: torch.device):
     """A user `BatchDim` makes the batch dimension dynamic beyond the single recorded batch size."""
     backend = case.factory()
@@ -96,7 +96,7 @@ def test_explicit_batch_dim(case: BackendCase, device: torch.device):
 
 @pytest.mark.matrix("aot_tuning.models.dynamic-non-batch")
 @with_backends(
-    "dynamic_non_batch",
+    "base",
     marks={
         # AITune's `_activate` reloads the artifact via `torch_tensorrt.load`, which wraps the loader assertion in ValueError.
         "torch-tensorrt-aot": pytest.mark.xfail(
@@ -186,7 +186,7 @@ def test_spatial_dims_export_retry(device: torch.device):
     "aot_tuning.models.nested-inputs",
     "aot_tuning.models.structured-outputs",
 )
-@with_backends("structured_io")
+@with_backends("base")
 def test_structured_io(case: BackendCase, device: torch.device):
     """Nested dict and list inputs, a float and a `None` argument, and a nested dict/tuple output survive tuning."""
     backend = case.factory()

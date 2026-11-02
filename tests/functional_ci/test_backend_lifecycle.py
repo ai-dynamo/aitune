@@ -24,7 +24,7 @@ from tests.functional_ci.models import make_input, make_mlp
     "topology.inspect/single-gpu",
     "strategies.one-backend/aot-tune",
 )
-@with_backends("save_load")
+@with_backends("base")
 def test_backend_lifecycle(case: BackendCase, device: torch.device, tmp_path):
     """Tune, infer, save, and reload the toy MLP."""
     run_lifecycle(case.factory(), partial(make_mlp, device), make_input(device), tmp_path / "model.ait", case.tolerance)
