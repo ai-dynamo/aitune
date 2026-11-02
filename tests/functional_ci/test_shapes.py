@@ -65,7 +65,7 @@ class NestedInputModel(nn.Module):
         return self.mlp(hidden * timestep[:, None])
 
 
-@pytest.mark.matrix("models.dynamic-batch-recorded")
+@pytest.mark.matrix("aot_tuning.models.dynamic-batch-recorded")
 @with_backends("dynamic_batch")
 def test_recorded_batch_range(case: BackendCase, device: torch.device):
     """Batch bounds come from recorded batch sizes; seen and unseen in-range batch sizes match eager."""
@@ -79,7 +79,7 @@ def test_recorded_batch_range(case: BackendCase, device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, case.tolerance, batch_sizes=(1, 2, 3, 4))
 
 
-@pytest.mark.matrix("models.dynamic-batch-user")
+@pytest.mark.matrix("aot_tuning.models.dynamic-batch-user")
 @with_backends("dynamic_batch")
 def test_explicit_batch_dim(case: BackendCase, device: torch.device):
     """A user `BatchDim` makes the batch dimension dynamic beyond the single recorded batch size."""
@@ -94,7 +94,7 @@ def test_explicit_batch_dim(case: BackendCase, device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, case.tolerance, batch_sizes=(1, 5, 8))
 
 
-@pytest.mark.matrix("models.dynamic-non-batch")
+@pytest.mark.matrix("aot_tuning.models.dynamic-non-batch")
 @with_backends(
     "dynamic_non_batch",
     marks={
@@ -145,7 +145,7 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
             case.tolerance.assert_close(restored(value), reference(value))
 
 
-@pytest.mark.matrix("models.dynamic-non-batch/torch-tensorrt-aot")
+@pytest.mark.matrix("aot_tuning.models.dynamic-non-batch/torch-tensorrt-aot")
 def test_spatial_dims_export_retry(device: torch.device):
     """Torch-TensorRT AOT exports again with bounded dynamic hints if strict export rejects the user's spatial dims.
 
@@ -182,9 +182,9 @@ def test_spatial_dims_export_retry(device: torch.device):
 
 
 @pytest.mark.matrix(
-    "models.non-tensor-inputs",
-    "models.nested-inputs",
-    "models.structured-outputs",
+    "aot_tuning.models.non-tensor-inputs",
+    "aot_tuning.models.nested-inputs",
+    "aot_tuning.models.structured-outputs",
 )
 @with_backends("structured_io")
 def test_structured_io(case: BackendCase, device: torch.device):
@@ -213,7 +213,7 @@ def test_structured_io(case: BackendCase, device: torch.device):
     assert_matches_eager(pipeline(tuned), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
 
 
-@pytest.mark.matrix("models.nested-inputs/torch-tensorrt-aot")
+@pytest.mark.matrix("aot_tuning.models.nested-inputs/torch-tensorrt-aot")
 @pytest.mark.parametrize("batch_sizes", [[2], [2, 4]], ids=["static", "dynamic"])
 def test_nested_tensor_inputs(batch_sizes: list[int], device: torch.device):
     """Torch-TensorRT AOT tunes nested tensor inputs passed as kwargs at static and dynamic batch, as in legacy 044.

@@ -15,9 +15,9 @@ from tests.functional_ci.models import make_input, make_mlp
 
 
 @pytest.mark.matrix(
-    "models.tensor-inputs",
-    "models.static-shapes",
-    "models.single-graph",
+    "aot_tuning.models.tensor-inputs",
+    "aot_tuning.models.static-shapes",
+    "aot_tuning.models.single-graph",
     "modes.aot-tune",
     "modes.aot-save-load",
     "topology.{backend}/single-gpu",

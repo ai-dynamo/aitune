@@ -36,8 +36,8 @@ class JitMLP(nn.Module):
 
 @pytest.mark.matrix(
     "modes.jit-{mode.value}",
-    "models.tensor-inputs",
-    "models.single-graph",
+    "jit_tuning.models.tensor-inputs",
+    "jit_tuning.models.single-graph",
     "topology.{backend}/single-gpu",
     "strategies.one-backend/jit-tune",
 )

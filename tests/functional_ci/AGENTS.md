@@ -139,8 +139,7 @@ formatting is checked.
 
 | Table | Row examples | Column |
 | --- | --- | --- |
-| `aot_tuning.models`, `jit_tuning.models` | `graph-breaks`, `multiple-graphs`, `pipelines` | backend id |
-| `models` | `tensor-inputs`, `static-shapes`, `single-graph`, `dynamic-batch-recorded`, `dynamic-batch-user`, `dynamic-non-batch`, `non-tensor-inputs`, `nested-inputs`, `structured-outputs` | backend id or `kernel-selector` |
+| `aot_tuning.models`, `jit_tuning.models` | `tensor-inputs`, `static-shapes`, `single-graph`, `multiple-graphs`, `graph-breaks`, `pipelines`, `dynamic-batch-recorded`, `dynamic-batch-user`, `dynamic-non-batch`, `non-tensor-inputs`, `nested-inputs`, `structured-outputs` | backend id or `kernel-selector` |
 | `modes` | `aot-tune`, `aot-save-load`, `aot-inspect-wrap`, `aot-export`, `aot-existing-onnx`, `jit-tune_eager`, `jit-tune_deferred`, `jit-inspect` | backend id or `kernel-selector` |
 | `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run` | `aot-tune`, `jit-tune`, `selection-checked` |
 | `topology` | backend id or `kernel-selector` | `single-gpu` |
