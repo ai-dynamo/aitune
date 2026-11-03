@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/pr.gb200-runners.yml
+      - .github/docker/gb200-smoke.Dockerfile
       - .github/scripts/sanity/**
   workflow_dispatch:
 
@@ -25,8 +26,42 @@ env:
   NCCL_NET: Socket
 
 jobs:
+  image:
+    name: Build ARM64 smoke image
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: linux-amd64-cpu4
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v4.4.0
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/build-push-action@v7.3.0
+        id: build
+        with:
+          context: .github/docker
+          file: .github/docker/gb200-smoke.Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}:gb200-smoke-${{ github.run_id }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
   smoke:
     name: GB200 ${{ matrix.gpus }} GPU - slot ${{ matrix.slot }}
+    needs: image
     runs-on:
       group: ai-dynamo-gb200
       labels: ai-dynamo-gb200-${{ matrix.gpus }}-gpu
@@ -41,7 +76,7 @@ jobs:
           - {gpus: 1, slot: 4}
           - {gpus: 4, slot: 1}
     container:
-      image: nvcr.io/nvidia/pytorch:26.01-py3
+      image: ${{ needs.image.outputs.image }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:

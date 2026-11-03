@@ -35,6 +35,10 @@ workflows:
         - 'github/codeql-action@v4.38.2'
     '.github/workflows/pr.gb200-runners.yml':
         - 'actions/checkout@v7.0.1'
+        - 'docker/build-push-action@v7.3.0'
+        - 'docker/login-action@v4.6.0'
+        - 'docker/setup-buildx-action@v4.4.1'
+        - 'docker/setup-qemu-action@v4.4.0'
     '.github/workflows/pr.label.yml':
         - 'actions/labeler@v7.0.0'
     '.github/workflows/schedule.containers.yml':
@@ -98,6 +102,16 @@ dependencies:
         commit: 'sha1-dbcb813823bdd20940b903addbd779551569679f'
         owner_id: 5429470
         repo_id: 287743349
+    'docker/setup-buildx-action@v4.4.1':
+        ref: 'v4.4.1'
+        commit: 'sha1-f87e5991a6d7451dcb8d9637bfbc97413f497069'
+        owner_id: 5429470
+        repo_id: 288485773
+    'docker/setup-qemu-action@v4.4.0':
+        ref: 'v4.4.0'
+        commit: 'sha1-99012661954931238ded8c8b007157a8430204e1'
+        owner_id: 5429470
+        repo_id: 288487894
     'github/codeql-action@v4.38.2':
         ref: 'v4.38.2'
         commit: 'sha1-2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2'
