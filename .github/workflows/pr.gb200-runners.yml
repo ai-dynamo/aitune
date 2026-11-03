@@ -1,0 +1,162 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: GB200 runner smoke test
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/pr.gb200-runners.yml
+      - .github/docker/gb200-smoke.Dockerfile
+      - .github/scripts/sanity/**
+  workflow_dispatch:
+    inputs:
+      full_capacity:
+        description: Require four 1-GPU jobs alongside the 4-GPU job
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gb200-runner-${{ github.event.pull_request.number || github.ref }}-${{ inputs.full_capacity && 'capacity' || 'smoke' }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NCCL_NET_PLUGIN: none
+  NCCL_NET: Socket
+
+jobs:
+  image:
+    name: Build ARM64 smoke image
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Free image build space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/build-push-action@v7.3.0
+        id: build
+        with:
+          context: .github/docker
+          file: .github/docker/gb200-smoke.Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}:gb200-smoke-${{ github.run_id }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+  smoke:
+    name: GB200 ${{ matrix.gpus }} GPU - slot ${{ matrix.slot }}
+    needs: image
+    permissions:
+      contents: read
+      actions: read
+    runs-on:
+      group: ai-dynamo-gb200
+      labels: ai-dynamo-gb200-${{ matrix.gpus }}-gpu
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.full_capacity && '[{"gpus":1,"slot":1},{"gpus":1,"slot":2},{"gpus":1,"slot":3},{"gpus":1,"slot":4},{"gpus":4,"slot":1}]' || '[{"gpus":1,"slot":1},{"gpus":4,"slot":1}]') }}
+    container:
+      image: ${{ needs.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Inspect GPU devices
+        run: |
+          nvidia-smi
+          nvidia-smi -L
+          nvidia-smi topo -m
+      - name: Verify ARM64, GPU count, and CUDA operations
+        env:
+          EXPECTED_GPUS: ${{ matrix.gpus }}
+        run: |
+          python - <<'PYTHON'
+          import os
+          import platform
+          import torch
+
+          expected = int(os.environ["EXPECTED_GPUS"])
+          assert platform.machine() == "aarch64", platform.machine()
+          assert torch.cuda.is_available()
+          assert torch.cuda.device_count() == expected, torch.cuda.device_count()
+          for index in range(expected):
+              name = torch.cuda.get_device_name(index)
+              assert "GB200" in name, name
+              with torch.cuda.device(index):
+                  value = torch.arange(16, device=f"cuda:{index}", dtype=torch.float32).reshape(4, 4)
+                  result = value @ torch.eye(4, device=f"cuda:{index}")
+                  torch.testing.assert_close(result, value)
+                  torch.cuda.synchronize()
+              print(f"GPU {index}: {name}; CUDA matmul passed", flush=True)
+          print(f"Validated {expected} GB200 GPU(s) on ARM64", flush=True)
+          PYTHON
+      - name: Verify GPU software stack
+        run: python .github/scripts/sanity/check_gpu_stack.py
+      - name: Verify four-rank NCCL all-reduce
+        if: matrix.gpus == 4
+        run: python .github/scripts/sanity/check_nccl_4_rank.py
+      - name: Hold allocation for concurrent placement verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_JOBS: ${{ inputs.full_capacity && '5' || '2' }}
+        run: |
+          python - <<'PYTHON'
+          import json
+          import os
+          import time
+          import urllib.request
+
+          step_name = "Hold allocation for concurrent placement verification"
+          expected = int(os.environ["EXPECTED_JOBS"])
+          url = (
+              f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}"
+              f"/actions/runs/{os.environ['GITHUB_RUN_ID']}/attempts/{os.environ['GITHUB_RUN_ATTEMPT']}"
+              "/jobs?per_page=100"
+          )
+          request = urllib.request.Request(url, headers={
+              "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+              "Accept": "application/vnd.github+json",
+          })
+          for _ in range(120):
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  jobs = [job for job in json.load(response)["jobs"] if job["name"].startswith("GB200 ")]
+              holding = [job for job in jobs if any(
+                  step["name"] == step_name and (
+                      step["status"] == "in_progress" or step.get("conclusion") == "success"
+                  ) for step in job["steps"]
+              )]
+              if len(jobs) == len(holding) == expected:
+                  print(f"All {expected} GPU jobs reached the allocation barrier", flush=True)
+                  break
+              if any(job["conclusion"] in ("failure", "cancelled") for job in jobs):
+                  raise RuntimeError("A GPU job failed before the allocation barrier")
+              print(f"Waiting at allocation barrier: {len(holding)}/{expected}", flush=True)
+              time.sleep(5)
+          else:
+              raise TimeoutError(f"{expected} concurrent GPU allocations were not demonstrated")
+          PYTHON
+          sleep 60
