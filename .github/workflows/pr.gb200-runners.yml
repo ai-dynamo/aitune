@@ -29,7 +29,7 @@ jobs:
   image:
     name: Build ARM64 smoke image
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: linux-amd64-cpu4
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     permissions:
       contents: read
@@ -45,9 +45,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-qemu-action@v4.4.0
-        with:
-          platforms: arm64
+      - name: Free image build space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: docker/setup-buildx-action@v4.4.1
       - uses: docker/build-push-action@v7.3.0
         id: build
@@ -62,6 +63,9 @@ jobs:
   smoke:
     name: GB200 ${{ matrix.gpus }} GPU - slot ${{ matrix.slot }}
     needs: image
+    permissions:
+      contents: read
+      actions: read
     runs-on:
       group: ai-dynamo-gb200
       labels: ai-dynamo-gb200-${{ matrix.gpus }}-gpu
@@ -116,4 +120,41 @@ jobs:
         if: matrix.gpus == 4
         run: python .github/scripts/sanity/check_nccl_4_rank.py
       - name: Hold allocation for concurrent placement verification
-        run: sleep 120
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PYTHON'
+          import json
+          import os
+          import time
+          import urllib.request
+
+          step_name = "Hold allocation for concurrent placement verification"
+          url = (
+              f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}"
+              f"/actions/runs/{os.environ['GITHUB_RUN_ID']}/attempts/{os.environ['GITHUB_RUN_ATTEMPT']}"
+              "/jobs?per_page=100"
+          )
+          request = urllib.request.Request(url, headers={
+              "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+              "Accept": "application/vnd.github+json",
+          })
+          for _ in range(120):
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  jobs = [job for job in json.load(response)["jobs"] if job["name"].startswith("GB200 ")]
+              holding = [job for job in jobs if any(
+                  step["name"] == step_name and (
+                      step["status"] == "in_progress" or step.get("conclusion") == "success"
+                  ) for step in job["steps"]
+              )]
+              if len(jobs) == len(holding) == 5:
+                  print("All five GPU jobs reached the allocation barrier", flush=True)
+                  break
+              if any(job["conclusion"] in ("failure", "cancelled") for job in jobs):
+                  raise RuntimeError("A GPU job failed before the allocation barrier")
+              print(f"Waiting at allocation barrier: {len(holding)}/5", flush=True)
+              time.sleep(5)
+          else:
+              raise TimeoutError("Five concurrent GPU allocations were not demonstrated")
+          PYTHON
+          sleep 60
