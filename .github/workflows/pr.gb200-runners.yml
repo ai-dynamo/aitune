@@ -1,0 +1,84 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: GB200 runner smoke test
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/pr.gb200-runners.yml
+      - .github/scripts/sanity/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gb200-runner-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NCCL_NET_PLUGIN: none
+  NCCL_NET: Socket
+
+jobs:
+  smoke:
+    name: GB200 ${{ matrix.gpus }} GPU - slot ${{ matrix.slot }}
+    runs-on:
+      group: ai-dynamo-gb200
+      labels: ai-dynamo-gb200-${{ matrix.gpus }}-gpu
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {gpus: 1, slot: 1}
+          - {gpus: 1, slot: 2}
+          - {gpus: 1, slot: 3}
+          - {gpus: 1, slot: 4}
+          - {gpus: 4, slot: 1}
+    container:
+      image: nvcr.io/nvidia/pytorch:26.01-py3
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Inspect GPU devices
+        run: |
+          nvidia-smi
+          nvidia-smi -L
+          nvidia-smi topo -m
+      - name: Verify ARM64, GPU count, and CUDA operations
+        env:
+          EXPECTED_GPUS: ${{ matrix.gpus }}
+        run: |
+          python - <<'PYTHON'
+          import os
+          import platform
+          import torch
+
+          expected = int(os.environ["EXPECTED_GPUS"])
+          assert platform.machine() == "aarch64", platform.machine()
+          assert torch.cuda.is_available()
+          assert torch.cuda.device_count() == expected, torch.cuda.device_count()
+          for index in range(expected):
+              name = torch.cuda.get_device_name(index)
+              assert "GB200" in name, name
+              with torch.cuda.device(index):
+                  value = torch.arange(16, device=f"cuda:{index}", dtype=torch.float32).reshape(4, 4)
+                  result = value @ torch.eye(4, device=f"cuda:{index}")
+                  torch.testing.assert_close(result, value)
+                  torch.cuda.synchronize()
+              print(f"GPU {index}: {name}; CUDA matmul passed", flush=True)
+          print(f"Validated {expected} GB200 GPU(s) on ARM64", flush=True)
+          PYTHON
+      - name: Verify GPU software stack
+        run: python .github/scripts/sanity/check_gpu_stack.py
+      - name: Verify four-rank NCCL all-reduce
+        if: matrix.gpus == 4
+        run: python .github/scripts/sanity/check_nccl_4_rank.py
+      - name: Hold allocation for concurrent placement verification
+        run: sleep 120

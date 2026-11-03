@@ -33,6 +33,8 @@ workflows:
     '.github/workflows/pr.codeql.yml':
         - 'actions/checkout@v7.0.1'
         - 'github/codeql-action@v4.38.2'
+    '.github/workflows/pr.gb200-runners.yml':
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/pr.label.yml':
         - 'actions/labeler@v7.0.0'
     '.github/workflows/schedule.containers.yml':
