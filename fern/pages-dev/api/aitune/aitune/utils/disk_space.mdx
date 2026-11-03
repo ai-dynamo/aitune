@@ -178,13 +178,19 @@ aitune.utils.disk_space.raise_if_out_of_space(
 Re-raise ``exc`` as `DiskSpaceError` when it represents ENOSPC.
 
 Use inside ``except`` blocks that otherwise suppress or swallow exceptions,
-so out-of-space failures stop propagating silently::
+so out-of-space failures stop propagating silently:
 
-    try:
-        write_artifact(...)
-    except Exception as e:
-        raise_if_out_of_space(e, path=cache_dir)
-        # ... existing fallback / best-effort handling ...
+<CodeBlock showLineNumbers={false}>
+
+```python
+try:
+    write_artifact(...)
+except Exception as e:
+    raise_if_out_of_space(e, path=cache_dir)
+    # ... existing fallback / best-effort handling ...
+```
+
+</CodeBlock>
 
 
 </Indent>

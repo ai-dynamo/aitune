@@ -48,13 +48,19 @@ Dynamic batch shapes are inferred automatically from ``graph_spec`` when a batch
 detected. At inference time the artifact is loaded via ``torch._inductor.aoti_load_package``,
 enabling deployment without Python-interpreter overhead.
 
-Workflow::
+Workflow:
 
-    backend = TorchInductorAotBackend()
-    # build / tune as usual through ait.tune()
-    ait.save(model, "model.ait")
-    # later
-    ait.load(model, "model.ait")
+<CodeBlock showLineNumbers={false}>
+
+```python
+backend = TorchInductorAotBackend()
+# build / tune as usual through ait.tune()
+ait.save(model, "model.ait")
+# later
+ait.load(model, "model.ait")
+```
+
+</CodeBlock>
 
 
 <ParamField path="STATE_COMPILED_MODEL_PATH" type="= 'compiled_model_path'">

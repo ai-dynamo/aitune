@@ -1576,13 +1576,19 @@ Uses the source path and shapes directly for ``OnnxModule``. Torch modules
 are exported to ONNX with dynamic dimensions inferred from ``graph_spec``.
 Both paths use the same ONNX Runtime executor.
 
-Workflow::
+Workflow:
 
-    backend = ONNXRuntimeBackend()
-    # build / tune as usual through ait.tune()
-    ait.save(model, "model.ait")
-    # later
-    ait.load(model, "model.ait")
+<CodeBlock showLineNumbers={false}>
+
+```python
+backend = ONNXRuntimeBackend()
+# build / tune as usual through ait.tune()
+ait.save(model, "model.ait")
+# later
+ait.load(model, "model.ait")
+```
+
+</CodeBlock>
 
 
 <ParamField path="STATE_CONFIG" type="= 'config'">
@@ -3694,9 +3700,6 @@ If you would like to use customize quantization, you can pass in a quantization 
 <ParamField path="STATE_CONFIG" type="= 'config'">
 </ParamField>
 
-<ParamField path="STATE_DATA" type="= 'data'">
-</ParamField>
-
 <ParamField path="STATE_DEVICE" type="= 'device'">
 </ParamField>
 
@@ -3967,23 +3970,6 @@ TorchAO applies ``filter_fn`` at the module level and skips modules where it ret
 compatibility preflight must mirror that behavior, otherwise it can reject parameters in layers that TorchAO
 would not quantize anyway, such as embeddings, output projections, or small ``Linear`` layers excluded by a
 model-specific predicate.
-
-
-</Indent>
-<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_iter_samples">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.TorchAOBackend._iter_samples()
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Iterate persisted samples, with support for legacy inline checkpoint data.
 
 
 </Indent>
@@ -4616,13 +4602,19 @@ Dynamic batch shapes are inferred automatically from ``graph_spec`` when a batch
 detected. At inference time the artifact is loaded via ``torch._inductor.aoti_load_package``,
 enabling deployment without Python-interpreter overhead.
 
-Workflow::
+Workflow:
 
-    backend = TorchInductorAotBackend()
-    # build / tune as usual through ait.tune()
-    ait.save(model, "model.ait")
-    # later
-    ait.load(model, "model.ait")
+<CodeBlock showLineNumbers={false}>
+
+```python
+backend = TorchInductorAotBackend()
+# build / tune as usual through ait.tune()
+ait.save(model, "model.ait")
+# later
+ait.load(model, "model.ait")
+```
+
+</CodeBlock>
 
 
 <ParamField path="STATE_COMPILED_MODEL_PATH" type="= 'compiled_model_path'">
@@ -4980,9 +4972,6 @@ Backend that does torch compilation with Inductor.
 <ParamField path="STATE_CONFIG" type="= 'config'">
 </ParamField>
 
-<ParamField path="STATE_DATA" type="= 'data'">
-</ParamField>
-
 <ParamField path="STATE_DEVICE" type="= 'device'">
 </ParamField>
 
@@ -5236,23 +5225,6 @@ inference keyword arguments
 **Returns:** `Any`
 
 The result of the inference.
-
-
-</Indent>
-<Anchor id="aitune-torch-backend-torch_inductor_jit_backend-TorchInductorJitBackend-_iter_samples">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.TorchInductorJitBackend._iter_samples()
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Iterate persisted samples, with support for legacy inline checkpoint data.
 
 
 </Indent>
@@ -5992,9 +5964,6 @@ Backend does not use intermediate formats, and compiled model is not stored.
 <ParamField path="STATE_CONFIG" type="= 'config'">
 </ParamField>
 
-<ParamField path="STATE_DATA" type="= 'data'">
-</ParamField>
-
 <ParamField path="STATE_DEVICE" type="= 'device'">
 </ParamField>
 
@@ -6206,23 +6175,6 @@ aitune.torch.backend.TorchTensorRTJitBackend._infer_with_autocast(
 <Indent>
 
 Run inference with autocast enabled.
-
-
-</Indent>
-<Anchor id="aitune-torch-backend-torch_tensorrt_jit_backend-TorchTensorRTJitBackend-_iter_samples">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.TorchTensorRTJitBackend._iter_samples()
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Iterate persisted samples, with support for legacy inline checkpoint data.
 
 
 </Indent>

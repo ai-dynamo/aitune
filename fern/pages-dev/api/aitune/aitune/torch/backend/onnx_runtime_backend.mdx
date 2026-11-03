@@ -84,13 +84,19 @@ Uses the source path and shapes directly for ``OnnxModule``. Torch modules
 are exported to ONNX with dynamic dimensions inferred from ``graph_spec``.
 Both paths use the same ONNX Runtime executor.
 
-Workflow::
+Workflow:
 
-    backend = ONNXRuntimeBackend()
-    # build / tune as usual through ait.tune()
-    ait.save(model, "model.ait")
-    # later
-    ait.load(model, "model.ait")
+<CodeBlock showLineNumbers={false}>
+
+```python
+backend = ONNXRuntimeBackend()
+# build / tune as usual through ait.tune()
+ait.save(model, "model.ait")
+# later
+ait.load(model, "model.ait")
+```
+
+</CodeBlock>
 
 
 <ParamField path="STATE_CONFIG" type="= 'config'">

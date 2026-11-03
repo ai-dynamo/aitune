@@ -63,9 +63,6 @@ If you would like to use customize quantization, you can pass in a quantization 
 <ParamField path="STATE_CONFIG" type="= 'config'">
 </ParamField>
 
-<ParamField path="STATE_DATA" type="= 'data'">
-</ParamField>
-
 <ParamField path="STATE_DEVICE" type="= 'device'">
 </ParamField>
 
@@ -336,23 +333,6 @@ TorchAO applies ``filter_fn`` at the module level and skips modules where it ret
 compatibility preflight must mirror that behavior, otherwise it can reject parameters in layers that TorchAO
 would not quantize anyway, such as embeddings, output projections, or small ``Linear`` layers excluded by a
 model-specific predicate.
-
-
-</Indent>
-<Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackend-_iter_samples">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.TorchAOBackend._iter_samples()
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Iterate persisted samples, with support for legacy inline checkpoint data.
 
 
 </Indent>

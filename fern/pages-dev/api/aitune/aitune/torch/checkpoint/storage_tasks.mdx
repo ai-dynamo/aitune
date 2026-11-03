@@ -84,9 +84,15 @@ aitune.torch.checkpoint.storage_tasks.CopyBackendArtifactsTask._copy_artifact(
 
 Copy an artifact into the checkpoint while preserving its root-relative path.
 
-The destination path has the following structure::
+The destination path has the following structure:
 
-    &lt;target_path&gt;/&lt;backend index&gt;/&lt;artifact root index&gt;/&lt;artifact.relative_path&gt;
+<CodeBlock showLineNumbers={false}>
+
+```python
+<target_path>/<backend index>/<artifact root index>/<artifact.relative_path>
+```
+
+</CodeBlock>
 
 ``backend_dir`` already contains the backend index. Each distinct resolved
 ``artifact.root`` is assigned a numbered directory below ``backend_dir``;

@@ -83,16 +83,22 @@ Format a compact backend label for multi-line table display.
 Each top-level parameter is placed on its own indented line. Nested
 config objects are formatted recursively with increased indentation.
 
-Example::
+Example:
 
-    TensorRTBackend(use_dynamo=False,quantization_config=ONNXQuantizationConfig(precision='int8'))
-    -&gt;
-    TensorRTBackend(
-        use_dynamo=False,
-        quantization_config=ONNXQuantizationConfig(
-            precision='int8'
-        )
+<CodeBlock showLineNumbers={false}>
+
+```python
+TensorRTBackend(use_dynamo=False,quantization_config=ONNXQuantizationConfig(precision='int8'))
+->
+TensorRTBackend(
+    use_dynamo=False,
+    quantization_config=ONNXQuantizationConfig(
+        precision='int8'
     )
+)
+```
+
+</CodeBlock>
 
 Labels with no parameters (e.g. ``TorchEagerBackend()``) or without
 parentheses are returned unchanged.

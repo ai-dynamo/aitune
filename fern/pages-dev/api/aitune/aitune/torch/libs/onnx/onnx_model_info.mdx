@@ -255,22 +255,12 @@ Post-export quantization precision for the ONNX model.
 All modes use standard ONNX operators and are compatible with the ONNX
 Runtime CUDA Execution Provider without TensorRT.
 
-+----------+-------------------+---------------------------------------------+
-| Precision| Required ORT ver. | Notes                                       |
-+==========+===================+=============================================+
-| FP16     | Any               | Converts model weights & ops to FP16 via    |
-|          |                   | ``onnxconverter_common``                    |
-+----------+-------------------+---------------------------------------------+
-| INT8     | Any               | Dynamic weight-only INT8 quantization via   |
-|          |                   | ``onnxruntime.quantization`` — no           |
-|          |                   | calibration data required                   |
-+----------+-------------------+---------------------------------------------+
-| FP8      | &gt;= 1.16           | Dynamic weight-only FP8 E4M3 quantization   |
-|          |                   | via ``onnxruntime.quantization``            |
-+----------+-------------------+---------------------------------------------+
-| INT4     | &gt;= 1.16           | Dynamic weight-only INT4 quantization via   |
-|          |                   | ``onnxruntime.quantization``                |
-+----------+-------------------+---------------------------------------------+
+| Precision | Required ORT ver. | Notes |
+| --- | --- | --- |
+| FP16 | Any | Converts model weights & ops to FP16 via ``onnxconverter_common`` |
+| INT8 | Any | Dynamic weight-only INT8 quantization via ``onnxruntime.quantization`` — no calibration data required |
+| FP8 | &gt;= 1.16 | Dynamic weight-only FP8 E4M3 quantization via ``onnxruntime.quantization`` |
+| INT4 | &gt;= 1.16 | Dynamic weight-only INT4 quantization via ``onnxruntime.quantization`` |
 
 <ParamField path="FP16" type="= 'fp16'">
 </ParamField>

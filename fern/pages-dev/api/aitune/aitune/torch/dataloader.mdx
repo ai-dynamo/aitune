@@ -316,44 +316,9 @@ Dataset that contains `num_samples` samples with random shapes given by the inpu
 <ParamField path="is_dict" type="= self._validate_names()">
 </ParamField>
 
-<ParamField path="samples" type="= self._generate_samples()">
+<ParamField path="samples">
+The generated samples, i.e. the dataset itself.
 </ParamField>
-<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-__getitem__">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.dataloader.MinMaxRandomDataset.__getitem__(
-    index
-)
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Get a sample from the dataset.
-
-
-</Indent>
-<Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-__len__">
-
-<CodeBlock showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.dataloader.MinMaxRandomDataset.__len__()
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Return the number of samples in the dataset.
-
-
-</Indent>
 <Anchor id="aitune-torch-dataloader-MinMaxRandomDataset-_generate_sample_dict">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -791,6 +756,7 @@ aitune.torch.dataloader.ensure_enough_samples(
 Ensures there is enough samples in the dataset to run the model for the given number of iterations.
 
 NOTE: This function trims the dataset to the given number of samples.
+A DataLoaderFactory is returned as a shallow copy holding the trimmed dataset; the one passed in is not modified.
 
 **Parameters:**
 
