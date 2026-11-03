@@ -9,12 +9,17 @@ on:
       - .github/docker/gb200-smoke.Dockerfile
       - .github/scripts/sanity/**
   workflow_dispatch:
+    inputs:
+      full_capacity:
+        description: Require four 1-GPU jobs alongside the 4-GPU job
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: gb200-runner-smoke-${{ github.event.pull_request.number || github.ref }}
+  group: gb200-runner-${{ github.event.pull_request.number || github.ref }}-${{ inputs.full_capacity && 'capacity' || 'smoke' }}
   cancel-in-progress: false
 
 defaults:
@@ -73,12 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {gpus: 1, slot: 1}
-          - {gpus: 1, slot: 2}
-          - {gpus: 1, slot: 3}
-          - {gpus: 1, slot: 4}
-          - {gpus: 4, slot: 1}
+        include: ${{ fromJSON(inputs.full_capacity && '[{"gpus":1,"slot":1},{"gpus":1,"slot":2},{"gpus":1,"slot":3},{"gpus":1,"slot":4},{"gpus":4,"slot":1}]' || '[{"gpus":1,"slot":1},{"gpus":4,"slot":1}]') }}
     container:
       image: ${{ needs.image.outputs.image }}
     steps:
@@ -122,6 +122,7 @@ jobs:
       - name: Hold allocation for concurrent placement verification
         env:
           GH_TOKEN: ${{ github.token }}
+          EXPECTED_JOBS: ${{ inputs.full_capacity && '5' || '2' }}
         run: |
           python - <<'PYTHON'
           import json
@@ -130,6 +131,7 @@ jobs:
           import urllib.request
 
           step_name = "Hold allocation for concurrent placement verification"
+          expected = int(os.environ["EXPECTED_JOBS"])
           url = (
               f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}"
               f"/actions/runs/{os.environ['GITHUB_RUN_ID']}/attempts/{os.environ['GITHUB_RUN_ATTEMPT']}"
@@ -147,14 +149,14 @@ jobs:
                       step["status"] == "in_progress" or step.get("conclusion") == "success"
                   ) for step in job["steps"]
               )]
-              if len(jobs) == len(holding) == 5:
-                  print("All five GPU jobs reached the allocation barrier", flush=True)
+              if len(jobs) == len(holding) == expected:
+                  print(f"All {expected} GPU jobs reached the allocation barrier", flush=True)
                   break
               if any(job["conclusion"] in ("failure", "cancelled") for job in jobs):
                   raise RuntimeError("A GPU job failed before the allocation barrier")
-              print(f"Waiting at allocation barrier: {len(holding)}/5", flush=True)
+              print(f"Waiting at allocation barrier: {len(holding)}/{expected}", flush=True)
               time.sleep(5)
           else:
-              raise TimeoutError("Five concurrent GPU allocations were not demonstrated")
+              raise TimeoutError(f"{expected} concurrent GPU allocations were not demonstrated")
           PYTHON
           sleep 60
