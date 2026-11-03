@@ -199,7 +199,7 @@ conflicts = [
 [tool.uv.sources]
 onnxruntime-gpu = [
     { index = "ort-cuda-13-nightly", extra = "onnxruntime-gpu-cuda13" },
-    { index = "pypi", extra = "onnxruntime-gpu-cuda12" },
+    { index = "ort-cuda-12-nightly", extra = "onnxruntime-gpu-cuda12" },
 ]
 
 [[tool.uv.index]]
@@ -210,6 +210,11 @@ explicit = true
 [[tool.uv.index]]
 name = "ort-cuda-13-nightly"
 url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"
+explicit = true
+
+[[tool.uv.index]]
+name = "ort-cuda-12-nightly"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/"
 explicit = true
 
 [tool.pytest.ini_options]
