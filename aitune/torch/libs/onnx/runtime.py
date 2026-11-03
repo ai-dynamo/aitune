@@ -31,6 +31,9 @@ def run_onnx(
     """Bind tensors directly and return outputs on the requested device."""
     # Keep contiguous buffers alive until inference completes.
     inputs = {name: value.contiguous() for name, value in inputs.items()}
+    # ONNX Runtime reads the bound buffers on its own stream, so finish the Torch writes first.
+    if device.type == "cuda":
+        torch.cuda.current_stream(device).synchronize()
     binding = session.io_binding()
 
     _bind_inputs(binding, inputs)
