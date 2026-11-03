@@ -29,9 +29,9 @@ def _qkv(device: torch.device, seed: int) -> tuple[torch.Tensor, ...]:
 
 
 @pytest.mark.matrix(
-    "models.tensor-inputs/kernel-selector",
-    "models.static-shapes/kernel-selector",
-    "models.single-graph/kernel-selector",
+    "aot_tuning.models.tensor-inputs/kernel-selector",
+    "aot_tuning.models.static-shapes/kernel-selector",
+    "aot_tuning.models.single-graph/kernel-selector",
     "modes.aot-tune/kernel-selector",
     "topology.kernel-selector/single-gpu",
 )
