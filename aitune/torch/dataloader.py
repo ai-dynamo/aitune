@@ -212,8 +212,8 @@ class InputConfig:
     InputConfig(min_input=(3, 24, 24), max_input=(3, 24, 24), dtype=torch.float32, kwarg_name='input2', min_value=0, max_value=3)
     """
 
-    min_input: torch.Size
-    max_input: torch.Size | None = None
+    min_input: tuple[int, ...]
+    max_input: tuple[int, ...] | None = None
     dtype: torch.dtype = torch.float32
     kwarg_name: str | None = None
     min_value: int | float = 0

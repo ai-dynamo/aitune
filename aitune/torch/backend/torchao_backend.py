@@ -40,7 +40,7 @@ from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.memory import gc_collect
-from aitune.torch.utils.module import move_module_to_device
+from aitune.torch.utils.module import move_module_to_device, offload
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
 
@@ -253,6 +253,9 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
 
     def _activate(self):
         """Activates backend."""
+        if self._orig_module is None:
+            raise RuntimeError("Backend has not been properly initialized. Please call build() first.")
+        move_module_to_device(self._orig_module, self.device)
         self._do_torchao_quantization()
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
@@ -325,7 +328,8 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         self._check_hardware_compatibility(self._orig_module)
 
         model = copy.deepcopy(self._orig_module)
-        move_module_to_device(self._orig_module, "cpu")
+        # Release the original weights' CUDA allocations before quantizing the copy.
+        offload(self._orig_module, device="cpu")
 
         quantization_config = self._config.quantization_config
         assert quantization_config is not None, "quantization_config is set in TorchAOBackendConfig.__post_init__"

@@ -83,7 +83,18 @@ def pytest_runtest_makereport(item, call):
             cell["tests"].add(item.nodeid)
             if _RANK[report.outcome] > _RANK[cell["state"]]:
                 cell["state"], cell["culprit"] = report.outcome, item.nodeid.split("/")[-1]
+                cell["reason"] = _reason(report, call)
     return report
+
+
+def _reason(report, call) -> str:
+    if hasattr(report, "wasxfail"):
+        return report.wasxfail
+    if report.skipped and isinstance(report.longrepr, tuple):
+        return report.longrepr[2].removeprefix("Skipped: ")
+    if call.excinfo is not None:
+        return call.excinfo.exconly().splitlines()[0]
+    return str(report.longrepr)
 
 
 def pytest_sessionfinish(session):
@@ -97,7 +108,9 @@ def pytest_sessionfinish(session):
         cell_id: {
             "state": cell["state"],
             "run": (
-                f"{cell['state']}: {cell['culprit']}" if "culprit" in cell else f"passed: {len(cell['tests'])} test(s)"
+                f"{cell['state']}: {cell['culprit']} ({cell['reason']})"
+                if "culprit" in cell
+                else f"passed: {len(cell['tests'])} test(s)"
             ),
         }
         for cell_id, cell in sorted(_cells.items())

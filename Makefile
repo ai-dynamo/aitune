@@ -59,7 +59,6 @@ clean-notebooks: ## remove Jupyter notebook output cells
 fern-setup: ## setup Fern docs
 	npm install -g fern-api
 	fern --version
-	fern login
 
 docs: ## generate and validate Fern docs
 	fern docs md generate
