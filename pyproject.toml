@@ -111,8 +111,8 @@ torch214 = [
     "torchao>=0.17",
 ]
 
-onnxruntime-gpu-cuda12 = ["onnxruntime-gpu"]
 onnxruntime-gpu-cuda13 = ["onnxruntime-gpu"]
+onnxruntime-gpu-cuda12 = ["onnxruntime-gpu; python_version < '3.14' and platform_machine != 'aarch64'"]
 
 [project.urls]
 "Documentation" = "https://docs.nvidia.com/aitune/"
@@ -216,7 +216,7 @@ explicit = true
 
 [[tool.uv.index]]
 name = "ort-cuda-12-nightly"
-url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ORT-Nightly/pypi/simple/"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/"
 explicit = true
 
 [tool.pytest.ini_options]

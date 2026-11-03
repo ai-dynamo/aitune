@@ -93,7 +93,7 @@ jobs:
             uv_torch_backend: cu128
             cuda_image: 12.9.2-devel-ubuntu24.04
             cuda_major: 12
-            uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
+            uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 cupy-cuda12x --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
           - &cu130
             uv_torch_backend: cu130
             cuda_image: 13.0.3-devel-ubuntu24.04
@@ -134,7 +134,7 @@ jobs:
       - name: Install and test
         run: |
           uv venv
-          printf "tensorrt\n" > cu12-excludes.txt
+          printf "tensorrt\ncupy-cuda13x\n" > cu12-excludes.txt
           uv pip install --torch-backend=${{ matrix.cuda.uv_torch_backend }} ".[${{ matrix.torch }},onnxruntime-gpu-cuda${{ matrix.cuda.cuda_major }},triton]" --group test ${{ matrix.cuda.uv_extra_args }}
           uv pip list
           .venv/bin/python .github/scripts/sanity/check_gpu_stack.py
