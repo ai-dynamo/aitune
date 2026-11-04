@@ -200,22 +200,17 @@ conflicts = [
 
 [tool.uv.sources]
 onnxruntime-gpu = [
-    { index = "ort-cuda-13-nightly", extra = "onnxruntime-gpu-cuda13" },
-    { index = "ort-cuda-12-nightly", extra = "onnxruntime-gpu-cuda12" },
+    { index = "ort-cuda-13", extra = "onnxruntime-gpu-cuda13" },
+    { index = "ort-cuda-12", extra = "onnxruntime-gpu-cuda12" },
 ]
 
 [[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
+name = "ort-cuda-13"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/"
 explicit = true
 
 [[tool.uv.index]]
-name = "ort-cuda-13-nightly"
-url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"
-explicit = true
-
-[[tool.uv.index]]
-name = "ort-cuda-12-nightly"
+name = "ort-cuda-12"
 url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/"
 explicit = true
 
