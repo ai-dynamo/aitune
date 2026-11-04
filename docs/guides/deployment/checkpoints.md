@@ -49,6 +49,21 @@ Loading extracts the checkpoint if a valid unpacked copy is unavailable, verifie
 module state and backend artifacts. Later loads can reuse the unpacked files. Allow write access to the storage
 directory when extraction is needed.
 
+For pipelines, checkpoints include weights from untuned modules as well as tuned modules. This increases checkpoint
+size, but lets you construct a pipeline on the meta device and load its weights directly:
+
+```python
+import torch
+import aitune.torch as ait
+
+with torch.device("meta"):
+    model = YourModel()
+model = ait.load(model, "model.ait")
+```
+
+Non-persistent buffers are not in `state_dict` and remain on meta. `device_map` applies only to tuned modules;
+untuned weights load to the device on which they were saved.
+
 ## Use another storage directory
 
 Pass the same storage directory when saving and loading:
