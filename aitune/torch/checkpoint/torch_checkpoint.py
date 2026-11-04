@@ -15,6 +15,7 @@ from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module.wrapper_module import Module as WrapperModule
 from aitune.torch.utils.device import get_device
+from aitune.torch.utils.module import load_state_dict
 
 logger = getLogger(__name__)
 
@@ -42,17 +43,16 @@ class TorchCheckpoint(Checkpoint):
 
         This method handles both individual torch modules and pipelines containing modules.
         For individual modules, it directly uses the module's state_dict() method.
-        For pipelines, it extracts state dictionaries from all tuned modules in the pipeline.
+        For pipelines, it extracts state dictionaries from tuned modules and weights in plain modules.
 
-        The pipeline is expected to be an object with attributes that are tuned modules (WrapperModule instances).
-        Only tuned modules are saved in the state dictionary, as regular torch modules don't have tuning information.
+        The pipeline is expected to be an object with module attributes. Plain-module weights are included so
+        pipelines constructed on the meta device can be fully loaded.
 
         If no tuned modules are found in the pipeline, a ValueError is raised.
 
         Args:
             module_or_pipeline: The module or pipeline to save. This can be either a torch.nn.Module
-                or a pipeline object with module attributes. For pipelines, only tuned modules
-                (WrapperModule instances) will be saved.
+                or a pipeline object with module attributes.
             path: The path where the module state should be saved.
         """
         if isinstance(module_or_pipeline, TorchModule):
@@ -149,7 +149,7 @@ class TorchCheckpoint(Checkpoint):
 
     @staticmethod
     def state_dict_from_pipeline(pipeline: Any) -> dict[str, Any]:
-        """Extract the state_dict from a pipeline (e.g. HF Diffusers pipeline).
+        """Extract tuned-module state and nonempty plain-module weights from a pipeline.
 
         Args:
             pipeline: The pipeline to extract the state_dict from.
@@ -167,6 +167,25 @@ class TorchCheckpoint(Checkpoint):
                 saved_module_ids.add(id(module))
         if not state_dict:
             raise ValueError("No tuned modules found in the pipeline")
+
+        # Meta-device pipelines need weights beyond the tuned wrappers.
+        for name, module in vars(pipeline).items():
+            if (
+                not isinstance(module, TorchModule)
+                or isinstance(module, WrapperModule)
+                or id(module) in saved_module_ids
+            ):
+                continue
+
+            weights = OrderedDict()
+            for path, child in pipeline_modules.items():
+                if (path == name or path.startswith(f"{name}.")) and not isinstance(child, WrapperModule):
+                    relative_path = path[len(name) :].lstrip(".")
+                    prefix = f"{relative_path}." if relative_path else ""
+                    child._save_to_state_dict(weights, prefix, keep_vars=False)
+            if weights:
+                state_dict[name] = weights
+                saved_module_ids.add(id(module))
         return state_dict
 
     @staticmethod
@@ -277,7 +296,7 @@ class TorchCheckpoint(Checkpoint):
 
         # Handle original torch modules not tuned, strict=False because wrapped module keys removed
         final_module = module if top_module is None else top_module
-        final_module.load_state_dict(state_dict, strict=False)
+        load_state_dict(cast(TorchModule, final_module), state_dict)
         return final_module
 
     @staticmethod

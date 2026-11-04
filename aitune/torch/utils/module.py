@@ -3,6 +3,7 @@
 """PyTorch module utilities for parameter counting, device management, and memory offloading."""
 
 import inspect
+import itertools
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -19,6 +20,13 @@ from aitune.utils.monitoring import annotate
 
 if TYPE_CHECKING:
     from aitune.torch.backend.backend import Backend
+
+
+def load_state_dict(module: nn.Module, state_dict: dict) -> None:
+    """Load `state_dict` with `strict=False`; take the checkpoint tensors in place of meta tensors."""
+    tensors = dict(itertools.chain(module.named_parameters(), module.named_buffers()))
+    assign = any(tensors[key].is_meta for key in state_dict if key in tensors)
+    module.load_state_dict(state_dict, strict=False, assign=assign)
 
 
 def format_num_parameters(num: int) -> str:
