@@ -141,8 +141,8 @@ def test_serialization(tmp_path):
     graph2 = SampleMetadata.from_inputs(signature.normalize((torch.randn(2),), kwargs).arguments, strict=True)
     backend1 = TorchInductorJitBackend()
     backend2 = TorchInductorJitBackend()
-    backend1._orig_module = Mock(spec=torch.nn.Module)
-    backend2._orig_module = Mock(spec=torch.nn.Module)
+    backend1._orig_module = torch.nn.Module()
+    backend2._orig_module = torch.nn.Module()
     backend1._samples = SampleStore.from_samples([((1,), {})], tmp_path, "graph1")
     backend2._samples = SampleStore.from_samples([((torch.randn(2),), {})], tmp_path, "graph2")
     backends = OrderedDict({graph1: backend1, graph2: backend2})
@@ -157,7 +157,7 @@ def test_serialization(tmp_path):
     state_dict = module.to_dict()
 
     # Deserialize
-    new_module = TunedModule.from_dict(Mock(spec=torch.nn.Module), state_dict)
+    new_module = TunedModule.from_dict(torch.nn.Module(), state_dict)
     assert new_module._check_graph == module._check_graph
     assert new_module._forward_signature == signature
     assert len(new_module._backends) == len(module._backends)
