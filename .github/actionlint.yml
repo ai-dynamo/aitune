@@ -7,6 +7,7 @@ self-hosted-runner:
     - prod-aitune-tester-rtx-pro-4500-v1
     - prod-aitune-tester-rtx-pro-4500-4-v1
     - prod-aitune-tester-rtx-pro-4500-8-v1
+    - ai-dynamo-gb200-1-gpu
     - linux-amd64-cpu4
     - linux-amd64-cpu8
     - linux-amd64-cpu16

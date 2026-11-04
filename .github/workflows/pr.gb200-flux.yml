@@ -1,0 +1,128 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: FLUX.1 on GB200
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/pr.gb200-flux.yml
+      - .github/docker/gb200-flux.Dockerfile
+      - .github/scripts/usercustomize.py
+      - aitune/**
+      - examples/FLUX/**
+      - examples/common/**
+      - tests/functional/scripts/**
+      - pyproject.toml
+      - uv.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gb200-flux-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  image:
+    name: Build ARM64 FLUX image
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: '3.12'
+          version: ${{ vars.UV_VERSION }}
+      - run: uv build
+      - uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Free image build space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/build-push-action@v7.3.0
+        id: build
+        with:
+          context: .
+          file: .github/docker/gb200-flux.Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}:gb200-flux-${{ github.run_id }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+  flux:
+    name: FLUX.1 tune and inference - GB200 1 GPU
+    needs: image
+    permissions:
+      contents: read
+      packages: read
+    runs-on:
+      group: ai-dynamo-gb200
+      labels: ai-dynamo-gb200-1-gpu
+    timeout-minutes: 180
+    container:
+      image: ${{ needs.image.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      AITUNE_OUTPUT_DIR: ${{ github.workspace }}/artifacts/flux
+      NCCL_NET_PLUGIN: none
+      NCCL_NET: Socket
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify GB200 environment
+        run: |
+          test -n "$HF_TOKEN" || { echo 'HF_TOKEN is required for FLUX.1-dev' >&2; exit 1; }
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          nvidia-smi
+          python - <<'PYTHON'
+          import platform
+          import torch
+
+          assert platform.machine() == "aarch64", platform.machine()
+          assert torch.cuda.is_available()
+          assert torch.cuda.device_count() == 1, torch.cuda.device_count()
+          assert "GB200" in torch.cuda.get_device_name(0), torch.cuda.get_device_name(0)
+          PYTHON
+      # shortcut: run only the default variant here until integration supports runner overrides.
+      - name: Run FLUX example
+        run: |
+          python tests/functional/scripts/metadata.py examples/FLUX | tee script_metadata.json
+          python tests/functional/scripts/execute.py examples/FLUX \
+            --kind project --test-number 0 --workflow legacy --verbose
+      - if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: flux-gb200
+          include-hidden-files: true
+          path: |
+            artifacts/**
+            .cache/aitune/**/*.log
+            .cache/aitune.jit/**/*.log
+            examples/FLUX/.cache/**/*.log
+            hardware_metrics.csv
+            script_metadata.json
+            functional_test_requirements.txt
+          if-no-files-found: ignore
