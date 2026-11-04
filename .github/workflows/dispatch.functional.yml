@@ -112,7 +112,7 @@ jobs:
     name: ${{ matrix.id }}
     needs: generate-functional-matrix
     if: needs.generate-functional-matrix.outputs.matrix_count != '0'
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ fromJSON(matrix.runs_on) }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
     continue-on-error: ${{ matrix.allow_failure }}
     strategy:
