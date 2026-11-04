@@ -25,7 +25,6 @@ title: "Changelog"
 - fix: restore forward pre-hooks and forward hooks when unpatching modules during JIT inspection
 - fix: save and restore tuned modules nested inside pipeline components
 - fix: topologically sort Dynamo-exported ONNX graphs before saving
-- fix: honor Triton model filenames, name multi-file ONNX graphs `model.onnx`, and preserve scalar request dimensions during profiling
 - fix: generate integer and boolean random inputs, collate every mixed-call sample, and honor a zero batch limit
 - fix: move Torch eager modules back to their execution device when activating the backend
 - breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
