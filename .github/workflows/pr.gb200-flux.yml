@@ -70,6 +70,8 @@ jobs:
   flux:
     name: FLUX.1 tune and inference - GB200 1 GPU
     needs: image
+    outputs:
+      completed: ${{ steps.example.outputs.completed }}
     permissions:
       contents: read
       packages: read
@@ -85,7 +87,6 @@ jobs:
     env:
       PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      AITUNE_OUTPUT_DIR: ${{ github.workspace }}/artifacts/flux
       NCCL_NET_PLUGIN: none
       NCCL_NET: Socket
     steps:
@@ -108,10 +109,20 @@ jobs:
           PYTHON
       # shortcut: run only the default variant here until integration supports runner overrides.
       - name: Run FLUX example
+        id: example
         run: |
+          # Container hooks expose the host's github.workspace; use the in-container working directory.
+          export AITUNE_OUTPUT_DIR="$PWD/artifacts/flux"
+          export AITUNE_CACHE_DIR="$PWD/.cache/aitune"
+          export AITUNE_JIT_CACHE_DIR="$PWD/.cache/aitune.jit"
+          mkdir -p "$AITUNE_OUTPUT_DIR"
           python tests/functional/scripts/metadata.py examples/FLUX | tee script_metadata.json
           python tests/functional/scripts/execute.py examples/FLUX \
-            --kind project --test-number 0 --workflow legacy --verbose
+            --kind project --test-number 0 --workflow legacy --verbose 2>&1 | tee "$AITUNE_OUTPUT_DIR/functional.log"
+          compgen -G "$AITUNE_OUTPUT_DIR/flux_output_orig_*.jpg" > /dev/null
+          compgen -G "$AITUNE_OUTPUT_DIR/flux_output_tuned_*.jpg" > /dev/null
+          test -s examples/FLUX/output.png
+          echo 'completed=true' >> "$GITHUB_OUTPUT"
       - if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
@@ -121,8 +132,18 @@ jobs:
             artifacts/**
             .cache/aitune/**/*.log
             .cache/aitune.jit/**/*.log
-            examples/FLUX/.cache/**/*.log
+            examples/FLUX/output.png
             hardware_metrics.csv
             script_metadata.json
             functional_test_requirements.txt
           if-no-files-found: ignore
+
+  verify:
+    name: Confirm FLUX completed
+    needs: flux
+    runs-on: ubuntu-latest
+    steps:
+      # Check completion independently of the GPU runner's reported step status.
+      - env:
+          FLUX_COMPLETED: ${{ needs.flux.outputs.completed }}
+        run: test "$FLUX_COMPLETED" = true
