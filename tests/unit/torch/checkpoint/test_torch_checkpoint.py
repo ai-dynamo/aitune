@@ -9,10 +9,12 @@ import pytest
 import torch
 
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend
+from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
 from aitune.torch.module.wrapper_module import Module
+from aitune.torch.tune_strategy.first_wins_strategy import FirstWinsStrategy
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 from aitune.torch.tuning import tune
 from tests.toy_models.torch_models import ToyComplexPipeline, ToyPipeline, ToyTorchModel
@@ -383,8 +385,7 @@ def test_state_dict_from_pipeline(pipeline_factory):
     # second module is still torch.nn.Module i.e. not tuned
     state_dict = TorchCheckpoint.state_dict_from_pipeline(pipeline)
     assert isinstance(state_dict, dict)
-    assert len(state_dict) == 1
-    assert "linear1" in state_dict
+    assert set(state_dict) == {"linear1", "linear2"}
 
 
 @requires_cuda
@@ -394,7 +395,46 @@ def test_load_state_dict_for_pipeline(pipeline_factory):
     # second module is still torch.nn.Module i.e. not tuned
     state_dict = TorchCheckpoint.state_dict_from_pipeline(pipeline)
     assert isinstance(state_dict, dict)
-    assert len(state_dict) == 1
+    assert set(state_dict) == {"linear1", "linear2"}
+
+
+def test_pipeline_meta_device_load_restores_all_weights(checkpoint):
+    class Vae(torch.nn.Module):
+        decoder: Any
+
+        def __init__(self):
+            super().__init__()
+            self.post = torch.nn.Linear(3, 3)
+            self.decoder = torch.nn.Linear(3, 3)
+
+    class Pipeline:
+        def __init__(self):
+            self.text_encoder = torch.nn.Linear(3, 3)
+            self.vae = Vae()
+
+    def inference(pipeline, value):
+        return pipeline.vae.decoder(pipeline.vae.post(pipeline.text_encoder(value)))
+
+    pipeline = Pipeline()
+    sample = torch.randn(1, 8, 3)
+    expected = inference(pipeline, sample)
+    strategy = FirstWinsStrategy([TorchEagerBackend()])
+    strategy.enable_performance_validation(False)
+    pipeline.vae.decoder = Module(pipeline.vae.decoder, "vae.decoder", strategy=strategy)
+
+    tune(lambda value: inference(pipeline, value), sample[0], batch_sizes=[1, 2], device="cpu")
+    checkpoint.save(pipeline, "pipeline.ait")
+
+    with torch.device("meta"):
+        restored = Pipeline()
+    checkpoint.load(restored, "pipeline.ait")
+
+    assert all(
+        not parameter.is_meta
+        for module in TorchCheckpoint.get_pipeline_modules(restored).values()
+        for parameter in module.parameters()
+    )
+    torch.testing.assert_close(inference(restored, sample), expected)
 
 
 def test_state_dict_from_pipeline_preserves_direct_passthrough_wrapper_state():
