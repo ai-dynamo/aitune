@@ -91,7 +91,7 @@ requires-dist = [
     { name = "nvtx" },
     { name = "onnx-ir", specifier = ">=0.1.11" },
     { name = "onnxruntime-gpu", marker = "python_full_version < '3.14' and platform_machine != 'aarch64' and extra == 'onnxruntime-gpu-cuda12'", index = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/", conflict = { package = "aitune", extra = "onnxruntime-gpu-cuda12" } },
-    { name = "onnxruntime-gpu", marker = "extra == 'onnxruntime-gpu-cuda13'", index = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/", conflict = { package = "aitune", extra = "onnxruntime-gpu-cuda13" } },
+    { name = "onnxruntime-gpu", marker = "extra == 'onnxruntime-gpu-cuda13'", index = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/", conflict = { package = "aitune", extra = "onnxruntime-gpu-cuda13" } },
     { name = "onnxscript", specifier = ">=0.2.0" },
     { name = "pandas", specifier = ">=2.3" },
     { name = "protobuf", marker = "extra == 'triton'", specifier = ">=6.33.5,<7" },
@@ -460,11 +460,11 @@ wheels = [
 
 [[package]]
 name = "filelock"
-version = "4.2.7"
+version = "4.2.8"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e0/14/73688a22e91cfcfc6837a011ffa572e2ba3c348765f7bd482d8436fa9b6f/filelock-4.2.7.tar.gz", hash = "sha256:31f6f7e3a8b6f0bd89114d30c5d5218ea1cfb63e5c4aa695b7559314a209bc7f", size = 661450, upload-time = "2026-11-02T16:09:15.119Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c8/51/6619729344deb33a55ead1fbf50ac6435f43e33d6d57e56acd1495b24233/filelock-4.2.8.tar.gz", hash = "sha256:23df640ac0c3351f8d15c9739072d63be9078758b7d102a2183277ceb96605a3", size = 662554, upload-time = "2026-11-04T07:46:45.354Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/1a/1fcf0d3886bad15b92459a0e529dd86a1ec4d9ef30e789df48044fd3698c/filelock-4.2.7-py3-none-any.whl", hash = "sha256:d08972bbca2b8767ee552aff877b091dd111ffb1d22de7de885766ea7d719d5e", size = 164345, upload-time = "2026-11-02T16:09:13.588Z" },
+    { url = "https://files.pythonhosted.org/packages/d2/ee/69ac34614c54831e0c4d34b92554d4df5b7ae71173d308040d44c432351f/filelock-4.2.8-py3-none-any.whl", hash = "sha256:c2be657e2c279cb032af8e4ea8ce2e20aa982e540be77fcaa34910d068ac2510", size = 164577, upload-time = "2026-11-04T07:46:43.907Z" },
 ]
 
 [[package]]
@@ -1419,7 +1419,7 @@ wheels = [
 
 [[package]]
 name = "onnxslim"
-version = "0.1.98"
+version = "0.1.99"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama" },
@@ -1429,9 +1429,9 @@ dependencies = [
     { name = "packaging" },
     { name = "sympy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/55/91/956b6e2ab4a10f274af9766dbafa616623c72bb4ee6226ed9de5f9253ab4/onnxslim-0.1.98.tar.gz", hash = "sha256:f9160f1a325de623409a4fd0b3b876124ad1c604b1ebdd4ed81f25b888e42ff4", size = 611126, upload-time = "2026-10-08T05:42:21.373Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/ac/8610e7274fe6bf26b6269f91de5a2acd03bfa2133153e691fc93f71a6f64/onnxslim-0.1.99.tar.gz", hash = "sha256:d662d6a6c384b64fe7464527a5865020c4335f8619a4a1272512ca0cc266867c", size = 616093, upload-time = "2026-11-04T03:13:12.228Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ea/7e/756d2b76d16df71282021260b0f6a8aebb91a23a10bce1a25cf79e81bf50/onnxslim-0.1.98-py3-none-any.whl", hash = "sha256:25383fcd43c471e3cabeb774b5cdbf3e36a1b3fd283c7ebbdcdf5aa6731dcee3", size = 245766, upload-time = "2026-10-08T05:42:19.981Z" },
+    { url = "https://files.pythonhosted.org/packages/76/d1/063874f0c02d3c00a169bce3ccf24a4f42ffbc4263d4b1593499c39f7a4c/onnxslim-0.1.99-py3-none-any.whl", hash = "sha256:6c6a3ddbbb7c5426f8f9c38ed1917bb4ab6335919c7d973328ba520faca469e4", size = 248552, upload-time = "2026-11-04T03:13:10.931Z" },
 ]
 
 [[package]]
@@ -2081,7 +2081,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/db/f5/babf00011cdb6bbed
 
 [[package]]
 name = "timm"
-version = "1.0.30"
+version = "1.0.31"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "huggingface-hub" },
@@ -2090,9 +2090,9 @@ dependencies = [
     { name = "torch" },
     { name = "torchvision" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0e/ab/49041213990e48edcb6013463b18ef86d8d3c5d6ac5b408802c480443025/timm-1.0.30.tar.gz", hash = "sha256:1444a3af7e17fdba5440ac2bcf6e4b728da96dd62289ed9e1bcba31a545f5935", size = 2534738, upload-time = "2026-09-22T20:46:13.9Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d8/f0/ef613e01647ba8e39d073df11bfe157ea16d0280a9b4a973f1caf0601856/timm-1.0.31.tar.gz", hash = "sha256:baa0b333339c46d3d6d4965d99b69f5053afed71210e8f433d7ea5ee6a18f0ec", size = 2737241, upload-time = "2026-11-03T19:24:56.491Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f5/85/b897716d0fa016af23b11e6526f5ef76d2013e8bc36b9c7ce15d9200e456/timm-1.0.30-py3-none-any.whl", hash = "sha256:c8e27adf6801a2fdfb570dbbdd171f2f084756eefc673df8cfaab06bd14864f3", size = 2668917, upload-time = "2026-09-22T20:46:12.11Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/bb/b909b8f0517a8fa00ffb3a9a0ddb20da9dbe3554eb68dfc3c9a2db99db76/timm-1.0.31-py3-none-any.whl", hash = "sha256:5bd50f7d0fe6d09bf9285ac2523234a1b7e6bf075c0be3e7aed09139fcb617c7", size = 2798714, upload-time = "2026-11-03T19:24:54.508Z" },
 ]
 
 [[package]]
@@ -2268,14 +2268,14 @@ wheels = [
 
 [[package]]
 name = "typing-inspection"
-version = "0.4.4"
+version = "0.4.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a3/26/b09b8010994eccc3c09092e6b34058f36a460eea2d4c3e8b910c695975a0/typing_inspection-0.4.4.tar.gz", hash = "sha256:547274fa6b0a561ccf549cc9524b999a578e737d015d8709d021f9d0d13bea47", size = 76928, upload-time = "2026-08-12T12:37:25.997Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ff/50/0195198eb1d75bab716bb0a813abea4cc394bfa17a92a189f021a34859af/typing_inspection-0.4.5.tar.gz", hash = "sha256:7f16c411e7930dc79596d42ab44672a3fe5f60eb34b781a1647e7872363120c7", size = 81194, upload-time = "2026-11-04T14:13:23.774Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/67/81/4add07e5172b7ac40d8ed5ff580409a7801a4fe26d529bdd915401dabfbe/typing_inspection-0.4.4-py3-none-any.whl", hash = "sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147", size = 14750, upload-time = "2026-08-12T12:37:24.648Z" },
+    { url = "https://files.pythonhosted.org/packages/de/0c/ea2544850a7c135e15033a5c7a8e7211136184b7ae63e2239d557c2b3019/typing_inspection-0.4.5-py3-none-any.whl", hash = "sha256:bc210535442b39e1bf2805e0c7a17dfd6a4ace760c84c7f7d16245d23a6b1c39", size = 14874, upload-time = "2026-11-04T14:13:22.616Z" },
 ]
 
 [[package]]
