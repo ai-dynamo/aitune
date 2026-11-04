@@ -257,7 +257,7 @@ jobs:
       - name: Image platforms
         id: platforms
         env:
-          EXTRA_PLATFORMS: linux/arm64${{ inputs.platforms }}
+          EXTRA_PLATFORMS: ${{ inputs.platforms }}
         run: |
           platforms=linux/amd64
           if [[ -n "$EXTRA_PLATFORMS" ]]; then
