@@ -7,7 +7,7 @@
 #
 # [[pip_install]]
 # packages = ["onnxruntime-gpu"]
-# flags = ["--upgrade", "--pre", "--index-url", "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"]
+# flags = ["--upgrade", "--pre", "--index-url", "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/"]
 # ///
 
 import tempfile
