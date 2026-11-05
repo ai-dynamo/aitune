@@ -40,6 +40,30 @@ redirects:
     destination: /aitune/dev
   - source: /aitune/resources/license
     destination: /aitune/v0.5.0/resources/license
+  - source: /aitune/examples/overview
+    destination: /aitune/model-recipes/overview
+  - source: /aitune/examples/res-net
+    destination: /aitune/model-recipes/res-net
+  - source: /aitune/examples/flux
+    destination: /aitune/model-recipes/flux
+  - source: /aitune/examples/stable-diffusion
+    destination: /aitune/model-recipes/stable-diffusion
+  - source: /aitune/examples/jit-tuning
+    destination: /aitune/model-recipes/jit-tuning
+  - source: /aitune/examples/esm-2
+    destination: /aitune/model-recipes/esm2
+  - source: /aitune/examples/parakeet-ctc
+    destination: /aitune/model-recipes/parakeet-ctc
+  - source: /aitune/examples/parakeet-rnnt
+    destination: /aitune/model-recipes/parakeet-rnnt
+  - source: /aitune/examples/e-5-large
+    destination: /aitune/model-recipes/e5-large
+  - source: /aitune/examples/llm
+    destination: /aitune/model-recipes/llm
+  - source: /aitune/examples/wan
+    destination: /aitune/model-recipes/wan
+  - source: /aitune/guides/deployment
+    destination: /aitune/guides/deployment/overview
 navbar-links:
   - type: github
     value: https://github.com/ai-dynamo/aitune
