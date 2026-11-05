@@ -15,6 +15,9 @@ rm -rf "$dst/pages-dev"
 mkdir -p "$dst/versions"
 cp -r "$src/docs" "$dst/pages-dev"
 find "$dst/pages-dev" \( -name digest -o -name pypi.rst -o -name index.yml \) -prune -exec rm -rf {} +
+# Pages move one level down (docs/ -> fern/pages-dev/), so links to repo-root examples/ lose one ../.
+find "$dst/pages-dev" \( -name '*.md' -o -name '*.mdx' \) -exec sed -i -E \
+  's#\]\(\.\./((\.\./)*)examples/#](\1examples/#g' {} +
 
 sed -E \
   -e 's#^(\s*-?\s*(path|folder): )\.\./docs/#\1../pages-dev/#' \
