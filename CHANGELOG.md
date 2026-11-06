@@ -8,7 +8,7 @@ title: "Changelog"
 ## 0.8.0 (unreleased)
 
 - feat: record a model's call tree with `ait.inspect(..., call_tree=True)`: module `forward` calls and model-defined methods, keyed by their chain of callers, with call counts, times and the code that moves modules with `.to()`
-- feat: keep weights that are read, have their device looked up, or are moved outside a tuned module on the device when tuning offloads it, with `ait.wrap(..., call_tree=info.call_tree)`; reads and device lookups are recorded per op during the call-tree pass (compiled code runs eagerly there), and `CallTree.shared_weights_of(...)` reports them
+- feat: keep weights that are read, have their device looked up, or are moved outside a tuned module on the device when tuning offloads it, with `ait.wrap(..., call_tree=info.call_tree)`; reads and device lookups are recorded per op during the call-tree pass (compiled code runs eagerly there), `CallTree.shared_weights_of(...)` reports them, and the kept set persists across `ait.save`/`ait.load`
 
 ## 0.7.0 (unreleased)
 
