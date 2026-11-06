@@ -33,9 +33,15 @@ to find configurations and commands you can adapt with your own compatible check
       <td>Ahead of time, Runtime</td><td>-</td><td>Dynamo + Triton</td>
     </tr>
     <tr>
-      <th scope="rowgroup" rowSpan="3">Image generation</th>
+      <th scope="rowgroup" rowSpan="4">Image generation</th>
       <td><a href="./FLUX/README.md">FLUX.1-dev</a></td>
       <td><a href="https://huggingface.co/black-forest-labs/FLUX.1-dev">Hugging Face</a></td>
+      <td>BF16, FP8 and NVFP4</td><td>-</td>
+      <td>Runtime</td><td>Runtime</td><td>Dynamo</td>
+    </tr>
+    <tr>
+      <td><a href="./FluxSchnell/README.md">FLUX.1-schnell</a></td>
+      <td><a href="https://huggingface.co/black-forest-labs/FLUX.1-schnell">Hugging Face</a></td>
       <td>BF16, FP8 and NVFP4</td><td>-</td>
       <td>Runtime</td><td>Runtime</td><td>Dynamo</td>
     </tr>
