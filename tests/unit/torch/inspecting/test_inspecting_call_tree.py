@@ -133,6 +133,28 @@ def test_wrappers_are_restored_when_the_object_walk_fails(mocker, dataset):
     assert "decode" not in vars(pipe)
 
 
+class _OptionalStepPipeline(PlainPipeline):
+    def __call__(self, x):
+        out = self.encoder(x)
+        if self.postprocess is not None:
+            out = self.postprocess(out)
+        return self.decode(out)
+
+    def postprocess(self, x):
+        return x
+
+
+def test_method_disabled_on_the_instance_is_not_wrapped(dataset):
+    pipe = _OptionalStepPipeline()
+    pipe.postprocess = None  # pyrefly: ignore[bad-assignment]
+
+    info = inspect(pipe, dataset, inference_function=lambda x: pipe(x), number_of_iterations=2, call_tree=True)
+
+    assert pipe.postprocess is None
+    assert ("root.postprocess",) not in _tree(info).nodes
+    assert ("root.decode",) in _tree(info).nodes
+
+
 def test_plain_object_methods_and_to_calls_are_recorded(dataset):
     pipe = PlainPipeline()
     info = inspect(pipe, dataset, inference_function=lambda x: pipe(x), number_of_iterations=2, call_tree=True)

@@ -358,6 +358,8 @@ class ModuleInspector:
             except Exception as e:
                 self._debug_error("Failed to read method %s of %s", name, object_path, error=e)
                 continue
+            if not callable(original):
+                continue
             wrapper = _recording_wrapper(recorder, obj, name, f"{prefix}.{name}", original)
             try:
                 setattr(obj, name, wrapper)

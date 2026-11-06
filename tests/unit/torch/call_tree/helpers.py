@@ -53,13 +53,13 @@ def instrumented(recorder: CallRecorder, root, root_label: str = "root"):
                 objects += [
                     (f"{root_label}.{attr}.{n}" if n else f"{root_label}.{attr}", m) for n, m in value.named_modules()
                 ]
-    for label, obj in objects:
-        if isinstance(obj, nn.Module):
-            recorder.register_module(label, obj)
-            wrap_method(recorder, obj, "forward", f"{label}.forward", restore)
-        for name in user_defined_methods(obj):
-            wrap_method(recorder, obj, name, f"{label}.{name}", restore)
     try:
+        for label, obj in objects:
+            if isinstance(obj, nn.Module):
+                recorder.register_module(label, obj)
+                wrap_method(recorder, obj, "forward", f"{label}.forward", restore)
+            for name in user_defined_methods(obj):
+                wrap_method(recorder, obj, name, f"{label}.{name}", restore)
         yield
     finally:
         restore_methods(restore)
