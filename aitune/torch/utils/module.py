@@ -3,6 +3,7 @@
 """PyTorch module utilities for parameter counting, device management, and memory offloading."""
 
 import inspect
+import weakref
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -141,8 +142,61 @@ def move_tensors_to_device(value: Any, device: str | torch.device) -> Any:
     return value
 
 
+# Weights that offloading must leave where they are, because something outside the offloaded module still uses or
+# moves them (``ait.wrap(..., call_tree=...)``). Weak, so the set does not keep models alive.
+# Keyed by ``id``: a WeakSet would compare tensors with ``==``, which is element-wise.
+# Each entry has owners (the ids of the wrapped modules that keep it, ``None`` for unowned): a tensor stays kept
+# while any owner keeps it, so releasing one wrapped module does not drop what another still needs.
+_KEPT_ON_DEVICE: dict[int, tuple["weakref.ref[torch.Tensor]", set[int | None]]] = {}
+
+
+def _owner_key(owner: object | None) -> int | None:
+    # An AITune wrapper proxy stands for the module it wraps.
+    return None if owner is None else id(getattr(owner, "__wrapped__", owner))
+
+
+def keep_on_device(tensors: Iterable[torch.Tensor], owner: object | None = None) -> None:
+    """Exclude ``tensors`` from every later ``offload``; they stay the same objects on the same device.
+
+    Args:
+        tensors: The tensors to keep.
+        owner: The wrapped module that keeps them, so ``release_kept_on_device(owner)`` can drop its share; None
+            keeps them until ``clear_kept_on_device``.
+    """
+    for tensor in tensors:
+        entry = _KEPT_ON_DEVICE.get(id(tensor))
+        owners = entry[1] if entry is not None and entry[0]() is tensor else set()
+        owners.add(_owner_key(owner))
+        _KEPT_ON_DEVICE[id(tensor)] = (weakref.ref(tensor), owners)
+
+
+def is_kept_on_device(tensor: torch.Tensor, owner: object | None = None) -> bool:
+    """Whether ``tensor`` is kept and still alive; with ``owner``, whether that owner keeps it."""
+    entry = _KEPT_ON_DEVICE.get(id(tensor))
+    if entry is None or entry[0]() is not tensor:
+        return False
+    return owner is None or _owner_key(owner) in entry[1]
+
+
+def release_kept_on_device(owner: object) -> None:
+    """Drop ``owner``'s share of every kept tensor; a tensor no other owner keeps is no longer kept."""
+    key = _owner_key(owner)
+    for tensor_id in list(_KEPT_ON_DEVICE):
+        owners = _KEPT_ON_DEVICE[tensor_id][1]
+        owners.discard(key)
+        if not owners:
+            del _KEPT_ON_DEVICE[tensor_id]
+
+
+def clear_kept_on_device() -> None:
+    """Forget the tensors registered with ``keep_on_device``."""
+    _KEPT_ON_DEVICE.clear()
+
+
 def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
     """Offload an ordinary module while preserving distributed placement.
+
+    Parameters and buffers registered with ``keep_on_device`` are not moved, so modules that share them keep working.
 
     Args:
         model: Model to offload, including any nested ONNX Runtime sessions.
@@ -152,7 +206,12 @@ def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
         return
 
     with annotate("Offloading module"):
-        model.to(device)
+        kept = {id(t) for t in (*model.parameters(), *model.buffers()) if is_kept_on_device(t)}
+        if kept:
+            # Same conversion as ``model.to(device)``, which goes through ``_apply`` too, minus the kept tensors.
+            model._apply(lambda t: t if id(t) in kept else t.to(device))
+        else:
+            model.to(device)
 
         if isinstance(model, OnnxModule):
             model.offload(device)
