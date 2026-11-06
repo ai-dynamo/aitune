@@ -48,8 +48,10 @@ def inspect(
         min_depth: Minimum depth of the modules to inspect, if root level modules is not working, try to increase this value
         max_depth: Maximum depth of the modules to inspect
         call_tree: Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran inside
-            which, keyed by their chain of callers. This runs one more pass of ``number_of_iterations`` without
-            per-module synchronization, so inspection takes longer. For deep models the walk must reach the linear
+            which, keyed by their chain of callers, plus the reads and device lookups code outside a module
+            makes on its weights. This runs one more pass of ``number_of_iterations`` without per-module
+            synchronization, so inspection takes longer. Parts compiled with ``torch.compile`` run eagerly during
+            that pass, so their call-tree times are eager times. For deep models the walk must reach the linear
             layers, for example ``max_depth=8``.
 
     Returns:
@@ -127,7 +129,8 @@ def _record_call_tree(
 ) -> CallTree:
     """Record the call tree in a pass of its own, resolving the recorder's events after every inference."""
     logger.info("Recording the call tree.")
-    with recorder.recording():
+    with recorder.recording(), torch.compiler.set_stance("force_eager"):
+        # Recording reads each weight access eagerly; Dynamo cannot trace the TorchFunctionMode.
         for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
             recorder.begin_iteration()
             _run_inference(inference_function, args, kwargs)

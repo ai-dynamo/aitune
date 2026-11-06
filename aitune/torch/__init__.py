@@ -8,7 +8,7 @@ from aitune.torch.config import aitune_cache_dir, config  # noqa: I001
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.kernel_forge.module_function_kernel_profiler import ModuleFunctionKernelProfiler
 from aitune.torch.dataloader import DataLoaderFactory
-from aitune.torch.call_tree import CallNode, CallTree
+from aitune.torch.call_tree import CallNode, CallTree, SharedWeights
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.inspecting import inspect, wrap
 from aitune.torch.module import Module
@@ -45,6 +45,7 @@ __all__ = [
     "profile",
     "CallNode",
     "CallTree",
+    "SharedWeights",
     "Module",
     "DynamicDim",
     "BatchDim",

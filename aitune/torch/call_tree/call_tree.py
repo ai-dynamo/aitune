@@ -7,11 +7,18 @@ module called from two places therefore gives two nodes (for example an LLM used
 Labels come from the adapter that installed the wrappers: object paths in AOT mode.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from torch import nn
 
+if TYPE_CHECKING:
+    from aitune.torch.call_tree.sharing import SharedWeights
+
 NodeKey = tuple[str, ...]
+
+UnitSpec = str | nn.Module | Sequence[str | nn.Module]
 
 PATH_SEPARATOR = " > "
 
@@ -92,6 +99,8 @@ class CallTree:
         sequences: Per iteration, the keys of the entered nodes in call order.
         external_apply: For each module (by ``id``), the labels of the calls during which ``nn.Module._apply``
             (``.to()``, ``.cuda()``, ...) reached it. ``<outside any call>`` if no recorded call was running.
+        weight_accesses: For each parameter or buffer (by ``id``), the recorded accesses to it outside an op that
+            offloading preserves: ``(node key, "read" | "device", caller label)``.
         modules: Label prefix and module for every instrumented module, used for parameter names and sizes.
 
     Example:
@@ -121,6 +130,7 @@ class CallTree:
     iterations: int = 0
     sequences: list[list[NodeKey]] = field(default_factory=list)
     external_apply: dict[int, set[str]] = field(default_factory=dict)
+    weight_accesses: dict[int, set[tuple[NodeKey, str, str]]] = field(default_factory=dict)
     modules: list[tuple[str, nn.Module]] = field(default_factory=list)
 
     @property
@@ -145,3 +155,26 @@ class CallTree:
     def find(self, text: str) -> list[CallNode]:
         """Nodes whose label contains ``text``, in first-call order."""
         return sorted((n for n in self.nodes.values() if text in n.label), key=lambda n: n.first_seen)
+
+    def shared_weights_of(self, unit: UnitSpec) -> "list[SharedWeights]":
+        """The weights ``unit`` holds that something outside it still uses or moves.
+
+        This is what tuning ``unit`` alone and offloading its weights would break: code outside it that reads one
+        of its weights (a tied head, ``F.linear(x, unit.weight)`` in a caller's forward), code that looks up a
+        weight's device, or code outside it that moves its modules with ``.to()`` or ``.cuda()``. Reads and device
+        lookups come from the ops recorded by ``WeightAccessMode`` during the call-tree pass. Weights with the same
+        readers, device lookups and movers form one group.
+
+        Args:
+            unit: A node path (``"forward > dit_forward"``, see ``CallNode.path``), a module (all its recorded
+                ``forward`` calls), or a list of them as one unit.
+
+        Returns:
+            The groups, sorted by their weights; empty if the unit can be tuned and offloaded on its own.
+
+        Raises:
+            ValueError: If ``unit`` matches no recorded call.
+        """
+        from aitune.torch.call_tree.sharing import shared_weights_of
+
+        return shared_weights_of(self, unit)

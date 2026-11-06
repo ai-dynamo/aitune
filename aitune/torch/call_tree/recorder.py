@@ -58,7 +58,11 @@ def _unrecorded_caller() -> str:
     while frame is not None:
         module = frame.f_globals.get("__name__", "")
         in_torch = module == "torch" or module.startswith("torch.")
-        if not in_torch and module != __name__ and frame.f_code.co_name not in _MOVING_METHODS:
+        if (
+            not in_torch
+            and module not in (__name__, "aitune.torch.call_tree.accesses")
+            and frame.f_code.co_name not in _MOVING_METHODS
+        ):
             return f"<unrecorded: {frame.f_code.co_qualname}>"
         frame = frame.f_back
     return OUTSIDE_ANY_CALL
@@ -106,6 +110,8 @@ class CallRecorder:
         self._current_sequence: list[NodeKey] | None = None
         self._external_apply: dict[int, set[str]] = {}
         self._apply_depth = 0
+        self._accesses = None
+        self._final_accesses: dict = {}
         self._modules: list[tuple[str, nn.Module]] = []
         self._registered: set[int] = set()
         self._order = 0
@@ -192,17 +198,26 @@ class CallRecorder:
         """Record calls inside the context, with the ``nn.Module._apply`` probe installed."""
         if CallRecorder._recording_now is not None:
             raise RuntimeError("Another CallRecorder is already recording; the nn.Module._apply probe is process-wide.")
+        from aitune.torch.call_tree.accesses import WeightAccessMode
 
         original_apply = nn.Module._apply
         CallRecorder._recording_now = self
         try:
             nn.Module._apply = self._make_apply_probe(original_apply)
+            mode = WeightAccessMode(self)
+            mode.__enter__()
+            self._accesses = mode
             self._active = True
             yield self
         finally:
             self._active = False
             self._stack.clear()
             self._current_sequence = None
+            if self._accesses is not None:
+                # Accumulate over recording passes, like the nodes: a weight read only in an earlier pass still counts.
+                self._final_accesses = self._weight_accesses()
+                self._accesses.__exit__(None, None, None)
+                self._accesses = None
             nn.Module._apply = original_apply
             CallRecorder._recording_now = None
 
@@ -223,6 +238,7 @@ class CallRecorder:
             iterations=len(self._sequences),
             sequences=list(self._sequences),
             external_apply={k: set(v) for k, v in self._external_apply.items()},
+            weight_accesses=self._weight_accesses(),
             modules=list(self._modules),
         )
 
@@ -265,6 +281,21 @@ class CallRecorder:
         else:
             self._ms[key] = self._ms.get(key, 0.0) + (time.perf_counter() - frame.start) * 1000.0
 
+    def _access_caller(self, node_key) -> str:
+        """Label of the call at ``node_key``, or the unrecorded caller when the stack is empty."""
+        if node_key:
+            return self._nodes[node_key].label
+        return _unrecorded_caller()
+
+    def _weight_accesses(self) -> dict:
+        """Accesses of all recording passes so far, deduplicated per storage and expanded to tensor ids."""
+        out: dict[int, set] = {tensor_id: set(records) for tensor_id, records in self._final_accesses.items()}
+        if self._accesses is not None:
+            for key, records in self._accesses.accesses.items():
+                for tensor_id in self._accesses.tensor_ids(key):
+                    out.setdefault(tensor_id, set()).update(records)
+        return out
+
     def _make_apply_probe(self, original_apply: Callable) -> Callable:
         """Build the replacement for ``nn.Module._apply`` that ``recording()`` installs.
 
@@ -295,5 +326,8 @@ class CallRecorder:
                 return original_apply(module, fn, *args, **kwargs)
             finally:
                 recorder._apply_depth -= 1
+                if recorder._apply_depth == 0 and recorder._active and recorder._accesses is not None:
+                    # A move or cast gives the tensors new storage; keep tracking them under it.
+                    recorder._accesses.register(module)
 
         return _apply

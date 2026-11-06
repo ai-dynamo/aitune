@@ -106,6 +106,56 @@ class TwoRoleToy(nn.Module):
         return self.llm(x)
 
 
+class GlueToy(nn.Module):
+    """The root calls the prefix's embedding outside the prefix, like pi0.5.
+
+    ``Llm.forward`` owns ``embed`` but never uses it; the root runs it before calling the prefix.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.prefix = Llm(layers=3)
+
+    def forward(self, tokens):
+        return self.prefix(self.prefix.embed(tokens))
+
+
+class Holder(nn.Module):
+    """Holds an embedding it never uses; its ``forward`` delegates to one child."""
+
+    def __init__(self):
+        super().__init__()
+        self.embed = nn.Embedding(16, HIDDEN)
+        self.body = Llm(layers=2)
+
+    def forward(self, hidden):
+        return self.body(hidden)
+
+
+class DelegatingGlueToy(nn.Module):
+    """The root looks up ``holder.embed`` before calling ``holder``, whose ``forward`` runs only ``body``."""
+
+    def __init__(self):
+        super().__init__()
+        self.holder = Holder()
+
+    def forward(self, tokens):
+        return self.holder(self.holder.embed(tokens))
+
+
+class SequentialHeadToy(nn.Module):
+    """A head built as an exact ``nn.Sequential`` (skipped by the recorder) and tied to the embedding."""
+
+    def __init__(self):
+        super().__init__()
+        self.embed = nn.Embedding(16, HIDDEN)
+        self.head = nn.Sequential(nn.Linear(HIDDEN, 16, bias=False))
+        self.head[0].weight = self.embed.weight
+
+    def forward(self, tokens):
+        return self.head(self.embed(tokens))
+
+
 class SequentialSubclassToy(nn.Sequential):
     """``nn.Sequential`` subclass whose ``encode`` moves itself, like E5's SentenceTransformer."""
 
