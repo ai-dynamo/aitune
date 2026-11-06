@@ -5,6 +5,10 @@ title: "Changelog"
 ---
 # Changelog
 
+## 0.8.0 (unreleased)
+
+- feat: record a model's call tree with `ait.inspect(..., call_tree=True)`: module `forward` calls and model-defined methods, keyed by their chain of callers, with call counts, times and the code that moves modules with `.to()`
+
 ## 0.7.0 (unreleased)
 
 - feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
