@@ -347,7 +347,7 @@ jobs:
           echo "Checking onnxruntime_providers_cuda.so dependencies:"
           ldd /usr/local/lib/python3.12/dist-packages/onnxruntime/capi/libonnxruntime_providers_cuda.so
           python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
-          python -m pytest -q -rf tests/unit \
+          python -m pytest -q -rf -n 4 tests/unit \
             --cov=aitune \
             --cov-report=xml:coverage.xml \
             --junitxml=pytorch-gpu.test-report.xml

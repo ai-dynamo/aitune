@@ -76,7 +76,7 @@ jobs:
           pip list
           nvidia-smi
           python .github/scripts/sanity/check_gpu_stack.py
-          pytest
+          pytest -n 4
 
   pytorch-gpu-cuda-python-matrix:
     name: ${{ matrix.cuda.uv_torch_backend }} py${{ matrix.python_version }} ${{ matrix.torch }}
@@ -141,4 +141,4 @@ jobs:
           uv pip list
           .venv/bin/python .github/scripts/sanity/check_gpu_stack.py
           .venv/bin/python .github/scripts/sanity/check_onnxruntime_cuda.py --cuda-major-version=${{ matrix.cuda.cuda_major }}
-          .venv/bin/python -m pytest -q -rf
+          .venv/bin/python -m pytest -q -rf -n 4
