@@ -138,3 +138,41 @@ def test_wrap_without_call_tree_breaks_on_shared_weights(toy_id: str, case: Back
         _wrap_tune_and_run(toy, case, device, use_call_tree=False)
     # PyTorch raises RuntimeError or NotImplementedError; ONNX Runtime raises a plain Exception for a meta input.
     assert isinstance(error.value, (RuntimeError, NotImplementedError)) or "Unsupported device type" in str(error.value)
+
+
+@pytest.mark.matrix("aot_tuning.models.shared-weights-tied-head")
+@pytest.mark.parametrize("toy_id", ["tied-head"])
+@with_backends("export")
+def test_kept_weights_survive_save_load(toy_id: str, case: BackendCase, device: torch.device, tmp_path):
+    """The kept-on-device set persists through ait.save -> ait.load in a fresh state."""
+    from aitune.torch.utils.module import clear_kept_on_device
+
+    with seeded(device, 0):
+        toy = TOYS[toy_id](device)
+    with torch.no_grad():
+        expected = toy.call(*toy.args)
+        info = ait.inspect(
+            toy.model,
+            [toy.args],
+            inference_function=toy.call,
+            number_of_iterations=2,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+            call_tree=True,
+        )
+    selected = [m for m in info.get_modules() if m.module is toy.tuned(toy.model)]
+    ait.wrap(toy.model, selected, strategy=pinned_strategy(case.factory()))
+    with torch.no_grad():
+        toy.call(*toy.args)
+        toy.tuned(toy.model).tune(device=device)
+
+    ait.save(toy.model, tmp_path / "kept_ckpt")
+    clear_kept_on_device()
+
+    with seeded(device, 0):
+        toy2 = TOYS[toy_id](device)
+    ait.load(toy2.model, tmp_path / "kept_ckpt")
+    with torch.no_grad():
+        actual = toy2.call(*toy2.args)
+    case.tolerance.assert_close(actual, expected)

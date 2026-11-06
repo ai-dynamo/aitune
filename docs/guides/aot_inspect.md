@@ -309,8 +309,10 @@ anyway. For weights that outside code only moves, it does not: E5's `SentenceTra
 whole encoder with `.to()` on every call, so its 1.34 GB stay on the GPU next to the tuned engine. That is the same
 as the `device_after_tuning="cpu"` workaround, whose `.to()` brings them back, but offloading saves nothing there.
 
-Each wrapped module owns the weights it keeps: wrapping it again replaces its set, and a weight stays kept while any
-wrapped module keeps it, also across models in the same process.
+`ait.save` stores the names of the kept weights with each tuned module, and `ait.load` keeps them on the device
+when it offloads the originals, so a deployment process needs no call tree. Each wrapped module owns the weights it
+keeps: wrapping it again replaces its set, and a weight stays kept while any wrapped module keeps it, also across
+models in the same process.
 
 Modules from `inspect` without `call_tree=True`, or `ModuleInfo` built by hand, keep nothing, so `wrap` and tuning
 behave as before.
