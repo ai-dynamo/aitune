@@ -66,6 +66,8 @@ def _unrecorded_caller() -> str:
 
 @dataclass
 class _Frame:
+    """An open call: its node and the start of its timer (a CUDA event or a ``perf_counter`` value)."""
+
     node: CallNode
     start: Any
 
@@ -233,6 +235,7 @@ class CallRecorder:
         self._events.clear()
 
     def _start_timer(self) -> Any:
+        """Start timing a call: record a CUDA event, or read ``time.perf_counter`` without CUDA."""
         if self._use_cuda:
             event = torch.cuda.Event(enable_timing=True)
             event.record()
@@ -240,6 +243,7 @@ class CallRecorder:
         return time.perf_counter()
 
     def _stop_timer(self, frame: _Frame) -> None:
+        """Stop timing a call: queue the CUDA event pair for ``flush``, or add the CPU time to the node's total."""
         key = frame.node.key
         if self._use_cuda:
             end = torch.cuda.Event(enable_timing=True)
@@ -249,6 +253,7 @@ class CallRecorder:
             self._ms[key] = self._ms.get(key, 0.0) + (time.perf_counter() - frame.start) * 1000.0
 
     def _make_apply_probe(self, original_apply: Callable) -> Callable:
+        """Build the ``nn.Module._apply`` replacement that records which code moves each module."""
         recorder = self
 
         def _apply(module: nn.Module, fn: Callable, *args: Any, **kwargs: Any) -> Any:

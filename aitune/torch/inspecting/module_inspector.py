@@ -399,6 +399,7 @@ class ModuleInspector:
 
         @wraps(original_forward)
         def wrapped_forward(*args, **kwargs):
+            """Report the call to the recorder while it records; otherwise run the legacy inspection forward."""
             # While the call-tree recorder records, report to it only: no per-call synchronization (it would
             # distort the recorder's timing) and no ModuleInfo updates (the legacy pass keeps its numbers).
             if recorder is not None and recorder.active:
