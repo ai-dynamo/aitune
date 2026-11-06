@@ -130,7 +130,8 @@ def _record_call_tree(
         for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
             recorder.begin_iteration()
             _run_inference(inference_function, args, kwargs)
-            recorder.flush()
+            with coordinator.raise_if_any_rank_fails("Resolving call tree timings"):
+                recorder.flush()
             recorder.end_iteration()
     return synchronize_call_tree(recorder.result())
 

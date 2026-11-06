@@ -403,6 +403,8 @@ class ModuleInspector:
             # While the call-tree recorder records, report to it only: no per-call synchronization (it would
             # distort the recorder's timing) and no ModuleInfo updates (the legacy pass keeps its numbers).
             if recorder is not None and recorder.active:
+                if torch.compiler.is_compiling():
+                    return original_forward(*args, **kwargs)
                 label = f"{_label_prefix(self._module_info[module].object_path)}.forward"
                 frame = recorder.enter(label, module, "forward", args, kwargs)
                 try:

@@ -283,3 +283,85 @@ def test_flush_resolves_pending_events_into_totals():
 
     assert recorder.result().nodes[("root.forward",)].time_ms > 0
     assert recorder.result().nodes[("root.forward",)].time_ms == recorder.result().nodes[("root.forward",)].time_ms
+
+
+def test_end_event_is_recorded_on_the_start_device_when_the_call_changes_device(mocker):
+    events = []
+
+    class FakeEvent:
+        def __init__(self, *args, **kwargs):
+            events.append(self)
+            self.stream = None
+
+        def record(self, stream=None):
+            self.stream = stream
+
+        def synchronize(self):
+            pass
+
+        def elapsed_time(self, end):
+            return 2.0
+
+    mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.Event", FakeEvent)
+    current_device = mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.current_device", return_value=0)
+    mocker.patch(
+        "aitune.torch.call_tree.recorder.torch.cuda.current_stream",
+        side_effect=lambda device=None: f"stream{device}",
+    )
+    recorder = CallRecorder()
+    recorder._use_cuda = True
+    model = nn.Linear(2, 2)
+
+    with recorder.recording():
+        recorder.begin_iteration()
+        frame = recorder.enter("root.forward", model, "forward", ())
+        current_device.return_value = 1  # the call changed the current device
+        recorder.exit(frame)
+        recorder.end_iteration()
+
+    tree = recorder.result()
+    start, end = events
+    assert start.stream is None
+    assert end.stream == "stream0"
+    assert tree.nodes[("root.forward",)].time_ms == 2.0
+
+
+def test_flush_synchronizes_every_end_event(mocker):
+    events = []
+
+    class FakeEvent:
+        def __init__(self, *args, **kwargs):
+            events.append(self)
+            self.synchronized = False
+
+        def record(self, stream=None):
+            pass
+
+        def synchronize(self):
+            self.synchronized = True
+
+        def elapsed_time(self, end):
+            if not end.synchronized:
+                raise RuntimeError("Both events must be completed")
+            return 1.0
+
+    mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.Event", FakeEvent)
+    mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.current_device", return_value=0)
+    mocker.patch(
+        "aitune.torch.call_tree.recorder.torch.cuda.current_stream",
+        side_effect=lambda device=None: f"stream{device}",
+    )
+    cuda_synchronize = mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.synchronize")
+    recorder = CallRecorder()
+    recorder._use_cuda = True
+    model = nn.Linear(2, 2)
+
+    with recorder.recording():
+        recorder.begin_iteration()
+        for _ in range(2):
+            recorder.exit(recorder.enter("root.forward", model, "forward", ()))
+        recorder.end_iteration()
+        recorder.flush()
+
+    assert recorder._ms[("root.forward",)] == 2.0
+    cuda_synchronize.assert_not_called()
