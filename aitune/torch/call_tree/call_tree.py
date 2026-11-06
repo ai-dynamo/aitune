@@ -15,6 +15,8 @@ NodeKey = tuple[str, ...]
 
 PATH_SEPARATOR = " > "
 
+ROOT_LABEL = "root"
+
 
 def short_label(label: str) -> str:
     """Label without the leading ``root.`` of the adapter.
@@ -23,7 +25,7 @@ def short_label(label: str) -> str:
         >>> short_label("root.vlm.lm_head.forward"), short_label("root.forward")
         ('vlm.lm_head.forward', 'forward')
     """
-    return label.split(".", 1)[1] if "." in label else label
+    return label.removeprefix(f"{ROOT_LABEL}.")
 
 
 def key_path(key: NodeKey) -> str:
@@ -50,6 +52,13 @@ class CallNode:
         time_ms: Time in milliseconds over all recorded iterations.
         children: Keys of the called nodes in first-call order.
         first_seen: Position of the node's first call among all nodes.
+
+    Example:
+        >>> node = CallNode(
+        ...     key=("root.forward", "root.dit_forward"), label="root.dit_forward", owner_class="Vla", method="dit_forward"
+        ... )
+        >>> node.path, node.parent_key
+        ('forward > dit_forward', ('root.forward',))
     """
 
     key: NodeKey
@@ -84,6 +93,28 @@ class CallTree:
         external_apply: For each module (by ``id``), the labels of the calls during which ``nn.Module._apply``
             (``.to()``, ``.cuda()``, ...) reached it. ``<outside any call>`` if no recorded call was running.
         modules: Label prefix and module for every instrumented module, used for parameter names and sizes.
+
+    Example:
+        >>> outer = CallNode(
+        ...     key=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
+        ... )
+        >>> dit = CallNode(
+        ...     key=("root.forward", "root.dit.forward"),
+        ...     label="root.dit.forward",
+        ...     owner_class="Dit",
+        ...     method="forward",
+        ...     calls=10,
+        ...     time_ms=25.0,
+        ...     first_seen=1,
+        ... )
+        >>> outer.children.append(dit.key)
+        >>> tree = CallTree(nodes={n.key: n for n in (outer, dit)}, iterations=2)
+        >>> [n.path for n in tree.roots], tree.total_ms
+        (['forward'], 30.0)
+        >>> [n.path for n in tree.descendants(outer)]
+        ['forward > dit.forward']
+        >>> [(n.path, n.calls) for n in tree.find("dit")]
+        [('forward > dit.forward', 10)]
     """
 
     nodes: dict[NodeKey, CallNode] = field(default_factory=dict)

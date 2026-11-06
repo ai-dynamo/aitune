@@ -266,7 +266,21 @@ class CallRecorder:
             self._ms[key] = self._ms.get(key, 0.0) + (time.perf_counter() - frame.start) * 1000.0
 
     def _make_apply_probe(self, original_apply: Callable) -> Callable:
-        """Build the ``nn.Module._apply`` replacement that records which code moves each module."""
+        """Build the replacement for ``nn.Module._apply`` that ``recording()`` installs.
+
+        ``nn.Module._apply`` is the method that ``.to()``, ``.cuda()``, ``.half()`` and similar calls use to convert a
+        module's parameters and buffers. The replacement runs ``original_apply`` unchanged. While the recorder is
+        recording, it first records who called it: the label of the innermost recorded call, or the code found by
+        ``_unrecorded_caller`` if no recorded call is running. The caller is added to ``external_apply`` for the
+        module and, unless ``recurse=False``, for all of its submodules. Only the outermost ``_apply`` of a
+        conversion records, because ``_apply`` calls itself on each child.
+
+        Args:
+            original_apply: The ``nn.Module._apply`` to call; restored by ``recording()`` on exit.
+
+        Returns:
+            A function with the signature of ``nn.Module._apply``.
+        """
         recorder = self
 
         def _apply(module: nn.Module, fn: Callable, *args: Any, **kwargs: Any) -> Any:
