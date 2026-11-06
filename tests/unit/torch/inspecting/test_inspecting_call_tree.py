@@ -2,11 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """``ait.inspect(..., call_tree=True)``: the recorder pass and its effect on the legacy output."""
 
+import unittest.mock
+
 import pytest
 import torch
 from torch import nn
 
+import aitune.torch.inspecting.inspecting as inspecting_module
 from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.distributed import coordinator
 from aitune.torch.inspecting import inspect
 from tests.toy_models.call_tree_models import PlainPipeline, SequentialSubclassToy, VlaToy, vla_inputs
 
@@ -166,3 +170,36 @@ def test_default_inspect_creates_no_recorder(mocker, dataset):
     inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1)
 
     assert spy.call_count == 0
+
+
+def test_forward_is_not_recorded_while_compiling(mocker, dataset):
+    model, fn = _vla()
+    without = inspect(model, dataset, inference_function=fn, number_of_iterations=ITERATIONS, warmup_iterations=1)
+
+    real_record_call_tree = inspecting_module._record_call_tree
+
+    def record_while_compiling(*args, **kwargs):
+        with unittest.mock.patch.object(torch.compiler, "is_compiling", return_value=True):
+            return real_record_call_tree(*args, **kwargs)
+
+    mocker.patch("aitune.torch.inspecting.inspecting._record_call_tree", side_effect=record_while_compiling)
+
+    info = inspect(
+        model, dataset, inference_function=fn, number_of_iterations=ITERATIONS, warmup_iterations=1, call_tree=True
+    )
+
+    assert _tree(info).nodes == {}
+    assert _legacy(info) == _legacy(without)
+
+
+def test_flush_failure_is_raised_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    mocker.patch.object(CallRecorder, "flush", side_effect=RuntimeError("bad events"))
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad events"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Resolving call tree timings")
+    assert nn.Module._apply is original_apply

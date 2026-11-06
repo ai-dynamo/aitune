@@ -66,10 +66,15 @@ def _unrecorded_caller() -> str:
 
 @dataclass
 class _Frame:
-    """An open call: its node and the start of its timer (a CUDA event or a ``perf_counter`` value)."""
+    """An open call: its node and the start of its timer.
+
+    The start is a CUDA event or a ``perf_counter`` value; ``device`` is the CUDA device the start event was
+    recorded on.
+    """
 
     node: CallNode
     start: Any
+    device: int | None = None
 
 
 class CallRecorder:
@@ -161,7 +166,8 @@ class CallRecorder:
         if self._current_sequence is not None:
             self._current_sequence.append(key)
         self._stack.append(key)
-        return _Frame(node=node, start=self._start_timer())
+        start, device = self._start_timer()
+        return _Frame(node=node, start=start, device=device)
 
     def exit(self, frame: _Frame | None) -> None:
         """Record the end of a call started with ``enter``."""
@@ -223,31 +229,38 @@ class CallRecorder:
     def flush(self) -> None:
         """Resolve pending CUDA event pairs into the accumulated totals so they are not held until the end.
 
-        Adapters call it once per iteration, after the iteration's work is synchronized; pending events stay
-        bounded by one iteration at no extra synchronization.
+        Adapters call it once per iteration; pending events stay bounded by one iteration. Each end event is
+        synchronized on its own, so pairs recorded on any device resolve without a device-wide synchronization.
         """
         if not self._events:
             return
         if self._use_cuda:
-            torch.cuda.synchronize()
+            for pairs in self._events.values():
+                for _, end in pairs:
+                    end.synchronize()
         for key, pairs in self._events.items():
             self._ms[key] = self._ms.get(key, 0.0) + sum(start.elapsed_time(end) for start, end in pairs)
         self._events.clear()
 
-    def _start_timer(self) -> Any:
-        """Start timing a call: record a CUDA event, or read ``time.perf_counter`` without CUDA."""
+    def _start_timer(self) -> tuple[Any, int | None]:
+        """Start timing a call: record a CUDA event, or read ``time.perf_counter`` without CUDA.
+
+        Returns:
+            The start of the timer and the CUDA device the start event was recorded on (``None`` without CUDA).
+        """
         if self._use_cuda:
+            device = torch.cuda.current_device()
             event = torch.cuda.Event(enable_timing=True)
             event.record()
-            return event
-        return time.perf_counter()
+            return event, device
+        return time.perf_counter(), None
 
     def _stop_timer(self, frame: _Frame) -> None:
         """Stop timing a call: queue the CUDA event pair for ``flush``, or add the CPU time to the node's total."""
         key = frame.node.key
         if self._use_cuda:
             end = torch.cuda.Event(enable_timing=True)
-            end.record()
+            end.record(torch.cuda.current_stream(frame.device))
             self._events.setdefault(key, []).append((frame.start, end))
         else:
             self._ms[key] = self._ms.get(key, 0.0) + (time.perf_counter() - frame.start) * 1000.0

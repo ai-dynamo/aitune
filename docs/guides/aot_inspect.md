@@ -249,7 +249,8 @@ layers, so deep models need a larger `max_depth` (8 for BAGEL-sized pipelines).
 Limits: exact `nn.Sequential`, `nn.ModuleList` and
 `nn.ModuleDict` containers are skipped and their children attached to the caller; a call that takes a callable as an
 argument (a checkpoint helper) is skipped the same way; free functions are not recorded; calls inside parts compiled
-with `torch.compile` are not recorded.
+with `torch.compile` are not recorded. CUDA times come from events on the device that was current when a call
+started, so work that a call runs on other GPUs is not fully counted.
 
 ## Troubleshooting
 
