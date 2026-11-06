@@ -148,7 +148,11 @@ class ModuleInspector:
         self._original_compiled_call.clear()
 
     def warn_about_compiled_modules(self) -> None:
-        """Warn about executed compiled modules none of whose submodules ran: Dynamo traced them instead."""
+        """Warn about compiled modules whose submodules were not inspected.
+
+        A compiled module is reported if it ran but none of its submodules were counted. This happens when
+        Dynamo traces the compiled code, because the submodule wrappers then call through without counting.
+        """
         compiled_with_submodules: dict[int, ModuleInfo] = {}
         ran_below: set[int] = set()
         for module_info in self._module_info.values():
