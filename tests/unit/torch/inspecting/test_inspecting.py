@@ -3,7 +3,6 @@
 
 import itertools
 from types import SimpleNamespace
-from typing import cast
 
 import onnx
 import pytest
@@ -631,7 +630,9 @@ def test_inspect_model_with_a_part_compiled_with_module_compile(fullgraph):
 def test_inspect_model_with_a_child_compiled_with_torch_compile():
     """``torch.compile(module)`` gives an ``OptimizedModule`` child, timed as one call."""
     torch._dynamo.reset()
-    model = _ModelWithEncoder(cast(nn.Module, torch.compile(_Encoder(), backend="eager")))
+    encoder = torch.compile(_Encoder(), backend="eager")
+    assert isinstance(encoder, nn.Module)
+    model = _ModelWithEncoder(encoder)
 
     assert _inspected_counts(model) == {".encoder": 2, ".head": 2}
 
