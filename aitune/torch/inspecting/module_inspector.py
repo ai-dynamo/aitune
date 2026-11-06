@@ -38,6 +38,7 @@ from typing import Any
 
 import torch
 
+from aitune.torch.call_tree.call_tree import ROOT_LABEL
 from aitune.torch.call_tree.methods import user_defined_methods
 from aitune.torch.call_tree.recorder import CallRecorder
 from aitune.torch.inspecting.module_info import (
@@ -54,8 +55,6 @@ from aitune.utils.env_vars import get_bool_env_variable
 logger = getLogger(__name__)
 
 DEFAULT_MAX_RECURSION_DEPTH = 5
-
-ROOT_LABEL = "root"
 
 DEFAULT_INSPECT_DEBUG = False
 
