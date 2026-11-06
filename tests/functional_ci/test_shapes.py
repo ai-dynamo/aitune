@@ -182,7 +182,17 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
 
 
 @pytest.mark.matrix("jit_tuning.models.dynamic-non-batch")
-@with_backends("base")
+@with_backends(
+    "base",
+    marks={
+        "torch-tensorrt-aot": pytest.mark.xfail(
+            TORCH_2_8_TO_2_10,
+            reason="PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)",
+            raises=AssertionError,
+            strict=True,
+        )
+    },
+)
 def test_explicit_spatial_dims_jit(case: BackendCase, device: torch.device):
     """Infer spatial and batch bounds from traffic and serve an unrecorded image size."""
     backend = case.factory()
